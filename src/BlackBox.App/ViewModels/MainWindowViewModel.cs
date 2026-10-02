@@ -78,6 +78,25 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>Raised after the user answered a prompt, so the window can get out of the way again.</summary>
     public event Action? AttentionHandled;
 
+    /// <summary>Raised the first time in a run that the agent looks at or acts on the screen.</summary>
+    public event Action? HideRequested;
+
+    /// <summary>True once the window was minimized for the current run.</summary>
+    public bool WindowHiddenForRun { get; private set; }
+
+    async Task IAgentObserver.OnBeforeScreenActionAsync(CancellationToken ct)
+    {
+        // Plain chat replies keep the window up; it only steps aside when the agent needs the screen.
+        if (!HideWindowWhileWorking || WindowHiddenForRun)
+            return;
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            WindowHiddenForRun = true;
+            HideRequested?.Invoke();
+        });
+        await Task.Delay(400, ct); // let the minimize animation finish before a screenshot
+    }
+
     // ---- first-run model download ----------------------------------------------------
 
     private CancellationTokenSource? _downloadCts;
@@ -211,6 +230,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         finally
         {
+            WindowHiddenForRun = false;
             IsBusy = false;
             _runCts.Dispose();
             _runCts = null;

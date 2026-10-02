@@ -122,6 +122,9 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
     [ObservableProperty]
     private string _remoteTestResult = "";
 
+    /// <summary>Models the server reported; filled by Test connection.</summary>
+    public System.Collections.ObjectModel.ObservableCollection<string> RemoteModels { get; } = [];
+
     [RelayCommand]
     private async Task TestRemoteAsync()
     {
@@ -132,9 +135,12 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
             var models = await new OpenAiChatClient(http, Remote.BaseUrl, Remote.ApiKey).ListModelsAsync(CancellationToken.None);
             RemoteTestResult = models.Count == 0
                 ? "Connected, but the server listed no models."
-                : $"Connected. {models.Count} model(s): {string.Join(", ", models.Take(8))}{(models.Count > 8 ? ", …" : "")}";
-            if (string.IsNullOrWhiteSpace(Remote.Model) && models.Count > 0)
-                RemoteModel = models[0];
+                : $"Connected. The server offers {models.Count} model(s); pick one in the Model box.";
+            RemoteModels.Clear();
+            foreach (var m in models.Where(m => !m.Contains("embed", StringComparison.OrdinalIgnoreCase)))
+                RemoteModels.Add(m);
+            if (RemoteModels.Count > 0 && !RemoteModels.Contains(Remote.Model))
+                RemoteModel = RemoteModels[0];
         }
         catch (Exception ex)
         {

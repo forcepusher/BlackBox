@@ -28,6 +28,9 @@ public sealed class AppPaths
     public string LogsDir => Path.Combine(DataDir, "logs");
     public string ModelsDir => Path.Combine(Root, "Models");
     public string LlamaDir => Path.Combine(Root, "llama");
+
+    /// <summary>Where the single-file build unpacks its native libraries and llama.cpp.</summary>
+    public string RuntimeDir => Path.Combine(DataDir, "runtime");
     public string WorkspaceDir => Path.Combine(Root, "Workspace");
 
     public void EnsureCreated()

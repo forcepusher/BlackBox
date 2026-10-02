@@ -196,6 +196,7 @@ internal sealed class RecordingObserver : IAgentObserver
     }
 
     public void OnToolStarted(ToolCall call, string summary) => ToolsRun.Add(call.Name);
+    public Task OnBeforeScreenActionAsync(CancellationToken ct) => Task.CompletedTask;
     public void OnToolFinished(ToolCall call, ToolResult result) => Results.Add(result);
 
     public void OnFinished(AgentStopReason reason, string? detail)

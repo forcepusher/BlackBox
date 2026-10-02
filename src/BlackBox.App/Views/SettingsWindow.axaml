@@ -13,7 +13,7 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="0,0,12,0" />
     </Style>
-    <Style Selector="Grid.form > TextBox, Grid.form > ComboBox, Grid.form > DockPanel, Grid.form > CheckBox, Grid.form > StackPanel">
+    <Style Selector="Grid.form > TextBox, Grid.form > AutoCompleteBox, Grid.form > ComboBox, Grid.form > DockPanel, Grid.form > CheckBox, Grid.form > StackPanel">
       <Setter Property="Margin" Value="0,4" />
     </Style>
   </Window.Styles>
@@ -69,7 +69,8 @@
                 <TextBlock Classes="label" Grid.Row="1" Text="API key" />
                 <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Remote.ApiKey}" PasswordChar="•" Watermark="Optional" />
                 <TextBlock Classes="label" Grid.Row="2" Text="Model" />
-                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding RemoteModel}" Watermark="Press Test connection to fill this in" />
+                <AutoCompleteBox Grid.Row="2" Grid.Column="1" Text="{Binding RemoteModel}" ItemsSource="{Binding RemoteModels}"
+                                 FilterMode="Contains" MinimumPrefixLength="0" Watermark="Press Test connection, then pick a model" />
                 <CheckBox Grid.Row="3" Grid.Column="1" Content="This model can see images (needed for screen control)" IsChecked="{Binding Remote.SupportsVision}" />
                 <StackPanel Grid.Row="4" Grid.Column="1" Spacing="6">
                   <Button Classes="ghost" Content="Test connection" Command="{Binding TestRemoteCommand}" />

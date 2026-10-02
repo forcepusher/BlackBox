@@ -1,40 +1,79 @@
-﻿<#
+<#
 .SYNOPSIS
-  Builds the portable BlackBox folder: no installer, nothing written outside the folder.
+  Builds the portable BlackBox: no installer, nothing written outside its own folder.
+
+.DESCRIPTION
+  Default (-SingleFile): one BlackBox.exe. The native libraries and llama.cpp are embedded and
+  unpacked into Data/runtime next to the exe on first run; the model is downloaded from inside
+  the app into Models/. Copy just the exe anywhere and run it.
+
+  -Folder: the classic self-contained folder (exe + DLLs + llama/), handy for debugging.
 
 .EXAMPLE
-  ./publish.ps1                 # publish/BlackBox-win-x64
-  ./publish.ps1 -BundleLlama    # also copy the llama.cpp found on PATH into ./llama
-  ./publish.ps1 -Runtime linux-x64
+  ./publish.ps1                  # publish/BlackBox.exe (single file, llama.cpp included)
+  ./publish.ps1 -Folder          # publish/BlackBox-win-x64/ folder layout
 #>
 param(
     [string]$Runtime = "win-x64",
-    [string]$Output = "",
-    [switch]$BundleLlama
+    [switch]$Folder,
+    [string]$LlamaDir = ""
 )
 
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
-if (-not $Output) { $Output = Join-Path $root "publish/BlackBox-$Runtime" }
+$project = Join-Path $root "src/BlackBox.App/BlackBox.App.csproj"
+$publishRoot = Join-Path $root "publish"
 
-# Self-contained (no .NET install needed). Deliberately not single-file: a single-file bundle
-# either extracts native libraries to %TEMP% (leaving files behind) or fails to load Skia.
-dotnet publish (Join-Path $root "src/BlackBox.App/BlackBox.App.csproj") `
-    -c Release -r $Runtime --self-contained `
-    -p:DebugType=none `
-    -o $Output
-if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
-
-foreach ($dir in "Models", "llama", "Workspace", "Data") {
-    New-Item -ItemType Directory -Force (Join-Path $Output $dir) | Out-Null
-}
-
-if ($BundleLlama) {
+function Find-Llama {
+    if ($LlamaDir) { return (Resolve-Path $LlamaDir).Path }
+    $local = Join-Path $root "llama"
+    if (Test-Path (Join-Path $local "llama-server.exe")) { return $local }
     $server = Get-Command llama-server -ErrorAction SilentlyContinue
-    if (-not $server) { throw "llama-server is not on PATH; download a llama.cpp release and unzip it into $Output/llama instead." }
-    Copy-Item (Join-Path (Split-Path $server.Source) "*") (Join-Path $Output "llama") -Recurse -Force
-    Write-Host "Bundled llama.cpp from $(Split-Path $server.Source)"
+    if ($server) { return Split-Path $server.Source }
+    return $null
 }
 
-Copy-Item (Join-Path $root "README.md") $Output -Force
-Write-Host "Portable build ready: $Output"
+function Publish([string]$out, [string[]]$extra) {
+    & dotnet publish $project -c Release -r $Runtime --self-contained -p:DebugType=none -o $out @extra
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
+}
+
+$llama = Find-Llama
+if (-not $llama) { Write-Warning "llama.cpp not found (./llama, -LlamaDir or PATH); the build will expect it to be installed separately." }
+
+if ($Folder) {
+    $out = Join-Path $publishRoot "BlackBox-$Runtime"
+    Publish $out @()
+    foreach ($dir in "Models", "llama", "Workspace", "Data") { New-Item -ItemType Directory -Force (Join-Path $out $dir) | Out-Null }
+    if ($llama) { Copy-Item (Join-Path $llama "*") (Join-Path $out "llama") -Recurse -Force }
+    Write-Host "Portable folder ready: $out"
+    return
+}
+
+# 1) Single-file publish to a staging folder to collect the native libraries it leaves beside the exe.
+$stage = Join-Path ([IO.Path]::GetTempPath()) "blackbox-publish-$([guid]::NewGuid().ToString('N'))"
+try {
+    Publish (Join-Path $stage "first") @("-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=false")
+    $payloadDir = Join-Path $stage "payload"
+    New-Item -ItemType Directory -Force $payloadDir | Out-Null
+    Get-ChildItem (Join-Path $stage "first") -File | Where-Object { $_.Extension -in ".dll", ".so", ".dylib" } |
+        Copy-Item -Destination $payloadDir
+    if ($llama) {
+        New-Item -ItemType Directory -Force (Join-Path $payloadDir "llama") | Out-Null
+        Copy-Item (Join-Path $llama "*") (Join-Path $payloadDir "llama") -Recurse -Force
+    }
+    $zip = Join-Path $stage "runtime.zip"
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::CreateFromDirectory($payloadDir, $zip, [IO.Compression.CompressionLevel]::Optimal, $false)
+
+    # 2) Publish again with that payload embedded, and keep only the exe.
+    $second = Join-Path $stage "second"
+    Publish $second @("-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=false", "-p:RuntimePayload=$zip")
+    New-Item -ItemType Directory -Force $publishRoot | Out-Null
+    $exe = Join-Path $publishRoot "BlackBox.exe"
+    Copy-Item (Join-Path $second "BlackBox.exe") $exe -Force
+    Write-Host ("Single-file build ready: {0} ({1:N0} MB)" -f $exe, ((Get-Item $exe).Length / 1MB))
+}
+finally {
+    Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
+}

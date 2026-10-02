@@ -16,6 +16,12 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
+  <!-- Single-file builds: publish.ps1 -SingleFile passes a zip of the native libraries and
+       llama.cpp, which PortableRuntime unpacks into Data/runtime on first run. -->
+  <ItemGroup Condition="'$(RuntimePayload)' != ''">
+    <EmbeddedResource Include="$(RuntimePayload)" LogicalName="BlackBox.runtime.zip" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.22" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />

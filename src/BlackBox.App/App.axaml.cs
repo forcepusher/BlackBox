@@ -17,7 +17,7 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var paths = new AppPaths(FindAppRoot());
+            var paths = new AppPaths(PortableRuntime.FindAppRoot());
             paths.EnsureCreated();
             var store = new SettingsStore(paths);
             var platform = CreatePlatform();
@@ -42,21 +42,4 @@ public partial class App : Application
 #endif
     }
 
-    /// <summary>
-    /// The portable root is the exe folder. A BLACKBOX_HOME variable overrides it, and debug builds
-    /// use the repository root so Models/, llama/ and Data/ are shared between builds.
-    /// </summary>
-    private static string FindAppRoot()
-    {
-        if (Environment.GetEnvironmentVariable("BLACKBOX_HOME") is { Length: > 0 } home)
-            return home;
-#if DEBUG
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            if (dir.EnumerateFiles("BlackBox.sln*").Any())
-                return dir.FullName;
-        }
-#endif
-        return AppContext.BaseDirectory;
-    }
 }

@@ -54,7 +54,7 @@ public sealed class LlamaServerHost : IAsyncDisposable
             return File.Exists(p) ? p : null;
         }
 
-        foreach (var dir in new[] { _paths.LlamaDir, Path.Combine(_paths.LlamaDir, "bin") })
+        foreach (var dir in new[] { _paths.LlamaDir, Path.Combine(_paths.LlamaDir, "bin"), Path.Combine(_paths.RuntimeDir, "llama") })
         {
             var p = Path.Combine(dir, exe);
             if (File.Exists(p)) return p;

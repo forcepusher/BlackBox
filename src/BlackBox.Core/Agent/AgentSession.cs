@@ -14,6 +14,9 @@ public interface IAgentObserver
     void OnAssistantMessage(ChatMessage message);
     Task<bool> RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct);
     void OnToolStarted(ToolCall call, string summary);
+
+    /// <summary>Called before a tool looks at or acts on the screen, so the host can get its own window out of the way.</summary>
+    Task OnBeforeScreenActionAsync(CancellationToken ct);
     void OnToolFinished(ToolCall call, ToolResult result);
     void OnFinished(AgentStopReason reason, string? detail);
 }
@@ -214,6 +217,8 @@ public sealed class AgentSession(
         }
 
         observer.OnToolStarted(call, summary);
+        if (tool is DesktopActionTool or ScreenshotTool or ZoomTool or WaitTool)
+            await observer.OnBeforeScreenActionAsync(ct).ConfigureAwait(false);
         ToolResult result;
         try
         {

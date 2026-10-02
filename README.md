@@ -6,14 +6,16 @@ screen, moves the mouse, types, runs shell commands and edits files step by step
 It runs fully offline on a local GGUF model through llama.cpp, or against any OpenAI-compatible API.
 
 ## Portable layout
-No installer, no registry, nothing in AppData. Everything lives in one folder you can move or copy:
+No installer, no registry, nothing in AppData or %TEMP%. Ship just `BlackBox.exe`: on first run it
+unpacks its native libraries and llama.cpp into `Data/runtime` next to itself and offers to download
+the model into `Models/`. Everything lives in that one folder you can move or copy:
 
 ```
 BlackBox/
   BlackBox.exe
   Models/      Qwen3.8-27B-UD-IQ2_S.gguf, mmproj-F16.gguf
   llama/       llama-server and its DLLs (optional if llama-server is on PATH)
-  Data/        settings.json, logs/
+  Data/        settings.json, logs/, runtime/ (unpacked by the single-file exe)
   Workspace/   default working folder for file and shell tools
 ```
 
@@ -60,7 +62,8 @@ Requires the .NET 10 SDK.
 ```powershell
 dotnet build                      # debug build; uses the repo root as the portable folder
 dotnet test                       # unit tests
-./publish.ps1 -BundleLlama        # self-contained portable folder in publish/BlackBox-win-x64
+./publish.ps1                     # single-file publish/BlackBox.exe (llama.cpp embedded)
+./publish.ps1 -Folder             # classic self-contained folder in publish/BlackBox-win-x64
 dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   # headless run
 ```
 

@@ -130,6 +130,8 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
         return Task.FromResult(Console.ReadLine()?.Trim().ToLowerInvariant() is "y" or "yes");
     }
 
+    public Task OnBeforeScreenActionAsync(CancellationToken ct) => Task.CompletedTask;
+
     public void OnToolStarted(ToolCall call, string summary)
     {
         ToolCalls++;

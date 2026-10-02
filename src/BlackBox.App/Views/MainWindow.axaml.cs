@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using BlackBox.App.ViewModels;
 
 namespace BlackBox.App.Views;
@@ -18,13 +19,20 @@ public partial class MainWindow : Window
         InputBox.AddHandler(KeyDownEvent, OnInputKeyDown, RoutingStrategies.Tunnel);
 
         // Follow new output while the user is at the bottom; stop following if they scroll up.
-        ChatScroll.PropertyChanged += (_, e) =>
+        // Only an offset change the user made decides "stuck or not": when content grows
+        // (streaming text, a new screenshot) the offset briefly lags the new extent, and treating
+        // that as "scrolled up" is what broke following before.
+        ChatScroll.ScrollChanged += (_, e) =>
         {
-            if (e.Property == ScrollViewer.ExtentProperty && _stickToBottom)
-                ChatScroll.ScrollToEnd();
+            if (e.ExtentDelta.Y != 0 || e.ViewportDelta.Y != 0)
+            {
+                if (_stickToBottom)
+                    Dispatcher.UIThread.Post(ChatScroll.ScrollToEnd, DispatcherPriority.Background);
+                return;
+            }
+            if (e.OffsetDelta.Y != 0)
+                _stickToBottom = ChatScroll.Offset.Y + ChatScroll.Viewport.Height >= ChatScroll.Extent.Height - 60;
         };
-        ChatScroll.ScrollChanged += (_, _) =>
-            _stickToBottom = ChatScroll.Offset.Y + ChatScroll.Viewport.Height >= ChatScroll.Extent.Height - 60;
     }
 
     private MainWindowViewModel Vm => (MainWindowViewModel)DataContext!;
@@ -39,14 +47,14 @@ public partial class MainWindow : Window
         vm.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName != nameof(MainWindowViewModel.IsBusy)) return;
-            if (vm.IsBusy && vm.HideWindowWhileWorking) WindowState = WindowState.Minimized;
-            else if (!vm.IsBusy) Restore();
+            if (!vm.IsBusy) Restore();
         };
         vm.AttentionNeeded += Restore;
         vm.AttentionHandled += () =>
         {
-            if (vm.IsBusy && vm.HideWindowWhileWorking) WindowState = WindowState.Minimized;
+            if (vm.IsBusy && vm.WindowHiddenForRun) WindowState = WindowState.Minimized;
         };
+        vm.HideRequested += () => WindowState = WindowState.Minimized;
     }
 
     private void Restore()
