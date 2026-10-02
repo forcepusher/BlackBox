@@ -81,6 +81,9 @@ public sealed class AgentSettings
     public double RepeatPenalty { get; set; } = 1.0;
     public int MaxTokensPerReply { get; set; } = 8192;
 
+    /// <summary>If the model thinks longer than this (roughly, in tokens) it is cut off and asked to act directly.</summary>
+    public int MaxThinkingTokens { get; set; } = 3000;
+
     /// <summary>Default working directory for file and shell tools. Empty = ./Workspace.</summary>
     public string WorkingDirectory { get; set; } = "";
 

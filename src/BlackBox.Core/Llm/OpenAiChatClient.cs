@@ -7,6 +7,13 @@ namespace BlackBox.Core.Llm;
 
 public sealed class LlmException(string message, Exception? inner = null) : Exception(message, inner);
 
+/// <summary>The model kept thinking past the configured budget; the stream was closed.</summary>
+public sealed class ReasoningBudgetExceededException(string partialReasoning)
+    : Exception("The model thought for too long without acting.")
+{
+    public string PartialReasoning { get; } = partialReasoning;
+}
+
 /// <summary>
 /// Minimal streaming client for any OpenAI-compatible /v1/chat/completions endpoint.
 /// Both the bundled llama-server and remote APIs go through this class.
@@ -93,11 +100,11 @@ public sealed class OpenAiChatClient
 
             await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
             using var reader = new StreamReader(stream, Encoding.UTF8);
-            return await ReadStreamAsync(reader, onDelta, ct).ConfigureAwait(false);
+            return await ReadStreamAsync(reader, onDelta, ct, options.MaxReasoningChars).ConfigureAwait(false);
         }
     }
 
-    internal static async Task<ChatMessage> ReadStreamAsync(TextReader reader, Action<StreamDelta>? onDelta, CancellationToken ct)
+    internal static async Task<ChatMessage> ReadStreamAsync(TextReader reader, Action<StreamDelta>? onDelta, CancellationToken ct, int? maxReasoningChars = null)
     {
         var content = new StringBuilder();
         var reasoning = new StringBuilder();
@@ -127,6 +134,9 @@ public sealed class OpenAiChatClient
             {
                 reasoning.Append(r);
                 onDelta?.Invoke(new StreamDelta(StreamChannel.Reasoning, r));
+                // Disposing the response on the way out closes the connection, which stops generation.
+                if (reasoning.Length > maxReasoningChars && content.Length == 0 && calls.Count == 0)
+                    throw new ReasoningBudgetExceededException(reasoning.ToString());
             }
 
             if (GetString(delta, "content") is { Length: > 0 } c)

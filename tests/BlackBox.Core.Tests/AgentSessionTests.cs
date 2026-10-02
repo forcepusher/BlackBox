@@ -61,16 +61,23 @@ public class AgentSessionTests
             Sse.ToolCall("s1", "screenshot", "{}"),
             Sse.ToolCall("s2", "screenshot", "{}"),
             Sse.ToolCall("s3", "screenshot", "{}"),
+            Sse.ToolCall("s4", "screenshot", "{}"),
+            Sse.ToolCall("s5", "screenshot", "{}"),
+            Sse.ToolCall("s6", "screenshot", "{}"),
             Sse.Text("Done."));
         var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), keepScreenshots: 2);
 
         await session.RunAsync("look", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        var last = server.Requests[^1]["messages"]!.AsArray();
-        var images = last.SelectMany(m => m!["content"] is JsonArray parts ? parts : [])
+        // Pruning waits for keep + 3 images, then drops back to keep, so the prompt prefix
+        // (and the server's cache) stays stable for several steps at a time.
+        Assert.Equal(5, Images(server.Requests[^2]));
+        Assert.Equal(2, Images(server.Requests[^1]));
+
+        static int Images(JsonObject request) => request["messages"]!.AsArray()
+            .SelectMany(m => m!["content"] is JsonArray parts ? parts : [])
             .Count(p => p!["type"]!.GetValue<string>() == "image_url");
-        Assert.Equal(2, images);
     }
 
     [Fact]
@@ -102,6 +109,30 @@ public class AgentSessionTests
         Assert.Equal(AgentStopReason.Cancelled, observer.StopReason);
         Assert.Equal(ChatRole.Tool, session.History[^1].Role);
         Assert.Equal("t1", session.History[^1].ToolCallId);
+    }
+
+    [Fact]
+    public async Task Runaway_thinking_is_cut_off_and_retried_without_thinking()
+    {
+        var thinking = new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["reasoning_content"] = new string('h', 500) } }) };
+        var longThought = string.Concat(Enumerable.Repeat($"data: {thinking.ToJsonString()}\n\n", 10));
+        var server = new ScriptedServer(longThought, Sse.Text("Done."));
+        var settings = new AgentSettings { FailsafeCorner = false };
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = settings, WorkingDirectory = Path.GetTempPath() };
+        var options = new ChatRequestOptions
+        {
+            MaxReasoningChars = 1000,
+            Extra = new JsonObject { ["chat_template_kwargs"] = new JsonObject { ["enable_thinking"] = true } },
+        };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null), options, ToolRegistry.CreateDefault(true), ctx, "sys");
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("go", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count);
+        Assert.False(server.Requests[1]["chat_template_kwargs"]!["enable_thinking"]!.GetValue<bool>());
+        Assert.Equal("Done.", session.History[^1].Content);
     }
 
     private static (AgentSession, RecordingObserver) CreateSession(ScriptedServer server, string dir, IPlatformServices platform, int keepScreenshots = 2)

@@ -74,6 +74,16 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task Zoom_returns_a_magnified_image_with_rulers()
+    {
+        var result = await new ZoomTool().ExecuteAsync(
+            new JsonObject { ["x"] = 10, ["y"] = 10, ["width"] = 50, ["height"] = 40 }, Ctx(new FakePlatform()), CancellationToken.None);
+        Assert.False(result.IsError);
+        Assert.Equal(0xFF, result.Image![0]);
+        Assert.Contains("Zoomed 4x", result.Text);
+    }
+
+    [Fact]
     public async Task Edit_file_requires_a_unique_match()
     {
         var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;

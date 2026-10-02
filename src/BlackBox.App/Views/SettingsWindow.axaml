@@ -145,8 +145,10 @@
             </Grid>
 
             <TextBlock Classes="h2" Text="Sampling" />
-            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
               <CheckBox Grid.Row="0" Grid.Column="1" Content="Let the model think before acting" IsChecked="{Binding Agent.EnableThinking}" />
+              <TextBlock Classes="label" Grid.Row="7" Text="Thinking limit (tokens)" />
+              <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding Agent.MaxThinkingTokens}" Watermark="0 = no limit" />
               <TextBlock Classes="label" Grid.Row="1" Text="Temperature" />
               <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Agent.Temperature}" />
               <TextBlock Classes="label" Grid.Row="2" Text="Top P" />

@@ -48,12 +48,24 @@ public sealed class AgentSession(
             {
                 ct.ThrowIfCancellationRequested();
                 observer.OnStepStarted(step);
-                PruneScreenshots(settings.KeepScreenshots);
+                PruneScreenshots(settings.KeepScreenshots, PruneSlack);
 
                 var request = new List<ChatMessage>(History.Count + 1) { ChatMessage.System(systemPrompt) };
                 request.AddRange(History);
 
-                var reply = await client.CompleteAsync(request, toolDefs, requestOptions, observer.OnDelta, ct).ConfigureAwait(false);
+                ChatMessage reply;
+                try
+                {
+                    reply = await client.CompleteAsync(request, toolDefs, requestOptions, observer.OnDelta, ct).ConfigureAwait(false);
+                }
+                catch (ReasoningBudgetExceededException ex) when (WithoutThinking(requestOptions) is { } direct)
+                {
+                    // Quantized models can get stuck deliberating. Cut the thought short and ask
+                    // again with thinking switched off for this one step.
+                    observer.OnAssistantMessage(new ChatMessage { Role = ChatRole.Assistant, Content = "", Reasoning = ex.PartialReasoning + "\n[thinking cut short]" });
+                    observer.OnStepStarted(step);
+                    reply = await client.CompleteAsync(request, toolDefs, direct, observer.OnDelta, ct).ConfigureAwait(false);
+                }
                 TextToolCallParser.TryExtract(reply, tools);
                 History.Add(reply);
                 observer.OnAssistantMessage(reply);
@@ -109,6 +121,29 @@ public sealed class AgentSession(
         {
             RepairDanglingToolCalls();
         }
+    }
+
+    /// <summary>
+    /// Screenshots are pruned in batches: rewriting old messages invalidates the server's prompt
+    /// cache from that point on, so doing it every step would reprocess most of the prompt each time.
+    /// </summary>
+    private const int PruneSlack = 3;
+
+    /// <summary>Request options with thinking disabled, or null if the backend has no such switch.</summary>
+    internal static ChatRequestOptions? WithoutThinking(ChatRequestOptions options)
+    {
+        if (options.Extra?["chat_template_kwargs"] is not System.Text.Json.Nodes.JsonObject)
+            return null;
+        var extra = (System.Text.Json.Nodes.JsonObject)options.Extra.DeepClone();
+        extra["chat_template_kwargs"]!["enable_thinking"] = false;
+        return new ChatRequestOptions
+        {
+            Model = options.Model,
+            Temperature = options.Temperature,
+            TopP = options.TopP,
+            MaxTokens = options.MaxTokens,
+            Extra = extra,
+        };
     }
 
     private const int MaxNudges = 2;
@@ -187,9 +222,15 @@ public sealed class AgentSession(
         _ => false,
     };
 
-    /// <summary>Keeps only the newest <paramref name="keep"/> screenshots in the history.</summary>
-    internal void PruneScreenshots(int keep)
+    /// <summary>
+    /// Once more than <paramref name="keep"/> + <paramref name="slack"/> screenshots are in the
+    /// history, drops all but the newest <paramref name="keep"/>.
+    /// </summary>
+    internal void PruneScreenshots(int keep, int slack = 0)
     {
+        var total = History.Sum(m => m.Parts?.Count(p => p.IsImage) ?? 0);
+        if (total <= keep + slack)
+            return;
         var seen = 0;
         for (var i = History.Count - 1; i >= 0; i--)
         {

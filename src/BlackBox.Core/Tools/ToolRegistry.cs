@@ -19,6 +19,7 @@ public sealed class ToolRegistry
         if (includeScreenTools)
         {
             yield return new ScreenshotTool();
+            yield return new ZoomTool();
             yield return new MouseClickTool();
             yield return new MouseMoveTool();
             yield return new MouseDragTool();

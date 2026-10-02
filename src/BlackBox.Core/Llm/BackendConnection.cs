@@ -15,6 +15,7 @@ public sealed record BackendConnection(OpenAiChatClient Client, ChatRequestOptio
             Temperature = agent.Temperature,
             TopP = agent.TopP,
             MaxTokens = agent.MaxTokensPerReply,
+            MaxReasoningChars = agent.MaxThinkingTokens > 0 ? agent.MaxThinkingTokens * 4 : null,
             Extra = new JsonObject
             {
                 ["top_k"] = agent.TopK,

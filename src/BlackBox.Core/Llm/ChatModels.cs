@@ -70,6 +70,9 @@ public sealed class ChatRequestOptions
 
     /// <summary>Extra top-level request fields (e.g. llama.cpp's top_k or chat_template_kwargs).</summary>
     public JsonObject? Extra { get; set; }
+
+    /// <summary>Abort the reply once the streamed reasoning grows past this many characters.</summary>
+    public int? MaxReasoningChars { get; set; }
 }
 
 public enum StreamChannel { Content, Reasoning }
