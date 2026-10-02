@@ -68,6 +68,11 @@ public sealed class AgentSession(
                     reply = await client.CompleteAsync(request, toolDefs, direct, observer.OnDelta, ct).ConfigureAwait(false);
                 }
                 TextToolCallParser.TryExtract(reply, tools);
+                // "The task is complete" followed by yet another screenshot: small models can keep
+                // re-verifying forever. A completion claim with only look-only calls ends the turn.
+                if (reply.HasToolCalls && LooksFinished(reply.Content) &&
+                    reply.ToolCalls!.All(c => ToolCallRepair.ResolveTool(c.Name, tools)?.Risk == ToolRisk.ReadOnly))
+                    reply.ToolCalls = null;
                 History.Add(reply);
                 observer.OnAssistantMessage(reply);
 
@@ -154,6 +159,12 @@ public sealed class AgentSession(
     private const int MaxNudges = 2;
     private const string NudgeText =
         "Continue with the task. If there is another step, call the tool for it now. If the task is finished, reply with a short summary of what you did.";
+
+    internal static bool LooksFinished(string? content) =>
+        content is { Length: > 0 } &&
+        System.Text.RegularExpressions.Regex.IsMatch(content,
+            @"\b((?<!\b(whether|if|once|when)\s+(the\s+)?)task (is|has been) (now )?(complete|completed|done|finished)|i('ve| have) (successfully )?(completed|finished) (the|your|this) task|everything is done|all done)\b",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     internal static bool LooksUnfinished(ChatMessage reply)
     {

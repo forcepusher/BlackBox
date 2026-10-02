@@ -100,7 +100,26 @@ public sealed class LlamaServerHost : IAsyncDisposable
         return args;
     }
 
-    public async Task StartAsync(LocalModelSettings s, CancellationToken ct)
+    private Task? _starting;
+
+    /// <summary>
+    /// Starts (or restarts) the server. If a start is already in progress, returns that one instead
+    /// of launching a second server, so pressing Send while the model loads simply waits.
+    /// </summary>
+    public Task StartAsync(LocalModelSettings s, CancellationToken ct)
+    {
+        lock (_recentLog)
+        {
+            if (_starting is { IsCompleted: false })
+                return _starting;
+            return _starting = StartCoreAsync(s, ct);
+        }
+    }
+
+    /// <summary>Waits for an in-progress start, if any.</summary>
+    public Task WaitForStartAsync() => _starting ?? Task.CompletedTask;
+
+    private async Task StartCoreAsync(LocalModelSettings s, CancellationToken ct)
     {
         await StopAsync().ConfigureAwait(false);
         LastError = null;

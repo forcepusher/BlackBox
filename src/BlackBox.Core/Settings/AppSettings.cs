@@ -57,7 +57,8 @@ public sealed class RemoteApiSettings
 public sealed class AgentSettings
 {
     public int MaxSteps { get; set; } = 40;
-    public ApprovalMode Approval { get; set; } = ApprovalMode.AskRisky;
+    /// <summary>Everything runs without asking by default; Stop and the failsafe corner stay available.</summary>
+    public ApprovalMode Approval { get; set; } = ApprovalMode.Never;
 
     /// <summary>Screenshots are downscaled to at most this many pixels before going to the model (about 1.3 MP, roughly 1300 image tokens).</summary>
     public int ScreenshotMaxPixels { get; set; } = 1_300_000;
@@ -67,6 +68,9 @@ public sealed class AgentSettings
 
     /// <summary>Attach a fresh screenshot after mouse/keyboard actions.</summary>
     public bool ScreenshotAfterActions { get; set; } = true;
+
+    /// <summary>Minimize BlackBox while the agent works so it does not cover (or click) its own window.</summary>
+    public bool HideWindowWhileWorking { get; set; } = true;
 
     /// <summary>Moving the mouse into the top-left corner stops the agent.</summary>
     public bool FailsafeCorner { get; set; } = true;

@@ -36,6 +36,15 @@ public class ChatClientTests
     }
 
     [Fact]
+    public async Task Leaked_think_tags_move_to_reasoning()
+    {
+        var sse = """data: {"choices":[{"delta":{"content":"Done, it is open.\n</think>\n\nNotepad is open."}}]}""";
+        var msg = await OpenAiChatClient.ReadStreamAsync(new StringReader(sse), null, CancellationToken.None);
+        Assert.Equal("Notepad is open.", msg.Content);
+        Assert.Contains("Done, it is open.", msg.Reasoning);
+    }
+
+    [Fact]
     public async Task Stream_error_chunk_throws()
     {
         var sse = """data: {"error":{"message":"context too long"}}""";
@@ -188,4 +197,12 @@ public class ChatClientTests
     [InlineData("Which file do you mean?", false)]
     public void Unfinished_replies_are_detected(string content, bool expected) =>
         Assert.Equal(expected, AgentSession.LooksUnfinished(new ChatMessage { Role = ChatRole.Assistant, Content = content }));
+
+    [Theory]
+    [InlineData("The task is complete. I opened Notepad.", true)]
+    [InlineData("I have successfully completed the task.", true)]
+    [InlineData("Let me check whether the task is complete.", false)]
+    [InlineData("Clicking Save now.", false)]
+    public void Completion_claims_are_detected(string content, bool expected) =>
+        Assert.Equal(expected, AgentSession.LooksFinished(content));
 }

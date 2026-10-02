@@ -70,6 +70,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     public bool HasNoMessages => Items.Count == 0;
 
+    public bool HideWindowWhileWorking => _settings.Agent.HideWindowWhileWorking;
+
+    /// <summary>Raised when the agent needs the user (an approval prompt), so a hidden window can come back.</summary>
+    public event Action? AttentionNeeded;
+
+    /// <summary>Raised after the user answered a prompt, so the window can get out of the way again.</summary>
+    public event Action? AttentionHandled;
+
     // ---- first-run model download ----------------------------------------------------
 
     private CancellationTokenSource? _downloadCts;
@@ -255,6 +263,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var wasRunning = _server.State is ServerState.Running or ServerState.Starting;
         RefreshModelPresent();
         OnPropertyChanged(nameof(SetupText));
+        OnPropertyChanged(nameof(HideWindowWhileWorking));
 
         if (updated.Backend == BackendKind.Remote && wasRunning)
         {
@@ -291,9 +300,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
         if (_server.State != ServerState.Running)
         {
-            if (_server.State != ServerState.Starting)
+            if (_server.State == ServerState.Starting)
+            {
+                AddNotice("Waiting for the model to finish loading…", isError: false);
+                await _server.WaitForStartAsync();
+            }
+            else
+            {
                 AddNotice("Starting the local model…", isError: false);
-            await StartServerAsync();
+                await StartServerAsync();
+            }
             ct.ThrowIfCancellationRequested();
             if (_server.State != ServerState.Running)
                 return null;
@@ -379,7 +395,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         return await Dispatcher.UIThread.InvokeAsync(() =>
         {
             var item = FindOrAddTool(call, summary);
-            return item.WaitForApprovalAsync(ct);
+            AttentionNeeded?.Invoke();
+            return item.WaitForApprovalAsync(ct).ContinueWith(t =>
+            {
+                Dispatcher.UIThread.Post(() => AttentionHandled?.Invoke());
+                return t.Result;
+            }, TaskScheduler.Default);
         });
     }
 

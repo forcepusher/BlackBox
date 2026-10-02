@@ -164,10 +164,20 @@ public sealed class OpenAiChatClient
             }
         }
 
+        // Thinking that leaked into the visible text (a stray </think> from a quantized model,
+        // or a server without a reasoning parser) belongs with the reasoning.
+        var text = content.ToString();
+        var thinkEnd = text.LastIndexOf("</think>", StringComparison.Ordinal);
+        if (thinkEnd >= 0)
+        {
+            reasoning.Append(text[..thinkEnd].Replace("<think>", "", StringComparison.Ordinal));
+            text = text[(thinkEnd + "</think>".Length)..].TrimStart();
+        }
+
         var message = new ChatMessage
         {
             Role = ChatRole.Assistant,
-            Content = content.ToString(),
+            Content = text,
             Reasoning = reasoning.Length > 0 ? reasoning.ToString() : null,
         };
         if (calls.Count > 0)

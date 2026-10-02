@@ -29,6 +29,32 @@ public partial class MainWindow : Window
 
     private MainWindowViewModel Vm => (MainWindowViewModel)DataContext!;
 
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (DataContext is not MainWindowViewModel vm) return;
+
+        // Get out of the way while the agent works on the desktop, come back when it is done
+        // or needs an answer.
+        vm.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName != nameof(MainWindowViewModel.IsBusy)) return;
+            if (vm.IsBusy && vm.HideWindowWhileWorking) WindowState = WindowState.Minimized;
+            else if (!vm.IsBusy) Restore();
+        };
+        vm.AttentionNeeded += Restore;
+        vm.AttentionHandled += () =>
+        {
+            if (vm.IsBusy && vm.HideWindowWhileWorking) WindowState = WindowState.Minimized;
+        };
+    }
+
+    private void Restore()
+    {
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+    }
+
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);

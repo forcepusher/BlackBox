@@ -81,10 +81,11 @@
             </StackPanel>
 
             <TextBlock Classes="h2" Text="Safety" />
-            <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto">
+            <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto">
               <TextBlock Classes="label" Grid.Row="0" Text="Ask me first" />
               <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding ApprovalModes}" SelectedIndex="{Binding ApprovalIndex}" HorizontalAlignment="Stretch" />
               <CheckBox Grid.Row="1" Grid.Column="1" Content="Stop when I move the mouse to the top-left corner" IsChecked="{Binding Agent.FailsafeCorner}" />
+              <CheckBox Grid.Row="2" Grid.Column="1" Content="Minimize BlackBox while it works (it comes back when done or when it needs you)" IsChecked="{Binding Agent.HideWindowWhileWorking}" />
             </Grid>
 
             <TextBlock Classes="h2" Text="Things BlackBox should always know" />
