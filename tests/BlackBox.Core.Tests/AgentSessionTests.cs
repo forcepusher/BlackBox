@@ -137,7 +137,7 @@ public class AgentSessionTests
 
     private static (AgentSession, RecordingObserver) CreateSession(ScriptedServer server, string dir, IPlatformServices platform, int keepScreenshots = 2)
     {
-        var settings = new AgentSettings { KeepScreenshots = keepScreenshots, FailsafeCorner = false, ScreenshotAfterActions = false };
+        var settings = new AgentSettings { KeepScreenshots = keepScreenshots, FailsafeCorner = false, ScreenshotAfterActions = false, Approval = ApprovalMode.AskRisky };
         var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = dir };
         var client = new OpenAiChatClient(new HttpClient(server), "http://test", null);
         var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(includeScreenTools: true), ctx, "system prompt");
