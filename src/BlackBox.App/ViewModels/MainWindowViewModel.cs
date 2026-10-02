@@ -118,9 +118,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     partial void OnIsLocalBackendChanged(bool value) => OnPropertyChanged(nameof(ShowSetupBanner));
 
-    public string SetupText =>
-        $"BlackBox needs its AI model ({Path.GetFileName(_settings.Local.ModelPath)}, about 8.7 GB with vision). " +
-        "It is downloaded once into the Models folder next to the app.";
+    /// <summary>Model files appended to this exe by publish.ps1, if any.</summary>
+    private readonly EmbeddedPayload? _payload = EmbeddedPayload.TryOpen(Environment.ProcessPath);
+
+    private bool HasEmbeddedModel => _payload?.Find(Path.GetFileName(_settings.Local.ModelPath)) is not null;
+
+    public string SetupText => HasEmbeddedModel
+        ? "Unpacking the built-in AI model into the Models folder next to the app. This only happens on the first run."
+        : $"BlackBox needs its AI model ({Path.GetFileName(_settings.Local.ModelPath)}, about 8.7 GB with vision). " +
+          "It is downloaded once into the Models folder next to the app.";
 
     [RelayCommand]
     private async Task DownloadModelAsync()
@@ -142,13 +148,30 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             var local = _settings.Local;
             var model = _paths.Resolve(local.ModelPath);
             var mmproj = string.IsNullOrWhiteSpace(local.MmprojPath) ? null : _paths.Resolve(local.MmprojPath);
-            if (mmproj is not null && !File.Exists(mmproj) && !string.IsNullOrWhiteSpace(local.MmprojUrl))
-                await downloader.DownloadAsync(local.MmprojUrl, mmproj, progress, _downloadCts.Token);
-            if (!File.Exists(model))
-                await downloader.DownloadAsync(local.ModelUrl, model, progress, _downloadCts.Token);
+            var unpacked = false;
+            foreach (var (path, url) in new[] { (mmproj, local.MmprojUrl), (model, local.ModelUrl) })
+            {
+                if (path is null || File.Exists(path)) continue;
+                // Prefer the copy inside the exe; fall back to downloading.
+                if (_payload?.Find(Path.GetFileName(path)) is { } entry)
+                {
+                    var started = DateTime.UtcNow;
+                    var name = Path.GetFileName(path);
+                    await _payload.ExtractAsync(entry, path, new Progress<long>(done =>
+                    {
+                        var seconds = Math.Max(0.001, (DateTime.UtcNow - started).TotalSeconds);
+                        ((IProgress<DownloadProgress>)progress).Report(new DownloadProgress(name, done, entry.Length, done / seconds));
+                    }), _downloadCts.Token);
+                    unpacked = true;
+                }
+                else if (!string.IsNullOrWhiteSpace(url))
+                {
+                    await downloader.DownloadAsync(url, path, progress, _downloadCts.Token);
+                }
+            }
 
             RefreshModelPresent();
-            AddNotice("Model downloaded.", isError: false);
+            AddNotice(unpacked ? "Built-in model unpacked." : "Model downloaded.", isError: false);
             if (ModelPresent)
                 await StartServerAsync();
         }
@@ -181,7 +204,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoMessages));
         RefreshModelPresent();
-        if (_settings.Backend == BackendKind.Local && ModelPresent && _settings.Local.AutoStart)
+        if (_settings.Backend != BackendKind.Local)
+            return;
+        var mmprojMissing = !string.IsNullOrWhiteSpace(_settings.Local.MmprojPath) && !File.Exists(_paths.Resolve(_settings.Local.MmprojPath));
+        if (HasEmbeddedModel && (!ModelPresent || mmprojMissing))
+            _ = DownloadModelAsync(); // unpack the built-in model, then start it
+        else if (ModelPresent && _settings.Local.AutoStart)
             _ = StartServerAsync();
     }
 
