@@ -54,6 +54,22 @@ public interface IWindowManager
     bool FocusWindow(long handle);
 }
 
+/// <summary>A control found through the OS accessibility tree.</summary>
+public sealed record UiElement(int Id, string ControlType, string Name, string? Value, ScreenRect Bounds, bool IsEnabled);
+
+/// <summary>
+/// Accessibility-tree access (UI Automation on Windows, AT-SPI on Linux, AX on macOS).
+/// Lets the model act on controls by name instead of by pixel, which small vision models need.
+/// </summary>
+public interface IUiAutomation
+{
+    /// <summary>Snapshot of the visible controls in the foreground window (or the window whose title contains <paramref name="windowTitle"/>). Ids are valid until the next snapshot.</summary>
+    IReadOnlyList<UiElement> GetElements(string? windowTitle, int maxCount);
+
+    /// <summary>Activates a control from the last snapshot (invoke, toggle or select). Returns false if it has no such action.</summary>
+    bool Activate(int id);
+}
+
 /// <summary>Everything OS-specific the agent needs. One implementation per platform.</summary>
 public interface IPlatformServices
 {
@@ -61,6 +77,9 @@ public interface IPlatformServices
     IScreenCapture Screen { get; }
     IInputController Input { get; }
     IWindowManager Windows { get; }
+
+    /// <summary>Null where no accessibility backend exists yet.</summary>
+    IUiAutomation? Automation { get; }
 
     /// <summary>Makes sure a child process dies with the app (e.g. a Windows job object).</summary>
     void TieToAppLifetime(Process process);
@@ -76,6 +95,7 @@ public sealed class UnsupportedPlatform : IPlatformServices, IScreenCapture, IIn
     public IScreenCapture Screen => this;
     public IInputController Input => this;
     public IWindowManager Windows => this;
+    public IUiAutomation? Automation => null;
     public ProcessStartInfo CreateShellStartInfo(string command) => new("/bin/sh") { ArgumentList = { "-c", command } };
     public void TieToAppLifetime(Process process) { }
 

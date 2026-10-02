@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- Windows builds include the Windows desktop backend; other OSes build the portable core only. -->
+    <TargetFramework Condition="$([MSBuild]::IsOSPlatform('Windows'))">net10.0-windows</TargetFramework>
     <OutputType>WinExe</OutputType>
     <AssemblyName>BlackBox</AssemblyName>
     <RootNamespace>BlackBox.App</RootNamespace>
@@ -25,7 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BlackBox.Core\BlackBox.Core.csproj" />
-    <ProjectReference Include="..\BlackBox.Platform.Windows\BlackBox.Platform.Windows.csproj" />
+    <ProjectReference Include="..\BlackBox.Platform.Windows\BlackBox.Platform.Windows.csproj" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
   </ItemGroup>
 
 </Project>

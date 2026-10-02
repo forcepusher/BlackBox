@@ -33,7 +33,11 @@ if (string.IsNullOrWhiteSpace(task))
 var paths = new AppPaths(root);
 paths.EnsureCreated();
 var settings = new SettingsStore(paths).Load();
-IPlatformServices platform = OperatingSystem.IsWindows() ? new BlackBox.Platform.Windows.WindowsPlatform() : new UnsupportedPlatform();
+#if WINDOWS
+IPlatformServices platform = new BlackBox.Platform.Windows.WindowsPlatform();
+#else
+IPlatformServices platform = new UnsupportedPlatform();
+#endif
 await using var server = new LlamaServerHost(paths, platform);
 using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
 using var cts = new CancellationTokenSource();
@@ -64,7 +68,7 @@ else
 var workDir = string.IsNullOrWhiteSpace(agent.WorkingDirectory) ? paths.WorkspaceDir : paths.Resolve(agent.WorkingDirectory);
 var ctx = new ToolContext { Platform = platform, Settings = agent, WorkingDirectory = workDir };
 var screen = backend.Vision ? ctx.GetScreenSpace() : null;
-var registry = ToolRegistry.CreateDefault(includeScreenTools: screen is not null);
+var registry = ToolRegistry.CreateDefault(includeScreenTools: screen is not null, includeUiAutomation: platform.Automation is not null);
 var session = new AgentSession(backend.Client, backend.Options, registry, ctx, SystemPrompt.Build(platform.Name, screen, workDir, agent.CustomInstructions));
 var observer = new ConsoleObserver(autoYes, shotsDir);
 

@@ -17,12 +17,18 @@ public sealed class WindowsPlatform : IPlatformServices
         // Coordinates must be physical pixels. The app manifest already asks for this;
         // calling it again is harmless and covers hosts without the manifest (tests, tools).
         SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        _automation = new Lazy<WindowsUiAutomation>(() => new WindowsUiAutomation(_windows, _input));
     }
+
+    private readonly WindowsInputController _input = new();
+    private readonly WindowsWindowManager _windows = new();
+    private readonly Lazy<WindowsUiAutomation> _automation;
 
     public string Name => $"Windows {Environment.OSVersion.Version}";
     public IScreenCapture Screen { get; } = new WindowsScreenCapture();
-    public IInputController Input { get; } = new WindowsInputController();
-    public IWindowManager Windows { get; } = new WindowsWindowManager();
+    public IInputController Input => _input;
+    public IWindowManager Windows => _windows;
+    public IUiAutomation? Automation => _automation.Value;
 
     public ProcessStartInfo CreateShellStartInfo(string command)
     {

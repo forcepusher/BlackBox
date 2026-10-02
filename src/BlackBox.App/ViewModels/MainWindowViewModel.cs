@@ -192,7 +192,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 catch (NotSupportedException) { }
             }
 
-            var registry = ToolRegistry.CreateDefault(includeScreenTools: screen is not null);
+            var registry = ToolRegistry.CreateDefault(includeScreenTools: screen is not null, includeUiAutomation: _platform.Automation is not null);
             var prompt = SystemPrompt.Build(_platform.Name, screen, ctx.WorkingDirectory, agent.CustomInstructions);
             var session = new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, _history);
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);

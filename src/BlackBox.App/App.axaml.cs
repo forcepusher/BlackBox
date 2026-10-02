@@ -34,9 +34,12 @@ public partial class App : Application
 
     private static IPlatformServices CreatePlatform()
     {
-        if (OperatingSystem.IsWindows())
-            return new Platform.Windows.WindowsPlatform();
+#if WINDOWS
+        return new Platform.Windows.WindowsPlatform();
+#else
+        // Linux and macOS backends go here.
         return new UnsupportedPlatform();
+#endif
     }
 
     /// <summary>

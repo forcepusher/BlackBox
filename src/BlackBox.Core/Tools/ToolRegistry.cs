@@ -12,10 +12,16 @@ public sealed class ToolRegistry
             _tools[t.Name] = t;
     }
 
-    public static ToolRegistry CreateDefault(bool includeScreenTools) => new(DefaultTools(includeScreenTools));
+    public static ToolRegistry CreateDefault(bool includeScreenTools, bool includeUiAutomation = false) =>
+        new(DefaultTools(includeScreenTools, includeUiAutomation));
 
-    public static IEnumerable<Tool> DefaultTools(bool includeScreenTools)
+    public static IEnumerable<Tool> DefaultTools(bool includeScreenTools, bool includeUiAutomation = false)
     {
+        if (includeUiAutomation)
+        {
+            yield return new ListUiElementsTool();
+            yield return new ClickElementTool();
+        }
         if (includeScreenTools)
         {
             yield return new ScreenshotTool();

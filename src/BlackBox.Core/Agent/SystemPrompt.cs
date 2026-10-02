@@ -24,6 +24,7 @@ public static class SystemPrompt
         {
             sb.AppendLine("- Start GUI tasks with a screenshot. Look before you click; never guess coordinates.");
             sb.AppendLine("- Aim for the center of buttons, fields and icons. After each action, check the new screenshot to confirm it worked before moving on.");
+            sb.AppendLine("- To press buttons, menu items, checkboxes or tabs in normal desktop apps, prefer list_ui_elements + click_element: it finds controls by name and does not miss. Use mouse clicks for things it does not list (web page content, games, canvases).");
             sb.AppendLine("- If text or buttons are small or close together, use zoom on that area first and read the coordinates off its rulers.");
             sb.AppendLine("- Maximize small windows (double-click the title bar or press win+up) when that makes them easier to work with.");
             sb.AppendLine("- Prefer keyboard shortcuts and the shell when they are more reliable than clicking (e.g. win+r, ctrl+l, Start-Process).");

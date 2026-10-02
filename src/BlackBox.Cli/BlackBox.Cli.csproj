@@ -3,6 +3,8 @@
   <!-- Headless runner: same agent, same tools, output in the console. Handy for trying tasks
        and models without the UI, and for scripted runs. -->
   <PropertyGroup>
+    <!-- Windows builds include the Windows desktop backend; other OSes build the portable core only. -->
+    <TargetFramework Condition="$([MSBuild]::IsOSPlatform('Windows'))">net10.0-windows</TargetFramework>
     <OutputType>Exe</OutputType>
     <AssemblyName>blackbox-cli</AssemblyName>
     <RootNamespace>BlackBox.Cli</RootNamespace>
@@ -11,7 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BlackBox.Core\BlackBox.Core.csproj" />
-    <ProjectReference Include="..\BlackBox.Platform.Windows\BlackBox.Platform.Windows.csproj" />
+    <ProjectReference Include="..\BlackBox.Platform.Windows\BlackBox.Platform.Windows.csproj" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
   </ItemGroup>
 
 </Project>

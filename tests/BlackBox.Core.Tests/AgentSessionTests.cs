@@ -206,8 +206,16 @@ internal sealed class RecordingObserver : IAgentObserver
 }
 
 /// <summary>A 200x100 screen that records input instead of sending it.</summary>
-internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputController, IWindowManager
+internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputController, IWindowManager, IUiAutomation
 {
+    public IUiAutomation? Automation => this;
+    public IReadOnlyList<UiElement> GetElements(string? windowTitle, int maxCount) =>
+    [
+        new UiElement(1, "Button", "Save", null, new ScreenRect(100, 50, 40, 20), true),
+        new UiElement(2, "Edit", "File name", "notes.txt", new ScreenRect(10, 10, 80, 20), true),
+    ];
+    public bool Activate(int id) { Actions.Add($"activate {id}"); return id is 1 or 2; }
+
     public List<string> Actions { get; } = [];
     public (int X, int Y) Cursor { get; set; } = (50, 50);
 

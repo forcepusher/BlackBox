@@ -84,6 +84,21 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task Ui_elements_are_listed_in_screenshot_coordinates_and_pressed_by_id()
+    {
+        var platform = new FakePlatform();
+        var ctx = Ctx(platform);
+        var list = await new ListUiElementsTool().ExecuteAsync(new JsonObject { ["filter"] = "save" }, ctx, CancellationToken.None);
+        Assert.Contains("#1 Button \"Save\"", list.Text);
+        Assert.DoesNotContain("File name", list.Text);
+
+        var press = await new ClickElementTool().ExecuteAsync(new JsonObject { ["id"] = 1 }, ctx, CancellationToken.None);
+        Assert.False(press.IsError);
+        Assert.Contains("activate 1", platform.Actions);
+        await Assert.ThrowsAsync<ToolArgumentException>(() => new ClickElementTool().ExecuteAsync(new JsonObject { ["id"] = 9 }, ctx, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Edit_file_requires_a_unique_match()
     {
         var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
@@ -135,10 +150,12 @@ public class ToolTests
     [Fact]
     public async Task Real_screen_capture_on_windows()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
-#pragma warning disable CA1416
+#if !WINDOWS
+        Assert.Skip("Windows only");
+        IPlatformServices platform = new UnsupportedPlatform();
+#else
         var platform = new BlackBox.Platform.Windows.WindowsPlatform();
-#pragma warning restore CA1416
+#endif
         var screen = platform.Screen.GetPrimaryScreen();
         Assert.True(screen.Width >= 640 && screen.Height >= 480);
 
@@ -151,10 +168,12 @@ public class ToolTests
     [Fact]
     public async Task Shell_on_windows_returns_utf8_output()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows only");
-#pragma warning disable CA1416
+#if !WINDOWS
+        Assert.Skip("Windows only");
+        IPlatformServices platform = new UnsupportedPlatform();
+#else
         var platform = new BlackBox.Platform.Windows.WindowsPlatform();
-#pragma warning restore CA1416
+#endif
         var result = await new ShellTool().ExecuteAsync(
             new JsonObject { ["command"] = "Write-Output \"héllo 'quoted' wörld\"; exit 3" }, Ctx(platform), CancellationToken.None);
 
