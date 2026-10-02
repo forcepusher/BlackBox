@@ -40,7 +40,9 @@ without taking it gets nudged to continue.
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |
-| `screenshot` | Captures the primary screen, downscaled to fit 1280x800 |
+| `screenshot` | Captures the primary screen, downscaled to ~1.3 MP on the 32px vision grid |
+| `zoom` | Magnified view of a region with rulers labelled in screenshot coordinates |
+| `list_ui_elements`, `click_element` | Windows UI Automation: find controls by name and press them (no pixel aiming) |
 | `mouse_click`, `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …) |
 | `wait` | Waits, then screenshots |
@@ -48,8 +50,9 @@ without taking it gets nudged to continue.
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 
-Safety: by default BlackBox asks before shell commands and file changes. Moving the mouse to the
-top-left corner of the screen, or pressing Stop, halts the agent.
+Actions run without asking by default (approvals can be switched on in Settings → General).
+Moving the mouse to the top-left corner of the screen, or pressing Stop, halts the agent. BlackBox
+minimizes itself while it works and comes back when it is done.
 
 ## Build
 Requires the .NET 10 SDK.
@@ -64,8 +67,10 @@ dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   #
 ## Project structure
 - `src/BlackBox.Core`: OpenAI-compatible streaming client, llama-server host, agent loop, tools,
   settings. Platform-neutral.
-- `src/BlackBox.Platform.Windows`: screen capture (GDI), input (SendInput), windows (EnumWindows),
-  job object that kills llama-server with the app.
+- `src/BlackBox.Platform.Windows` (net10.0-windows): screen capture (GDI), input (SendInput), windows
+  (EnumWindows), UI Automation (FlaUI), job object that kills llama-server with the app. Only
+  referenced when building on Windows.
+- `src/BlackBox.Cli`: headless runner for trying tasks and models.
 - `src/BlackBox.App`: Avalonia 11 UI with CommunityToolkit.Mvvm.
 - `tests/BlackBox.Core.Tests`: xUnit tests.
 
