@@ -112,21 +112,3 @@ public abstract class Tool
 }
 
 public sealed class ToolArgumentException(string message) : Exception(message);
-
-public static class ToolArgs
-{
-    /// <summary>Parses the raw arguments string from a tool call, accepting empty strings as "{}".</summary>
-    public static JsonObject Parse(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-            return [];
-        try
-        {
-            return JsonNode.Parse(raw) as JsonObject ?? throw new ToolArgumentException("Tool arguments must be a JSON object.");
-        }
-        catch (JsonException ex)
-        {
-            throw new ToolArgumentException("Tool arguments are not valid JSON: " + ex.Message);
-        }
-    }
-}

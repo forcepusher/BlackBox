@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using BlackBox.Core.Agent;
 using BlackBox.Core.Llm;
+using BlackBox.Core.Tools;
 using Xunit;
 
 namespace BlackBox.Core.Tests;
@@ -87,7 +88,7 @@ public class ChatClientTests
             Content = "I'll click it.\n<tool_call>\n{\"name\": \"mouse_click\", \"arguments\": {\"x\": 5, \"y\": 6}}\n</tool_call>",
         };
 
-        Assert.True(TextToolCallParser.TryExtract(msg, new HashSet<string> { "mouse_click" }));
+        Assert.True(TextToolCallParser.TryExtract(msg, Registry));
         Assert.Equal("I'll click it.", msg.Content);
         Assert.Equal("mouse_click", msg.ToolCalls![0].Name);
         Assert.Equal("""{"x":5,"y":6}""", msg.ToolCalls[0].Arguments);
@@ -97,6 +98,94 @@ public class ChatClientTests
     public void Text_tool_calls_for_unknown_tools_are_ignored()
     {
         var msg = new ChatMessage { Role = ChatRole.Assistant, Content = "<tool_call>{\"name\":\"rm_rf\",\"arguments\":{}}</tool_call>" };
-        Assert.False(TextToolCallParser.TryExtract(msg, new HashSet<string> { "mouse_click" }));
+        Assert.False(TextToolCallParser.TryExtract(msg, Registry));
     }
+
+    private static readonly ToolRegistry Registry = ToolRegistry.CreateDefault(includeScreenTools: true);
+
+    [Fact]
+    public void Qwen_xml_tool_calls_in_text_are_extracted()
+    {
+        var msg = new ChatMessage
+        {
+            Role = ChatRole.Assistant,
+            Content = "Opening it.\n<tool_call>\n<function=mouse_click>\n<parameter=x>\n120\n</parameter>\n<parameter=y>\n45.5\n</parameter>\n</function>\n</tool_call>\n" +
+                      "<tool_call>\n<function=type_text>\n<parameter=text>\nhello 42\n</parameter>\n</function>\n</tool_call>",
+        };
+
+        Assert.True(TextToolCallParser.TryExtract(msg, Registry));
+        Assert.Equal("Opening it.", msg.Content);
+        Assert.Equal(2, msg.ToolCalls!.Count);
+        Assert.Equal("""{"x":120,"y":45.5}""", msg.ToolCalls[0].Arguments);
+        Assert.Equal("""{"text":"hello 42"}""", msg.ToolCalls[1].Arguments);
+    }
+
+    [Fact]
+    public void Fenced_json_reply_is_treated_as_a_tool_call()
+    {
+        var msg = new ChatMessage { Role = ChatRole.Assistant, Content = "```json\n{\"name\": \"screenshot\", \"arguments\": {}}\n```" };
+        Assert.True(TextToolCallParser.TryExtract(msg, Registry));
+        Assert.Equal("screenshot", msg.ToolCalls![0].Name);
+        Assert.Equal("", msg.Content);
+    }
+
+    [Theory]
+    [InlineData("{\"x\": 10, \"y\": 20,}")]                 // trailing comma
+    [InlineData("{'x': 10, 'y': 20}")]                    // single quotes
+    [InlineData("{x: 10, y: 20}")]                        // unquoted keys
+    [InlineData("{\"x\": 10, \"y\": 20")]                  // truncated
+    [InlineData("\"{\\\"x\\\": 10, \\\"y\\\": 20}\"")]     // double-encoded
+    [InlineData("```json\n{\"x\": 10, \"y\": 20}\n```")]   // fenced
+    [InlineData("{\"x\": 10, \"y\": 20} I will click now")] // trailing prose
+    public void Sloppy_argument_json_is_repaired(string raw)
+    {
+        var args = ToolCallRepair.ParseArguments(raw);
+        Assert.Equal(10, args["x"]!.GetValue<int>());
+        Assert.Equal(20, args["y"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void Coordinates_and_aliases_are_normalized()
+    {
+        var click = ToolCallRepair.NormalizeArguments(ToolCallRepair.ParseArguments("""{"coordinate": [5, 6]}"""), Registry.Find("mouse_click")!);
+        Assert.Equal(5, click["x"]!.GetValue<int>());
+        Assert.Equal(6, click["y"]!.GetValue<int>());
+
+        var drag = ToolCallRepair.NormalizeArguments(ToolCallRepair.ParseArguments("""{"start": "(1, 2)", "end": [3, 4]}"""), Registry.Find("mouse_drag")!);
+        Assert.Equal(1, drag["x"]!.GetValue<double>());
+        Assert.Equal(4, drag["to_y"]!.GetValue<int>());
+
+        var shell = ToolCallRepair.NormalizeArguments(ToolCallRepair.ParseArguments("""{"cmd": "dir"}"""), Registry.Find("run_shell")!);
+        Assert.Equal("dir", shell["command"]!.GetValue<string>());
+
+        var type = ToolCallRepair.NormalizeArguments(ToolCallRepair.ParseArguments("""{"Text": "hi"}"""), Registry.Find("type_text")!);
+        Assert.Equal("hi", type["text"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("mouse_click", "mouse_click")]
+    [InlineData("Mouse-Click", "mouse_click")]
+    [InlineData("functions.screenshot", "screenshot")]
+    [InlineData("double_click", "mouse_click")]
+    [InlineData("bash", "run_shell")]
+    [InlineData("hotkey", "press_keys")]
+    public void Tool_names_are_resolved(string called, string expected) =>
+        Assert.Equal(expected, ToolCallRepair.ResolveTool(called, Registry)!.Name);
+
+    [Fact]
+    public void Double_click_alias_keeps_its_meaning()
+    {
+        var args = new JsonObject { ["x"] = 1, ["y"] = 2 };
+        ToolCallRepair.ApplyNameHints("double_click", args);
+        Assert.Equal(2, args["clicks"]!.GetValue<int>());
+    }
+
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("Let me take a screenshot first.", true)]
+    [InlineData("I'll open Notepad now:", true)]
+    [InlineData("Done. Notepad is open with your text.", false)]
+    [InlineData("Which file do you mean?", false)]
+    public void Unfinished_replies_are_detected(string content, bool expected) =>
+        Assert.Equal(expected, AgentSession.LooksUnfinished(new ChatMessage { Role = ChatRole.Assistant, Content = content }));
 }

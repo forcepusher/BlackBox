@@ -40,7 +40,7 @@ public sealed class AgentSession(
         History.Add(ChatMessage.User(userText));
         var settings = toolContext.Settings;
         var toolDefs = tools.Definitions();
-        var toolNames = tools.All.Select(t => t.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var nudges = 0;
 
         try
         {
@@ -54,12 +54,20 @@ public sealed class AgentSession(
                 request.AddRange(History);
 
                 var reply = await client.CompleteAsync(request, toolDefs, requestOptions, observer.OnDelta, ct).ConfigureAwait(false);
-                TextToolCallParser.TryExtract(reply, toolNames);
+                TextToolCallParser.TryExtract(reply, tools);
                 History.Add(reply);
                 observer.OnAssistantMessage(reply);
 
                 if (!reply.HasToolCalls)
                 {
+                    // Small models sometimes announce an action ("Let me click Save.") and stop,
+                    // or return nothing at all. Push them on a couple of times before giving up.
+                    if (nudges < MaxNudges && LooksUnfinished(reply))
+                    {
+                        nudges++;
+                        History.Add(ChatMessage.User(NudgeText));
+                        continue;
+                    }
                     observer.OnFinished(AgentStopReason.Completed, null);
                     return;
                 }
@@ -103,9 +111,25 @@ public sealed class AgentSession(
         }
     }
 
+    private const int MaxNudges = 2;
+    private const string NudgeText =
+        "Continue with the task. If there is another step, call the tool for it now. If the task is finished, reply with a short summary of what you did.";
+
+    internal static bool LooksUnfinished(ChatMessage reply)
+    {
+        var text = (reply.Content ?? "").Trim();
+        if (text.Length == 0)
+            return true;
+        var tail = text.Length > 240 ? text[^240..] : text;
+        return tail.EndsWith(':') ||
+               System.Text.RegularExpressions.Regex.IsMatch(tail,
+                   @"(^|[.!?\n]\s*)(let me|let's|i'll|i will|i'm going to|i am going to|next,? i|now i|i need to)\b[^.!?\n]*[.!]?\s*$",
+                   System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    }
+
     private async Task<ToolResult> RunToolAsync(ToolCall call, IAgentObserver observer, CancellationToken ct)
     {
-        var tool = tools.Find(call.Name);
+        var tool = ToolCallRepair.ResolveTool(call.Name, tools);
         if (tool is null)
         {
             var unknown = ToolResult.Error($"Unknown tool '{call.Name}'. Available: {string.Join(", ", tools.All.Select(t => t.Name))}.");
@@ -118,12 +142,14 @@ public sealed class AgentSession(
         string summary;
         try
         {
-            args = ToolArgs.Parse(call.Arguments);
+            args = ToolCallRepair.ParseArguments(call.Arguments);
+            ToolCallRepair.ApplyNameHints(call.Name, args);
+            ToolCallRepair.NormalizeArguments(args, tool);
             summary = tool.Describe(args);
         }
         catch (ToolArgumentException ex)
         {
-            var bad = ToolResult.Error(ex.Message);
+            var bad = ToolResult.Error($"{ex.Message} Parameters for {tool.Name}: {tool.Parameters.ToJsonString()}");
             observer.OnToolStarted(call, call.Name);
             observer.OnToolFinished(call, bad);
             return bad;
@@ -142,7 +168,11 @@ public sealed class AgentSession(
         {
             result = await tool.ExecuteAsync(args, toolContext, ct).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is ToolArgumentException or IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException or ArgumentException)
+        catch (ToolArgumentException ex)
+        {
+            result = ToolResult.Error($"{ex.Message} Parameters for {tool.Name}: {tool.Parameters.ToJsonString()}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException or ArgumentException)
         {
             result = ToolResult.Error(ex.Message);
         }

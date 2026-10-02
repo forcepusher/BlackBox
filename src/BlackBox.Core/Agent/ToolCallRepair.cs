@@ -1,0 +1,270 @@
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using BlackBox.Core.Tools;
+
+namespace BlackBox.Core.Agent;
+
+/// <summary>
+/// Fixes the tool calls that heavily quantized models get slightly wrong, so a near miss runs
+/// instead of costing a whole round trip: sloppy JSON, misspelled tool names and arguments
+/// under the wrong key.
+/// </summary>
+public static partial class ToolCallRepair
+{
+    private static readonly Dictionary<string, string> NameAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["click"] = "mouse_click", ["left_click"] = "mouse_click", ["double_click"] = "mouse_click",
+        ["right_click"] = "mouse_click", ["mouse_double_click"] = "mouse_click",
+        ["move_mouse"] = "mouse_move", ["hover"] = "mouse_move", ["mouse_hover"] = "mouse_move",
+        ["drag"] = "mouse_drag", ["left_click_drag"] = "mouse_drag",
+        ["type"] = "type_text", ["typing"] = "type_text", ["input_text"] = "type_text", ["write_text"] = "type_text",
+        ["key"] = "press_keys", ["keys"] = "press_keys", ["press_key"] = "press_keys", ["hotkey"] = "press_keys", ["keyboard"] = "press_keys",
+        ["take_screenshot"] = "screenshot", ["capture_screen"] = "screenshot", ["screen_capture"] = "screenshot",
+        ["sleep"] = "wait",
+        ["shell"] = "run_shell", ["bash"] = "run_shell", ["powershell"] = "run_shell", ["run_command"] = "run_shell",
+        ["execute_command"] = "run_shell", ["terminal"] = "run_shell", ["cmd"] = "run_shell",
+        ["read"] = "read_file", ["cat"] = "read_file", ["open_file"] = "read_file",
+        ["write"] = "write_file", ["create_file"] = "write_file", ["save_file"] = "write_file",
+        ["edit"] = "edit_file", ["replace_in_file"] = "edit_file", ["str_replace"] = "edit_file",
+        ["ls"] = "list_directory", ["list_files"] = "list_directory", ["list_dir"] = "list_directory", ["dir"] = "list_directory",
+        ["windows"] = "list_windows", ["get_windows"] = "list_windows",
+        ["activate_window"] = "focus_window", ["switch_window"] = "focus_window",
+    };
+
+    // Argument names models borrow from other agent frameworks, per canonical parameter.
+    private static readonly Dictionary<string, string[]> ArgAliases = new()
+    {
+        ["text"] = ["content", "value", "string", "input", "message"],
+        ["keys"] = ["key", "combo", "shortcut", "hotkey", "keys_combo"],
+        ["command"] = ["cmd", "script", "shell_command", "code"],
+        ["path"] = ["file", "file_path", "filepath", "filename", "directory", "dir", "folder"],
+        ["content"] = ["text", "data", "contents", "body"],
+        ["old_text"] = ["old", "old_str", "old_string", "search", "find"],
+        ["new_text"] = ["new", "new_str", "new_string", "replace", "replacement"],
+        ["seconds"] = ["duration", "time", "secs", "delay"],
+        ["direction"] = ["dir", "scroll_direction"],
+        ["amount"] = ["clicks", "scroll_amount", "steps", "distance"],
+        ["title"] = ["name", "window", "window_title"],
+    };
+
+    /// <summary>Maps a tool name the model produced to a registered tool, or returns null.</summary>
+    public static Tool? ResolveTool(string name, ToolRegistry registry)
+    {
+        if (registry.Find(name) is { } exact)
+            return exact;
+        var normalized = Regex.Replace(name.Trim(), @"^(functions|tools|default_api)[.:]", "", RegexOptions.IgnoreCase)
+            .Replace('-', '_').Replace(' ', '_').Replace('.', '_').ToLowerInvariant();
+        if (registry.Find(normalized) is { } n)
+            return n;
+        return NameAliases.TryGetValue(normalized, out var alias) ? registry.Find(alias) : null;
+    }
+
+    /// <summary>Keeps the intent of aliased names like "double_click" that map onto a more general tool.</summary>
+    public static void ApplyNameHints(string calledName, JsonObject args)
+    {
+        var n = calledName.Trim().ToLowerInvariant().Replace('-', '_');
+        if (n.Contains("double") && !args.ContainsKey("clicks")) args["clicks"] = 2;
+        if (n.Contains("triple") && !args.ContainsKey("clicks")) args["clicks"] = 3;
+        if (n.Contains("right") && n.Contains("click") && !args.ContainsKey("button")) args["button"] = "right";
+        if (n.Contains("middle") && n.Contains("click") && !args.ContainsKey("button")) args["button"] = "middle";
+    }
+
+    /// <summary>Parses tool arguments, repairing the usual JSON mistakes if strict parsing fails.</summary>
+    public static JsonObject ParseArguments(string raw)
+    {
+        raw = raw.Trim();
+        if (raw.Length == 0)
+            return [];
+        if (TryParseObject(raw) is { } strict)
+            return strict;
+
+        var text = StripWrappers(raw);
+        foreach (var candidate in Candidates(text))
+        {
+            if (TryParseObject(candidate) is { } obj)
+                return obj;
+        }
+        throw new ToolArgumentException("Tool arguments are not valid JSON. Send a single JSON object like {\"x\": 100, \"y\": 200}.");
+    }
+
+    /// <summary>
+    /// Moves arguments that arrived under a different name to the name the tool expects,
+    /// and unpacks coordinate pairs such as "coordinate": [x, y].
+    /// </summary>
+    public static JsonObject NormalizeArguments(JsonObject args, Tool tool)
+    {
+        if (tool.Parameters["properties"] is not JsonObject props)
+            return args;
+        var expected = props.Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
+
+        // Case differences ("X", "Path").
+        foreach (var key in args.Select(a => a.Key).ToList())
+        {
+            if (expected.Contains(key)) continue;
+            var match = expected.FirstOrDefault(e => string.Equals(e, key, StringComparison.OrdinalIgnoreCase));
+            if (match is not null && !args.ContainsKey(match))
+                Move(args, key, match);
+        }
+
+        // Coordinate pairs in all the shapes models like to send.
+        if (expected.Contains("x") && !args.ContainsKey("x"))
+            UnpackPoint(args, ["coordinate", "coordinates", "coord", "position", "point", "pos", "location", "start", "from", "start_coordinate"], "x", "y");
+        if (expected.Contains("to_x") && !args.ContainsKey("to_x"))
+            UnpackPoint(args, ["to", "end", "end_coordinate", "target", "destination", "coordinate2"], "to_x", "to_y");
+
+        foreach (var (canonical, aliases) in ArgAliases)
+        {
+            if (!expected.Contains(canonical) || args.ContainsKey(canonical)) continue;
+            var found = aliases.FirstOrDefault(a => args.ContainsKey(a) && !expected.Contains(a));
+            if (found is not null)
+                Move(args, found, canonical);
+        }
+
+        // Last resort: one required argument missing and exactly one unknown argument present.
+        var required = (tool.Parameters["required"] as JsonArray)?.Select(r => r!.GetValue<string>()).ToList() ?? [];
+        var missing = required.Where(r => !args.ContainsKey(r)).ToList();
+        var unknown = args.Select(a => a.Key).Where(k => !expected.Contains(k)).ToList();
+        if (missing.Count == 1 && unknown.Count == 1)
+            Move(args, unknown[0], missing[0]);
+
+        return args;
+    }
+
+    private static void UnpackPoint(JsonObject args, string[] keys, string xKey, string yKey)
+    {
+        foreach (var key in keys)
+        {
+            switch (args[key])
+            {
+                case JsonArray { Count: >= 2 } arr:
+                    args[xKey] = arr[0]?.DeepClone();
+                    args[yKey] = arr[1]?.DeepClone();
+                    args.Remove(key);
+                    return;
+                case JsonObject o when o["x"] is not null && o["y"] is not null:
+                    args[xKey] = o["x"]!.DeepClone();
+                    args[yKey] = o["y"]!.DeepClone();
+                    args.Remove(key);
+                    return;
+                case JsonValue v when v.TryGetValue<string>(out var s) && PointText().Match(s) is { Success: true } m:
+                    args[xKey] = double.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+                    args[yKey] = double.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+                    args.Remove(key);
+                    return;
+            }
+        }
+    }
+
+    private static void Move(JsonObject args, string from, string to)
+    {
+        var value = args[from]?.DeepClone();
+        args.Remove(from);
+        args[to] = value;
+    }
+
+    private static JsonObject? TryParseObject(string text)
+    {
+        try
+        {
+            var node = JsonNode.Parse(text, documentOptions: new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            return node switch
+            {
+                JsonObject o => o,
+                // Arguments double-encoded as a JSON string: "{\"x\": 1}"
+                JsonValue v when v.TryGetValue<string>(out var inner) && inner.TrimStart().StartsWith('{') => TryParseObject(inner),
+                _ => null,
+            };
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string StripWrappers(string text)
+    {
+        text = CodeFence().Replace(text, "$1").Trim();
+        text = text.Replace("<tool_call>", "").Replace("</tool_call>", "").Trim();
+        var start = text.IndexOf('{');
+        return start > 0 ? text[start..] : text;
+    }
+
+    private static IEnumerable<string> Candidates(string text)
+    {
+        // Python-style literals and single quotes.
+        var pythonish = PythonLiteral().Replace(text, m => m.Value switch { "True" => "true", "False" => "false", _ => "null" });
+        yield return pythonish;
+        if (!pythonish.Contains('"'))
+            yield return pythonish.Replace('\'', '"');
+
+        // Unquoted keys: {x: 10, y: 20}
+        var quotedKeys = UnquotedKey().Replace(pythonish, "$1\"$2\":");
+        yield return quotedKeys;
+
+        // Truncated output: close whatever is still open.
+        yield return Balance(quotedKeys);
+        // Extra text after the object.
+        yield return FirstObject(quotedKeys);
+    }
+
+    private static string Balance(string text)
+    {
+        var stack = new Stack<char>();
+        var inString = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (inString)
+            {
+                if (c == '\\') i++;
+                else if (c == '"') inString = false;
+                continue;
+            }
+            switch (c)
+            {
+                case '"': inString = true; break;
+                case '{': stack.Push('}'); break;
+                case '[': stack.Push(']'); break;
+                case '}' or ']' when stack.Count > 0: stack.Pop(); break;
+            }
+        }
+        var sb = new StringBuilder(text.TrimEnd().TrimEnd(','));
+        if (inString) sb.Append('"');
+        while (stack.Count > 0) sb.Append(stack.Pop());
+        return sb.ToString();
+    }
+
+    private static string FirstObject(string text)
+    {
+        var depth = 0;
+        var inString = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (inString)
+            {
+                if (c == '\\') i++;
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"') inString = true;
+            else if (c == '{') depth++;
+            else if (c == '}' && --depth == 0) return text[..(i + 1)];
+        }
+        return text;
+    }
+
+    [GeneratedRegex(@"```(?:json|JSON)?\s*(.*?)\s*```", RegexOptions.Singleline)]
+    private static partial Regex CodeFence();
+
+    [GeneratedRegex(@"(?<![""\w])(True|False|None)(?![""\w])")]
+    private static partial Regex PythonLiteral();
+
+    [GeneratedRegex(@"([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:")]
+    private static partial Regex UnquotedKey();
+
+    [GeneratedRegex(@"^\s*\(?\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*\)?\s*$")]
+    private static partial Regex PointText();
+}
