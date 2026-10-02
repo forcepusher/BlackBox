@@ -70,19 +70,91 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     public bool HasNoMessages => Items.Count == 0;
 
+    // ---- first-run model download ----------------------------------------------------
+
+    private CancellationTokenSource? _downloadCts;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowSetupBanner))]
+    private bool _modelPresent;
+
+    [ObservableProperty]
+    private bool _isDownloading;
+
+    [ObservableProperty]
+    private double _downloadPercent;
+
+    [ObservableProperty]
+    private string _downloadText = "";
+
+    public bool ShowSetupBanner => IsLocalBackend && !ModelPresent;
+
+    partial void OnIsLocalBackendChanged(bool value) => OnPropertyChanged(nameof(ShowSetupBanner));
+
+    public string SetupText =>
+        $"BlackBox needs its AI model ({Path.GetFileName(_settings.Local.ModelPath)}, about 8.7 GB with vision). " +
+        "It is downloaded once into the Models folder next to the app.";
+
+    [RelayCommand]
+    private async Task DownloadModelAsync()
+    {
+        if (IsDownloading) return;
+        IsDownloading = true;
+        _downloadCts = new CancellationTokenSource();
+        var downloader = new ModelDownloader(_http);
+        var progress = new Progress<DownloadProgress>(p =>
+        {
+            DownloadPercent = p.Total is > 0 ? 100.0 * p.Done / p.Total.Value : 0;
+            var total = p.Total is { } t ? $" of {t / 1e9:0.0} GB" : "";
+            var speed = p.BytesPerSecond > 0 ? $" · {p.BytesPerSecond / 1e6:0} MB/s" : "";
+            DownloadText = $"{p.FileName}: {p.Done / 1e9:0.00} GB{total}{speed}";
+        });
+
+        try
+        {
+            var local = _settings.Local;
+            var model = _paths.Resolve(local.ModelPath);
+            var mmproj = string.IsNullOrWhiteSpace(local.MmprojPath) ? null : _paths.Resolve(local.MmprojPath);
+            if (mmproj is not null && !File.Exists(mmproj) && !string.IsNullOrWhiteSpace(local.MmprojUrl))
+                await downloader.DownloadAsync(local.MmprojUrl, mmproj, progress, _downloadCts.Token);
+            if (!File.Exists(model))
+                await downloader.DownloadAsync(local.ModelUrl, model, progress, _downloadCts.Token);
+
+            RefreshModelPresent();
+            AddNotice("Model downloaded.", isError: false);
+            if (ModelPresent)
+                await StartServerAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            DownloadText = "Paused. Press Download to continue where it stopped.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException)
+        {
+            DownloadText = "Download failed: " + ex.Message + " Press Download to retry; it resumes where it stopped.";
+        }
+        finally
+        {
+            IsDownloading = false;
+            _downloadCts.Dispose();
+            _downloadCts = null;
+        }
+    }
+
+    [RelayCommand]
+    private void CancelDownload() => _downloadCts?.Cancel();
+
+    private void RefreshModelPresent()
+    {
+        ModelPresent = File.Exists(_paths.Resolve(_settings.Local.ModelPath));
+        RefreshServerStatus();
+    }
+
     public void OnStartup()
     {
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoMessages));
-        if (_settings.Backend != BackendKind.Local)
-            return;
-
-        var model = _paths.Resolve(_settings.Local.ModelPath);
-        if (!File.Exists(model))
-        {
-            AddNotice($"No model file at {model}. Put the GGUF in the Models folder or pick it in Settings, then press Start.", isError: false);
-            return;
-        }
-        if (_settings.Local.AutoStart)
+        RefreshModelPresent();
+        if (_settings.Backend == BackendKind.Local && ModelPresent && _settings.Local.AutoStart)
             _ = StartServerAsync();
     }
 
@@ -102,8 +174,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
         try
         {
-            var backend = await PrepareBackendAsync(ct);
-            if (backend is null)
+            if (await PrepareBackendAsync(ct) is not { } backend)
                 return;
 
             var agent = _settings.Agent;
@@ -115,7 +186,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             };
 
             ScreenSpace? screen = null;
-            if (backend.Value.Vision)
+            if (backend.Vision)
             {
                 try { screen = ctx.GetScreenSpace(); }
                 catch (NotSupportedException) { }
@@ -123,7 +194,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
             var registry = ToolRegistry.CreateDefault(includeScreenTools: screen is not null);
             var prompt = SystemPrompt.Build(_platform.Name, screen, ctx.WorkingDirectory, agent.CustomInstructions);
-            var session = new AgentSession(backend.Value.Client, backend.Value.Options, registry, ctx, prompt, _history);
+            var session = new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, _history);
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
         }
         catch (OperationCanceledException)
@@ -182,6 +253,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
         var localChanged = JsonSerializer.Serialize(old.Local) != JsonSerializer.Serialize(updated.Local);
         var wasRunning = _server.State is ServerState.Running or ServerState.Starting;
+        RefreshModelPresent();
+        OnPropertyChanged(nameof(SetupText));
 
         if (updated.Backend == BackendKind.Remote && wasRunning)
         {
@@ -197,25 +270,23 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     // ---- backend --------------------------------------------------------------------
 
-    private async Task<(OpenAiChatClient Client, ChatRequestOptions Options, bool Vision)?> PrepareBackendAsync(CancellationToken ct)
+    private async Task<BackendConnection?> PrepareBackendAsync(CancellationToken ct)
     {
-        var agent = _settings.Agent;
         if (_settings.Backend == BackendKind.Remote)
         {
             var remote = _settings.Remote;
             if (string.IsNullOrWhiteSpace(remote.BaseUrl) || string.IsNullOrWhiteSpace(remote.Model))
             {
-                AddNotice("Set the API URL and model name in Settings first.", isError: true);
+                AddNotice("Set the API address and model name in Settings first.", isError: true);
                 return null;
             }
-            var client = new OpenAiChatClient(_http, remote.BaseUrl, remote.ApiKey);
-            var options = new ChatRequestOptions
-            {
-                Model = remote.Model,
-                Temperature = agent.Temperature,
-                MaxTokens = agent.MaxTokensPerReply,
-            };
-            return (client, options, remote.SupportsVision);
+            return BackendConnection.ForRemote(_http, remote, _settings.Agent);
+        }
+
+        if (!ModelPresent)
+        {
+            AddNotice("The model isn't downloaded yet. Press Download at the top first.", isError: true);
+            return null;
         }
 
         if (_server.State != ServerState.Running)
@@ -227,20 +298,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             if (_server.State != ServerState.Running)
                 return null;
         }
-
-        var local = new ChatRequestOptions
-        {
-            Model = "local",
-            Temperature = agent.Temperature,
-            TopP = agent.TopP,
-            MaxTokens = agent.MaxTokensPerReply,
-            Extra = new JsonObject
-            {
-                ["top_k"] = agent.TopK,
-                ["chat_template_kwargs"] = new JsonObject { ["enable_thinking"] = agent.EnableThinking },
-            },
-        };
-        return (new OpenAiChatClient(_http, _server.BaseUrl, null), local, _server.HasVision);
+        return BackendConnection.ForLocal(_http, _server, _settings.Agent);
     }
 
     private string WorkingDirectory()
@@ -273,12 +331,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         };
         ServerStatusText = state switch
         {
-            ServerState.Running => _server.HasVision ? "Running · vision" : "Running · text only",
+            ServerState.Running => $"Ready · {(_server.HasVision ? "vision" : "text only")} · {_server.EffectiveContextSize / 1024}k context",
             ServerState.Starting => "Loading model…",
             ServerState.Failed => "Failed to start",
             _ => "Stopped",
         };
-        CanStartServer = state is ServerState.Stopped or ServerState.Failed;
+        CanStartServer = state is ServerState.Stopped or ServerState.Failed && File.Exists(_paths.Resolve(_settings.Local.ModelPath));
         CanStopServer = state is ServerState.Running or ServerState.Starting;
     }
 

@@ -17,6 +17,7 @@ public sealed class LlamaServerHost : IAsyncDisposable
     private readonly IPlatformServices _platform;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
     private readonly List<string> _recentLog = [];
+    private int _logLines;
     private Process? _process;
     private StreamWriter? _logFile;
 
@@ -71,14 +72,14 @@ public sealed class LlamaServerHost : IAsyncDisposable
         return null;
     }
 
-    public static IReadOnlyList<string> BuildArguments(LocalModelSettings s, string modelPath, string? mmprojPath)
+    public static IReadOnlyList<string> BuildArguments(LocalModelSettings s, string modelPath, string? mmprojPath, int? contextSize = null)
     {
         var args = new List<string>
         {
             "--model", modelPath,
             "--host", "127.0.0.1",
             "--port", s.Port.ToString(CultureInfo.InvariantCulture),
-            "--ctx-size", s.ContextSize.ToString(CultureInfo.InvariantCulture),
+            "--ctx-size", (contextSize ?? s.ContextSize).ToString(CultureInfo.InvariantCulture),
             "--n-gpu-layers", s.GpuLayers.ToString(CultureInfo.InvariantCulture),
             "--batch-size", s.BatchSize.ToString(CultureInfo.InvariantCulture),
             "--flash-attn", s.FlashAttention ? "on" : "off",
@@ -132,8 +133,70 @@ public sealed class LlamaServerHost : IAsyncDisposable
             return;
         }
 
-        SetState(ServerState.Starting);
         HasVision = mmproj is not null;
+        Directory.CreateDirectory(_paths.LogsDir);
+        _logFile = new StreamWriter(Path.Combine(_paths.LogsDir, "llama-server.log"), append: false) { AutoFlush = true };
+
+        // If the requested context does not fit in VRAM, step it down instead of failing:
+        // a working agent with less context beats an error message.
+        foreach (var ctxSize in ContextLadder(s.ContextSize))
+        {
+            var logStart = LogCount;
+            if (await LaunchAsync(exe, s, model, mmproj, ctxSize, ct).ConfigureAwait(false))
+            {
+                EffectiveContextSize = ctxSize;
+                if (ctxSize < s.ContextSize)
+                {
+                    var note = $"Context lowered from {s.ContextSize / 1024}k to {ctxSize / 1024}k tokens so the model fits in GPU memory.";
+                    Warning = Warning is null ? note : Warning + " " + note;
+                    Log("WARNING: " + note);
+                }
+                return;
+            }
+            if (ct.IsCancellationRequested || !LooksOutOfMemory(logStart))
+                return;
+            Log($"Not enough memory with a {ctxSize / 1024}k context; retrying with less.");
+        }
+    }
+
+    /// <summary>Context size actually loaded (may be lower than requested).</summary>
+    public int EffectiveContextSize { get; private set; }
+
+    internal static IEnumerable<int> ContextLadder(int requested)
+    {
+        yield return requested;
+        foreach (var smaller in new[] { 65536, 49152, 32768, 16384, 8192 })
+            if (smaller < requested)
+                yield return smaller;
+    }
+
+    private int LogCount
+    {
+        get { lock (_recentLog) return _logLines; }
+    }
+
+    private bool LooksOutOfMemory(int sinceLine)
+    {
+        string[] lines;
+        lock (_recentLog)
+        {
+            var skip = Math.Max(0, _recentLog.Count - (_logLines - sinceLine));
+            lines = _recentLog.Skip(skip).ToArray();
+        }
+        return lines.Any(l =>
+            l.Contains("out of memory", StringComparison.OrdinalIgnoreCase) ||
+            l.Contains("OutOfDeviceMemory", StringComparison.OrdinalIgnoreCase) ||
+            l.Contains("failed to allocate", StringComparison.OrdinalIgnoreCase) ||
+            l.Contains("unable to allocate", StringComparison.OrdinalIgnoreCase) ||
+            l.Contains("cudaMalloc", StringComparison.OrdinalIgnoreCase) ||
+            l.Contains("failed to create context", StringComparison.OrdinalIgnoreCase) ||
+            l.Contains("failed to initialize the context", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task<bool> LaunchAsync(string exe, LocalModelSettings s, string model, string? mmproj, int contextSize, CancellationToken ct)
+    {
+        SetState(ServerState.Starting);
+        LastError = null;
 
         var psi = new ProcessStartInfo(exe)
         {
@@ -143,11 +206,8 @@ public sealed class LlamaServerHost : IAsyncDisposable
             CreateNoWindow = true,
             WorkingDirectory = Path.GetDirectoryName(exe)!,
         };
-        foreach (var a in BuildArguments(s, model, mmproj))
+        foreach (var a in BuildArguments(s, model, mmproj, contextSize))
             psi.ArgumentList.Add(a);
-
-        Directory.CreateDirectory(_paths.LogsDir);
-        _logFile = new StreamWriter(Path.Combine(_paths.LogsDir, "llama-server.log"), append: false) { AutoFlush = true };
         Log($"> {exe} {string.Join(' ', psi.ArgumentList.Select(Quote))}");
 
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
@@ -159,7 +219,7 @@ public sealed class LlamaServerHost : IAsyncDisposable
             var code = SafeExitCode(process);
             Log($"llama-server exited with code {code}");
             Fail(State == ServerState.Starting
-                ? $"llama-server stopped while loading (exit code {code}). See the server log; the model may not fit in VRAM with these settings."
+                ? $"llama-server stopped while loading (exit code {code}). Open the Log for details; the model may not fit in GPU memory."
                 : $"llama-server stopped unexpectedly (exit code {code}).");
         };
 
@@ -170,7 +230,7 @@ public sealed class LlamaServerHost : IAsyncDisposable
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             Fail("Could not start llama-server: " + ex.Message);
-            return;
+            return false;
         }
         _process = process;
         _platform.TieToAppLifetime(process);
@@ -182,18 +242,25 @@ public sealed class LlamaServerHost : IAsyncDisposable
         while (DateTime.UtcNow < deadline)
         {
             ct.ThrowIfCancellationRequested();
-            if (State != ServerState.Starting) return;
+            if (State != ServerState.Starting)
+            {
+                // Make sure the stderr reader has flushed the error lines before we inspect them.
+                await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None).ConfigureAwait(false);
+                _process = null;
+                process.Dispose();
+                return false;
+            }
             if (await IsHealthyAsync(ct).ConfigureAwait(false))
             {
                 SetState(ServerState.Running);
-                return;
+                return true;
             }
             await Task.Delay(500, ct).ConfigureAwait(false);
         }
         await StopAsync().ConfigureAwait(false);
         Fail("llama-server did not become ready within 10 minutes.");
+        return false;
     }
-
     public async Task StopAsync()
     {
         var p = _process;
@@ -250,6 +317,7 @@ public sealed class LlamaServerHost : IAsyncDisposable
         lock (_recentLog)
         {
             _recentLog.Add(line);
+            _logLines++;
             if (_recentLog.Count > 400) _recentLog.RemoveRange(0, _recentLog.Count - 400);
             try { _logFile?.WriteLine(line); } catch (ObjectDisposedException) { }
         }

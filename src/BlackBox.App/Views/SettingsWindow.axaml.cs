@@ -15,6 +15,15 @@ public partial class SettingsWindow : Window
 
     private void OnCancel(object? sender, RoutedEventArgs e) => Close(false);
 
+    private void OnRestoreDefaults(object? sender, RoutedEventArgs e)
+    {
+        var vm = Vm;
+        vm.RestoreAdvancedDefaults();
+        // The settings objects were replaced; rebind so every field shows the new values.
+        DataContext = null;
+        DataContext = vm;
+    }
+
     private async void OnBrowseModel(object? sender, RoutedEventArgs e)
     {
         if (await PickFile("Choose a GGUF model", "GGUF model", "*.gguf") is { } path)

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Headless runner: same agent, same tools, output in the console. Handy for trying tasks
+       and models without the UI, and for scripted runs. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>blackbox-cli</AssemblyName>
+    <RootNamespace>BlackBox.Cli</RootNamespace>
+    <ApplicationManifest>..\BlackBox.App\app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BlackBox.Core\BlackBox.Core.csproj" />
+    <ProjectReference Include="..\BlackBox.Platform.Windows\BlackBox.Platform.Windows.csproj" />
+  </ItemGroup>
+
+</Project>

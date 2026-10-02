@@ -26,11 +26,15 @@ public sealed class LocalModelSettings
     /// <summary>Vision projector GGUF. Needed for the model to see screenshots; skipped with a warning if missing.</summary>
     public string MmprojPath { get; set; } = "Models/mmproj-F16.gguf";
 
+    /// <summary>Where the in-app downloader fetches the model and projector from when they are missing.</summary>
+    public string ModelUrl { get; set; } = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-IQ2_S.gguf";
+    public string MmprojUrl { get; set; } = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/mmproj-F16.gguf";
+
     public int Port { get; set; } = 18080;
 
     // Defaults tuned for a 27B IQ2_S model on a 16 GB GPU: all layers on the GPU,
-    // 8-bit KV cache with flash attention so a 32k context fits next to the weights.
-    public int ContextSize { get; set; } = 32768;
+    // 8-bit KV cache with flash attention. If 80k context does not fit, the host steps it down.
+    public int ContextSize { get; set; } = 81920;
     public int GpuLayers { get; set; } = 99;
     public bool FlashAttention { get; set; } = true;
     public string KvCacheType { get; set; } = "q8_0";
@@ -69,9 +73,13 @@ public sealed class AgentSettings
     public bool FailsafeCorner { get; set; } = true;
 
     public bool EnableThinking { get; set; } = true;
-    public double Temperature { get; set; } = 0.6;
+    // Low temperature keeps clicks and tool arguments precise.
+    public double Temperature { get; set; } = 0.1;
     public double TopP { get; set; } = 0.95;
-    public int TopK { get; set; } = 20;
+    public int TopK { get; set; } = 40;
+    public double MinP { get; set; } = 0.05;
+    /// <summary>1.0 = off.</summary>
+    public double RepeatPenalty { get; set; } = 1.0;
     public int MaxTokensPerReply { get; set; } = 8192;
 
     /// <summary>Default working directory for file and shell tools. Empty = ./Workspace.</summary>

@@ -33,12 +33,12 @@
       <Setter Property="Margin" Value="0,12,0,4" />
     </Style>
 
-    <Style Selector="Button.accent">
+    <Style Selector="Button.primary">
       <Setter Property="Background" Value="{StaticResource BbAccent}" />
       <Setter Property="Foreground" Value="#111214" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
-    <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="#EDB866" />
       <Setter Property="Foreground" Value="#111214" />
     </Style>

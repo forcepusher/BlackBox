@@ -77,6 +77,28 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         set { Agent.WorkingDirectory = Paths.ToPortable(value); OnPropertyChanged(); }
     }
 
+    public string RemoteModel
+    {
+        get => Remote.Model;
+        set { Remote.Model = value.Trim(); OnPropertyChanged(); }
+    }
+
+    public string ModelName => Path.GetFileNameWithoutExtension(Local.ModelPath);
+
+    /// <summary>Resets everything on the Advanced tab, keeping the choices made on General.</summary>
+    public void RestoreAdvancedDefaults()
+    {
+        var oldLocal = Settings.Local;
+        var oldAgent = Settings.Agent;
+        Settings.Local = new LocalModelSettings { AutoStart = oldLocal.AutoStart };
+        Settings.Agent = new AgentSettings
+        {
+            Approval = oldAgent.Approval,
+            FailsafeCorner = oldAgent.FailsafeCorner,
+            CustomInstructions = oldAgent.CustomInstructions,
+        };
+    }
+
     public string ServerInfo => server.LocateServer(Local) is { } exe
         ? "Using " + exe
         : "llama-server not found. Put llama.cpp in the 'llama' folder or pick llama-server.exe.";
@@ -87,12 +109,12 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         {
             var model = Paths.Resolve(Local.ModelPath);
             if (!File.Exists(model))
-                return "Model file not found.";
+                return "Not downloaded yet. Use the Download button in the main window.";
             var gb = new FileInfo(model).Length / 1024d / 1024 / 1024;
             var vision = string.IsNullOrWhiteSpace(Local.MmprojPath)
-                ? "No vision projector: the model cannot see the screen, so mouse and screenshot tools are off."
-                : File.Exists(Paths.Resolve(Local.MmprojPath)) ? "Vision on." : "Vision projector file not found.";
-            return $"{gb:0.0} GB model. {vision}";
+                ? "Vision is off (no projector file), so it cannot see the screen."
+                : File.Exists(Paths.Resolve(Local.MmprojPath)) ? "Can see the screen." : "Vision file missing; press Download in the main window.";
+            return $"Installed ({gb:0.0} GB). {vision}";
         }
     }
 
@@ -111,10 +133,7 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
                 ? "Connected, but the server listed no models."
                 : $"Connected. {models.Count} model(s): {string.Join(", ", models.Take(8))}{(models.Count > 8 ? ", …" : "")}";
             if (string.IsNullOrWhiteSpace(Remote.Model) && models.Count > 0)
-            {
-                Remote.Model = models[0];
-                OnPropertyChanged(nameof(Remote));
-            }
+                RemoteModel = models[0];
         }
         catch (Exception ex)
         {

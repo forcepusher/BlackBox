@@ -8,7 +8,7 @@
         Width="900" Height="760" MinWidth="520" MinHeight="480"
         WindowStartupLocation="CenterScreen">
 
-  <Grid RowDefinitions="Auto,*,Auto">
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
 
     <!-- Header -->
     <Border Grid.Row="0" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,8">
@@ -33,8 +33,25 @@
       </DockPanel>
     </Border>
 
+    <!-- First run: model download -->
+    <Border Grid.Row="1" IsVisible="{Binding ShowSetupBanner}" Background="{StaticResource BbSurfaceRaised}"
+            BorderBrush="{StaticResource BbAccent}" BorderThickness="0,0,0,2" Padding="16,12">
+      <Grid ColumnDefinitions="*,Auto" MaxWidth="860">
+        <StackPanel Spacing="6">
+          <TextBlock Text="One more step: download the AI model" FontWeight="SemiBold" />
+          <TextBlock Classes="muted" Text="{Binding SetupText}" TextWrapping="Wrap" />
+          <ProgressBar IsVisible="{Binding IsDownloading}" Value="{Binding DownloadPercent}" Maximum="100" Height="6" />
+          <TextBlock Classes="muted" Text="{Binding DownloadText}" IsVisible="{Binding DownloadText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" TextWrapping="Wrap" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="12,0,0,0">
+          <Button Classes="primary" Content="Download" Command="{Binding DownloadModelCommand}" IsVisible="{Binding !IsDownloading}" />
+          <Button Classes="ghost" Content="Pause" Command="{Binding CancelDownloadCommand}" IsVisible="{Binding IsDownloading}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
     <!-- Conversation -->
-    <Panel Grid.Row="1">
+    <Panel Grid.Row="2">
       <StackPanel IsVisible="{Binding HasNoMessages}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" MaxWidth="460">
         <Image Source="/Assets/blackbox.png" Width="48" Height="48" Opacity="0.8" />
         <TextBlock Text="What should I do on your computer?" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
@@ -84,7 +101,7 @@
                   </DockPanel>
 
                   <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsAwaitingApproval}">
-                    <Button Classes="accent" Content="Allow" Command="{Binding ApproveCommand}" />
+                    <Button Classes="primary" Content="Allow" Command="{Binding ApproveCommand}" />
                     <Button Classes="ghost" Content="Deny" Command="{Binding DenyCommand}" />
                   </StackPanel>
 
@@ -111,14 +128,14 @@
     </Panel>
 
     <!-- Input -->
-    <Border Grid.Row="2" Padding="16,8,16,14">
+    <Border Grid.Row="3" Padding="16,8,16,14">
       <Border Classes="card" MaxWidth="860" Padding="8">
         <Grid ColumnDefinitions="*,Auto">
           <TextBox x:Name="InputBox" Grid.Column="0" Text="{Binding Input}" AcceptsReturn="True" TextWrapping="Wrap"
                    MaxHeight="200" MinHeight="40" BorderThickness="0" Background="Transparent"
                    Watermark="Describe a task… (Enter to send, Shift+Enter for a new line)" />
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Bottom" Margin="8,0,0,0">
-            <Button Classes="accent" Content="Send" Command="{Binding SendCommand}" IsVisible="{Binding !IsBusy}" />
+            <Button Classes="primary" Content="Send" Command="{Binding SendCommand}" IsVisible="{Binding !IsBusy}" />
             <Button Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" Background="{StaticResource BbError}" />
           </StackPanel>
         </Grid>

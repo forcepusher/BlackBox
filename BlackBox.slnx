@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/BlackBox.App/BlackBox.App.csproj" />
+    <Project Path="src/BlackBox.Cli/BlackBox.Cli.csproj" />
     <Project Path="src/BlackBox.Core/BlackBox.Core.csproj" />
     <Project Path="src/BlackBox.Platform.Windows/BlackBox.Platform.Windows.csproj" />
   </Folder>

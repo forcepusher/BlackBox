@@ -22,11 +22,20 @@ Set `BLACKBOX_HOME` to use a different root.
 
 ## Model
 Default target: `unsloth/Qwen3.8-27B-GGUF`, file `Qwen3.8-27B-UD-IQ2_S.gguf` (7.8 GB) plus
-`mmproj-F16.gguf` (0.9 GB) so the model can see screenshots. Put both in `Models/`.
+`mmproj-F16.gguf` (0.9 GB) so the model can see screenshots. On first run BlackBox offers to
+download both into `Models/` (resumable); you can also drop them there yourself.
 
-Defaults are tuned for a 16 GB GPU: all layers on the GPU (`-ngl 99`), 32k context, flash attention,
-q8_0 KV cache, `--jinja` for native tool calling. Change them under Settings → Model.
-Without the mmproj file the model runs text-only and the screen/mouse tools are turned off.
+Defaults are tuned for a 16 GB GPU and 32 GB RAM: all layers on the GPU (`-ngl 99`), 80k context,
+flash attention, q8_0 KV cache, `--jinja` for native tool calling. If the context does not fit,
+BlackBox steps it down automatically (64k, 48k, 32k…) and says so.
+Sampling: temperature 0.1, top-k 40, top-p 0.95, min-p 0.05, no repetition penalty.
+Everything is adjustable under Settings → Advanced. Without the mmproj file the model runs
+text-only and the screen/mouse tools are turned off.
+
+Small quantized models often fumble tool-call syntax, so BlackBox repairs calls on the fly:
+Qwen XML or JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…) and
+misnamed arguments (`coordinate: [x, y]`) are all accepted, and a model that announces a step
+without taking it gets nudged to continue.
 
 ## Tools the agent has
 | Tool | What it does |
@@ -49,6 +58,7 @@ Requires the .NET 10 SDK.
 dotnet build                      # debug build; uses the repo root as the portable folder
 dotnet test                       # unit tests
 ./publish.ps1 -BundleLlama        # self-contained portable folder in publish/BlackBox-win-x64
+dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   # headless run
 ```
 
 ## Project structure
