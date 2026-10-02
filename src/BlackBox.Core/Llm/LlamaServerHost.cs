@@ -252,6 +252,7 @@ public sealed class LlamaServerHost : IAsyncDisposable
             }
             if (await IsHealthyAsync(ct).ConfigureAwait(false))
             {
+                await WarmUpAsync(mmproj is not null, ct).ConfigureAwait(false);
                 SetState(ServerState.Running);
                 return true;
             }
@@ -283,6 +284,53 @@ public sealed class LlamaServerHost : IAsyncDisposable
         _logFile = null;
         if (State != ServerState.Failed)
             SetState(ServerState.Stopped);
+    }
+
+    /// <summary>
+    /// The Vulkan backend compiles its GPU shaders on first use, which made the first real
+    /// request take minutes. One throwaway request with a long prompt (and an image when vision
+    /// is on) does that work while the UI still says "Loading", so the first task is fast.
+    /// </summary>
+    private async Task WarmUpAsync(bool vision, CancellationToken ct)
+    {
+        Log("Warming up (first run compiles GPU shaders and can take a few minutes)…");
+        var started = DateTime.UtcNow;
+        var filler = string.Concat(Enumerable.Repeat("The quick brown fox jumps over the lazy dog. ", 150));
+        var parts = new List<ContentPart> { ContentPart.FromText(filler + "\nReply with OK.") };
+        if (vision)
+            parts.Add(ContentPart.FromImage(BlankJpeg(), "image/jpeg"));
+
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+            var client = new OpenAiChatClient(http, BaseUrl, null);
+            await client.CompleteAsync(
+                [new ChatMessage { Role = ChatRole.User, Parts = parts }], [],
+                new ChatRequestOptions
+                {
+                    Model = "local",
+                    MaxTokens = 1,
+                    Extra = new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["chat_template_kwargs"] = new System.Text.Json.Nodes.JsonObject { ["enable_thinking"] = false },
+                    },
+                },
+                null, ct).ConfigureAwait(false);
+            Log($"Warm-up done in {(DateTime.UtcNow - started).TotalSeconds:0.0}s.");
+        }
+        catch (Exception ex) when (ex is LlmException or HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            Log("Warm-up skipped: " + ex.Message);
+        }
+    }
+
+    private static byte[] BlankJpeg()
+    {
+        using var bmp = new SkiaSharp.SKBitmap(512, 512);
+        bmp.Erase(new SkiaSharp.SKColor(128, 128, 128));
+        using var img = SkiaSharp.SKImage.FromBitmap(bmp);
+        using var data = img.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 80);
+        return data.ToArray();
     }
 
     private async Task<bool> IsHealthyAsync(CancellationToken ct)

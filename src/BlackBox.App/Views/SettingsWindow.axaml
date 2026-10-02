@@ -163,10 +163,9 @@
 
             <TextBlock Classes="h2" Text="Screen" />
             <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto">
-              <TextBlock Classes="label" Grid.Row="0" Text="Screenshot max width" />
-              <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Agent.ScreenshotMaxWidth}" />
-              <TextBlock Classes="label" Grid.Row="1" Text="Screenshot max height" />
-              <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Agent.ScreenshotMaxHeight}" />
+              <TextBlock Classes="label" Grid.Row="0" Text="Screenshot max pixels" />
+              <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Agent.ScreenshotMaxPixels}" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Classes="muted" Text="More pixels = sharper view of small text, but slower and uses more context." TextWrapping="Wrap" />
               <TextBlock Classes="label" Grid.Row="2" Text="Screenshots kept" />
               <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Agent.KeepScreenshots}" />
               <CheckBox Grid.Row="3" Grid.Column="1" Content="Screenshot after each mouse or keyboard action" IsChecked="{Binding Agent.ScreenshotAfterActions}" />

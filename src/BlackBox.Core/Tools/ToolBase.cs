@@ -27,7 +27,7 @@ public sealed class ToolContext
     public required string WorkingDirectory { get; init; }
 
     public ScreenSpace GetScreenSpace() =>
-        new(Platform.Screen.GetPrimaryScreen(), Settings.ScreenshotMaxWidth, Settings.ScreenshotMaxHeight);
+        new(Platform.Screen.GetPrimaryScreen(), Settings.ScreenshotMaxPixels);
 
     public string ResolvePath(string path) =>
         Path.GetFullPath(Environment.ExpandEnvironmentVariables(path), WorkingDirectory);

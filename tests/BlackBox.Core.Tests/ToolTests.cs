@@ -19,19 +19,18 @@ public class ToolTests
     [Fact]
     public void Screen_space_scales_down_and_maps_back()
     {
-        var space = new ScreenSpace(new ScreenRect(0, 0, 2560, 1440), 1280, 800);
-        Assert.Equal(0.5, space.Scale);
-        Assert.Equal((1280, 720), (space.ImageWidth, space.ImageHeight));
-        Assert.Equal((200, 300), space.ToScreen(100, 150));
-        Assert.Equal((100, 150), space.ToImage(200, 300));
+        var space = new ScreenSpace(new ScreenRect(0, 0, 2560, 1440), 1280 * 720);
+        Assert.Equal((1280, 704), (space.ImageWidth, space.ImageHeight)); // 720 snaps to the 32px grid
+        Assert.Equal((200, 307), space.ToScreen(100, 150));
+        Assert.Equal((100, 150), space.ToImage(200, 307));
         Assert.Equal((2558, 1438), space.ToScreen(5000, 5000)); // clamped to the screen
     }
 
     [Fact]
     public void Small_screens_are_not_upscaled()
     {
-        var space = new ScreenSpace(new ScreenRect(0, 0, 1024, 768), 1280, 800);
-        Assert.Equal(1.0, space.Scale);
+        var space = new ScreenSpace(new ScreenRect(0, 0, 1024, 768), 1_300_000);
+        Assert.Equal((1024, 768), (space.ImageWidth, space.ImageHeight));
     }
 
     [Fact]
@@ -39,11 +38,11 @@ public class ToolTests
     {
         var platform = new FakePlatform();
         // 200x100 fake screen with a 100x100 box => scale 0.5
-        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotMaxWidth = 100, ScreenshotMaxHeight = 100, ScreenshotAfterActions = false, FailsafeCorner = false });
+        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotMaxPixels = 64 * 32, ScreenshotAfterActions = false, FailsafeCorner = false });
 
         await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 10, ["y"] = "20", ["clicks"] = 2 }, ctx, CancellationToken.None);
 
-        Assert.Equal(["move 20,40", "click Left x2"], platform.Actions);
+        Assert.Equal(["move 31,62", "click Left x2"], platform.Actions); // 200x100 screen seen as 64x32
     }
 
     [Fact]
@@ -71,7 +70,7 @@ public class ToolTests
         Assert.NotNull(result.Image);
         Assert.Equal(0xFF, result.Image![0]);
         Assert.Equal(0xD8, result.Image[1]);
-        Assert.Contains("200x100", result.Text);
+        Assert.Contains("192x96", result.Text); // 200x100 snapped to the 32px grid
     }
 
     [Fact]
@@ -134,7 +133,7 @@ public class ToolTests
         Assert.True(screen.Width >= 640 && screen.Height >= 480);
 
         var result = await new ScreenshotTool().ExecuteAsync([], Ctx(platform), CancellationToken.None);
-        var space = new ScreenSpace(screen, 1280, 800);
+        var space = new ScreenSpace(screen, new AgentSettings().ScreenshotMaxPixels);
         Assert.Contains($"{space.ImageWidth}x{space.ImageHeight}", result.Text);
         Assert.True(result.Image!.Length > 5_000);
     }

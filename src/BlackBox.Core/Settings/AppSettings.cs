@@ -59,9 +59,8 @@ public sealed class AgentSettings
     public int MaxSteps { get; set; } = 40;
     public ApprovalMode Approval { get; set; } = ApprovalMode.AskRisky;
 
-    /// <summary>Screenshots are downscaled to fit this box before going to the model.</summary>
-    public int ScreenshotMaxWidth { get; set; } = 1280;
-    public int ScreenshotMaxHeight { get; set; } = 800;
+    /// <summary>Screenshots are downscaled to at most this many pixels before going to the model (about 1.3 MP, roughly 1300 image tokens).</summary>
+    public int ScreenshotMaxPixels { get; set; } = 1_300_000;
 
     /// <summary>Only the newest N screenshots stay in context; older ones are dropped to save tokens.</summary>
     public int KeepScreenshots { get; set; } = 2;
