@@ -1,0 +1,128 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:BlackBox.App.ViewModels"
+        x:Class="BlackBox.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="BlackBox"
+        Icon="/Assets/blackbox.ico"
+        Width="900" Height="760" MinWidth="520" MinHeight="480"
+        WindowStartupLocation="CenterScreen">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Header -->
+    <Border Grid.Row="0" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,8">
+      <DockPanel LastChildFill="False">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <Image Source="/Assets/blackbox.png" Width="22" Height="22" />
+          <TextBlock Text="BlackBox" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" />
+          <TextBlock Classes="muted" Text="{Binding BackendLabel}" VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Ellipse Width="9" Height="9" Fill="{Binding StatusBrush}" VerticalAlignment="Center" />
+          <TextBlock Classes="muted" Text="{Binding ServerStatusText}" VerticalAlignment="Center" Margin="0,0,6,0" />
+          <Button Classes="ghost" Content="Start model" Command="{Binding StartServerCommand}"
+                  IsVisible="{Binding CanStartServer}" />
+          <Button Classes="ghost" Content="Stop model" Command="{Binding StopServerCommand}"
+                  IsVisible="{Binding CanStopServer}" />
+          <Button Classes="ghost" Content="Log" Click="OnLogClick" IsVisible="{Binding IsLocalBackend}" />
+          <Button Classes="ghost" Content="New chat" Command="{Binding NewChatCommand}" />
+          <Button Classes="ghost" Content="Settings" Click="OnSettingsClick" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- Conversation -->
+    <Panel Grid.Row="1">
+      <StackPanel IsVisible="{Binding HasNoMessages}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" MaxWidth="460">
+        <Image Source="/Assets/blackbox.png" Width="48" Height="48" Opacity="0.8" />
+        <TextBlock Text="What should I do on your computer?" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
+                   Text="I can look at the screen, use the mouse and keyboard, run commands and work with files. Move the mouse to the top-left corner or press Stop to halt me at any time." />
+      </StackPanel>
+
+      <ScrollViewer x:Name="ChatScroll" HorizontalScrollBarVisibility="Disabled" Padding="16,12">
+        <ItemsControl ItemsSource="{Binding Items}" MaxWidth="860">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Spacing="10" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+
+          <ItemsControl.DataTemplates>
+
+            <DataTemplate DataType="vm:UserMessageItem">
+              <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="12,8"
+                      HorizontalAlignment="Right" MaxWidth="640" Margin="60,0,0,0">
+                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+              </Border>
+            </DataTemplate>
+
+            <DataTemplate DataType="vm:AssistantMessageItem">
+              <StackPanel Spacing="6" Margin="0,0,40,0">
+                <Expander IsVisible="{Binding HasReasoning}" Header="{Binding ThinkingLabel}" HorizontalAlignment="Stretch"
+                          Padding="10,6">
+                  <SelectableTextBlock Classes="muted" Text="{Binding Reasoning}" TextWrapping="Wrap" />
+                </Expander>
+                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" LineHeight="21" />
+                <TextBlock Classes="muted" Text="…" IsVisible="{Binding IsStreaming}" />
+              </StackPanel>
+            </DataTemplate>
+
+            <DataTemplate DataType="vm:ToolCallItem">
+              <Border Classes="card" Margin="0,0,40,0">
+                <StackPanel Spacing="6">
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding StatusText}" VerticalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Border Background="{StaticResource BbSurfaceRaised}" CornerRadius="4" Padding="6,1">
+                        <TextBlock Text="{Binding Name}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Foreground="{StaticResource BbAccent}" />
+                      </Border>
+                      <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </DockPanel>
+
+                  <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsAwaitingApproval}">
+                    <Button Classes="accent" Content="Allow" Command="{Binding ApproveCommand}" />
+                    <Button Classes="ghost" Content="Deny" Command="{Binding DenyCommand}" />
+                  </StackPanel>
+
+                  <Image Source="{Binding Screenshot}" IsVisible="{Binding HasScreenshot}" MaxWidth="480"
+                         HorizontalAlignment="Left" Stretch="Uniform" />
+
+                  <Expander IsVisible="{Binding HasResult}" Header="Output" Padding="8,4" HorizontalAlignment="Stretch">
+                    <SelectableTextBlock Text="{Binding ResultText}" TextWrapping="Wrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" />
+                  </Expander>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+
+            <DataTemplate DataType="vm:NoticeItem">
+              <Border Padding="10,6" CornerRadius="6" Background="{StaticResource BbSurface}" HorizontalAlignment="Center">
+                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="12"
+                                     Foreground="{Binding IsError, Converter={x:Static vm:Converters.ErrorBrush}}" />
+              </Border>
+            </DataTemplate>
+
+          </ItemsControl.DataTemplates>
+        </ItemsControl>
+      </ScrollViewer>
+    </Panel>
+
+    <!-- Input -->
+    <Border Grid.Row="2" Padding="16,8,16,14">
+      <Border Classes="card" MaxWidth="860" Padding="8">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBox x:Name="InputBox" Grid.Column="0" Text="{Binding Input}" AcceptsReturn="True" TextWrapping="Wrap"
+                   MaxHeight="200" MinHeight="40" BorderThickness="0" Background="Transparent"
+                   Watermark="Describe a task… (Enter to send, Shift+Enter for a new line)" />
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Bottom" Margin="8,0,0,0">
+            <Button Classes="accent" Content="Send" Command="{Binding SendCommand}" IsVisible="{Binding !IsBusy}" />
+            <Button Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" Background="{StaticResource BbError}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+    </Border>
+  </Grid>
+</Window>

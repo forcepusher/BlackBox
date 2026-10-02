@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>BlackBox.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Same SkiaSharp line as Avalonia 11 so the app ships a single native Skia. -->
+    <PackageReference Include="SkiaSharp" Version="2.88.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="BlackBox.Core.Tests" />
+  </ItemGroup>
+
+</Project>

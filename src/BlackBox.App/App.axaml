@@ -1,0 +1,61 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="BlackBox.App.App"
+             RequestedThemeVariant="Dark">
+
+  <Application.Resources>
+    <SolidColorBrush x:Key="BbBackground" Color="#111214" />
+    <SolidColorBrush x:Key="BbSurface" Color="#1A1C1F" />
+    <SolidColorBrush x:Key="BbSurfaceRaised" Color="#23262A" />
+    <SolidColorBrush x:Key="BbBorder" Color="#2F3338" />
+    <SolidColorBrush x:Key="BbMuted" Color="#8B9199" />
+    <SolidColorBrush x:Key="BbAccent" Color="#E0A64B" />
+    <SolidColorBrush x:Key="BbUserBubble" Color="#2A2F36" />
+    <SolidColorBrush x:Key="BbOk" Color="#5FB878" />
+    <SolidColorBrush x:Key="BbError" Color="#E06C6C" />
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <Style Selector="Window">
+      <Setter Property="Background" Value="{StaticResource BbBackground}" />
+    </Style>
+
+    <Style Selector="TextBlock.muted, SelectableTextBlock.muted">
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <Style Selector="TextBlock.h2">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Margin" Value="0,12,0,4" />
+    </Style>
+
+    <Style Selector="Button.accent">
+      <Setter Property="Background" Value="{StaticResource BbAccent}" />
+      <Setter Property="Foreground" Value="#111214" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#EDB866" />
+      <Setter Property="Foreground" Value="#111214" />
+    </Style>
+
+    <Style Selector="Button.ghost">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{StaticResource BbSurface}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12,10" />
+    </Style>
+
+  </Application.Styles>
+</Application>
