@@ -14,9 +14,6 @@ public interface IAgentObserver
     void OnAssistantMessage(ChatMessage message);
     Task<bool> RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct);
     void OnToolStarted(ToolCall call, string summary);
-
-    /// <summary>Called before a tool looks at or acts on the screen, so the host can get its own window out of the way.</summary>
-    Task OnBeforeScreenActionAsync(CancellationToken ct);
     void OnToolFinished(ToolCall call, ToolResult result);
     void OnFinished(AgentStopReason reason, string? detail);
 }
@@ -31,7 +28,8 @@ public sealed class AgentSession(
     ToolRegistry tools,
     ToolContext toolContext,
     string systemPrompt,
-    List<ChatMessage>? history = null)
+    List<ChatMessage>? history = null,
+    int contextTokens = 0)
 {
     private const string OmittedScreenshot = "[earlier screenshot omitted to save context]";
 
@@ -53,6 +51,8 @@ public sealed class AgentSession(
                 ct.ThrowIfCancellationRequested();
                 observer.OnStepStarted(step);
                 PruneScreenshots(settings.KeepScreenshots, PruneSlack);
+                if (contextTokens > 0)
+                    FitContext((int)(contextTokens * 0.8) - (requestOptions.MaxTokens ?? 4096));
 
                 var request = new List<ChatMessage>(History.Count + 1) { ChatMessage.System(systemPrompt) };
                 request.AddRange(History);
@@ -155,6 +155,7 @@ public sealed class AgentSession(
             Temperature = options.Temperature,
             TopP = options.TopP,
             MaxTokens = options.MaxTokens,
+            SendReasoning = options.SendReasoning,
             Extra = extra,
         };
     }
@@ -217,8 +218,6 @@ public sealed class AgentSession(
         }
 
         observer.OnToolStarted(call, summary);
-        if (tool is DesktopActionTool or ScreenshotTool or ZoomTool or WaitTool)
-            await observer.OnBeforeScreenActionAsync(ct).ConfigureAwait(false);
         ToolResult result;
         try
         {
@@ -242,6 +241,36 @@ public sealed class AgentSession(
         ApprovalMode.AskRisky => tool.Risk == ToolRisk.Risky,
         _ => false,
     };
+
+    /// <summary>Rough token count of the conversation (about 3.5 characters per token, ~1300 per screenshot).</summary>
+    internal int EstimateTokens() =>
+        (systemPrompt.Length + 12_000 /* tool schemas */ + History.Sum(m =>
+            (m.Content?.Length ?? 0) + (m.Reasoning?.Length ?? 0) +
+            (m.ToolCalls?.Sum(c => c.Name.Length + c.Arguments.Length) ?? 0) +
+            (m.Parts?.Sum(p => p.IsImage ? 4_500 : p.Text?.Length ?? 0) ?? 0))) * 2 / 7;
+
+    /// <summary>
+    /// Keeps the prompt under <paramref name="budget"/> tokens. Preserved thinking is the bulk of
+    /// a long run, so older reasoning goes first, then the text of old tool results.
+    /// </summary>
+    internal void FitContext(int budget)
+    {
+        if (budget <= 0 || EstimateTokens() <= budget)
+            return;
+
+        var assistants = History.Where(m => m.Role == ChatRole.Assistant && m.Reasoning is not null).ToList();
+        foreach (var m in assistants.Take(Math.Max(0, assistants.Count - 3)))
+        {
+            m.Reasoning = null;
+            if (EstimateTokens() <= budget) return;
+        }
+
+        foreach (var m in History.Take(Math.Max(0, History.Count - 8)).Where(m => m.Role == ChatRole.Tool && m.Content is { Length: > 400 }))
+        {
+            m.Content = m.Content![..300] + "\n[older output trimmed to save context]";
+            if (EstimateTokens() <= budget) return;
+        }
+    }
 
     /// <summary>
     /// Once more than <paramref name="keep"/> + <paramref name="slack"/> screenshots are in the

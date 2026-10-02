@@ -40,6 +40,10 @@ public abstract class DesktopActionTool : Tool
     protected static (int X, int Y) Point(JsonObject args, ToolContext ctx, string xKey = "x", string yKey = "y") =>
         ctx.GetScreenSpace().ToScreen(RequireNumber(args, xKey), RequireNumber(args, yKey));
 
+    /// <summary>Moves BlackBox's own window out of the way if the action lands on it.</summary>
+    protected static IDisposable Aside(ToolContext ctx, params (int X, int Y)[] points) =>
+        ctx.Platform.HostWindow.StepAside(points);
+
     protected static string Fmt(JsonObject args, string xKey = "x", string yKey = "y") =>
         $"({GetNumber(args, xKey)}, {GetNumber(args, yKey)})";
 }
@@ -88,6 +92,7 @@ public sealed class MouseClickTool : DesktopActionTool
         var (x, y) = Point(args, ctx);
         var button = ParseButton(GetString(args, "button"));
         var clicks = Math.Clamp((int)(GetNumber(args, "clicks") ?? 1), 1, 3);
+        using var aside = Aside(ctx, (x, y));
         ctx.Platform.Input.MoveMouse(x, y);
         await Task.Delay(60, ct).ConfigureAwait(false);
         ctx.Platform.Input.Click(button, clicks);
@@ -112,6 +117,7 @@ public sealed class MouseMoveTool : DesktopActionTool
     protected override Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var (x, y) = Point(args, ctx);
+        using var aside = Aside(ctx, (x, y));
         ctx.Platform.Input.MoveMouse(x, y);
         return Task.FromResult(Describe(args) + " done.");
     }
@@ -131,6 +137,7 @@ public sealed class MouseDragTool : DesktopActionTool
         var (x1, y1) = Point(args, ctx);
         var (x2, y2) = Point(args, ctx, "to_x", "to_y");
         var input = ctx.Platform.Input;
+        using var aside = Aside(ctx, (x1, y1), (x2, y2));
         input.MoveMouse(x1, y1);
         await Task.Delay(80, ct).ConfigureAwait(false);
         input.MouseDown(MouseButton.Left);
@@ -166,11 +173,13 @@ public sealed class ScrollTool : DesktopActionTool
 
     protected override Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
+        var at = ctx.Platform.Input.GetCursorPosition();
         if (args["x"] is not null && args["y"] is not null)
         {
-            var (x, y) = Point(args, ctx);
-            ctx.Platform.Input.MoveMouse(x, y);
+            at = Point(args, ctx);
+            ctx.Platform.Input.MoveMouse(at.X, at.Y);
         }
+        using var aside = Aside(ctx, at);
         var amount = Math.Clamp((int)(GetNumber(args, "amount") ?? 3), 1, 50);
         var (dx, dy) = RequireString(args, "direction").ToLowerInvariant() switch
         {
@@ -200,6 +209,7 @@ public sealed class TypeTextTool : DesktopActionTool
     protected override Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var text = RequireString(args, "text");
+        ctx.Platform.HostWindow.YieldFocus();
         ctx.Platform.Input.TypeText(text);
         return Task.FromResult($"Typed {text.Length} characters.");
     }
@@ -234,6 +244,7 @@ public sealed class PressKeysTool : DesktopActionTool
             throw new ToolArgumentException($"Unknown key name(s): {string.Join(", ", unknown)}.");
 
         var repeat = Math.Clamp((int)(GetNumber(args, "repeat") ?? 1), 1, 100);
+        ctx.Platform.HostWindow.YieldFocus();
         for (var i = 0; i < repeat; i++)
         {
             ctx.Platform.Input.PressKeys(keys);

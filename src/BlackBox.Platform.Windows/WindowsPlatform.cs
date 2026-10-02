@@ -29,6 +29,7 @@ public sealed class WindowsPlatform : IPlatformServices
     public IInputController Input => _input;
     public IWindowManager Windows => _windows;
     public IUiAutomation? Automation => _automation.Value;
+    public IHostWindow HostWindow { get; } = new WindowsHostWindow();
 
     public ProcessStartInfo CreateShellStartInfo(string command)
     {

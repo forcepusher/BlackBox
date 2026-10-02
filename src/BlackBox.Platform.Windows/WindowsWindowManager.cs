@@ -30,6 +30,8 @@ internal sealed class WindowsWindowManager : IWindowManager
                 GetWindowRect(hwnd, out r);
 
             GetWindowThreadProcessId(hwnd, out var pid);
+            if (pid == Environment.ProcessId)
+                return true; // BlackBox itself is not something the agent should operate
             if (!names.TryGetValue(pid, out var proc))
             {
                 try { proc = Process.GetProcessById((int)pid).ProcessName; }

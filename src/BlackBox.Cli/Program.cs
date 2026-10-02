@@ -69,7 +69,7 @@ var workDir = string.IsNullOrWhiteSpace(agent.WorkingDirectory) ? paths.Workspac
 var ctx = new ToolContext { Platform = platform, Settings = agent, WorkingDirectory = workDir };
 var screen = backend.Vision ? ctx.GetScreenSpace() : null;
 var registry = ToolRegistry.CreateDefault(includeScreenTools: screen is not null, includeUiAutomation: platform.Automation is not null);
-var session = new AgentSession(backend.Client, backend.Options, registry, ctx, SystemPrompt.Build(platform.Name, screen, workDir, agent.CustomInstructions));
+var session = new AgentSession(backend.Client, backend.Options, registry, ctx, SystemPrompt.Build(platform.Name, screen, workDir, agent.CustomInstructions), contextTokens: backend.ContextTokens);
 var observer = new ConsoleObserver(autoYes, shotsDir);
 
 var t0 = DateTime.UtcNow;
@@ -129,8 +129,6 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
         Console.Write($"[approve?] {summary} [y/N] ");
         return Task.FromResult(Console.ReadLine()?.Trim().ToLowerInvariant() is "y" or "yes");
     }
-
-    public Task OnBeforeScreenActionAsync(CancellationToken ct) => Task.CompletedTask;
 
     public void OnToolStarted(ToolCall call, string summary)
     {

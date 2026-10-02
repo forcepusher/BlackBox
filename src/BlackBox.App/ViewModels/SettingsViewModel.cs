@@ -95,7 +95,7 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         {
             Approval = oldAgent.Approval,
             FailsafeCorner = oldAgent.FailsafeCorner,
-            HideWindowWhileWorking = oldAgent.HideWindowWhileWorking,
+            HideFromScreenshots = oldAgent.HideFromScreenshots,
             CustomInstructions = oldAgent.CustomInstructions,
         };
     }

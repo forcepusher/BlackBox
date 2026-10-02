@@ -33,6 +33,8 @@ public sealed class OpenAiChatClient
 
     public string BaseUrl => _baseUrl;
 
+    private bool _reasoningRejected;
+
     /// <summary>Turns "http://host:port", ".../v1" or ".../v1/" into ".../v1".</summary>
     public static string NormalizeBaseUrl(string url)
     {
@@ -72,7 +74,8 @@ public sealed class OpenAiChatClient
         Action<StreamDelta>? onDelta,
         CancellationToken ct)
     {
-        var payload = BuildRequest(messages, tools, options);
+        var sendReasoning = options.SendReasoning && !_reasoningRejected;
+        var payload = BuildRequest(messages, tools, options, sendReasoning);
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/chat/completions")
         {
             Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json"),
@@ -95,6 +98,12 @@ public sealed class OpenAiChatClient
             if (!resp.IsSuccessStatusCode)
             {
                 var err = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                // Strict providers reject the extra reasoning_content field; drop it and retry once.
+                if (sendReasoning && (int)resp.StatusCode is 400 or 422 && err.Contains("reasoning", StringComparison.OrdinalIgnoreCase))
+                {
+                    _reasoningRejected = true;
+                    return await CompleteAsync(messages, tools, options, onDelta, ct).ConfigureAwait(false);
+                }
                 throw new LlmException($"Chat request failed ({(int)resp.StatusCode}): {Truncate(err, 1000)}");
             }
 
@@ -195,11 +204,11 @@ public sealed class OpenAiChatClient
         return message;
     }
 
-    internal static JsonObject BuildRequest(IReadOnlyList<ChatMessage> messages, IReadOnlyList<ToolDefinition> tools, ChatRequestOptions options)
+    internal static JsonObject BuildRequest(IReadOnlyList<ChatMessage> messages, IReadOnlyList<ToolDefinition> tools, ChatRequestOptions options, bool sendReasoning = false)
     {
         var msgs = new JsonArray();
         foreach (var m in messages)
-            msgs.Add(SerializeMessage(m));
+            msgs.Add(SerializeMessage(m, sendReasoning));
 
         var req = new JsonObject
         {
@@ -237,7 +246,7 @@ public sealed class OpenAiChatClient
         return req;
     }
 
-    private static JsonObject SerializeMessage(ChatMessage m)
+    private static JsonObject SerializeMessage(ChatMessage m, bool sendReasoning)
     {
         var obj = new JsonObject { ["role"] = m.Role };
 
@@ -290,6 +299,12 @@ public sealed class OpenAiChatClient
 
         if (m.ToolCallId is not null)
             obj["tool_call_id"] = m.ToolCallId;
+
+        // Qwen3.5+ templates re-render every past <think> block ("preserve thinking"). Without
+        // this field they render empty, which both hides the model's earlier reasoning from it
+        // and breaks the server's prompt cache at every assistant turn.
+        if (sendReasoning && m.Role == ChatRole.Assistant && !string.IsNullOrEmpty(m.Reasoning))
+            obj["reasoning_content"] = m.Reasoning;
 
         return obj;
     }

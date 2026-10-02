@@ -37,6 +37,9 @@ internal sealed class WindowsUiAutomation : IUiAutomation, IDisposable
     public IReadOnlyList<UiElement> GetElements(string? windowTitle, int maxCount)
     {
         var hwnd = GetForegroundWindow();
+        GetWindowThreadProcessId(hwnd, out var pid);
+        if (pid == Environment.ProcessId && WindowsHostWindow.NextWindowBelow(hwnd) is var below and not 0)
+            hwnd = below; // BlackBox itself has focus: the user means the app underneath
         if (!string.IsNullOrWhiteSpace(windowTitle))
         {
             var match = _windows.ListWindows().FirstOrDefault(w => w.Title.Contains(windowTitle, StringComparison.OrdinalIgnoreCase))

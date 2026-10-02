@@ -112,6 +112,36 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task Earlier_reasoning_is_sent_back_for_preserved_thinking()
+    {
+        var thought = new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["reasoning_content"] = "I should list files." } }) };
+        var server = new ScriptedServer($"data: {thought.ToJsonString()}\n\n" + Sse.ToolCall("c1", "list_directory", "{}"), Sse.Text("Done."));
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null),
+            new ChatRequestOptions { SendReasoning = true }, ToolRegistry.CreateDefault(true), ctx, "sys");
+
+        await session.RunAsync("go", new RecordingObserver(), CancellationToken.None);
+
+        var assistant = server.Requests[1]["messages"]!.AsArray().First(m => m!["role"]!.GetValue<string>() == "assistant")!;
+        Assert.Equal("I should list files.", assistant["reasoning_content"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Old_thinking_is_dropped_first_when_context_runs_out()
+    {
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(new ScriptedServer()), "http://test", null),
+            new ChatRequestOptions(), ToolRegistry.CreateDefault(true), ctx, "sys");
+        for (var i = 0; i < 6; i++)
+            session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "step", Reasoning = new string('r', 20_000) });
+
+        session.FitContext(session.EstimateTokens() - 15_000); // needs three of six thoughts dropped
+
+        Assert.Equal(3, session.History.Count(m => m.Reasoning is not null)); // newest three kept
+        Assert.NotNull(session.History[^1].Reasoning);
+    }
+
+    [Fact]
     public async Task Runaway_thinking_is_cut_off_and_retried_without_thinking()
     {
         var thinking = new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["reasoning_content"] = new string('h', 500) } }) };
@@ -196,7 +226,6 @@ internal sealed class RecordingObserver : IAgentObserver
     }
 
     public void OnToolStarted(ToolCall call, string summary) => ToolsRun.Add(call.Name);
-    public Task OnBeforeScreenActionAsync(CancellationToken ct) => Task.CompletedTask;
     public void OnToolFinished(ToolCall call, ToolResult result) => Results.Add(result);
 
     public void OnFinished(AgentStopReason reason, string? detail)
@@ -210,6 +239,7 @@ internal sealed class RecordingObserver : IAgentObserver
 internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputController, IWindowManager, IUiAutomation
 {
     public IUiAutomation? Automation => this;
+    public IHostWindow HostWindow { get; set; } = NoHostWindow.Instance;
     public IReadOnlyList<UiElement> GetElements(string? windowTitle, int maxCount) =>
     [
         new UiElement(1, "Button", "Save", null, new ScreenRect(100, 50, 40, 20), true),

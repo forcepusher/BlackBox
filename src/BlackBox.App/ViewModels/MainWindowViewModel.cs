@@ -70,32 +70,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     public bool HasNoMessages => Items.Count == 0;
 
-    public bool HideWindowWhileWorking => _settings.Agent.HideWindowWhileWorking;
-
-    /// <summary>Raised when the agent needs the user (an approval prompt), so a hidden window can come back.</summary>
-    public event Action? AttentionNeeded;
-
-    /// <summary>Raised after the user answered a prompt, so the window can get out of the way again.</summary>
-    public event Action? AttentionHandled;
-
-    /// <summary>Raised the first time in a run that the agent looks at or acts on the screen.</summary>
-    public event Action? HideRequested;
-
-    /// <summary>True once the window was minimized for the current run.</summary>
-    public bool WindowHiddenForRun { get; private set; }
-
-    async Task IAgentObserver.OnBeforeScreenActionAsync(CancellationToken ct)
-    {
-        // Plain chat replies keep the window up; it only steps aside when the agent needs the screen.
-        if (!HideWindowWhileWorking || WindowHiddenForRun)
-            return;
-        await Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            WindowHiddenForRun = true;
-            HideRequested?.Invoke();
-        });
-        await Task.Delay(400, ct); // let the minimize animation finish before a screenshot
-    }
+    public void AttachHostWindow(nint handle) => _platform.HostWindow.Attach(handle, _settings.Agent.HideFromScreenshots);
 
     // ---- first-run model download ----------------------------------------------------
 
@@ -221,7 +196,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
             var registry = ToolRegistry.CreateDefault(includeScreenTools: screen is not null, includeUiAutomation: _platform.Automation is not null);
             var prompt = SystemPrompt.Build(_platform.Name, screen, ctx.WorkingDirectory, agent.CustomInstructions);
-            var session = new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, _history);
+            var session = new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, _history, backend.ContextTokens);
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
         }
         catch (OperationCanceledException)
@@ -230,7 +205,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         finally
         {
-            WindowHiddenForRun = false;
             IsBusy = false;
             _runCts.Dispose();
             _runCts = null;
@@ -283,7 +257,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var wasRunning = _server.State is ServerState.Running or ServerState.Starting;
         RefreshModelPresent();
         OnPropertyChanged(nameof(SetupText));
-        OnPropertyChanged(nameof(HideWindowWhileWorking));
+        _platform.HostWindow.SetHiddenFromCapture(updated.Agent.HideFromScreenshots);
 
         if (updated.Backend == BackendKind.Remote && wasRunning)
         {
@@ -415,12 +389,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         return await Dispatcher.UIThread.InvokeAsync(() =>
         {
             var item = FindOrAddTool(call, summary);
-            AttentionNeeded?.Invoke();
-            return item.WaitForApprovalAsync(ct).ContinueWith(t =>
-            {
-                Dispatcher.UIThread.Post(() => AttentionHandled?.Invoke());
-                return t.Result;
-            }, TaskScheduler.Default);
+            return item.WaitForApprovalAsync(ct);
         });
     }
 

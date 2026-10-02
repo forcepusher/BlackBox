@@ -70,6 +70,45 @@ public interface IUiAutomation
     bool Activate(int id);
 }
 
+/// <summary>
+/// BlackBox's own window. It stays on screen while the agent works, so it is kept out of the
+/// agent's way: invisible to screenshots, and pushed behind other windows for the moment an
+/// action lands on it.
+/// </summary>
+public interface IHostWindow
+{
+    /// <summary>Registers the native window handle and, if asked, hides it from screen capture where the OS allows.</summary>
+    void Attach(nint handle, bool hideFromCapture);
+
+    /// <summary>Turns capture hiding on or off after <see cref="Attach"/>.</summary>
+    void SetHiddenFromCapture(bool hide);
+
+    /// <summary>True when screenshots show what is behind the window rather than the window itself.</summary>
+    bool HiddenFromCapture { get; }
+
+    /// <summary>If any of the points lie on the window, sends it behind other windows until the result is disposed.</summary>
+    IDisposable StepAside(params (int X, int Y)[] points);
+
+    /// <summary>If the window has keyboard focus, hands focus to the window underneath it.</summary>
+    void YieldFocus();
+}
+
+public sealed class NoHostWindow : IHostWindow
+{
+    public static readonly NoHostWindow Instance = new();
+    public void Attach(nint handle, bool hideFromCapture) { }
+    public void SetHiddenFromCapture(bool hide) { }
+    public bool HiddenFromCapture => false;
+    public IDisposable StepAside(params (int X, int Y)[] points) => Nothing.Instance;
+    public void YieldFocus() { }
+
+    private sealed class Nothing : IDisposable
+    {
+        public static readonly Nothing Instance = new();
+        public void Dispose() { }
+    }
+}
+
 /// <summary>Everything OS-specific the agent needs. One implementation per platform.</summary>
 public interface IPlatformServices
 {
@@ -80,6 +119,8 @@ public interface IPlatformServices
 
     /// <summary>Null where no accessibility backend exists yet.</summary>
     IUiAutomation? Automation { get; }
+
+    IHostWindow HostWindow { get; }
 
     /// <summary>Makes sure a child process dies with the app (e.g. a Windows job object).</summary>
     void TieToAppLifetime(Process process);
@@ -96,6 +137,7 @@ public sealed class UnsupportedPlatform : IPlatformServices, IScreenCapture, IIn
     public IInputController Input => this;
     public IWindowManager Windows => this;
     public IUiAutomation? Automation => null;
+    public IHostWindow HostWindow => NoHostWindow.Instance;
     public ProcessStartInfo CreateShellStartInfo(string command) => new("/bin/sh") { ArgumentList = { "-c", command } };
     public void TieToAppLifetime(Process process) { }
 

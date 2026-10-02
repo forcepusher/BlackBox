@@ -52,6 +52,9 @@ public sealed class RemoteApiSettings
     public string ApiKey { get; set; } = "";
     public string Model { get; set; } = "";
     public bool SupportsVision { get; set; } = true;
+
+    /// <summary>Context window of the remote model, used to trim old thinking before it overflows.</summary>
+    public int ContextSize { get; set; } = 32768;
 }
 
 public sealed class AgentSettings
@@ -69,8 +72,11 @@ public sealed class AgentSettings
     /// <summary>Attach a fresh screenshot after mouse/keyboard actions.</summary>
     public bool ScreenshotAfterActions { get; set; } = true;
 
-    /// <summary>Minimize BlackBox while the agent works so it does not cover (or click) its own window.</summary>
-    public bool HideWindowWhileWorking { get; set; } = true;
+    /// <summary>
+    /// Keep BlackBox's window out of screenshots so the agent sees the desktop behind it.
+    /// Side effect: screen recorders and screen sharing do not show the window either.
+    /// </summary>
+    public bool HideFromScreenshots { get; set; } = true;
 
     /// <summary>Moving the mouse into the top-left corner stops the agent.</summary>
     public bool FailsafeCorner { get; set; } = true;

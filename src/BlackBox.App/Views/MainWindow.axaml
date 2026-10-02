@@ -59,8 +59,10 @@
                    Text="I can look at the screen, use the mouse and keyboard, run commands and work with files. Move the mouse to the top-left corner or press Stop to halt me at any time." />
       </StackPanel>
 
-      <ScrollViewer x:Name="ChatScroll" HorizontalScrollBarVisibility="Disabled" Padding="16,12">
-        <ItemsControl ItemsSource="{Binding Items}" MaxWidth="860">
+      <!-- Spacing lives on the ItemsControl as a margin, not as ScrollViewer padding:
+           padding is not part of the scroll extent, so the last lines ended up clipped. -->
+      <ScrollViewer x:Name="ChatScroll" HorizontalScrollBarVisibility="Disabled">
+        <ItemsControl ItemsSource="{Binding Items}" MaxWidth="860" Margin="16,12,16,16">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
               <StackPanel Spacing="10" />
@@ -78,7 +80,7 @@
 
             <DataTemplate DataType="vm:AssistantMessageItem">
               <StackPanel Spacing="6" Margin="0,0,40,0">
-                <Expander IsVisible="{Binding HasReasoning}" Header="{Binding ThinkingLabel}" HorizontalAlignment="Stretch"
+                <Expander IsVisible="{Binding HasReasoning}" Header="{Binding ThinkingLabel}" HorizontalAlignment="Stretch" IsExpanded="True"
                           Padding="10,6">
                   <SelectableTextBlock Classes="muted" Text="{Binding Reasoning}" TextWrapping="Wrap" />
                 </Expander>
