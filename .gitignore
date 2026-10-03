@@ -5,9 +5,11 @@ publish/
 *.user
 .vs/
 
-## Portable runtime folders (created next to the exe, or at the repo root in Debug builds)
-/Data/
-/Workspace/
-## Leftovers from the earlier local-model builds
+## Dev builds keep their portable folder (Data/, Workspace/) here
+/.dev/
+
+## Leftovers from the old local-model layout (Models/, llama/) and pre-.dev dev data; delete when no longer needed
 /Models/
 /llama/
+/Data/
+/Workspace/

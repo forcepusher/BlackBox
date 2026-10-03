@@ -17,7 +17,7 @@ BlackBox/
   Workspace/   default working folder for file and shell tools
 ```
 
-Set `BLACKBOX_HOME` to use a different root.
+Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
 
 ## Connecting to a model
 Settings → General → AI model server. Enter the server address (LM Studio's default is
@@ -76,12 +76,19 @@ windows for the moment a click lands on it.
 Requires the .NET 10 SDK.
 
 ```powershell
-dotnet build                      # debug build; uses the repo root as the portable folder
+dotnet build                      # debug build; keeps its Data/ and Workspace/ in .dev/
 dotnet test                       # unit tests
-./publish.ps1                     # single-file publish/BlackBox.exe
-./publish.ps1 -Folder             # classic self-contained folder in publish/BlackBox-win-x64
+./scripts/publish.ps1             # single-file publish/BlackBox.exe
+./scripts/publish.ps1 -Folder     # classic self-contained folder in publish/BlackBox-win-x64
 dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   # headless run
-./tests/agent-tasks.ps1           # real desktop task suite (drives your mouse and keyboard)
+./scripts/agent-tasks.ps1         # real desktop task suite (drives your mouse and keyboard)
+```
+
+Integration tests against a real server (they send prompts larger than the context):
+
+```powershell
+$env:BB_SERVER_URL = "http://localhost:1234/v1"; $env:BB_SERVER_MODEL = "qwen3.8-27b@iq2_s"
+dotnet test --filter ServerIntegrationTests
 ```
 
 ## Project structure
@@ -91,7 +98,8 @@ dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   #
   (EnumWindows), UI Automation (FlaUI), host-window handling. Only referenced when building on Windows.
 - `src/BlackBox.Cli`: headless runner for trying tasks and models.
 - `src/BlackBox.App`: Avalonia 11 UI with CommunityToolkit.Mvvm.
-- `tests/BlackBox.Core.Tests`: xUnit tests.
+- `tests/BlackBox.Core.Tests`: xUnit tests (unit tests plus opt-in server integration tests).
+- `scripts/`: `publish.ps1` (portable build) and `agent-tasks.ps1` (real desktop task suite).
 
 Linux and macOS ports need an `IPlatformServices` implementation (screen, input, windows); the rest
 of the code is already cross-platform.

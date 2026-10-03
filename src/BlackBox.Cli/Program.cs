@@ -5,7 +5,7 @@ using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
 
 // Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] "task"
-//   --root        portable folder (default: BLACKBOX_HOME, else the exe folder, else the repo root)
+//   --root        portable folder (default: BLACKBOX_HOME, else .dev/ in the repo for dev builds, else the exe folder)
 //   --url/--model override the server address and model saved in Data/settings.json
 //   --yes         approve risky tools without asking
 //   --save-shots  write every screenshot the model sees to DIR
@@ -78,7 +78,7 @@ static string FindRoot()
 {
     for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         if (dir.EnumerateFiles("BlackBox.sln*").Any())
-            return dir.FullName;
+            return Path.Combine(dir.FullName, ".dev"); // same dev folder as the debug app
     return AppContext.BaseDirectory;
 }
 

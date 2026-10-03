@@ -18,8 +18,8 @@ internal static class PortableRuntime
     private const string PayloadName = "BlackBox.runtime.zip";
 
     /// <summary>
-    /// The portable root is the exe folder. BLACKBOX_HOME overrides it, and debug builds use the
-    /// repository root so Data/ and Workspace/ are shared between builds.
+    /// The portable root is the exe folder. BLACKBOX_HOME overrides it, and debug builds use
+    /// <c>.dev/</c> in the repository so Data/ and Workspace/ are shared between builds.
     /// </summary>
     public static string FindAppRoot()
     {
@@ -29,7 +29,7 @@ internal static class PortableRuntime
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
             if (dir.EnumerateFiles("BlackBox.sln*").Any())
-                return dir.FullName;
+                return Path.Combine(dir.FullName, ".dev");
         }
 #endif
         return AppContext.BaseDirectory;

@@ -4,15 +4,15 @@
   It drives your actual mouse and keyboard: don't touch the PC while it runs.
 
 .EXAMPLE
-  ./tests/agent-tasks.ps1                         # server and model from Data/settings.json
-  ./tests/agent-tasks.ps1 -Root D:\bb-other       # another portable root with its own settings
-  ./tests/agent-tasks.ps1 -Url http://host:1234/v1 -Model qwen3.8-27b@q4_k_s
+  ./scripts/agent-tasks.ps1                         # server and model from Data/settings.json
+  ./scripts/agent-tasks.ps1 -Root D:\bb-other       # another portable root with its own settings
+  ./scripts/agent-tasks.ps1 -Url http://host:1234/v1 -Model qwen3.8-27b@q4_k_s
 #>
 param([string]$Root = "", [string]$Url = "", [string]$Model = "")
 $repo = Split-Path $PSScriptRoot
 $cli = Join-Path $repo "src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe"
 if (-not (Test-Path $cli)) { dotnet build (Join-Path $repo "src\BlackBox.Cli") -v q | Out-Null }
-$out = Join-Path $repo ("Data\agent-tasks\" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+$out = Join-Path $repo (".dev\agent-tasks\" + (Get-Date -Format "yyyyMMdd-HHmmss"))
 New-Item -ItemType Directory -Force $out | Out-Null
 $rootArgs = @()
 if ($Root) { $rootArgs = @("--root", $Root) }

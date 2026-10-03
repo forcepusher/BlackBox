@@ -7,17 +7,17 @@ using Xunit;
 namespace BlackBox.Core.Tests;
 
 /// <summary>
-/// Opt-in checks against a real server. Set BB_LMSTUDIO_URL (e.g. http://host:1234/v1) and
-/// BB_LMSTUDIO_MODEL to run them. They send large prompts and can take several minutes.
+/// Opt-in checks against a real OpenAI-compatible server (tested with LM Studio). Set BB_SERVER_URL (e.g. http://host:1234/v1) and
+/// BB_SERVER_MODEL to run them. They send large prompts and can take several minutes.
 /// </summary>
-public class LmStudioOverflowTests
+public class ServerIntegrationTests
 {
-    private static readonly string? Url = Environment.GetEnvironmentVariable("BB_LMSTUDIO_URL");
-    private static readonly string? Model = Environment.GetEnvironmentVariable("BB_LMSTUDIO_MODEL");
+    private static readonly string? Url = Environment.GetEnvironmentVariable("BB_SERVER_URL");
+    private static readonly string? Model = Environment.GetEnvironmentVariable("BB_SERVER_MODEL");
 
     private static async Task<(ServerSettings Server, HttpClient Http, int Context)> ConnectAsync()
     {
-        Assert.SkipWhen(Url is null || Model is null, "Set BB_LMSTUDIO_URL and BB_LMSTUDIO_MODEL to run.");
+        Assert.SkipWhen(Url is null || Model is null, "Set BB_SERVER_URL and BB_SERVER_MODEL to run.");
         var server = new ServerSettings { BaseUrl = Url!, Model = Model! };
         var http = LlmHttp.Create(TimeSpan.FromMinutes(20));
         var context = await ServerProbe.EnsureLoadedAsync(http, server, null, CancellationToken.None);
