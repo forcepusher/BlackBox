@@ -125,7 +125,7 @@ public class ToolTests
             {
               "backend": "Remote",
               "local": { "modelPath": "Models/x.gguf", "gpuLayers": 99 },
-              "remote": { "baseUrl": "http://host:1234/v1", "model": "qwen", "sendExtras": false },
+              "remote": { "baseUrl": "http://host:1234/v1", "model": "qwen", "sendExtras": false, "maxPromptTokens": 65536 },
               "agent": { "enableThinking": false, "temperature": 0.3, "maxSteps": 12, "customInstructions": "be brief", "keepScreenshots": 5, "workingDirectory": "D:\\x", "screenshotMaxPixels": 2000000 }
             }
             """);
@@ -137,7 +137,7 @@ public class ToolTests
         Assert.Equal("be brief", settings.Agent.CustomInstructions);
         Assert.Equal(ScreenshotResolution.R1920x1080, settings.Agent.ScreenshotResolution); // nearest to the old 2 MP budget
         var saved = File.ReadAllText(paths.SettingsFile);
-        foreach (var gone in new[] { "backend", "local", "remote", "gpuLayers", "sendExtras", "enableThinking", "temperature", "keepScreenshots", "contextSize", "workingDirectory", "screenshotMaxPixels", "maxSteps" })
+        foreach (var gone in new[] { "backend", "local", "remote", "gpuLayers", "sendExtras", "enableThinking", "temperature", "keepScreenshots", "contextSize", "workingDirectory", "screenshotMaxPixels", "maxSteps", "maxPromptTokens" })
             Assert.DoesNotContain(gone, saved);
     }
 

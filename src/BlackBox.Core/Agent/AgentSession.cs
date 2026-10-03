@@ -273,10 +273,15 @@ public sealed partial class AgentSession(
 
     /// <summary>Rough token count of the conversation (about 3.5 characters per token, ~1300 per screenshot).</summary>
     internal int EstimateTokens() =>
-        (systemPrompt.Length + 12_000 /* tool schemas */ + History.Sum(m =>
-            (m.Content?.Length ?? 0) + (m.Reasoning?.Length ?? 0) +
-            (m.ToolCalls?.Sum(c => c.Name.Length + c.Arguments.Length) ?? 0) +
-            (m.Parts?.Sum(p => p.IsImage ? 4_500 : p.Text?.Length ?? 0) ?? 0))) * 2 / 7;
+        (int)(((long)systemPrompt.Length + 12_000 /* tool schemas */ + History.Sum(CharsOf)) * 2 / 7);
+
+    /// <summary>Rough token count of one message.</summary>
+    internal static int EstimateTokens(ChatMessage m) => (int)((long)CharsOf(m) * 2 / 7);
+
+    private static long CharsOf(ChatMessage m) =>
+        (m.Content?.Length ?? 0) + (m.Reasoning?.Length ?? 0) +
+        (m.ToolCalls?.Sum(c => c.Name.Length + c.Arguments.Length) ?? 0) +
+        (m.Parts?.Sum(p => p.IsImage ? 4_500 : p.Text?.Length ?? 0) ?? 0);
 
     /// <summary>
     /// Keeps the prompt under <paramref name="budget"/> tokens. Preserved thinking is the bulk of

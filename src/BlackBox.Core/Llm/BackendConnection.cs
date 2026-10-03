@@ -21,5 +21,5 @@ public sealed record BackendConnection(OpenAiChatClient Client, ChatRequestOptio
             Extra = new JsonObject { ["chat_template_kwargs"] = new JsonObject { ["preserve_thinking"] = true } },
         },
         server.SupportsVision,
-        server.MaxPromptTokens > 0 ? Math.Min(server.ContextSize, server.MaxPromptTokens) : server.ContextSize);
+        server.ContextSize);
 }

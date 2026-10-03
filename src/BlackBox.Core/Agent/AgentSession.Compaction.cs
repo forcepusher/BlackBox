@@ -18,14 +18,15 @@ public sealed partial class AgentSession
 {
     internal const string SummaryHeader = "[Summary of the earlier steps of this task, written to save context]";
 
-    /// <summary>Messages at the end of the history that are never compacted.</summary>
+    /// <summary>Messages at the end of the history that are always kept verbatim.</summary>
     internal const int KeepRecentMessages = 8;
 
     /// <summary>
-    /// Size of one compaction chunk. About 8k tokens: even uncached that is well under a minute
-    /// of prompt processing on a single consumer GPU.
+    /// Size of one compaction chunk, about 24k tokens: under a minute of prompt processing on a
+    /// single consumer GPU, so even a link that cuts silent connections gets each one through
+    /// (and if not, the resend resumes from the server's cache).
     /// </summary>
-    internal const int ChunkChars = 28_000;
+    internal const int ChunkChars = 84_000;
 
     private const string CompactionSystemPrompt =
         "You compress the history of a computer-use agent so it can continue its task with less context. " +
@@ -34,10 +35,12 @@ public sealed partial class AgentSession
         "of the screen and task. Keep everything still needed to finish the task; drop chatter and repetition. " +
         "Do not invent anything. Do not call tools.";
 
-    /// <summary>Room left for the reply: the server decides its length, so keep a fixed margin.</summary>
-    private const int ReplyReserve = 4096;
-
-    private int PromptBudget => (int)(contextTokens * 0.8) - ReplyReserve;
+    /// <summary>
+    /// The whole context the server reports is used. Compaction starts only when the prompt
+    /// would leave less than a reply's worth of room (16k, or an eighth of small contexts), with
+    /// a little slack because token counts here are estimates.
+    /// </summary>
+    private int PromptBudget => (int)(contextTokens * 0.95) - Math.Min(16_384, contextTokens / 8);
 
     /// <summary>
     /// Brings the conversation under <paramref name="budget"/> tokens: old screenshots and old
@@ -57,7 +60,7 @@ public sealed partial class AgentSession
         {
             // Aim well below the budget so the next compaction is many steps away; every
             // compaction changes the prompt prefix and costs one uncached pass.
-            await CompactAsync(observer, ct).ConfigureAwait(false);
+            await CompactAsync(observer, ct, keepTokens: budget / 2).ConfigureAwait(false);
         }
         catch (LlmException ex)
         {
@@ -78,11 +81,22 @@ public sealed partial class AgentSession
     }
 
     /// <summary>Replaces the middle of the history with a model-written summary. Returns false if there was nothing to compact.</summary>
-    internal async Task<bool> CompactAsync(IAgentObserver observer, CancellationToken ct)
+    /// <param name="keepTokens">
+    /// How much recent history stays verbatim (at least <see cref="KeepRecentMessages"/> messages).
+    /// Keeping about half the budget means detailed recent work survives, the next compaction is
+    /// far away, and only the older half has to be summarized.
+    /// </param>
+    internal async Task<bool> CompactAsync(IAgentObserver observer, CancellationToken ct, int keepTokens = 0)
     {
         // Keep the first message (the task) and the recent tail. Never split a tool call from its results.
         var start = 1;
         var end = History.Count - KeepRecentMessages;
+        for (var kept = History.Skip(end).Sum(EstimateTokens); end > start + 1; end--)
+        {
+            var next = EstimateTokens(History[end - 1]);
+            if (kept + next > keepTokens) break;
+            kept += next;
+        }
         while (end > start && History[end].Role == ChatRole.Tool)
             end--;
         if (end - start < 2)

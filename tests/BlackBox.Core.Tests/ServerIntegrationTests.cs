@@ -55,14 +55,13 @@ public class ServerIntegrationTests
         Assert.Contains("BLUEFISH", session.History[^1].Content, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>The normal path: the run outgrows the prompt budget and gets compacted before sending.</summary>
+    /// <summary>The normal path: the run fills the model's whole context and gets compacted before sending.</summary>
     [Fact]
     public async Task Long_run_is_compacted_and_still_knows_the_task()
     {
         var (server, http, context) = await ConnectAsync();
-        var budget = Math.Min(context, server.MaxPromptTokens);
-        var session = NewSession(http, server, budget);
-        FillHistory(session, (int)(budget * 1.2));
+        var session = NewSession(http, server, context); // the whole context, as the app does
+        FillHistory(session, (int)(context * 1.05));
 
         await AssertAnswersPassword(session);
         Assert.StartsWith(AgentSession.SummaryHeader, session.History[1].Content);

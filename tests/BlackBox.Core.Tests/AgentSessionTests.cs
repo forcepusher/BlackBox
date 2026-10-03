@@ -241,10 +241,10 @@ public class AgentSessionTests
         var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null),
             new ChatRequestOptions { MaxTokens = 1000 }, ToolRegistry.CreateDefault(true), ctx, "sys", contextTokens: 20_000);
         session.History.Add(ChatMessage.User("THE TASK"));
-        for (var i = 0; i < 40; i++)
+        for (var i = 0; i < 100; i++)
         {
             session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "", ToolCalls = [new ToolCall { Id = $"c{i}", Name = "wait", Arguments = "{}" }] });
-            session.History.Add(ChatMessage.ToolResult($"c{i}", new string('x', 1500)));
+            session.History.Add(ChatMessage.ToolResult($"c{i}", new string('x', 6000)));
         }
         var observer = new RecordingObserver();
 
@@ -253,11 +253,11 @@ public class AgentSessionTests
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
         var compactionCalls = server.Requests.Count(r => r["tools"] is null);
         Assert.True(compactionCalls >= 2, $"expected several small summary requests, got {compactionCalls}");
-        Assert.All(server.Requests.Where(r => r["tools"] is null), r => Assert.True(r.ToJsonString().Length < 40_000));
+        Assert.All(server.Requests.Where(r => r["tools"] is null), r => Assert.True(r.ToJsonString().Length < 100_000));
         Assert.Equal("THE TASK", session.History[0].Content);
         Assert.StartsWith(AgentSession.SummaryHeader, session.History[1].Content);
         Assert.Contains("C:\\notes.txt", session.History[1].Content);
-        Assert.True(session.EstimateTokens() < 15_000);
+        Assert.True(session.EstimateTokens() < 17_000); // under the budget for a 20k context
     }
 
     [Fact]
