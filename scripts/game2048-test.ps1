@@ -45,7 +45,7 @@ $p = Start-Process $cli -ArgumentList ($cliArgs | ForEach-Object { '"' + ($_ -re
   -RedirectStandardOutput $log -RedirectStandardError (Join-Path $out "stderr.txt")
 
 # Show the log live in this window while the run goes on (thinking, tool calls, reconnects,
-# compactions). Writing to the console never takes focus away from what the agent is doing.
+# context resets). Writing to the console never takes focus away from what the agent is doing.
 $limit = [TimeSpan]::FromHours($Hours)
 $stream = [IO.FileStream]::new($log, 'Open', 'Read', 'ReadWrite')
 $reader = [IO.StreamReader]::new($stream, [Text.Encoding]::UTF8)
@@ -73,7 +73,7 @@ $summary = @(
   "outcome      $done"
   "model calls  $(($c | Select-String '^\S+ step [1-9]').Count)"
   "tool calls   $(($c | Select-String '^\[call\]').Count)  (recovered from text: $(($c | Select-String 'recovered from text').Count))"
-  "compactions  $(($c | Select-String 'Earlier steps summarized').Count)  (failed: $(($c | Select-String 'Could not summarize').Count))"
+  "resets       $(($c | Select-String 'Context reset:').Count)  (without a model-written note: $(($c | Select-String "couldn't write a handoff note").Count))"
   "reconnects   $(($c | Select-String 'Connection lost').Count)"
   "loop notes   $(($c | Select-String 'Note: (you made exactly|the screen has not changed)').Count)"
   "game files   $((Get-ChildItem $game -Recurse -File | ForEach-Object { '{0} ({1:N0} bytes)' -f $_.Name, $_.Length }) -join ', ')"

@@ -37,12 +37,22 @@ public sealed class ChatMessage
     /// <summary>Multimodal content; used for messages that carry screenshots.</summary>
     public List<ContentPart>? Parts { get; set; }
 
-    /// <summary>Model "thinking" text, shown in the UI but never sent back to the model.</summary>
+    /// <summary>Model "thinking" text; sent back as reasoning_content when <see cref="ChatRequestOptions.SendReasoning"/> is on.</summary>
     public string? Reasoning { get; set; }
 
     public List<ToolCall>? ToolCalls { get; set; }
 
     public string? ToolCallId { get; set; }
+
+    /// <summary>Typed by the user, as opposed to BlackBox's notes, nudges and screenshots. Kept verbatim when the context is reset.</summary>
+    public bool FromUser { get; set; }
+
+    /// <summary>For replies: the prompt and reply size the server reported, when it reports usage.</summary>
+    public int? PromptTokens { get; set; }
+    public int? CompletionTokens { get; set; }
+
+    /// <summary>For replies: why the server stopped ("stop", "tool_calls", "length" when out of room).</summary>
+    public string? FinishReason { get; set; }
 
     public bool HasToolCalls => ToolCalls is { Count: > 0 };
 

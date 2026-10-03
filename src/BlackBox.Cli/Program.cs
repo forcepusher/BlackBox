@@ -48,6 +48,7 @@ using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
 var agent = settings.Agent;
+platform.InputOverlay.Duration = TimeSpan.FromSeconds(agent.InputLogSeconds);
 platform.InputOverlay.Enabled = agent.ShowInputs;
 if (urlOverride is not null) settings.Server.BaseUrl = urlOverride;
 if (modelOverride is not null) settings.Server.Model = modelOverride;

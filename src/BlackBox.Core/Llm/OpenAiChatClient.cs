@@ -93,7 +93,7 @@ public sealed class OpenAiChatClient
         CancellationToken ct)
     {
         var sendReasoning = options.SendReasoning && !_reasoningRejected;
-        var sendExtras = options.Extra is not null && !_extrasRejected;
+        var sendExtras = !_extrasRejected;
         var payload = BuildRequest(messages, tools, options, sendReasoning, sendExtras);
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/chat/completions")
         {
@@ -156,6 +156,8 @@ public sealed class OpenAiChatClient
         var reasoning = new StringBuilder();
         var calls = new SortedDictionary<int, (string Id, string Name, StringBuilder Args)>();
         var finished = false;
+        string? finishReason = null;
+        int? promptTokens = null, completionTokens = null;
 
         while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
         {
@@ -181,7 +183,15 @@ public sealed class OpenAiChatClient
             }
 
             if (chunk?["choices"] is JsonArray { Count: > 0 } c0 && c0[0]?["finish_reason"] is JsonValue fr && fr.GetValueKind() == JsonValueKind.String)
+            {
                 finished = true;
+                finishReason = fr.GetValue<string>();
+            }
+            if (chunk?["usage"] is JsonObject usage)
+            {
+                promptTokens = usage["prompt_tokens"]?.GetValue<int>() ?? promptTokens;
+                completionTokens = usage["completion_tokens"]?.GetValue<int>() ?? completionTokens;
+            }
             if (chunk?["choices"] is not JsonArray { Count: > 0 } choices || choices[0]?["delta"] is not JsonObject delta)
                 continue;
 
@@ -244,6 +254,9 @@ public sealed class OpenAiChatClient
             Role = ChatRole.Assistant,
             Content = text,
             Reasoning = reasoning.Length > 0 ? reasoning.ToString() : null,
+            FinishReason = finishReason,
+            PromptTokens = promptTokens,
+            CompletionTokens = completionTokens,
         };
         if (calls.Count > 0)
         {
@@ -294,9 +307,14 @@ public sealed class OpenAiChatClient
             req["tools"] = arr;
         }
 
-        if (sendExtras && options.Extra is not null)
-            foreach (var (key, value) in options.Extra)
-                req[key] = value?.DeepClone();
+        if (sendExtras)
+        {
+            // Exact prompt and reply sizes, so the agent knows how full the context really is.
+            req["stream_options"] = new JsonObject { ["include_usage"] = true };
+            if (options.Extra is not null)
+                foreach (var (key, value) in options.Extra)
+                    req[key] = value?.DeepClone();
+        }
 
         return req;
     }

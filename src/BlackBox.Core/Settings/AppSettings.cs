@@ -69,10 +69,6 @@ public sealed class AgentSettings
     /// <summary>Largest size a screenshot is sent at; the screen is scaled down to fit, keeping its shape.</summary>
     public ScreenshotResolution ScreenshotResolution { get; set; } = ScreenshotResolution.R1920x1080;
 
-    /// <summary>Screenshots kept when the context fills up (until then all stay, so the server cache holds). Internal tuning, not a user setting.</summary>
-    [JsonIgnore]
-    public int KeepScreenshots { get; set; } = 2;
-
     /// <summary>Attach a fresh screenshot after mouse/keyboard actions. Internal (tests turn it off).</summary>
     [JsonIgnore]
     public bool ScreenshotAfterActions { get; set; } = true;
@@ -88,6 +84,11 @@ public sealed class AgentSettings
 
     /// <summary>Show the inputs the agent makes in a fading log in the screen corner, and a ring where it clicks.</summary>
     public bool ShowInputs { get; set; } = true;
+
+    public const int DefaultInputLogSeconds = 15;
+
+    /// <summary>How long each line of the on-screen input log stays before it has faded out.</summary>
+    public int InputLogSeconds { get; set; } = DefaultInputLogSeconds;
 
     public string CustomInstructions { get; set; } = "";
 }

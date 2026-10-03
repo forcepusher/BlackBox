@@ -34,34 +34,44 @@ public sealed partial class AgentSession(
     List<ChatMessage>? history = null,
     int contextTokens = 0)
 {
-    private const string OmittedScreenshot = "[earlier screenshot omitted to save context]";
-
     /// <summary>Conversation so far (without the system prompt). Can be shared across sessions so settings changes keep the chat.</summary>
     public List<ChatMessage> History { get; } = history ?? [];
 
     public async Task RunAsync(string userText, IAgentObserver observer, CancellationToken ct)
     {
-        History.Add(ChatMessage.User(userText));
+        History.Add(new ChatMessage { Role = ChatRole.User, Content = userText, FromUser = true });
         var toolDefs = tools.Definitions();
         var nudges = 0;
         var loops = new LoopDetector();
+        var justReset = false;
 
         try
         {
             // No step limit: a run ends when the model is done, the user presses Stop, or the
             // mouse hits the failsafe corner. Tasks like "keep chatting for 12 hours" are valid;
-            // runaway loops are handled by LoopDetector, and growth by compaction.
+            // runaway loops are handled by LoopDetector, and growth by context resets.
             for (var step = 1; ; step++)
             {
                 ct.ThrowIfCancellationRequested();
                 observer.OnStepStarted(step);
-                if (contextTokens > 0)
-                    await EnsureFitsAsync(PromptBudget, observer, ct).ConfigureAwait(false);
+                if (contextTokens > 0 && TokensInUse() > ResetThreshold)
+                    await ResetContextAsync(observer, ct).ConfigureAwait(false);
 
                 var request = new List<ChatMessage>(History.Count + 1) { ChatMessage.System(systemPrompt) };
                 request.AddRange(History);
 
                 var reply = await CompleteFittingAsync(request, observer, ct).ConfigureAwait(false);
+                if (reply.FinishReason == "length" && !reply.HasToolCalls && contextTokens > 0 && !justReset)
+                {
+                    // The server ran out of context mid-reply, so the size estimate was off. The
+                    // cut-off reply is thrown away and this step is redone after a reset.
+                    observer.OnNotice("The model ran out of context in the middle of its reply.");
+                    observer.OnAssistantMessage(new ChatMessage { Role = ChatRole.Assistant, Content = "" });
+                    await ResetContextAsync(observer, ct).ConfigureAwait(false);
+                    justReset = true;
+                    continue;
+                }
+                justReset = false;
                 TextToolCallParser.TryExtract(reply, tools);
                 // "The task is complete" followed by yet another screenshot: small models can keep
                 // re-verifying forever. A completion claim with only look-only calls ends the turn.
@@ -69,6 +79,7 @@ public sealed partial class AgentSession(
                     reply.ToolCalls!.All(c => ToolCallRepair.ResolveTool(c.Name, tools)?.Risk == ToolRisk.ReadOnly))
                     reply.ToolCalls = null;
                 History.Add(reply);
+                RecordUsage(reply);
                 observer.OnAssistantMessage(reply);
 
                 if (!reply.HasToolCalls)
@@ -223,8 +234,8 @@ public sealed partial class AgentSession(
     };
 
     /// <summary>
-    /// Sends the request; if the server says it does not fit, trims history much harder and
-    /// tries again (twice at most) before giving up.
+    /// Sends the request; if the server says it does not fit, resets the context and tries again
+    /// (twice at most) before giving up.
     /// </summary>
     private async Task<ChatMessage> CompleteFittingAsync(List<ChatMessage> request, IAgentObserver observer, CancellationToken ct)
     {
@@ -254,9 +265,7 @@ public sealed partial class AgentSession(
             }
             catch (ContextOverflowException) when (attempt < 2)
             {
-                var before = EstimateTokens();
-                PruneScreenshots(1);
-                await EnsureFitsAsync(before / 2, observer, ct).ConfigureAwait(false);
+                await ResetContextAsync(observer, ct).ConfigureAwait(false);
                 request.Clear();
                 request.Add(ChatMessage.System(systemPrompt));
                 request.AddRange(History);
@@ -303,7 +312,7 @@ public sealed partial class AgentSession(
         }
     }
 
-    /// <summary>Rough token count of the conversation (about 3.5 characters per token, ~1300 per screenshot).</summary>
+    /// <summary>Rough token count of the conversation (about 3.5 characters per token, ~2000 per screenshot, the size of a 1920x1080 one).</summary>
     internal int EstimateTokens() =>
         (int)(((long)systemPrompt.Length + 12_000 /* tool schemas */ + History.Sum(CharsOf)) * 2 / 7);
 
@@ -313,7 +322,7 @@ public sealed partial class AgentSession(
     private static long CharsOf(ChatMessage m) =>
         (m.Content?.Length ?? 0) + (m.Reasoning?.Length ?? 0) +
         (m.ToolCalls?.Sum(c => c.Name.Length + c.Arguments.Length) ?? 0) +
-        (m.Parts?.Sum(p => p.IsImage ? 4_500 : p.Text?.Length ?? 0) ?? 0);
+        (m.Parts?.Sum(p => p.IsImage ? 7_000 : p.Text?.Length ?? 0) ?? 0);
 
     /// <summary>
     /// Keeps the prompt under <paramref name="budget"/> tokens. Preserved thinking is the bulk of
@@ -348,23 +357,6 @@ public sealed partial class AgentSession(
         }
         if (removedAny && History[1].Content != gap)
             History.Insert(1, ChatMessage.User(gap));
-    }
-
-    /// <summary>Drops all but the newest <paramref name="keep"/> screenshots from the history.</summary>
-    internal void PruneScreenshots(int keep)
-    {
-        var seen = 0;
-        for (var i = History.Count - 1; i >= 0; i--)
-        {
-            var parts = History[i].Parts;
-            if (parts is null) continue;
-            for (var p = parts.Count - 1; p >= 0; p--)
-            {
-                if (!parts[p].IsImage) continue;
-                if (++seen > keep)
-                    parts[p] = ContentPart.FromText(OmittedScreenshot);
-            }
-        }
     }
 
     /// <summary>

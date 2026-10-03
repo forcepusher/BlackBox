@@ -35,6 +35,13 @@ public sealed class SettingsViewModel(AppSettings settings, AppPaths paths) : Ob
         set => Agent.ScreenshotResolution = (ScreenshotResolution)Math.Clamp(value, 0, ResolutionOptions.Length - 1);
     }
 
+    /// <summary>NumericUpDown works in decimals.</summary>
+    public decimal? InputLogSeconds
+    {
+        get => Agent.InputLogSeconds;
+        set => Agent.InputLogSeconds = (int)Math.Clamp(value ?? AgentSettings.DefaultInputLogSeconds, 1, 300);
+    }
+
     public int ApprovalIndex
     {
         get => (int)Agent.Approval;

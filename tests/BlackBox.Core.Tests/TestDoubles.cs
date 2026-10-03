@@ -81,7 +81,8 @@ internal sealed class RecordingObserver : IAgentObserver
 
     public void OnToolStarted(ToolCall call, string summary) => ToolsRun.Add(call.Name);
     public List<string> Notices { get; } = [];
-    public void OnNotice(string text) => Notices.Add(text);
+    public event Action<string>? NoticeReceived;
+    public void OnNotice(string text) { Notices.Add(text); NoticeReceived?.Invoke(text); }
     public void OnToolFinished(ToolCall call, ToolResult result) => Results.Add(result);
 
     public void OnFinished(AgentStopReason reason, string? detail)

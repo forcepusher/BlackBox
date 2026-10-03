@@ -55,16 +55,57 @@ public class ServerIntegrationTests
         Assert.Contains("BLUEFISH", session.History[^1].Content, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>The normal path: the run fills the model's whole context and gets compacted before sending.</summary>
+    /// <summary>
+    /// The normal path, as in a long run: the history grows (cached on the server) until it is
+    /// nearly full, then the model writes a handoff note and the run continues from a fresh
+    /// context. A value only found in a tool result must survive through the note. Timings of
+    /// each phase are printed (and written to bb-reset-timings.txt in the temp folder).
+    /// </summary>
     [Fact]
-    public async Task Long_run_is_compacted_and_still_knows_the_task()
+    public async Task Full_context_is_reset_with_a_handoff_note_and_the_task_continues()
     {
         var (server, http, context) = await ConnectAsync();
         var session = NewSession(http, server, context); // the whole context, as the app does
-        FillHistory(session, (int)(context * 1.05));
+        var log = new List<string>();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        void Mark(string what) { log.Add($"{clock.Elapsed.TotalSeconds,7:0.0}s  {what}"); TestContext.Current.SendDiagnosticMessage(log[^1]); }
 
-        await AssertAnswersPassword(session);
-        Assert.StartsWith(AgentSession.SummaryHeader, session.History[1].Content);
+        // Phase 1: a history just under the reset point, sent once so the server caches it.
+        session.History.Add(new ChatMessage { Role = ChatRole.User, Content = "We are reading the server logs to find the vault code. Read them one by one.", FromUser = true });
+        AddLogs(session, session.ResetThreshold - 6_000, codeAt: 3);
+        var observer = new RecordingObserver();
+        await session.RunAsync("Without using tools, reply with just OK for now.", observer, CancellationToken.None);
+        Assert.True(observer.StopReason == AgentStopReason.Completed, $"{observer.StopReason}: {observer.Detail}");
+        Mark($"cold prompt processed ({session.TokensInUse() / 1000}k tokens, {observer.Notices.Count(n => n.StartsWith("Connection lost"))} drops)");
+
+        // Phase 2: a few more steps push it just over the reset point; the next request resets.
+        AddLogs(session, session.ResetThreshold + 2_000, codeAt: -1);
+        observer = new RecordingObserver();
+        observer.NoticeReceived += n =>
+        {
+            if (n.StartsWith("The context is nearly full")) Mark("reset started, asking for the handoff note");
+            if (n.StartsWith("Context reset")) Mark("handoff note written. " + n);
+        };
+        await session.RunAsync("Without using tools, reply with just the vault code you found in the logs.", observer, CancellationToken.None);
+        Mark($"answered after the reset ({observer.Notices.Count(n => n.StartsWith("Connection lost"))} drops)");
+        File.WriteAllLines(Path.Combine(Path.GetTempPath(), "bb-reset-timings.txt"), log.Concat(observer.Notices.Select(n => "notice: " + n)));
+
+        Assert.True(observer.StopReason == AgentStopReason.Completed, $"{observer.StopReason}: {observer.Detail}");
+        Assert.Contains(observer.Notices, n => n.StartsWith("Context reset"));
+        Assert.StartsWith(AgentSession.HandoffHeader, session.History.First(m => !m.FromUser).Content);
+        Assert.Contains("ORCHID-7", session.History[^1].Content, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AddLogs(AgentSession session, int untilTokens, int codeAt)
+    {
+        for (var i = session.History.Count; session.TokensInUse() < untilTokens; i++)
+        {
+            var text = $"Log page {i}: the quick brown fox number {i} jumped over lazy dog number {i * 7}. " +
+                       (i == codeAt ? "IMPORTANT: the vault code is ORCHID-7. " : "") +
+                       string.Concat(Enumerable.Repeat($"Entry {i}: nothing unusual happened. ", 60));
+            session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "", ToolCalls = [new ToolCall { Id = $"c{i}", Name = "read_file", Arguments = $$"""{"path":"log{{i}}.txt"}""" }] });
+            session.History.Add(ChatMessage.ToolResult($"c{i}", text));
+        }
     }
 
     /// <summary>A prompt that takes minutes to process; on links that cut silent connections it only finishes by resuming.</summary>

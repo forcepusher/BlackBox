@@ -11,14 +11,16 @@ namespace BlackBox.Platform.Windows;
 /// </summary>
 /// <remarks>
 /// Both windows are click-through (WS_EX_TRANSPARENT), never activated (WS_EX_NOACTIVATE),
-/// left out of the taskbar and Alt+Tab (WS_EX_TOOLWINDOW) and excluded from screen capture, so
-/// they can't take focus, catch clicks or show up in the model's screenshots. They are drawn with
-/// Skia into a DIB and pushed with UpdateLayeredWindow, which needs no compositor.
+/// and left out of the taskbar and Alt+Tab (WS_EX_TOOLWINDOW), so they can't take focus or catch
+/// clicks. They are drawn with Skia into a DIB and pushed with UpdateLayeredWindow.
+/// Keeping them out of the model's screenshots: WDA_EXCLUDEFROMCAPTURE is refused for windows
+/// drawn with UpdateLayeredWindow (SetWindowDisplayAffinity fails with error 8), so instead
+/// BlackBox's own capture hides them for the instant it takes a screenshot (<see cref="Suspend"/>).
 /// </remarks>
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsInputOverlay : IInputOverlay
 {
-    private const double LogSeconds = 5, FadeSeconds = 1.5, MarkerSeconds = 1.2;
+    private const double FadeSeconds = 1.5, MarkerSeconds = 1.2;
     private const int MaxLines = 8, PanelWidth = 460, LineHeight = 34, MarkerSize = 72;
     private const uint WM_APP_REFRESH = 0x8001, WM_TIMER = 0x0113;
 
@@ -26,10 +28,12 @@ internal sealed class WindowsInputOverlay : IInputOverlay
     private readonly List<Entry> _entries = [];
     private (int X, int Y, DateTime At)? _marker;
     private volatile bool _enabled;
+    private double _logSeconds = 15;
     private Thread? _thread;
     private uint _threadId;
     private nint _logWindow, _markerWindow;
     private bool _timerOn;
+    private int _suspended;
     private WndProc? _wndProc; // kept alive for the window class
 
     private sealed record Entry(string Text, int Count, DateTime At);
@@ -48,6 +52,12 @@ internal sealed class WindowsInputOverlay : IInputOverlay
                 Refresh();
             }
         }
+    }
+
+    public TimeSpan Duration
+    {
+        get => TimeSpan.FromSeconds(_logSeconds);
+        set => _logSeconds = Math.Max(FadeSeconds, value.TotalSeconds);
     }
 
     public void Show(string text, (int X, int Y)? point = null)
@@ -121,18 +131,45 @@ internal sealed class WindowsInputOverlay : IInputOverlay
         var hwnd = CreateWindowEx(
             WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
             "BlackBoxInputOverlay", "", WS_POPUP, 0, 0, 1, 1, 0, 0, instance, 0);
-        SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
         return hwnd;
+    }
+
+    /// <summary>Hides the overlay until the result is disposed (for screenshots). Cheap when nothing is shown.</summary>
+    internal IDisposable Suspend()
+    {
+        Interlocked.Increment(ref _suspended);
+        if (IsWindowVisible(_logWindow) || IsWindowVisible(_markerWindow))
+        {
+            // ShowWindow on another thread's window waits until that thread has handled it, so no
+            // frame drawn before this can come back on screen; DwmFlush waits for the next frame.
+            ShowWindow(_logWindow, SW_HIDE);
+            ShowWindow(_markerWindow, SW_HIDE);
+            DwmFlush();
+        }
+        return new Resume(this);
+    }
+
+    private sealed class Resume(WindowsInputOverlay overlay) : IDisposable
+    {
+        private int _done;
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _done, 1) == 1) return;
+            Interlocked.Decrement(ref overlay._suspended);
+            overlay.Refresh();
+        }
     }
 
     private void Render()
     {
+        if (Volatile.Read(ref _suspended) > 0)
+            return; // a screenshot is being taken; the timer redraws right after
         var now = DateTime.UtcNow;
         List<(Entry Entry, double Alpha)> lines;
         (int X, int Y, double Age)? marker = null;
         lock (_lock)
         {
-            _entries.RemoveAll(e => (now - e.At).TotalSeconds >= LogSeconds);
+            _entries.RemoveAll(e => (now - e.At).TotalSeconds >= _logSeconds);
             lines = _entries.Select(e => (e, Fade((now - e.At).TotalSeconds))).ToList();
             if (_marker is { } m && (now - m.At).TotalSeconds < MarkerSeconds)
                 marker = (m.X, m.Y, (now - m.At).TotalSeconds);
@@ -147,8 +184,8 @@ internal sealed class WindowsInputOverlay : IInputOverlay
         else if (!active && _timerOn) { KillTimer(_logWindow, 1); _timerOn = false; }
     }
 
-    private static double Fade(double age) =>
-        age < LogSeconds - FadeSeconds ? 1 : Math.Clamp((LogSeconds - age) / FadeSeconds, 0, 1);
+    private double Fade(double age) =>
+        age < _logSeconds - FadeSeconds ? 1 : Math.Clamp((_logSeconds - age) / FadeSeconds, 0, 1);
 
     private void DrawLog(List<(Entry Entry, double Alpha)> lines)
     {
@@ -228,7 +265,7 @@ internal sealed class WindowsInputOverlay : IInputOverlay
     private const uint WS_POPUP = 0x80000000;
     private const uint WS_EX_LAYERED = 0x00080000, WS_EX_TRANSPARENT = 0x00000020, WS_EX_TOPMOST = 0x00000008,
         WS_EX_NOACTIVATE = 0x08000000, WS_EX_TOOLWINDOW = 0x00000080;
-    private const uint WDA_EXCLUDEFROMCAPTURE = 0x11, ULW_ALPHA = 2, SPI_GETWORKAREA = 0x0030;
+    private const uint ULW_ALPHA = 2, SPI_GETWORKAREA = 0x0030;
     private const int SW_HIDE = 0;
     private static readonly nint HWND_TOPMOST = -1;
     private const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOACTIVATE = 0x0010, SWP_SHOWWINDOW = 0x0040;
@@ -276,7 +313,8 @@ internal sealed class WindowsInputOverlay : IInputOverlay
     [DllImport("user32.dll")] private static extern bool KillTimer(nint hWnd, nint id);
     [DllImport("user32.dll")] private static extern bool ShowWindow(nint hWnd, int cmd);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(nint hWnd, nint after, int x, int y, int cx, int cy, uint flags);
-    [DllImport("user32.dll")] private static extern bool SetWindowDisplayAffinity(nint hWnd, uint affinity);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(nint hWnd);
+    [DllImport("dwmapi.dll")] private static extern int DwmFlush();
     [DllImport("user32.dll")] private static extern bool SystemParametersInfo(uint action, uint param, out RECT rect, uint winIni);
     [DllImport("user32.dll")] private static extern bool UpdateLayeredWindow(nint hWnd, nint hdcDst, ref POINT dst, ref SIZE size, nint hdcSrc, ref POINT src, uint key, ref BLENDFUNCTION blend, uint flags);
     [DllImport("user32.dll")] private static extern nint GetDC(nint hWnd);

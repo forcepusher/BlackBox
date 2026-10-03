@@ -114,6 +114,9 @@ public interface IInputOverlay
 {
     bool Enabled { get; set; }
 
+    /// <summary>How long a log line stays on screen, fade-out included.</summary>
+    TimeSpan Duration { get; set; }
+
     /// <param name="text">What happened, e.g. "Left click" or "Keys: Ctrl+S".</param>
     /// <param name="point">Where on the screen (physical pixels), for a marker; null for keyboard input.</param>
     void Show(string text, (int X, int Y)? point = null);
@@ -123,6 +126,7 @@ public sealed class NoInputOverlay : IInputOverlay
 {
     public static readonly NoInputOverlay Instance = new();
     public bool Enabled { get; set; }
+    public TimeSpan Duration { get; set; }
     public void Show(string text, (int X, int Y)? point = null) { }
 }
 

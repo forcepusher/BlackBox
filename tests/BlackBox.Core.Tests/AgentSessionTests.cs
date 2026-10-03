@@ -65,7 +65,7 @@ public class AgentSessionTests
             Sse.ToolCall("s5", "screenshot", "{}"),
             Sse.ToolCall("s6", "screenshot", "{}"),
             Sse.Text("Done."));
-        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), keepScreenshots: 2);
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
 
         await session.RunAsync("look", observer, CancellationToken.None);
 
@@ -79,24 +79,6 @@ public class AgentSessionTests
             for (var m = 0; m < before.Count; m++)
                 Assert.Equal(before[m]!.ToJsonString(), after[m]!.ToJsonString());
         }
-    }
-
-    [Fact]
-    public async Task Old_screenshots_go_in_one_batch_when_the_context_fills_up()
-    {
-        var server = new ScriptedServer(); // must not be asked to summarize
-        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), keepScreenshots: 2);
-        session.History.Add(ChatMessage.User("THE TASK"));
-        for (var i = 0; i < 30; i++)
-            session.History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText("shot"), ContentPart.FromImage([1, 2, 3], "image/jpeg")] });
-
-        var budget = session.EstimateTokens() - 1;
-        await session.EnsureFitsAsync(budget, observer, CancellationToken.None);
-
-        Assert.Equal(2, Images(session.History));
-        Assert.Empty(server.Requests);
-        // Well below the budget, so the next trim (and full reprocess on the server) is far away.
-        Assert.True(session.EstimateTokens() <= budget * 3 / 4);
     }
 
     private static int Images(JsonObject request) => request["messages"]!.AsArray()
@@ -152,10 +134,10 @@ public class AgentSessionTests
     }
 
     [Fact]
-    public async Task Context_overflow_from_the_server_trims_history_and_retries()
+    public async Task Context_overflow_from_the_server_resets_the_context_and_retries()
     {
         var overflow = """{"error":"The number of tokens to keep from the initial prompt is greater than the context length. Try to load the model with a larger context length"}""";
-        var server = new ScriptedServer(Sse.Text("Short answer."));
+        var server = new ScriptedServer(Sse.Text("NOTE: answered four old questions."), Sse.Text("Short answer."));
         server.Failures.Enqueue((System.Net.HttpStatusCode.BadRequest, overflow));
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
         var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null),
@@ -170,8 +152,9 @@ public class AgentSessionTests
         await session.RunAsync("new question", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal(2, server.Requests.Count);
-        Assert.True(JsonSize(server.Requests[1]) < JsonSize(server.Requests[0]));
+        Assert.Equal(3, server.Requests.Count); // rejected, handoff note, retry
+        Assert.True(JsonSize(server.Requests[2]) < JsonSize(server.Requests[0]) / 4);
+        Assert.Equal("Short answer.", session.History[^1].Content);
 
         static int JsonSize(JsonObject o) => o.ToJsonString().Length;
     }
@@ -308,36 +291,105 @@ public class AgentSessionTests
         Assert.False(RepetitionGuard.IsRepeating("Left merged the 2s. " + string.Concat(Enumerable.Range(0, 50).Select(i => $"Move {i}: score {i * 4}, new tile at ({i % 4},{i / 4 % 4}). "))));
     }
 
+    /// <summary>A long run: the task, 60 steps of tool output and a final screenshot.</summary>
+    private static (AgentSession, RecordingObserver) LongSession(ScriptedServer server, int contextTokens)
+    {
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null),
+            new ChatRequestOptions(), ToolRegistry.CreateDefault(true), ctx, "sys", contextTokens: contextTokens);
+        session.History.Add(new ChatMessage { Role = ChatRole.User, Content = "THE TASK", FromUser = true });
+        for (var i = 0; i < 60; i++)
+        {
+            session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "", ToolCalls = [new ToolCall { Id = $"c{i}", Name = "wait", Arguments = "{}" }] });
+            session.History.Add(ChatMessage.ToolResult($"c{i}", new string('x', 2000)));
+        }
+        session.History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText("Screenshot after the last action:"), ContentPart.FromImage([7, 7, 7], "image/jpeg")] });
+        return (session, new RecordingObserver());
+    }
+
+    private static string LastText(JsonObject request) => request["messages"]!.AsArray()[^1]!["content"] is JsonValue v ? v.ToString() : "";
+
     [Fact]
-    public async Task Long_runs_are_compacted_in_chunks_into_a_summary()
+    public async Task A_full_context_is_reset_to_the_users_messages_a_handoff_note_and_the_screen()
     {
         var server = new ScriptedServer
         {
-            Responder = req => req["tools"] is null
-                ? Sse.Text("SUMMARY: opened Notepad, typed the report, saved to C:\\notes.txt.")
+            Responder = req => LastText(req) == AgentSession.HandoffRequest
+                ? Sse.Text("NOTE: opened Notepad, saved C:\\notes.txt. Next: close Notepad.")
                 : Sse.Text("Done."),
         };
-        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
-        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null),
-            new ChatRequestOptions { MaxTokens = 1000 }, ToolRegistry.CreateDefault(true), ctx, "sys", contextTokens: 20_000);
-        session.History.Add(ChatMessage.User("THE TASK"));
-        for (var i = 0; i < 100; i++)
-        {
-            session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "", ToolCalls = [new ToolCall { Id = $"c{i}", Name = "wait", Arguments = "{}" }] });
-            session.History.Add(ChatMessage.ToolResult($"c{i}", new string('x', 6000)));
-        }
-        var observer = new RecordingObserver();
+        var (session, observer) = LongSession(server, contextTokens: 40_000);
+        var fullHistory = session.History.Count;
 
         await session.RunAsync("and now finish", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        var compactionCalls = server.Requests.Count(r => r["tools"] is null);
-        Assert.True(compactionCalls >= 2, $"expected several small summary requests, got {compactionCalls}");
-        Assert.All(server.Requests.Where(r => r["tools"] is null), r => Assert.True(r.ToJsonString().Length < 100_000));
+        Assert.Equal(2, server.Requests.Count);
+        // The note is asked for on the whole history, with the same tools, so the server's cache holds.
+        var handoff = server.Requests[0];
+        Assert.Equal(fullHistory + 3, handoff["messages"]!.AsArray().Count); // system + history + "and now finish" + request
+        Assert.NotNull(handoff["tools"]);
+        // The next step starts from the user's messages, the note and the latest screenshot only.
+        var messages = server.Requests[1]["messages"]!.AsArray();
+        Assert.Equal(5, messages.Count);
+        Assert.Equal("THE TASK", messages[1]!["content"]!.ToString());
+        Assert.Equal("and now finish", messages[2]!["content"]!.ToString());
+        Assert.StartsWith(AgentSession.HandoffHeader, messages[3]!["content"]!.ToString());
+        Assert.Contains("notes.txt", messages[3]!["content"]!.ToString());
+        Assert.Equal(1, Images(server.Requests[1]));
+        Assert.Contains(observer.Notices, n => n.StartsWith("Context reset"));
+    }
+
+    [Fact]
+    public async Task The_servers_token_count_triggers_the_reset_even_when_the_estimate_is_small()
+    {
+        // A short history the estimate considers tiny, but the server says the prompt was 90k tokens.
+        static string WithUsage(string sse, int prompt) => sse.Replace("data: [DONE]",
+            "data: " + new JsonObject { ["choices"] = new JsonArray(), ["usage"] = new JsonObject { ["prompt_tokens"] = prompt, ["completion_tokens"] = 50 } }.ToJsonString() + "\n\ndata: [DONE]");
+        var server = new ScriptedServer(
+            WithUsage(Sse.ToolCall("w1", "wait", """{"seconds":0}"""), 90_000),
+            Sse.Text("NOTE: waited once."),
+            Sse.Text("Done."));
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null),
+            new ChatRequestOptions(), ToolRegistry.CreateDefault(true), ctx, "sys", contextTokens: 100_000);
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("wait, then finish", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(AgentSession.HandoffRequest, LastText(server.Requests[1]));
+        Assert.Contains(session.History, m => m.Content?.Contains("waited once") == true);
+    }
+
+    [Fact]
+    public async Task A_reply_cut_off_by_the_context_limit_is_redone_after_a_reset()
+    {
+        var cutOff = "data: " + new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["reasoning_content"] = "Let me think about the board" }, ["finish_reason"] = "length" }) }.ToJsonString() + "\n\ndata: [DONE]\n\n";
+        var server = new ScriptedServer(cutOff, Sse.Text("NOTE: playing 2048."), Sse.Text("Done."));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 100_000);
+
+        await session.RunAsync("play", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Contains(observer.Notices, n => n.Contains("ran out of context"));
+        Assert.Equal(AgentSession.HandoffRequest, LastText(server.Requests[1]));
+        Assert.DoesNotContain(session.History, m => m.Reasoning?.Contains("board") == true);
+    }
+
+    [Fact]
+    public async Task Without_a_note_from_the_model_the_reset_keeps_a_record_of_the_last_steps()
+    {
+        var server = new ScriptedServer(Sse.Text("Done."));
+        server.Failures.Enqueue((HttpStatusCode.InternalServerError, """{"error":"boom"}"""));
+        var (session, observer) = LongSession(server, contextTokens: 40_000);
+
+        await session.RunAsync("and now finish", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        var note = session.History.Single(m => m.Content?.StartsWith(AgentSession.HandoffHeader) == true).Content!;
+        Assert.Contains("You called wait", note);
         Assert.Equal("THE TASK", session.History[0].Content);
-        Assert.StartsWith(AgentSession.SummaryHeader, session.History[1].Content);
-        Assert.Contains("C:\\notes.txt", session.History[1].Content);
-        Assert.True(session.EstimateTokens() < 17_000); // under the budget for a 20k context
     }
 
     [Fact]
@@ -355,12 +407,12 @@ public class AgentSessionTests
         Assert.NotNull(session.History[^1].Reasoning);
     }
 
-    private static (AgentSession, RecordingObserver) CreateSession(ScriptedServer server, string dir, IPlatformServices platform, int keepScreenshots = 2)
+    private static (AgentSession, RecordingObserver) CreateSession(ScriptedServer server, string dir, IPlatformServices platform, int contextTokens = 0)
     {
-        var settings = new AgentSettings { KeepScreenshots = keepScreenshots, FailsafeCorner = false, ScreenshotAfterActions = false, Approval = ApprovalMode.AskRisky };
+        var settings = new AgentSettings { FailsafeCorner = false, ScreenshotAfterActions = false, Approval = ApprovalMode.AskRisky };
         var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = dir };
         var client = new OpenAiChatClient(new HttpClient(server), "http://test", null);
-        var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(includeScreenTools: true), ctx, "system prompt");
+        var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(includeScreenTools: true), ctx, "system prompt", contextTokens: contextTokens);
         return (session, new RecordingObserver());
     }
 }

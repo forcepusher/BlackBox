@@ -7,11 +7,18 @@ namespace BlackBox.Platform.Windows;
 
 /// <summary>GDI screen capture. Works everywhere back to Windows 7 and needs no extra packages.</summary>
 [SupportedOSPlatform("windows")]
-internal sealed class WindowsScreenCapture : IScreenCapture
+internal sealed class WindowsScreenCapture(WindowsInputOverlay? overlay = null) : IScreenCapture
 {
     public ScreenRect GetPrimaryScreen() => new(0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
 
-    public unsafe RawImage Capture(ScreenRect region, bool includeCursor)
+    public RawImage Capture(ScreenRect region, bool includeCursor)
+    {
+        // The input overlay must not end up in the model's screenshots.
+        using var _ = overlay?.Suspend();
+        return CaptureScreen(region, includeCursor);
+    }
+
+    private unsafe RawImage CaptureScreen(ScreenRect region, bool includeCursor)
     {
         var screenDc = GetDC(0);
         var memDc = CreateCompatibleDC(screenDc);

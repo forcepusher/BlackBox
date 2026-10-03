@@ -36,14 +36,16 @@ Thinking models get their earlier reasoning sent back each step (`reasoning_cont
 The OpenAI API has no field for the context length, so BlackBox asks each server its own way:
 LM Studio (`/api/v0/models/{id}`, `loaded_context_length`, after loading the model if needed),
 llama-server (`/props`, `n_ctx`), vLLM (`max_model_len`) and OpenRouter (`context_length`).
-Servers that don't say get a conservative 32k. Each request is also capped at 64k tokens by default
-(Settings → Advanced) so steps stay fast.
+Servers that don't say get a conservative 32k. BlackBox uses the whole context.
 
-When a run outgrows that budget, BlackBox drops old screenshots and old thinking, then has the
-model **summarize the middle of the run** (the original task and the latest steps stay verbatim).
-Summaries are written in ~8k-token chunks, so each request stays short. If summarizing fails, old
-tool output and then whole middle steps are trimmed instead, and a server's "context length
-exceeded" error triggers the same trimming and a retry.
+Until the context is nearly full (a fifth left, at least 16k), the conversation only grows at the
+end, so the server reuses its cache and each step processes only the new messages. Then BlackBox
+does a **context reset**: the model writes a handoff note for itself on the cached history (it
+streams at once), and the conversation is replaced by your messages, that note and the current
+screenshot, a few thousand tokens. When to reset is decided from the token counts the server
+reports, not guessed. If the model can't write the note, a record of its last steps is used
+instead; a reply cut off by the context limit, or a server's "context length exceeded" error,
+triggers the same reset and a retry.
 
 ### Unstable connections
 VPNs and proxies often cut a connection that has been silent for about a minute, which happens
@@ -72,7 +74,7 @@ Actions run without asking by default (approvals can be switched on in Settings 
 Moving the mouse to the top-left corner of the screen, or pressing Stop, halts the agent. BlackBox
 stays on screen while it works but is hidden from the agent's screenshots, and steps behind other
 windows for the moment a click lands on it. Every click and key press the agent makes shows up in a
-log in the bottom-right corner that fades after 5 seconds, with a ring where it clicked. The agent
+log in the bottom-right corner that fades after 15 seconds (adjustable), with a ring where it clicked. The agent
 can't see it and it never takes focus (turn it off in Settings → Advanced).
 
 ## Build
