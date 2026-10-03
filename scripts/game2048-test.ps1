@@ -1,21 +1,22 @@
 <#
 .SYNOPSIS
-  Long-running test: BlackBox writes its own Tetris, play-tests it through the desktop and fixes it
-  until it works. Afterwards the game is played in headless Edge (tetris-check.mjs) to judge it.
+  Long-running test: BlackBox writes its own 2048, play-tests it through the desktop and fixes it
+  until it works. 2048 is turn-based, so the model's seconds per step don't matter. Afterwards
+  game2048-check.mjs plays the game in headless Edge and checks every move against the rules.
   It drives your actual mouse and keyboard for as long as the run takes: don't touch the PC.
 
-  Everything lands in .dev\tetris\<time>\: run.txt (the full log), shots\ (what the model saw),
+  Everything lands in .dev\game2048\<time>\: run.txt (the full log), shots\ (what the model saw),
   game\ (the files it wrote), check\ (the checker's screenshots and check.json), summary.txt.
 
 .EXAMPLE
-  ./scripts/tetris-test.ps1                         # server and model from Data/settings.json
-  ./scripts/tetris-test.ps1 -Url http://host:1234/v1 -Model qwen3.8-27b@q4_k_s -Hours 6
+  ./scripts/game2048-test.ps1                         # server and model from Data/settings.json
+  ./scripts/game2048-test.ps1 -Url http://host:1234/v1 -Model qwen3.8-27b@q4_k_s -Hours 6
 #>
 param([string]$Root = "", [string]$Url = "", [string]$Model = "", [double]$Hours = 4)
 $repo = Split-Path $PSScriptRoot
 $cli = Join-Path $repo "src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe"
 dotnet build (Join-Path $repo "src\BlackBox.Cli") -v q | Out-Null
-$out = Join-Path $repo (".dev\tetris\" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+$out = Join-Path $repo (".dev\game2048\" + (Get-Date -Format "yyyyMMdd-HHmmss"))
 $game = Join-Path $out "game"
 New-Item -ItemType Directory -Force $game | Out-Null
 $cliArgs = @()
@@ -23,12 +24,13 @@ if ($Root) { $cliArgs += @("--root", $Root) }
 if ($Url) { $cliArgs += @("--url", $Url) }
 if ($Model) { $cliArgs += @("--model", $Model) }
 
-$task = "Write your own Tetris game and make sure it really works. Put it in the folder $game as a single file tetris.html " +
-  "(plain HTML, CSS and JavaScript, no libraries, nothing to install). The game starts as soon as the page opens. " +
-  "Controls: Left and Right arrows move, Up arrow rotates, Down arrow drops faster, Space drops the piece straight down, R restarts. " +
+$task = "Write your own 2048 game and make sure it really works. Put it in the folder $game as a single file 2048.html " +
+  "(plain HTML, CSS and JavaScript, no libraries, nothing to install). Draw the 4x4 board with HTML elements, not a canvas, and show the score. " +
+  "Controls: the arrow keys slide the tiles, R starts a new game. " +
   "Then play-test it yourself through the desktop: open the file in Microsoft Edge and play it with the keyboard. " +
-  "Check that pieces fall on their own, move, rotate, stop at the walls and on other pieces, that full lines are cleared and the score goes up, " +
-  "that the game shows Game Over when the stack reaches the top, and that R starts a new game. " +
+  "Check that a new game starts with two tiles, that tiles slide all the way and equal tiles merge once per move, " +
+  "that exactly one new 2 or 4 appears after every move that changes the board and none after a move that changes nothing, " +
+  "that the score goes up by the value of each merged tile, that the game says Game Over when no move is left, and that R starts a new game. " +
   "Whenever something does not work properly, fix the file, reload the page and test again. Keep going until everything works. " +
   "When you are done, close the browser tab you opened and tell me what you tested and what you fixed."
 
@@ -46,9 +48,9 @@ $sw.Stop()
 
 $c = Get-Content $log
 $done = ($c | Select-String '^\[done\]' | ForEach-Object Line) -join " | "
-node (Join-Path $PSScriptRoot "tetris-check.mjs") (Join-Path $game "tetris.html") (Join-Path $out "check") *> (Join-Path $out "check.txt")
+node (Join-Path $PSScriptRoot "game2048-check.mjs") (Join-Path $game "2048.html") (Join-Path $out "check") *> (Join-Path $out "check.txt")
 $summary = @(
-  "Tetris run $(Split-Path $out -Leaf)"
+  "2048 run $(Split-Path $out -Leaf)"
   "wall time    {0:hh\:mm\:ss}" -f $sw.Elapsed
   "outcome      $done"
   "model calls  $(($c | Select-String '^\S+ step [1-9]').Count)"

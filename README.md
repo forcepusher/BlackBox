@@ -83,6 +83,7 @@ dotnet test                       # unit tests
 ./scripts/publish.ps1 -Folder     # classic self-contained folder in publish/BlackBox-win-x64
 dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   # headless run
 ./scripts/agent-tasks.ps1         # real desktop task suite (drives your mouse and keyboard)
+./scripts/game2048-test.ps1       # long run: BlackBox writes, play-tests and fixes its own 2048
 ```
 
 Integration tests against a real server (they send prompts larger than the context):
@@ -100,7 +101,7 @@ dotnet test --filter ServerIntegrationTests
 - `src/BlackBox.Cli`: headless runner for trying tasks and models.
 - `src/BlackBox.App`: Avalonia 11 UI with CommunityToolkit.Mvvm.
 - `tests/BlackBox.Core.Tests`: xUnit tests (unit tests plus opt-in server integration tests).
-- `scripts/`: `publish.ps1` (portable build) and `agent-tasks.ps1` (real desktop task suite).
+- `scripts/`: `publish.ps1` (portable build), `agent-tasks.ps1` (real desktop task suite) and `game2048-test.ps1` (long self-testing run, judged by `game2048-check.mjs`).
 
 Linux and macOS ports need an `IPlatformServices` implementation (screen, input, windows); the rest
 of the code is already cross-platform.
