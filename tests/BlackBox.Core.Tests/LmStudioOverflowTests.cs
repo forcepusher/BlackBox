@@ -43,7 +43,7 @@ public class LmStudioOverflowTests
         var observer = new RecordingObserver();
         await session.RunAsync("Without using tools, reply with just the password I gave you at the start.", observer, CancellationToken.None);
 
-        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.True(observer.StopReason == AgentStopReason.Completed, $"{observer.StopReason}: {observer.Detail}");
         Assert.Contains("BLUEFISH", session.History[^1].Content, StringComparison.OrdinalIgnoreCase);
     }
 }
