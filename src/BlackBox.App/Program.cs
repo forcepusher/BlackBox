@@ -8,7 +8,7 @@ internal static class Program
     public static void Main(string[] args)
     {
         // Must run before Avalonia touches Skia.
-        PortableRuntime.Prepare(PortableRuntime.FindAppRoot());
+        PortableRuntime.Prepare(PortableRuntime.FindPaths());
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

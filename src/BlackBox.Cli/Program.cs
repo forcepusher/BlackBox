@@ -5,7 +5,7 @@ using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
 
 // Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] "task"
-//   --root        portable folder (default: BLACKBOX_HOME, else .dev/ in the repo for dev builds, else the exe folder)
+//   --root        portable folder (default: BLACKBOX_HOME, else .dev/ when run from the repository, else the exe folder)
 //   --url/--model override the server address and model saved in Data/settings.json
 //   --yes         approve risky tools without asking
 //   --save-shots  write every screenshot the model sees to DIR
@@ -23,7 +23,7 @@ string? Take(string flag)
 }
 bool Flag(string flag) => argsList.Remove(flag);
 
-var root = Take("--root") ?? Environment.GetEnvironmentVariable("BLACKBOX_HOME") ?? FindRoot();
+var root = Take("--root") ?? AppPaths.FindRoot(useRepositoryDevFolder: true);
 var shotsDir = Take("--save-shots");
 var urlOverride = Take("--url");
 var modelOverride = Take("--model");
@@ -77,14 +77,6 @@ await session.RunAsync(task, observer, cts.Token);
 Console.WriteLine($"\n[done] {observer.Reason} in {(DateTime.UtcNow - t0).TotalSeconds:0}s, {observer.Steps} model calls, {observer.ToolCalls} tool calls, {observer.ToolErrors} tool errors");
 if (observer.Detail is { } d) Console.WriteLine("[done] " + d);
 return observer.Reason == AgentStopReason.Completed ? 0 : 1;
-
-static string FindRoot()
-{
-    for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        if (dir.EnumerateFiles("BlackBox.sln*").Any())
-            return Path.Combine(dir.FullName, ".dev"); // same dev folder as the debug app
-    return AppContext.BaseDirectory;
-}
 
 /// <summary>
 /// Prints the run as it happens. Every line carries the time, so a log

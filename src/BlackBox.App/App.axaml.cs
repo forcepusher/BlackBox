@@ -3,7 +3,6 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using BlackBox.App.ViewModels;
 using BlackBox.App.Views;
-using BlackBox.Core.Llm;
 using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 
@@ -17,7 +16,7 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var paths = new AppPaths(PortableRuntime.FindAppRoot());
+            var paths = PortableRuntime.FindPaths();
             paths.EnsureCreated();
             var store = new SettingsStore(paths);
             var platform = CreatePlatform();
@@ -39,5 +38,4 @@ public partial class App : Application
         return new UnsupportedPlatform();
 #endif
     }
-
 }
