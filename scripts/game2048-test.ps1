@@ -40,10 +40,25 @@ Write-Host "Running; log: $log"
 $sw = [Diagnostics.Stopwatch]::StartNew()
 $p = Start-Process $cli -ArgumentList ($cliArgs | ForEach-Object { '"' + ($_ -replace '"', '\"') + '"' }) -NoNewWindow -PassThru `
   -RedirectStandardOutput $log -RedirectStandardError (Join-Path $out "stderr.txt")
-if (-not $p.WaitForExit([int]($Hours * 3600 * 1000))) {
-  Stop-Process $p -Force
-  Add-Content $log "`n[done] TIMEOUT after $Hours h"
+
+# Show the log live in this window while the run goes on (thinking, tool calls, reconnects,
+# compactions). Writing to the console never takes focus away from what the agent is doing.
+$limit = [TimeSpan]::FromHours($Hours)
+$stream = [IO.FileStream]::new($log, 'Open', 'Read', 'ReadWrite')
+$reader = [IO.StreamReader]::new($stream, [Text.Encoding]::UTF8)
+while (-not $p.HasExited) {
+  $text = $reader.ReadToEnd()
+  if ($text) { Write-Host $text -NoNewline }
+  if ($sw.Elapsed -gt $limit) {
+    Stop-Process $p -Force
+    $p.WaitForExit()
+    Add-Content $log "`n[done] TIMEOUT after $Hours h"
+    break
+  }
+  Start-Sleep -Milliseconds 300
 }
+Write-Host $reader.ReadToEnd()
+$reader.Dispose()
 $sw.Stop()
 
 $c = Get-Content $log

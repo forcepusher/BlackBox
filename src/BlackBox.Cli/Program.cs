@@ -10,6 +10,8 @@ using BlackBox.Core.Tools;
 //   --yes         approve risky tools without asking
 //   --save-shots  write every screenshot the model sees to DIR
 
+// UTF-8 also when redirected to a log file, so scripts can show the log as it is written.
+Console.OutputEncoding = System.Text.Encoding.UTF8;
 var argsList = args.ToList();
 string? Take(string flag)
 {
