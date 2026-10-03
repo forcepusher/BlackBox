@@ -67,9 +67,9 @@ public sealed class AgentSettings
     public ApprovalMode Approval { get; set; } = ApprovalMode.Never;
 
     /// <summary>Largest size a screenshot is sent at; the screen is scaled down to fit, keeping its shape.</summary>
-    public ScreenshotResolution ScreenshotResolution { get; set; } = ScreenshotResolution.R1600x900;
+    public ScreenshotResolution ScreenshotResolution { get; set; } = ScreenshotResolution.R1920x1080;
 
-    /// <summary>Only the newest N screenshots stay in context. Internal tuning, not a user setting.</summary>
+    /// <summary>Screenshots kept when the context fills up (until then all stay, so the server cache holds). Internal tuning, not a user setting.</summary>
     [JsonIgnore]
     public int KeepScreenshots { get; set; } = 2;
 

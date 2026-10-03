@@ -42,18 +42,34 @@ public sealed partial class AgentSession
     /// </summary>
     private int PromptBudget => (int)(contextTokens * 0.95) - Math.Min(16_384, contextTokens / 8);
 
+    /// <summary>Where cheap trimming (old screenshots and thinking) has to get to before compaction is used instead.</summary>
+    private static int TrimTarget(int budget) => budget * 3 / 4;
+
     /// <summary>
     /// Brings the conversation under <paramref name="budget"/> tokens: old screenshots and old
     /// thinking go first, then the middle of the run is compacted into a summary, and only if
     /// that fails are old outputs and steps cut.
     /// </summary>
+    /// <remarks>
+    /// Until the budget is reached the history only grows at the end, so the server reuses its
+    /// cache and each step processes just the new messages. Editing anything earlier costs a full
+    /// reprocess: hybrid models such as Qwen 3.5+ keep a recurrent state that cannot be rewound to
+    /// a shared prefix, so llama.cpp and LM Studio start over (measured: 2 s cached vs 33 s for a
+    /// 20k prompt). So trimming happens rarely and in one go, down to <see cref="TrimTarget"/>,
+    /// which leaves room for many steps before the next one.
+    /// </remarks>
     internal async Task EnsureFitsAsync(int budget, IAgentObserver observer, CancellationToken ct)
     {
         if (budget <= 0 || EstimateTokens() <= budget)
             return;
 
-        DropOldReasoning(budget);
-        if (EstimateTokens() <= budget)
+        var target = TrimTarget(budget);
+        PruneScreenshots(toolContext.Settings.KeepScreenshots);
+        if (EstimateTokens() <= target)
+            return;
+
+        DropOldReasoning(target);
+        if (EstimateTokens() <= target)
             return;
 
         try

@@ -55,7 +55,7 @@ public class AgentSessionTests
     }
 
     [Fact]
-    public async Task Screenshots_are_sent_as_user_images_and_old_ones_pruned()
+    public async Task Screenshots_are_sent_as_user_images_and_the_history_only_grows()
     {
         var server = new ScriptedServer(
             Sse.ToolCall("s1", "screenshot", "{}"),
@@ -70,15 +70,40 @@ public class AgentSessionTests
         await session.RunAsync("look", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        // Pruning waits for keep + 3 images, then drops back to keep, so the prompt prefix
-        // (and the server's cache) stays stable for several steps at a time.
-        Assert.Equal(5, Images(server.Requests[^2]));
-        Assert.Equal(2, Images(server.Requests[^1]));
-
-        static int Images(JsonObject request) => request["messages"]!.AsArray()
-            .SelectMany(m => m!["content"] is JsonArray parts ? parts : [])
-            .Count(p => p!["type"]!.GetValue<string>() == "image_url");
+        Assert.Equal(6, Images(server.Requests[^1]));
+        // Every request starts with the previous one unchanged, so the server's cache always holds.
+        for (var i = 1; i < server.Requests.Count; i++)
+        {
+            var before = server.Requests[i - 1]["messages"]!.AsArray();
+            var after = server.Requests[i]["messages"]!.AsArray();
+            for (var m = 0; m < before.Count; m++)
+                Assert.Equal(before[m]!.ToJsonString(), after[m]!.ToJsonString());
+        }
     }
+
+    [Fact]
+    public async Task Old_screenshots_go_in_one_batch_when_the_context_fills_up()
+    {
+        var server = new ScriptedServer(); // must not be asked to summarize
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), keepScreenshots: 2);
+        session.History.Add(ChatMessage.User("THE TASK"));
+        for (var i = 0; i < 30; i++)
+            session.History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText("shot"), ContentPart.FromImage([1, 2, 3], "image/jpeg")] });
+
+        var budget = session.EstimateTokens() - 1;
+        await session.EnsureFitsAsync(budget, observer, CancellationToken.None);
+
+        Assert.Equal(2, Images(session.History));
+        Assert.Empty(server.Requests);
+        // Well below the budget, so the next trim (and full reprocess on the server) is far away.
+        Assert.True(session.EstimateTokens() <= budget * 3 / 4);
+    }
+
+    private static int Images(JsonObject request) => request["messages"]!.AsArray()
+        .SelectMany(m => m!["content"] is JsonArray parts ? parts : [])
+        .Count(p => p!["type"]!.GetValue<string>() == "image_url");
+
+    private static int Images(IEnumerable<ChatMessage> history) => history.Sum(m => m.Parts?.Count(p => p.IsImage) ?? 0);
 
     [Fact]
     public async Task Risky_tools_wait_for_approval_and_denial_is_reported()

@@ -99,7 +99,7 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
     {
         Steps = step;
         _channel = null;
-        Console.WriteLine($"\n── step {step} ──");
+        Console.WriteLine($"\n── step {step} · {DateTime.Now:HH:mm:ss} ──");
     }
 
     public void OnDelta(StreamDelta delta)

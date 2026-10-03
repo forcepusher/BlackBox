@@ -54,13 +54,16 @@ public sealed class WriteFileTool : Tool
     {
         var path = ctx.ResolvePath(RequireString(args, "path"));
         var content = RequireString(args, "content");
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var existed = File.Exists(path);
         if (GetBool(args, "append"))
         {
+            // Appending only continues a file; a typo in the path must not start a new one.
+            if (!existed)
+                return ToolResult.Error($"Cannot append: {path} does not exist. Check the path, or create the file first with append=false.");
             await File.AppendAllTextAsync(path, content, ct).ConfigureAwait(false);
             return new ToolResult($"Appended {content.Length} chars to {path} (now {new FileInfo(path).Length} bytes).");
         }
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         await File.WriteAllTextAsync(path, content, ct).ConfigureAwait(false);
         return new ToolResult($"{(existed ? "Overwrote" : "Created")} {path} ({content.Length} chars).");
     }

@@ -53,7 +53,7 @@ cache, so each retry continues where the last one stopped (up to 12 times per st
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |
-| `screenshot` | Captures the primary screen, scaled to fit the chosen resolution (1600×900 by default) on the 32px vision grid |
+| `screenshot` | Captures the primary screen, scaled to fit the chosen resolution (1920×1080 by default) on the 32px vision grid |
 | `zoom` | Magnified view of a region with rulers labelled in screenshot coordinates |
 | `list_ui_elements`, `click_element` | Windows UI Automation: find controls by name and press them (no pixel aiming) |
 | `mouse_click`, `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates |

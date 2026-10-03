@@ -23,8 +23,8 @@ public sealed class SettingsViewModel(AppSettings settings, AppPaths paths) : Ob
     public string[] ResolutionOptions { get; } =
     [
         "1280 × 720",
-        "1600 × 900 (default)",
-        "1920 × 1080",
+        "1600 × 900",
+        "1920 × 1080 (default)",
         "2560 × 1440",
         "Full screen resolution",
     ];

@@ -42,7 +42,6 @@ public sealed partial class AgentSession(
     public async Task RunAsync(string userText, IAgentObserver observer, CancellationToken ct)
     {
         History.Add(ChatMessage.User(userText));
-        var settings = toolContext.Settings;
         var toolDefs = tools.Definitions();
         var nudges = 0;
         var loops = new LoopDetector();
@@ -56,7 +55,6 @@ public sealed partial class AgentSession(
             {
                 ct.ThrowIfCancellationRequested();
                 observer.OnStepStarted(step);
-                PruneScreenshots(settings.KeepScreenshots, PruneSlack);
                 if (contextTokens > 0)
                     await EnsureFitsAsync(PromptBudget, observer, ct).ConfigureAwait(false);
 
@@ -125,12 +123,6 @@ public sealed partial class AgentSession(
             RepairDanglingToolCalls();
         }
     }
-
-    /// <summary>
-    /// Screenshots are pruned in batches: rewriting old messages invalidates the server's prompt
-    /// cache from that point on, so doing it every step would reprocess most of the prompt each time.
-    /// </summary>
-    private const int PruneSlack = 3;
 
     private const int MaxNudges = 2;
 
@@ -332,15 +324,9 @@ public sealed partial class AgentSession(
             History.Insert(1, ChatMessage.User(gap));
     }
 
-    /// <summary>
-    /// Once more than <paramref name="keep"/> + <paramref name="slack"/> screenshots are in the
-    /// history, drops all but the newest <paramref name="keep"/>.
-    /// </summary>
-    internal void PruneScreenshots(int keep, int slack = 0)
+    /// <summary>Drops all but the newest <paramref name="keep"/> screenshots from the history.</summary>
+    internal void PruneScreenshots(int keep)
     {
-        var total = History.Sum(m => m.Parts?.Count(p => p.IsImage) ?? 0);
-        if (total <= keep + slack)
-            return;
         var seen = 0;
         for (var i = History.Count - 1; i >= 0; i--)
         {

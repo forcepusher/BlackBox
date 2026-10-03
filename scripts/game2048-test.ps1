@@ -27,8 +27,9 @@ if ($Model) { $cliArgs += @("--model", $Model) }
 $task = "Write your own 2048 game and make sure it really works. Put it in the folder $game as a single file 2048.html " +
   "(plain HTML, CSS and JavaScript, no libraries, nothing to install). Draw the 4x4 board with HTML elements, not a canvas, and show the score. " +
   "Controls: the arrow keys slide the tiles, R starts a new game. " +
-  "Then play-test it yourself through the desktop: open the file in Microsoft Edge and play it with the keyboard. " +
-  "Check that a new game starts with two tiles, that tiles slide all the way and equal tiles merge once per move, " +
+  "Then play-test it the way a person would: open the file in Microsoft Edge, maximize the window, and play with the arrow keys while watching the board. " +
+  "Do not use the developer tools, the console or scripts to test or change the game: only real key presses and what you see on screen count. " +
+  "Play at least one whole game until Game Over. Along the way check that a new game starts with two tiles, that tiles slide all the way and equal tiles merge once per move, " +
   "that exactly one new 2 or 4 appears after every move that changes the board and none after a move that changes nothing, " +
   "that the score goes up by the value of each merged tile, that the game says Game Over when no move is left, and that R starts a new game. " +
   "Whenever something does not work properly, fix the file, reload the page and test again. Keep going until everything works. " +

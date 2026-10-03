@@ -74,6 +74,12 @@ public class ToolTests
             await tool.ExecuteAsync(new JsonObject { ["path"] = path, ["content"] = "two\n", ["append"] = true }, Ctx(new FakePlatform()), CancellationToken.None);
             await tool.ExecuteAsync(new JsonObject { ["path"] = path, ["content"] = "three\n", ["append"] = "true" }, Ctx(new FakePlatform()), CancellationToken.None);
             Assert.Equal("one\ntwo\nthree\n", File.ReadAllText(path));
+
+            // A typo in the path is an error, not a new file in a new folder.
+            var typo = Path.Combine(Path.GetTempPath(), "bb-typo-" + Guid.NewGuid().ToString("N"), "x.txt");
+            var result = await tool.ExecuteAsync(new JsonObject { ["path"] = typo, ["content"] = "four\n", ["append"] = true }, Ctx(new FakePlatform()), CancellationToken.None);
+            Assert.True(result.IsError);
+            Assert.False(Directory.Exists(Path.GetDirectoryName(typo)));
         }
         finally
         {
