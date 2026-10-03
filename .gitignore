@@ -5,5 +5,5 @@ publish/
 *.user
 .vs/
 
-## Dev builds keep their portable folder (Data/, Workspace/) here
+## Dev builds keep their portable folder (Data/) here
 /.dev/

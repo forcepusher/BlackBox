@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace BlackBox.Core.Settings;
@@ -143,13 +144,13 @@ public sealed class SettingsStore(AppPaths paths)
     /// </summary>
     internal static string Migrate(string json)
     {
-        if (System.Text.Json.Nodes.JsonNode.Parse(json) is not System.Text.Json.Nodes.JsonObject root)
+        if (JsonNode.Parse(json) is not JsonObject root)
             return json;
-        if (root["server"] is null && root["remote"] is System.Text.Json.Nodes.JsonObject remote)
+        if (root["server"] is null && root["remote"] is JsonObject remote)
             root["server"] = remote.DeepClone();
         root.Remove("remote");
         // Screenshot size used to be a raw pixel count.
-        if (root["agent"] is System.Text.Json.Nodes.JsonObject agent && agent["screenshotMaxPixels"] is System.Text.Json.Nodes.JsonValue px
+        if (root["agent"] is JsonObject agent && agent["screenshotMaxPixels"] is JsonValue px
             && px.TryGetValue<long>(out var pixels))
         {
             agent["screenshotResolution"] = ScreenshotResolutionExtensions.FromPixelBudget(pixels).ToString();

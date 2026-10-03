@@ -44,10 +44,8 @@ public sealed class ZoomTool : Tool
         var frame = ctx.Platform.Screen.Capture(region, includeCursor: true);
 
         // Magnify up to 4x, within the same pixel budget as a normal screenshot.
-        // Same pixel budget as a normal screenshot.
         var budget = ctx.Settings.ScreenshotResolution.Box() is { } b ? b.Width * b.Height : space.Screen.Width * space.Screen.Height;
-        var zoom = Math.Min(4.0, Math.Sqrt(budget / (iw * ih)));
-        zoom = Math.Max(zoom, 1.0);
+        var zoom = Math.Clamp(Math.Sqrt(budget / (iw * ih)), 1.0, 4.0);
         var outW = (int)Math.Round(iw * zoom);
         var outH = (int)Math.Round(ih * zoom);
 

@@ -64,7 +64,8 @@ public sealed class ScreenshotTool : Tool
         var space = ctx.GetScreenSpace();
         var frame = ctx.Platform.Screen.Capture(space.Screen, includeCursor: true);
         var jpeg = space.Encode(frame);
-        var (cx, cy) = space.ToImage(ctx.Platform.Input.GetCursorPosition().X, ctx.Platform.Input.GetCursorPosition().Y);
+        var cursor = ctx.Platform.Input.GetCursorPosition();
+        var (cx, cy) = space.ToImage(cursor.X, cursor.Y);
         return new ToolResult($"Screenshot {space.ImageWidth}x{space.ImageHeight}. Mouse cursor at ({cx}, {cy}).", jpeg);
     }
 }

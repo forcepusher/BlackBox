@@ -74,7 +74,7 @@ public class ChatClientTests
             new() { Role = ChatRole.User, Parts = [ContentPart.FromText("look"), ContentPart.FromImage([1, 2, 3], "image/jpeg")] },
         };
         var tools = new List<ToolDefinition> { new() { Name = "screenshot", Description = "d", Parameters = new JsonObject { ["type"] = "object" } } };
-        var options = new ChatRequestOptions { Model = "m", Temperature = 0.6, Extra = new JsonObject { ["top_k"] = 20 } };
+        var options = new ChatRequestOptions { Model = "m", Extra = new JsonObject { ["top_k"] = 20 } };
 
         var req = OpenAiChatClient.BuildRequest(messages, tools, options);
 

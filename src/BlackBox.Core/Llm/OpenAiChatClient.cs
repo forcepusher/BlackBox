@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace BlackBox.Core.Llm;
 
@@ -24,7 +25,7 @@ public sealed class ContextOverflowException(string serverMessage)
             @"\((\d+) tokens\) exceeds",                        // "... (4096 tokens) exceeds"
         })
         {
-            var m = System.Text.RegularExpressions.Regex.Match(message, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var m = Regex.Match(message, pattern, RegexOptions.IgnoreCase);
             if (m.Success && int.TryParse(m.Groups[1].Value, out var n) && n >= 512)
                 return n;
         }
@@ -50,12 +51,11 @@ public sealed class ConnectionLostException(string message, bool receivedTokens,
     public string? ToolCallInProgress { get; } = toolCallInProgress;
 }
 
-
 /// <summary>
 /// Minimal streaming client for any OpenAI-compatible /v1/chat/completions endpoint.
 /// LM Studio, llama-server, vLLM and hosted APIs all go through this class.
 /// </summary>
-public sealed class OpenAiChatClient
+public sealed partial class OpenAiChatClient
 {
     private readonly HttpClient _http;
     private readonly string _baseUrl;
@@ -142,7 +142,6 @@ public sealed class OpenAiChatClient
             if (!resp.IsSuccessStatusCode)
             {
                 var err = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-                // Strict providers reject the extra reasoning_content field; drop it and retry once.
                 // Strict providers reject fields they do not know. Drop ours and try once more.
                 if ((int)resp.StatusCode is 400 or 422 && (sendReasoning || sendExtras) && LooksLikeUnknownField(err))
                 {
@@ -203,17 +202,19 @@ public sealed class OpenAiChatClient
                 throw LooksLikeContextOverflow(errorText) ? new ContextOverflowException(errorText) : new LlmException("Server error: " + errorText);
             }
 
-            if (chunk?["choices"] is JsonArray { Count: > 0 } c0 && c0[0]?["finish_reason"] is JsonValue fr && fr.GetValueKind() == JsonValueKind.String)
-            {
-                finished = true;
-                finishReason = fr.GetValue<string>();
-            }
             if (chunk?["usage"] is JsonObject usage)
             {
                 promptTokens = usage["prompt_tokens"]?.GetValue<int>() ?? promptTokens;
                 completionTokens = usage["completion_tokens"]?.GetValue<int>() ?? completionTokens;
             }
-            if (chunk?["choices"] is not JsonArray { Count: > 0 } choices || choices[0]?["delta"] is not JsonObject delta)
+            if (chunk?["choices"] is not JsonArray { Count: > 0 } choices || choices[0] is not JsonObject choice)
+                continue;
+            if (choice["finish_reason"] is JsonValue fr && fr.GetValueKind() == JsonValueKind.String)
+            {
+                finished = true;
+                finishReason = fr.GetValue<string>();
+            }
+            if (choice["delta"] is not JsonObject delta)
                 continue;
 
             if ((GetString(delta, "reasoning_content") ?? GetString(delta, "reasoning")) is { Length: > 0 } r)
@@ -258,11 +259,9 @@ public sealed class OpenAiChatClient
         // Thinking that leaked into the visible text (a stray </think> from a quantized model,
         // or a server without a reasoning parser) belongs with the reasoning.
         var text = content.ToString();
-        // Gemma 4 marks its thinking as a "thought" channel.
-        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(
-                     text, @"<\|channel>thought\s*(.*?)<channel\|>", System.Text.RegularExpressions.RegexOptions.Singleline))
+        foreach (Match m in GemmaThought().Matches(text))
             reasoning.Append(m.Groups[1].Value);
-        text = System.Text.RegularExpressions.Regex.Replace(text, @"<\|channel>thought\s*.*?<channel\|>\s*", "", System.Text.RegularExpressions.RegexOptions.Singleline);
+        text = GemmaThought().Replace(text, "");
         var thinkEnd = text.LastIndexOf("</think>", StringComparison.Ordinal);
         if (thinkEnd >= 0)
         {
@@ -306,7 +305,6 @@ public sealed class OpenAiChatClient
             ["messages"] = msgs,
             ["stream"] = true,
         };
-        if (options.Temperature is { } t) req["temperature"] = t;
         if (options.MaxTokens is { } mt) req["max_tokens"] = mt;
 
         if (tools.Count > 0)
@@ -404,7 +402,7 @@ public sealed class OpenAiChatClient
     }
 
     private static bool LooksLikeUnknownField(string err) =>
-        new[] { "unrecognized", "unknown", "not permitted", "extra", "unexpected", "reasoning", "top_k", "min_p", "repeat_penalty", "chat_template_kwargs" }
+        new[] { "unrecognized", "unknown", "not permitted", "extra", "unexpected", "reasoning", "chat_template_kwargs" }
             .Any(w => err.Contains(w, StringComparison.OrdinalIgnoreCase));
 
     internal static bool LooksLikeContextOverflow(string err) =>
@@ -421,4 +419,8 @@ public sealed class OpenAiChatClient
         node[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
 
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
+
+    /// <summary>Gemma 4 marks its thinking as a "thought" channel.</summary>
+    [GeneratedRegex(@"<\|channel>thought\s*(.*?)<channel\|>\s*", RegexOptions.Singleline)]
+    private static partial Regex GemmaThought();
 }

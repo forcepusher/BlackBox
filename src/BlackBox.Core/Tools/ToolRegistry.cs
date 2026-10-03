@@ -15,7 +15,7 @@ public sealed class ToolRegistry
     public static ToolRegistry CreateDefault(bool includeScreenTools, bool includeUiAutomation = false) =>
         new(DefaultTools(includeScreenTools, includeUiAutomation));
 
-    public static IEnumerable<Tool> DefaultTools(bool includeScreenTools, bool includeUiAutomation = false)
+    private static IEnumerable<Tool> DefaultTools(bool includeScreenTools, bool includeUiAutomation)
     {
         if (includeUiAutomation)
         {

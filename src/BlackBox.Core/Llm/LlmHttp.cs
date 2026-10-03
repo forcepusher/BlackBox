@@ -18,7 +18,7 @@ public static class LlmHttp
 {
     public static HttpClient Create(TimeSpan timeout) => new(CreateHandler()) { Timeout = timeout };
 
-    public static SocketsHttpHandler CreateHandler() => new()
+    private static SocketsHttpHandler CreateHandler() => new()
     {
         PooledConnectionIdleTimeout = TimeSpan.FromSeconds(30),
         ConnectCallback = async (context, ct) =>
