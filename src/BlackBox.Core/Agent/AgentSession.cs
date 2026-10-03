@@ -129,6 +129,14 @@ public sealed partial class AgentSession(
     /// <summary>How many dropped connections one step survives.</summary>
     internal const int MaxReconnects = 12;
 
+    /// <summary>How many looping replies one step survives before the run ends with an error.</summary>
+    private const int MaxRepetitionRetries = 3;
+
+    internal const string RepetitionNote =
+        "[BlackBox] Your last reply was cut off because your thinking kept repeating the same lines. " +
+        "Don't re-check earlier screens from memory: you may have misread one. Trust what the current screen shows " +
+        "(zoom in if needed), decide, and call the next tool.";
+
     internal const string LongToolCallNote =
         "[BlackBox] Your last reply was lost: the connection drops when a single tool call takes more than about a minute to write. " +
         "Keep every tool call short. Write long files in parts of at most about 100 lines: create the file with write_file, " +
@@ -220,11 +228,29 @@ public sealed partial class AgentSession(
     /// </summary>
     private async Task<ChatMessage> CompleteFittingAsync(List<ChatMessage> request, IAgentObserver observer, CancellationToken ct)
     {
+        var repeats = 0;
         for (var attempt = 0; ; attempt++)
         {
             try
             {
-                return await CompleteWithReconnectAsync(request, tools.Definitions(), requestOptions, observer, observer.OnDelta, ct).ConfigureAwait(false);
+                var guard = new RepetitionGuard(observer.OnDelta);
+                return await CompleteWithReconnectAsync(request, tools.Definitions(), requestOptions, observer, guard.OnDelta, ct).ConfigureAwait(false);
+            }
+            catch (RepetitionException) when (++repeats <= MaxRepetitionRetries)
+            {
+                // Dropping the stream stops the server too. The looping reply is thrown away and
+                // the model is told to trust the screen instead of its memory; appending the note
+                // keeps the server's cache.
+                observer.OnNotice("The model's thinking started repeating itself; cut it off and asked it to look again.");
+                observer.OnAssistantMessage(new ChatMessage { Role = ChatRole.Assistant, Content = "" });
+                observer.OnStepStarted(0);
+                if (History[^1].Content != RepetitionNote)
+                {
+                    var note = ChatMessage.User(RepetitionNote);
+                    History.Add(note);
+                    request.Add(note);
+                }
+                attempt--;
             }
             catch (ContextOverflowException) when (attempt < 2)
             {

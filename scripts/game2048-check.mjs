@@ -3,7 +3,8 @@
 // (the task asks for HTML elements, not a canvas): every move is replayed with the real rules
 // and the page must show the same board plus exactly one new 2 or 4, nothing new when the move
 // changes nothing, and a score that grows by the merged values. It also checks the game ends
-// and R starts a new one. Screenshots of each stage go next to the report.
+// and R starts a new one, and that the tiles sit inside the board. Screenshots of each stage go
+// next to the report.
 //
 // Usage: node scripts/game2048-check.mjs <path to 2048.html> <output folder>
 import { spawn } from "node:child_process";
@@ -40,7 +41,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // is the first ancestor of a tile that is at least 2.5 tiles wide and tall; a tile's cell is
 // where its center falls on a 4x4 split of the board.
 const readState = `(() => {
-  const named = el => { for (; el; el = el.parentElement) if (/score|best/i.test((el.id || "") + " " + (el.className || ""))) return true; return false; };
+  // Not tiles: the score, and titles like the big "2048" heading.
+  const named = el => { for (; el; el = el.parentElement) if (/^H[1-6]$|^HEADER$|^TITLE$/.test(el.tagName) || /score|best|title|header|logo|heading/i.test((el.id || "") + " " + (el.className || ""))) return true; return false; };
   const tiles = [];
   for (const el of document.body.querySelectorAll("*")) {
     if (el.children.length || named(el)) continue;
@@ -79,7 +81,16 @@ const readState = `(() => {
     const m = el.textContent.match(/\\d+/);
     if (m) { score = +m[0]; break; }
   }
-  return { grid, tiles: tiles.length, clash, score, text: document.body.innerText.slice(0, 300) };
+  // Tiles must sit inside the board's own box (a common bug: the last column sticks out).
+  let outside = 0;
+  const boardBox = tiles.length && board ? (() => { let el = tiles[0]; for (; el; el = el.parentElement) { const r = el.getBoundingClientRect(); if (r.width >= board.width - 1 && r.height >= board.height - 1) return r; } return null; })() : null;
+  if (boardBox) for (const t of tiles) {
+    let el = t;
+    while (el.parentElement && el.parentElement.getBoundingClientRect().width < boardBox.width * 0.5) el = el.parentElement;
+    const r = el.getBoundingClientRect();
+    if (r.left < boardBox.left - 1 || r.right > boardBox.right + 1 || r.top < boardBox.top - 1 || r.bottom > boardBox.bottom + 1) outside++;
+  }
+  return { grid, tiles: tiles.length, clash, outside, score, text: document.body.innerText.slice(0, 300) };
 })()`;
 
 // The real rules: slide toward the side, merge equal neighbours once per move, score the merges.
@@ -156,6 +167,7 @@ try {
     const expected = slide(s.grid, key);
     await press(key);
     const n = await state();
+    if (n.outside) problem("layout", `after move ${i + 1} (${key}): ${n.outside} tile(s) stick out of the board`);
     const moved = expected.grid.join() !== s.grid.join();
     const where = `move ${i + 1} (${key}) from ${show(s.grid)}`;
     report.moves.push({ key, grid: show(n.grid), score: n.score });
@@ -191,6 +203,7 @@ try {
   const r = await state();
   report.restart = r;
   report.checks["R starts a new game"] = r.grid.filter(Boolean).length === 2 && (r.score ?? 0) === 0;
+  report.checks["tiles sit inside the board"] = !s.outside && !report.problems["layout"];
   report.checks["no script errors"] = report.errors.length === 0;
   ws.close();
 } catch (e) {

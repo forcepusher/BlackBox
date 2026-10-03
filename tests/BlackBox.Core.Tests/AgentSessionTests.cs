@@ -276,6 +276,39 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task Thinking_that_repeats_itself_is_cut_off_and_the_model_told_to_look_again()
+    {
+        // From a real run: the model misread the board and wrote this paragraph about 30 times.
+        const string loop =
+            "Hmm, wait a moment. Could it be that the key press didn't register as Up, and instead... the board changed from " +
+            "[2,2,4,0] to [2,4,2,2]? What kind of move would produce that? Actually, wait. Maybe I misread the previous board. " +
+            "Let me re-verify: in the previous screenshot (score 2084), column 3 was 2, 2, 4, empty. Yes, I'm confident about that.\n";
+        var chunks = new StringBuilder();
+        for (var i = 0; i < 30; i++)
+            foreach (var word in loop.Split(' '))
+                chunks.Append("data: ").Append(new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["reasoning_content"] = word + " " } }) }.ToJsonString()).Append("\n\n");
+        chunks.Append("data: [DONE]\n\n");
+        var server = new ScriptedServer(chunks.ToString(), Sse.Text("Done."));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("play", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Contains(observer.Notices, n => n.Contains("repeating"));
+        Assert.Equal(2, server.Requests.Count);
+        Assert.Equal(AgentSession.RepetitionNote, server.Requests[1]["messages"]!.AsArray()[^1]!["content"]!.ToString());
+        Assert.DoesNotContain(session.History, m => m.Reasoning?.Contains("misread") == true);
+    }
+
+    [Fact]
+    public void Repeated_board_printouts_are_not_a_loop()
+    {
+        var board = string.Concat(Enumerable.Repeat("8 2 8 2\n16 8 16 4\n8 32 256 2\n4 16 2 2\n", 20));
+        Assert.False(RepetitionGuard.IsRepeating(board));
+        Assert.False(RepetitionGuard.IsRepeating("Left merged the 2s. " + string.Concat(Enumerable.Range(0, 50).Select(i => $"Move {i}: score {i * 4}, new tile at ({i % 4},{i / 4 % 4}). "))));
+    }
+
+    [Fact]
     public async Task Long_runs_are_compacted_in_chunks_into_a_summary()
     {
         var server = new ScriptedServer
