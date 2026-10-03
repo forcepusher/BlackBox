@@ -57,9 +57,6 @@ public partial class MainWindow : Window
     {
         base.OnOpened(e);
         InputBox.Focus();
-        // Stay visible while the agent works, but invisible to its screenshots.
-        if (TryGetPlatformHandle()?.Handle is { } handle)
-            Vm.AttachHostWindow(handle);
     }
 
     private void OnInputKeyDown(object? sender, KeyEventArgs e)
@@ -75,8 +72,14 @@ public partial class MainWindow : Window
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
-        if (DataContext is MainWindowViewModel vm)
-            vm.OpenSettingsRequested += () => OnSettingsClick(this, new RoutedEventArgs());
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+        vm.OpenSettingsRequested += () => OnSettingsClick(this, new RoutedEventArgs());
+        // Stay visible while the agent works, but invisible to its screenshots. Applied before the
+        // window is first shown: changing capture exclusion on an already-painted window left
+        // parts of it unpainted (the window behind showed through).
+        if (TryGetPlatformHandle()?.Handle is { } handle)
+            vm.AttachHostWindow(handle);
     }
 
     private async void OnSettingsClick(object? sender, RoutedEventArgs e)
