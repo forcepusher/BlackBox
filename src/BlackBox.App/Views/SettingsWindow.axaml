@@ -58,7 +58,7 @@
                   <TextBox Text="{Binding ContextSize}" Width="120" />
                 </StackPanel>
                 <TextBlock Classes="muted" TextWrapping="Wrap"
-                           Text="Filled in automatically from LM Studio. BlackBox trims old thinking and tool output to stay inside it." />
+                           Text="Read from the server when it reports it (LM Studio, llama-server, vLLM, OpenRouter). When a run outgrows it, BlackBox summarizes older steps." />
               </StackPanel>
             </Grid>
             <TextBlock Classes="muted" TextWrapping="Wrap"

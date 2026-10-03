@@ -38,10 +38,17 @@ public class ChatClientTests
     [Fact]
     public async Task Leaked_think_tags_move_to_reasoning()
     {
-        var sse = """data: {"choices":[{"delta":{"content":"Done, it is open.\n</think>\n\nNotepad is open."}}]}""";
+        var sse = """data: {"choices":[{"delta":{"content":"Done, it is open.\n</think>\n\nNotepad is open."}}]}""" + "\ndata: [DONE]";
         var msg = await OpenAiChatClient.ReadStreamAsync(new StringReader(sse), null, CancellationToken.None);
         Assert.Equal("Notepad is open.", msg.Content);
         Assert.Contains("Done, it is open.", msg.Reasoning);
+    }
+
+    [Fact]
+    public async Task Stream_cut_off_without_done_is_reported_as_a_drop()
+    {
+        var sse = """data: {"choices":[{"delta":{"content":"Half a sent"}}]}""";
+        await Assert.ThrowsAsync<IOException>(() => OpenAiChatClient.ReadStreamAsync(new StringReader(sse), null, CancellationToken.None));
     }
 
     [Fact]
@@ -147,7 +154,7 @@ public class ChatClientTests
     [Fact]
     public async Task Gemma_thought_channel_moves_to_reasoning()
     {
-        var sse = """data: {"choices":[{"delta":{"content":"<|channel>thought\nCheck the screen first.<channel|>Taking a look."}}]}""";
+        var sse = """data: {"choices":[{"delta":{"content":"<|channel>thought\nCheck the screen first.<channel|>Taking a look."}}]}""" + "\ndata: [DONE]";
         var msg = await OpenAiChatClient.ReadStreamAsync(new StringReader(sse), null, CancellationToken.None);
         Assert.Equal("Taking a look.", msg.Content);
         Assert.Equal("Check the screen first.", msg.Reasoning);

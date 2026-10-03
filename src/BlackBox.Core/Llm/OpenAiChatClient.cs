@@ -11,6 +11,17 @@ public class LlmException(string message, Exception? inner = null) : Exception(m
 public sealed class ContextOverflowException(string serverMessage)
     : LlmException("The conversation no longer fits in the model's context window: " + serverMessage);
 
+/// <summary>
+/// The connection broke before the reply was complete (network drop, proxy idle timeout).
+/// Safe to retry: the server keeps the prompt it already processed in its cache.
+/// </summary>
+public sealed class ConnectionLostException(string message, bool receivedTokens, Exception? inner = null)
+    : LlmException(message, inner)
+{
+    /// <summary>True if part of the reply had already streamed in.</summary>
+    public bool ReceivedTokens { get; } = receivedTokens;
+}
+
 /// <summary>The model kept thinking past the configured budget; the stream was closed.</summary>
 public sealed class ReasoningBudgetExceededException(string partialReasoning)
     : Exception("The model thought for too long without acting.")
@@ -97,7 +108,11 @@ public sealed class OpenAiChatClient
         }
         catch (HttpRequestException ex)
         {
-            throw new LlmException($"Could not reach {_baseUrl}: {ex.Message}", ex);
+            throw new ConnectionLostException($"Could not reach {_baseUrl}: {ex.Message}", false, ex);
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new ConnectionLostException($"{_baseUrl} did not answer in time.", false, ex);
         }
 
         using (resp)
@@ -118,9 +133,17 @@ public sealed class OpenAiChatClient
                 throw new LlmException($"Chat request failed ({(int)resp.StatusCode}): {Truncate(err, 1000)}");
             }
 
-            await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-            using var reader = new StreamReader(stream, Encoding.UTF8);
-            return await ReadStreamAsync(reader, onDelta, ct, options.MaxReasoningChars).ConfigureAwait(false);
+            var received = false;
+            try
+            {
+                await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+                return await ReadStreamAsync(reader, d => { received = true; onDelta?.Invoke(d); }, ct, options.MaxReasoningChars).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or HttpRequestException || ex is TaskCanceledException && !ct.IsCancellationRequested)
+            {
+                throw new ConnectionLostException($"The connection to {_baseUrl} dropped: {ex.Message}", received, ex);
+            }
         }
     }
 
@@ -129,6 +152,7 @@ public sealed class OpenAiChatClient
         var content = new StringBuilder();
         var reasoning = new StringBuilder();
         var calls = new SortedDictionary<int, (string Id, string Name, StringBuilder Args)>();
+        var finished = false;
 
         while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
         {
@@ -138,7 +162,10 @@ public sealed class OpenAiChatClient
             if (data.Length == 0)
                 continue;
             if (data == "[DONE]")
+            {
+                finished = true;
                 break;
+            }
 
             JsonNode? chunk;
             try { chunk = JsonNode.Parse(data); }
@@ -150,6 +177,8 @@ public sealed class OpenAiChatClient
                 throw LooksLikeContextOverflow(errorText) ? new ContextOverflowException(errorText) : new LlmException("Server error: " + errorText);
             }
 
+            if (chunk?["choices"] is JsonArray { Count: > 0 } c0 && c0[0]?["finish_reason"] is JsonValue fr && fr.GetValueKind() == JsonValueKind.String)
+                finished = true;
             if (chunk?["choices"] is not JsonArray { Count: > 0 } choices || choices[0]?["delta"] is not JsonObject delta)
                 continue;
 
@@ -186,6 +215,10 @@ public sealed class OpenAiChatClient
                 }
             }
         }
+
+        // A stream that just stops, without [DONE] or a finish reason, was cut by the network.
+        if (!finished)
+            throw new IOException("The reply stream ended before the server finished.");
 
         // Thinking that leaked into the visible text (a stray </think> from a quantized model,
         // or a server without a reasoning parser) belongs with the reasoning.

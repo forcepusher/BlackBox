@@ -264,6 +264,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         });
     }
 
+    void IAgentObserver.OnNotice(string text) => Dispatcher.UIThread.Post(() => AddNotice(text, isError: false));
+
     void IAgentObserver.OnToolStarted(ToolCall call, string summary) => Dispatcher.UIThread.Post(() =>
     {
         var item = FindOrAddTool(call, summary);

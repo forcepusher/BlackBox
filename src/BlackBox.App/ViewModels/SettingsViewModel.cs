@@ -85,8 +85,8 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         if (Models.Count > 0 && !Models.Contains(Server.Model))
             Model = Models[0];
 
-        // Ask again now that a model is chosen, to learn its loaded context (LM Studio only).
-        var (context, loaded) = await ServerProbe.TryLmStudioContextAsync(http, Server, CancellationToken.None);
+        // Ask again now that a model is chosen, to learn the context it runs with.
+        var (context, loaded) = await ServerProbe.TryContextAsync(http, Server, CancellationToken.None);
         if (context is { } c)
             ContextSize = c;
         TestResult = $"Connected. {Models.Count} model(s) available." +
