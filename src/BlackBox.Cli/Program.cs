@@ -87,7 +87,7 @@ static string FindRoot()
 }
 
 /// <summary>
-/// Prints the run as it happens. Every line carries the time to a tenth of a second, so a log
+/// Prints the run as it happens. Every line carries the time, so a log
 /// shows where the seconds go between steps: waiting for the server, writing the reply, tools.
 /// </summary>
 internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentObserver
@@ -104,7 +104,7 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
     public AgentStopReason Reason { get; private set; }
     public string? Detail { get; private set; }
 
-    private static string Now => DateTime.Now.ToString("HH:mm:ss.f");
+    private static string Now => DateTime.Now.ToString("HH:mm:ss");
 
     public void OnStepStarted(int step)
     {
