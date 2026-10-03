@@ -113,6 +113,14 @@
               </StackPanel>
             </Grid>
 
+            <TextBlock Classes="h2" Text="Context" />
+            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto">
+              <TextBlock Classes="label" Grid.Row="0" Text="Max prompt size (tokens)" />
+              <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Server.MaxPromptTokens}" Watermark="0 = use the whole context" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Classes="muted" TextWrapping="Wrap"
+                         Text="Each step resends the conversation. Keeping it below the model's full context keeps steps fast; older steps are trimmed to fit." />
+            </Grid>
+
             <TextBlock Classes="h2" Text="Screen" />
             <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto">
               <TextBlock Classes="label" Grid.Row="0" Text="Screenshot max pixels" />

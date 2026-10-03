@@ -29,6 +29,13 @@ public sealed class ServerSettings
     public int ContextSize { get; set; } = 32768;
 
     /// <summary>
+    /// Upper bound for one request, even when the model is loaded with a bigger context. Every
+    /// step resends the conversation, and a 200k-token prompt can take minutes to process on a
+    /// single GPU, so keeping it smaller keeps the agent responsive.
+    /// </summary>
+    public int MaxPromptTokens { get; set; } = 65536;
+
+    /// <summary>
     /// Send llama.cpp / LM Studio extras (top_k, min_p, repeat_penalty, chat-template switches).
     /// Dropped automatically if the server rejects them.
     /// </summary>

@@ -58,6 +58,7 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
             CustomInstructions = old.CustomInstructions,
         };
         Settings.Server.SendExtras = new ServerSettings().SendExtras;
+        Settings.Server.MaxPromptTokens = new ServerSettings().MaxPromptTokens;
     }
 
     [ObservableProperty]
@@ -70,7 +71,7 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
     private async Task TestConnectionAsync()
     {
         TestResult = "Connecting…";
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        using var http = LlmHttp.Create(TimeSpan.FromSeconds(20));
         var probe = await ServerProbe.CheckAsync(http, Server, CancellationToken.None);
         if (!probe.Reachable)
         {

@@ -41,14 +41,14 @@ IPlatformServices platform = new BlackBox.Platform.Windows.WindowsPlatform();
 #else
 IPlatformServices platform = new UnsupportedPlatform();
 #endif
-using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+using var http = LlmHttp.Create(Timeout.InfiniteTimeSpan);
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
 var agent = settings.Agent;
 if (urlOverride is not null) settings.Server.BaseUrl = urlOverride;
 if (modelOverride is not null) settings.Server.Model = modelOverride;
-using (var probeHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
+using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a model can take a while
 {
     var probe = await ServerProbe.CheckAsync(probeHttp, settings.Server, cts.Token);
     if (!probe.Reachable)
@@ -56,7 +56,8 @@ using (var probeHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
         Console.Error.WriteLine("[server] " + probe.Message);
         return 1;
     }
-    if (probe.LoadedContext is { } c) settings.Server.ContextSize = c;
+    if (await ServerProbe.EnsureLoadedAsync(probeHttp, settings.Server, () => Console.WriteLine("[server] loading the model…"), cts.Token) is { } c)
+        settings.Server.ContextSize = c;
     Console.WriteLine($"[server] {settings.Server.BaseUrl} · {settings.Server.Model} · {settings.Server.ContextSize / 1024}k context");
 }
 var backend = BackendConnection.Create(http, settings.Server, agent);

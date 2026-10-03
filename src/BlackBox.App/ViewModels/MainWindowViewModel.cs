@@ -17,7 +17,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private readonly AppPaths _paths;
     private readonly SettingsStore _store;
     private readonly IPlatformServices _platform;
-    private readonly HttpClient _http = new() { Timeout = Timeout.InfiniteTimeSpan };
+    private readonly HttpClient _http = LlmHttp.Create(Timeout.InfiniteTimeSpan);
     private readonly List<ChatMessage> _history = [];
     private AppSettings _settings;
     private CancellationTokenSource? _runCts;
@@ -87,7 +87,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
 
         SetStatus(BusyBrush, "Checking…", null);
-        using var probeHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        using var probeHttp = LlmHttp.Create(TimeSpan.FromSeconds(10));
         var probe = await ServerProbe.CheckAsync(probeHttp, server, CancellationToken.None);
         if (!probe.Reachable)
         {
@@ -132,6 +132,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
         try
         {
+            if (_settings.Server.BaseUrl.Length > 0 && _settings.Server.Model.Length > 0)
+            {
+                // LM Studio loads models on first use; do that now so we know the real context size.
+                using var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10));
+                var context = await ServerProbe.EnsureLoadedAsync(probeHttp, _settings.Server,
+                    () => Dispatcher.UIThread.Post(() => AddNotice("Loading the model on the server…", isError: false)), ct);
+                if (context is { } c && c != _settings.Server.ContextSize)
+                {
+                    _settings.Server.ContextSize = c;
+                    _store.Save(_settings);
+                    ServerStatusText = $"Connected · {c / 1024}k context";
+                }
+            }
             if (PrepareBackend() is not { } backend)
                 return;
 

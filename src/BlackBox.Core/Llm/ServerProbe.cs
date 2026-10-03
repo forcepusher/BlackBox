@@ -28,6 +28,30 @@ public static class ServerProbe
     }
 
     /// <summary>
+    /// Makes sure the model is loaded (LM Studio loads models on first use) and returns the
+    /// context length it was loaded with, if the server reports one.
+    /// </summary>
+    public static async Task<int?> EnsureLoadedAsync(HttpClient http, ServerSettings server, Action? onLoading, CancellationToken ct)
+    {
+        var (context, loaded) = await TryLmStudioContextAsync(http, server, ct).ConfigureAwait(false);
+        if (loaded != false)
+            return context;
+
+        onLoading?.Invoke();
+        try
+        {
+            var client = new OpenAiChatClient(http, server.BaseUrl, server.ApiKey);
+            await client.CompleteAsync([ChatMessage.User("Reply with OK.")], [],
+                new ChatRequestOptions { Model = server.Model, MaxTokens = 1 }, null, ct).ConfigureAwait(false);
+        }
+        catch (LlmException)
+        {
+            return null; // the real request will report the problem
+        }
+        return (await TryLmStudioContextAsync(http, server, ct).ConfigureAwait(false)).Context;
+    }
+
+    /// <summary>
     /// LM Studio's native REST API reports the context length a model is loaded with;
     /// OpenAI's /models does not. Other servers simply don't have this endpoint.
     /// </summary>
@@ -47,8 +71,9 @@ public static class ServerProbe
             var json = JsonNode.Parse(await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
             var state = json?["state"]?.GetValue<string>();
             var loaded = json?["loaded_context_length"]?.GetValue<int>();
-            var max = json?["max_context_length"]?.GetValue<int>();
-            return (loaded ?? max, state is null ? null : state == "loaded");
+            // Only a loaded model has a real context length. max_context_length is what the model
+            // could support (often 256k), not what LM Studio will actually load it with.
+            return (state == "loaded" ? loaded : null, state is null ? null : state == "loaded");
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidOperationException && !ct.IsCancellationRequested)
         {

@@ -34,5 +34,5 @@ public sealed record BackendConnection(OpenAiChatClient Client, ChatRequestOptio
                 : null,
         },
         server.SupportsVision,
-        server.ContextSize);
+        server.MaxPromptTokens > 0 ? Math.Min(server.ContextSize, server.MaxPromptTokens) : server.ContextSize);
 }
