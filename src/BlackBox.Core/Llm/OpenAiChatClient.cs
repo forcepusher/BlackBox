@@ -15,11 +15,18 @@ public sealed class ContextOverflowException(string serverMessage)
 /// The connection broke before the reply was complete (network drop, proxy idle timeout).
 /// Safe to retry: the server keeps the prompt it already processed in its cache.
 /// </summary>
-public sealed class ConnectionLostException(string message, bool receivedTokens, Exception? inner = null)
+public sealed class ConnectionLostException(string message, bool receivedTokens, Exception? inner = null, string? toolCallInProgress = null)
     : LlmException(message, inner)
 {
     /// <summary>True if part of the reply had already streamed in.</summary>
     public bool ReceivedTokens { get; } = receivedTokens;
+
+    /// <summary>
+    /// Name of the tool call the model was writing when the link dropped. Servers such as
+    /// LM Studio send a call's arguments only once the call is complete, so a long call (a whole
+    /// file) is a silent stretch that idle-cutting proxies kill, and resending repeats it.
+    /// </summary>
+    public string? ToolCallInProgress { get; } = toolCallInProgress;
 }
 
 
@@ -128,20 +135,22 @@ public sealed class OpenAiChatClient
             }
 
             var received = false;
+            string? toolCall = null;
             try
             {
                 await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                 using var reader = new StreamReader(stream, Encoding.UTF8);
-                return await ReadStreamAsync(reader, d => { received = true; onDelta?.Invoke(d); }, ct).ConfigureAwait(false);
+                return await ReadStreamAsync(reader, d => { received = true; onDelta?.Invoke(d); }, ct,
+                    onToolCall: name => { received = true; toolCall = name; }).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is IOException or HttpRequestException || ex is TaskCanceledException && !ct.IsCancellationRequested)
             {
-                throw new ConnectionLostException($"The connection to {_baseUrl} dropped: {ex.Message}", received, ex);
+                throw new ConnectionLostException($"The connection to {_baseUrl} dropped: {ex.Message}", received, ex, toolCall);
             }
         }
     }
 
-    internal static async Task<ChatMessage> ReadStreamAsync(TextReader reader, Action<StreamDelta>? onDelta, CancellationToken ct)
+    internal static async Task<ChatMessage> ReadStreamAsync(TextReader reader, Action<StreamDelta>? onDelta, CancellationToken ct, Action<string>? onToolCall = null)
     {
         var content = new StringBuilder();
         var reasoning = new StringBuilder();
@@ -199,7 +208,11 @@ public sealed class OpenAiChatClient
                     if (GetString(tc, "id") is { Length: > 0 } id) acc.Id = id;
                     if (tc["function"] is JsonObject fn)
                     {
-                        if (GetString(fn, "name") is { Length: > 0 } name) acc.Name += name;
+                        if (GetString(fn, "name") is { Length: > 0 } name)
+                        {
+                            acc.Name += name;
+                            onToolCall?.Invoke(acc.Name);
+                        }
                         if (GetString(fn, "arguments") is { } args) acc.Args.Append(args);
                     }
                     calls[index] = acc;

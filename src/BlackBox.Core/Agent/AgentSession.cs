@@ -136,6 +136,11 @@ public sealed partial class AgentSession(
 
     /// <summary>How many dropped connections one step survives.</summary>
     internal const int MaxReconnects = 12;
+
+    internal const string LongToolCallNote =
+        "[BlackBox] Your last reply was lost: the connection drops when a single tool call takes more than about a minute to write. " +
+        "Keep every tool call short. Write long files in parts of at most about 100 lines: create the file with write_file, " +
+        "then add each next part with write_file and append set to true. Continue with the task.";
     private const string NudgeText =
         "Continue with the task. If there is another step, call the tool for it now. If the task is finished, reply with a short summary of what you did.";
 
@@ -260,6 +265,15 @@ public sealed partial class AgentSession(
             catch (ConnectionLostException ex) when (++drops <= MaxReconnects)
             {
                 observer.OnNotice($"Connection lost ({ex.Message}). Reconnecting, attempt {drops} of {MaxReconnects}…");
+                // Resending would only repeat a tool call too long to get through, so the model is
+                // asked to split it. The note stays in the history so later calls stay short too.
+                if (ex.ToolCallInProgress is not null && toolDefs.Count > 0 && request[^1].Content != LongToolCallNote)
+                {
+                    var note = ChatMessage.User(LongToolCallNote);
+                    History.Add(note);
+                    request = [.. request, note];
+                    observer.OnNotice("The reply was lost while the model was writing a long tool call; asking it to write in smaller parts.");
+                }
                 if (ex.ReceivedTokens && onDelta is not null)
                 {
                     // Discard the half-streamed reply; the retry produces it again.

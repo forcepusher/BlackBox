@@ -39,10 +39,16 @@ public sealed class ReadFileTool : Tool
 public sealed class WriteFileTool : Tool
 {
     public override string Name => "write_file";
-    public override string Description => "Create or overwrite a text file with the given content. Creates parent folders.";
+    public override string Description =>
+        "Create or overwrite a text file with the given content, or add to its end with append=true. Creates parent folders. " +
+        "Write long files in parts of at most about 100 lines: the first call creates the file, each next part is appended.";
     public override ToolRisk Risk => ToolRisk.Risky;
-    public override JsonObject Parameters => Schema(("path", Str("File path"), true), ("content", Str("Full file content"), true));
-    public override string Describe(JsonObject args) => $"Write {GetString(args, "path")} ({GetString(args, "content")?.Length ?? 0} chars)";
+    public override JsonObject Parameters => Schema(
+        ("path", Str("File path"), true),
+        ("content", Str("File content, or the part to add when appending"), true),
+        ("append", Bool("Add the content to the end of the file instead of replacing it (default false)"), false));
+    public override string Describe(JsonObject args) =>
+        $"{(GetBool(args, "append") ? "Append to" : "Write")} {GetString(args, "path")} ({GetString(args, "content")?.Length ?? 0} chars)";
 
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
@@ -50,6 +56,11 @@ public sealed class WriteFileTool : Tool
         var content = RequireString(args, "content");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var existed = File.Exists(path);
+        if (GetBool(args, "append"))
+        {
+            await File.AppendAllTextAsync(path, content, ct).ConfigureAwait(false);
+            return new ToolResult($"Appended {content.Length} chars to {path} (now {new FileInfo(path).Length} bytes).");
+        }
         await File.WriteAllTextAsync(path, content, ct).ConfigureAwait(false);
         return new ToolResult($"{(existed ? "Overwrote" : "Created")} {path} ({content.Length} chars).");
     }

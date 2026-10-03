@@ -229,6 +229,28 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_tool_call_lost_to_a_drop_makes_the_model_write_in_parts()
+    {
+        // LM Studio sends a call's name first and its arguments only when the call is complete;
+        // a proxy that cuts silent connections kills it in between, every time it is resent.
+        var cut = Sse.ToolCall("c1", "write_file", "").Replace("data: [DONE]\n\n", "");
+        var server = new ScriptedServer(cut, cut, Sse.Text("Done."));
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null),
+            new ChatRequestOptions(), ToolRegistry.CreateDefault(true), ctx, "sys");
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("write a game", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(3, server.Requests.Count);
+        static string LastContent(JsonObject req) => ((JsonArray)req["messages"]!)[^1]!["content"]!.ToString();
+        Assert.Equal(AgentSession.LongToolCallNote, LastContent(server.Requests[1]));
+        Assert.Equal(server.Requests[1].ToJsonString(), server.Requests[2].ToJsonString()); // the note is added once
+        Assert.Single(session.History, m => m.Content == AgentSession.LongToolCallNote);
+    }
+
+    [Fact]
     public async Task Long_runs_are_compacted_in_chunks_into_a_summary()
     {
         var server = new ScriptedServer

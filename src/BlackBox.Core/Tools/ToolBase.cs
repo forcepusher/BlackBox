@@ -72,6 +72,8 @@ public abstract class Tool
 
     protected static JsonObject Num(string description) => new() { ["type"] = "number", ["description"] = description };
 
+    protected static JsonObject Bool(string description) => new() { ["type"] = "boolean", ["description"] = description };
+
     protected static JsonObject StrArray(string description) =>
         new() { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = description };
 
@@ -100,6 +102,15 @@ public abstract class Tool
         };
         return double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
     }
+
+    /// <summary>True for JSON true and for the strings "true"/"yes"/"1" some models send instead.</summary>
+    protected static bool GetBool(JsonObject args, string key) => args[key] is JsonValue v && v.GetValueKind() switch
+    {
+        JsonValueKind.True => true,
+        JsonValueKind.String => v.GetValue<string>().Trim().ToLowerInvariant() is "true" or "yes" or "1",
+        JsonValueKind.Number => v.ToJsonString() != "0",
+        _ => false,
+    };
 
     protected static double RequireNumber(JsonObject args, string key) =>
         GetNumber(args, key) ?? throw new ToolArgumentException($"Missing or non-numeric argument '{key}'.");

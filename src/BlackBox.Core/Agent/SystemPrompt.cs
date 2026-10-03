@@ -30,6 +30,7 @@ public static class SystemPrompt
             sb.AppendLine("- Prefer keyboard shortcuts and the shell when they are more reliable than clicking (e.g. win+r, ctrl+l, Start-Process).");
             sb.AppendLine("- Click a text field before typing into it.");
         }
+        sb.AppendLine("- Keep each tool call short: write long files in parts of at most about 100 lines (write_file, then write_file with append=true for each next part).");
         sb.AppendLine("- Do one step at a time and keep going until the task is finished, then reply with a short summary of what you did.");
         sb.AppendLine("- If something fails twice, try a different approach. If you are blocked or the task is ambiguous, stop and ask the user.");
         sb.AppendLine("- Never enter passwords, payment details or other secrets, and ask before deleting things or sending messages on the user's behalf.");
