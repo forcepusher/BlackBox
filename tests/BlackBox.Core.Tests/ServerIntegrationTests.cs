@@ -27,7 +27,7 @@ public class ServerIntegrationTests
 
     private static AgentSession NewSession(HttpClient http, ServerSettings server, int contextTokens)
     {
-        var connection = BackendConnection.Create(http, server, new AgentSettings());
+        var connection = BackendConnection.Create(http, server);
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
         return new AgentSession(connection.Client, connection.Options, ToolRegistry.CreateDefault(false), ctx,
             "You are a test assistant.", contextTokens: contextTokens);

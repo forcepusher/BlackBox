@@ -15,15 +15,6 @@ public partial class SettingsWindow : Window
 
     private void OnCancel(object? sender, RoutedEventArgs e) => Close(false);
 
-    private void OnRestoreDefaults(object? sender, RoutedEventArgs e)
-    {
-        var vm = Vm;
-        vm.RestoreAdvancedDefaults();
-        // The settings objects were replaced; rebind so every field shows the new values.
-        DataContext = null;
-        DataContext = vm;
-    }
-
     private async void OnBrowseWorkingDir(object? sender, RoutedEventArgs e)
     {
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Working folder" });

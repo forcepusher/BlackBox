@@ -126,7 +126,7 @@ public class ToolTests
               "backend": "Remote",
               "local": { "modelPath": "Models/x.gguf", "gpuLayers": 99 },
               "remote": { "baseUrl": "http://host:1234/v1", "model": "qwen", "sendExtras": false },
-              "agent": { "enableThinking": false, "temperature": 0.3 }
+              "agent": { "enableThinking": false, "temperature": 0.3, "maxSteps": 12, "keepScreenshots": 5 }
             }
             """);
 
@@ -134,9 +134,9 @@ public class ToolTests
 
         Assert.Equal("http://host:1234/v1", settings.Server.BaseUrl);
         Assert.Equal("qwen", settings.Server.Model);
-        Assert.Equal(0.3, settings.Agent.Temperature);
+        Assert.Equal(12, settings.Agent.MaxSteps);
         var saved = File.ReadAllText(paths.SettingsFile);
-        foreach (var gone in new[] { "backend", "local", "remote", "gpuLayers", "sendExtras", "enableThinking" })
+        foreach (var gone in new[] { "backend", "local", "remote", "gpuLayers", "sendExtras", "enableThinking", "temperature", "keepScreenshots", "contextSize" })
             Assert.DoesNotContain(gone, saved);
     }
 

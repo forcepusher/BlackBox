@@ -46,25 +46,6 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         set { Server.SupportsVision = value; OnPropertyChanged(); }
     }
 
-    public int ContextSize
-    {
-        get => Server.ContextSize;
-        set { Server.ContextSize = value; OnPropertyChanged(); }
-    }
-
-    /// <summary>Resets everything on the Advanced tab, keeping the choices made on General.</summary>
-    public void RestoreAdvancedDefaults()
-    {
-        var old = Settings.Agent;
-        Settings.Agent = new AgentSettings
-        {
-            Approval = old.Approval,
-            FailsafeCorner = old.FailsafeCorner,
-            HideFromScreenshots = old.HideFromScreenshots,
-            CustomInstructions = old.CustomInstructions,
-        };
-        Settings.Server.MaxPromptTokens = new ServerSettings().MaxPromptTokens;
-    }
 
     [ObservableProperty]
     private string _testResult = "";
@@ -92,8 +73,7 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
 
         // Ask again now that a model is chosen, to learn the context it runs with.
         var facts = await ServerProbe.TryContextAsync(http, Server, CancellationToken.None);
-        if (facts.Context is { } c)
-            ContextSize = c;
+
         if (facts.Vision is { } v)
             SupportsVision = v;
         TestResult = $"Connected. {Models.Count} model(s) available." +

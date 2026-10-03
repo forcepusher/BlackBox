@@ -79,62 +79,25 @@
       <TabItem Header="Advanced">
         <ScrollViewer>
           <StackPanel Spacing="4" Margin="0,0,12,16">
-            <TextBlock Classes="muted" TextWrapping="Wrap" Text="You normally don't need to change anything here." />
-
-            <TextBlock Classes="h2" Text="Sampling" />
             <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="These are sent with every request and override the server's own defaults. Whether a model thinks before answering is set on the server (in LM Studio, per model)." />
-            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
-              <TextBlock Classes="label" Grid.Row="0" Text="Temperature" />
-              <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Agent.Temperature}" />
-              <TextBlock Classes="label" Grid.Row="1" Text="Top P" />
-              <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Agent.TopP}" />
-              <TextBlock Classes="label" Grid.Row="2" Text="Top K" />
-              <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Agent.TopK}" />
-              <TextBlock Classes="label" Grid.Row="3" Text="Min P" />
-              <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Agent.MinP}" />
-              <TextBlock Classes="label" Grid.Row="4" Text="Repeat penalty" />
-              <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Agent.RepeatPenalty}" Watermark="1.0 = off" />
-              <TextBlock Classes="label" Grid.Row="5" Text="Max tokens per reply" />
-              <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Agent.MaxTokensPerReply}" />
-              <TextBlock Classes="label" Grid.Row="6" Text="Thinking limit (tokens)" />
-              <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding Agent.MaxThinkingTokens}" Watermark="0 = no limit" />
-            </Grid>
-
-            <TextBlock Classes="h2" Text="Context" />
-            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                       Text="How the model behaves (temperature, reply length, thinking) is configured on the server, in LM Studio per model. These settings control BlackBox itself." />
+            <Grid Classes="form" ColumnDefinitions="190,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" Margin="0,8,0,0">
               <TextBlock Classes="label" Grid.Row="0" Text="Max prompt size (tokens)" />
               <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Server.MaxPromptTokens}" Watermark="0 = use the whole context" />
               <TextBlock Grid.Row="1" Grid.Column="1" Classes="muted" TextWrapping="Wrap"
                          Text="Each step resends the conversation. Keeping it below the model's full context keeps steps fast; older steps are summarized to fit." />
-              <TextBlock Classes="label" Grid.Row="2" Text="Context size (fallback)" />
-              <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ContextSize}" />
+              <TextBlock Classes="label" Grid.Row="2" Text="Screenshot max pixels" />
+              <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Agent.ScreenshotMaxPixels}" />
               <TextBlock Grid.Row="3" Grid.Column="1" Classes="muted" TextWrapping="Wrap"
-                         Text="Only used when the server doesn't report its context size. LM Studio, llama-server, vLLM and OpenRouter report it." />
-            </Grid>
-
-            <TextBlock Classes="h2" Text="Screen" />
-            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto">
-              <TextBlock Classes="label" Grid.Row="0" Text="Screenshot max pixels" />
-              <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Agent.ScreenshotMaxPixels}" />
-              <TextBlock Grid.Row="1" Grid.Column="1" Classes="muted" Text="More pixels = sharper view of small text, but slower and uses more context." TextWrapping="Wrap" />
-              <TextBlock Classes="label" Grid.Row="2" Text="Screenshots kept" />
-              <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Agent.KeepScreenshots}" />
-              <CheckBox Grid.Row="3" Grid.Column="1" Content="Screenshot after each mouse or keyboard action" IsChecked="{Binding Agent.ScreenshotAfterActions}" />
-            </Grid>
-
-            <TextBlock Classes="h2" Text="Agent" />
-            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto">
-              <TextBlock Classes="label" Grid.Row="0" Text="Max steps per task" />
-              <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Agent.MaxSteps}" />
-              <TextBlock Classes="label" Grid.Row="1" Text="Working folder" />
-              <DockPanel Grid.Row="1" Grid.Column="1">
+                         Text="More pixels = sharper view of small text, but slower and uses more context." />
+              <TextBlock Classes="label" Grid.Row="4" Text="Max steps per task" />
+              <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Agent.MaxSteps}" />
+              <TextBlock Classes="label" Grid.Row="5" Text="Working folder" />
+              <DockPanel Grid.Row="5" Grid.Column="1">
                 <Button DockPanel.Dock="Right" Classes="ghost" Content="Browse…" Margin="6,0,0,0" Click="OnBrowseWorkingDir" />
                 <TextBox Text="{Binding WorkingDirectory}" Watermark="Default: Workspace folder next to the app" />
               </DockPanel>
             </Grid>
-
-            <Button Classes="ghost" Content="Restore advanced defaults" Margin="0,16,0,0" Click="OnRestoreDefaults" />
           </StackPanel>
         </ScrollViewer>
       </TabItem>

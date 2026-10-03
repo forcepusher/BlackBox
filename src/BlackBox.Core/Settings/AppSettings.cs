@@ -25,9 +25,10 @@ public sealed class ServerSettings
     public bool SupportsVision { get; set; } = true;
 
     /// <summary>
-    /// Context window of the model. Read from the server when it reports it; this value is the
-    /// fallback for servers that don't.
+    /// Context window of the model, as reported by the server when the app connects. Not saved;
+    /// servers that don't report it get this conservative default.
     /// </summary>
+    [JsonIgnore]
     public int ContextSize { get; set; } = 32768;
 
     /// <summary>
@@ -47,10 +48,12 @@ public sealed class AgentSettings
     /// <summary>Screenshots are downscaled to at most this many pixels before going to the model (about 1.3 MP, roughly 1300 image tokens).</summary>
     public int ScreenshotMaxPixels { get; set; } = 1_300_000;
 
-    /// <summary>Only the newest N screenshots stay in context; older ones are dropped to save tokens.</summary>
+    /// <summary>Only the newest N screenshots stay in context. Internal tuning, not a user setting.</summary>
+    [JsonIgnore]
     public int KeepScreenshots { get; set; } = 2;
 
-    /// <summary>Attach a fresh screenshot after mouse/keyboard actions.</summary>
+    /// <summary>Attach a fresh screenshot after mouse/keyboard actions. Internal (tests turn it off).</summary>
+    [JsonIgnore]
     public bool ScreenshotAfterActions { get; set; } = true;
 
     /// <summary>
@@ -61,18 +64,6 @@ public sealed class AgentSettings
 
     /// <summary>Moving the mouse into the top-left corner stops the agent.</summary>
     public bool FailsafeCorner { get; set; } = true;
-
-    // Low temperature keeps clicks and tool arguments precise.
-    public double Temperature { get; set; } = 0.1;
-    public double TopP { get; set; } = 0.95;
-    public int TopK { get; set; } = 40;
-    public double MinP { get; set; } = 0.05;
-    /// <summary>1.0 = off.</summary>
-    public double RepeatPenalty { get; set; } = 1.0;
-    public int MaxTokensPerReply { get; set; } = 8192;
-
-    /// <summary>If the model thinks longer than this (roughly, in tokens) it is cut off and asked to act directly.</summary>
-    public int MaxThinkingTokens { get; set; } = 3000;
 
     /// <summary>Default working directory for file and shell tools. Empty = ./Workspace.</summary>
     public string WorkingDirectory { get; set; } = "";

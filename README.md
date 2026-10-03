@@ -25,10 +25,8 @@ Settings → General → AI model server. Enter the server address (LM Studio's 
 model must accept images (for example Qwen3.5+ VL models or Gemma 4 with their vision projector);
 LM Studio reports this and BlackBox sets it automatically.
 
-Sampling defaults: temperature 0.1, top-k 40, top-p 0.95, min-p 0.05, no repetition penalty.
-top-k, min-p and repetition penalty are extras that LM Studio, llama-server and vLLM understand; if
-a stricter server rejects them, BlackBox drops them automatically. Whether a model thinks before
-answering is a server-side setting (in LM Studio, per model).
+BlackBox sends no sampling parameters: temperature, top-k/p, reply length and thinking come from
+the server's own model configuration (in LM Studio, per model).
 
 Thinking models get their earlier reasoning sent back each step (`reasoning_content`,
 `preserve_thinking`), as the Qwen3.5+ and Gemma 4 templates expect.
@@ -37,7 +35,7 @@ Thinking models get their earlier reasoning sent back each step (`reasoning_cont
 The OpenAI API has no field for the context length, so BlackBox asks each server its own way:
 LM Studio (`/api/v0/models/{id}`, `loaded_context_length`, after loading the model if needed),
 llama-server (`/props`, `n_ctx`), vLLM (`max_model_len`) and OpenRouter (`context_length`).
-Otherwise the size in Settings is used. Each request is also capped at 64k tokens by default
+Servers that don't say get a conservative 32k. Each request is also capped at 64k tokens by default
 (Settings → Advanced) so steps stay fast.
 
 When a run outgrows that budget, BlackBox drops old screenshots and old thinking, then has the

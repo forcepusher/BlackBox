@@ -255,30 +255,6 @@ public class AgentSessionTests
         Assert.NotNull(session.History[^1].Reasoning);
     }
 
-    [Fact]
-    public async Task Runaway_thinking_is_cut_off_and_retried_without_thinking()
-    {
-        var thinking = new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["reasoning_content"] = new string('h', 500) } }) };
-        var longThought = string.Concat(Enumerable.Repeat($"data: {thinking.ToJsonString()}\n\n", 10));
-        var server = new ScriptedServer(longThought, Sse.Text("Done."));
-        var settings = new AgentSettings { FailsafeCorner = false };
-        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = settings, WorkingDirectory = Path.GetTempPath() };
-        var options = new ChatRequestOptions
-        {
-            MaxReasoningChars = 1000,
-            Extra = new JsonObject { ["chat_template_kwargs"] = new JsonObject { ["enable_thinking"] = true } },
-        };
-        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null), options, ToolRegistry.CreateDefault(true), ctx, "sys");
-        var observer = new RecordingObserver();
-
-        await session.RunAsync("go", observer, CancellationToken.None);
-
-        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal(2, server.Requests.Count);
-        Assert.False(server.Requests[1]["chat_template_kwargs"]!["enable_thinking"]!.GetValue<bool>());
-        Assert.Equal("Done.", session.History[^1].Content);
-    }
-
     private static (AgentSession, RecordingObserver) CreateSession(ScriptedServer server, string dir, IPlatformServices platform, int keepScreenshots = 2)
     {
         var settings = new AgentSettings { KeepScreenshots = keepScreenshots, FailsafeCorner = false, ScreenshotAfterActions = false, Approval = ApprovalMode.AskRisky };

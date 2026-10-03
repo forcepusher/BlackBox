@@ -60,19 +60,7 @@ public sealed partial class AgentSession(
                 var request = new List<ChatMessage>(History.Count + 1) { ChatMessage.System(systemPrompt) };
                 request.AddRange(History);
 
-                ChatMessage reply;
-                try
-                {
-                    reply = await CompleteFittingAsync(request, requestOptions, observer, ct).ConfigureAwait(false);
-                }
-                catch (ReasoningBudgetExceededException ex) when (WithoutThinking(requestOptions) is { } direct)
-                {
-                    // Quantized models can get stuck deliberating. Cut the thought short and ask
-                    // again with thinking switched off for this one step.
-                    observer.OnAssistantMessage(new ChatMessage { Role = ChatRole.Assistant, Content = "", Reasoning = ex.PartialReasoning + "\n[thinking cut short]" });
-                    observer.OnStepStarted(step);
-                    reply = await CompleteFittingAsync(request, direct, observer, ct).ConfigureAwait(false);
-                }
+                var reply = await CompleteFittingAsync(request, observer, ct).ConfigureAwait(false);
                 TextToolCallParser.TryExtract(reply, tools);
                 // "The task is complete" followed by yet another screenshot: small models can keep
                 // re-verifying forever. A completion claim with only look-only calls ends the turn.
@@ -144,24 +132,6 @@ public sealed partial class AgentSession(
     /// cache from that point on, so doing it every step would reprocess most of the prompt each time.
     /// </summary>
     private const int PruneSlack = 3;
-
-    /// <summary>Request options with thinking disabled, or null if the backend has no such switch.</summary>
-    internal static ChatRequestOptions? WithoutThinking(ChatRequestOptions options)
-    {
-        if (options.Extra?["chat_template_kwargs"] is not System.Text.Json.Nodes.JsonObject)
-            return null;
-        var extra = (System.Text.Json.Nodes.JsonObject)options.Extra.DeepClone();
-        extra["chat_template_kwargs"]!["enable_thinking"] = false;
-        return new ChatRequestOptions
-        {
-            Model = options.Model,
-            Temperature = options.Temperature,
-            TopP = options.TopP,
-            MaxTokens = options.MaxTokens,
-            SendReasoning = options.SendReasoning,
-            Extra = extra,
-        };
-    }
 
     private const int MaxNudges = 2;
 
@@ -252,13 +222,13 @@ public sealed partial class AgentSession(
     /// Sends the request; if the server says it does not fit, trims history much harder and
     /// tries again (twice at most) before giving up.
     /// </summary>
-    private async Task<ChatMessage> CompleteFittingAsync(List<ChatMessage> request, ChatRequestOptions options, IAgentObserver observer, CancellationToken ct)
+    private async Task<ChatMessage> CompleteFittingAsync(List<ChatMessage> request, IAgentObserver observer, CancellationToken ct)
     {
         for (var attempt = 0; ; attempt++)
         {
             try
             {
-                return await CompleteWithReconnectAsync(request, tools.Definitions(), options, observer, observer.OnDelta, ct).ConfigureAwait(false);
+                return await CompleteWithReconnectAsync(request, tools.Definitions(), requestOptions, observer, observer.OnDelta, ct).ConfigureAwait(false);
             }
             catch (ContextOverflowException) when (attempt < 2)
             {

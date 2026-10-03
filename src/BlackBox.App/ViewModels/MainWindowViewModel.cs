@@ -99,11 +99,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             SetStatus(ErrorBrush, "Model not found", $"The server doesn't offer \"{server.Model}\". Pick one of its models in Settings.");
             return;
         }
-        // Trust what the server reports over the saved values.
-        if (probe.LoadedContext is { } context && context != server.ContextSize || probe.Vision is { } v && v != server.SupportsVision)
+        // Trust what the server reports. The context size is not saved; image support is.
+        if (probe.LoadedContext is { } context)
+            server.ContextSize = context;
+        if (probe.Vision is { } v && v != server.SupportsVision)
         {
-            server.ContextSize = probe.LoadedContext ?? server.ContextSize;
-            server.SupportsVision = probe.Vision ?? server.SupportsVision;
+            server.SupportsVision = v;
             _store.Save(_settings);
         }
         var ctxText = probe.LoadedContext is { } c ? $" · {c / 1024}k context" : "";
@@ -142,7 +143,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 if (context is { } c && c != _settings.Server.ContextSize)
                 {
                     _settings.Server.ContextSize = c;
-                    _store.Save(_settings);
                     ServerStatusText = $"Connected · {c / 1024}k context";
                 }
             }
@@ -199,6 +199,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     public async Task ApplySettingsAsync(AppSettings updated)
     {
+        updated.Server.ContextSize = _settings.Server.ContextSize; // runtime value, re-detected below
         _settings = updated;
         _store.Save(updated);
         _platform.HostWindow.SetHiddenFromCapture(updated.Agent.HideFromScreenshots);
@@ -213,7 +214,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             AddNotice("Connect to a model server in Settings first.", isError: true);
             return null;
         }
-        return BackendConnection.Create(_http, server, _settings.Agent);
+        return BackendConnection.Create(_http, server);
     }
     private string WorkingDirectory()
     {
