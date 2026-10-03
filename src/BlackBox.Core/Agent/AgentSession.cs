@@ -60,7 +60,7 @@ public sealed class AgentSession(
                 ChatMessage reply;
                 try
                 {
-                    reply = await client.CompleteAsync(request, toolDefs, requestOptions, observer.OnDelta, ct).ConfigureAwait(false);
+                    reply = await CompleteFittingAsync(request, observer, ct).ConfigureAwait(false);
                 }
                 catch (ReasoningBudgetExceededException ex) when (WithoutThinking(requestOptions) is { } direct)
                 {
@@ -242,6 +242,30 @@ public sealed class AgentSession(
         _ => false,
     };
 
+    /// <summary>
+    /// Sends the request; if the server says it does not fit, trims history much harder and
+    /// tries again (twice at most) before giving up.
+    /// </summary>
+    private async Task<ChatMessage> CompleteFittingAsync(List<ChatMessage> request, IAgentObserver observer, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await client.CompleteAsync(request, tools.Definitions(), requestOptions, observer.OnDelta, ct).ConfigureAwait(false);
+            }
+            catch (ContextOverflowException) when (attempt < 2)
+            {
+                var before = EstimateTokens();
+                PruneScreenshots(1);
+                FitContext(before / 2);
+                request.Clear();
+                request.Add(ChatMessage.System(systemPrompt));
+                request.AddRange(History);
+            }
+        }
+    }
+
     /// <summary>Rough token count of the conversation (about 3.5 characters per token, ~1300 per screenshot).</summary>
     internal int EstimateTokens() =>
         (systemPrompt.Length + 12_000 /* tool schemas */ + History.Sum(m =>
@@ -270,6 +294,21 @@ public sealed class AgentSession(
             m.Content = m.Content![..300] + "\n[older output trimmed to save context]";
             if (EstimateTokens() <= budget) return;
         }
+
+        // Last resort: drop whole steps from the middle. The original request (first message)
+        // and the most recent steps stay, and tool results never lose their tool call.
+        const string gap = "[Earlier steps were removed to fit the context window. Take a screenshot if you need to see the current state.]";
+        var removedAny = false;
+        while (EstimateTokens() > budget && History.Count > 8)
+        {
+            var at = History.Count > 1 && History[1].Content == gap ? 2 : 1;
+            History.RemoveAt(at);
+            while (at < History.Count - 6 && History[at].Role == ChatRole.Tool)
+                History.RemoveAt(at); // results whose call was just removed
+            removedAny = true;
+        }
+        if (removedAny && History[1].Content != gap)
+            History.Insert(1, ChatMessage.User(gap));
     }
 
     /// <summary>

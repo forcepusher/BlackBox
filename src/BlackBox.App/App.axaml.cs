@@ -21,11 +21,9 @@ public partial class App : Application
             paths.EnsureCreated();
             var store = new SettingsStore(paths);
             var platform = CreatePlatform();
-            var server = new LlamaServerHost(paths, platform);
 
-            var vm = new MainWindowViewModel(paths, store, store.Load(), platform, server);
+            var vm = new MainWindowViewModel(paths, store, store.Load(), platform);
             desktop.MainWindow = new MainWindow { DataContext = vm };
-            desktop.ShutdownRequested += (_, _) => server.StopAsync().GetAwaiter().GetResult();
             vm.OnStartup();
         }
 

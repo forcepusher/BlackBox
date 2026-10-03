@@ -4,8 +4,9 @@ using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
 
-// Usage: blackbox-cli [--root DIR] [--yes] [--keep-server] [--save-shots DIR] "task"
+// Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] "task"
 //   --root        portable folder (default: BLACKBOX_HOME, else the exe folder, else the repo root)
+//   --url/--model override the server address and model saved in Data/settings.json
 //   --yes         approve risky tools without asking
 //   --save-shots  write every screenshot the model sees to DIR
 
@@ -22,11 +23,13 @@ bool Flag(string flag) => argsList.Remove(flag);
 
 var root = Take("--root") ?? Environment.GetEnvironmentVariable("BLACKBOX_HOME") ?? FindRoot();
 var shotsDir = Take("--save-shots");
+var urlOverride = Take("--url");
+var modelOverride = Take("--model");
 var autoYes = Flag("--yes");
 var task = string.Join(' ', argsList);
 if (string.IsNullOrWhiteSpace(task))
 {
-    Console.Error.WriteLine("Usage: blackbox-cli [--root DIR] [--yes] [--save-shots DIR] \"task\"");
+    Console.Error.WriteLine("Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] \"task\"");
     return 2;
 }
 
@@ -38,33 +41,25 @@ IPlatformServices platform = new BlackBox.Platform.Windows.WindowsPlatform();
 #else
 IPlatformServices platform = new UnsupportedPlatform();
 #endif
-await using var server = new LlamaServerHost(paths, platform);
 using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
-BackendConnection backend;
 var agent = settings.Agent;
-if (settings.Backend == BackendKind.Remote)
+if (urlOverride is not null) settings.Server.BaseUrl = urlOverride;
+if (modelOverride is not null) settings.Server.Model = modelOverride;
+using (var probeHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
 {
-    backend = BackendConnection.ForRemote(http, settings.Remote, agent);
-}
-else
-{
-    Console.WriteLine("[server] starting llama-server…");
-    var started = DateTime.UtcNow;
-    await server.StartAsync(settings.Local, cts.Token);
-    if (server.State != ServerState.Running)
+    var probe = await ServerProbe.CheckAsync(probeHttp, settings.Server, cts.Token);
+    if (!probe.Reachable)
     {
-        Console.Error.WriteLine("[server] " + server.LastError);
-        Console.Error.WriteLine(string.Join(Environment.NewLine, server.RecentLog.Split(Environment.NewLine).TakeLast(25)));
+        Console.Error.WriteLine("[server] " + probe.Message);
         return 1;
     }
-    if (server.Warning is { } w) Console.WriteLine("[server] " + w);
-    Console.WriteLine($"[server] ready in {(DateTime.UtcNow - started).TotalSeconds:0.0}s at {server.BaseUrl}");
-    backend = BackendConnection.ForLocal(http, server, agent);
+    if (probe.LoadedContext is { } c) settings.Server.ContextSize = c;
+    Console.WriteLine($"[server] {settings.Server.BaseUrl} · {settings.Server.Model} · {settings.Server.ContextSize / 1024}k context");
 }
-
+var backend = BackendConnection.Create(http, settings.Server, agent);
 var workDir = string.IsNullOrWhiteSpace(agent.WorkingDirectory) ? paths.WorkspaceDir : paths.Resolve(agent.WorkingDirectory);
 var ctx = new ToolContext { Platform = platform, Settings = agent, WorkingDirectory = workDir };
 var screen = backend.Vision ? ctx.GetScreenSpace() : null;

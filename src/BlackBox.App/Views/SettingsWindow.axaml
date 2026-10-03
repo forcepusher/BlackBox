@@ -32,56 +32,37 @@
 
     <TabControl Padding="16,8">
 
-      <!-- ===================== General: what most people need ===================== -->
+      <!-- ===================== General ===================== -->
       <TabItem Header="General">
         <ScrollViewer>
           <StackPanel Spacing="4" Margin="0,0,12,16">
-            <TextBlock Classes="h2" Text="AI model" />
-            <StackPanel Spacing="6">
-              <RadioButton GroupName="backend" IsChecked="{Binding IsLocal}">
-                <StackPanel>
-                  <TextBlock Text="On this computer (private, works offline)" />
-                  <TextBlock Classes="muted" Text="Runs the built-in model on your graphics card." />
+            <TextBlock Classes="h2" Text="AI model server" />
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Any OpenAI-compatible server works: LM Studio, llama.cpp's llama-server, vLLM, OpenAI and others. For LM Studio, start its server and use the address it shows." />
+            <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+              <TextBlock Classes="label" Grid.Row="0" Text="Address" />
+              <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Server.BaseUrl}" Watermark="http://localhost:1234/v1" />
+              <TextBlock Classes="label" Grid.Row="1" Text="API key" />
+              <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Server.ApiKey}" PasswordChar="•" Watermark="Optional" />
+              <StackPanel Grid.Row="2" Grid.Column="1" Spacing="6">
+                <Button Classes="ghost" Content="Test connection" Command="{Binding TestConnectionCommand}" />
+                <TextBlock Classes="muted" Text="{Binding TestResult}" TextWrapping="Wrap" />
+              </StackPanel>
+              <TextBlock Classes="label" Grid.Row="3" Text="Model" />
+              <AutoCompleteBox Grid.Row="3" Grid.Column="1" Text="{Binding Model}" ItemsSource="{Binding Models}"
+                               FilterMode="Contains" MinimumPrefixLength="0" Watermark="Press Test connection, then pick a model" />
+              <CheckBox Grid.Row="4" Grid.Column="1" Content="This model can see images (needed for screen control)" IsChecked="{Binding Server.SupportsVision}" />
+              <StackPanel Grid.Row="5" Grid.Column="1" Spacing="2">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Classes="label" Text="Context size" />
+                  <TextBox Text="{Binding ContextSize}" Width="120" />
                 </StackPanel>
-              </RadioButton>
-              <RadioButton GroupName="backend" IsChecked="{Binding IsRemote}">
-                <StackPanel>
-                  <TextBlock Text="Online service (OpenAI-compatible API)" />
-                  <TextBlock Classes="muted" Text="Sends screenshots and messages to the service you choose." />
-                </StackPanel>
-              </RadioButton>
-            </StackPanel>
-
-            <StackPanel IsVisible="{Binding IsLocal}" Spacing="4" Margin="0,8,0,0">
-              <Border Classes="card">
-                <StackPanel Spacing="4">
-                  <TextBlock Text="{Binding ModelName}" FontWeight="SemiBold" />
-                  <TextBlock Classes="muted" Text="{Binding ModelInfo}" TextWrapping="Wrap" />
-                </StackPanel>
-              </Border>
-              <CheckBox Content="Start the model when BlackBox opens" IsChecked="{Binding Local.AutoStart}" />
-            </StackPanel>
-
-            <StackPanel IsVisible="{Binding IsRemote}" Spacing="4" Margin="0,8,0,0">
-              <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
-                <TextBlock Classes="label" Grid.Row="0" Text="Address" />
-                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Remote.BaseUrl}" Watermark="https://host/v1" />
-                <TextBlock Classes="label" Grid.Row="1" Text="API key" />
-                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Remote.ApiKey}" PasswordChar="•" Watermark="Optional" />
-                <TextBlock Classes="label" Grid.Row="2" Text="Model" />
-                <AutoCompleteBox Grid.Row="2" Grid.Column="1" Text="{Binding RemoteModel}" ItemsSource="{Binding RemoteModels}"
-                                 FilterMode="Contains" MinimumPrefixLength="0" Watermark="Press Test connection, then pick a model" />
-                <CheckBox Grid.Row="3" Grid.Column="1" Content="This model can see images (needed for screen control)" IsChecked="{Binding Remote.SupportsVision}" />
-                <TextBlock Classes="label" Grid.Row="5" Text="Context size" />
-                <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Remote.ContextSize}" Watermark="Tokens the server's model can hold" />
-                <StackPanel Grid.Row="4" Grid.Column="1" Spacing="6">
-                  <Button Classes="ghost" Content="Test connection" Command="{Binding TestRemoteCommand}" />
-                  <TextBlock Classes="muted" Text="{Binding RemoteTestResult}" TextWrapping="Wrap" />
-                </StackPanel>
-              </Grid>
-              <TextBlock Classes="muted" TextWrapping="Wrap"
-                         Text="The key is saved in plain text in the Data folder next to the app, so keep that folder private." />
-            </StackPanel>
+                <TextBlock Classes="muted" TextWrapping="Wrap"
+                           Text="Filled in automatically from LM Studio. BlackBox trims old thinking and tool output to stay inside it." />
+              </StackPanel>
+            </Grid>
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="The key is saved in plain text in the Data folder next to the app, so keep that folder private." />
 
             <TextBlock Classes="h2" Text="Safety" />
             <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto">
@@ -106,57 +87,11 @@
       <TabItem Header="Advanced">
         <ScrollViewer>
           <StackPanel Spacing="4" Margin="0,0,12,16">
-            <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="The defaults are tuned for a 16 GB graphics card. You normally don't need to change anything here." />
-
-            <TextBlock Classes="h2" Text="Model files" />
-            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
-              <TextBlock Classes="label" Grid.Row="0" Text="Model (GGUF)" />
-              <DockPanel Grid.Row="0" Grid.Column="1">
-                <Button DockPanel.Dock="Right" Classes="ghost" Content="Browse…" Margin="6,0,0,0" Click="OnBrowseModel" />
-                <TextBox Text="{Binding ModelPath}" />
-              </DockPanel>
-              <TextBlock Classes="label" Grid.Row="1" Text="Vision projector" />
-              <DockPanel Grid.Row="1" Grid.Column="1">
-                <Button DockPanel.Dock="Right" Classes="ghost" Content="Browse…" Margin="6,0,0,0" Click="OnBrowseMmproj" />
-                <TextBox Text="{Binding MmprojPath}" Watermark="mmproj-*.gguf (lets the model see the screen)" />
-              </DockPanel>
-              <TextBlock Classes="label" Grid.Row="2" Text="llama-server" />
-              <DockPanel Grid.Row="2" Grid.Column="1">
-                <Button DockPanel.Dock="Right" Classes="ghost" Content="Browse…" Margin="6,0,0,0" Click="OnBrowseServer" />
-                <TextBox Text="{Binding ServerPath}" Watermark="Auto: ./llama folder, then PATH" />
-              </DockPanel>
-              <TextBlock Grid.Row="3" Grid.Column="1" Classes="muted" Text="{Binding ServerInfo}" TextWrapping="Wrap" />
-              <TextBlock Classes="label" Grid.Row="4" Text="Model download URL" />
-              <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Local.ModelUrl}" />
-              <TextBlock Classes="label" Grid.Row="5" Text="Projector download URL" />
-              <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Local.MmprojUrl}" />
-            </Grid>
-
-            <TextBlock Classes="h2" Text="Performance" />
-            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
-              <TextBlock Classes="label" Grid.Row="0" Text="Context size (tokens)" />
-              <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Local.ContextSize}" />
-              <TextBlock Classes="label" Grid.Row="1" Text="GPU layers" />
-              <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Local.GpuLayers}" />
-              <TextBlock Classes="label" Grid.Row="2" Text="KV cache type" />
-              <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding KvCacheTypes}" SelectedItem="{Binding Local.KvCacheType}" />
-              <TextBlock Classes="label" Grid.Row="3" Text="Batch size" />
-              <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Local.BatchSize}" />
-              <TextBlock Classes="label" Grid.Row="4" Text="CPU threads" />
-              <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Local.Threads}" Watermark="0 = auto" />
-              <TextBlock Classes="label" Grid.Row="5" Text="Port" />
-              <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Local.Port}" />
-              <CheckBox Grid.Row="6" Grid.Column="1" Content="Flash attention" IsChecked="{Binding Local.FlashAttention}" />
-              <TextBlock Classes="label" Grid.Row="7" Text="Extra llama-server args" />
-              <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding Local.ExtraArgs}" />
-            </Grid>
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="You normally don't need to change anything here." />
 
             <TextBlock Classes="h2" Text="Sampling" />
-            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
               <CheckBox Grid.Row="0" Grid.Column="1" Content="Let the model think before acting" IsChecked="{Binding Agent.EnableThinking}" />
-              <TextBlock Classes="label" Grid.Row="7" Text="Thinking limit (tokens)" />
-              <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding Agent.MaxThinkingTokens}" Watermark="0 = no limit" />
               <TextBlock Classes="label" Grid.Row="1" Text="Temperature" />
               <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Agent.Temperature}" />
               <TextBlock Classes="label" Grid.Row="2" Text="Top P" />
@@ -169,6 +104,13 @@
               <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Agent.RepeatPenalty}" Watermark="1.0 = off" />
               <TextBlock Classes="label" Grid.Row="6" Text="Max tokens per reply" />
               <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding Agent.MaxTokensPerReply}" />
+              <TextBlock Classes="label" Grid.Row="7" Text="Thinking limit (tokens)" />
+              <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding Agent.MaxThinkingTokens}" Watermark="0 = no limit" />
+              <StackPanel Grid.Row="8" Grid.Column="1">
+                <CheckBox Content="Send LM Studio / llama.cpp extras (top-k, min-p, repeat penalty, thinking switches)" IsChecked="{Binding Server.SendExtras}" />
+                <TextBlock Classes="muted" TextWrapping="Wrap" Margin="28,0,0,0"
+                           Text="Dropped automatically if the server rejects them." />
+              </StackPanel>
             </Grid>
 
             <TextBlock Classes="h2" Text="Screen" />

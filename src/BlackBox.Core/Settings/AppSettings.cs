@@ -3,8 +3,6 @@ using System.Text.Json.Serialization;
 
 namespace BlackBox.Core.Settings;
 
-public enum BackendKind { Local, Remote }
-
 public enum ApprovalMode
 {
     /// <summary>Ask before every tool call.</summary>
@@ -15,48 +13,27 @@ public enum ApprovalMode
     Never,
 }
 
-/// <summary>Settings for the llama-server process that BlackBox starts and stops itself.</summary>
-public sealed class LocalModelSettings
+/// <summary>The OpenAI-compatible server the agent talks to (LM Studio, llama-server, vLLM, OpenAI…).</summary>
+public sealed class ServerSettings
 {
-    /// <summary>Path to llama-server(.exe). Empty = look in ./llama, then on PATH.</summary>
-    public string ServerPath { get; set; } = "";
-
-    public string ModelPath { get; set; } = "Models/Qwen3.8-27B-UD-IQ2_S.gguf";
-
-    /// <summary>Vision projector GGUF. Needed for the model to see screenshots; skipped with a warning if missing.</summary>
-    public string MmprojPath { get; set; } = "Models/mmproj-F16.gguf";
-
-    /// <summary>Where the in-app downloader fetches the model and projector from when they are missing.</summary>
-    public string ModelUrl { get; set; } = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-IQ2_S.gguf";
-    public string MmprojUrl { get; set; } = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/mmproj-F16.gguf";
-
-    public int Port { get; set; } = 18080;
-
-    // Defaults tuned for a 27B IQ2_S model on a 16 GB GPU: all layers on the GPU,
-    // 8-bit KV cache with flash attention. If 80k context does not fit, the host steps it down.
-    public int ContextSize { get; set; } = 81920;
-    public int GpuLayers { get; set; } = 99;
-    public bool FlashAttention { get; set; } = true;
-    public string KvCacheType { get; set; } = "q8_0";
-    public int Threads { get; set; } = 0;
-    public int BatchSize { get; set; } = 512;
-    public string ExtraArgs { get; set; } = "";
-
-    /// <summary>Start llama-server automatically when the app opens.</summary>
-    public bool AutoStart { get; set; } = true;
-}
-
-public sealed class RemoteApiSettings
-{
-    public string BaseUrl { get; set; } = "https://api.openai.com/v1";
+    /// <summary>LM Studio's default local address.</summary>
+    public string BaseUrl { get; set; } = "http://localhost:1234/v1";
     public string ApiKey { get; set; } = "";
     public string Model { get; set; } = "";
     public bool SupportsVision { get; set; } = true;
 
-    /// <summary>Context window of the remote model, used to trim old thinking before it overflows.</summary>
+    /// <summary>
+    /// Context window of the loaded model. Filled in from LM Studio when it reports it; used to
+    /// trim old thinking and tool output before a request would overflow.
+    /// </summary>
     public int ContextSize { get; set; } = 32768;
-}
 
+    /// <summary>
+    /// Send llama.cpp / LM Studio extras (top_k, min_p, repeat_penalty, chat-template switches).
+    /// Dropped automatically if the server rejects them.
+    /// </summary>
+    public bool SendExtras { get; set; } = true;
+}
 public sealed class AgentSettings
 {
     public int MaxSteps { get; set; } = 40;
@@ -102,9 +79,7 @@ public sealed class AgentSettings
 
 public sealed class AppSettings
 {
-    public BackendKind Backend { get; set; } = BackendKind.Local;
-    public LocalModelSettings Local { get; set; } = new();
-    public RemoteApiSettings Remote { get; set; } = new();
+    public ServerSettings Server { get; set; } = new();
     public AgentSettings Agent { get; set; } = new();
 
     public AppSettings Clone() =>

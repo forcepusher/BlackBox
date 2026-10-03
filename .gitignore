@@ -1,4 +1,4 @@
-﻿## Build output
+## Build output
 bin/
 obj/
 publish/
@@ -6,7 +6,8 @@ publish/
 .vs/
 
 ## Portable runtime folders (created next to the exe, or at the repo root in Debug builds)
-/Models/
 /Data/
 /Workspace/
+## Leftovers from the earlier local-model builds
+/Models/
 /llama/

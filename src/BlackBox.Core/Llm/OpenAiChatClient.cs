@@ -5,7 +5,11 @@ using System.Text.Json.Nodes;
 
 namespace BlackBox.Core.Llm;
 
-public sealed class LlmException(string message, Exception? inner = null) : Exception(message, inner);
+public class LlmException(string message, Exception? inner = null) : Exception(message, inner);
+
+/// <summary>The server said the prompt does not fit in the model's context window.</summary>
+public sealed class ContextOverflowException(string serverMessage)
+    : LlmException("The conversation no longer fits in the model's context window: " + serverMessage);
 
 /// <summary>The model kept thinking past the configured budget; the stream was closed.</summary>
 public sealed class ReasoningBudgetExceededException(string partialReasoning)
@@ -16,7 +20,7 @@ public sealed class ReasoningBudgetExceededException(string partialReasoning)
 
 /// <summary>
 /// Minimal streaming client for any OpenAI-compatible /v1/chat/completions endpoint.
-/// Both the bundled llama-server and remote APIs go through this class.
+/// LM Studio, llama-server, vLLM and hosted APIs all go through this class.
 /// </summary>
 public sealed class OpenAiChatClient
 {
@@ -33,7 +37,9 @@ public sealed class OpenAiChatClient
 
     public string BaseUrl => _baseUrl;
 
+    // Set once the server rejected our non-standard fields, so later requests stay plain.
     private bool _reasoningRejected;
+    private bool _extrasRejected;
 
     /// <summary>Turns "http://host:port", ".../v1" or ".../v1/" into ".../v1".</summary>
     public static string NormalizeBaseUrl(string url)
@@ -75,7 +81,8 @@ public sealed class OpenAiChatClient
         CancellationToken ct)
     {
         var sendReasoning = options.SendReasoning && !_reasoningRejected;
-        var payload = BuildRequest(messages, tools, options, sendReasoning);
+        var sendExtras = options.Extra is not null && !_extrasRejected;
+        var payload = BuildRequest(messages, tools, options, sendReasoning, sendExtras);
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/chat/completions")
         {
             Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json"),
@@ -99,11 +106,15 @@ public sealed class OpenAiChatClient
             {
                 var err = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
                 // Strict providers reject the extra reasoning_content field; drop it and retry once.
-                if (sendReasoning && (int)resp.StatusCode is 400 or 422 && err.Contains("reasoning", StringComparison.OrdinalIgnoreCase))
+                // Strict providers reject fields they do not know. Drop ours and try once more.
+                if ((int)resp.StatusCode is 400 or 422 && (sendReasoning || sendExtras) && LooksLikeUnknownField(err))
                 {
-                    _reasoningRejected = true;
+                    _reasoningRejected |= sendReasoning;
+                    _extrasRejected |= sendExtras;
                     return await CompleteAsync(messages, tools, options, onDelta, ct).ConfigureAwait(false);
                 }
+                if (LooksLikeContextOverflow(err))
+                    throw new ContextOverflowException(Truncate(err, 500));
                 throw new LlmException($"Chat request failed ({(int)resp.StatusCode}): {Truncate(err, 1000)}");
             }
 
@@ -134,7 +145,10 @@ public sealed class OpenAiChatClient
             catch (JsonException) { continue; }
 
             if (chunk?["error"] is JsonNode error)
-                throw new LlmException("Server error: " + (error["message"]?.ToString() ?? error.ToJsonString()));
+            {
+                var errorText = error["message"]?.ToString() ?? error.ToJsonString();
+                throw LooksLikeContextOverflow(errorText) ? new ContextOverflowException(errorText) : new LlmException("Server error: " + errorText);
+            }
 
             if (chunk?["choices"] is not JsonArray { Count: > 0 } choices || choices[0]?["delta"] is not JsonObject delta)
                 continue;
@@ -209,7 +223,7 @@ public sealed class OpenAiChatClient
         return message;
     }
 
-    internal static JsonObject BuildRequest(IReadOnlyList<ChatMessage> messages, IReadOnlyList<ToolDefinition> tools, ChatRequestOptions options, bool sendReasoning = false)
+    internal static JsonObject BuildRequest(IReadOnlyList<ChatMessage> messages, IReadOnlyList<ToolDefinition> tools, ChatRequestOptions options, bool sendReasoning = false, bool sendExtras = true)
     {
         var msgs = new JsonArray();
         foreach (var m in messages)
@@ -244,7 +258,7 @@ public sealed class OpenAiChatClient
             req["tools"] = arr;
         }
 
-        if (options.Extra is not null)
+        if (sendExtras && options.Extra is not null)
             foreach (var (key, value) in options.Extra)
                 req[key] = value?.DeepClone();
 
@@ -313,6 +327,14 @@ public sealed class OpenAiChatClient
 
         return obj;
     }
+
+    private static bool LooksLikeUnknownField(string err) =>
+        new[] { "unrecognized", "unknown", "not permitted", "extra", "unexpected", "reasoning", "top_k", "min_p", "repeat_penalty", "chat_template_kwargs" }
+            .Any(w => err.Contains(w, StringComparison.OrdinalIgnoreCase));
+
+    internal static bool LooksLikeContextOverflow(string err) =>
+        new[] { "context length", "context_length", "context window", "n_ctx", "maximum context", "too many tokens", "exceeds the context", "context size", "context overflow" }
+            .Any(w => err.Contains(w, StringComparison.OrdinalIgnoreCase));
 
     private void Authorize(HttpRequestMessage req)
     {

@@ -10,7 +10,6 @@ namespace BlackBox.Platform.Windows;
 [SupportedOSPlatform("windows")]
 public sealed class WindowsPlatform : IPlatformServices
 {
-    private readonly Lazy<nint> _job = new(CreateKillOnCloseJob);
 
     public WindowsPlatform()
     {
@@ -41,26 +40,5 @@ public sealed class WindowsPlatform : IPlatformServices
         {
             ArgumentList = { "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded },
         };
-    }
-
-    /// <summary>
-    /// Puts the process in a job that Windows kills when BlackBox exits, even on a crash,
-    /// so a multi-gigabyte llama-server never lingers in VRAM.
-    /// </summary>
-    public void TieToAppLifetime(Process process)
-    {
-        if (_job.Value != 0)
-            AssignProcessToJobObject(_job.Value, process.Handle);
-    }
-
-    private static nint CreateKillOnCloseJob()
-    {
-        var job = CreateJobObject(0, 0);
-        if (job == 0) return 0;
-        var info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION
-        {
-            BasicLimitInformation = new JOBOBJECT_BASIC_LIMIT_INFORMATION { LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE },
-        };
-        return SetInformationJobObject(job, JobObjectExtendedLimitInformation, ref info, Marshal.SizeOf<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>()) ? job : 0;
     }
 }

@@ -3,50 +3,36 @@ using BlackBox.Core.Settings;
 
 namespace BlackBox.Core.Llm;
 
-/// <summary>A ready-to-use client plus the request options that go with the selected backend.</summary>
+/// <summary>A ready-to-use client plus the request options for the configured server.</summary>
 public sealed record BackendConnection(OpenAiChatClient Client, ChatRequestOptions Options, bool Vision, int ContextTokens)
 {
-    /// <summary>Connection to the local llama-server, with llama.cpp-specific sampling fields.</summary>
-    public static BackendConnection ForLocal(HttpClient http, LlamaServerHost server, AgentSettings agent) => new(
-        new OpenAiChatClient(http, server.BaseUrl, null),
+    public static BackendConnection Create(HttpClient http, ServerSettings server, AgentSettings agent) => new(
+        new OpenAiChatClient(http, server.BaseUrl, server.ApiKey),
         new ChatRequestOptions
         {
-            Model = "local",
+            Model = server.Model,
             Temperature = agent.Temperature,
             TopP = agent.TopP,
             MaxTokens = agent.MaxTokensPerReply,
             MaxReasoningChars = agent.MaxThinkingTokens > 0 ? agent.MaxThinkingTokens * 4 : null,
+            // Thinking models (Qwen3.5+, Gemma 4) expect their earlier reasoning back.
             SendReasoning = true,
-            Extra = new JsonObject
-            {
-                ["top_k"] = agent.TopK,
-                ["min_p"] = agent.MinP,
-                ["repeat_penalty"] = agent.RepeatPenalty,
-                ["chat_template_kwargs"] = new JsonObject
+            // Non-standard sampling fields that LM Studio and llama.cpp understand. Strict
+            // providers reject unknown fields; the client then retries once without them.
+            Extra = server.SendExtras
+                ? new JsonObject
                 {
-                    ["enable_thinking"] = agent.EnableThinking,
-                    ["preserve_thinking"] = true,
-                },
-            },
+                    ["top_k"] = agent.TopK,
+                    ["min_p"] = agent.MinP,
+                    ["repeat_penalty"] = agent.RepeatPenalty,
+                    ["chat_template_kwargs"] = new JsonObject
+                    {
+                        ["enable_thinking"] = agent.EnableThinking,
+                        ["preserve_thinking"] = true,
+                    },
+                }
+                : null,
         },
-        server.HasVision,
-        server.EffectiveContextSize);
-
-    /// <summary>
-    /// Connection to a remote OpenAI-compatible API. Only standard fields are sent, since strict
-    /// providers reject unknown ones like top_k or min_p.
-    /// </summary>
-    public static BackendConnection ForRemote(HttpClient http, RemoteApiSettings remote, AgentSettings agent) => new(
-        new OpenAiChatClient(http, remote.BaseUrl, remote.ApiKey),
-        new ChatRequestOptions
-        {
-            Model = remote.Model,
-            Temperature = agent.Temperature,
-            TopP = agent.TopP,
-            MaxTokens = agent.MaxTokensPerReply,
-            // Harmless where unsupported: the client drops it if the provider rejects the field.
-            SendReasoning = true,
-        },
-        remote.SupportsVision,
-        remote.ContextSize);
+        server.SupportsVision,
+        server.ContextSize);
 }
