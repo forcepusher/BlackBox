@@ -30,7 +30,7 @@ $task = "Write your own 2048 game and make sure it really works. Put it in the f
   "Controls: the arrow keys slide the tiles, R starts a new game. " +
   "Then play-test it the way a person would: open the file in Microsoft Edge, maximize the window, and play with the arrow keys while watching the board. " +
   "Do not use the developer tools, the console or scripts to test or change the game: only real key presses and what you see on screen count. " +
-  "Play until a 128 tile appears. Then check Game Over: press R and fill the board quickly with big batches of moves, without checking each one, until no move is left. " +
+  "Play until the score reaches 128. Then check Game Over: press R and fill the board quickly with big batches of moves, without checking each one, until no move is left. " +
   "Along the way check that a new game starts with two tiles, that tiles stay inside the board, that tiles slide all the way and equal tiles merge once per move, " +
   "that exactly one new 2 or 4 appears after every move that changes the board and none after a move that changes nothing, " +
   "that the score goes up by the value of each merged tile, that the game says Game Over when no move is left, and that R starts a new game. " +
