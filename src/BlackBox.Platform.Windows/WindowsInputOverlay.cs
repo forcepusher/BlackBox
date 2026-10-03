@@ -11,11 +11,10 @@ namespace BlackBox.Platform.Windows;
 /// </summary>
 /// <remarks>
 /// Both windows are click-through (WS_EX_TRANSPARENT), never activated (WS_EX_NOACTIVATE),
-/// and left out of the taskbar and Alt+Tab (WS_EX_TOOLWINDOW), so they can't take focus or catch
-/// clicks. They are drawn with Skia into a DIB and pushed with UpdateLayeredWindow.
-/// Keeping them out of the model's screenshots: WDA_EXCLUDEFROMCAPTURE is refused for windows
-/// drawn with UpdateLayeredWindow (SetWindowDisplayAffinity fails with error 8), so instead
-/// BlackBox's own capture hides them for the instant it takes a screenshot (<see cref="Suspend"/>).
+/// left out of the taskbar and Alt+Tab (WS_EX_TOOLWINDOW) and excluded from screen capture, so
+/// they can't take focus, catch clicks or show up in the model's screenshots. They are drawn with
+/// Skia and use a colour key plus a window-wide opacity rather than per-pixel alpha:
+/// Windows refuses capture exclusion for windows drawn with UpdateLayeredWindow (error 8).
 /// </remarks>
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsInputOverlay : IInputOverlay
@@ -33,7 +32,6 @@ internal sealed class WindowsInputOverlay : IInputOverlay
     private uint _threadId;
     private nint _logWindow, _markerWindow;
     private bool _timerOn;
-    private int _suspended;
     private WndProc? _wndProc; // kept alive for the window class
 
     private sealed record Entry(string Text, int Count, DateTime At);
@@ -131,39 +129,14 @@ internal sealed class WindowsInputOverlay : IInputOverlay
         var hwnd = CreateWindowEx(
             WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
             "BlackBoxInputOverlay", "", WS_POPUP, 0, 0, 1, 1, 0, 0, instance, 0);
+        // Colour-key transparency (not UpdateLayeredWindow) so that capture exclusion is allowed.
+        SetLayeredWindowAttributes(hwnd, ColorKey, 255, LWA_COLORKEY | LWA_ALPHA);
+        SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
         return hwnd;
-    }
-
-    /// <summary>Hides the overlay until the result is disposed (for screenshots). Cheap when nothing is shown.</summary>
-    internal IDisposable Suspend()
-    {
-        Interlocked.Increment(ref _suspended);
-        if (IsWindowVisible(_logWindow) || IsWindowVisible(_markerWindow))
-        {
-            // ShowWindow on another thread's window waits until that thread has handled it, so no
-            // frame drawn before this can come back on screen; DwmFlush waits for the next frame.
-            ShowWindow(_logWindow, SW_HIDE);
-            ShowWindow(_markerWindow, SW_HIDE);
-            DwmFlush();
-        }
-        return new Resume(this);
-    }
-
-    private sealed class Resume(WindowsInputOverlay overlay) : IDisposable
-    {
-        private int _done;
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref _done, 1) == 1) return;
-            Interlocked.Decrement(ref overlay._suspended);
-            overlay.Refresh();
-        }
     }
 
     private void Render()
     {
-        if (Volatile.Read(ref _suspended) > 0)
-            return; // a screenshot is being taken; the timer redraws right after
         var now = DateTime.UtcNow;
         List<(Entry Entry, double Alpha)> lines;
         (int X, int Y, double Age)? marker = null;
@@ -187,16 +160,20 @@ internal sealed class WindowsInputOverlay : IInputOverlay
     private double Fade(double age) =>
         age < _logSeconds - FadeSeconds ? 1 : Math.Clamp((_logSeconds - age) / FadeSeconds, 0, 1);
 
+    private static readonly SKColor LineBack = new(28, 28, 32);
+
     private void DrawLog(List<(Entry Entry, double Alpha)> lines)
     {
         var height = lines.Count * LineHeight + 8;
         SystemParametersInfo(SPI_GETWORKAREA, 0, out var work, 0);
         var x = work.Right - PanelWidth - 16;
         var y = work.Bottom - height - 16;
-        Paint(_logWindow, x, y, PanelWidth, height, canvas =>
+        Paint(_logWindow, x, y, PanelWidth, height, 230, canvas =>
         {
             using var typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold);
-            using var back = new SKPaint { IsAntialias = true };
+            // No antialiasing on the boxes: their edges meet the colour key, and blended edge
+            // pixels would show as a pink fringe.
+            using var back = new SKPaint { IsAntialias = false, Color = LineBack };
             using var text = new SKPaint { IsAntialias = true, Typeface = typeface, TextSize = 17 };
             for (var i = 0; i < lines.Count; i++)
             {
@@ -204,9 +181,9 @@ internal sealed class WindowsInputOverlay : IInputOverlay
                 var label = entry.Count > 1 ? $"{entry.Text}  ×{entry.Count}" : entry.Text;
                 var width = Math.Min(PanelWidth, text.MeasureText(label) + 24);
                 var top = 4 + i * LineHeight;
-                back.Color = new SKColor(20, 20, 24, (byte)(200 * alpha));
-                canvas.DrawRoundRect(new SKRect(PanelWidth - width, top, PanelWidth, top + LineHeight - 6), 6, 6, back);
-                text.Color = new SKColor(255, 255, 255, (byte)(255 * alpha));
+                canvas.DrawRect(new SKRect(PanelWidth - width, top, PanelWidth, top + LineHeight - 6), back);
+                // A line fades by its text sinking into the box; the box goes when the line does.
+                text.Color = Blend(LineBack, SKColors.White, alpha);
                 canvas.DrawText(label, PanelWidth - width + 12, top + 20, text);
             }
         });
@@ -214,49 +191,54 @@ internal sealed class WindowsInputOverlay : IInputOverlay
 
     private void DrawMarker(int cx, int cy, double progress)
     {
-        Paint(_markerWindow, cx - MarkerSize / 2, cy - MarkerSize / 2, MarkerSize, MarkerSize, canvas =>
+        // The whole marker window fades, so the ring can be drawn fully opaque.
+        Paint(_markerWindow, cx - MarkerSize / 2, cy - MarkerSize / 2, MarkerSize, MarkerSize, (byte)(255 * (1 - progress)), canvas =>
         {
-            var alpha = (byte)(255 * (1 - progress));
-            using var ring = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 4, Color = new SKColor(255, 64, 160, alpha) };
-            using var dot = new SKPaint { IsAntialias = true, Color = new SKColor(255, 64, 160, alpha) };
+            using var ring = new SKPaint { IsAntialias = false, Style = SKPaintStyle.Stroke, StrokeWidth = 4, Color = new SKColor(255, 64, 160) };
+            using var dot = new SKPaint { IsAntialias = false, Color = new SKColor(255, 64, 160) };
             canvas.DrawCircle(MarkerSize / 2f, MarkerSize / 2f, 8 + (float)progress * 24, ring);
             canvas.DrawCircle(MarkerSize / 2f, MarkerSize / 2f, 4, dot);
         });
     }
 
-    /// <summary>Draws into a premultiplied BGRA DIB and hands it to the layered window.</summary>
-    private static unsafe void Paint(nint hwnd, int x, int y, int width, int height, Action<SKCanvas> draw)
+    private static SKColor Blend(SKColor from, SKColor to, double t) => new(
+        (byte)(from.Red + (to.Red - from.Red) * t),
+        (byte)(from.Green + (to.Green - from.Green) * t),
+        (byte)(from.Blue + (to.Blue - from.Blue) * t));
+
+    /// <summary>
+    /// Moves the window, sets its overall opacity and draws into it. Pixels left in the key colour
+    /// are see-through. Layered windows keep what is drawn into them, so no WM_PAINT is needed.
+    /// </summary>
+    private static unsafe void Paint(nint hwnd, int x, int y, int width, int height, byte opacity, Action<SKCanvas> draw)
     {
-        var screen = GetDC(0);
-        var memory = CreateCompatibleDC(screen);
+        SetWindowPos(hwnd, HWND_TOPMOST, x, y, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        SetLayeredWindowAttributes(hwnd, ColorKey, opacity, LWA_COLORKEY | LWA_ALPHA);
+        var target = GetDC(hwnd);
+        var memory = CreateCompatibleDC(target);
         var header = new BITMAPINFOHEADER
         {
             biSize = Marshal.SizeOf<BITMAPINFOHEADER>(), biWidth = width, biHeight = -height, // top-down
             biPlanes = 1, biBitCount = 32,
         };
-        var bitmap = CreateDIBSection(screen, ref header, 0, out var bits, 0, 0);
+        var bitmap = CreateDIBSection(target, ref header, 0, out var bits, 0, 0);
         var old = SelectObject(memory, bitmap);
         try
         {
             using (var surface = SKSurface.Create(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul), bits, width * 4))
             {
-                surface.Canvas.Clear(SKColors.Transparent);
+                surface.Canvas.Clear(new SKColor(0xFF, 0x00, 0xFF)); // = ColorKey
                 draw(surface.Canvas);
                 surface.Canvas.Flush();
             }
-            var dst = new POINT { X = x, Y = y };
-            var size = new SIZE { cx = width, cy = height };
-            var src = new POINT();
-            var blend = new BLENDFUNCTION { BlendOp = 0, SourceConstantAlpha = 255, AlphaFormat = 1 /* AC_SRC_ALPHA */ };
-            UpdateLayeredWindow(hwnd, screen, ref dst, ref size, memory, ref src, 0, ref blend, ULW_ALPHA);
-            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            BitBlt(target, 0, 0, width, height, memory, 0, 0, SRCCOPY);
         }
         finally
         {
             SelectObject(memory, old);
             DeleteObject(bitmap);
             DeleteDC(memory);
-            ReleaseDC(0, screen);
+            ReleaseDC(hwnd, target);
         }
     }
 
@@ -265,7 +247,8 @@ internal sealed class WindowsInputOverlay : IInputOverlay
     private const uint WS_POPUP = 0x80000000;
     private const uint WS_EX_LAYERED = 0x00080000, WS_EX_TRANSPARENT = 0x00000020, WS_EX_TOPMOST = 0x00000008,
         WS_EX_NOACTIVATE = 0x08000000, WS_EX_TOOLWINDOW = 0x00000080;
-    private const uint ULW_ALPHA = 2, SPI_GETWORKAREA = 0x0030;
+    private const uint SPI_GETWORKAREA = 0x0030, WDA_EXCLUDEFROMCAPTURE = 0x11, LWA_COLORKEY = 1, LWA_ALPHA = 2, SRCCOPY = 0x00CC0020;
+    private const uint ColorKey = 0x00FF00FF; // magenta, as COLORREF (0x00BBGGRR)
     private const int SW_HIDE = 0;
     private static readonly nint HWND_TOPMOST = -1;
     private const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOACTIVATE = 0x0010, SWP_SHOWWINDOW = 0x0040;
@@ -289,9 +272,7 @@ internal sealed class WindowsInputOverlay : IInputOverlay
     private struct MSG { public nint hwnd; public uint message; public nint wParam, lParam; public uint time; public POINT pt; }
 
     [StructLayout(LayoutKind.Sequential)] private struct POINT { public int X, Y; }
-    [StructLayout(LayoutKind.Sequential)] private struct SIZE { public int cx, cy; }
     [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
-    [StructLayout(LayoutKind.Sequential)] private struct BLENDFUNCTION { public byte BlendOp, BlendFlags, SourceConstantAlpha, AlphaFormat; }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct BITMAPINFOHEADER
@@ -313,10 +294,10 @@ internal sealed class WindowsInputOverlay : IInputOverlay
     [DllImport("user32.dll")] private static extern bool KillTimer(nint hWnd, nint id);
     [DllImport("user32.dll")] private static extern bool ShowWindow(nint hWnd, int cmd);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(nint hWnd, nint after, int x, int y, int cx, int cy, uint flags);
-    [DllImport("user32.dll")] private static extern bool IsWindowVisible(nint hWnd);
-    [DllImport("dwmapi.dll")] private static extern int DwmFlush();
+    [DllImport("user32.dll")] private static extern bool SetWindowDisplayAffinity(nint hWnd, uint affinity);
+    [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(nint hWnd, uint key, byte alpha, uint flags);
+    [DllImport("gdi32.dll")] private static extern bool BitBlt(nint dst, int x, int y, int w, int h, nint src, int sx, int sy, uint rop);
     [DllImport("user32.dll")] private static extern bool SystemParametersInfo(uint action, uint param, out RECT rect, uint winIni);
-    [DllImport("user32.dll")] private static extern bool UpdateLayeredWindow(nint hWnd, nint hdcDst, ref POINT dst, ref SIZE size, nint hdcSrc, ref POINT src, uint key, ref BLENDFUNCTION blend, uint flags);
     [DllImport("user32.dll")] private static extern nint GetDC(nint hWnd);
     [DllImport("user32.dll")] private static extern int ReleaseDC(nint hWnd, nint hdc);
     [DllImport("gdi32.dll")] private static extern nint CreateCompatibleDC(nint hdc);

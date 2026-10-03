@@ -18,7 +18,7 @@ public sealed class WindowsPlatform : IPlatformServices
         SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         _automation = new Lazy<WindowsUiAutomation>(() => new WindowsUiAutomation(_windows, _input));
         Input = new OverlayInputController(_input, _overlay);
-        Screen = new WindowsScreenCapture(_overlay);
+        Screen = new WindowsScreenCapture();
     }
 
     private readonly WindowsInputController _input = new();
