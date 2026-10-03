@@ -13,7 +13,7 @@ unpacks its native UI libraries into `Data/runtime` next to itself.
 ```
 BlackBox/
   BlackBox.exe
-  Data/        settings.json, logs/, runtime/ (unpacked by the single-file exe)
+  Data/        settings.json, runtime/ (unpacked by the single-file exe)
   Workspace/   default working folder for file and shell tools
 ```
 
@@ -22,11 +22,13 @@ Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the rep
 ## Connecting to a model
 Settings → General → AI model server. Enter the server address (LM Studio's default is
 `http://localhost:1234/v1`), press **Test connection** and pick a model. For screen control the
-model must accept images (for example Qwen3.5+ VL models or Gemma 4 with their vision projector).
+model must accept images (for example Qwen3.5+ VL models or Gemma 4 with their vision projector);
+LM Studio reports this and BlackBox sets it automatically.
 
 Sampling defaults: temperature 0.1, top-k 40, top-p 0.95, min-p 0.05, no repetition penalty.
-top-k, min-p, repetition penalty and the chat-template thinking switches are extras that LM Studio
-and llama.cpp understand; if a stricter server rejects them, BlackBox drops them automatically.
+top-k, min-p and repetition penalty are extras that LM Studio, llama-server and vLLM understand; if
+a stricter server rejects them, BlackBox drops them automatically. Whether a model thinks before
+answering is a server-side setting (in LM Studio, per model).
 
 Thinking models get their earlier reasoning sent back each step (`reasoning_content`,
 `preserve_thinking`), as the Qwen3.5+ and Gemma 4 templates expect.

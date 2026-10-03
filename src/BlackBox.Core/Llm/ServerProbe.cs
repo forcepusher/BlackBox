@@ -3,7 +3,10 @@ using BlackBox.Core.Settings;
 
 namespace BlackBox.Core.Llm;
 
-public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, int? LoadedContext, bool? ModelLoaded, string Message);
+public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, int? LoadedContext, bool? Vision, string Message);
+
+/// <summary>What the server says about the configured model; nulls where it doesn't say.</summary>
+public readonly record struct ModelFacts(int? Context, bool? Loaded, bool? Vision);
 
 /// <summary>
 /// Checks the configured server: is it up, which models does it offer, and how large a context
@@ -33,8 +36,8 @@ public static class ServerProbe
             return new ProbeResult(false, [], null, null, "Can't reach the server: " + ex.Message);
         }
 
-        var (context, loaded) = await TryContextAsync(http, server, ct).ConfigureAwait(false);
-        return new ProbeResult(true, models, context, loaded, models.Count == 0 ? "Connected, but the server lists no models." : "Connected.");
+        var facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
+        return new ProbeResult(true, models, facts.Context, facts.Vision, models.Count == 0 ? "Connected, but the server lists no models." : "Connected.");
     }
 
     /// <summary>
@@ -43,9 +46,9 @@ public static class ServerProbe
     /// </summary>
     public static async Task<int?> EnsureLoadedAsync(HttpClient http, ServerSettings server, Action? onLoading, CancellationToken ct)
     {
-        var (context, loaded) = await TryContextAsync(http, server, ct).ConfigureAwait(false);
-        if (loaded != false)
-            return context;
+        var facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
+        if (facts.Loaded != false)
+            return facts.Context;
 
         onLoading?.Invoke();
         try
@@ -61,11 +64,11 @@ public static class ServerProbe
         return (await TryContextAsync(http, server, ct).ConfigureAwait(false)).Context;
     }
 
-    /// <summary>Context length and load state of the configured model; nulls when the server doesn't say.</summary>
-    public static async Task<(int? Context, bool? Loaded)> TryContextAsync(HttpClient http, ServerSettings server, CancellationToken ct)
+    /// <summary>Context length, load state and image support of the configured model.</summary>
+    public static async Task<ModelFacts> TryContextAsync(HttpClient http, ServerSettings server, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(server.Model))
-            return (null, null);
+            return default;
         var v1 = OpenAiChatClient.NormalizeBaseUrl(server.BaseUrl);
         var root = v1[..^"/v1".Length];
 
@@ -75,22 +78,24 @@ public static class ServerProbe
         {
             // Only a loaded model has a real context length. max_context_length is what the model
             // could support (often 256k), not what LM Studio will actually load it with.
-            return (state == "loaded" ? Int(lms["loaded_context_length"]) : null, state == "loaded");
+            // "vlm" models take images, "llm" models don't.
+            bool? vision = lms["type"] is JsonValue t && t.TryGetValue<string>(out var type) && type is "vlm" or "llm" ? type == "vlm" : null;
+            return new ModelFacts(state == "loaded" ? Int(lms["loaded_context_length"]) : null, state == "loaded", vision);
         }
 
         // llama.cpp llama-server
         if (await GetJsonAsync(http, server, $"{root}/props", ct).ConfigureAwait(false) is { } props
             && Int(props["default_generation_settings"]?["n_ctx"]) is { } nctx)
-            return (nctx, true);
+            return new ModelFacts(nctx, true, null);
 
         // vLLM / OpenRouter style metadata on the model list
         if (await GetJsonAsync(http, server, $"{v1}/models", ct).ConfigureAwait(false) is { } list && list["data"] is JsonArray data)
         {
             var entry = data.FirstOrDefault(m => m?["id"] is JsonValue id && id.TryGetValue<string>(out var s) && s == server.Model);
             if ((Int(entry?["max_model_len"]) ?? Int(entry?["context_length"])) is { } len)
-                return (len, null);
+                return new ModelFacts(len, null, null);
         }
-        return (null, null);
+        return default;
     }
 
     private static async Task<JsonNode?> GetJsonAsync(HttpClient http, ServerSettings server, string url, CancellationToken ct)

@@ -40,6 +40,12 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         set { Server.Model = value.Trim(); OnPropertyChanged(); }
     }
 
+    public bool SupportsVision
+    {
+        get => Server.SupportsVision;
+        set { Server.SupportsVision = value; OnPropertyChanged(); }
+    }
+
     public int ContextSize
     {
         get => Server.ContextSize;
@@ -57,7 +63,6 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
             HideFromScreenshots = old.HideFromScreenshots,
             CustomInstructions = old.CustomInstructions,
         };
-        Settings.Server.SendExtras = new ServerSettings().SendExtras;
         Settings.Server.MaxPromptTokens = new ServerSettings().MaxPromptTokens;
     }
 
@@ -86,10 +91,14 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
             Model = Models[0];
 
         // Ask again now that a model is chosen, to learn the context it runs with.
-        var (context, loaded) = await ServerProbe.TryContextAsync(http, Server, CancellationToken.None);
-        if (context is { } c)
+        var facts = await ServerProbe.TryContextAsync(http, Server, CancellationToken.None);
+        if (facts.Context is { } c)
             ContextSize = c;
+        if (facts.Vision is { } v)
+            SupportsVision = v;
         TestResult = $"Connected. {Models.Count} model(s) available." +
-                     (context is { } k ? $" \"{Server.Model}\" has a {k / 1024}k context{(loaded == false ? " (not loaded yet; LM Studio loads it on first use)" : "")}." : "");
+                     (facts.Context is { } k ? $" \"{Server.Model}\" has a {k / 1024}k context." : "") +
+                     (facts.Loaded == false ? " It isn't loaded yet; it will load on first use." : "") +
+                     (facts.Vision == false ? " This model can't see images, so screen control is off." : "");
     }
 }

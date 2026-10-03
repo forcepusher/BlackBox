@@ -20,11 +20,13 @@ public sealed class ServerSettings
     public string BaseUrl { get; set; } = "http://localhost:1234/v1";
     public string ApiKey { get; set; } = "";
     public string Model { get; set; } = "";
+
+    /// <summary>Whether the model accepts images. Detected from LM Studio; set by hand for other servers.</summary>
     public bool SupportsVision { get; set; } = true;
 
     /// <summary>
-    /// Context window of the loaded model. Filled in from LM Studio when it reports it; used to
-    /// trim old thinking and tool output before a request would overflow.
+    /// Context window of the model. Read from the server when it reports it; this value is the
+    /// fallback for servers that don't.
     /// </summary>
     public int ContextSize { get; set; } = 32768;
 
@@ -34,13 +36,8 @@ public sealed class ServerSettings
     /// single GPU, so keeping it smaller keeps the agent responsive.
     /// </summary>
     public int MaxPromptTokens { get; set; } = 65536;
-
-    /// <summary>
-    /// Send llama.cpp / LM Studio extras (top_k, min_p, repeat_penalty, chat-template switches).
-    /// Dropped automatically if the server rejects them.
-    /// </summary>
-    public bool SendExtras { get; set; } = true;
 }
+
 public sealed class AgentSettings
 {
     public int MaxSteps { get; set; } = 40;
@@ -65,7 +62,6 @@ public sealed class AgentSettings
     /// <summary>Moving the mouse into the top-left corner stops the agent.</summary>
     public bool FailsafeCorner { get; set; } = true;
 
-    public bool EnableThinking { get; set; } = true;
     // Low temperature keeps clicks and tool arguments precise.
     public double Temperature { get; set; } = 0.1;
     public double TopP { get; set; } = 0.95;
@@ -106,8 +102,16 @@ public sealed class SettingsStore(AppPaths paths)
     {
         try
         {
-            if (File.Exists(paths.SettingsFile))
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(paths.SettingsFile), JsonOptions) ?? new AppSettings();
+            if (!File.Exists(paths.SettingsFile))
+                return new AppSettings();
+
+            var text = File.ReadAllText(paths.SettingsFile);
+            var settings = JsonSerializer.Deserialize<AppSettings>(Migrate(text), JsonOptions) ?? new AppSettings();
+            // Rewrite the file if it still has keys from older versions, so it only ever holds
+            // settings that exist.
+            if (JsonSerializer.Serialize(settings, JsonOptions) != text)
+                Save(settings);
+            return settings;
         }
         catch (JsonException)
         {
@@ -115,6 +119,22 @@ public sealed class SettingsStore(AppPaths paths)
             File.Copy(paths.SettingsFile, paths.SettingsFile + ".bad", overwrite: true);
         }
         return new AppSettings();
+    }
+
+    /// <summary>
+    /// Settings from the local-model versions kept the server under "remote" next to "backend"
+    /// and "local". Carry the server over; everything else that no longer exists is dropped.
+    /// </summary>
+    internal static string Migrate(string json)
+    {
+        if (System.Text.Json.Nodes.JsonNode.Parse(json) is not System.Text.Json.Nodes.JsonObject root)
+            return json;
+        if (root["server"] is null && root["remote"] is System.Text.Json.Nodes.JsonObject remote)
+            root["server"] = remote.DeepClone();
+        root.Remove("remote");
+        root.Remove("local");
+        root.Remove("backend");
+        return root.ToJsonString();
     }
 
     public void Save(AppSettings settings)

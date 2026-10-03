@@ -99,10 +99,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             SetStatus(ErrorBrush, "Model not found", $"The server doesn't offer \"{server.Model}\". Pick one of its models in Settings.");
             return;
         }
-        if (probe.LoadedContext is { } context && context != server.ContextSize)
+        // Trust what the server reports over the saved values.
+        if (probe.LoadedContext is { } context && context != server.ContextSize || probe.Vision is { } v && v != server.SupportsVision)
         {
-            // Trust what LM Studio reports over the saved guess.
-            server.ContextSize = context;
+            server.ContextSize = probe.LoadedContext ?? server.ContextSize;
+            server.SupportsVision = probe.Vision ?? server.SupportsVision;
             _store.Save(_settings);
         }
         var ctxText = probe.LoadedContext is { } c ? $" · {c / 1024}k context" : "";

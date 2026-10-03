@@ -318,12 +318,9 @@ public sealed partial class AgentSession(
         if (budget <= 0 || EstimateTokens() <= budget)
             return;
 
-        var assistants = History.Where(m => m.Role == ChatRole.Assistant && m.Reasoning is not null).ToList();
-        foreach (var m in assistants.Take(Math.Max(0, assistants.Count - 3)))
-        {
-            m.Reasoning = null;
-            if (EstimateTokens() <= budget) return;
-        }
+        DropOldReasoning(budget);
+        if (EstimateTokens() <= budget)
+            return;
 
         foreach (var m in History.Take(Math.Max(0, History.Count - 8)).Where(m => m.Role == ChatRole.Tool && m.Content is { Length: > 400 }))
         {

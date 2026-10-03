@@ -24,8 +24,6 @@ internal sealed class WindowsHostWindow : IHostWindow
 
     private nint _hwnd;
 
-    public bool HiddenFromCapture { get; private set; }
-
     public void Attach(nint handle, bool hideFromCapture)
     {
         _hwnd = handle;
@@ -35,7 +33,7 @@ internal sealed class WindowsHostWindow : IHostWindow
     public void SetHiddenFromCapture(bool hide)
     {
         if (_hwnd == 0) return;
-        HiddenFromCapture = SetWindowDisplayAffinity(_hwnd, hide ? WDA_EXCLUDEFROMCAPTURE : 0) && hide;
+        SetWindowDisplayAffinity(_hwnd, hide ? WDA_EXCLUDEFROMCAPTURE : 0);
     }
 
     public IDisposable StepAside(params (int X, int Y)[] points)

@@ -35,12 +35,10 @@ internal static class PortableRuntime
         return AppContext.BaseDirectory;
     }
 
-    public static string RuntimeDir(string root) => Path.Combine(root, "Data", "runtime");
-
     /// <summary>Unpacks the embedded payload if this build has one, then points native loading at it.</summary>
     public static void Prepare(string root)
     {
-        var dir = RuntimeDir(root);
+        var dir = new Core.Settings.AppPaths(root).RuntimeDir;
         using (var payload = Assembly.GetExecutingAssembly().GetManifestResourceStream(PayloadName))
         {
             if (payload is null)

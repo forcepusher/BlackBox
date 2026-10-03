@@ -116,6 +116,31 @@ public class ToolTests
     }
 
     [Fact]
+    public void Settings_from_the_local_model_versions_are_migrated_and_cleaned()
+    {
+        var root = Directory.CreateTempSubdirectory("bb-settings-").FullName;
+        var paths = new AppPaths(root);
+        Directory.CreateDirectory(paths.DataDir);
+        File.WriteAllText(paths.SettingsFile, """
+            {
+              "backend": "Remote",
+              "local": { "modelPath": "Models/x.gguf", "gpuLayers": 99 },
+              "remote": { "baseUrl": "http://host:1234/v1", "model": "qwen", "sendExtras": false },
+              "agent": { "enableThinking": false, "temperature": 0.3 }
+            }
+            """);
+
+        var settings = new SettingsStore(paths).Load();
+
+        Assert.Equal("http://host:1234/v1", settings.Server.BaseUrl);
+        Assert.Equal("qwen", settings.Server.Model);
+        Assert.Equal(0.3, settings.Agent.Temperature);
+        var saved = File.ReadAllText(paths.SettingsFile);
+        foreach (var gone in new[] { "backend", "local", "remote", "gpuLayers", "sendExtras", "enableThinking" })
+            Assert.DoesNotContain(gone, saved);
+    }
+
+    [Fact]
     public void Portable_paths_inside_the_app_folder_are_stored_relative()
     {
         var root = Path.Combine(Path.GetTempPath(), "bb-root");
