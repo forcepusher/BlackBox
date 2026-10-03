@@ -44,9 +44,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private bool _isBusy;
 
     [ObservableProperty]
-    private string _backendLabel = "";
-
-    [ObservableProperty]
     private string _serverStatusText = "Checking…";
 
     [ObservableProperty]
@@ -66,49 +63,120 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     public void OnStartup()
     {
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoMessages));
+        if (!string.IsNullOrEmpty(_settings.Server.Model))
+            Models.Add(_settings.Server.Model);
         _ = CheckServerAsync();
     }
 
-    /// <summary>Raised by the setup banner's button; the view opens Settings.</summary>
-    public event Action? OpenSettingsRequested;
+    // ---- server and model (top bar) ---------------------------------------------------
 
-    [RelayCommand]
-    private void OpenSettings() => OpenSettingsRequested?.Invoke();
+    private CancellationTokenSource? _addressEdit;
+    private int _checkVersion;
+    private bool _refreshingModels;
 
+    /// <summary>Server address typed in the top bar. Saved as you type; checked once typing pauses.</summary>
+    public string ServerAddress
+    {
+        get => _settings.Server.BaseUrl;
+        set
+        {
+            value = value.Trim();
+            if (value == _settings.Server.BaseUrl) return;
+            _settings.Server.BaseUrl = value;
+            _store.Save(_settings);
+            OnPropertyChanged();
+            _ = CheckAfterTypingAsync();
+        }
+    }
+
+    /// <summary>Models the server reports (embedding models left out). Always contains the saved one.</summary>
+    public ObservableCollection<string> Models { get; } = [];
+
+    public string? SelectedModel
+    {
+        get => string.IsNullOrEmpty(_settings.Server.Model) ? null : _settings.Server.Model;
+        set
+        {
+            // Refilling the list briefly clears the selection; that is not the user choosing nothing.
+            if (_refreshingModels || string.IsNullOrEmpty(value) || value == _settings.Server.Model)
+                return;
+            _settings.Server.Model = value;
+            _store.Save(_settings);
+            OnPropertyChanged();
+            _ = CheckServerAsync();
+        }
+    }
+
+    private async Task CheckAfterTypingAsync()
+    {
+        _addressEdit?.Cancel();
+        var edit = _addressEdit = new CancellationTokenSource();
+        try { await Task.Delay(700, edit.Token); }
+        catch (OperationCanceledException) { return; }
+        await CheckServerAsync();
+    }
+
+    /// <summary>Asks the server for its models and the chosen model's details; updates the top bar.</summary>
     [RelayCommand]
     private async Task CheckServerAsync()
     {
+        var version = ++_checkVersion;
         var server = _settings.Server;
-        BackendLabel = string.IsNullOrWhiteSpace(server.Model) ? "No model selected" : server.Model;
-        if (string.IsNullOrWhiteSpace(server.BaseUrl) || string.IsNullOrWhiteSpace(server.Model))
+        if (string.IsNullOrWhiteSpace(server.BaseUrl))
         {
-            SetStatus(Brushes.Gray, "Not set up", "Connect BlackBox to an AI model server (for example LM Studio) in Settings.");
+            SetStatus(Brushes.Gray, "Not set up", "Enter the address of your model server (for example LM Studio at http://localhost:1234/v1) at the top.");
             return;
         }
 
         SetStatus(BusyBrush, "Checking…", null);
         using var probeHttp = LlmHttp.Create(TimeSpan.FromSeconds(10));
         var probe = await ServerProbe.CheckAsync(probeHttp, server, CancellationToken.None);
+        if (version != _checkVersion)
+            return; // the address or model changed while this check was running
+
+        _refreshingModels = true;
+        Models.Clear();
+        foreach (var m in probe.Models.Where(m => !m.Contains("embed", StringComparison.OrdinalIgnoreCase)))
+            Models.Add(m);
+        if (!string.IsNullOrEmpty(server.Model) && !Models.Contains(server.Model))
+            Models.Insert(0, server.Model);
+        _refreshingModels = false;
+
         if (!probe.Reachable)
         {
-            SetStatus(ErrorBrush, "Offline", $"{probe.Message} Check that the server is running at {server.BaseUrl}.");
+            OnPropertyChanged(nameof(SelectedModel));
+            SetStatus(ErrorBrush, "Offline", $"{probe.Message} Check the address at the top and that the server is running.");
+            return;
+        }
+        if (string.IsNullOrEmpty(server.Model) && Models.Count > 0)
+        {
+            server.Model = Models[0];
+            _store.Save(_settings);
+            probe = await ServerProbe.CheckAsync(probeHttp, server, CancellationToken.None); // details for this model
+        }
+        OnPropertyChanged(nameof(SelectedModel));
+        if (string.IsNullOrEmpty(server.Model))
+        {
+            SetStatus(ErrorBrush, "No models", "The server is running but offers no models. Load or download one in LM Studio.");
             return;
         }
         if (probe.Models.Count > 0 && !probe.Models.Contains(server.Model))
         {
-            SetStatus(ErrorBrush, "Model not found", $"The server doesn't offer \"{server.Model}\". Pick one of its models in Settings.");
+            SetStatus(ErrorBrush, "Model not found", $"The server doesn't offer \"{server.Model}\" anymore. Pick another model at the top.");
             return;
         }
-        if (probe.LoadedContext is { } context && context != server.ContextSize)
-        {
-            // Trust what LM Studio reports over the saved guess.
+
+        // Trust what the server reports. The context size is not saved; image support is.
+        if (probe.LoadedContext is { } context)
             server.ContextSize = context;
+        if (probe.Vision is { } v && v != server.SupportsVision)
+        {
+            server.SupportsVision = v;
             _store.Save(_settings);
         }
-        var ctxText = probe.LoadedContext is { } c ? $" · {c / 1024}k context" : "";
-        SetStatus(OkBrush, $"Connected{ctxText}", null);
+        var details = (probe.LoadedContext is { } c ? $" · {c / 1024}k context" : "") + (probe.Vision == false ? " · no vision" : "");
+        SetStatus(OkBrush, "Connected" + details, null);
     }
-
     private void SetStatus(IBrush brush, string status, string? setup)
     {
         StatusBrush = brush;
@@ -141,7 +209,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 if (context is { } c && c != _settings.Server.ContextSize)
                 {
                     _settings.Server.ContextSize = c;
-                    _store.Save(_settings);
                     ServerStatusText = $"Connected · {c / 1024}k context";
                 }
             }
@@ -153,7 +220,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             {
                 Platform = _platform,
                 Settings = agent,
-                WorkingDirectory = WorkingDirectory(),
+                WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             };
 
             ScreenSpace? screen = null;
@@ -198,6 +265,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     public async Task ApplySettingsAsync(AppSettings updated)
     {
+        // The address and model live in the top bar, not in the Settings dialog.
+        updated.Server.BaseUrl = _settings.Server.BaseUrl;
+        updated.Server.Model = _settings.Server.Model;
+        updated.Server.ContextSize = _settings.Server.ContextSize; // runtime value, re-detected below
         _settings = updated;
         _store.Save(updated);
         _platform.HostWindow.SetHiddenFromCapture(updated.Agent.HideFromScreenshots);
@@ -209,16 +280,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var server = _settings.Server;
         if (string.IsNullOrWhiteSpace(server.BaseUrl) || string.IsNullOrWhiteSpace(server.Model))
         {
-            AddNotice("Connect to a model server in Settings first.", isError: true);
+            AddNotice("Enter your model server's address and pick a model at the top first.", isError: true);
             return null;
         }
-        return BackendConnection.Create(_http, server, _settings.Agent);
-    }
-    private string WorkingDirectory()
-    {
-        var wd = string.IsNullOrWhiteSpace(_settings.Agent.WorkingDirectory) ? _paths.WorkspaceDir : _paths.Resolve(_settings.Agent.WorkingDirectory);
-        Directory.CreateDirectory(wd);
-        return wd;
+        return BackendConnection.Create(_http, server);
     }
 
     private static readonly IBrush OkBrush = new SolidColorBrush(Color.Parse("#5FB878"));
@@ -229,8 +294,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     // ---- IAgentObserver (called from the agent thread) -------------------------------
 
+    // A run can last hours. The model's context is kept in check by compaction; the chat view is
+    // kept in check here so memory stays flat: old entries are dropped and only recent
+    // screenshots keep their thumbnails.
+    private const int MaxChatItems = 400;
+    private const int MaxThumbnails = 30;
+
+    private void TrimChat()
+    {
+        while (Items.Count > MaxChatItems)
+            Items.RemoveAt(0);
+        foreach (var old in Items.OfType<ToolCallItem>().Where(t => t.HasScreenshot).SkipLast(MaxThumbnails).ToList())
+        {
+            old.Screenshot?.Dispose();
+            old.Screenshot = null;
+        }
+    }
+
     void IAgentObserver.OnStepStarted(int step) => Dispatcher.UIThread.Post(() =>
     {
+        TrimChat();
         _current = new AssistantMessageItem();
         Items.Add(_current);
     });
@@ -304,7 +387,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 AddNotice("Stopped.", isError: false);
                 break;
             case AgentStopReason.Failsafe:
-            case AgentStopReason.MaxSteps:
                 AddNotice(detail ?? reason.ToString(), isError: false);
                 break;
             case AgentStopReason.Error:

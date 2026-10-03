@@ -8,19 +8,19 @@ namespace BlackBox.Core.Platform;
 /// and settings, so it is stable across calls.
 /// </summary>
 /// <remarks>
-/// The size is capped by pixel count rather than width, so ultrawide and tall screens keep the
-/// same level of detail as a 16:9 one. Sides are rounded to multiples of 32 (the Qwen vision
-/// patch grid) so the vision encoder does not resize the image again, which would shift the
-/// coordinates the model answers with.
+/// The screen is scaled down to fit a box (e.g. 1600×900) keeping its shape; it is never scaled
+/// up. Sides are rounded to multiples of 32 (the Qwen vision patch grid) so the vision encoder does
+/// not resize the image again, which would shift the coordinates the model answers with.
 /// </remarks>
 public sealed class ScreenSpace
 {
     private const int Grid = 32;
 
-    public ScreenSpace(ScreenRect screen, int maxPixels)
+    /// <param name="box">Largest size to send, or null for the screen's own resolution.</param>
+    public ScreenSpace(ScreenRect screen, (int Width, int Height)? box)
     {
         Screen = screen;
-        var scale = Math.Min(1.0, Math.Sqrt((double)maxPixels / ((double)screen.Width * screen.Height)));
+        var scale = box is { } b ? Math.Min(1.0, Math.Min((double)b.Width / screen.Width, (double)b.Height / screen.Height)) : 1.0;
         ImageWidth = Snap(screen.Width * scale);
         ImageHeight = Snap(screen.Height * scale);
         ScaleX = (double)ImageWidth / screen.Width;

@@ -9,8 +9,8 @@
   -Folder: the classic self-contained folder (exe + DLLs), handy for debugging.
 
 .EXAMPLE
-  ./publish.ps1           # publish/BlackBox.exe
-  ./publish.ps1 -Folder   # publish/BlackBox-win-x64/
+  ./scripts/publish.ps1           # publish/BlackBox.exe
+  ./scripts/publish.ps1 -Folder   # publish/BlackBox-win-x64/
 #>
 param(
     [string]$Runtime = "win-x64",
@@ -18,7 +18,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$root = $PSScriptRoot
+$root = Split-Path $PSScriptRoot
 $project = Join-Path $root "src/BlackBox.App/BlackBox.App.csproj"
 $publishRoot = Join-Path $root "publish"
 

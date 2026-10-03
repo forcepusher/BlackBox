@@ -83,9 +83,6 @@ public interface IHostWindow
     /// <summary>Turns capture hiding on or off after <see cref="Attach"/>.</summary>
     void SetHiddenFromCapture(bool hide);
 
-    /// <summary>True when screenshots show what is behind the window rather than the window itself.</summary>
-    bool HiddenFromCapture { get; }
-
     /// <summary>If any of the points lie on the window, sends it behind other windows until the result is disposed.</summary>
     IDisposable StepAside(params (int X, int Y)[] points);
 
@@ -98,7 +95,6 @@ public sealed class NoHostWindow : IHostWindow
     public static readonly NoHostWindow Instance = new();
     public void Attach(nint handle, bool hideFromCapture) { }
     public void SetHiddenFromCapture(bool hide) { }
-    public bool HiddenFromCapture => false;
     public IDisposable StepAside(params (int X, int Y)[] points) => Nothing.Instance;
     public void YieldFocus() { }
 

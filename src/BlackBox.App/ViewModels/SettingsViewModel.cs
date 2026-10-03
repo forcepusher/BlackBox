@@ -1,13 +1,10 @@
-using System.Collections.ObjectModel;
-using BlackBox.Core.Llm;
 using BlackBox.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 
 namespace BlackBox.App.ViewModels;
 
 /// <summary>Edits a copy of the settings; the window hands it back to the main view model on Save.</summary>
-public sealed partial class SettingsViewModel(AppSettings settings, AppPaths paths) : ObservableObject
+public sealed class SettingsViewModel(AppSettings settings, AppPaths paths) : ObservableObject
 {
     public AppSettings Settings { get; } = settings;
     public AppPaths Paths { get; } = paths;
@@ -22,74 +19,25 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         "Never ask",
     ];
 
+    /// <summary>Labels for <see cref="ScreenshotResolution"/>, in enum order.</summary>
+    public string[] ResolutionOptions { get; } =
+    [
+        "1280 × 720",
+        "1600 × 900 (default)",
+        "1920 × 1080",
+        "2560 × 1440",
+        "Full screen resolution",
+    ];
+
+    public int ResolutionIndex
+    {
+        get => (int)Agent.ScreenshotResolution;
+        set => Agent.ScreenshotResolution = (ScreenshotResolution)Math.Clamp(value, 0, ResolutionOptions.Length - 1);
+    }
+
     public int ApprovalIndex
     {
         get => (int)Agent.Approval;
         set => Agent.Approval = (ApprovalMode)Math.Clamp(value, 0, 2);
-    }
-
-    public string WorkingDirectory
-    {
-        get => Agent.WorkingDirectory;
-        set { Agent.WorkingDirectory = Paths.ToPortable(value); OnPropertyChanged(); }
-    }
-
-    public string Model
-    {
-        get => Server.Model;
-        set { Server.Model = value.Trim(); OnPropertyChanged(); }
-    }
-
-    public int ContextSize
-    {
-        get => Server.ContextSize;
-        set { Server.ContextSize = value; OnPropertyChanged(); }
-    }
-
-    /// <summary>Resets everything on the Advanced tab, keeping the choices made on General.</summary>
-    public void RestoreAdvancedDefaults()
-    {
-        var old = Settings.Agent;
-        Settings.Agent = new AgentSettings
-        {
-            Approval = old.Approval,
-            FailsafeCorner = old.FailsafeCorner,
-            HideFromScreenshots = old.HideFromScreenshots,
-            CustomInstructions = old.CustomInstructions,
-        };
-        Settings.Server.SendExtras = new ServerSettings().SendExtras;
-        Settings.Server.MaxPromptTokens = new ServerSettings().MaxPromptTokens;
-    }
-
-    [ObservableProperty]
-    private string _testResult = "";
-
-    /// <summary>Models the server reported; filled by Test connection.</summary>
-    public ObservableCollection<string> Models { get; } = [];
-
-    [RelayCommand]
-    private async Task TestConnectionAsync()
-    {
-        TestResult = "Connecting…";
-        using var http = LlmHttp.Create(TimeSpan.FromSeconds(20));
-        var probe = await ServerProbe.CheckAsync(http, Server, CancellationToken.None);
-        if (!probe.Reachable)
-        {
-            TestResult = probe.Message;
-            return;
-        }
-
-        Models.Clear();
-        foreach (var m in probe.Models.Where(m => !m.Contains("embed", StringComparison.OrdinalIgnoreCase)))
-            Models.Add(m);
-        if (Models.Count > 0 && !Models.Contains(Server.Model))
-            Model = Models[0];
-
-        // Ask again now that a model is chosen, to learn the context it runs with.
-        var (context, loaded) = await ServerProbe.TryContextAsync(http, Server, CancellationToken.None);
-        if (context is { } c)
-            ContextSize = c;
-        TestResult = $"Connected. {Models.Count} model(s) available." +
-                     (context is { } k ? $" \"{Server.Model}\" has a {k / 1024}k context{(loaded == false ? " (not loaded yet; LM Studio loads it on first use)" : "")}." : "");
     }
 }

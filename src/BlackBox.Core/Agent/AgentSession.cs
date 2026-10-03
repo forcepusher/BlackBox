@@ -4,7 +4,7 @@ using BlackBox.Core.Tools;
 
 namespace BlackBox.Core.Agent;
 
-public enum AgentStopReason { Completed, MaxSteps, Cancelled, Failsafe, Error }
+public enum AgentStopReason { Completed, Cancelled, Failsafe, Error }
 
 /// <summary>Callbacks from the agent loop. Called on a background thread.</summary>
 public interface IAgentObserver
@@ -45,11 +45,14 @@ public sealed partial class AgentSession(
         var settings = toolContext.Settings;
         var toolDefs = tools.Definitions();
         var nudges = 0;
-        var actionCounts = new Dictionary<string, int>();
+        var loops = new LoopDetector();
 
         try
         {
-            for (var step = 1; step <= settings.MaxSteps; step++)
+            // No step limit: a run ends when the model is done, the user presses Stop, or the
+            // mouse hits the failsafe corner. Tasks like "keep chatting for 12 hours" are valid;
+            // runaway loops are handled by LoopDetector, and growth by compaction.
+            for (var step = 1; ; step++)
             {
                 ct.ThrowIfCancellationRequested();
                 observer.OnStepStarted(step);
@@ -60,19 +63,7 @@ public sealed partial class AgentSession(
                 var request = new List<ChatMessage>(History.Count + 1) { ChatMessage.System(systemPrompt) };
                 request.AddRange(History);
 
-                ChatMessage reply;
-                try
-                {
-                    reply = await CompleteFittingAsync(request, requestOptions, observer, ct).ConfigureAwait(false);
-                }
-                catch (ReasoningBudgetExceededException ex) when (WithoutThinking(requestOptions) is { } direct)
-                {
-                    // Quantized models can get stuck deliberating. Cut the thought short and ask
-                    // again with thinking switched off for this one step.
-                    observer.OnAssistantMessage(new ChatMessage { Role = ChatRole.Assistant, Content = "", Reasoning = ex.PartialReasoning + "\n[thinking cut short]" });
-                    observer.OnStepStarted(step);
-                    reply = await CompleteFittingAsync(request, direct, observer, ct).ConfigureAwait(false);
-                }
+                var reply = await CompleteFittingAsync(request, observer, ct).ConfigureAwait(false);
                 TextToolCallParser.TryExtract(reply, tools);
                 // "The task is complete" followed by yet another screenshot: small models can keep
                 // re-verifying forever. A completion claim with only look-only calls ends the turn.
@@ -100,10 +91,8 @@ public sealed partial class AgentSession(
                 foreach (var call in reply.ToolCalls!)
                 {
                     var result = await RunToolAsync(call, observer, ct).ConfigureAwait(false);
-                    var signature = call.Name + " " + call.Arguments.Replace(" ", "");
-                    var repeats = actionCounts[signature] = actionCounts.GetValueOrDefault(signature) + 1;
-                    if (repeats >= 3 && call.Name is not ("screenshot" or "wait" or "zoom" or "list_ui_elements" or "list_windows"))
-                        result = result with { Text = result.Text + $"\nNote: you have now made exactly this call {repeats} times. If it is not getting you closer, stop repeating it and try a different approach." };
+                    if (loops.Check(call, result) is { } warning)
+                        result = result with { Text = result.Text + "\n" + warning };
                     History.Add(ChatMessage.ToolResult(call.Id, result.Image is null ? result.Text : result.Text + "\n(The screenshot is attached in the next message.)"));
                     if (result.Image is not null)
                         screenshots.Add(ContentPart.FromImage(result.Image, result.ImageMime));
@@ -118,8 +107,6 @@ public sealed partial class AgentSession(
                     History.Add(new ChatMessage { Role = ChatRole.User, Parts = parts });
                 }
             }
-
-            observer.OnFinished(AgentStopReason.MaxSteps, $"Stopped after {settings.MaxSteps} steps. Send another message to let it continue.");
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -144,24 +131,6 @@ public sealed partial class AgentSession(
     /// cache from that point on, so doing it every step would reprocess most of the prompt each time.
     /// </summary>
     private const int PruneSlack = 3;
-
-    /// <summary>Request options with thinking disabled, or null if the backend has no such switch.</summary>
-    internal static ChatRequestOptions? WithoutThinking(ChatRequestOptions options)
-    {
-        if (options.Extra?["chat_template_kwargs"] is not System.Text.Json.Nodes.JsonObject)
-            return null;
-        var extra = (System.Text.Json.Nodes.JsonObject)options.Extra.DeepClone();
-        extra["chat_template_kwargs"]!["enable_thinking"] = false;
-        return new ChatRequestOptions
-        {
-            Model = options.Model,
-            Temperature = options.Temperature,
-            TopP = options.TopP,
-            MaxTokens = options.MaxTokens,
-            SendReasoning = options.SendReasoning,
-            Extra = extra,
-        };
-    }
 
     private const int MaxNudges = 2;
 
@@ -252,13 +221,13 @@ public sealed partial class AgentSession(
     /// Sends the request; if the server says it does not fit, trims history much harder and
     /// tries again (twice at most) before giving up.
     /// </summary>
-    private async Task<ChatMessage> CompleteFittingAsync(List<ChatMessage> request, ChatRequestOptions options, IAgentObserver observer, CancellationToken ct)
+    private async Task<ChatMessage> CompleteFittingAsync(List<ChatMessage> request, IAgentObserver observer, CancellationToken ct)
     {
         for (var attempt = 0; ; attempt++)
         {
             try
             {
-                return await CompleteWithReconnectAsync(request, tools.Definitions(), options, observer, observer.OnDelta, ct).ConfigureAwait(false);
+                return await CompleteWithReconnectAsync(request, tools.Definitions(), requestOptions, observer, observer.OnDelta, ct).ConfigureAwait(false);
             }
             catch (ContextOverflowException) when (attempt < 2)
             {
@@ -318,12 +287,9 @@ public sealed partial class AgentSession(
         if (budget <= 0 || EstimateTokens() <= budget)
             return;
 
-        var assistants = History.Where(m => m.Role == ChatRole.Assistant && m.Reasoning is not null).ToList();
-        foreach (var m in assistants.Take(Math.Max(0, assistants.Count - 3)))
-        {
-            m.Reasoning = null;
-            if (EstimateTokens() <= budget) return;
-        }
+        DropOldReasoning(budget);
+        if (EstimateTokens() <= budget)
+            return;
 
         foreach (var m in History.Take(Math.Max(0, History.Count - 8)).Where(m => m.Role == ChatRole.Tool && m.Content is { Length: > 400 }))
         {

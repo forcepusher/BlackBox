@@ -34,7 +34,10 @@ public sealed partial class AgentSession
         "of the screen and task. Keep everything still needed to finish the task; drop chatter and repetition. " +
         "Do not invent anything. Do not call tools.";
 
-    private int PromptBudget => (int)(contextTokens * 0.8) - (requestOptions.MaxTokens ?? 4096);
+    /// <summary>Room left for the reply: the server decides its length, so keep a fixed margin.</summary>
+    private const int ReplyReserve = 4096;
+
+    private int PromptBudget => (int)(contextTokens * 0.8) - ReplyReserve;
 
     /// <summary>
     /// Brings the conversation under <paramref name="budget"/> tokens: old screenshots and old
@@ -90,9 +93,9 @@ public sealed partial class AgentSession
         var options = new ChatRequestOptions
         {
             Model = requestOptions.Model,
+            // This request is BlackBox's own, so it sets its own limits: a factual, bounded summary.
             Temperature = 0.1,
             MaxTokens = 1500,
-            Extra = WithoutThinking(requestOptions)?.Extra,
         };
 
         var summary = "";

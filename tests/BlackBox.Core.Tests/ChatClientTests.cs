@@ -74,11 +74,11 @@ public class ChatClientTests
             new() { Role = ChatRole.User, Parts = [ContentPart.FromText("look"), ContentPart.FromImage([1, 2, 3], "image/jpeg")] },
         };
         var tools = new List<ToolDefinition> { new() { Name = "screenshot", Description = "d", Parameters = new JsonObject { ["type"] = "object" } } };
-        var options = new ChatRequestOptions { Model = "local", Temperature = 0.6, Extra = new JsonObject { ["top_k"] = 20 } };
+        var options = new ChatRequestOptions { Model = "m", Temperature = 0.6, Extra = new JsonObject { ["top_k"] = 20 } };
 
         var req = OpenAiChatClient.BuildRequest(messages, tools, options);
 
-        Assert.Equal("local", req["model"]!.GetValue<string>());
+        Assert.Equal("m", req["model"]!.GetValue<string>());
         Assert.Equal(20, req["top_k"]!.GetValue<int>());
         Assert.Equal("{}", req["messages"]![1]!["tool_calls"]![0]!["function"]!["arguments"]!.GetValue<string>());
         Assert.Equal("c1", req["messages"]![2]!["tool_call_id"]!.GetValue<string>());

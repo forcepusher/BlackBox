@@ -24,10 +24,11 @@ public sealed class ToolContext
 {
     public required IPlatformServices Platform { get; init; }
     public required AgentSettings Settings { get; init; }
+    /// <summary>Where relative paths and shell commands start (the user's home folder). Not a limit: tools reach the whole PC.</summary>
     public required string WorkingDirectory { get; init; }
 
     public ScreenSpace GetScreenSpace() =>
-        new(Platform.Screen.GetPrimaryScreen(), Settings.ScreenshotMaxPixels);
+        new(Platform.Screen.GetPrimaryScreen(), Settings.ScreenshotResolution.Box());
 
     public string ResolvePath(string path) =>
         Path.GetFullPath(Environment.ExpandEnvironmentVariables(path), WorkingDirectory);

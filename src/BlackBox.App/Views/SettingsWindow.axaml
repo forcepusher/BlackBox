@@ -38,31 +38,14 @@
           <StackPanel Spacing="4" Margin="0,0,12,16">
             <TextBlock Classes="h2" Text="AI model server" />
             <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="Any OpenAI-compatible server works: LM Studio, llama.cpp's llama-server, vLLM, OpenAI and others. For LM Studio, start its server and use the address it shows." />
-            <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
-              <TextBlock Classes="label" Grid.Row="0" Text="Address" />
-              <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Server.BaseUrl}" Watermark="http://localhost:1234/v1" />
-              <TextBlock Classes="label" Grid.Row="1" Text="API key" />
-              <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Server.ApiKey}" PasswordChar="•" Watermark="Optional" />
-              <StackPanel Grid.Row="2" Grid.Column="1" Spacing="6">
-                <Button Classes="ghost" Content="Test connection" Command="{Binding TestConnectionCommand}" />
-                <TextBlock Classes="muted" Text="{Binding TestResult}" TextWrapping="Wrap" />
-              </StackPanel>
-              <TextBlock Classes="label" Grid.Row="3" Text="Model" />
-              <AutoCompleteBox Grid.Row="3" Grid.Column="1" Text="{Binding Model}" ItemsSource="{Binding Models}"
-                               FilterMode="Contains" MinimumPrefixLength="0" Watermark="Press Test connection, then pick a model" />
-              <CheckBox Grid.Row="4" Grid.Column="1" Content="This model can see images (needed for screen control)" IsChecked="{Binding Server.SupportsVision}" />
-              <StackPanel Grid.Row="5" Grid.Column="1" Spacing="2">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <TextBlock Classes="label" Text="Context size" />
-                  <TextBox Text="{Binding ContextSize}" Width="120" />
-                </StackPanel>
-                <TextBlock Classes="muted" TextWrapping="Wrap"
-                           Text="Read from the server when it reports it (LM Studio, llama-server, vLLM, OpenRouter). When a run outgrows it, BlackBox summarizes older steps." />
-              </StackPanel>
+                       Text="The server address and model are chosen at the top of the main window." />
+            <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto">
+              <TextBlock Classes="label" Grid.Row="0" Text="API key" />
+              <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Server.ApiKey}" PasswordChar="•" Watermark="Only if your server asks for one" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Classes="muted" TextWrapping="Wrap"
+                         Text="Saved in plain text in the Data folder next to the app, so keep that folder private." />
+              <CheckBox Grid.Row="2" Grid.Column="1" Content="This model can see images (needed for screen control)" IsChecked="{Binding Server.SupportsVision}" />
             </Grid>
-            <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="The key is saved in plain text in the Data folder next to the app, so keep that folder private." />
 
             <TextBlock Classes="h2" Text="Safety" />
             <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto">
@@ -87,62 +70,18 @@
       <TabItem Header="Advanced">
         <ScrollViewer>
           <StackPanel Spacing="4" Margin="0,0,12,16">
-            <TextBlock Classes="muted" TextWrapping="Wrap" Text="You normally don't need to change anything here." />
-
-            <TextBlock Classes="h2" Text="Sampling" />
-            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
-              <CheckBox Grid.Row="0" Grid.Column="1" Content="Let the model think before acting" IsChecked="{Binding Agent.EnableThinking}" />
-              <TextBlock Classes="label" Grid.Row="1" Text="Temperature" />
-              <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Agent.Temperature}" />
-              <TextBlock Classes="label" Grid.Row="2" Text="Top P" />
-              <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Agent.TopP}" />
-              <TextBlock Classes="label" Grid.Row="3" Text="Top K" />
-              <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Agent.TopK}" />
-              <TextBlock Classes="label" Grid.Row="4" Text="Min P" />
-              <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Agent.MinP}" />
-              <TextBlock Classes="label" Grid.Row="5" Text="Repeat penalty" />
-              <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Agent.RepeatPenalty}" Watermark="1.0 = off" />
-              <TextBlock Classes="label" Grid.Row="6" Text="Max tokens per reply" />
-              <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding Agent.MaxTokensPerReply}" />
-              <TextBlock Classes="label" Grid.Row="7" Text="Thinking limit (tokens)" />
-              <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding Agent.MaxThinkingTokens}" Watermark="0 = no limit" />
-              <StackPanel Grid.Row="8" Grid.Column="1">
-                <CheckBox Content="Send LM Studio / llama.cpp extras (top-k, min-p, repeat penalty, thinking switches)" IsChecked="{Binding Server.SendExtras}" />
-                <TextBlock Classes="muted" TextWrapping="Wrap" Margin="28,0,0,0"
-                           Text="Dropped automatically if the server rejects them." />
-              </StackPanel>
-            </Grid>
-
-            <TextBlock Classes="h2" Text="Context" />
-            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto">
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="How the model behaves (temperature, reply length, thinking) is configured on the server, in LM Studio per model. These settings control BlackBox itself." />
+            <Grid Classes="form" ColumnDefinitions="190,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,8,0,0">
               <TextBlock Classes="label" Grid.Row="0" Text="Max prompt size (tokens)" />
               <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Server.MaxPromptTokens}" Watermark="0 = use the whole context" />
               <TextBlock Grid.Row="1" Grid.Column="1" Classes="muted" TextWrapping="Wrap"
-                         Text="Each step resends the conversation. Keeping it below the model's full context keeps steps fast; older steps are trimmed to fit." />
-            </Grid>
-
-            <TextBlock Classes="h2" Text="Screen" />
-            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto">
-              <TextBlock Classes="label" Grid.Row="0" Text="Screenshot max pixels" />
-              <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Agent.ScreenshotMaxPixels}" />
-              <TextBlock Grid.Row="1" Grid.Column="1" Classes="muted" Text="More pixels = sharper view of small text, but slower and uses more context." TextWrapping="Wrap" />
-              <TextBlock Classes="label" Grid.Row="2" Text="Screenshots kept" />
-              <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Agent.KeepScreenshots}" />
-              <CheckBox Grid.Row="3" Grid.Column="1" Content="Screenshot after each mouse or keyboard action" IsChecked="{Binding Agent.ScreenshotAfterActions}" />
-            </Grid>
-
-            <TextBlock Classes="h2" Text="Agent" />
-            <Grid Classes="form" ColumnDefinitions="170,*" RowDefinitions="Auto,Auto">
-              <TextBlock Classes="label" Grid.Row="0" Text="Max steps per task" />
-              <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Agent.MaxSteps}" />
-              <TextBlock Classes="label" Grid.Row="1" Text="Working folder" />
-              <DockPanel Grid.Row="1" Grid.Column="1">
-                <Button DockPanel.Dock="Right" Classes="ghost" Content="Browse…" Margin="6,0,0,0" Click="OnBrowseWorkingDir" />
-                <TextBox Text="{Binding WorkingDirectory}" Watermark="Default: Workspace folder next to the app" />
-              </DockPanel>
-            </Grid>
-
-            <Button Classes="ghost" Content="Restore advanced defaults" Margin="0,16,0,0" Click="OnRestoreDefaults" />
+                         Text="Each step resends the conversation. Keeping it below the model's full context keeps steps fast; older steps are summarized to fit." />
+              <TextBlock Classes="label" Grid.Row="2" Text="Screenshot resolution" />
+              <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding ResolutionOptions}" SelectedIndex="{Binding ResolutionIndex}" HorizontalAlignment="Stretch" />
+              <TextBlock Grid.Row="3" Grid.Column="1" Classes="muted" TextWrapping="Wrap"
+                         Text="The largest size screenshots are sent at; your screen is scaled down to fit. Higher is sharper for small text but slower and uses more context." />
+           </Grid>
           </StackPanel>
         </ScrollViewer>
       </TabItem>

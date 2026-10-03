@@ -65,7 +65,6 @@ public sealed class ChatRequestOptions
 {
     public string Model { get; set; } = "local";
     public double? Temperature { get; set; }
-    public double? TopP { get; set; }
     public int? MaxTokens { get; set; }
 
     /// <summary>Extra top-level request fields (e.g. llama.cpp's top_k or chat_template_kwargs).</summary>
@@ -73,9 +72,6 @@ public sealed class ChatRequestOptions
 
     /// <summary>Send earlier reasoning back as reasoning_content so thinking models keep their train of thought.</summary>
     public bool SendReasoning { get; set; }
-
-    /// <summary>Abort the reply once the streamed reasoning grows past this many characters.</summary>
-    public int? MaxReasoningChars { get; set; }
 }
 
 public enum StreamChannel { Content, Reasoning }
