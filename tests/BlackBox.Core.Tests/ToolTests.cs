@@ -116,34 +116,13 @@ public class ToolTests
     }
 
     [Fact]
-    public void Llama_arguments_include_tuned_defaults()
-    {
-        var s = new LocalModelSettings { ExtraArgs = "--temp 0.7 --override-kv \"a b\"" };
-        var args = LlamaServerHost.BuildArguments(s, "m.gguf", "proj.gguf");
-        var line = string.Join(' ', args);
-
-        Assert.Contains("--jinja", args);
-        Assert.Contains("--n-gpu-layers 99", line);
-        Assert.Contains("--ctx-size 81920", line);
-        Assert.Contains("--ctx-size 32768", string.Join(' ', LlamaServerHost.BuildArguments(s, "m.gguf", null, 32768)));
-        Assert.Contains("--cache-type-k q8_0", line);
-        Assert.Contains("--flash-attn on", line);
-        Assert.Contains("--mmproj proj.gguf", line);
-        Assert.Equal("a b", args[^1]);
-    }
-
-    [Fact]
-    public void Context_steps_down_when_it_does_not_fit() =>
-        Assert.Equal([81920, 65536, 49152, 32768, 16384, 8192], LlamaServerHost.ContextLadder(81920));
-
-    [Fact]
     public void Portable_paths_inside_the_app_folder_are_stored_relative()
     {
         var root = Path.Combine(Path.GetTempPath(), "bb-root");
         var paths = new AppPaths(root);
-        Assert.Equal(Path.Combine("Models", "x.gguf"), paths.ToPortable(Path.Combine(root, "Models", "x.gguf")));
-        Assert.Equal(Path.Combine(root, "Models", "x.gguf"), paths.Resolve("Models/x.gguf").Replace('/', Path.DirectorySeparatorChar));
-        var outside = Path.GetFullPath(Path.Combine(root, "..", "elsewhere", "y.gguf"));
+        Assert.Equal(Path.Combine("Workspace", "x.txt"), paths.ToPortable(Path.Combine(root, "Workspace", "x.txt")));
+        Assert.Equal(Path.Combine(root, "Workspace", "x.txt"), paths.Resolve("Workspace/x.txt").Replace('/', Path.DirectorySeparatorChar));
+        var outside = Path.GetFullPath(Path.Combine(root, "..", "elsewhere", "y.txt"));
         Assert.Equal(outside, paths.ToPortable(outside));
     }
 

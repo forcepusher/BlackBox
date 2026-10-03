@@ -8,8 +8,8 @@ namespace BlackBox.App;
 /// Makes the single-file build work without a folder of DLLs next to it.
 /// </summary>
 /// <remarks>
-/// .NET can bundle managed code into one exe, but native libraries (Skia, HarfBuzz, ANGLE) and
-/// llama.cpp have to exist as real files. The single-file publish embeds them as a zip; on first
+/// .NET can bundle managed code into one exe, but native libraries (Skia, HarfBuzz, ANGLE) have
+/// to exist as real files. The single-file publish embeds them as a zip; on first
 /// run (or after an update) they are unpacked into <c>Data/runtime</c> next to the exe, never
 /// into %TEMP%, so the app stays portable and leaves nothing elsewhere on the system.
 /// </remarks>
@@ -19,7 +19,7 @@ internal static class PortableRuntime
 
     /// <summary>
     /// The portable root is the exe folder. BLACKBOX_HOME overrides it, and debug builds use the
-    /// repository root so Models/, llama/ and Data/ are shared between builds.
+    /// repository root so Data/ and Workspace/ are shared between builds.
     /// </summary>
     public static string FindAppRoot()
     {

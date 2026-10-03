@@ -7,8 +7,7 @@ namespace BlackBox.Core.Settings;
 ///   BlackBox.exe
 ///   Data/settings.json
 ///   Data/logs/
-///   Models/        (GGUF files)
-///   llama/         (llama-server binaries, optional)
+///   Data/runtime/  (native libraries unpacked by the single-file build)
 ///   Workspace/     (default working directory for file and shell tools)
 /// </code>
 /// </summary>
@@ -26,10 +25,8 @@ public sealed class AppPaths
     public string DataDir => Path.Combine(Root, "Data");
     public string SettingsFile => Path.Combine(DataDir, "settings.json");
     public string LogsDir => Path.Combine(DataDir, "logs");
-    public string ModelsDir => Path.Combine(Root, "Models");
-    public string LlamaDir => Path.Combine(Root, "llama");
 
-    /// <summary>Where the single-file build unpacks its native libraries and llama.cpp.</summary>
+    /// <summary>Where the single-file build unpacks its native libraries.</summary>
     public string RuntimeDir => Path.Combine(DataDir, "runtime");
     public string WorkspaceDir => Path.Combine(Root, "Workspace");
 
@@ -37,7 +34,6 @@ public sealed class AppPaths
     {
         Directory.CreateDirectory(DataDir);
         Directory.CreateDirectory(LogsDir);
-        Directory.CreateDirectory(ModelsDir);
         Directory.CreateDirectory(WorkspaceDir);
     }
 

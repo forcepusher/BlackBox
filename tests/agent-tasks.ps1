@@ -4,10 +4,11 @@
   It drives your actual mouse and keyboard: don't touch the PC while it runs.
 
 .EXAMPLE
-  ./tests/agent-tasks.ps1                         # backend from Data/settings.json (default: local model)
-  ./tests/agent-tasks.ps1 -Root D:\bb-remote      # a portable root whose settings point at a remote API
+  ./tests/agent-tasks.ps1                         # server and model from Data/settings.json
+  ./tests/agent-tasks.ps1 -Root D:\bb-other       # another portable root with its own settings
+  ./tests/agent-tasks.ps1 -Url http://host:1234/v1 -Model qwen3.8-27b@q4_k_s
 #>
-param([string]$Root = "")
+param([string]$Root = "", [string]$Url = "", [string]$Model = "")
 $repo = Split-Path $PSScriptRoot
 $cli = Join-Path $repo "src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe"
 if (-not (Test-Path $cli)) { dotnet build (Join-Path $repo "src\BlackBox.Cli") -v q | Out-Null }
@@ -15,6 +16,8 @@ $out = Join-Path $repo ("Data\agent-tasks\" + (Get-Date -Format "yyyyMMdd-HHmmss
 New-Item -ItemType Directory -Force $out | Out-Null
 $rootArgs = @()
 if ($Root) { $rootArgs = @("--root", $Root) }
+if ($Url) { $rootArgs += @("--url", $Url) }
+if ($Model) { $rootArgs += @("--model", $Model) }
 
 $tasks = [ordered]@{
   "files"   = "In the working folder, create a file named fruits.txt containing three lines: apple, banana, cherry. Then read the file back and tell me exactly what the second line says."

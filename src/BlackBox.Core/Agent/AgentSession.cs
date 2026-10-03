@@ -14,6 +14,9 @@ public interface IAgentObserver
     void OnAssistantMessage(ChatMessage message);
     Task<bool> RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct);
     void OnToolStarted(ToolCall call, string summary);
+
+    /// <summary>Status the user should see that is not part of the conversation (e.g. reconnecting).</summary>
+    void OnNotice(string text);
     void OnToolFinished(ToolCall call, ToolResult result);
     void OnFinished(AgentStopReason reason, string? detail);
 }
@@ -22,7 +25,7 @@ public interface IAgentObserver
 /// One conversation with the model. Each user turn runs the loop: ask the model, run the tools it
 /// calls, feed results back, repeat until it answers without tool calls.
 /// </summary>
-public sealed class AgentSession(
+public sealed partial class AgentSession(
     OpenAiChatClient client,
     ChatRequestOptions requestOptions,
     ToolRegistry tools,
@@ -52,7 +55,7 @@ public sealed class AgentSession(
                 observer.OnStepStarted(step);
                 PruneScreenshots(settings.KeepScreenshots, PruneSlack);
                 if (contextTokens > 0)
-                    FitContext((int)(contextTokens * 0.8) - (requestOptions.MaxTokens ?? 4096));
+                    await EnsureFitsAsync(PromptBudget, observer, ct).ConfigureAwait(false);
 
                 var request = new List<ChatMessage>(History.Count + 1) { ChatMessage.System(systemPrompt) };
                 request.AddRange(History);
@@ -60,7 +63,7 @@ public sealed class AgentSession(
                 ChatMessage reply;
                 try
                 {
-                    reply = await client.CompleteAsync(request, toolDefs, requestOptions, observer.OnDelta, ct).ConfigureAwait(false);
+                    reply = await CompleteFittingAsync(request, requestOptions, observer, ct).ConfigureAwait(false);
                 }
                 catch (ReasoningBudgetExceededException ex) when (WithoutThinking(requestOptions) is { } direct)
                 {
@@ -68,7 +71,7 @@ public sealed class AgentSession(
                     // again with thinking switched off for this one step.
                     observer.OnAssistantMessage(new ChatMessage { Role = ChatRole.Assistant, Content = "", Reasoning = ex.PartialReasoning + "\n[thinking cut short]" });
                     observer.OnStepStarted(step);
-                    reply = await client.CompleteAsync(request, toolDefs, direct, observer.OnDelta, ct).ConfigureAwait(false);
+                    reply = await CompleteFittingAsync(request, direct, observer, ct).ConfigureAwait(false);
                 }
                 TextToolCallParser.TryExtract(reply, tools);
                 // "The task is complete" followed by yet another screenshot: small models can keep
@@ -161,6 +164,9 @@ public sealed class AgentSession(
     }
 
     private const int MaxNudges = 2;
+
+    /// <summary>How many dropped connections one step survives.</summary>
+    internal const int MaxReconnects = 12;
     private const string NudgeText =
         "Continue with the task. If there is another step, call the tool for it now. If the task is finished, reply with a short summary of what you did.";
 
@@ -227,7 +233,7 @@ public sealed class AgentSession(
         {
             result = ToolResult.Error($"{ex.Message} Parameters for {tool.Name}: {tool.Parameters.ToJsonString()}");
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException or ArgumentException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException or ArgumentException or System.Runtime.InteropServices.ExternalException or TimeoutException)
         {
             result = ToolResult.Error(ex.Message);
         }
@@ -241,6 +247,60 @@ public sealed class AgentSession(
         ApprovalMode.AskRisky => tool.Risk == ToolRisk.Risky,
         _ => false,
     };
+
+    /// <summary>
+    /// Sends the request; if the server says it does not fit, trims history much harder and
+    /// tries again (twice at most) before giving up.
+    /// </summary>
+    private async Task<ChatMessage> CompleteFittingAsync(List<ChatMessage> request, ChatRequestOptions options, IAgentObserver observer, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await CompleteWithReconnectAsync(request, tools.Definitions(), options, observer, observer.OnDelta, ct).ConfigureAwait(false);
+            }
+            catch (ContextOverflowException) when (attempt < 2)
+            {
+                var before = EstimateTokens();
+                PruneScreenshots(1);
+                await EnsureFitsAsync(before / 2, observer, ct).ConfigureAwait(false);
+                request.Clear();
+                request.Add(ChatMessage.System(systemPrompt));
+                request.AddRange(History);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sends one request, retrying when the connection drops. Unstable links (VPNs, proxies that
+    /// cut silent connections) drop long requests, but the server keeps what it already processed
+    /// in its prompt cache, so sending the identical request again resumes where it stopped.
+    /// </summary>
+    private async Task<ChatMessage> CompleteWithReconnectAsync(
+        IReadOnlyList<ChatMessage> request, IReadOnlyList<ToolDefinition> toolDefs, ChatRequestOptions options,
+        IAgentObserver observer, Action<StreamDelta>? onDelta, CancellationToken ct)
+    {
+        var drops = 0;
+        while (true)
+        {
+            try
+            {
+                return await client.CompleteAsync(request, toolDefs, options, onDelta, ct).ConfigureAwait(false);
+            }
+            catch (ConnectionLostException ex) when (++drops <= MaxReconnects)
+            {
+                observer.OnNotice($"Connection lost ({ex.Message}). Reconnecting, attempt {drops} of {MaxReconnects}…");
+                if (ex.ReceivedTokens && onDelta is not null)
+                {
+                    // Discard the half-streamed reply; the retry produces it again.
+                    observer.OnAssistantMessage(new ChatMessage { Role = ChatRole.Assistant, Content = "" });
+                    observer.OnStepStarted(0);
+                }
+                await Task.Delay(TimeSpan.FromSeconds(Math.Min(2 * drops, 10)), ct).ConfigureAwait(false);
+            }
+        }
+    }
 
     /// <summary>Rough token count of the conversation (about 3.5 characters per token, ~1300 per screenshot).</summary>
     internal int EstimateTokens() =>
@@ -270,6 +330,21 @@ public sealed class AgentSession(
             m.Content = m.Content![..300] + "\n[older output trimmed to save context]";
             if (EstimateTokens() <= budget) return;
         }
+
+        // Last resort: drop whole steps from the middle. The original request (first message)
+        // and the most recent steps stay, and tool results never lose their tool call.
+        const string gap = "[Earlier steps were removed to fit the context window. Take a screenshot if you need to see the current state.]";
+        var removedAny = false;
+        while (EstimateTokens() > budget && History.Count > 8)
+        {
+            var at = History.Count > 1 && History[1].Content == gap ? 2 : 1;
+            History.RemoveAt(at);
+            while (at < History.Count - 6 && History[at].Role == ChatRole.Tool)
+                History.RemoveAt(at); // results whose call was just removed
+            removedAny = true;
+        }
+        if (removedAny && History[1].Content != gap)
+            History.Insert(1, ChatMessage.User(gap));
     }
 
     /// <summary>

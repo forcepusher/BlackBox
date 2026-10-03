@@ -127,6 +127,120 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task Context_overflow_from_the_server_trims_history_and_retries()
+    {
+        var overflow = """{"error":"The number of tokens to keep from the initial prompt is greater than the context length. Try to load the model with a larger context length"}""";
+        var server = new ScriptedServer(Sse.Text("Short answer."));
+        server.Failures.Enqueue((System.Net.HttpStatusCode.BadRequest, overflow));
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null),
+            new ChatRequestOptions { SendReasoning = true }, ToolRegistry.CreateDefault(true), ctx, "sys");
+        for (var i = 0; i < 4; i++)
+        {
+            session.History.Add(ChatMessage.User("old question " + i));
+            session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "old answer", Reasoning = new string('r', 8000) });
+        }
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("new question", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count);
+        Assert.True(JsonSize(server.Requests[1]) < JsonSize(server.Requests[0]));
+
+        static int JsonSize(JsonObject o) => o.ToJsonString().Length;
+    }
+
+    [Fact]
+    public async Task Fields_a_strict_server_rejects_are_dropped_once()
+    {
+        var server = new ScriptedServer(Sse.Text("ok"), Sse.Text("ok again"));
+        server.Failures.Enqueue((System.Net.HttpStatusCode.BadRequest, """{"error":{"message":"Unrecognized request argument supplied: top_k"}}"""));
+        var client = new OpenAiChatClient(new HttpClient(server), "http://test", null);
+        var options = new ChatRequestOptions { Extra = new JsonObject { ["top_k"] = 40 } };
+
+        await client.CompleteAsync([ChatMessage.User("hi")], [], options, null, CancellationToken.None);
+        await client.CompleteAsync([ChatMessage.User("hi")], [], options, null, CancellationToken.None);
+
+        Assert.Equal(3, server.Requests.Count);
+        Assert.NotNull(server.Requests[0]["top_k"]);
+        Assert.Null(server.Requests[1]["top_k"]);
+        Assert.Null(server.Requests[2]["top_k"]); // remembered for later requests
+    }
+
+    [Fact]
+    public void Middle_steps_are_dropped_last_keeping_the_task_and_recent_steps()
+    {
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(new ScriptedServer()), "http://test", null),
+            new ChatRequestOptions(), ToolRegistry.CreateDefault(true), ctx, "sys");
+        session.History.Add(ChatMessage.User("THE TASK"));
+        for (var i = 0; i < 20; i++)
+        {
+            session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "", ToolCalls = [new ToolCall { Id = $"c{i}", Name = "wait", Arguments = "{}" }] });
+            session.History.Add(ChatMessage.ToolResult($"c{i}", new string('x', 300)));
+        }
+
+        session.FitContext(5_000);
+
+        Assert.Equal("THE TASK", session.History[0].Content);
+        Assert.StartsWith("[Earlier steps were removed", session.History[1].Content);
+        Assert.Equal("c19", session.History[^1].ToolCallId);
+        // Every remaining tool result still follows the call it answers.
+        var callIds = session.History.Where(m => m.HasToolCalls).SelectMany(m => m.ToolCalls!).Select(c => c.Id).ToHashSet();
+        Assert.All(session.History.Where(m => m.Role == ChatRole.Tool), m => Assert.Contains(m.ToolCallId, callIds));
+    }
+
+    [Fact]
+    public async Task Dropped_connections_are_retried_with_the_same_request()
+    {
+        var server = new ScriptedServer(Sse.Text("Made it.")) { Drops = 2 };
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null),
+            new ChatRequestOptions(), ToolRegistry.CreateDefault(true), ctx, "sys");
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("go", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(3, server.Requests.Count);
+        Assert.Equal(server.Requests[0].ToJsonString(), server.Requests[2].ToJsonString()); // identical, so the server cache resumes
+        Assert.Equal(2, observer.Notices.Count(n => n.Contains("Reconnecting")));
+    }
+
+    [Fact]
+    public async Task Long_runs_are_compacted_in_chunks_into_a_summary()
+    {
+        var server = new ScriptedServer
+        {
+            Responder = req => req["tools"] is null
+                ? Sse.Text("SUMMARY: opened Notepad, typed the report, saved to C:\\notes.txt.")
+                : Sse.Text("Done."),
+        };
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null),
+            new ChatRequestOptions { MaxTokens = 1000 }, ToolRegistry.CreateDefault(true), ctx, "sys", contextTokens: 20_000);
+        session.History.Add(ChatMessage.User("THE TASK"));
+        for (var i = 0; i < 40; i++)
+        {
+            session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "", ToolCalls = [new ToolCall { Id = $"c{i}", Name = "wait", Arguments = "{}" }] });
+            session.History.Add(ChatMessage.ToolResult($"c{i}", new string('x', 1500)));
+        }
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("and now finish", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        var compactionCalls = server.Requests.Count(r => r["tools"] is null);
+        Assert.True(compactionCalls >= 2, $"expected several small summary requests, got {compactionCalls}");
+        Assert.All(server.Requests.Where(r => r["tools"] is null), r => Assert.True(r.ToJsonString().Length < 40_000));
+        Assert.Equal("THE TASK", session.History[0].Content);
+        Assert.StartsWith(AgentSession.SummaryHeader, session.History[1].Content);
+        Assert.Contains("C:\\notes.txt", session.History[1].Content);
+        Assert.True(session.EstimateTokens() < 15_000);
+    }
+
+    [Fact]
     public void Old_thinking_is_dropped_first_when_context_runs_out()
     {
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
@@ -198,9 +312,27 @@ internal sealed class ScriptedServer(params string[] responses) : HttpMessageHan
     private int _next;
     public List<JsonObject> Requests { get; } = [];
 
+    /// <summary>Error responses returned before the scripted ones.</summary>
+    public Queue<(HttpStatusCode Status, string Body)> Failures { get; } = [];
+
+    /// <summary>Number of requests to fail with a dropped connection first.</summary>
+    public int Drops { get; set; }
+
+    /// <summary>Optional: computes the reply from the request instead of the script.</summary>
+    public Func<JsonObject, string>? Responder { get; set; }
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         Requests.Add(JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!.AsObject());
+        if (Failures.TryDequeue(out var failure))
+            return new HttpResponseMessage(failure.Status) { Content = new StringContent(failure.Body, Encoding.UTF8, "application/json") };
+        if (Drops > 0)
+        {
+            Drops--;
+            throw new HttpRequestException("The connection was closed (simulated drop)");
+        }
+        if (Responder is not null)
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Responder(Requests[^1]), Encoding.UTF8, "text/event-stream") };
         var body = _next < responses.Length ? responses[_next++] : Sse.Text("(script exhausted)");
         return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "text/event-stream") };
     }
@@ -226,6 +358,8 @@ internal sealed class RecordingObserver : IAgentObserver
     }
 
     public void OnToolStarted(ToolCall call, string summary) => ToolsRun.Add(call.Name);
+    public List<string> Notices { get; } = [];
+    public void OnNotice(string text) => Notices.Add(text);
     public void OnToolFinished(ToolCall call, ToolResult result) => Results.Add(result);
 
     public void OnFinished(AgentStopReason reason, string? detail)
@@ -254,7 +388,6 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     public IScreenCapture Screen => this;
     public IInputController Input => this;
     public IWindowManager Windows => this;
-    public void TieToAppLifetime(Process process) { }
     public ProcessStartInfo CreateShellStartInfo(string command) => new("cmd.exe") { ArgumentList = { "/c", command } };
 
     public ScreenRect GetPrimaryScreen() => new(0, 0, 200, 100);

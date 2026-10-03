@@ -122,9 +122,6 @@ public interface IPlatformServices
 
     IHostWindow HostWindow { get; }
 
-    /// <summary>Makes sure a child process dies with the app (e.g. a Windows job object).</summary>
-    void TieToAppLifetime(Process process);
-
     /// <summary>Start info for running one command string in the platform shell (no redirection set).</summary>
     ProcessStartInfo CreateShellStartInfo(string command);
 }
@@ -139,7 +136,6 @@ public sealed class UnsupportedPlatform : IPlatformServices, IScreenCapture, IIn
     public IUiAutomation? Automation => null;
     public IHostWindow HostWindow => NoHostWindow.Instance;
     public ProcessStartInfo CreateShellStartInfo(string command) => new("/bin/sh") { ArgumentList = { "-c", command } };
-    public void TieToAppLifetime(Process process) { }
 
     private static NotSupportedException Fail() => new("Desktop control is not implemented on this OS yet.");
 

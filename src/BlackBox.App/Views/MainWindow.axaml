@@ -22,30 +22,23 @@
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <Ellipse Width="9" Height="9" Fill="{Binding StatusBrush}" VerticalAlignment="Center" />
           <TextBlock Classes="muted" Text="{Binding ServerStatusText}" VerticalAlignment="Center" Margin="0,0,6,0" />
-          <Button Classes="ghost" Content="Start model" Command="{Binding StartServerCommand}"
-                  IsVisible="{Binding CanStartServer}" />
-          <Button Classes="ghost" Content="Stop model" Command="{Binding StopServerCommand}"
-                  IsVisible="{Binding CanStopServer}" />
-          <Button Classes="ghost" Content="Log" Click="OnLogClick" IsVisible="{Binding IsLocalBackend}" />
           <Button Classes="ghost" Content="New chat" Command="{Binding NewChatCommand}" />
           <Button Classes="ghost" Content="Settings" Click="OnSettingsClick" />
         </StackPanel>
       </DockPanel>
     </Border>
 
-    <!-- First run: model download -->
+    <!-- Not connected yet: what to do about it -->
     <Border Grid.Row="1" IsVisible="{Binding ShowSetupBanner}" Background="{StaticResource BbSurfaceRaised}"
             BorderBrush="{StaticResource BbAccent}" BorderThickness="0,0,0,2" Padding="16,12">
       <Grid ColumnDefinitions="*,Auto" MaxWidth="860">
         <StackPanel Spacing="6">
-          <TextBlock Text="One more step: download the AI model" FontWeight="SemiBold" />
+          <TextBlock Text="BlackBox isn't connected to a model yet" FontWeight="SemiBold" />
           <TextBlock Classes="muted" Text="{Binding SetupText}" TextWrapping="Wrap" />
-          <ProgressBar IsVisible="{Binding IsDownloading}" Value="{Binding DownloadPercent}" Maximum="100" Height="6" />
-          <TextBlock Classes="muted" Text="{Binding DownloadText}" IsVisible="{Binding DownloadText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" TextWrapping="Wrap" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="12,0,0,0">
-          <Button Classes="primary" Content="Download" Command="{Binding DownloadModelCommand}" IsVisible="{Binding !IsDownloading}" />
-          <Button Classes="ghost" Content="Pause" Command="{Binding CancelDownloadCommand}" IsVisible="{Binding IsDownloading}" />
+          <Button Classes="primary" Content="Settings" Command="{Binding OpenSettingsCommand}" />
+          <Button Classes="ghost" Content="Check again" Command="{Binding CheckServerCommand}" />
         </StackPanel>
       </Grid>
     </Border>

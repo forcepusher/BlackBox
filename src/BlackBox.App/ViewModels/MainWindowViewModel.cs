@@ -1,6 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -19,28 +17,23 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private readonly AppPaths _paths;
     private readonly SettingsStore _store;
     private readonly IPlatformServices _platform;
-    private readonly LlamaServerHost _server;
-    private readonly HttpClient _http = new() { Timeout = Timeout.InfiniteTimeSpan };
+    private readonly HttpClient _http = LlmHttp.Create(Timeout.InfiniteTimeSpan);
     private readonly List<ChatMessage> _history = [];
     private AppSettings _settings;
     private CancellationTokenSource? _runCts;
     private AssistantMessageItem? _current;
 
-    public MainWindowViewModel(AppPaths paths, SettingsStore store, AppSettings settings, IPlatformServices platform, LlamaServerHost server)
+    public MainWindowViewModel(AppPaths paths, SettingsStore store, AppSettings settings, IPlatformServices platform)
     {
         _paths = paths;
         _store = store;
         _settings = settings;
         _platform = platform;
-        _server = server;
-        _server.StateChanged += _ => Dispatcher.UIThread.Post(RefreshServerStatus);
-        RefreshServerStatus();
     }
 
     public ObservableCollection<ChatItemViewModel> Items { get; } = [];
 
     public AppPaths Paths => _paths;
-    public LlamaServerHost Server => _server;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
@@ -54,112 +47,75 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private string _backendLabel = "";
 
     [ObservableProperty]
-    private string _serverStatusText = "";
+    private string _serverStatusText = "Checking…";
 
     [ObservableProperty]
     private IBrush _statusBrush = Brushes.Gray;
 
+    /// <summary>Shown when no server/model is configured or the server can't be reached.</summary>
     [ObservableProperty]
-    private bool _isLocalBackend;
+    private bool _showSetupBanner;
 
     [ObservableProperty]
-    private bool _canStartServer;
-
-    [ObservableProperty]
-    private bool _canStopServer;
+    private string _setupText = "";
 
     public bool HasNoMessages => Items.Count == 0;
 
     public void AttachHostWindow(nint handle) => _platform.HostWindow.Attach(handle, _settings.Agent.HideFromScreenshots);
 
-    // ---- first-run model download ----------------------------------------------------
-
-    private CancellationTokenSource? _downloadCts;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowSetupBanner))]
-    private bool _modelPresent;
-
-    [ObservableProperty]
-    private bool _isDownloading;
-
-    [ObservableProperty]
-    private double _downloadPercent;
-
-    [ObservableProperty]
-    private string _downloadText = "";
-
-    public bool ShowSetupBanner => IsLocalBackend && !ModelPresent;
-
-    partial void OnIsLocalBackendChanged(bool value) => OnPropertyChanged(nameof(ShowSetupBanner));
-
-    public string SetupText =>
-        $"BlackBox needs its AI model ({Path.GetFileName(_settings.Local.ModelPath)}, about 8.7 GB with vision). " +
-        "It is downloaded once into the Models folder next to the app.";
-
-    [RelayCommand]
-    private async Task DownloadModelAsync()
-    {
-        if (IsDownloading) return;
-        IsDownloading = true;
-        _downloadCts = new CancellationTokenSource();
-        var downloader = new ModelDownloader(_http);
-        var progress = new Progress<DownloadProgress>(p =>
-        {
-            DownloadPercent = p.Total is > 0 ? 100.0 * p.Done / p.Total.Value : 0;
-            var total = p.Total is { } t ? $" of {t / 1e9:0.0} GB" : "";
-            var speed = p.BytesPerSecond > 0 ? $" · {p.BytesPerSecond / 1e6:0} MB/s" : "";
-            DownloadText = $"{p.FileName}: {p.Done / 1e9:0.00} GB{total}{speed}";
-        });
-
-        try
-        {
-            var local = _settings.Local;
-            var model = _paths.Resolve(local.ModelPath);
-            var mmproj = string.IsNullOrWhiteSpace(local.MmprojPath) ? null : _paths.Resolve(local.MmprojPath);
-            if (mmproj is not null && !File.Exists(mmproj) && !string.IsNullOrWhiteSpace(local.MmprojUrl))
-                await downloader.DownloadAsync(local.MmprojUrl, mmproj, progress, _downloadCts.Token);
-            if (!File.Exists(model))
-                await downloader.DownloadAsync(local.ModelUrl, model, progress, _downloadCts.Token);
-
-            RefreshModelPresent();
-            AddNotice("Model downloaded.", isError: false);
-            if (ModelPresent)
-                await StartServerAsync();
-        }
-        catch (OperationCanceledException)
-        {
-            DownloadText = "Paused. Press Download to continue where it stopped.";
-        }
-        catch (Exception ex) when (ex is HttpRequestException or IOException)
-        {
-            DownloadText = "Download failed: " + ex.Message + " Press Download to retry; it resumes where it stopped.";
-        }
-        finally
-        {
-            IsDownloading = false;
-            _downloadCts.Dispose();
-            _downloadCts = null;
-        }
-    }
-
-    [RelayCommand]
-    private void CancelDownload() => _downloadCts?.Cancel();
-
-    private void RefreshModelPresent()
-    {
-        ModelPresent = File.Exists(_paths.Resolve(_settings.Local.ModelPath));
-        RefreshServerStatus();
-    }
-
     public void OnStartup()
     {
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoMessages));
-        RefreshModelPresent();
-        if (_settings.Backend == BackendKind.Local && ModelPresent && _settings.Local.AutoStart)
-            _ = StartServerAsync();
+        _ = CheckServerAsync();
     }
 
+    /// <summary>Raised by the setup banner's button; the view opens Settings.</summary>
+    public event Action? OpenSettingsRequested;
+
+    [RelayCommand]
+    private void OpenSettings() => OpenSettingsRequested?.Invoke();
+
+    [RelayCommand]
+    private async Task CheckServerAsync()
+    {
+        var server = _settings.Server;
+        BackendLabel = string.IsNullOrWhiteSpace(server.Model) ? "No model selected" : server.Model;
+        if (string.IsNullOrWhiteSpace(server.BaseUrl) || string.IsNullOrWhiteSpace(server.Model))
+        {
+            SetStatus(Brushes.Gray, "Not set up", "Connect BlackBox to an AI model server (for example LM Studio) in Settings.");
+            return;
+        }
+
+        SetStatus(BusyBrush, "Checking…", null);
+        using var probeHttp = LlmHttp.Create(TimeSpan.FromSeconds(10));
+        var probe = await ServerProbe.CheckAsync(probeHttp, server, CancellationToken.None);
+        if (!probe.Reachable)
+        {
+            SetStatus(ErrorBrush, "Offline", $"{probe.Message} Check that the server is running at {server.BaseUrl}.");
+            return;
+        }
+        if (probe.Models.Count > 0 && !probe.Models.Contains(server.Model))
+        {
+            SetStatus(ErrorBrush, "Model not found", $"The server doesn't offer \"{server.Model}\". Pick one of its models in Settings.");
+            return;
+        }
+        if (probe.LoadedContext is { } context && context != server.ContextSize)
+        {
+            // Trust what LM Studio reports over the saved guess.
+            server.ContextSize = context;
+            _store.Save(_settings);
+        }
+        var ctxText = probe.LoadedContext is { } c ? $" · {c / 1024}k context" : "";
+        SetStatus(OkBrush, $"Connected{ctxText}", null);
+    }
+
+    private void SetStatus(IBrush brush, string status, string? setup)
+    {
+        StatusBrush = brush;
+        ServerStatusText = status;
+        ShowSetupBanner = setup is not null;
+        SetupText = setup ?? "";
+    }
     // ---- commands -------------------------------------------------------------------
 
     private bool CanSend() => !IsBusy && !string.IsNullOrWhiteSpace(Input);
@@ -176,7 +132,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
         try
         {
-            if (await PrepareBackendAsync(ct) is not { } backend)
+            if (_settings.Server.BaseUrl.Length > 0 && _settings.Server.Model.Length > 0)
+            {
+                // LM Studio loads models on first use; do that now so we know the real context size.
+                using var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10));
+                var context = await ServerProbe.EnsureLoadedAsync(probeHttp, _settings.Server,
+                    () => Dispatcher.UIThread.Post(() => AddNotice("Loading the model on the server…", isError: false)), ct);
+                if (context is { } c && c != _settings.Server.ContextSize)
+                {
+                    _settings.Server.ContextSize = c;
+                    _store.Save(_settings);
+                    ServerStatusText = $"Connected · {c / 1024}k context";
+                }
+            }
+            if (PrepareBackend() is not { } backend)
                 return;
 
             var agent = _settings.Agent;
@@ -223,131 +192,33 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _current = null;
     }
 
-    [RelayCommand]
-    private async Task StartServerAsync()
-    {
-        try
-        {
-            await _server.StartAsync(_settings.Local, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            AddNotice("Could not start the local model: " + ex.Message, isError: true);
-        }
-        if (_server.State == ServerState.Failed && _server.LastError is { } err)
-            AddNotice(err, isError: true);
-        else if (_server.Warning is { } warning)
-            AddNotice(warning, isError: false);
-    }
-
-    [RelayCommand]
-    private Task StopServerAsync() => _server.StopAsync();
-
     // ---- settings -------------------------------------------------------------------
 
-    public SettingsViewModel CreateSettingsViewModel() => new(_settings.Clone(), _paths, _server);
+    public SettingsViewModel CreateSettingsViewModel() => new(_settings.Clone(), _paths);
 
     public async Task ApplySettingsAsync(AppSettings updated)
     {
-        var old = _settings;
         _settings = updated;
         _store.Save(updated);
-
-        var localChanged = JsonSerializer.Serialize(old.Local) != JsonSerializer.Serialize(updated.Local);
-        var wasRunning = _server.State is ServerState.Running or ServerState.Starting;
-        RefreshModelPresent();
-        OnPropertyChanged(nameof(SetupText));
         _platform.HostWindow.SetHiddenFromCapture(updated.Agent.HideFromScreenshots);
-
-        if (updated.Backend == BackendKind.Remote && wasRunning)
-        {
-            await _server.StopAsync(); // free the GPU when switching to a remote API
-        }
-        else if (updated.Backend == BackendKind.Local && (localChanged && wasRunning || old.Backend == BackendKind.Remote && updated.Local.AutoStart))
-        {
-            AddNotice("Restarting the local model with the new settings…", isError: false);
-            await StartServerAsync();
-        }
-        RefreshServerStatus();
+        await CheckServerAsync();
     }
 
-    // ---- backend --------------------------------------------------------------------
-
-    private async Task<BackendConnection?> PrepareBackendAsync(CancellationToken ct)
+    private BackendConnection? PrepareBackend()
     {
-        if (_settings.Backend == BackendKind.Remote)
+        var server = _settings.Server;
+        if (string.IsNullOrWhiteSpace(server.BaseUrl) || string.IsNullOrWhiteSpace(server.Model))
         {
-            var remote = _settings.Remote;
-            if (string.IsNullOrWhiteSpace(remote.BaseUrl) || string.IsNullOrWhiteSpace(remote.Model))
-            {
-                AddNotice("Set the API address and model name in Settings first.", isError: true);
-                return null;
-            }
-            return BackendConnection.ForRemote(_http, remote, _settings.Agent);
-        }
-
-        if (!ModelPresent)
-        {
-            AddNotice("The model isn't downloaded yet. Press Download at the top first.", isError: true);
+            AddNotice("Connect to a model server in Settings first.", isError: true);
             return null;
         }
-
-        if (_server.State != ServerState.Running)
-        {
-            if (_server.State == ServerState.Starting)
-            {
-                AddNotice("Waiting for the model to finish loading…", isError: false);
-                await _server.WaitForStartAsync();
-            }
-            else
-            {
-                AddNotice("Starting the local model…", isError: false);
-                await StartServerAsync();
-            }
-            ct.ThrowIfCancellationRequested();
-            if (_server.State != ServerState.Running)
-                return null;
-        }
-        return BackendConnection.ForLocal(_http, _server, _settings.Agent);
+        return BackendConnection.Create(_http, server, _settings.Agent);
     }
-
     private string WorkingDirectory()
     {
         var wd = string.IsNullOrWhiteSpace(_settings.Agent.WorkingDirectory) ? _paths.WorkspaceDir : _paths.Resolve(_settings.Agent.WorkingDirectory);
         Directory.CreateDirectory(wd);
         return wd;
-    }
-
-    private void RefreshServerStatus()
-    {
-        IsLocalBackend = _settings.Backend == BackendKind.Local;
-        if (!IsLocalBackend)
-        {
-            BackendLabel = string.IsNullOrWhiteSpace(_settings.Remote.Model) ? "Remote API" : _settings.Remote.Model;
-            ServerStatusText = "Remote API";
-            StatusBrush = OkBrush;
-            CanStartServer = CanStopServer = false;
-            return;
-        }
-
-        BackendLabel = Path.GetFileNameWithoutExtension(_settings.Local.ModelPath);
-        var state = _server.State;
-        StatusBrush = state switch
-        {
-            ServerState.Running => OkBrush,
-            ServerState.Starting => BusyBrush,
-            ServerState.Failed => ErrorBrush,
-            _ => Brushes.Gray,
-        };
-        ServerStatusText = state switch
-        {
-            ServerState.Running => $"Ready · {(_server.HasVision ? "vision" : "text only")} · {_server.EffectiveContextSize / 1024}k context",
-            ServerState.Starting => "Loading model…",
-            ServerState.Failed => "Failed to start",
-            _ => "Stopped",
-        };
-        CanStartServer = state is ServerState.Stopped or ServerState.Failed && File.Exists(_paths.Resolve(_settings.Local.ModelPath));
-        CanStopServer = state is ServerState.Running or ServerState.Starting;
     }
 
     private static readonly IBrush OkBrush = new SolidColorBrush(Color.Parse("#5FB878"));
@@ -392,6 +263,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             return item.WaitForApprovalAsync(ct);
         });
     }
+
+    void IAgentObserver.OnNotice(string text) => Dispatcher.UIThread.Post(() => AddNotice(text, isError: false));
 
     void IAgentObserver.OnToolStarted(ToolCall call, string summary) => Dispatcher.UIThread.Post(() =>
     {

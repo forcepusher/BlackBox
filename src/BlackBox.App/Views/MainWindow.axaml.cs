@@ -72,6 +72,13 @@ public partial class MainWindow : Window
             Vm.SendCommand.Execute(null);
     }
 
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (DataContext is MainWindowViewModel vm)
+            vm.OpenSettingsRequested += () => OnSettingsClick(this, new RoutedEventArgs());
+    }
+
     private async void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
         var settingsVm = Vm.CreateSettingsViewModel();
@@ -80,6 +87,4 @@ public partial class MainWindow : Window
             await Vm.ApplySettingsAsync(settingsVm.Settings);
     }
 
-    private void OnLogClick(object? sender, RoutedEventArgs e) =>
-        new LogWindow(Vm.Server).Show(this);
 }
