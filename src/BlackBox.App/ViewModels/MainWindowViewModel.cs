@@ -94,8 +94,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     partial void OnIsLocalBackendChanged(bool value) => OnPropertyChanged(nameof(ShowSetupBanner));
 
     public string SetupText =>
-        $"BlackBox needs its AI model ({Path.GetFileName(_settings.Local.ModelPath)}, about 8.7 GB with vision). " +
-        "It is downloaded once into the Models folder next to the app.";
+        $"BlackBox needs its AI model ({Path.GetFileName(_settings.Local.ModelPath)}" +
+        (ModelCatalog.Find(_settings.Local.SelectedModel) is { } m ? $", about {m.DownloadBytes / 1e9:0.0} GB with vision" : "") +
+        "). It is downloaded once into the Models folder next to the app.";
 
     [RelayCommand]
     private async Task DownloadModelAsync()

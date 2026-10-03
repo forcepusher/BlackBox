@@ -4,7 +4,8 @@ using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
 
-// Usage: blackbox-cli [--root DIR] [--yes] [--keep-server] [--save-shots DIR] "task"
+// Usage: blackbox-cli [--root DIR] [--model ID] [--yes] [--save-shots DIR] "task"
+//   --model       local catalog model id (qwen3.8-27b-iq2s, gemma-4-12b-qat) instead of the saved choice
 //   --root        portable folder (default: BLACKBOX_HOME, else the exe folder, else the repo root)
 //   --yes         approve risky tools without asking
 //   --save-shots  write every screenshot the model sees to DIR
@@ -22,6 +23,7 @@ bool Flag(string flag) => argsList.Remove(flag);
 
 var root = Take("--root") ?? Environment.GetEnvironmentVariable("BLACKBOX_HOME") ?? FindRoot();
 var shotsDir = Take("--save-shots");
+var modelId = Take("--model");
 var autoYes = Flag("--yes");
 var task = string.Join(' ', argsList);
 if (string.IsNullOrWhiteSpace(task))
@@ -33,6 +35,12 @@ if (string.IsNullOrWhiteSpace(task))
 var paths = new AppPaths(root);
 paths.EnsureCreated();
 var settings = new SettingsStore(paths).Load();
+if (modelId is not null)
+{
+    var model = ModelCatalog.Find(modelId) ?? throw new ArgumentException($"Unknown model '{modelId}'. Known: {string.Join(", ", ModelCatalog.All.Select(m => m.Id))}");
+    ModelCatalog.Apply(model, settings.Local);
+    settings.Backend = BackendKind.Local;
+}
 #if WINDOWS
 IPlatformServices platform = new BlackBox.Platform.Windows.WindowsPlatform();
 #else

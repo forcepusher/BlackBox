@@ -54,7 +54,8 @@ without taking it gets nudged to continue.
 
 Actions run without asking by default (approvals can be switched on in Settings → General).
 Moving the mouse to the top-left corner of the screen, or pressing Stop, halts the agent. BlackBox
-minimizes itself while it works and comes back when it is done.
+stays on screen while it works but is hidden from the agent's screenshots, and steps behind other
+windows for the moment a click lands on it.
 
 ## Build
 Requires the .NET 10 SDK.

@@ -62,13 +62,49 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
     public string ModelPath
     {
         get => Local.ModelPath;
-        set { Local.ModelPath = Paths.ToPortable(value); OnPropertyChanged(); OnPropertyChanged(nameof(ModelInfo)); }
+        set { Local.ModelPath = Paths.ToPortable(value); MarkCustom(); OnPropertyChanged(); OnPropertyChanged(nameof(ModelInfo)); }
     }
 
     public string MmprojPath
     {
         get => Local.MmprojPath;
-        set { Local.MmprojPath = Paths.ToPortable(value); OnPropertyChanged(); OnPropertyChanged(nameof(ModelInfo)); }
+        set { Local.MmprojPath = Paths.ToPortable(value); MarkCustom(); OnPropertyChanged(); OnPropertyChanged(nameof(ModelInfo)); }
+    }
+
+    // ---- model picker ---------------------------------------------------------------
+
+    public sealed record ModelChoice(string Id, string Title, string Subtitle);
+
+    public IReadOnlyList<ModelChoice> ModelChoices =>
+    [
+        .. ModelCatalog.All.Select(m => new ModelChoice(m.Id, m.DisplayName,
+            $"{m.Description} {(File.Exists(Paths.Resolve(m.ModelPath)) ? "Downloaded." : $"Download: {m.DownloadBytes / 1e9:0.0} GB.")}")),
+        new ModelChoice(ModelCatalog.CustomId, "Custom GGUF file", "Pick your own model and vision files under Advanced."),
+    ];
+
+    public ModelChoice? SelectedModelChoice
+    {
+        get => ModelChoices.FirstOrDefault(c => c.Id == Local.SelectedModel) ?? ModelChoices[^1];
+        set
+        {
+            if (value is null || value.Id == Local.SelectedModel) return;
+            if (ModelCatalog.Find(value.Id) is { } model)
+                ModelCatalog.Apply(model, Local);
+            else
+                Local.SelectedModel = ModelCatalog.CustomId;
+            OnPropertyChanged();
+            foreach (var name in new[] { nameof(ModelPath), nameof(MmprojPath), nameof(ModelInfo), nameof(ModelName), nameof(Local) })
+                OnPropertyChanged(name);
+        }
+    }
+
+    private void MarkCustom()
+    {
+        var match = ModelCatalog.All.FirstOrDefault(m => m.ModelPath == Local.ModelPath && m.MmprojPath == Local.MmprojPath);
+        var id = match?.Id ?? ModelCatalog.CustomId;
+        if (id == Local.SelectedModel) return;
+        Local.SelectedModel = id;
+        OnPropertyChanged(nameof(SelectedModelChoice));
     }
 
     public string WorkingDirectory
@@ -91,6 +127,8 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         var oldLocal = Settings.Local;
         var oldAgent = Settings.Agent;
         Settings.Local = new LocalModelSettings { AutoStart = oldLocal.AutoStart };
+        if (ModelCatalog.Find(oldLocal.SelectedModel) is { } chosen)
+            ModelCatalog.Apply(chosen, Settings.Local); // keep the model picked on General
         Settings.Agent = new AgentSettings
         {
             Approval = oldAgent.Approval,
@@ -110,7 +148,7 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         {
             var model = Paths.Resolve(Local.ModelPath);
             if (!File.Exists(model))
-                return "Not downloaded yet. Use the Download button in the main window.";
+                return "Not downloaded yet. After saving, press Download in the main window.";
             var gb = new FileInfo(model).Length / 1024d / 1024 / 1024;
             var vision = string.IsNullOrWhiteSpace(Local.MmprojPath)
                 ? "Vision is off (no projector file), so it cannot see the screen."

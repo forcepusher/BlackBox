@@ -18,6 +18,9 @@ public enum ApprovalMode
 /// <summary>Settings for the llama-server process that BlackBox starts and stops itself.</summary>
 public sealed class LocalModelSettings
 {
+    /// <summary>Catalog id of the chosen model (see ModelCatalog), or "custom" for hand-picked files.</summary>
+    public string SelectedModel { get; set; } = ModelCatalog.Qwen38IQ2S.Id;
+
     /// <summary>Path to llama-server(.exe). Empty = look in ./llama, then on PATH.</summary>
     public string ServerPath { get; set; } = "";
 

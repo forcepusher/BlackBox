@@ -53,6 +53,16 @@
             </StackPanel>
 
             <StackPanel IsVisible="{Binding IsLocal}" Spacing="4" Margin="0,8,0,0">
+              <ComboBox ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding SelectedModelChoice}" HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:SettingsViewModel+ModelChoice">
+                    <StackPanel Spacing="2" Margin="0,2">
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                      <TextBlock Classes="muted" Text="{Binding Subtitle}" TextWrapping="Wrap" MaxWidth="560" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
               <Border Classes="card">
                 <StackPanel Spacing="4">
                   <TextBlock Text="{Binding ModelName}" FontWeight="SemiBold" />

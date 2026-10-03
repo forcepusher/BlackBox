@@ -6,8 +6,9 @@
 .EXAMPLE
   ./tests/agent-tasks.ps1                         # backend from Data/settings.json (default: local model)
   ./tests/agent-tasks.ps1 -Root D:\bb-remote      # a portable root whose settings point at a remote API
+  ./tests/agent-tasks.ps1 -Model gemma-4-12b-qat  # a specific local catalog model
 #>
-param([string]$Root = "")
+param([string]$Root = "", [string]$Model = "")
 $repo = Split-Path $PSScriptRoot
 $cli = Join-Path $repo "src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe"
 if (-not (Test-Path $cli)) { dotnet build (Join-Path $repo "src\BlackBox.Cli") -v q | Out-Null }
@@ -15,6 +16,7 @@ $out = Join-Path $repo ("Data\agent-tasks\" + (Get-Date -Format "yyyyMMdd-HHmmss
 New-Item -ItemType Directory -Force $out | Out-Null
 $rootArgs = @()
 if ($Root) { $rootArgs = @("--root", $Root) }
+if ($Model) { $rootArgs += @("--model", $Model) }
 
 $tasks = [ordered]@{
   "files"   = "In the working folder, create a file named fruits.txt containing three lines: apple, banana, cherry. Then read the file back and tell me exactly what the second line says."
