@@ -161,7 +161,19 @@ public sealed class LlamaServerHost : IAsyncDisposable
         foreach (var ctxSize in ContextLadder(s.ContextSize))
         {
             var logStart = LogCount;
-            if (await LaunchAsync(exe, s, model, mmproj, ctxSize, ct).ConfigureAwait(false))
+            var launched = await LaunchAsync(exe, s, model, mmproj, ctxSize, ct).ConfigureAwait(false);
+            if (!launched && !ct.IsCancellationRequested && mmproj is not null && LogContains(logStart, "failed to load multimodal", "Failed to load CLIP"))
+            {
+                // A vision file this llama.cpp cannot read should not stop the model itself.
+                var reason = LastLogLine(logStart, "unknown projector", "load_hparams", "clip_init") ?? "unsupported format";
+                Warning = $"The vision file could not be loaded ({reason.Trim()}), so the model runs text-only and cannot see the screen. A newer llama.cpp usually fixes this.";
+                Log("WARNING: " + Warning);
+                mmproj = null;
+                HasVision = false;
+                logStart = LogCount;
+                launched = await LaunchAsync(exe, s, model, mmproj, ctxSize, ct).ConfigureAwait(false);
+            }
+            if (launched)
             {
                 EffectiveContextSize = ctxSize;
                 if (ctxSize < s.ContextSize)
@@ -172,8 +184,15 @@ public sealed class LlamaServerHost : IAsyncDisposable
                 }
                 return;
             }
-            if (ct.IsCancellationRequested || !LooksOutOfMemory(logStart))
+            if (ct.IsCancellationRequested)
                 return;
+            if (!LooksOutOfMemory(logStart))
+            {
+                // Say what llama.cpp actually complained about rather than guessing.
+                if (LastLogLine(logStart, "error", "failed", "unknown", "unsupported") is { } why)
+                    LastError = $"llama-server could not load the model: {why.Trim()}";
+                return;
+            }
             Log($"Not enough memory with a {ctxSize / 1024}k context; retrying with less.");
         }
     }
@@ -193,6 +212,22 @@ public sealed class LlamaServerHost : IAsyncDisposable
     {
         get { lock (_recentLog) return _logLines; }
     }
+
+    private string[] LogSince(int sinceLine)
+    {
+        lock (_recentLog)
+        {
+            var skip = Math.Max(0, _recentLog.Count - (_logLines - sinceLine));
+            return _recentLog.Skip(skip).ToArray();
+        }
+    }
+
+    private bool LogContains(int sinceLine, params string[] needles) =>
+        LogSince(sinceLine).Any(l => needles.Any(n => l.Contains(n, StringComparison.OrdinalIgnoreCase)));
+
+    private string? LastLogLine(int sinceLine, params string[] needles) =>
+        LogSince(sinceLine).LastOrDefault(l => !l.StartsWith("ERROR:", StringComparison.Ordinal) && !l.StartsWith("llama-server exited", StringComparison.Ordinal)
+            && needles.Any(n => l.Contains(n, StringComparison.OrdinalIgnoreCase)));
 
     private bool LooksOutOfMemory(int sinceLine)
     {
