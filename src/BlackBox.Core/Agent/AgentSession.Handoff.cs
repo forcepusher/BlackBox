@@ -106,14 +106,8 @@ public sealed partial class AgentSession
     private async Task<string> WriteHandoffNoteAsync(IAgentObserver observer, CancellationToken ct)
     {
         // Same tools and options as every step, so the prompt matches the server's cache up to
-        // the request message; only the length limit differs, and it isn't part of the prompt.
-        var options = new ChatRequestOptions
-        {
-            Model = requestOptions.Model,
-            MaxTokens = HandoffMaxTokens,
-            Extra = requestOptions.Extra,
-            SendReasoning = requestOptions.SendReasoning,
-        };
+        // the request message.
+        var options = requestOptions.WithMaxTokens(HandoffMaxTokens);
         var request = new List<ChatMessage>(History.Count + 2) { ChatMessage.System(systemPrompt) };
         request.AddRange(History);
         request.Add(ChatMessage.User(HandoffRequest));

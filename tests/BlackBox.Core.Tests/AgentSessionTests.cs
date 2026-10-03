@@ -40,6 +40,31 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task The_reply_is_read_back_into_the_servers_cache_while_the_tools_run()
+    {
+        var server = new ScriptedServer(
+            Sse.ToolCall("call_a", "list_directory", "{}"),
+            Sse.Text("Done."));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("look", observer, CancellationToken.None);
+
+        // One warm-up, for the one reply that was followed by a tool run; none after the final answer.
+        var warmUp = Assert.Single(server.WarmUps);
+        Assert.Equal(1, warmUp["max_tokens"]!.GetValue<int>());
+        Assert.NotNull(warmUp["tools"]);
+        // Its prompt is the next real request's prompt up to the tool results, so the cache matches.
+        var warm = warmUp["messages"]!.AsArray();
+        var next = server.Requests[1]["messages"]!.AsArray();
+        Assert.Equal(AgentSession.WarmUpText, warm[^1]!["content"]!.ToString());
+        for (var i = 0; i < warm.Count - 1; i++)
+            Assert.Equal(warm[i]!.ToJsonString(), next[i]!.ToJsonString());
+        Assert.Equal("tool", next[warm.Count - 1]!["role"]!.ToString());
+        // The warm-up leaves no trace in the conversation.
+        Assert.DoesNotContain(session.History, m => m.Content == AgentSession.WarmUpText);
+    }
+
+    [Fact]
     public async Task Bad_arguments_are_reported_to_the_model_instead_of_crashing()
     {
         var server = new ScriptedServer(
