@@ -74,7 +74,6 @@ public partial class MainWindow : Window
         base.OnDataContextChanged(e);
         if (DataContext is not MainWindowViewModel vm)
             return;
-        vm.OpenSettingsRequested += () => OnSettingsClick(this, new RoutedEventArgs());
         // Stay visible while the agent works, but invisible to its screenshots. Applied before the
         // window is first shown: changing capture exclusion on an already-painted window left
         // parts of it unpainted (the window behind showed through).

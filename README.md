@@ -14,14 +14,15 @@ unpacks its native UI libraries into `Data/runtime` next to itself.
 BlackBox/
   BlackBox.exe
   Data/        settings.json, runtime/ (unpacked by the single-file exe)
-  Workspace/   default working folder for file and shell tools
 ```
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
+The agent itself works across the whole PC; relative paths and shell commands start in your home folder.
 
 ## Connecting to a model
-Settings → General → AI model server. Enter the server address (LM Studio's default is
-`http://localhost:1234/v1`), press **Test connection** and pick a model. For screen control the
+Enter the server address in the bar at the top of the main window (LM Studio's default is
+`http://localhost:1234/v1`); the model dropdown fills in from the models the server reports. An API
+key, if your server needs one, goes in Settings. For screen control the
 model must accept images (for example Qwen3.5+ VL models or Gemma 4 with their vision projector);
 LM Studio reports this and BlackBox sets it automatically.
 
@@ -52,7 +53,7 @@ cache, so each retry continues where the last one stopped (up to 12 times per st
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |
-| `screenshot` | Captures the primary screen, downscaled to ~1.3 MP on the 32px vision grid |
+| `screenshot` | Captures the primary screen, scaled to fit the chosen resolution (1600×900 by default) on the 32px vision grid |
 | `zoom` | Magnified view of a region with rulers labelled in screenshot coordinates |
 | `list_ui_elements`, `click_element` | Windows UI Automation: find controls by name and press them (no pixel aiming) |
 | `mouse_click`, `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates |
@@ -76,7 +77,7 @@ windows for the moment a click lands on it.
 Requires the .NET 10 SDK.
 
 ```powershell
-dotnet build                      # debug build; keeps its Data/ and Workspace/ in .dev/
+dotnet build                      # debug build; keeps its Data/ in .dev/
 dotnet test                       # unit tests
 ./scripts/publish.ps1             # single-file publish/BlackBox.exe
 ./scripts/publish.ps1 -Folder     # classic self-contained folder in publish/BlackBox-win-x64

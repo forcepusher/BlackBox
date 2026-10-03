@@ -61,7 +61,7 @@ using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a mo
     Console.WriteLine($"[server] {settings.Server.BaseUrl} · {settings.Server.Model} · {settings.Server.ContextSize / 1024}k context");
 }
 var backend = BackendConnection.Create(http, settings.Server);
-var workDir = string.IsNullOrWhiteSpace(agent.WorkingDirectory) ? paths.WorkspaceDir : paths.Resolve(agent.WorkingDirectory);
+var workDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 var ctx = new ToolContext { Platform = platform, Settings = agent, WorkingDirectory = workDir };
 var screen = backend.Vision ? ctx.GetScreenSpace() : null;
 var registry = ToolRegistry.CreateDefault(includeScreenTools: screen is not null, includeUiAutomation: platform.Automation is not null);

@@ -19,7 +19,7 @@ public class ToolTests
     [Fact]
     public void Screen_space_scales_down_and_maps_back()
     {
-        var space = new ScreenSpace(new ScreenRect(0, 0, 2560, 1440), 1280 * 720);
+        var space = new ScreenSpace(new ScreenRect(0, 0, 2560, 1440), (1280, 720));
         Assert.Equal((1280, 704), (space.ImageWidth, space.ImageHeight)); // 720 snaps to the 32px grid
         Assert.Equal((200, 307), space.ToScreen(100, 150));
         Assert.Equal((100, 150), space.ToImage(200, 307));
@@ -29,20 +29,20 @@ public class ToolTests
     [Fact]
     public void Small_screens_are_not_upscaled()
     {
-        var space = new ScreenSpace(new ScreenRect(0, 0, 1024, 768), 1_300_000);
+        var space = new ScreenSpace(new ScreenRect(0, 0, 1024, 768), (1600, 900));
         Assert.Equal((1024, 768), (space.ImageWidth, space.ImageHeight));
     }
 
     [Fact]
     public async Task Click_maps_model_coordinates_to_screen_pixels()
     {
-        var platform = new FakePlatform();
-        // 200x100 fake screen with a 100x100 box => scale 0.5
-        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotMaxPixels = 64 * 32, ScreenshotAfterActions = false, FailsafeCorner = false });
+        var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1440) };
+        // 2560x1440 screen sent at 1280x720 (704 after snapping to the 32px grid)
+        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotResolution = ScreenshotResolution.R1280x720, ScreenshotAfterActions = false, FailsafeCorner = false });
 
         await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 10, ["y"] = "20", ["clicks"] = 2 }, ctx, CancellationToken.None);
 
-        Assert.Equal(["move 31,62", "click Left x2"], platform.Actions); // 200x100 screen seen as 64x32
+        Assert.Equal(["move 20,41", "click Left x2"], platform.Actions);
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public class ToolTests
               "backend": "Remote",
               "local": { "modelPath": "Models/x.gguf", "gpuLayers": 99 },
               "remote": { "baseUrl": "http://host:1234/v1", "model": "qwen", "sendExtras": false },
-              "agent": { "enableThinking": false, "temperature": 0.3, "maxSteps": 12, "keepScreenshots": 5 }
+              "agent": { "enableThinking": false, "temperature": 0.3, "maxSteps": 12, "keepScreenshots": 5, "workingDirectory": "D:\\x", "screenshotMaxPixels": 2000000 }
             }
             """);
 
@@ -135,20 +135,10 @@ public class ToolTests
         Assert.Equal("http://host:1234/v1", settings.Server.BaseUrl);
         Assert.Equal("qwen", settings.Server.Model);
         Assert.Equal(12, settings.Agent.MaxSteps);
+        Assert.Equal(ScreenshotResolution.R1920x1080, settings.Agent.ScreenshotResolution); // nearest to the old 2 MP budget
         var saved = File.ReadAllText(paths.SettingsFile);
-        foreach (var gone in new[] { "backend", "local", "remote", "gpuLayers", "sendExtras", "enableThinking", "temperature", "keepScreenshots", "contextSize" })
+        foreach (var gone in new[] { "backend", "local", "remote", "gpuLayers", "sendExtras", "enableThinking", "temperature", "keepScreenshots", "contextSize", "workingDirectory", "screenshotMaxPixels" })
             Assert.DoesNotContain(gone, saved);
-    }
-
-    [Fact]
-    public void Portable_paths_inside_the_app_folder_are_stored_relative()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "bb-root");
-        var paths = new AppPaths(root);
-        Assert.Equal(Path.Combine("Workspace", "x.txt"), paths.ToPortable(Path.Combine(root, "Workspace", "x.txt")));
-        Assert.Equal(Path.Combine(root, "Workspace", "x.txt"), paths.Resolve("Workspace/x.txt").Replace('/', Path.DirectorySeparatorChar));
-        var outside = Path.GetFullPath(Path.Combine(root, "..", "elsewhere", "y.txt"));
-        Assert.Equal(outside, paths.ToPortable(outside));
     }
 
     [Fact]
@@ -164,7 +154,7 @@ public class ToolTests
         Assert.True(screen.Width >= 640 && screen.Height >= 480);
 
         var result = await new ScreenshotTool().ExecuteAsync([], Ctx(platform), CancellationToken.None);
-        var space = new ScreenSpace(screen, new AgentSettings().ScreenshotMaxPixels);
+        var space = new ScreenSpace(screen, new AgentSettings().ScreenshotResolution.Box());
         Assert.Contains($"{space.ImageWidth}x{space.ImageHeight}", result.Text);
         Assert.True(result.Image!.Length > 5_000);
     }

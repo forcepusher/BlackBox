@@ -3,6 +3,35 @@ using System.Text.Json.Serialization;
 
 namespace BlackBox.Core.Settings;
 
+/// <summary>Largest size screenshots are sent to the model at.</summary>
+public enum ScreenshotResolution
+{
+    R1280x720,
+    R1600x900,
+    R1920x1080,
+    R2560x1440,
+    /// <summary>The screen's own resolution, no scaling.</summary>
+    Native,
+}
+
+public static class ScreenshotResolutionExtensions
+{
+    /// <summary>The box screenshots must fit in, or null for native size.</summary>
+    public static (int Width, int Height)? Box(this ScreenshotResolution r) => r switch
+    {
+        ScreenshotResolution.R1280x720 => (1280, 720),
+        ScreenshotResolution.R1600x900 => (1600, 900),
+        ScreenshotResolution.R1920x1080 => (1920, 1080),
+        ScreenshotResolution.R2560x1440 => (2560, 1440),
+        _ => null,
+    };
+
+    /// <summary>Nearest option for an old pixel-count setting.</summary>
+    internal static ScreenshotResolution FromPixelBudget(long pixels) =>
+        Enum.GetValues<ScreenshotResolution>().Where(r => r.Box() is not null)
+            .MinBy(r => Math.Abs((long)r.Box()!.Value.Width * r.Box()!.Value.Height - pixels));
+}
+
 public enum ApprovalMode
 {
     /// <summary>Ask before every tool call.</summary>
@@ -45,8 +74,8 @@ public sealed class AgentSettings
     /// <summary>Everything runs without asking by default; Stop and the failsafe corner stay available.</summary>
     public ApprovalMode Approval { get; set; } = ApprovalMode.Never;
 
-    /// <summary>Screenshots are downscaled to at most this many pixels before going to the model (about 1.3 MP, roughly 1300 image tokens).</summary>
-    public int ScreenshotMaxPixels { get; set; } = 1_300_000;
+    /// <summary>Largest size a screenshot is sent at; the screen is scaled down to fit, keeping its shape.</summary>
+    public ScreenshotResolution ScreenshotResolution { get; set; } = ScreenshotResolution.R1600x900;
 
     /// <summary>Only the newest N screenshots stay in context. Internal tuning, not a user setting.</summary>
     [JsonIgnore]
@@ -64,9 +93,6 @@ public sealed class AgentSettings
 
     /// <summary>Moving the mouse into the top-left corner stops the agent.</summary>
     public bool FailsafeCorner { get; set; } = true;
-
-    /// <summary>Default working directory for file and shell tools. Empty = ./Workspace.</summary>
-    public string WorkingDirectory { get; set; } = "";
 
     public string CustomInstructions { get; set; } = "";
 }
@@ -123,6 +149,13 @@ public sealed class SettingsStore(AppPaths paths)
         if (root["server"] is null && root["remote"] is System.Text.Json.Nodes.JsonObject remote)
             root["server"] = remote.DeepClone();
         root.Remove("remote");
+        // Screenshot size used to be a raw pixel count.
+        if (root["agent"] is System.Text.Json.Nodes.JsonObject agent && agent["screenshotMaxPixels"] is System.Text.Json.Nodes.JsonValue px
+            && px.TryGetValue<long>(out var pixels))
+        {
+            agent["screenshotResolution"] = ScreenshotResolutionExtensions.FromPixelBudget(pixels).ToString();
+            agent.Remove("screenshotMaxPixels");
+        }
         root.Remove("local");
         root.Remove("backend");
         return root.ToJsonString();

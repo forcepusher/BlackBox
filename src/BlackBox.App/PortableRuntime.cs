@@ -19,7 +19,7 @@ internal static class PortableRuntime
 
     /// <summary>
     /// The portable root is the exe folder. BLACKBOX_HOME overrides it, and debug builds use
-    /// <c>.dev/</c> in the repository so Data/ and Workspace/ are shared between builds.
+    /// <c>.dev/</c> in the repository so Data/ is shared between builds.
     /// </summary>
     public static string FindAppRoot()
     {

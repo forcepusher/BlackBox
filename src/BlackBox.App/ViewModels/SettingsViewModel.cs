@@ -1,13 +1,10 @@
-using System.Collections.ObjectModel;
-using BlackBox.Core.Llm;
 using BlackBox.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 
 namespace BlackBox.App.ViewModels;
 
 /// <summary>Edits a copy of the settings; the window hands it back to the main view model on Save.</summary>
-public sealed partial class SettingsViewModel(AppSettings settings, AppPaths paths) : ObservableObject
+public sealed class SettingsViewModel(AppSettings settings, AppPaths paths) : ObservableObject
 {
     public AppSettings Settings { get; } = settings;
     public AppPaths Paths { get; } = paths;
@@ -22,63 +19,25 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         "Never ask",
     ];
 
+    /// <summary>Labels for <see cref="ScreenshotResolution"/>, in enum order.</summary>
+    public string[] ResolutionOptions { get; } =
+    [
+        "1280 × 720",
+        "1600 × 900 (default)",
+        "1920 × 1080",
+        "2560 × 1440",
+        "Full screen resolution",
+    ];
+
+    public int ResolutionIndex
+    {
+        get => (int)Agent.ScreenshotResolution;
+        set => Agent.ScreenshotResolution = (ScreenshotResolution)Math.Clamp(value, 0, ResolutionOptions.Length - 1);
+    }
+
     public int ApprovalIndex
     {
         get => (int)Agent.Approval;
         set => Agent.Approval = (ApprovalMode)Math.Clamp(value, 0, 2);
-    }
-
-    public string WorkingDirectory
-    {
-        get => Agent.WorkingDirectory;
-        set { Agent.WorkingDirectory = Paths.ToPortable(value); OnPropertyChanged(); }
-    }
-
-    public string Model
-    {
-        get => Server.Model;
-        set { Server.Model = value.Trim(); OnPropertyChanged(); }
-    }
-
-    public bool SupportsVision
-    {
-        get => Server.SupportsVision;
-        set { Server.SupportsVision = value; OnPropertyChanged(); }
-    }
-
-
-    [ObservableProperty]
-    private string _testResult = "";
-
-    /// <summary>Models the server reported; filled by Test connection.</summary>
-    public ObservableCollection<string> Models { get; } = [];
-
-    [RelayCommand]
-    private async Task TestConnectionAsync()
-    {
-        TestResult = "Connecting…";
-        using var http = LlmHttp.Create(TimeSpan.FromSeconds(20));
-        var probe = await ServerProbe.CheckAsync(http, Server, CancellationToken.None);
-        if (!probe.Reachable)
-        {
-            TestResult = probe.Message;
-            return;
-        }
-
-        Models.Clear();
-        foreach (var m in probe.Models.Where(m => !m.Contains("embed", StringComparison.OrdinalIgnoreCase)))
-            Models.Add(m);
-        if (Models.Count > 0 && !Models.Contains(Server.Model))
-            Model = Models[0];
-
-        // Ask again now that a model is chosen, to learn the context it runs with.
-        var facts = await ServerProbe.TryContextAsync(http, Server, CancellationToken.None);
-
-        if (facts.Vision is { } v)
-            SupportsVision = v;
-        TestResult = $"Connected. {Models.Count} model(s) available." +
-                     (facts.Context is { } k ? $" \"{Server.Model}\" has a {k / 1024}k context." : "") +
-                     (facts.Loaded == false ? " It isn't loaded yet; it will load on first use." : "") +
-                     (facts.Vision == false ? " This model can't see images, so screen control is off." : "");
     }
 }

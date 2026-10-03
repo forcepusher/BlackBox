@@ -112,7 +112,8 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     public IWindowManager Windows => this;
     public ProcessStartInfo CreateShellStartInfo(string command) => new("cmd.exe") { ArgumentList = { "/c", command } };
 
-    public ScreenRect GetPrimaryScreen() => new(0, 0, 200, 100);
+    public ScreenRect ScreenBounds { get; set; } = new(0, 0, 200, 100);
+    public ScreenRect GetPrimaryScreen() => ScreenBounds;
     public RawImage Capture(ScreenRect region, bool includeCursor) => new(region.Width, region.Height, new byte[region.Width * region.Height * 4]);
     public (int X, int Y) GetCursorPosition() => Cursor;
     public void MoveMouse(int x, int y) { Cursor = (x, y); Actions.Add($"move {x},{y}"); }

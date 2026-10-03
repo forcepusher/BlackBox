@@ -15,7 +15,7 @@ public static class SystemPrompt
         sb.AppendLine("Environment:");
         sb.AppendLine($"- OS: {platformName}");
         sb.AppendLine($"- Date: {DateTime.Now.ToString("dddd, d MMMM yyyy, HH:mm", CultureInfo.InvariantCulture)}");
-        sb.AppendLine($"- Working directory for files and shell: {workingDirectory}");
+        sb.AppendLine($"- Home folder: {workingDirectory}. Relative paths and shell commands start here; you can work with any file or folder on this PC.");
         if (screen is not null)
             sb.AppendLine($"- Screenshots are {screen.ImageWidth}x{screen.ImageHeight} pixels. All x/y arguments use that coordinate space, origin top-left.");
         sb.AppendLine();
