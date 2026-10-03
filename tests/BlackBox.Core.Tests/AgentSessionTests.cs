@@ -160,6 +160,21 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_wrong_assumed_context_size_is_corrected_from_the_servers_error()
+    {
+        var tooLong = """{"error":{"message":"This model's maximum context length is 8192 tokens. However, your messages resulted in 9100 tokens."}}""";
+        var server = new ScriptedServer(Sse.Text("NOTE: nothing done yet."), Sse.Text("Short answer."));
+        server.Failures.Enqueue((System.Net.HttpStatusCode.BadRequest, tooLong));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 100_000);
+
+        await session.RunAsync("question", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(8192, session.ContextTokens);
+        Assert.Contains(observer.Notices, n => n.Contains("8k tokens, not 100k"));
+    }
+
+    [Fact]
     public async Task Fields_a_strict_server_rejects_are_dropped_once()
     {
         var server = new ScriptedServer(Sse.Text("ok"), Sse.Text("ok again"));

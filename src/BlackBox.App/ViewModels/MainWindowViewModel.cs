@@ -172,8 +172,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
 
         // Trust what the server reports. The context size is not saved; image support is.
-        if (probe.LoadedContext is { } context)
-            server.ContextSize = context;
+        server.ContextSize = probe.LoadedContext ?? ServerSettings.FallbackContextSize;
         if (probe.Vision is { } v && v != server.SupportsVision)
         {
             server.SupportsVision = v;
@@ -239,6 +238,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             var prompt = SystemPrompt.Build(_platform.Name, screen, ctx.WorkingDirectory, agent.CustomInstructions);
             var session = new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, _history, backend.ContextTokens);
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
+            // A server error may have revealed the real context size; keep it for the next run.
+            _settings.Server.ContextSize = session.ContextTokens;
         }
         catch (OperationCanceledException)
         {

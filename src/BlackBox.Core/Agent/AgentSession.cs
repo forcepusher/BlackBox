@@ -34,6 +34,9 @@ public sealed partial class AgentSession(
     List<ChatMessage>? history = null,
     int contextTokens = 0)
 {
+    /// <summary>The model's context size as this session knows it: as reported at the start, or corrected by a server error.</summary>
+    public int ContextTokens => contextTokens;
+
     /// <summary>Conversation so far (without the system prompt). Can be shared across sessions so settings changes keep the chat.</summary>
     public List<ChatMessage> History { get; } = history ?? [];
 
@@ -263,8 +266,14 @@ public sealed partial class AgentSession(
                 }
                 attempt--;
             }
-            catch (ContextOverflowException) when (attempt < 2)
+            catch (ContextOverflowException ex) when (attempt < 2)
             {
+                // The context size was assumed or wrong; most servers name the real one.
+                if (ex.ContextLimit is { } limit && (contextTokens == 0 || limit < contextTokens))
+                {
+                    observer.OnNotice($"The server's context is {limit / 1000}k tokens, not {contextTokens / 1000}k; working with that from now on.");
+                    contextTokens = limit;
+                }
                 await ResetContextAsync(observer, ct).ConfigureAwait(false);
                 request.Clear();
                 request.Add(ChatMessage.System(systemPrompt));

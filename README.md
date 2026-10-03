@@ -35,8 +35,10 @@ Thinking models get their earlier reasoning sent back each step (`reasoning_cont
 ## Context window
 The OpenAI API has no field for the context length, so BlackBox asks each server its own way:
 LM Studio (`/api/v0/models/{id}`, `loaded_context_length`, after loading the model if needed),
-llama-server (`/props`, `n_ctx`), vLLM (`max_model_len`) and OpenRouter (`context_length`).
-Servers that don't say get a conservative 32k. BlackBox uses the whole context.
+llama-server (`/props`, `n_ctx`), Ollama (`/api/ps`, or `num_ctx` from `/api/show`), vLLM
+(`max_model_len`) and OpenRouter (`context_length`); the first that answers wins. Servers that
+don't say are assumed to have 100k. If that is too much, the server's "too long" error usually
+names the real size, and BlackBox switches to it. BlackBox uses the whole context.
 
 Until the context is nearly full (a fifth left, at least 16k), the conversation only grows at the
 end, so the server reuses its cache and each step processes only the new messages. Then BlackBox

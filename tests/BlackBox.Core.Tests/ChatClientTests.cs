@@ -237,3 +237,50 @@ public class ChatClientTests
     public void Completion_claims_are_detected(string content, bool expected) =>
         Assert.Equal(expected, AgentSession.LooksFinished(content));
 }
+
+public class ContextDetectionTests
+{
+    /// <summary>Answers by URL path; anything unknown is a 404, like a server without that endpoint.</summary>
+    private sealed class RoutedServer(Dictionary<string, string> routes) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(routes.TryGetValue(request.RequestUri!.AbsolutePath, out var body)
+                ? new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(body) }
+                : new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
+    }
+
+    private static Task<ModelFacts> Probe(Dictionary<string, string> routes) =>
+        ServerProbe.TryContextAsync(new HttpClient(new RoutedServer(routes)),
+            new BlackBox.Core.Settings.ServerSettings { BaseUrl = "http://host:1234/v1", Model = "m" }, CancellationToken.None);
+
+    [Fact]
+    public async Task Ollama_reports_the_context_it_runs_with_not_the_models_maximum()
+    {
+        var routes = new Dictionary<string, string>
+        {
+            ["/api/version"] = """{"version":"0.12.0"}""",
+            ["/api/ps"] = """{"models":[]}""",
+            ["/api/show"] = """{"parameters":"num_ctx 16384\nstop \"<|im_end|>\"","model_info":{"qwen3.context_length":262144}}""",
+        };
+        Assert.Equal(16384, (await Probe(routes)).Context);
+
+        routes["/api/ps"] = """{"models":[{"name":"m","model":"m","context_length":8192}]}""";
+        Assert.Equal(8192, (await Probe(routes)).Context);
+    }
+
+    [Fact]
+    public async Task llama_cpp_and_vLLM_report_their_context()
+    {
+        Assert.Equal(4096, (await Probe(new() { ["/props"] = """{"default_generation_settings":{"n_ctx":4096}}""" })).Context);
+        Assert.Equal(32768, (await Probe(new() { ["/v1/models"] = """{"data":[{"id":"m","max_model_len":32768}]}""" })).Context);
+        Assert.Null((await Probe([])).Context); // nothing answers: the caller assumes 100k
+    }
+
+    [Fact]
+    public void The_real_context_size_is_read_from_too_long_errors()
+    {
+        Assert.Equal(8192, ContextOverflowException.ParseLimit("This model's maximum context length is 8192 tokens. However, your messages resulted in 9100 tokens."));
+        Assert.Equal(4096, ContextOverflowException.ParseLimit("""{"error":{"code":400,"message":"the request exceeds the available context size, try increasing it","type":"exceed_context_size_error","n_prompt_tokens":5000,"n_ctx":4096}}"""));
+        Assert.Null(ContextOverflowException.ParseLimit("The number of tokens to keep from the initial prompt is greater than the context length."));
+    }
+}

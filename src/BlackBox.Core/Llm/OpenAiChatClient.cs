@@ -9,7 +9,28 @@ public class LlmException(string message, Exception? inner = null) : Exception(m
 
 /// <summary>The server said the prompt does not fit in the model's context window.</summary>
 public sealed class ContextOverflowException(string serverMessage)
-    : LlmException("The conversation no longer fits in the model's context window: " + serverMessage);
+    : LlmException("The conversation no longer fits in the model's context window: " + serverMessage)
+{
+    /// <summary>The context size the error names, if it names one (OpenAI, vLLM, llama.cpp and OpenRouter do).</summary>
+    public int? ContextLimit { get; } = ParseLimit(serverMessage);
+
+    internal static int? ParseLimit(string message)
+    {
+        foreach (var pattern in new[]
+        {
+            @"maximum context length is (\d+)",                 // OpenAI, vLLM, OpenRouter
+            @"""n_ctx""\s*:\s*(\d+)",                            // llama.cpp server error details
+            @"context (?:length|size|window) (?:is|of) (\d+)",   // other wordings
+            @"\((\d+) tokens\) exceeds",                        // "... (4096 tokens) exceeds"
+        })
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(message, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (m.Success && int.TryParse(m.Groups[1].Value, out var n) && n >= 512)
+                return n;
+        }
+        return null;
+    }
+}
 
 /// <summary>
 /// The connection broke before the reply was complete (network drop, proxy idle timeout).

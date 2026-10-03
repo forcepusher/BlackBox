@@ -53,12 +53,15 @@ public sealed class ServerSettings
     /// <summary>Whether the model accepts images. Detected from LM Studio; set by hand for other servers.</summary>
     public bool SupportsVision { get; set; } = true;
 
+    /// <summary>Assumed context window when the server doesn't report one. If the real one is smaller, the server's "too long" error says so and BlackBox adjusts.</summary>
+    public const int FallbackContextSize = 100_000;
+
     /// <summary>
-    /// Context window of the model, as reported by the server when the app connects. Not saved;
-    /// servers that don't report it get this conservative default.
+    /// Context window of the model, as reported by the server when the app connects (see
+    /// <see cref="Llm.ServerProbe"/>), or learnt from its "too long" error. Not saved.
     /// </summary>
     [JsonIgnore]
-    public int ContextSize { get; set; } = 32768;
+    public int ContextSize { get; set; } = FallbackContextSize;
 }
 
 public sealed class AgentSettings
