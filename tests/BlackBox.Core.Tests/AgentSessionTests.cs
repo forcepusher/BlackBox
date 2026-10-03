@@ -192,6 +192,26 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public void Loop_detector_warns_on_repeats_and_unchanged_screens_but_not_on_watching()
+    {
+        var loops = new LoopDetector();
+        var click = new ToolCall { Id = "c", Name = "mouse_click", Arguments = """{"x":1,"y":2}""" };
+        var same = new ToolResult("clicked", [1, 2, 3]);
+
+        Assert.Null(loops.Check(click, same));
+        Assert.Null(loops.Check(click, same));
+        var third = loops.Check(click, same);
+        Assert.Contains("3 times", third);
+        Assert.Contains("screen has not changed", loops.Check(click, same));
+
+        // Watching the screen for a long time is fine.
+        var watcher = new LoopDetector();
+        var shot = new ToolCall { Id = "s", Name = "screenshot", Arguments = "{}" };
+        for (var i = 0; i < 50; i++)
+            Assert.Null(watcher.Check(shot, same));
+    }
+
+    [Fact]
     public async Task Dropped_connections_are_retried_with_the_same_request()
     {
         var server = new ScriptedServer(Sse.Text("Made it.")) { Drops = 2 };

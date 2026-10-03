@@ -70,7 +70,6 @@ public sealed class ServerSettings
 
 public sealed class AgentSettings
 {
-    public int MaxSteps { get; set; } = 40;
     /// <summary>Everything runs without asking by default; Stop and the failsafe corner stay available.</summary>
     public ApprovalMode Approval { get; set; } = ApprovalMode.Never;
 

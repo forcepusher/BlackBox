@@ -72,7 +72,7 @@
           <StackPanel Spacing="4" Margin="0,0,12,16">
             <TextBlock Classes="muted" TextWrapping="Wrap"
                        Text="How the model behaves (temperature, reply length, thinking) is configured on the server, in LM Studio per model. These settings control BlackBox itself." />
-            <Grid Classes="form" ColumnDefinitions="190,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" Margin="0,8,0,0">
+            <Grid Classes="form" ColumnDefinitions="190,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,8,0,0">
               <TextBlock Classes="label" Grid.Row="0" Text="Max prompt size (tokens)" />
               <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Server.MaxPromptTokens}" Watermark="0 = use the whole context" />
               <TextBlock Grid.Row="1" Grid.Column="1" Classes="muted" TextWrapping="Wrap"
@@ -81,8 +81,6 @@
               <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding ResolutionOptions}" SelectedIndex="{Binding ResolutionIndex}" HorizontalAlignment="Stretch" />
               <TextBlock Grid.Row="3" Grid.Column="1" Classes="muted" TextWrapping="Wrap"
                          Text="The largest size screenshots are sent at; your screen is scaled down to fit. Higher is sharper for small text but slower and uses more context." />
-              <TextBlock Classes="label" Grid.Row="4" Text="Max steps per task" />
-              <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Agent.MaxSteps}" />
            </Grid>
           </StackPanel>
         </ScrollViewer>

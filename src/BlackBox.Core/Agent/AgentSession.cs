@@ -4,7 +4,7 @@ using BlackBox.Core.Tools;
 
 namespace BlackBox.Core.Agent;
 
-public enum AgentStopReason { Completed, MaxSteps, Cancelled, Failsafe, Error }
+public enum AgentStopReason { Completed, Cancelled, Failsafe, Error }
 
 /// <summary>Callbacks from the agent loop. Called on a background thread.</summary>
 public interface IAgentObserver
@@ -45,11 +45,14 @@ public sealed partial class AgentSession(
         var settings = toolContext.Settings;
         var toolDefs = tools.Definitions();
         var nudges = 0;
-        var actionCounts = new Dictionary<string, int>();
+        var loops = new LoopDetector();
 
         try
         {
-            for (var step = 1; step <= settings.MaxSteps; step++)
+            // No step limit: a run ends when the model is done, the user presses Stop, or the
+            // mouse hits the failsafe corner. Tasks like "keep chatting for 12 hours" are valid;
+            // runaway loops are handled by LoopDetector, and growth by compaction.
+            for (var step = 1; ; step++)
             {
                 ct.ThrowIfCancellationRequested();
                 observer.OnStepStarted(step);
@@ -88,10 +91,8 @@ public sealed partial class AgentSession(
                 foreach (var call in reply.ToolCalls!)
                 {
                     var result = await RunToolAsync(call, observer, ct).ConfigureAwait(false);
-                    var signature = call.Name + " " + call.Arguments.Replace(" ", "");
-                    var repeats = actionCounts[signature] = actionCounts.GetValueOrDefault(signature) + 1;
-                    if (repeats >= 3 && call.Name is not ("screenshot" or "wait" or "zoom" or "list_ui_elements" or "list_windows"))
-                        result = result with { Text = result.Text + $"\nNote: you have now made exactly this call {repeats} times. If it is not getting you closer, stop repeating it and try a different approach." };
+                    if (loops.Check(call, result) is { } warning)
+                        result = result with { Text = result.Text + "\n" + warning };
                     History.Add(ChatMessage.ToolResult(call.Id, result.Image is null ? result.Text : result.Text + "\n(The screenshot is attached in the next message.)"));
                     if (result.Image is not null)
                         screenshots.Add(ContentPart.FromImage(result.Image, result.ImageMime));
@@ -106,8 +107,6 @@ public sealed partial class AgentSession(
                     History.Add(new ChatMessage { Role = ChatRole.User, Parts = parts });
                 }
             }
-
-            observer.OnFinished(AgentStopReason.MaxSteps, $"Stopped after {settings.MaxSteps} steps. Send another message to let it continue.");
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

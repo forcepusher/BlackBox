@@ -294,8 +294,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     // ---- IAgentObserver (called from the agent thread) -------------------------------
 
+    // A run can last hours. The model's context is kept in check by compaction; the chat view is
+    // kept in check here so memory stays flat: old entries are dropped and only recent
+    // screenshots keep their thumbnails.
+    private const int MaxChatItems = 400;
+    private const int MaxThumbnails = 30;
+
+    private void TrimChat()
+    {
+        while (Items.Count > MaxChatItems)
+            Items.RemoveAt(0);
+        foreach (var old in Items.OfType<ToolCallItem>().Where(t => t.HasScreenshot).SkipLast(MaxThumbnails).ToList())
+        {
+            old.Screenshot?.Dispose();
+            old.Screenshot = null;
+        }
+    }
+
     void IAgentObserver.OnStepStarted(int step) => Dispatcher.UIThread.Post(() =>
     {
+        TrimChat();
         _current = new AssistantMessageItem();
         Items.Add(_current);
     });
@@ -369,7 +387,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 AddNotice("Stopped.", isError: false);
                 break;
             case AgentStopReason.Failsafe:
-            case AgentStopReason.MaxSteps:
                 AddNotice(detail ?? reason.ToString(), isError: false);
                 break;
             case AgentStopReason.Error:
