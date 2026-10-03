@@ -307,7 +307,10 @@ public sealed partial class AgentSession(
                     observer.OnAssistantMessage(new ChatMessage { Role = ChatRole.Assistant, Content = "" });
                     observer.OnStepStarted(0);
                 }
-                await Task.Delay(TimeSpan.FromSeconds(Math.Min(2 * drops, 10)), ct).ConfigureAwait(false);
+                // The server keeps what it processed, so resending at once loses nothing; a short
+                // pause only after repeated drops, in case the link itself is down.
+                if (drops > 1)
+                    await Task.Delay(TimeSpan.FromSeconds(Math.Min(drops - 1, 3)), ct).ConfigureAwait(false);
             }
         }
     }

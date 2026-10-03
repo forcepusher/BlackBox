@@ -86,10 +86,17 @@ static string FindRoot()
     return AppContext.BaseDirectory;
 }
 
+/// <summary>
+/// Prints the run as it happens. Every line carries the time to a tenth of a second, so a log
+/// shows where the seconds go between steps: waiting for the server, writing the reply, tools.
+/// </summary>
 internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentObserver
 {
     private StreamChannel? _channel;
     private int _shot;
+    private DateTime _requestStart = DateTime.Now;
+    private DateTime? _firstToken;
+    private DateTime _toolStart;
 
     public int Steps { get; private set; }
     public int ToolCalls { get; private set; }
@@ -97,18 +104,23 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
     public AgentStopReason Reason { get; private set; }
     public string? Detail { get; private set; }
 
+    private static string Now => DateTime.Now.ToString("HH:mm:ss.f");
+
     public void OnStepStarted(int step)
     {
-        Steps = step;
+        if (step > 0) Steps = step;
         _channel = null;
-        Console.WriteLine($"\n── step {step} · {DateTime.Now:HH:mm:ss} ──");
+        _requestStart = DateTime.Now;
+        _firstToken = null;
+        Console.WriteLine($"\n── step {step} · {Now} ──");
     }
 
     public void OnDelta(StreamDelta delta)
     {
+        _firstToken ??= DateTime.Now;
         if (_channel != delta.Channel)
         {
-            Console.Write(delta.Channel == StreamChannel.Reasoning ? "\n[think] " : "\n[say] ");
+            Console.Write($"\n{(delta.Channel == StreamChannel.Reasoning ? "[think]" : "[say]")} {Now} ");
             _channel = delta.Channel;
         }
         if (delta.Channel == StreamChannel.Reasoning) Console.ForegroundColor = ConsoleColor.DarkGray;
@@ -119,8 +131,13 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
     public void OnAssistantMessage(ChatMessage message)
     {
         Console.WriteLine();
+        var done = DateTime.Now;
+        Console.WriteLine(_firstToken is { } first
+            ? $"[time] {Now} server read the prompt in {(first - _requestStart).TotalSeconds:0.0}s, wrote the reply in {(done - first).TotalSeconds:0.0}s" +
+              (message.PromptTokens is { } p ? $" ({p / 1000.0:0.0}k prompt tokens, {message.CompletionTokens} reply tokens)" : "")
+            : $"[time] {Now} no reply after {(done - _requestStart).TotalSeconds:0.0}s");
         foreach (var c in message.ToolCalls ?? [])
-            Console.WriteLine($"[call] {c.Name} {c.Arguments}{(c.Id.StartsWith("text_") ? "   (recovered from text)" : "")}");
+            Console.WriteLine($"[call] {Now} {c.Name} {c.Arguments}{(c.Id.StartsWith("text_") ? "   (recovered from text)" : "")}");
     }
 
     public Task<bool> RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct)
@@ -130,12 +147,18 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
         return Task.FromResult(Console.ReadLine()?.Trim().ToLowerInvariant() is "y" or "yes");
     }
 
-    public void OnNotice(string text) => Console.WriteLine($"\n[notice] {text}");
+    public void OnNotice(string text)
+    {
+        Console.WriteLine($"\n[notice] {Now} {text}");
+        _requestStart = DateTime.Now; // a resend after a drop starts a new wait
+        _firstToken = null;
+    }
 
     public void OnToolStarted(ToolCall call, string summary)
     {
         ToolCalls++;
-        Console.WriteLine($"[tool] {summary}");
+        _toolStart = DateTime.Now;
+        Console.WriteLine($"[tool] {Now} {summary}");
     }
 
     public void OnToolFinished(ToolCall call, ToolResult result)
@@ -143,7 +166,7 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
         if (result.IsError) ToolErrors++;
         var text = result.Text.Length > 600 ? result.Text[..600] + "…" : result.Text;
         Console.ForegroundColor = result.IsError ? ConsoleColor.Red : ConsoleColor.DarkCyan;
-        Console.WriteLine($"[result] {text.TrimEnd()}");
+        Console.WriteLine($"[result] {Now} after {(DateTime.Now - _toolStart).TotalSeconds:0.0}s: {text.TrimEnd()}");
         Console.ResetColor();
         if (result.Image is not null && shotsDir is not null)
         {
