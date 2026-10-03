@@ -71,7 +71,9 @@ it gets nudged to continue.
 Actions run without asking by default (approvals can be switched on in Settings → General).
 Moving the mouse to the top-left corner of the screen, or pressing Stop, halts the agent. BlackBox
 stays on screen while it works but is hidden from the agent's screenshots, and steps behind other
-windows for the moment a click lands on it.
+windows for the moment a click lands on it. Every click and key press the agent makes shows up in a
+log in the bottom-right corner that fades after 5 seconds, with a ring where it clicked. The agent
+can't see it and it never takes focus (turn it off in Settings → Advanced).
 
 ## Build
 Requires the .NET 10 SDK.
