@@ -26,6 +26,23 @@
       <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
       <Setter Property="FontSize" Value="12" />
     </Style>
+    <Style Selector="SelectableTextBlock.muted.error">
+      <Setter Property="Foreground" Value="{StaticResource BbError}" />
+    </Style>
+
+    <!-- The server dot in the top bar: grey until checked, then amber, green or red. -->
+    <Style Selector="Ellipse.status">
+      <Setter Property="Fill" Value="{StaticResource BbMuted}" />
+    </Style>
+    <Style Selector="Ellipse.status.checking">
+      <Setter Property="Fill" Value="{StaticResource BbAccent}" />
+    </Style>
+    <Style Selector="Ellipse.status.connected">
+      <Setter Property="Fill" Value="{StaticResource BbOk}" />
+    </Style>
+    <Style Selector="Ellipse.status.failed">
+      <Setter Property="Fill" Value="{StaticResource BbError}" />
+    </Style>
 
     <Style Selector="TextBlock.h2">
       <Setter Property="FontSize" Value="15" />

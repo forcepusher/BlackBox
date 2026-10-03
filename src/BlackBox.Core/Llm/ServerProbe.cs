@@ -1,4 +1,7 @@
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using BlackBox.Core.Settings;
 
 namespace BlackBox.Core.Llm;
@@ -118,7 +121,7 @@ public static class ServerProbe
         if (await GetJsonAsync(http, server, $"{root}/api/show", ct, new JsonObject { ["model"] = server.Model }).ConfigureAwait(false) is not { } show)
             return null;
         if (show["parameters"]?.ToString() is { } parameters
-            && System.Text.RegularExpressions.Regex.Match(parameters, @"(?m)^\s*num_ctx\s+(\d+)") is { Success: true } numCtx)
+            && Regex.Match(parameters, @"(?m)^\s*num_ctx\s+(\d+)") is { Success: true } numCtx)
             return int.Parse(numCtx.Groups[1].Value);
         return show["model_info"] is JsonObject info
             ? info.Where(p => p.Key.EndsWith(".context_length", StringComparison.Ordinal)).Select(p => Int(p.Value)).FirstOrDefault(v => v is not null)
@@ -131,7 +134,7 @@ public static class ServerProbe
         {
             using var req = new HttpRequestMessage(postBody is null ? HttpMethod.Get : HttpMethod.Post, url);
             if (postBody is not null)
-                req.Content = new StringContent(postBody.ToJsonString(), System.Text.Encoding.UTF8, "application/json");
+                req.Content = new StringContent(postBody.ToJsonString(), Encoding.UTF8, "application/json");
             if (!string.IsNullOrWhiteSpace(server.ApiKey))
                 req.Headers.Authorization = new("Bearer", server.ApiKey.Trim());
             using var resp = await http.SendAsync(req, ct).ConfigureAwait(false);
@@ -139,7 +142,7 @@ public static class ServerProbe
                 return null;
             return JsonNode.Parse(await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException && !ct.IsCancellationRequested)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException && !ct.IsCancellationRequested)
         {
             return null;
         }

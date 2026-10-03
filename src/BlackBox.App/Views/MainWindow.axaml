@@ -36,7 +36,8 @@
         <Button Grid.Column="4" Classes="ghost" Content="↻" Margin="6,0,0,0" Command="{Binding CheckServerCommand}"
                 ToolTip.Tip="Ask the server again for its models" />
         <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="12,0,0,0">
-          <Ellipse Width="9" Height="9" Fill="{Binding StatusBrush}" VerticalAlignment="Center" />
+          <Ellipse Classes="status" Classes.checking="{Binding IsChecking}" Classes.connected="{Binding IsConnected}" Classes.failed="{Binding IsFailed}"
+                   Width="9" Height="9" VerticalAlignment="Center" />
           <TextBlock Classes="muted" Text="{Binding ServerStatusText}" VerticalAlignment="Center" />
         </StackPanel>
       </Grid>
@@ -125,8 +126,7 @@
 
             <DataTemplate DataType="vm:NoticeItem">
               <Border Padding="10,6" CornerRadius="6" Background="{StaticResource BbSurface}" HorizontalAlignment="Center">
-                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="12"
-                                     Foreground="{Binding IsError, Converter={x:Static vm:Converters.ErrorBrush}}" />
+                <SelectableTextBlock Classes="muted" Classes.error="{Binding IsError}" Text="{Binding Text}" TextWrapping="Wrap" />
               </Border>
             </DataTemplate>
 

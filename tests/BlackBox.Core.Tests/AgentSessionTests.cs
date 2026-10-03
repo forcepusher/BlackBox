@@ -85,8 +85,6 @@ public class AgentSessionTests
         .SelectMany(m => m!["content"] is JsonArray parts ? parts : [])
         .Count(p => p!["type"]!.GetValue<string>() == "image_url");
 
-    private static int Images(IEnumerable<ChatMessage> history) => history.Sum(m => m.Parts?.Count(p => p.IsImage) ?? 0);
-
     [Fact]
     public async Task Risky_tools_wait_for_approval_and_denial_is_reported()
     {

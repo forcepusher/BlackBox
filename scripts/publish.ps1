@@ -30,7 +30,7 @@ function Publish([string]$out, [string[]]$extra) {
 if ($Folder) {
     $out = Join-Path $publishRoot "BlackBox-$Runtime"
     Publish $out @()
-    foreach ($dir in "Workspace", "Data") { New-Item -ItemType Directory -Force (Join-Path $out $dir) | Out-Null }
+    New-Item -ItemType Directory -Force (Join-Path $out "Data") | Out-Null
     Write-Host "Portable folder ready: $out"
     return
 }

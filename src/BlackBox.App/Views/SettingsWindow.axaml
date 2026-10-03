@@ -13,7 +13,7 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="0,0,12,0" />
     </Style>
-    <Style Selector="Grid.form > TextBox, Grid.form > AutoCompleteBox, Grid.form > ComboBox, Grid.form > DockPanel, Grid.form > CheckBox, Grid.form > StackPanel">
+    <Style Selector="Grid.form > TextBox, Grid.form > ComboBox, Grid.form > CheckBox, Grid.form > StackPanel">
       <Setter Property="Margin" Value="0,4" />
     </Style>
   </Window.Styles>
@@ -86,7 +86,7 @@
                                IsEnabled="{Binding Agent.ShowInputs}" />
                 <TextBlock Text="seconds" VerticalAlignment="Center" />
               </StackPanel>
-           </Grid>
+            </Grid>
           </StackPanel>
         </ScrollViewer>
       </TabItem>

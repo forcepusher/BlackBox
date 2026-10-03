@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using BlackBox.Core.Agent;
@@ -11,6 +10,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace BlackBox.App.ViewModels;
+
+/// <summary>What the last server check found; drawn as the coloured dot in the top bar.</summary>
+public enum ServerState { Unknown, Checking, Connected, Failed }
 
 public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserver
 {
@@ -33,8 +35,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     public ObservableCollection<ChatItemViewModel> Items { get; } = [];
 
-    public AppPaths Paths => _paths;
-
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand))]
     private string _input = "";
@@ -47,7 +47,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private string _serverStatusText = "Checking…";
 
     [ObservableProperty]
-    private IBrush _statusBrush = Brushes.Gray;
+    [NotifyPropertyChangedFor(nameof(IsChecking), nameof(IsConnected), nameof(IsFailed))]
+    private ServerState _serverState;
+
+    public bool IsChecking => ServerState == ServerState.Checking;
+    public bool IsConnected => ServerState == ServerState.Connected;
+    public bool IsFailed => ServerState == ServerState.Failed;
 
     /// <summary>Shown when no server/model is configured or the server can't be reached.</summary>
     [ObservableProperty]
@@ -129,11 +134,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var server = _settings.Server;
         if (string.IsNullOrWhiteSpace(server.BaseUrl))
         {
-            SetStatus(Brushes.Gray, "Not set up", "Enter the address of your model server (for example LM Studio at http://localhost:1234/v1) at the top.");
+            SetStatus(ServerState.Unknown, "Not set up", "Enter the address of your model server (for example LM Studio at http://localhost:1234/v1) at the top.");
             return;
         }
 
-        SetStatus(BusyBrush, "Checking…", null);
+        SetStatus(ServerState.Checking, "Checking…", null);
         using var probeHttp = LlmHttp.Create(TimeSpan.FromSeconds(10));
         var probe = await ServerProbe.CheckAsync(probeHttp, server, CancellationToken.None);
         if (version != _checkVersion)
@@ -150,7 +155,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         if (!probe.Reachable)
         {
             OnPropertyChanged(nameof(SelectedModel));
-            SetStatus(ErrorBrush, "Offline", $"{probe.Message} Check the address at the top and that the server is running.");
+            SetStatus(ServerState.Failed, "Offline", $"{probe.Message} Check the address at the top and that the server is running.");
             return;
         }
         if (string.IsNullOrEmpty(server.Model) && Models.Count > 0)
@@ -162,12 +167,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         OnPropertyChanged(nameof(SelectedModel));
         if (string.IsNullOrEmpty(server.Model))
         {
-            SetStatus(ErrorBrush, "No models", "The server is running but offers no models. Load or download one in LM Studio.");
+            SetStatus(ServerState.Failed, "No models", "The server is running but offers no models. Load or download one in LM Studio.");
             return;
         }
         if (probe.Models.Count > 0 && !probe.Models.Contains(server.Model))
         {
-            SetStatus(ErrorBrush, "Model not found", $"The server doesn't offer \"{server.Model}\" anymore. Pick another model at the top.");
+            SetStatus(ServerState.Failed, "Model not found", $"The server doesn't offer \"{server.Model}\" anymore. Pick another model at the top.");
             return;
         }
 
@@ -179,15 +184,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             _store.Save(_settings);
         }
         var details = (probe.LoadedContext is { } c ? $" · {c / 1024}k context" : "") + (probe.Vision == false ? " · no vision" : "");
-        SetStatus(OkBrush, "Connected" + details, null);
+        SetStatus(ServerState.Connected, "Connected" + details, null);
     }
-    private void SetStatus(IBrush brush, string status, string? setup)
+
+    private void SetStatus(ServerState state, string status, string? setup)
     {
-        StatusBrush = brush;
+        ServerState = state;
         ServerStatusText = status;
         ShowSetupBanner = setup is not null;
         SetupText = setup ?? "";
     }
+
     // ---- commands -------------------------------------------------------------------
 
     private bool CanSend() => !IsBusy && !string.IsNullOrWhiteSpace(Input);
@@ -294,16 +301,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         return BackendConnection.Create(_http, server);
     }
 
-    private static readonly IBrush OkBrush = new SolidColorBrush(Color.Parse("#5FB878"));
-    private static readonly IBrush BusyBrush = new SolidColorBrush(Color.Parse("#E0A64B"));
-    private static readonly IBrush ErrorBrush = new SolidColorBrush(Color.Parse("#E06C6C"));
-
     private void AddNotice(string text, bool isError) => Items.Add(new NoticeItem(text, isError));
 
     // ---- IAgentObserver (called from the agent thread) -------------------------------
 
-    // A run can last hours. The model's context is kept in check by compaction; the chat view is
-    // kept in check here so memory stays flat: old entries are dropped and only recent
+    // A run can last hours. The model's context is kept in check by context resets; the chat
+    // view is kept in check here so memory stays flat: old entries are dropped and only recent
     // screenshots keep their thumbnails.
     private const int MaxChatItems = 400;
     private const int MaxThumbnails = 30;
@@ -340,11 +343,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         if (_current is null) return;
         _current.Text = (message.Content ?? "").Trim();
         _current.Reasoning = (message.Reasoning ?? _current.Reasoning).Trim();
+        FinishCurrent();
+    });
+
+    /// <summary>Ends the streaming bubble; an empty one (a discarded reply) leaves no trace.</summary>
+    private void FinishCurrent()
+    {
+        if (_current is null) return;
         _current.IsStreaming = false;
         if (!_current.HasText && !_current.HasReasoning)
             Items.Remove(_current);
         _current = null;
-    });
+    }
 
     async Task<bool> IAgentObserver.RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct)
     {
@@ -379,13 +389,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     void IAgentObserver.OnFinished(AgentStopReason reason, string? detail) => Dispatcher.UIThread.Post(() =>
     {
-        if (_current is not null)
-        {
-            _current.IsStreaming = false;
-            if (!_current.HasText && !_current.HasReasoning)
-                Items.Remove(_current);
-            _current = null;
-        }
+        FinishCurrent();
         foreach (var t in Items.OfType<ToolCallItem>().Where(t => t.State is ToolItemState.Running or ToolItemState.AwaitingApproval))
             t.State = ToolItemState.Denied;
 

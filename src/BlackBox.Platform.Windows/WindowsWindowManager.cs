@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using BlackBox.Core.Platform;
 using static BlackBox.Platform.Windows.Native;
@@ -26,7 +27,7 @@ internal sealed class WindowsWindowManager : IWindowManager
             if (title.Length == 0)
                 return true;
 
-            if (DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out RECT r, System.Runtime.InteropServices.Marshal.SizeOf<RECT>()) != 0)
+            if (DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out RECT r, Marshal.SizeOf<RECT>()) != 0)
                 GetWindowRect(hwnd, out r);
 
             GetWindowThreadProcessId(hwnd, out var pid);

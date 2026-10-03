@@ -45,6 +45,6 @@ public sealed class SettingsViewModel(AppSettings settings, AppPaths paths) : Ob
     public int ApprovalIndex
     {
         get => (int)Agent.Approval;
-        set => Agent.Approval = (ApprovalMode)Math.Clamp(value, 0, 2);
+        set => Agent.Approval = (ApprovalMode)Math.Clamp(value, 0, ApprovalModes.Length - 1);
     }
 }

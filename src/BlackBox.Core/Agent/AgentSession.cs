@@ -1,3 +1,6 @@
+using System.Runtime.InteropServices;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using BlackBox.Core.Llm;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
@@ -43,7 +46,6 @@ public sealed partial class AgentSession(
     public async Task RunAsync(string userText, IAgentObserver observer, CancellationToken ct)
     {
         History.Add(new ChatMessage { Role = ChatRole.User, Content = userText, FromUser = true });
-        var toolDefs = tools.Definitions();
         var nudges = 0;
         var loops = new LoopDetector();
         var justReset = false;
@@ -63,7 +65,7 @@ public sealed partial class AgentSession(
                 var request = new List<ChatMessage>(History.Count + 1) { ChatMessage.System(systemPrompt) };
                 request.AddRange(History);
 
-                var reply = await CompleteFittingAsync(request, observer, ct).ConfigureAwait(false);
+                var reply = await CompleteWithResetAsync(request, observer, ct).ConfigureAwait(false);
                 if (reply.FinishReason == "length" && !reply.HasToolCalls && contextTokens > 0 && !justReset)
                 {
                     // The server ran out of context mid-reply, so the size estimate was off. The
@@ -158,11 +160,7 @@ public sealed partial class AgentSession(
     private const string NudgeText =
         "Continue with the task. If there is another step, call the tool for it now. If the task is finished, reply with a short summary of what you did.";
 
-    internal static bool LooksFinished(string? content) =>
-        content is { Length: > 0 } &&
-        System.Text.RegularExpressions.Regex.IsMatch(content,
-            @"\b((?<!\b(whether|if|once|when)\s+(the\s+)?)task (is|has been) (now )?(complete|completed|done|finished)|i('ve| have) (successfully )?(completed|finished) (the|your|this) task|everything is done|all done)\b",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    internal static bool LooksFinished(string? content) => content is { Length: > 0 } && CompletionClaim().IsMatch(content);
 
     internal static bool LooksUnfinished(ChatMessage reply)
     {
@@ -170,11 +168,14 @@ public sealed partial class AgentSession(
         if (text.Length == 0)
             return true;
         var tail = text.Length > 240 ? text[^240..] : text;
-        return tail.EndsWith(':') ||
-               System.Text.RegularExpressions.Regex.IsMatch(tail,
-                   @"(^|[.!?\n]\s*)(let me|let's|i'll|i will|i'm going to|i am going to|next,? i|now i|i need to)\b[^.!?\n]*[.!]?\s*$",
-                   System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return tail.EndsWith(':') || AnnouncedAction().IsMatch(tail);
     }
+
+    [GeneratedRegex(@"\b((?<!\b(whether|if|once|when)\s+(the\s+)?)task (is|has been) (now )?(complete|completed|done|finished)|i('ve| have) (successfully )?(completed|finished) (the|your|this) task|everything is done|all done)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex CompletionClaim();
+
+    [GeneratedRegex(@"(^|[.!?\n]\s*)(let me|let's|i'll|i will|i'm going to|i am going to|next,? i|now i|i need to)\b[^.!?\n]*[.!]?\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex AnnouncedAction();
 
     private async Task<ToolResult> RunToolAsync(ToolCall call, IAgentObserver observer, CancellationToken ct)
     {
@@ -187,7 +188,7 @@ public sealed partial class AgentSession(
             return unknown;
         }
 
-        System.Text.Json.Nodes.JsonObject args;
+        JsonObject args;
         string summary;
         try
         {
@@ -221,7 +222,7 @@ public sealed partial class AgentSession(
         {
             result = ToolResult.Error($"{ex.Message} Parameters for {tool.Name}: {tool.Parameters.ToJsonString()}");
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException or ArgumentException or System.Runtime.InteropServices.ExternalException or TimeoutException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException or ArgumentException or ExternalException or TimeoutException)
         {
             result = ToolResult.Error(ex.Message);
         }
@@ -240,7 +241,7 @@ public sealed partial class AgentSession(
     /// Sends the request; if the server says it does not fit, resets the context and tries again
     /// (twice at most) before giving up.
     /// </summary>
-    private async Task<ChatMessage> CompleteFittingAsync(List<ChatMessage> request, IAgentObserver observer, CancellationToken ct)
+    private async Task<ChatMessage> CompleteWithResetAsync(List<ChatMessage> request, IAgentObserver observer, CancellationToken ct)
     {
         var repeats = 0;
         for (var attempt = 0; ; attempt++)

@@ -74,10 +74,9 @@ public sealed class ToolDefinition
 public sealed class ChatRequestOptions
 {
     public string Model { get; set; } = "local";
-    public double? Temperature { get; set; }
     public int? MaxTokens { get; set; }
 
-    /// <summary>Extra top-level request fields (e.g. llama.cpp's top_k or chat_template_kwargs).</summary>
+    /// <summary>Extra top-level request fields (e.g. chat_template_kwargs).</summary>
     public JsonObject? Extra { get; set; }
 
     /// <summary>Send earlier reasoning back as reasoning_content so thinking models keep their train of thought.</summary>

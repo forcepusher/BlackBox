@@ -1,7 +1,9 @@
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using BlackBox.Core.Platform;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
+using FlaUI.Core.Exceptions;
 using FlaUI.UIA3;
 using static BlackBox.Platform.Windows.Native;
 
@@ -146,9 +148,8 @@ internal sealed class WindowsUiAutomation : IUiAutomation, IDisposable
     }
 
     private static bool IsUiaFailure(Exception ex) =>
-        ex is System.Runtime.InteropServices.COMException or TimeoutException or InvalidOperationException or UnauthorizedAccessException
-            or FlaUI.Core.Exceptions.PropertyNotSupportedException or FlaUI.Core.Exceptions.PatternNotSupportedException
-            or FlaUI.Core.Exceptions.ElementNotAvailableException;
+        ex is COMException or TimeoutException or InvalidOperationException or UnauthorizedAccessException
+            or PropertyNotSupportedException or PatternNotSupportedException or ElementNotAvailableException;
 
     public void Dispose() => _automation.Dispose();
 }

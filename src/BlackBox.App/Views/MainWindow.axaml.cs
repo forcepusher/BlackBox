@@ -10,6 +10,7 @@ namespace BlackBox.App.Views;
 public partial class MainWindow : Window
 {
     private bool _stickToBottom = true;
+    private bool _pinning;
 
     public MainWindow()
     {
@@ -35,8 +36,6 @@ public partial class MainWindow : Window
                 UpdateStickiness();
         };
     }
-
-    private bool _pinning;
 
     private double MaxOffset => Math.Max(0, ChatScroll.Extent.Height - ChatScroll.Viewport.Height);
 
@@ -88,5 +87,4 @@ public partial class MainWindow : Window
         if (await window.ShowDialog<bool>(this))
             await Vm.ApplySettingsAsync(settingsVm.Settings);
     }
-
 }

@@ -110,7 +110,6 @@ public sealed partial class AgentSession
         var options = new ChatRequestOptions
         {
             Model = requestOptions.Model,
-            Temperature = requestOptions.Temperature,
             MaxTokens = HandoffMaxTokens,
             Extra = requestOptions.Extra,
             SendReasoning = requestOptions.SendReasoning,
