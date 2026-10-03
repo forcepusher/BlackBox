@@ -66,7 +66,10 @@ public sealed class ClickElementTool : DesktopActionTool
         var automation = ctx.Platform.Automation ?? throw new NotSupportedException("UI automation is not available on this OS.");
         var id = (int)RequireNumber(args, "id");
         if (automation.Activate(id))
+        {
+            ctx.Platform.InputOverlay.Show($"Press control #{id}");
             return Task.FromResult($"Pressed control #{id}.");
+        }
         throw new ToolArgumentException($"Control #{id} could not be pressed (unknown id or no click action). Call list_ui_elements again, or click its coordinates with mouse_click.");
     }
 }

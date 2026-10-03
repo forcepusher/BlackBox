@@ -72,11 +72,14 @@
           <StackPanel Spacing="4" Margin="0,0,12,16">
             <TextBlock Classes="muted" TextWrapping="Wrap"
                        Text="How the model behaves (temperature, reply length, thinking) is configured on the server, in LM Studio per model. These settings control BlackBox itself." />
-            <Grid Classes="form" ColumnDefinitions="190,*" RowDefinitions="Auto,Auto" Margin="0,8,0,0">
+            <Grid Classes="form" ColumnDefinitions="190,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,8,0,0">
               <TextBlock Classes="label" Grid.Row="0" Text="Screenshot resolution" />
               <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding ResolutionOptions}" SelectedIndex="{Binding ResolutionIndex}" HorizontalAlignment="Stretch" />
               <TextBlock Grid.Row="1" Grid.Column="1" Classes="muted" TextWrapping="Wrap"
                          Text="The largest size screenshots are sent at; your screen is scaled down to fit. Higher is sharper for small text but slower and uses more context." />
+              <CheckBox Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Content="Show the agent's clicks and key presses on screen" IsChecked="{Binding Agent.ShowInputs}" />
+              <TextBlock Grid.Row="3" Grid.Column="1" Classes="muted" TextWrapping="Wrap" Margin="28,0,0,0"
+                         Text="A short log in the bottom-right corner that fades after 5 seconds, and a ring where it clicks. The agent can't see it in its screenshots." />
            </Grid>
           </StackPanel>
         </ScrollViewer>

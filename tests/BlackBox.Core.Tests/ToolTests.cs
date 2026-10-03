@@ -200,3 +200,37 @@ public class ToolTests
         Assert.True(result.IsError);
     }
 }
+
+public class OverlayInputTests
+{
+    private sealed class RecordingOverlay : IInputOverlay
+    {
+        public bool Enabled { get; set; } = true;
+        public List<(string Text, (int X, int Y)? Point)> Shown { get; } = [];
+        public void Show(string text, (int X, int Y)? point = null) => Shown.Add((text, point));
+    }
+
+    [Fact]
+    public void Inputs_are_described_in_plain_words_with_click_positions()
+    {
+        var platform = new FakePlatform();
+        var overlay = new RecordingOverlay();
+        var input = new OverlayInputController(platform, overlay);
+
+        input.MoveMouse(40, 30);
+        input.Click(MouseButton.Left, 2);
+        input.PressKeys(["ctrl", "shift", "s"]);
+        input.PressKeys(["left"]);
+        input.TypeText("hello\nworld, this is a long line that keeps going and going");
+        input.Scroll(0, 3);
+
+        Assert.Equal("Left double click", overlay.Shown[0].Text);
+        Assert.Equal((40, 30), overlay.Shown[0].Point);
+        Assert.Equal("Keys Ctrl+Shift+S", overlay.Shown[1].Text);
+        Assert.Equal("Keys ←", overlay.Shown[2].Text);
+        Assert.Equal("Type “hello⏎world, this is a long line that ke…”", overlay.Shown[3].Text);
+        Assert.Null(overlay.Shown[3].Point);
+        Assert.Equal("Scroll down 3", overlay.Shown[4].Text);
+        Assert.Contains("click Left x2", platform.Actions); // the real input still happened
+    }
+}

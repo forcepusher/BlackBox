@@ -86,6 +86,9 @@ public sealed class AgentSettings
     /// <summary>Moving the mouse into the top-left corner stops the agent.</summary>
     public bool FailsafeCorner { get; set; } = true;
 
+    /// <summary>Show the inputs the agent makes in a fading log in the screen corner, and a ring where it clicks.</summary>
+    public bool ShowInputs { get; set; } = true;
+
     public string CustomInstructions { get; set; } = "";
 }
 

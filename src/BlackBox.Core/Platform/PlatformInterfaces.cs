@@ -105,6 +105,27 @@ public sealed class NoHostWindow : IHostWindow
     }
 }
 
+/// <summary>
+/// Shows the user what the agent just did with the mouse and keyboard: a short log in a screen
+/// corner that fades out, and a marker where it clicked. It never takes focus or clicks, and
+/// it is invisible to screenshots so the model never sees it.
+/// </summary>
+public interface IInputOverlay
+{
+    bool Enabled { get; set; }
+
+    /// <param name="text">What happened, e.g. "Left click" or "Keys: Ctrl+S".</param>
+    /// <param name="point">Where on the screen (physical pixels), for a marker; null for keyboard input.</param>
+    void Show(string text, (int X, int Y)? point = null);
+}
+
+public sealed class NoInputOverlay : IInputOverlay
+{
+    public static readonly NoInputOverlay Instance = new();
+    public bool Enabled { get; set; }
+    public void Show(string text, (int X, int Y)? point = null) { }
+}
+
 /// <summary>Everything OS-specific the agent needs. One implementation per platform.</summary>
 public interface IPlatformServices
 {
@@ -117,6 +138,8 @@ public interface IPlatformServices
     IUiAutomation? Automation { get; }
 
     IHostWindow HostWindow { get; }
+
+    IInputOverlay InputOverlay { get; }
 
     /// <summary>Start info for running one command string in the platform shell (no redirection set).</summary>
     ProcessStartInfo CreateShellStartInfo(string command);
@@ -131,6 +154,7 @@ public sealed class UnsupportedPlatform : IPlatformServices, IScreenCapture, IIn
     public IWindowManager Windows => this;
     public IUiAutomation? Automation => null;
     public IHostWindow HostWindow => NoHostWindow.Instance;
+    public IInputOverlay InputOverlay => NoInputOverlay.Instance;
     public ProcessStartInfo CreateShellStartInfo(string command) => new("/bin/sh") { ArgumentList = { "-c", command } };
 
     private static NotSupportedException Fail() => new("Desktop control is not implemented on this OS yet.");

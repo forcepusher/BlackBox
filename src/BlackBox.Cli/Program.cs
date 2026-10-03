@@ -48,6 +48,7 @@ using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
 var agent = settings.Agent;
+platform.InputOverlay.Enabled = agent.ShowInputs;
 if (urlOverride is not null) settings.Server.BaseUrl = urlOverride;
 if (modelOverride is not null) settings.Server.Model = modelOverride;
 using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a model can take a while

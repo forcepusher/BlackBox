@@ -58,7 +58,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     public bool HasNoMessages => Items.Count == 0;
 
-    public void AttachHostWindow(nint handle) => _platform.HostWindow.Attach(handle, _settings.Agent.HideFromScreenshots);
+    public void AttachHostWindow(nint handle)
+    {
+        _platform.HostWindow.Attach(handle, _settings.Agent.HideFromScreenshots);
+        _platform.InputOverlay.Enabled = _settings.Agent.ShowInputs;
+    }
 
     public void OnStartup()
     {
@@ -272,6 +276,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _settings = updated;
         _store.Save(updated);
         _platform.HostWindow.SetHiddenFromCapture(updated.Agent.HideFromScreenshots);
+        _platform.InputOverlay.Enabled = updated.Agent.ShowInputs;
         await CheckServerAsync();
     }
 

@@ -96,6 +96,7 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
 {
     public IUiAutomation? Automation => this;
     public IHostWindow HostWindow { get; set; } = NoHostWindow.Instance;
+    public IInputOverlay InputOverlay => NoInputOverlay.Instance;
     public IReadOnlyList<UiElement> GetElements(string? windowTitle, int maxCount) =>
     [
         new UiElement(1, "Button", "Save", null, new ScreenRect(100, 50, 40, 20), true),
