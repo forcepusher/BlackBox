@@ -7,9 +7,3 @@ publish/
 
 ## Dev builds keep their portable folder (Data/, Workspace/) here
 /.dev/
-
-## Leftovers from the old local-model layout (Models/, llama/) and pre-.dev dev data; delete when no longer needed
-/Models/
-/llama/
-/Data/
-/Workspace/
