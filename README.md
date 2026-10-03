@@ -32,12 +32,23 @@ Thinking models get their earlier reasoning sent back each step (`reasoning_cont
 `preserve_thinking`), as the Qwen3.5+ and Gemma 4 templates expect.
 
 ## Context window
-BlackBox reads the loaded context length from LM Studio (`/api/v0/models`) and keeps each
-request inside it, trimming in this order: old screenshots, the thinking of older steps, long
-outputs of older tools, and finally whole steps from the middle of the run (the original task and
-the most recent steps always stay). If the server still reports a context overflow, BlackBox
-trims harder and retries.
+The OpenAI API has no field for the context length, so BlackBox asks each server its own way:
+LM Studio (`/api/v0/models/{id}`, `loaded_context_length`, after loading the model if needed),
+llama-server (`/props`, `n_ctx`), vLLM (`max_model_len`) and OpenRouter (`context_length`).
+Otherwise the size in Settings is used. Each request is also capped at 64k tokens by default
+(Settings → Advanced) so steps stay fast.
 
+When a run outgrows that budget, BlackBox drops old screenshots and old thinking, then has the
+model **summarize the middle of the run** (the original task and the latest steps stay verbatim).
+Summaries are written in ~8k-token chunks, so each request stays short. If summarizing fails, old
+tool output and then whole middle steps are trimmed instead, and a server's "context length
+exceeded" error triggers the same trimming and a retry.
+
+### Unstable connections
+VPNs and proxies often cut a connection that has been silent for about a minute, which happens
+while a server processes a long prompt. BlackBox resends the identical request when a connection
+drops or a reply stream stops early; the server still has the already-processed prompt in its
+cache, so each retry continues where the last one stopped (up to 12 times per step).
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |
