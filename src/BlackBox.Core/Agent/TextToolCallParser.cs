@@ -12,6 +12,7 @@ namespace BlackBox.Core.Agent;
 /// <list type="bullet">
 /// <item>Qwen 3.5+ XML: <c>&lt;tool_call&gt;&lt;function=name&gt;&lt;parameter=x&gt;1&lt;/parameter&gt;&lt;/function&gt;&lt;/tool_call&gt;</c></item>
 /// <item>Hermes JSON: <c>&lt;tool_call&gt;{"name": ..., "arguments": {...}}&lt;/tool_call&gt;</c></item>
+/// <item>Gemma 4: <c>&lt;|tool_call&gt;call:name{key:&lt;|"|&gt;text&lt;|"|&gt;,n:1}&lt;tool_call|&gt;</c></item>
 /// <item>A bare or fenced JSON object with "name" and "arguments".</item>
 /// </list>
 /// </summary>
@@ -35,6 +36,18 @@ public static partial class TextToolCallParser
 
         if (calls.Count == 0)
         {
+            foreach (Match m in GemmaCall().Matches(content))
+            {
+                // Gemma quotes strings with <|"|> and leaves keys bare; turn that into JSON and let
+                // the argument repair handle the unquoted keys.
+                var json = GemmaString().Replace(m.Groups["args"].Value, s => JsonSerializer.Serialize(s.Groups[1].Value));
+                try { Add(m.Groups["name"].Value, ToolCallRepair.ParseArguments(json).ToJsonString()); }
+                catch (ToolArgumentException) { }
+            }
+        }
+
+        if (calls.Count == 0)
+        {
             foreach (Match m in JsonToolCall().Matches(content))
                 AddJson(m.Groups["json"].Value);
         }
@@ -53,6 +66,7 @@ public static partial class TextToolCallParser
         message.ToolCalls = calls;
         var cleaned = XmlFunction().Replace(content, "");
         cleaned = JsonToolCall().Replace(cleaned, "");
+        cleaned = GemmaCall().Replace(cleaned, "");
         cleaned = cleaned.Replace("<tool_call>", "").Replace("</tool_call>", "").Trim();
         message.Content = cleaned.StartsWith('{') || cleaned.StartsWith("```") ? "" : cleaned;
         return true;
@@ -100,6 +114,12 @@ public static partial class TextToolCallParser
 
     [GeneratedRegex(@"<parameter=(?<name>[^>]+)>(?<value>.*?)</parameter>", RegexOptions.Singleline)]
     private static partial Regex XmlParameter();
+
+    [GeneratedRegex(@"<\|tool_call>\s*call:(?<name>[\w.\-]+)\s*(?<args>\{.*?\})\s*(<tool_call\|>|$)", RegexOptions.Singleline)]
+    private static partial Regex GemmaCall();
+
+    [GeneratedRegex(@"<\|""\|>(.*?)<\|""\|>", RegexOptions.Singleline)]
+    private static partial Regex GemmaString();
 
     [GeneratedRegex(@"<tool_call>\s*(?<json>\{.*?\})\s*(</tool_call>|$)", RegexOptions.Singleline)]
     private static partial Regex JsonToolCall();

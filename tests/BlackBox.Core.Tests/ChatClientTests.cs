@@ -130,6 +130,30 @@ public class ChatClientTests
     }
 
     [Fact]
+    public void Gemma_tool_calls_in_text_are_extracted()
+    {
+        var msg = new ChatMessage
+        {
+            Role = ChatRole.Assistant,
+            Content = "<|tool_call>call:type_text{text:<|\"|>Hello, world: \"hi\"<|\"|>}<tool_call|><|tool_call>call:mouse_click{x:120,y:45}<tool_call|>",
+        };
+        Assert.True(TextToolCallParser.TryExtract(msg, Registry));
+        Assert.Equal(2, msg.ToolCalls!.Count);
+        Assert.Equal("Hello, world: \"hi\"", System.Text.Json.Nodes.JsonNode.Parse(msg.ToolCalls[0].Arguments)!["text"]!.GetValue<string>());
+        Assert.Equal("""{"x":120,"y":45}""", msg.ToolCalls[1].Arguments);
+        Assert.Equal("", msg.Content);
+    }
+
+    [Fact]
+    public async Task Gemma_thought_channel_moves_to_reasoning()
+    {
+        var sse = """data: {"choices":[{"delta":{"content":"<|channel>thought\nCheck the screen first.<channel|>Taking a look."}}]}""";
+        var msg = await OpenAiChatClient.ReadStreamAsync(new StringReader(sse), null, CancellationToken.None);
+        Assert.Equal("Taking a look.", msg.Content);
+        Assert.Equal("Check the screen first.", msg.Reasoning);
+    }
+
+    [Fact]
     public void Fenced_json_reply_is_treated_as_a_tool_call()
     {
         var msg = new ChatMessage { Role = ChatRole.Assistant, Content = "```json\n{\"name\": \"screenshot\", \"arguments\": {}}\n```" };

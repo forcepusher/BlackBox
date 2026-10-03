@@ -176,6 +176,11 @@ public sealed class OpenAiChatClient
         // Thinking that leaked into the visible text (a stray </think> from a quantized model,
         // or a server without a reasoning parser) belongs with the reasoning.
         var text = content.ToString();
+        // Gemma 4 marks its thinking as a "thought" channel.
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(
+                     text, @"<\|channel>thought\s*(.*?)<channel\|>", System.Text.RegularExpressions.RegexOptions.Singleline))
+            reasoning.Append(m.Groups[1].Value);
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"<\|channel>thought\s*.*?<channel\|>\s*", "", System.Text.RegularExpressions.RegexOptions.Singleline);
         var thinkEnd = text.LastIndexOf("</think>", StringComparison.Ordinal);
         if (thinkEnd >= 0)
         {

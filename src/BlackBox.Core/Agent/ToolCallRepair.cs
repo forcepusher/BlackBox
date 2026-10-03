@@ -200,13 +200,50 @@ public static partial class ToolCallRepair
             yield return pythonish.Replace('\'', '"');
 
         // Unquoted keys: {x: 10, y: 20}
-        var quotedKeys = UnquotedKey().Replace(pythonish, "$1\"$2\":");
+        var quotedKeys = QuoteBareKeys(pythonish);
         yield return quotedKeys;
 
         // Truncated output: close whatever is still open.
         yield return Balance(quotedKeys);
         // Extra text after the object.
         yield return FirstObject(quotedKeys);
+    }
+
+    /// <summary>Quotes bare object keys ({x: 1} to {"x": 1}) without touching text inside strings.</summary>
+    internal static string QuoteBareKeys(string text)
+    {
+        var sb = new StringBuilder(text.Length + 16);
+        var inString = false;
+        var expectKey = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (inString)
+            {
+                sb.Append(c);
+                if (c == '\\' && i + 1 < text.Length) sb.Append(text[++i]);
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"') { inString = true; expectKey = false; sb.Append(c); continue; }
+            if (c is '{' or ',') { expectKey = true; sb.Append(c); continue; }
+            if (expectKey && (char.IsLetter(c) || c == '_'))
+            {
+                var start = i;
+                while (i < text.Length && (char.IsLetterOrDigit(text[i]) || text[i] == '_')) i++;
+                var j = i;
+                while (j < text.Length && char.IsWhiteSpace(text[j])) j++;
+                var word = text[start..i];
+                if (j < text.Length && text[j] == ':') sb.Append('"').Append(word).Append('"');
+                else sb.Append(word);
+                i--;
+                expectKey = false;
+                continue;
+            }
+            if (!char.IsWhiteSpace(c)) expectKey = false;
+            sb.Append(c);
+        }
+        return sb.ToString();
     }
 
     private static string Balance(string text)
@@ -261,9 +298,6 @@ public static partial class ToolCallRepair
 
     [GeneratedRegex(@"(?<![""\w])(True|False|None)(?![""\w])")]
     private static partial Regex PythonLiteral();
-
-    [GeneratedRegex(@"([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:")]
-    private static partial Regex UnquotedKey();
 
     [GeneratedRegex(@"^\s*\(?\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*\)?\s*$")]
     private static partial Regex PointText();
