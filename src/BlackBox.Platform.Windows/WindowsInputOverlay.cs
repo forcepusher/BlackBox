@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using BlackBox.Core.Platform;
 using SkiaSharp;
+using static BlackBox.Platform.Windows.Native;
 
 namespace BlackBox.Platform.Windows;
 
@@ -21,7 +22,8 @@ internal sealed class WindowsInputOverlay : IInputOverlay
 {
     private const double FadeSeconds = 1.5, MarkerSeconds = 1.2;
     private const int MaxLines = 8, PanelWidth = 460, LineHeight = 34, MarkerSize = 72;
-    private const uint WM_APP_REFRESH = 0x8001, WM_TIMER = 0x0113;
+    private const uint WM_APP_REFRESH = WM_APP + 1;
+    private const uint ColorKey = 0x00FF00FF; // magenta, as COLORREF (0x00BBGGRR)
 
     private readonly object _lock = new();
     private readonly List<Entry> _entries = [];
@@ -210,7 +212,7 @@ internal sealed class WindowsInputOverlay : IInputOverlay
     /// Moves the window, sets its overall opacity and draws into it. Pixels left in the key colour
     /// are see-through. Layered windows keep what is drawn into them, so no WM_PAINT is needed.
     /// </summary>
-    private static unsafe void Paint(nint hwnd, int x, int y, int width, int height, byte opacity, Action<SKCanvas> draw)
+    private static void Paint(nint hwnd, int x, int y, int width, int height, byte opacity, Action<SKCanvas> draw)
     {
         SetWindowPos(hwnd, HWND_TOPMOST, x, y, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
         SetLayeredWindowAttributes(hwnd, ColorKey, opacity, LWA_COLORKEY | LWA_ALPHA);
@@ -241,70 +243,4 @@ internal sealed class WindowsInputOverlay : IInputOverlay
             ReleaseDC(hwnd, target);
         }
     }
-
-    // ---- interop ---------------------------------------------------------------------
-
-    private const uint WS_POPUP = 0x80000000;
-    private const uint WS_EX_LAYERED = 0x00080000, WS_EX_TRANSPARENT = 0x00000020, WS_EX_TOPMOST = 0x00000008,
-        WS_EX_NOACTIVATE = 0x08000000, WS_EX_TOOLWINDOW = 0x00000080;
-    private const uint SPI_GETWORKAREA = 0x0030, WDA_EXCLUDEFROMCAPTURE = 0x11, LWA_COLORKEY = 1, LWA_ALPHA = 2, SRCCOPY = 0x00CC0020;
-    private const uint ColorKey = 0x00FF00FF; // magenta, as COLORREF (0x00BBGGRR)
-    private const int SW_HIDE = 0;
-    private static readonly nint HWND_TOPMOST = -1;
-    private const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOACTIVATE = 0x0010, SWP_SHOWWINDOW = 0x0040;
-
-    private delegate nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam);
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct WNDCLASSEX
-    {
-        public int cbSize;
-        public uint style;
-        public nint lpfnWndProc;
-        public int cbClsExtra, cbWndExtra;
-        public nint hInstance, hIcon, hCursor, hbrBackground;
-        public string? lpszMenuName;
-        public string lpszClassName;
-        public nint hIconSm;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MSG { public nint hwnd; public uint message; public nint wParam, lParam; public uint time; public POINT pt; }
-
-    [StructLayout(LayoutKind.Sequential)] private struct POINT { public int X, Y; }
-    [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct BITMAPINFOHEADER
-    {
-        public int biSize, biWidth, biHeight;
-        public short biPlanes, biBitCount;
-        public int biCompression, biSizeImage, biXPelsPerMeter, biYPelsPerMeter, biClrUsed, biClrImportant;
-    }
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern ushort RegisterClassEx(ref WNDCLASSEX wc);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern nint CreateWindowEx(uint exStyle, string className, string title, uint style, int x, int y, int w, int h, nint parent, nint menu, nint instance, nint param);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint DefWindowProc(nint hWnd, uint msg, nint wParam, nint lParam);
-    [DllImport("user32.dll")] private static extern int GetMessage(out MSG msg, nint hWnd, uint min, uint max);
-    [DllImport("user32.dll")] private static extern bool TranslateMessage(ref MSG msg);
-    [DllImport("user32.dll")] private static extern nint DispatchMessage(ref MSG msg);
-    [DllImport("user32.dll")] private static extern bool PostThreadMessage(uint threadId, uint msg, nint wParam, nint lParam);
-    [DllImport("user32.dll")] private static extern nint SetTimer(nint hWnd, nint id, uint ms, nint proc);
-    [DllImport("user32.dll")] private static extern bool KillTimer(nint hWnd, nint id);
-    [DllImport("user32.dll")] private static extern bool ShowWindow(nint hWnd, int cmd);
-    [DllImport("user32.dll")] private static extern bool SetWindowPos(nint hWnd, nint after, int x, int y, int cx, int cy, uint flags);
-    [DllImport("user32.dll")] private static extern bool SetWindowDisplayAffinity(nint hWnd, uint affinity);
-    [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(nint hWnd, uint key, byte alpha, uint flags);
-    [DllImport("gdi32.dll")] private static extern bool BitBlt(nint dst, int x, int y, int w, int h, nint src, int sx, int sy, uint rop);
-    [DllImport("user32.dll")] private static extern bool SystemParametersInfo(uint action, uint param, out RECT rect, uint winIni);
-    [DllImport("user32.dll")] private static extern nint GetDC(nint hWnd);
-    [DllImport("user32.dll")] private static extern int ReleaseDC(nint hWnd, nint hdc);
-    [DllImport("gdi32.dll")] private static extern nint CreateCompatibleDC(nint hdc);
-    [DllImport("gdi32.dll")] private static extern nint CreateDIBSection(nint hdc, ref BITMAPINFOHEADER info, uint usage, out nint bits, nint section, uint offset);
-    [DllImport("gdi32.dll")] private static extern nint SelectObject(nint hdc, nint obj);
-    [DllImport("gdi32.dll")] private static extern bool DeleteObject(nint obj);
-    [DllImport("gdi32.dll")] private static extern bool DeleteDC(nint hdc);
-    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern nint GetModuleHandle(string? name);
 }

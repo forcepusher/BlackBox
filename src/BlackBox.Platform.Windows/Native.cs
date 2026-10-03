@@ -206,7 +206,9 @@ internal static partial class Native
     public static partial uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
 
     public const int GWL_EXSTYLE = -20;
-    public const long WS_EX_TOOLWINDOW = 0x00000080;
+    public const uint WS_POPUP = 0x80000000;
+    public const uint WS_EX_TOPMOST = 0x00000008, WS_EX_TRANSPARENT = 0x00000020, WS_EX_TOOLWINDOW = 0x00000080,
+        WS_EX_LAYERED = 0x00080000, WS_EX_NOACTIVATE = 0x08000000;
 
     [LibraryImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
     public static partial nint GetWindowLongPtr(nint hWnd, int nIndex);
@@ -214,7 +216,7 @@ internal static partial class Native
     [LibraryImport("user32.dll")]
     public static partial nint GetWindow(nint hWnd, uint uCmd);
 
-    public const uint GW_OWNER = 4;
+    public const uint GW_HWNDNEXT = 2, GW_OWNER = 4;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT { public int Left, Top, Right, Bottom; }
@@ -223,11 +225,25 @@ internal static partial class Native
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetWindowRect(nint hWnd, out RECT lpRect);
 
-    public const int SW_RESTORE = 9;
+    public const int SW_HIDE = 0, SW_RESTORE = 9;
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool ShowWindow(nint hWnd, int nCmdShow);
+
+    public static readonly nint HWND_TOP = 0, HWND_BOTTOM = 1, HWND_TOPMOST = -1;
+    public const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOACTIVATE = 0x0010, SWP_SHOWWINDOW = 0x0040;
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
+
+    /// <summary>Screen capture (and screen sharing) shows what is behind the window instead.</summary>
+    public const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetWindowDisplayAffinity(nint hWnd, uint dwAffinity);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -248,4 +264,76 @@ internal static partial class Native
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(nint hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
+
+    // ---- own windows: class, message loop, layering (the input overlay) ----------------
+
+    public const uint WM_TIMER = 0x0113, WM_APP = 0x8000;
+    public const uint LWA_COLORKEY = 1, LWA_ALPHA = 2;
+    public const uint SPI_GETWORKAREA = 0x0030;
+
+    public delegate nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct WNDCLASSEX
+    {
+        public int cbSize;
+        public uint style;
+        public nint lpfnWndProc;
+        public int cbClsExtra, cbWndExtra;
+        public nint hInstance, hIcon, hCursor, hbrBackground;
+        public string? lpszMenuName;
+        public string lpszClassName;
+        public nint hIconSm;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MSG { public nint hwnd; public uint message; public nint wParam, lParam; public uint time; public POINT pt; }
+
+    // WNDCLASSEX holds strings, which the source-generated marshaller does not take by ref.
+    [DllImport("user32.dll", EntryPoint = "RegisterClassExW", CharSet = CharSet.Unicode)]
+    public static extern ushort RegisterClassEx(ref WNDCLASSEX wc);
+
+    [LibraryImport("user32.dll", EntryPoint = "CreateWindowExW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    public static partial nint CreateWindowEx(uint exStyle, string className, string title, uint style, int x, int y, int w, int h, nint parent, nint menu, nint instance, nint param);
+
+    [LibraryImport("user32.dll", EntryPoint = "DefWindowProcW")]
+    public static partial nint DefWindowProc(nint hWnd, uint msg, nint wParam, nint lParam);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetMessageW")]
+    public static partial int GetMessage(out MSG msg, nint hWnd, uint min, uint max);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool TranslateMessage(ref MSG msg);
+
+    [LibraryImport("user32.dll", EntryPoint = "DispatchMessageW")]
+    public static partial nint DispatchMessage(ref MSG msg);
+
+    [LibraryImport("user32.dll", EntryPoint = "PostThreadMessageW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool PostThreadMessage(uint threadId, uint msg, nint wParam, nint lParam);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint SetTimer(nint hWnd, nint id, uint ms, nint proc);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool KillTimer(nint hWnd, nint id);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetLayeredWindowAttributes(nint hWnd, uint key, byte alpha, uint flags);
+
+    [LibraryImport("user32.dll", EntryPoint = "SystemParametersInfoW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SystemParametersInfo(uint action, uint param, out RECT rect, uint winIni);
+
+    [LibraryImport("gdi32.dll")]
+    public static partial nint CreateDIBSection(nint hdc, ref BITMAPINFOHEADER info, uint usage, out nint bits, nint section, uint offset);
+
+    [LibraryImport("kernel32.dll")]
+    public static partial uint GetCurrentThreadId();
+
+    [LibraryImport("kernel32.dll", EntryPoint = "GetModuleHandleW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint GetModuleHandle(string? name);
 }

@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using BlackBox.Core.Platform;
 using static BlackBox.Platform.Windows.Native;
@@ -16,12 +15,6 @@ namespace BlackBox.Platform.Windows;
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsHostWindow : IHostWindow
 {
-    private const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
-    private static readonly nint HWND_TOP = 0;
-    private static readonly nint HWND_BOTTOM = 1;
-    private const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOACTIVATE = 0x0010;
-    private const uint GW_HWNDNEXT = 2;
-
     private nint _hwnd;
 
     public void Attach(nint handle, bool hideFromCapture)
@@ -85,12 +78,4 @@ internal sealed class WindowsHostWindow : IHostWindow
             SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         }
     }
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetWindowDisplayAffinity(nint hWnd, uint dwAffinity);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
 }
