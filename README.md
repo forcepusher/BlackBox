@@ -43,8 +43,8 @@ llama-server (`/props`, `n_ctx`), Ollama (`/api/ps`, or `num_ctx` from `/api/sho
 don't say are assumed to have 100k. If that is too much, the server's "too long" error usually
 names the real size, and BlackBox switches to it. BlackBox uses the whole context.
 
-The **Context** slider in the top bar shows that size while **Auto** is ticked (a `?` means the
-server didn't say and it is the 100k guess; LM Studio says once the model is loaded). Untick Auto
+The **Context** slider in the top bar shows that size while **Auto** is ticked ("not loaded" until LM Studio has loaded
+the model, which your first message does; a `?` means the server doesn't say and it is the 100k guess). Untick Auto
 to have BlackBox use less: the slider stops at 4k to 1M in coarser steps as it grows (4k, 8k, 12k,
 16k, 24k, 32k, 40k, 48k, 64k, 80k, 96k, 128k, 160k, 192k, 256k, 320k, 384k, 512k, 640k, 768k,
 1M) and ends at the server's own size when the server reports one, so it can't go past what the
