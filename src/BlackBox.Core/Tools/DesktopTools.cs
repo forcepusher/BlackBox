@@ -218,39 +218,62 @@ public sealed class TypeTextTool : DesktopActionTool
 
 public sealed class PressKeysTool : DesktopActionTool
 {
+    /// <summary>Pause between the presses of a sequence, so apps (and game animations) keep up.</summary>
+    private const int DefaultGapMs = 150;
+
     public override string Name => "press_keys";
     public override string Description =>
-        "Press a key or shortcut. Give the keys of one chord in order, e.g. [\"ctrl\",\"c\"], [\"alt\",\"tab\"], [\"enter\"], [\"win\",\"r\"]. " +
+        "Press a key or shortcut, or a whole series of them in one go. For one chord give its keys in order, e.g. [\"ctrl\",\"c\"], [\"alt\",\"tab\"], [\"enter\"]. " +
+        "For several presses one after another, give sequence instead, e.g. [\"left\",\"down\",\"left\",\"tab\",\"ctrl+s\"]: much faster than one call per key. " +
         "Names: ctrl, alt, shift, win, enter, esc, tab, backspace, delete, space, up, down, left, right, home, end, pageup, pagedown, f1-f12, a-z, 0-9.";
     public override JsonObject Parameters => Schema(
-        ("keys", StrArray("Keys of one chord, modifiers first"), true),
-        ("repeat", Int("How many times to press the chord, default 1"), false));
-    public override string Describe(JsonObject args) =>
-        $"Press {string.Join("+", Keys(args))}" + (GetNumber(args, "repeat") is > 1 and var r ? $" x{r}" : "");
+        ("keys", StrArray("Keys of one chord, modifiers first"), false),
+        ("sequence", StrArray("Presses to make one after another; each is a key or a chord like ctrl+s. Use instead of keys."), false),
+        ("repeat", Int("How many times to press the chord or run the sequence, default 1"), false),
+        ("gap_ms", Int($"Pause between presses in milliseconds, default {DefaultGapMs}"), false));
+
+    public override string Describe(JsonObject args)
+    {
+        var repeat = GetNumber(args, "repeat") is > 1 and var r ? $" x{r}" : "";
+        var sequence = Sequence(args);
+        return sequence.Count > 0
+            ? $"Press {sequence.Count} keys: {string.Join(" ", sequence.Select(c => string.Join("+", c)))}{repeat}"
+            : $"Press {string.Join("+", Keys(args))}{repeat}";
+    }
 
     private static List<string> Keys(JsonObject args)
     {
         var keys = GetStringList(args, "keys") ?? [];
         // Accept "ctrl+c" as a single string as well.
-        return keys.SelectMany(k => k.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).ToList();
+        return keys.SelectMany(Split).ToList();
     }
+
+    private static List<List<string>> Sequence(JsonObject args) =>
+        (GetStringList(args, "sequence") ?? []).Select(c => Split(c).ToList()).Where(c => c.Count > 0).ToList();
+
+    private static string[] Split(string chord) =>
+        chord.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     protected override async Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
-        var keys = Keys(args);
-        if (keys.Count == 0)
-            throw new ToolArgumentException("'keys' must list at least one key.");
-        var unknown = keys.Where(k => !ctx.Platform.Input.IsKnownKey(k)).ToList();
+        var presses = Sequence(args);
+        if (presses.Count == 0 && Keys(args) is { Count: > 0 } chord)
+            presses = [chord];
+        if (presses.Count == 0)
+            throw new ToolArgumentException("Give 'keys' (one chord) or 'sequence' (several presses).");
+        var unknown = presses.SelectMany(p => p).Where(k => !ctx.Platform.Input.IsKnownKey(k)).Distinct().ToList();
         if (unknown.Count > 0)
             throw new ToolArgumentException($"Unknown key name(s): {string.Join(", ", unknown)}.");
 
         var repeat = Math.Clamp((int)(GetNumber(args, "repeat") ?? 1), 1, 100);
+        var gap = Math.Clamp((int)(GetNumber(args, "gap_ms") ?? (presses.Count > 1 ? DefaultGapMs : 40)), 0, 5000);
         ctx.Platform.HostWindow.YieldFocus();
-        for (var i = 0; i < repeat; i++)
+        var total = repeat * presses.Count;
+        for (var i = 0; i < total; i++)
         {
-            ctx.Platform.Input.PressKeys(keys);
-            if (i < repeat - 1)
-                await Task.Delay(40, ct).ConfigureAwait(false);
+            ctx.Platform.Input.PressKeys(presses[i % presses.Count]);
+            if (i < total - 1)
+                await Task.Delay(gap, ct).ConfigureAwait(false);
         }
         return Describe(args) + " done.";
     }

@@ -64,6 +64,15 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task Press_keys_plays_a_sequence_in_one_call()
+    {
+        var platform = new FakePlatform();
+        var args = new JsonObject { ["sequence"] = new JsonArray("left", "down", "ctrl+s"), ["repeat"] = 2, ["gap_ms"] = 0 };
+        await new PressKeysTool().ExecuteAsync(args, Ctx(platform), CancellationToken.None);
+        Assert.Equal(["keys left", "keys down", "keys ctrl+s", "keys left", "keys down", "keys ctrl+s"], platform.Actions);
+    }
+
+    [Fact]
     public async Task Write_file_appends_parts()
     {
         var path = Path.Combine(Path.GetTempPath(), "bb-append-" + Guid.NewGuid().ToString("N") + ".txt");
