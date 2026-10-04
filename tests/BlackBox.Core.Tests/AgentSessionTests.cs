@@ -255,7 +255,7 @@ public class AgentSessionTests
         // LM Studio sends a call's name first and its arguments only when the call is complete;
         // a proxy that cuts silent connections kills it in between, every time it is resent.
         var cut = Sse.ToolCall("c1", "write_file", "").Replace("data: [DONE]\n\n", "");
-        var server = new ScriptedServer(cut, cut, Sse.Text("Done."));
+        var server = new ScriptedServer(cut, cut, cut, Sse.Text("Done."));
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
         var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null),
             new ChatRequestOptions(), ToolRegistry.CreateDefault(true), ctx, "sys");
@@ -264,11 +264,14 @@ public class AgentSessionTests
         await session.RunAsync("write a game", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal(3, server.Requests.Count);
+        Assert.Equal(4, server.Requests.Count);
         static string LastContent(JsonObject req) => ((JsonArray)req["messages"]!)[^1]!["content"]!.ToString();
         Assert.Equal(AgentSession.LongToolCallNote, LastContent(server.Requests[1]));
-        Assert.Equal(server.Requests[1].ToJsonString(), server.Requests[2].ToJsonString()); // the note is added once
+        // Still too long: one firmer note, then plain resends.
+        Assert.Equal(AgentSession.StillTooLongNote, LastContent(server.Requests[2]));
+        Assert.Equal(server.Requests[2].ToJsonString(), server.Requests[3].ToJsonString());
         Assert.Single(session.History, m => m.Content == AgentSession.LongToolCallNote);
+        Assert.Single(session.History, m => m.Content == AgentSession.StillTooLongNote);
     }
 
     [Fact]
