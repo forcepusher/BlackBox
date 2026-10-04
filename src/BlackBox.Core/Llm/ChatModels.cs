@@ -81,10 +81,6 @@ public sealed class ChatRequestOptions
 
     /// <summary>Send earlier reasoning back as reasoning_content so thinking models keep their train of thought.</summary>
     public bool SendReasoning { get; set; }
-
-    /// <summary>The same options with a reply length limit; the limit is not part of the prompt, so the server's cache still matches.</summary>
-    public ChatRequestOptions WithMaxTokens(int maxTokens) =>
-        new() { Model = Model, MaxTokens = maxTokens, Extra = Extra, SendReasoning = SendReasoning };
 }
 
 public enum StreamChannel { Content, Reasoning }

@@ -49,7 +49,6 @@ public sealed partial class AgentSession(
         var nudges = 0;
         var loops = new LoopDetector();
         var justReset = false;
-        Task? warmUp = null;
 
         try
         {
@@ -60,11 +59,6 @@ public sealed partial class AgentSession(
             {
                 ct.ThrowIfCancellationRequested();
                 observer.OnStepStarted(step);
-                if (warmUp is not null)
-                {
-                    await warmUp.ConfigureAwait(false); // never two requests on the server at once
-                    warmUp = null;
-                }
                 if (contextTokens > 0 && TokensInUse() > ResetThreshold)
                     await ResetContextAsync(observer, ct).ConfigureAwait(false);
 
@@ -107,7 +101,6 @@ public sealed partial class AgentSession(
                     return;
                 }
 
-                warmUp = WarmCacheAsync(ct);
                 var screenshots = new List<ContentPart>();
                 foreach (var call in reply.ToolCalls!)
                 {
@@ -166,36 +159,6 @@ public sealed partial class AgentSession(
         "then add each next part with write_file and append set to true. Continue with the task.";
     private const string NudgeText =
         "Continue with the task. If there is another step, call the tool for it now. If the task is finished, reply with a short summary of what you did.";
-
-    /// <summary>The throwaway user message a cache warm-up ends with (see <see cref="WarmCacheAsync"/>).</summary>
-    internal const string WarmUpText = ".";
-
-    /// <summary>
-    /// Has the server read the reply it just produced back into its cache while the tools run.
-    /// </summary>
-    /// <remarks>
-    /// Hybrid models (Qwen3.5+) cannot rewind their state, so llama.cpp-based servers checkpoint it
-    /// only while reading a prompt, never after generating. The next request therefore has to read
-    /// the model's own reply again, at prefill speed (about 2 s per 1,000 tokens, thinking included).
-    /// A one-token request that ends in a throwaway user message makes the server do that now and
-    /// leave a checkpoint where the next request's tool results begin (a user message too). Measured
-    /// on LM Studio with qwen3.8: the next step then reads 2 s of prompt instead of 12 s for a
-    /// 6.5k-token reply. The warm-up is awaited before the next real request so the two never run
-    /// at once; if it fails, the next request simply reads the reply itself, as before.
-    /// </remarks>
-    private async Task WarmCacheAsync(CancellationToken ct)
-    {
-        var request = new List<ChatMessage>(History.Count + 2) { ChatMessage.System(systemPrompt) };
-        request.AddRange(History);
-        request.Add(ChatMessage.User(WarmUpText));
-        try
-        {
-            await client.CompleteAsync(request, tools.Definitions(), requestOptions.WithMaxTokens(1), null, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is LlmException || ex is OperationCanceledException && ct.IsCancellationRequested)
-        {
-        }
-    }
 
     internal static bool LooksFinished(string? content) => content is { Length: > 0 } && CompletionClaim().IsMatch(content);
 

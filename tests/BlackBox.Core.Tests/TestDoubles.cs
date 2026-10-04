@@ -32,12 +32,7 @@ internal static class Sse
 internal sealed class ScriptedServer(params string[] responses) : HttpMessageHandler
 {
     private int _next;
-
-    /// <summary>Every real chat request, in order (cache warm-ups are kept apart in <see cref="WarmUps"/>).</summary>
     public List<JsonObject> Requests { get; } = [];
-
-    /// <summary>The one-token warm-up requests the agent sends while tools run.</summary>
-    public List<JsonObject> WarmUps { get; } = [];
 
     /// <summary>Error responses returned before the scripted ones.</summary>
     public Queue<(HttpStatusCode Status, string Body)> Failures { get; } = [];
@@ -50,13 +45,7 @@ internal sealed class ScriptedServer(params string[] responses) : HttpMessageHan
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
-        var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!.AsObject();
-        if (body["max_tokens"]?.GetValue<int>() == 1 && body["messages"]!.AsArray()[^1]!["content"]?.ToString() == AgentSession.WarmUpText)
-        {
-            WarmUps.Add(body);
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Sse.Text(""), Encoding.UTF8, "text/event-stream") };
-        }
-        Requests.Add(body);
+        Requests.Add(JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!.AsObject());
         if (Failures.TryDequeue(out var failure))
             return new HttpResponseMessage(failure.Status) { Content = new StringContent(failure.Body, Encoding.UTF8, "application/json") };
         if (Drops > 0)
@@ -66,8 +55,8 @@ internal sealed class ScriptedServer(params string[] responses) : HttpMessageHan
         }
         if (Responder is not null)
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Responder(Requests[^1]), Encoding.UTF8, "text/event-stream") };
-        var reply = _next < responses.Length ? responses[_next++] : Sse.Text("(script exhausted)");
-        return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(reply, Encoding.UTF8, "text/event-stream") };
+        var body = _next < responses.Length ? responses[_next++] : Sse.Text("(script exhausted)");
+        return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "text/event-stream") };
     }
 }
 

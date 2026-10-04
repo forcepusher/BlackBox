@@ -49,12 +49,6 @@ reports, not guessed. If the model can't write the note, a record of its last st
 instead; a reply cut off by the context limit, or a server's "context length exceeded" error,
 triggers the same reset and a retry.
 
-Hybrid models (Qwen3.5+) can't rewind their state, so llama.cpp-based servers only checkpoint
-it while reading a prompt, never after generating: every step would otherwise start by reading
-the model's previous reply again, thinking included, at about 2 s per 1,000 tokens. BlackBox
-sends a one-token warm-up request right after each reply, so the server does that reading while
-the tools run and the next step starts from a checkpoint.
-
 ### Unstable connections
 VPNs and proxies often cut a connection that has been silent for about a minute, which happens
 while a server processes a long prompt. BlackBox resends the identical request when a connection
