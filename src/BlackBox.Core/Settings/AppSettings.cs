@@ -51,7 +51,11 @@ public sealed class ServerSettings
     public string ApiKey { get; set; } = "";
     public string Model { get; set; } = "";
 
-    /// <summary>Whether the model accepts images. Detected from LM Studio; set by hand for other servers.</summary>
+    /// <summary>
+    /// Whether the model accepts images, which screen control needs. Read from LM Studio each time
+    /// the app connects ("vlm" or "llm"); other servers don't say, so their models are assumed to. Not saved.
+    /// </summary>
+    [JsonIgnore]
     public bool SupportsVision { get; set; } = true;
 
     /// <summary>Assumed context window when the server doesn't report one. If the real one is smaller, the server's "too long" error says so and BlackBox adjusts.</summary>
@@ -75,13 +79,12 @@ public sealed class ServerSettings
     public bool ContextReported { get; set; }
 
     /// <summary>
-    /// The context size BlackBox budgets with and resets by. A manual size never goes above
-    /// what the server reported: the server would refuse the longer requests anyway.
+    /// The context size BlackBox budgets with and resets by. A manual size is used as chosen, even
+    /// above what the server reports; if the server then refuses a request as too long, the run
+    /// drops to the size its error names.
     /// </summary>
     [JsonIgnore]
-    public int ContextSize => AutoContext || ManualContextSize <= 0 ? DetectedContextSize
-        : ContextReported ? Math.Min(ManualContextSize, DetectedContextSize)
-        : ManualContextSize;
+    public int ContextSize => AutoContext || ManualContextSize <= 0 ? DetectedContextSize : ManualContextSize;
 
     /// <summary>Takes in what the server says the context is; a "too long" error only ever lowers it.</summary>
     public void SetDetectedContext(int? reported)
@@ -90,7 +93,7 @@ public sealed class ServerSettings
         ContextReported = reported is not null;
     }
 
-    /// <summary>A run found the server's real limit (from its "too long" error); keep it for the next run.</summary>
+    /// <summary>A run found the server's real limit (from its "too long" error); keep it for the next run on Auto.</summary>
     public void LearnContextLimit(int tokens)
     {
         if (tokens <= 0 || tokens >= ContextSize)
@@ -119,6 +122,33 @@ public static class ContextSizes
         var stops = Standard.Where(s => s < serverMax).ToList();
         stops.Add(serverMax.Value);
         return stops;
+    }
+
+    /// <summary>Smallest and largest size that can be typed in; the agent needs room for its prompt and a reply.</summary>
+    public const int Min = 4096, Max = 16 * 1024 * 1024;
+
+    /// <summary>
+    /// Reads a typed size: "65536", "64k", "64 K", "1M", "1.5m", "250,000". It reads back what
+    /// <see cref="Format"/> writes: "64k" is 65536 (a slider stop), "250k" is 250000 (as LM Studio
+    /// would have it), "1M" is 1048576. Null when it isn't a size; clamped to <see cref="Min"/>..<see cref="Max"/>.
+    /// </summary>
+    public static int? Parse(string? text)
+    {
+        var t = (text ?? "").Trim().Replace(",", "").Replace(" ", "").Replace("_", "");
+        if (t.Length == 0) return null;
+        var suffix = char.ToLowerInvariant(t[^1]);
+        if (suffix is 'k' or 'm')
+            t = t[..^1];
+        if (!double.TryParse(t, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var n)
+            || !double.IsFinite(n) || n <= 0)
+            return null;
+        var tokens = suffix switch
+        {
+            'k' => Standard.Contains((int)Math.Min(n * 1024, int.MaxValue)) ? n * 1024 : n * 1000,
+            'm' => n * 1024 * 1024,
+            _ => n,
+        };
+        return (int)Math.Clamp(Math.Round(tokens), Min, Max);
     }
 
     /// <summary>Position of a size on the slider: the largest stop not above it (the first stop if all are).</summary>

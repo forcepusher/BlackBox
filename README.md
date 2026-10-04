@@ -27,7 +27,7 @@ form of the address works: `host:1234`, with or without `/v1`, or a full endpoin
 that answers. An API key, if your server needs one, goes next to the address (the eye button
 shows it). For screen control the
 model must accept images (for example Qwen3.5+ VL models or Gemma 4 with their vision projector);
-LM Studio reports this and BlackBox sets it automatically.
+LM Studio reports this and BlackBox follows it; models on other servers are assumed to see images.
 
 BlackBox sends no sampling parameters: temperature, top-k/p, reply length and thinking come from
 the server's own model configuration (in LM Studio, per model).
@@ -45,11 +45,13 @@ names the real size, and BlackBox switches to it. BlackBox uses the whole contex
 
 The **Context** slider in the top bar shows that size while **Auto** is ticked ("not loaded" until LM Studio has loaded
 the model, which your first message does; a `?` means the server doesn't say and it is the 100k guess). Untick Auto
-to have BlackBox use less: the slider stops at 4k to 1M in coarser steps as it grows (4k, 8k, 12k,
+to set the size yourself: the slider stops at 4k to 1M in coarser steps as it grows (4k, 8k, 12k,
 16k, 24k, 32k, 40k, 48k, 64k, 80k, 96k, 128k, 160k, 192k, 256k, 320k, 384k, 512k, 640k, 768k,
-1M) and ends at the server's own size when the server reports one, so it can't go past what the
-server runs. The choice is saved; it only changes BlackBox's budgeting and when it resets, and
-does not reload the model on the server.
+1M) and ends at the server's own size when the server reports one. The box next to it takes any
+size typed in (`48k`, `100000`, `1M`; Enter or leaving the box applies it), past the slider's end
+too; the server refuses requests longer than its own size, and a run that hits that drops to the
+size the server names. The choice is saved; it only changes BlackBox's budgeting and when it
+resets, and does not reload the model on the server.
 
 Until the context is nearly full (a fifth left, at least 16k), the conversation only grows at the
 end, so the server reuses its cache and each step processes only the new messages. Then BlackBox

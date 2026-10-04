@@ -60,9 +60,10 @@
         <TextBlock Grid.Row="1" Grid.Column="2" Classes="muted" Text="Context" VerticalAlignment="Center" Margin="14,8,8,0" />
         <DockPanel Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="2" Margin="0,8,0,0" ToolTip.Tip="{Binding ContextToolTip}">
           <CheckBox DockPanel.Dock="Right" Content="Auto" IsChecked="{Binding AutoContext}" Margin="10,0,0,0" MinWidth="0" />
-          <TextBlock DockPanel.Dock="Right" Text="{Binding ContextText}" VerticalAlignment="Center" TextAlignment="Right" Width="72" />
+          <TextBox x:Name="ContextBox" DockPanel.Dock="Right" Text="{Binding ContextInput, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding !AutoContext}"
+                   Width="90" Padding="6,5" TextAlignment="Right" VerticalAlignment="Center" />
           <Slider Minimum="0" Maximum="{Binding ContextMaxIndex}" Value="{Binding ContextIndex}" TickFrequency="1" IsSnapToTickEnabled="True"
-                  IsEnabled="{Binding !AutoContext}" VerticalAlignment="Center" Margin="0,-6,4,-6" MinWidth="100" />
+                  IsEnabled="{Binding !AutoContext}" VerticalAlignment="Center" Margin="0,-6,6,-6" MinWidth="60" />
         </DockPanel>
       </Grid>
     </Border>

@@ -23,20 +23,17 @@ public class ContextSizeTests
     }
 
     [Fact]
-    public void A_manual_size_replaces_the_detected_one_but_never_exceeds_what_the_server_reports()
+    public void A_manual_size_replaces_the_detected_one_even_above_what_the_server_reports()
     {
         var server = new ServerSettings { AutoContext = false, ManualContextSize = 32 * 1024 };
         server.SetDetectedContext(131072);
         Assert.Equal(32 * 1024, server.ContextSize);
 
-        server.ManualContextSize = 256 * 1024;
-        Assert.Equal(131072, server.ContextSize);
-
-        server.SetDetectedContext(null); // unknown: the manual size is all there is to go on
-        Assert.Equal(256 * 1024, server.ContextSize);
+        server.ManualContextSize = 300_000; // typed past the slider's end: used as typed
+        Assert.Equal(300_000, server.ContextSize);
 
         server.AutoContext = true;
-        Assert.Equal(ServerSettings.FallbackContextSize, server.ContextSize);
+        Assert.Equal(131072, server.ContextSize);
     }
 
     [Fact]
@@ -48,15 +45,18 @@ public class ContextSizeTests
     }
 
     [Fact]
-    public void A_too_long_error_lowers_the_size_for_the_next_run_but_nothing_raises_it()
+    public void A_too_long_error_lowers_the_auto_size_for_the_next_run_but_leaves_a_manual_one()
     {
-        var server = new ServerSettings { AutoContext = false, ManualContextSize = 128 * 1024 };
+        var server = new ServerSettings();
         server.LearnContextLimit(200_000); // no news: the session kept the size it was given
-        Assert.Equal(128 * 1024, server.ContextSize);
-
+        Assert.Equal(ServerSettings.FallbackContextSize, server.ContextSize);
         server.LearnContextLimit(65536);
         Assert.Equal(65536, server.ContextSize);
-        Assert.Equal(128 * 1024, server.ManualContextSize); // the choice is kept for when the server runs larger again
+
+        var manual = new ServerSettings { AutoContext = false, ManualContextSize = 128 * 1024 };
+        manual.LearnContextLimit(65536);
+        Assert.Equal(128 * 1024, manual.ContextSize); // the user's choice; the run itself drops to the server's size
+        Assert.Equal(65536, manual.DetectedContextSize);
     }
 
     [Fact]
@@ -81,18 +81,20 @@ public class ContextSizeTests
     }
 
     [Fact]
-    public void Old_settings_files_start_on_auto()
+    public void Old_settings_files_start_on_auto_and_lose_the_vision_switch()
     {
         var root = Directory.CreateTempSubdirectory("bb-context-").FullName;
         var paths = new AppPaths(root);
         Directory.CreateDirectory(paths.DataDir);
-        File.WriteAllText(paths.SettingsFile, """{ "server": { "baseUrl": "http://host:1234/v1", "apiKey": "k", "model": "qwen" } }""");
+        File.WriteAllText(paths.SettingsFile, """{ "server": { "baseUrl": "http://host:1234/v1", "apiKey": "k", "model": "qwen", "supportsVision": false } }""");
 
         var settings = new SettingsStore(paths).Load();
 
         Assert.True(settings.Server.AutoContext);
         Assert.Equal(0, settings.Server.ManualContextSize);
         Assert.Equal("k", settings.Server.ApiKey);
+        Assert.True(settings.Server.SupportsVision); // read from the server on connecting now
+        Assert.DoesNotContain("supportsVision", File.ReadAllText(paths.SettingsFile));
     }
 
     [Fact]
@@ -133,4 +135,35 @@ public class ContextSizeTests
     [InlineData(1_000_000, "1M")]
     public void Sizes_are_written_in_k(int tokens, string text) =>
         Assert.Equal(text, ContextSizes.Format(tokens));
+
+    [Theory]
+    [InlineData("65536", 65536)]
+    [InlineData("64k", 65536)]      // a slider stop: counted in 1024s
+    [InlineData(" 64 K ", 65536)]
+    [InlineData("40k", 40960)]
+    [InlineData("250k", 250_000)]   // not a stop: as LM Studio would have it
+    [InlineData("100k", 100_000)]
+    [InlineData("250,000", 250_000)]
+    [InlineData("1M", 1024 * 1024)]
+    [InlineData("1.5m", 1536 * 1024)]
+    [InlineData("100", ContextSizes.Min)]           // too small to work with
+    [InlineData("999999999", ContextSizes.Max)]
+    public void Typed_sizes_are_read(string text, int tokens) =>
+        Assert.Equal(tokens, ContextSizes.Parse(text));
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("auto")]
+    [InlineData("-5k")]
+    [InlineData("0")]
+    [InlineData("k")]
+    public void Things_that_are_not_sizes_are_refused(string text) =>
+        Assert.Null(ContextSizes.Parse(text));
+
+    [Fact]
+    public void What_is_written_reads_back_the_same()
+    {
+        foreach (var size in ContextSizes.Standard.Concat([100_000, 250_000, 131072]))
+            Assert.Equal(size, ContextSizes.Parse(ContextSizes.Format(size)));
+    }
 }

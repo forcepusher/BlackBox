@@ -36,11 +36,6 @@
       <TabItem Header="General">
         <ScrollViewer>
           <StackPanel Spacing="4" Margin="0,0,12,16">
-            <TextBlock Classes="h2" Text="AI model server" />
-            <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="The server address, API key, model and context size are set at the top of the main window." />
-            <CheckBox Content="This model can see images (needed for screen control)" IsChecked="{Binding Server.SupportsVision}" Margin="0,4" />
-
             <TextBlock Classes="h2" Text="Safety" />
             <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto">
               <TextBlock Classes="label" Grid.Row="0" Text="Ask me first" />

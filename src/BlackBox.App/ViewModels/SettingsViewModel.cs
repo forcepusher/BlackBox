@@ -10,7 +10,6 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
     public AppSettings Settings { get; } = settings;
     public AppPaths Paths { get; } = paths;
 
-    public ServerSettings Server => Settings.Server;
     public AgentSettings Agent => Settings.Agent;
 
     public string[] ApprovalModes { get; } =

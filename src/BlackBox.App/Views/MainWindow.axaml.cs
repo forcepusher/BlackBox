@@ -19,6 +19,21 @@ public partial class MainWindow : Window
         // Enter sends, Shift+Enter inserts a newline. Tunnel so we see the key before the TextBox.
         InputBox.AddHandler(KeyDownEvent, OnInputKeyDown, RoutingStrategies.Tunnel);
 
+        // The context size box takes what was typed when focus leaves it: Enter does that, Escape
+        // puts the size back first. Afterwards it shows the size in use in the usual form ("65536"
+        // becomes "64k"), or the old one if the text wasn't a size; the binding doesn't refresh
+        // a value that didn't change, so that is set here.
+        ContextBox.LostFocus += (_, _) => Dispatcher.UIThread.Post(() => ContextBox.Text = Vm.ContextInput);
+        ContextBox.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Key.Enter or Key.Escape))
+                return;
+            if (e.Key == Key.Escape)
+                ContextBox.Text = Vm.ContextInput;
+            e.Handled = true;
+            InputBox.Focus();
+        };
+
         // Follow new output while the user is at the bottom; stop following when they scroll up.
         // After every layout pass (streamed text, a growing thinking block, a new screenshot)
         // pin the offset to the true end. Doing it per layout pass rather than per scroll event

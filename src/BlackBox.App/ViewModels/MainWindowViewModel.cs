@@ -161,22 +161,45 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>Last slider position: the server's own size when it reports one, else 1M.</summary>
     public double ContextMaxIndex => ContextStops.Count - 1;
 
-    /// <summary>Slider position, an index into <see cref="ContextStops"/>.</summary>
+    /// <summary>Slider position, an index into <see cref="ContextStops"/>. A typed size past the last stop sits at the end.</summary>
     public double ContextIndex
     {
         get => ContextSizes.IndexOf(ContextStops, _settings.Server.ContextSize);
         set
         {
-            // The slider is greyed out on Auto; anything it sends then is it adjusting to a new range.
+            // Only a move to another stop is the user's: on Auto the slider is greyed out, and the
+            // slider sends its value back when its range changes or a typed size pins it to the end.
             var server = _settings.Server;
-            if (server.AutoContext) return;
             var stops = ContextStops;
-            var size = stops[Math.Clamp((int)Math.Round(value), 0, stops.Count - 1)];
-            if (size == server.ContextSize) return;
-            server.ManualContextSize = size;
-            _store.Save(_settings);
-            OnContextChanged();
+            var index = Math.Clamp((int)Math.Round(value), 0, stops.Count - 1);
+            if (server.AutoContext || index == (int)ContextIndex) return;
+            SetManualContext(stops[index]);
         }
+    }
+
+    /// <summary>
+    /// The size box next to the slider. On Auto it shows what the server reports (see
+    /// <see cref="ContextText"/>) and can't be edited; otherwise anything typed ("64k", "250000",
+    /// "1M") is used as typed, past the slider's end too. Taken when Enter is pressed or focus leaves.
+    /// </summary>
+    public string ContextInput
+    {
+        get => ContextText;
+        set
+        {
+            // The box sends its text back whenever it loses focus; text it was showing is no change
+            // (256000 shows as "250k", which would read back as 250000).
+            if (_settings.Server.AutoContext || value.Trim() == ContextText) return;
+            if (ContextSizes.Parse(value) is { } size && size != _settings.Server.ContextSize)
+                SetManualContext(size);
+        }
+    }
+
+    private void SetManualContext(int size)
+    {
+        _settings.Server.ManualContextSize = size;
+        _store.Save(_settings);
+        OnContextChanged();
     }
 
     /// <summary>LM Studio said the model isn't loaded yet; it has no context size until the first message loads it.</summary>
@@ -207,9 +230,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 return reported is not null ? $"{reported} BlackBox uses all of it. Untick Auto to use less."
                     : _modelNotLoaded ? "The model isn't loaded on the server yet, so its context size isn't known. Your first message loads it, and the size shows here."
                     : $"The server doesn't say how large the context is, so BlackBox assumes {server.DetectedContextSize:N0} tokens and goes lower if the server objects.";
-            return $"BlackBox uses {server.ContextSize:N0} tokens: it starts a fresh context (with a handoff note) when a fifth is left. "
-                   + (reported ?? "The server doesn't say how large its context is, so if this is too large its error tells BlackBox the real size.")
-                   + " The model on the server is not reloaded.";
+            var over = server.ContextReported && server.ContextSize > server.DetectedContextSize
+                ? $" That is more than the {server.DetectedContextSize:N0} the server runs this model with: it will refuse requests longer than that, and BlackBox then drops to its size for the rest of the task."
+                : "";
+            return $"BlackBox uses {server.ContextSize:N0} tokens: it starts a fresh context (with a handoff note) when a fifth is left.{over} "
+                   + "Drag the slider or type a size such as 48k, 100000 or 1M. The model on the server is not reloaded.";
         }
     }
 
@@ -219,6 +244,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         OnPropertyChanged(nameof(ContextMaxIndex));
         OnPropertyChanged(nameof(ContextIndex));
         OnPropertyChanged(nameof(ContextText));
+        OnPropertyChanged(nameof(ContextInput));
         OnPropertyChanged(nameof(ContextToolTip));
     }
 
@@ -298,15 +324,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             return;
         }
 
-        // Trust what the server reports. The context size is not saved (it shows by the slider); image support is.
+        // Trust what the server reports; neither the context size (it shows by the slider) nor image support is saved.
         server.SetDetectedContext(probe.LoadedContext);
         _modelNotLoaded = probe.Loaded == false;
         OnContextChanged();
-        if (probe.Vision is { } v && v != server.SupportsVision)
-        {
-            server.SupportsVision = v;
-            _store.Save(_settings);
-        }
+        server.SupportsVision = probe.Vision ?? true;
         SetStatus(ServerState.Connected, "Connected" + (probe.Vision == false ? " · no vision" : ""), null);
     }
 
@@ -456,8 +478,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     public async Task ApplySettingsAsync(AppSettings updated, string mcpConfigText)
     {
-        // The server, key, model and context size live in the top bar; the dialog only has the vision switch.
-        _settings.Server.SupportsVision = updated.Server.SupportsVision;
+        // The server, key, model and context size live in the top bar, not in the dialog.
         updated.Server = _settings.Server;
         _settings = updated;
         _store.Save(updated);
