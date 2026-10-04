@@ -6,7 +6,8 @@ using BlackBox.Core.Settings;
 
 namespace BlackBox.Core.Llm;
 
-public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, int? LoadedContext, bool? Vision, string Message);
+/// <param name="Loaded">False when the server says the model is not loaded yet (LM Studio loads on first use), so it has no context size yet.</param>
+public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, int? LoadedContext, bool? Vision, string Message, bool? Loaded = null);
 
 /// <summary>What the server says about the configured model; nulls where it doesn't say.</summary>
 public readonly record struct ModelFacts(int? Context, bool? Loaded, bool? Vision);
@@ -30,20 +31,43 @@ public readonly record struct ModelFacts(int? Context, bool? Loaded, bool? Visio
 /// </remarks>
 public static class ServerProbe
 {
+    /// <summary>
+    /// The address may be typed in any form (see <see cref="ServerAddress"/>); the first form that
+    /// lists models wins and replaces <see cref="ServerSettings.BaseUrl"/>, so everything after
+    /// uses a complete URL.
+    /// </summary>
     public static async Task<ProbeResult> CheckAsync(HttpClient http, ServerSettings server, CancellationToken ct)
     {
-        IReadOnlyList<string> models;
+        var candidates = ServerAddress.Candidates(server.BaseUrl);
+        if (candidates.Count == 0)
+            return new ProbeResult(false, [], null, null, "No server address.");
+
+        // https and http are tried at the same time; whichever answers is the one.
+        var attempts = candidates.Select(url => ListModelsAsync(http, url, server.ApiKey, ct)).ToList();
+        await Task.WhenAll(attempts).ConfigureAwait(false);
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            if (attempts[i].Result.Models is not { } models)
+                continue;
+            server.BaseUrl = candidates[i];
+            var facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
+            return new ProbeResult(true, models, facts.Context, facts.Vision, models.Count == 0 ? "Connected, but the server lists no models." : "Connected.", facts.Loaded);
+        }
+        // The plain-http error reads better than a failed TLS handshake.
+        var http0 = Math.Max(0, candidates.ToList().FindIndex(c => c.StartsWith("http://", StringComparison.OrdinalIgnoreCase)));
+        return new ProbeResult(false, [], null, null, "Can't reach the server: " + attempts[http0].Result.Error);
+    }
+
+    private static async Task<(IReadOnlyList<string>? Models, string? Error)> ListModelsAsync(HttpClient http, string baseUrl, string apiKey, CancellationToken ct)
+    {
         try
         {
-            models = await new OpenAiChatClient(http, server.BaseUrl, server.ApiKey).ListModelsAsync(ct).ConfigureAwait(false);
+            return (await new OpenAiChatClient(http, baseUrl, apiKey).ListModelsAsync(ct).ConfigureAwait(false), null);
         }
         catch (Exception ex) when (ex is LlmException or HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
         {
-            return new ProbeResult(false, [], null, null, "Can't reach the server: " + ex.Message);
+            return (null, ex.Message);
         }
-
-        var facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
-        return new ProbeResult(true, models, facts.Context, facts.Vision, models.Count == 0 ? "Connected, but the server lists no models." : "Connected.");
     }
 
     /// <summary>

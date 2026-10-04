@@ -3,6 +3,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using BlackBox.Core.Agent;
 using BlackBox.Core.Llm;
+using BlackBox.Core.Mcp;
 using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
@@ -21,9 +22,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private readonly IPlatformServices _platform;
     private readonly HttpClient _http = LlmHttp.Create(Timeout.InfiniteTimeSpan);
     private readonly List<ChatMessage> _history = [];
+    private readonly McpHost _mcp = new();
+    private Task _mcpConnect = Task.CompletedTask;
+    private bool _mcpRestartPending;
     private AppSettings _settings;
     private CancellationTokenSource? _runCts;
     private AssistantMessageItem? _current;
+    private IDisposable? _stopKey;
+    private volatile bool _stoppedByKey;
 
     public MainWindowViewModel(AppPaths paths, SettingsStore store, AppSettings settings, IPlatformServices platform)
     {
@@ -31,6 +37,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _store = store;
         _settings = settings;
         _platform = platform;
+        // The saved model is in the list before the view binds to it, so the dropdown starts
+        // with it selected; a selection the ComboBox once lost is not restored by rebinding.
+        if (!string.IsNullOrEmpty(settings.Server.Model))
+            Models.Add(settings.Server.Model);
     }
 
     public ObservableCollection<ChatItemViewModel> Items { get; } = [];
@@ -73,12 +83,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     public void OnStartup()
     {
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoMessages));
-        if (!string.IsNullOrEmpty(_settings.Server.Model))
-            Models.Add(_settings.Server.Model);
+        _stopKey = _platform.StopKey.Watch(OnStopKey);
         _ = CheckServerAsync();
+        _mcpConnect = ConnectMcpAsync();
     }
 
-    // ---- server and model (top bar) ---------------------------------------------------
+    /// <summary>Stops the run and the MCP servers; called when the window closes.</summary>
+    public void Shutdown()
+    {
+        _runCts?.Cancel();
+        _stopKey?.Dispose();
+        try { _mcp.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5)); }
+        catch (AggregateException) { /* a server that would not stop; the process ends anyway */ }
+    }
+
+    // ---- server, API key, model and context size (top bar) ----------------------------
 
     private CancellationTokenSource? _addressEdit;
     private int _checkVersion;
@@ -97,6 +116,136 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             OnPropertyChanged();
             _ = CheckAfterTypingAsync();
         }
+    }
+
+    /// <summary>API key typed in the top bar, for servers that want one. Saved as you type; checked once typing pauses.</summary>
+    public string ApiKey
+    {
+        get => _settings.Server.ApiKey;
+        set
+        {
+            value = value.Trim();
+            if (value == _settings.Server.ApiKey) return;
+            _settings.Server.ApiKey = value;
+            _store.Save(_settings);
+            OnPropertyChanged();
+            _ = CheckAfterTypingAsync();
+        }
+    }
+
+    /// <summary>The eye button next to the API key: shows the key instead of dots.</summary>
+    [ObservableProperty]
+    private bool _showApiKey;
+
+    /// <summary>Context size as the server reports it; the slider only shows it, greyed out.</summary>
+    public bool AutoContext
+    {
+        get => _settings.Server.AutoContext;
+        set
+        {
+            var server = _settings.Server;
+            if (value == server.AutoContext) return;
+            // The slider starts where Auto left it (on a stop), unless a size was picked by hand before.
+            if (!value && server.ManualContextSize <= 0)
+                server.ManualContextSize = ContextStops[ContextSizes.IndexOf(ContextStops, server.DetectedContextSize)];
+            server.AutoContext = value;
+            _store.Save(_settings);
+            OnPropertyChanged();
+            OnContextChanged();
+        }
+    }
+
+    private IReadOnlyList<int> ContextStops =>
+        ContextSizes.Stops(_settings.Server.ContextReported ? _settings.Server.DetectedContextSize : null);
+
+    /// <summary>Last slider position: the server's own size when it reports one, else 1M.</summary>
+    public double ContextMaxIndex => ContextStops.Count - 1;
+
+    /// <summary>Slider position, an index into <see cref="ContextStops"/>. A typed size past the last stop sits at the end.</summary>
+    public double ContextIndex
+    {
+        get => ContextSizes.IndexOf(ContextStops, _settings.Server.ContextSize);
+        set
+        {
+            // Only a move to another stop is the user's: on Auto the slider is greyed out, and the
+            // slider sends its value back when its range changes or a typed size pins it to the end.
+            var server = _settings.Server;
+            var stops = ContextStops;
+            var index = Math.Clamp((int)Math.Round(value), 0, stops.Count - 1);
+            if (server.AutoContext || index == (int)ContextIndex) return;
+            SetManualContext(stops[index]);
+        }
+    }
+
+    /// <summary>
+    /// The size box next to the slider. On Auto it shows what the server reports (see
+    /// <see cref="ContextText"/>) and can't be edited; otherwise anything typed ("64k", "250000",
+    /// "1M") is used as typed, past the slider's end too. Taken when Enter is pressed or focus leaves.
+    /// </summary>
+    public string ContextInput
+    {
+        get => ContextText;
+        set
+        {
+            // The box sends its text back whenever it loses focus; text it was showing is no change
+            // (256000 shows as "250k", which would read back as 250000).
+            if (_settings.Server.AutoContext || value.Trim() == ContextText) return;
+            if (ContextSizes.Parse(value) is { } size && size != _settings.Server.ContextSize)
+                SetManualContext(size);
+        }
+    }
+
+    private void SetManualContext(int size)
+    {
+        _settings.Server.ManualContextSize = size;
+        _store.Save(_settings);
+        OnContextChanged();
+    }
+
+    /// <summary>LM Studio said the model isn't loaded yet; it has no context size until the first message loads it.</summary>
+    private bool _modelNotLoaded;
+
+    /// <summary>
+    /// The size in use, next to the slider: "64k"; on Auto "not loaded" before LM Studio has loaded
+    /// the model, and "98k?" when the server doesn't say and it is the guess.
+    /// </summary>
+    public string ContextText
+    {
+        get
+        {
+            var server = _settings.Server;
+            if (!server.AutoContext || server.ContextReported)
+                return ContextSizes.Format(server.ContextSize);
+            return _modelNotLoaded ? "not loaded" : ContextSizes.Format(server.ContextSize) + "?";
+        }
+    }
+
+    public string ContextToolTip
+    {
+        get
+        {
+            var server = _settings.Server;
+            var reported = server.ContextReported ? $"The server runs this model with {server.DetectedContextSize:N0} tokens." : null;
+            if (server.AutoContext)
+                return reported is not null ? $"{reported} BlackBox uses all of it. Untick Auto to use less."
+                    : _modelNotLoaded ? "The model isn't loaded on the server yet, so its context size isn't known. Your first message loads it, and the size shows here."
+                    : $"The server doesn't say how large the context is, so BlackBox assumes {server.DetectedContextSize:N0} tokens and goes lower if the server objects.";
+            var over = server.ContextReported && server.ContextSize > server.DetectedContextSize
+                ? $" That is more than the {server.DetectedContextSize:N0} the server runs this model with: it will refuse requests longer than that, and BlackBox then drops to its size for the rest of the task."
+                : "";
+            return $"BlackBox uses {server.ContextSize:N0} tokens: it starts a fresh context (with a handoff note) when a fifth is left.{over} "
+                   + "Drag the slider or type a size such as 48k, 100000 or 1M. The model on the server is not reloaded.";
+        }
+    }
+
+    private void OnContextChanged()
+    {
+        // The range first: the slider clamps its value to it.
+        OnPropertyChanged(nameof(ContextMaxIndex));
+        OnPropertyChanged(nameof(ContextIndex));
+        OnPropertyChanged(nameof(ContextText));
+        OnPropertyChanged(nameof(ContextInput));
+        OnPropertyChanged(nameof(ContextToolTip));
     }
 
     /// <summary>Models the server reports (embedding models left out). Always contains the saved one.</summary>
@@ -140,21 +289,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
         SetStatus(ServerState.Checking, "Checking…", null);
         using var probeHttp = LlmHttp.Create(TimeSpan.FromSeconds(10));
+        var typed = server.BaseUrl;
         var probe = await ServerProbe.CheckAsync(probeHttp, server, CancellationToken.None);
         if (version != _checkVersion)
             return; // the address or model changed while this check was running
+        if (server.BaseUrl != typed)
+        {
+            // "host:1234" became the full URL that answered; show it so there is no doubt.
+            _store.Save(_settings);
+            OnPropertyChanged(nameof(ServerAddress));
+        }
 
-        _refreshingModels = true;
-        Models.Clear();
-        foreach (var m in probe.Models.Where(m => !m.Contains("embed", StringComparison.OrdinalIgnoreCase)))
-            Models.Add(m);
-        if (!string.IsNullOrEmpty(server.Model) && !Models.Contains(server.Model))
-            Models.Insert(0, server.Model);
-        _refreshingModels = false;
-
+        SetModels(probe.Models);
         if (!probe.Reachable)
         {
-            OnPropertyChanged(nameof(SelectedModel));
             SetStatus(ServerState.Failed, "Offline", $"{probe.Message} Check the address at the top and that the server is running.");
             return;
         }
@@ -162,9 +310,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         {
             server.Model = Models[0];
             _store.Save(_settings);
+            OnPropertyChanged(nameof(SelectedModel));
             probe = await ServerProbe.CheckAsync(probeHttp, server, CancellationToken.None); // details for this model
         }
-        OnPropertyChanged(nameof(SelectedModel));
         if (string.IsNullOrEmpty(server.Model))
         {
             SetStatus(ServerState.Failed, "No models", "The server is running but offers no models. Load or download one in LM Studio.");
@@ -176,15 +324,34 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             return;
         }
 
-        // Trust what the server reports. The context size is not saved; image support is.
-        server.ContextSize = probe.LoadedContext ?? ServerSettings.FallbackContextSize;
-        if (probe.Vision is { } v && v != server.SupportsVision)
-        {
-            server.SupportsVision = v;
-            _store.Save(_settings);
-        }
-        var details = (probe.LoadedContext is { } c ? $" · {c / 1024}k context" : "") + (probe.Vision == false ? " · no vision" : "");
-        SetStatus(ServerState.Connected, "Connected" + details, null);
+        // Trust what the server reports; neither the context size (it shows by the slider) nor image support is saved.
+        server.SetDetectedContext(probe.LoadedContext);
+        _modelNotLoaded = probe.Loaded == false;
+        OnContextChanged();
+        server.SupportsVision = probe.Vision ?? true;
+        SetStatus(ServerState.Connected, "Connected" + (probe.Vision == false ? " · no vision" : ""), null);
+    }
+
+    /// <summary>
+    /// Updates the dropdown in place. Clearing it would drop the selection, and the ComboBox
+    /// does not pick it up again when the same value is set back; so the chosen model stays in
+    /// the list throughout, and only the other entries change.
+    /// </summary>
+    private void SetModels(IEnumerable<string> fromServer)
+    {
+        var wanted = fromServer.Where(m => !m.Contains("embed", StringComparison.OrdinalIgnoreCase)).ToList();
+        var chosen = _settings.Server.Model;
+        if (!string.IsNullOrEmpty(chosen) && !wanted.Contains(chosen))
+            wanted.Insert(0, chosen);
+        _refreshingModels = true;
+        for (var i = Models.Count - 1; i >= 0; i--)
+            if (!wanted.Contains(Models[i]))
+                Models.RemoveAt(i);
+        for (var i = 0; i < wanted.Count; i++)
+            if (!Models.Contains(wanted[i]))
+                Models.Insert(Math.Min(i, Models.Count), wanted[i]);
+        _refreshingModels = false;
+        OnPropertyChanged(nameof(SelectedModel));
     }
 
     private void SetStatus(ServerState state, string status, string? setup)
@@ -217,14 +384,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 using var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10));
                 var context = await ServerProbe.EnsureLoadedAsync(probeHttp, _settings.Server,
                     () => Dispatcher.UIThread.Post(() => AddNotice("Loading the model on the server…", isError: false)), ct);
-                if (context is { } c && c != _settings.Server.ContextSize)
+                if (context is not null)
                 {
-                    _settings.Server.ContextSize = c;
-                    ServerStatusText = $"Connected · {c / 1024}k context";
+                    _settings.Server.SetDetectedContext(context);
+                    _modelNotLoaded = false;
+                    OnContextChanged();
                 }
             }
             if (PrepareBackend() is not { } backend)
                 return;
+            if (!_mcpConnect.IsCompleted)
+            {
+                AddNotice("Starting the MCP servers…", isError: false);
+                await _mcpConnect;
+            }
 
             var agent = _settings.Agent;
             var ctx = new ToolContext
@@ -234,34 +407,61 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             };
 
-            ScreenSpace? screen = null;
+            IReadOnlyList<ScreenSpace>? screens = null;
             if (backend.Vision)
             {
-                try { screen = ctx.GetScreenSpace(); }
+                try { screens = ctx.ScreenSpaces(); }
                 catch (NotSupportedException) { }
             }
 
-            var registry = ToolRegistry.CreateDefault(includeScreenTools: screen is not null, includeUiAutomation: _platform.Automation is not null);
-            var prompt = SystemPrompt.Build(_platform.Name, screen, ctx.WorkingDirectory, agent.CustomInstructions);
+            // The MCP tools are a snapshot: the tool list stays the same for the whole run.
+            var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, includeUiAutomation: _platform.Automation is not null, extra: _mcp.Tools);
+            var prompt = SystemPrompt.Build(_platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, _mcp.Connected);
             var session = new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, _history, backend.ContextTokens);
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
-            _settings.Server.ContextSize = session.ContextTokens;
+            _settings.Server.LearnContextLimit(session.ContextTokens);
+            OnContextChanged();
         }
         catch (OperationCanceledException)
         {
-            AddNotice("Stopped.", isError: false);
+            AddNotice(StoppedText(), isError: false);
         }
         finally
         {
             IsBusy = false;
             _runCts.Dispose();
             _runCts = null;
+            if (_mcpRestartPending)
+            {
+                // Changed in Settings during the run; restarting then would have pulled the tools from under it.
+                _mcpRestartPending = false;
+                _mcpConnect = ConnectMcpAsync();
+            }
         }
     }
 
     [RelayCommand(CanExecute = nameof(IsBusy))]
     private void Stop() => _runCts?.Cancel();
+
+    /// <summary>The Break key, from the hook's thread: stops the run in progress, if any.</summary>
+    private bool OnStopKey()
+    {
+        var cts = _runCts;
+        if (cts is null || cts.IsCancellationRequested)
+            return false;
+        _stoppedByKey = true;
+        try { cts.Cancel(); }
+        catch (ObjectDisposedException) { return false; } // the run ended at that very moment
+        return true;
+    }
+
+    private string StoppedText()
+    {
+        var byKey = _stoppedByKey;
+        _stoppedByKey = false;
+        return byKey ? "Stopped with the Break key." : "Stopped.";
+    }
 
     [RelayCommand]
     private void NewChat()
@@ -274,20 +474,44 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     // ---- settings -------------------------------------------------------------------
 
-    public SettingsViewModel CreateSettingsViewModel() => new(_settings.Clone(), _paths);
+    public SettingsViewModel CreateSettingsViewModel() => new(_settings.Clone(), _paths, McpConfig.Load(_paths.McpConfigFile), _mcp.Statuses);
 
-    public async Task ApplySettingsAsync(AppSettings updated)
+    public async Task ApplySettingsAsync(AppSettings updated, string mcpConfigText)
     {
-        // The address and model live in the top bar, not in the Settings dialog.
-        updated.Server.BaseUrl = _settings.Server.BaseUrl;
-        updated.Server.Model = _settings.Server.Model;
-        updated.Server.ContextSize = _settings.Server.ContextSize; // runtime value, re-detected below
+        // The server, key, model and context size live in the top bar, not in the dialog.
+        updated.Server = _settings.Server;
         _settings = updated;
         _store.Save(updated);
         _platform.HostWindow.SetHiddenFromCapture(updated.Agent.HideFromScreenshots);
         _platform.InputOverlay.Duration = TimeSpan.FromSeconds(updated.Agent.InputLogSeconds);
         _platform.InputOverlay.Enabled = updated.Agent.ShowInputs;
+        if (mcpConfigText != McpConfig.Load(_paths.McpConfigFile))
+        {
+            McpConfig.Save(_paths.McpConfigFile, mcpConfigText);
+            if (IsBusy) _mcpRestartPending = true;
+            else _mcpConnect = ConnectMcpAsync();
+        }
         await CheckServerAsync();
+    }
+
+    // ---- MCP servers ----------------------------------------------------------------
+
+    /// <summary>Starts the servers in Data/mcp.json (stopping any running ones) and reports the ones that fail in the chat.</summary>
+    private async Task ConnectMcpAsync()
+    {
+        IReadOnlyList<McpServerConfig> servers;
+        try
+        {
+            servers = McpConfig.Parse(McpConfig.Load(_paths.McpConfigFile)).Servers;
+        }
+        catch (Exception ex) when (ex is McpConfigException or IOException or UnauthorizedAccessException)
+        {
+            AddNotice($"The MCP server list could not be read, so no MCP tools are available: {ex.Message} Fix it in Settings → Advanced.", isError: true);
+            servers = [];
+        }
+        await Task.Run(() => _mcp.ConnectAsync(servers, CancellationToken.None));
+        foreach (var s in _mcp.Statuses.Where(s => s.State == McpServerState.Failed))
+            AddNotice($"MCP server \"{s.Name}\" is not available: {s.Error} (Settings → Advanced)", isError: true);
     }
 
     private BackendConnection? PrepareBackend()
@@ -396,10 +620,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         switch (reason)
         {
             case AgentStopReason.Cancelled:
-                AddNotice("Stopped.", isError: false);
-                break;
-            case AgentStopReason.Failsafe:
-                AddNotice(detail ?? reason.ToString(), isError: false);
+                AddNotice(StoppedText(), isError: false);
                 break;
             case AgentStopReason.Error:
                 AddNotice(detail ?? "Something went wrong.", isError: true);

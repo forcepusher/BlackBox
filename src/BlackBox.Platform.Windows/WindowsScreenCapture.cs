@@ -11,6 +11,25 @@ internal sealed class WindowsScreenCapture : IScreenCapture
 {
     public ScreenRect GetPrimaryScreen() => new(0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
 
+    public IReadOnlyList<ScreenRect> GetScreens()
+    {
+        var monitors = new List<(ScreenRect Rect, bool Primary)>();
+        EnumDisplayMonitors(0, 0, (nint monitor, nint hdc, ref RECT rect, nint lParam) =>
+        {
+            var info = new MONITORINFOEX { cbSize = Marshal.SizeOf<MONITORINFOEX>() };
+            if (GetMonitorInfo(monitor, ref info))
+            {
+                var m = info.rcMonitor;
+                monitors.Add((new ScreenRect(m.Left, m.Top, m.Right - m.Left, m.Bottom - m.Top), (info.dwFlags & MONITORINFOF_PRIMARY) != 0));
+            }
+            return true;
+        }, 0);
+        if (monitors.Count == 0)
+            return [GetPrimaryScreen()];
+        // The primary first, then left to right and top to bottom: the same numbering every call.
+        return monitors.OrderByDescending(m => m.Primary).ThenBy(m => m.Rect.X).ThenBy(m => m.Rect.Y).Select(m => m.Rect).ToList();
+    }
+
     public unsafe RawImage Capture(ScreenRect region, bool includeCursor)
     {
         var screenDc = GetDC(0);

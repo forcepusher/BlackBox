@@ -202,7 +202,8 @@ public class AgentSessionTests
             session.History.Add(ChatMessage.ToolResult($"c{i}", new string('x', 300)));
         }
 
-        session.FitContext(5_000);
+        // About a third of the steps have to go, whatever the tool schemas weigh.
+        session.FitContext(session.EstimateTokens() - 700);
 
         Assert.Equal("THE TASK", session.History[0].Content);
         Assert.StartsWith("[Earlier steps were removed", session.History[1].Content);
@@ -425,7 +426,7 @@ public class AgentSessionTests
 
     private static (AgentSession, RecordingObserver) CreateSession(ScriptedServer server, string dir, IPlatformServices platform, int contextTokens = 0)
     {
-        var settings = new AgentSettings { FailsafeCorner = false, ScreenshotAfterActions = false, Approval = ApprovalMode.AskRisky };
+        var settings = new AgentSettings { ScreenshotAfterActions = false, Approval = ApprovalMode.AskRisky };
         var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = dir };
         var client = new OpenAiChatClient(new HttpClient(server), "http://test", null);
         var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(includeScreenTools: true), ctx, "system prompt", contextTokens: contextTokens);

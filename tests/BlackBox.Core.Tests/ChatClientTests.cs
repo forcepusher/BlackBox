@@ -92,8 +92,43 @@ public class ChatClientTests
     [InlineData("http://127.0.0.1:8080", "http://127.0.0.1:8080/v1")]
     [InlineData("https://api.example.com/v1/", "https://api.example.com/v1")]
     [InlineData("https://api.example.com/v1/chat/completions", "https://api.example.com/v1")]
+    [InlineData("https://api.example.com/v1/models", "https://api.example.com/v1")]
+    [InlineData("host:1234", "http://host:1234/v1")]
+    [InlineData(" host:1234/v1/ ", "http://host:1234/v1")]
     public void Base_url_is_normalized(string input, string expected) =>
         Assert.Equal(expected, OpenAiChatClient.NormalizeBaseUrl(input));
+
+    [Fact]
+    public void Addresses_without_a_scheme_try_both_protocols()
+    {
+        Assert.Equal(["https://forcepusher.ddns.net:1234/v1", "http://forcepusher.ddns.net:1234/v1"], ServerAddress.Candidates("forcepusher.ddns.net:1234"));
+        Assert.Equal(["http://localhost:1234/v1", "https://localhost:1234/v1"], ServerAddress.Candidates("localhost:1234/v1/chat/completions"));
+        Assert.Equal(["http://192.168.1.5:8080/v1", "https://192.168.1.5:8080/v1"], ServerAddress.Candidates("192.168.1.5:8080"));
+        Assert.Equal(["https://api.openai.com/v1"], ServerAddress.Candidates("https://api.openai.com/"));
+        Assert.Empty(ServerAddress.Candidates("  "));
+    }
+
+    [Fact]
+    public async Task The_probe_keeps_the_protocol_that_answers()
+    {
+        var server = new BlackBox.Core.Settings.ServerSettings { BaseUrl = "host:1234", Model = "m" };
+        var http = new HttpClient(new SchemeServer("http"));
+        var probe = await ServerProbe.CheckAsync(http, server, CancellationToken.None);
+        Assert.True(probe.Reachable);
+        Assert.Equal("http://host:1234/v1", server.BaseUrl);
+        Assert.Equal(["m"], probe.Models);
+    }
+
+    /// <summary>Answers /v1/models only over one scheme, like a plain-http LM Studio.</summary>
+    private sealed class SchemeServer(string scheme) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            request.RequestUri!.Scheme == scheme && request.RequestUri.AbsolutePath == "/v1/models"
+                ? Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent("{\"data\":[{\"id\":\"m\"}]}") })
+                : request.RequestUri.Scheme == scheme
+                    ? Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound))
+                    : throw new HttpRequestException("The SSL connection could not be established");
+    }
 
     [Fact]
     public void Text_tool_calls_are_extracted_when_server_does_not_parse_them()

@@ -31,6 +31,7 @@ public sealed class WindowsPlatform : IPlatformServices
     public IUiAutomation? Automation => _automation.Value;
     public IHostWindow HostWindow { get; } = new WindowsHostWindow();
     public IInputOverlay InputOverlay => _overlay;
+    public IStopKey StopKey { get; } = new WindowsStopKey();
 
     public ProcessStartInfo CreateShellStartInfo(string command)
     {

@@ -30,29 +30,17 @@
       </DockPanel>
     </Border>
 
-    <TabControl Padding="16,8">
+    <TabControl x:Name="Tabs" Padding="16,8">
 
       <!-- ===================== General ===================== -->
       <TabItem Header="General">
         <ScrollViewer>
           <StackPanel Spacing="4" Margin="0,0,12,16">
-            <TextBlock Classes="h2" Text="AI model server" />
-            <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="The server address and model are chosen at the top of the main window." />
-            <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto">
-              <TextBlock Classes="label" Grid.Row="0" Text="API key" />
-              <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Server.ApiKey}" PasswordChar="•" Watermark="Only if your server asks for one" />
-              <TextBlock Grid.Row="1" Grid.Column="1" Classes="muted" TextWrapping="Wrap"
-                         Text="Saved in plain text in the Data folder next to the app, so keep that folder private." />
-              <CheckBox Grid.Row="2" Grid.Column="1" Content="This model can see images (needed for screen control)" IsChecked="{Binding Server.SupportsVision}" />
-            </Grid>
-
             <TextBlock Classes="h2" Text="Safety" />
-            <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto">
+            <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto">
               <TextBlock Classes="label" Grid.Row="0" Text="Ask me first" />
               <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding ApprovalModes}" SelectedIndex="{Binding ApprovalIndex}" HorizontalAlignment="Stretch" />
-              <CheckBox Grid.Row="1" Grid.Column="1" Content="Stop when I move the mouse to the top-left corner" IsChecked="{Binding Agent.FailsafeCorner}" />
-              <StackPanel Grid.Row="2" Grid.Column="1">
+              <StackPanel Grid.Row="1" Grid.Column="1">
                 <CheckBox Content="Hide BlackBox from the agent's screenshots" IsChecked="{Binding Agent.HideFromScreenshots}" />
                 <TextBlock Classes="muted" TextWrapping="Wrap" Margin="28,0,0,0"
                            Text="The agent then sees the desktop behind this window. Screen recorders and screen sharing won't show it either; turn this off while recording." />
@@ -87,6 +75,17 @@
                 <TextBlock Text="seconds" VerticalAlignment="Center" />
               </StackPanel>
             </Grid>
+
+            <TextBlock Classes="h2" Text="MCP servers" />
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Extra tools for the agent from MCP servers. Paste the mcpServers block from a server's README; it is the same format Claude Desktop, LM Studio and Cursor use. Servers with a command are started with BlackBox, servers with a url are connected to. Their tools are offered to the model next to BlackBox's own, named server__tool, and run like any other tool." />
+            <TextBox Text="{Binding McpConfigText}" Watermark="{Binding McpExample}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
+                     FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12" MinHeight="200" Margin="0,8,0,0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+            <SelectableTextBlock Classes="muted error" TextWrapping="Wrap" Text="{Binding McpError}" IsVisible="{Binding HasMcpError}" />
+            <SelectableTextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Text="{Binding Paths.McpConfigFile, StringFormat='Saved to {0}. The servers are started when you save and each time BlackBox starts; what each one reports shows above.'}" />
           </StackPanel>
         </ScrollViewer>
       </TabItem>

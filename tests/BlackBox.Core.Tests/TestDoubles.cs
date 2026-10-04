@@ -98,11 +98,14 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     public IUiAutomation? Automation => this;
     public IHostWindow HostWindow { get; set; } = NoHostWindow.Instance;
     public IInputOverlay InputOverlay => NoInputOverlay.Instance;
-    public IReadOnlyList<UiElement> GetElements(string? windowTitle, int maxCount) =>
+    /// <summary>Controls list_ui_elements finds; by default a button and a field on the primary screen.</summary>
+    public List<UiElement> Elements { get; set; } =
     [
         new UiElement(1, "Button", "Save", null, new ScreenRect(100, 50, 40, 20), true),
         new UiElement(2, "Edit", "File name", "notes.txt", new ScreenRect(10, 10, 80, 20), true),
     ];
+
+    public IReadOnlyList<UiElement> GetElements(string? windowTitle, int maxCount) => Elements;
     public bool Activate(int id) { Actions.Add($"activate {id}"); return id is 1 or 2; }
 
     public List<string> Actions { get; } = [];
@@ -115,8 +118,19 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     public ProcessStartInfo CreateShellStartInfo(string command) => new("cmd.exe") { ArgumentList = { "/c", command } };
 
     public ScreenRect ScreenBounds { get; set; } = new(0, 0, 200, 100);
+
+    /// <summary>All monitors; by default just <see cref="ScreenBounds"/>.</summary>
+    public List<ScreenRect>? Screens { get; set; }
+    public List<ScreenRect> Captures { get; } = [];
+    public IStopKey StopKey => NoStopKey.Instance;
+
     public ScreenRect GetPrimaryScreen() => ScreenBounds;
-    public RawImage Capture(ScreenRect region, bool includeCursor) => new(region.Width, region.Height, new byte[region.Width * region.Height * 4]);
+    public IReadOnlyList<ScreenRect> GetScreens() => Screens ?? [ScreenBounds];
+    public RawImage Capture(ScreenRect region, bool includeCursor)
+    {
+        Captures.Add(region);
+        return new(region.Width, region.Height, new byte[region.Width * region.Height * 4]);
+    }
     public (int X, int Y) GetCursorPosition() => Cursor;
     public void MoveMouse(int x, int y) { Cursor = (x, y); Actions.Add($"move {x},{y}"); }
     public void MouseDown(MouseButton button) => Actions.Add($"down {button}");

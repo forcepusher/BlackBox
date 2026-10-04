@@ -74,12 +74,25 @@ public sealed partial class OpenAiChatClient
     private bool _reasoningRejected;
     private bool _extrasRejected;
 
-    /// <summary>Turns "http://host:port", ".../v1" or ".../v1/" into ".../v1".</summary>
+    /// <summary>
+    /// Turns "host:port", "http://host:port", ".../v1/", ".../v1/chat/completions" or ".../v1/models"
+    /// into "http(s)://host:port/v1". Without a scheme, http is assumed (see <see cref="ServerAddress"/>
+    /// for trying both).
+    /// </summary>
     public static string NormalizeBaseUrl(string url)
     {
-        url = url.Trim().TrimEnd('/');
-        if (url.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
-            url = url[..^"/chat/completions".Length];
+        url = url.Trim();
+        if (!url.Contains("://"))
+            url = "http://" + url.TrimStart('/');
+        url = url.TrimEnd('/');
+        foreach (var endpoint in new[] { "/chat/completions", "/completions", "/models" })
+        {
+            if (url.EndsWith(endpoint, StringComparison.OrdinalIgnoreCase))
+            {
+                url = url[..^endpoint.Length].TrimEnd('/');
+                break;
+            }
+        }
         if (!url.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
             url += "/v1";
         return url;

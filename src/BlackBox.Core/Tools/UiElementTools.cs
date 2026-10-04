@@ -20,29 +20,45 @@ public sealed class ListUiElementsTool : Tool
     public override Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var automation = ctx.Platform.Automation ?? throw new NotSupportedException("UI automation is not available on this OS.");
-        var space = ctx.GetScreenSpace();
         var filter = GetString(args, "filter");
         var elements = automation.GetElements(GetString(args, "window_title"), 400);
 
+        // The window may be on another monitor than the last screenshot. Coordinates are given
+        // in that monitor's space, and it becomes the current one (as focus_window does), so
+        // the model's next screenshot and clicks land there.
+        var spaces = ctx.ScreenSpaces();
+        var centres = elements.Select(e => (e.Bounds.X + e.Bounds.Width / 2, e.Bounds.Y + e.Bounds.Height / 2)).ToList();
+        var screen = centres.Count > 0 && spaces.Count > 1
+            ? centres.Select(c => ctx.ScreenAt(c.Item1, c.Item2)).GroupBy(s => s).MaxBy(g => g.Count())!.Key
+            : ctx.CurrentScreen;
+        var switched = screen != ctx.CurrentScreen;
+        ctx.CurrentScreen = screen;
+
         var sb = new StringBuilder();
+        if (switched)
+            sb.AppendLine($"These controls are on screen {screen + 1}; x/y now refer to that screen.");
         var shown = 0;
-        foreach (var e in elements)
+        for (var i = 0; i < elements.Count; i++)
         {
+            var e = elements[i];
             var label = string.IsNullOrWhiteSpace(e.Name) ? e.Value ?? "" : e.Name;
             if (filter is { Length: > 0 } && !label.Contains(filter, StringComparison.OrdinalIgnoreCase) && !e.ControlType.Contains(filter, StringComparison.OrdinalIgnoreCase))
                 continue;
-            var (cx, cy) = space.ToImage(e.Bounds.X + e.Bounds.Width / 2, e.Bounds.Y + e.Bounds.Height / 2);
+            var on = spaces.Count > 1 ? ctx.ScreenAt(centres[i].Item1, centres[i].Item2) : screen;
+            var (cx, cy) = spaces[on].ToImage(centres[i].Item1, centres[i].Item2);
             sb.Append('#').Append(e.Id).Append(' ').Append(e.ControlType).Append(" \"").Append(Trim(label)).Append('"');
             if (e.Value is { Length: > 0 } v && v != label) sb.Append(" value=\"").Append(Trim(v)).Append('"');
             if (!e.IsEnabled) sb.Append(" (disabled)");
-            sb.Append(" at (").Append(cx).Append(", ").Append(cy).AppendLine(")");
+            sb.Append(" at (").Append(cx).Append(", ").Append(cy).Append(')');
+            if (on != screen) sb.Append(" on screen ").Append(on + 1);
+            sb.AppendLine();
             if (++shown >= 150)
             {
                 sb.AppendLine("[more controls not shown; use filter]");
                 break;
             }
         }
-        return Task.FromResult(new ToolResult(sb.Length > 0 ? sb.ToString() : "No controls found. The app may not expose accessibility info; use screenshot and mouse tools."));
+        return Task.FromResult(new ToolResult(shown > 0 ? sb.ToString() : "No controls found. The app may not expose accessibility info; use screenshot and mouse tools."));
     }
 
     private static string Trim(string s)

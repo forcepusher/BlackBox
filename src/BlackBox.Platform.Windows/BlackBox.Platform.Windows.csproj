@@ -16,4 +16,8 @@
     <ProjectReference Include="..\BlackBox.Core\BlackBox.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="BlackBox.Core.Tests" />
+  </ItemGroup>
+
 </Project>
