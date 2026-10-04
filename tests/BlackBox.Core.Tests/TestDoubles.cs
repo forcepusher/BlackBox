@@ -93,20 +93,10 @@ internal sealed class RecordingObserver : IAgentObserver
 }
 
 /// <summary>A 200x100 screen that records input instead of sending it.</summary>
-internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputController, IWindowManager, IUiAutomation
+internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputController
 {
-    public IUiAutomation? Automation => this;
     public IHostWindow HostWindow { get; set; } = NoHostWindow.Instance;
     public IInputOverlay InputOverlay => NoInputOverlay.Instance;
-    /// <summary>Controls list_ui_elements finds; by default a button and a field on the primary screen.</summary>
-    public List<UiElement> Elements { get; set; } =
-    [
-        new UiElement(1, "Button", "Save", null, new ScreenRect(100, 50, 40, 20), true),
-        new UiElement(2, "Edit", "File name", "notes.txt", new ScreenRect(10, 10, 80, 20), true),
-    ];
-
-    public IReadOnlyList<UiElement> GetElements(string? windowTitle, int maxCount) => Elements;
-    public bool Activate(int id) { Actions.Add($"activate {id}"); return id is 1 or 2; }
 
     public List<string> Actions { get; } = [];
     public (int X, int Y) Cursor { get; set; } = (50, 50);
@@ -114,7 +104,6 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     public string Name => "Fake OS";
     public IScreenCapture Screen => this;
     public IInputController Input => this;
-    public IWindowManager Windows => this;
     public ProcessStartInfo CreateShellStartInfo(string command) => new("cmd.exe") { ArgumentList = { "/c", command } };
 
     public ScreenRect ScreenBounds { get; set; } = new(0, 0, 200, 100);
@@ -126,10 +115,17 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
 
     public ScreenRect GetPrimaryScreen() => ScreenBounds;
     public IReadOnlyList<ScreenRect> GetScreens() => Screens ?? [ScreenBounds];
+    /// <summary>What the screen shows, if anything (a black screen otherwise).</summary>
+    public RawImage? Desktop { get; set; }
+
     public RawImage Capture(ScreenRect region, bool includeCursor)
     {
         Captures.Add(region);
-        return new(region.Width, region.Height, new byte[region.Width * region.Height * 4]);
+        var pixels = new byte[region.Width * region.Height * 4];
+        if (Desktop is { } d)
+            for (var row = 0; row < region.Height; row++)
+                Array.Copy(d.Bgra, (region.Y + row) * d.Stride + region.X * 4, pixels, row * region.Width * 4, region.Width * 4);
+        return new(region.Width, region.Height, pixels);
     }
     public (int X, int Y) GetCursorPosition() => Cursor;
     public void MoveMouse(int x, int y) { Cursor = (x, y); Actions.Add($"move {x},{y}"); }
@@ -140,6 +136,4 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     public void TypeText(string text) => Actions.Add($"type {text}");
     public void PressKeys(IReadOnlyList<string> keys) => Actions.Add("keys " + string.Join("+", keys));
     public bool IsKnownKey(string key) => key.Length > 0;
-    public IReadOnlyList<WindowInfo> ListWindows() => [new WindowInfo(42, "Notepad", "notepad", new ScreenRect(0, 0, 100, 50), false)];
-    public bool FocusWindow(long handle) { Actions.Add($"focus {handle}"); return true; }
 }

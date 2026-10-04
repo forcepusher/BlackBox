@@ -13,20 +13,14 @@ public sealed class ToolRegistry
     }
 
     /// <param name="extra">Tools from outside BlackBox (MCP servers), offered after its own.</param>
-    public static ToolRegistry CreateDefault(bool includeScreenTools, bool includeUiAutomation = false, IEnumerable<Tool>? extra = null) =>
-        new(DefaultTools(includeScreenTools, includeUiAutomation).Concat(extra ?? []));
+    public static ToolRegistry CreateDefault(bool includeScreenTools, IEnumerable<Tool>? extra = null) =>
+        new(DefaultTools(includeScreenTools).Concat(extra ?? []));
 
-    private static IEnumerable<Tool> DefaultTools(bool includeScreenTools, bool includeUiAutomation)
+    private static IEnumerable<Tool> DefaultTools(bool includeScreenTools)
     {
-        if (includeUiAutomation)
-        {
-            yield return new ListUiElementsTool();
-            yield return new ClickElementTool();
-        }
         if (includeScreenTools)
         {
             yield return new ScreenshotTool();
-            yield return new ZoomTool();
             yield return new MouseClickTool();
             yield return new MouseMoveTool();
             yield return new MouseDragTool();
@@ -35,8 +29,6 @@ public sealed class ToolRegistry
             yield return new PressKeysTool();
             yield return new WaitTool();
         }
-        yield return new ListWindowsTool();
-        yield return new FocusWindowTool();
         yield return new ReadFileTool();
         yield return new WriteFileTool();
         yield return new EditFileTool();

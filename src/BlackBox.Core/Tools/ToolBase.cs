@@ -7,7 +7,7 @@ namespace BlackBox.Core.Tools;
 
 public enum ToolRisk
 {
-    /// <summary>Only reads state (screenshots, file reads, window lists).</summary>
+    /// <summary>Only reads state (screenshots, file reads).</summary>
     ReadOnly,
     /// <summary>Drives the mouse and keyboard.</summary>
     Desktop,
@@ -27,9 +27,12 @@ public sealed class ToolContext
     /// <summary>Where relative paths and shell commands start (the user's home folder). Not a limit: tools reach the whole PC.</summary>
     public required string WorkingDirectory { get; init; }
 
+    /// <summary>The relative grid the model gives x/y on (see <see cref="ScreenSpace"/>), or null for screenshot pixels. Set from the model, see <see cref="ModelCoordinates"/>.</summary>
+    public int? CoordinateGrid { get; init; }
+
     /// <summary>
     /// The monitor the agent is looking at (0 = primary): the one the latest screenshot showed.
-    /// Screenshot coordinates are relative to it. Set by the screenshot tool and focus_window.
+    /// Screenshot coordinates are relative to it. Set by the screenshot tool.
     /// </summary>
     public int CurrentScreen { get; set; }
 
@@ -41,12 +44,12 @@ public sealed class ToolContext
     public ScreenSpace GetScreenSpace(int screen)
     {
         var screens = Screens;
-        return new(screens[Math.Clamp(screen, 0, screens.Count - 1)], Settings.ScreenshotResolution.Box());
+        return new(screens[Math.Clamp(screen, 0, screens.Count - 1)], Settings.ScreenshotResolution.Box(), CoordinateGrid);
     }
 
     /// <summary>One <see cref="ScreenSpace"/> per monitor, in <see cref="Screens"/> order.</summary>
     public IReadOnlyList<ScreenSpace> ScreenSpaces() =>
-        Screens.Select(s => new ScreenSpace(s, Settings.ScreenshotResolution.Box())).ToList();
+        Screens.Select(s => new ScreenSpace(s, Settings.ScreenshotResolution.Box(), CoordinateGrid)).ToList();
 
     /// <summary>The monitor a physical point lies on; the current one if none contains it.</summary>
     public int ScreenAt(int x, int y)

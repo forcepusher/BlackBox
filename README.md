@@ -71,12 +71,9 @@ cache, so each retry continues where the last one stopped (up to 12 times per st
 | Tool | What it does |
 | --- | --- |
 | `screenshot` | Captures a screen, scaled to fit the chosen resolution (1920×1080 by default) on the 32px vision grid; `screen=N` looks at another monitor |
-| `zoom` | Magnified view of a region with rulers labelled in screenshot coordinates |
-| `list_ui_elements`, `click_element` | Windows UI Automation: find controls by name and press them (no pixel aiming) |
 | `mouse_click`, `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …) |
 | `wait` | Waits, then screenshots |
-| `list_windows`, `focus_window` | Window discovery and activation |
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `<server>__<tool>` | Any tool of the MCP servers you add in Settings → Advanced (see below) |
@@ -87,8 +84,13 @@ arguments (`coordinate: [x, y]`) are all accepted, and a model that announces a 
 it gets nudged to continue.
 
 With several monitors the agent sees one at a time: screenshots show the screen it looked at last
-(the primary at first), `screen=N` switches, and `focus_window` and `list_ui_elements` follow a
-window to its screen. All coordinates refer to the screen in the latest screenshot.
+(the primary at first) and `screen=N` switches. All coordinates refer to the screen in the latest
+screenshot.
+
+Coordinates follow what the model was trained on. Qwen3 and later point on a 0-1000 grid over the
+image, so for them x/y are on that grid; asked for pixels, qwen3.8 slipped back to the grid in about
+a third of its clicks and missed by hundreds of pixels (11/16 hits against 16/16 on the grid in
+`ClickAccuracyTests`). Every other model gets screenshot pixels.
 
 ### MCP servers
 BlackBox is an MCP client: any [Model Context Protocol](https://modelcontextprotocol.io) server adds its
@@ -141,13 +143,14 @@ Integration tests against a real server (they send prompts larger than the conte
 ```powershell
 $env:BB_SERVER_URL = "http://localhost:1234/v1"; $env:BB_SERVER_MODEL = "qwen3.8-27b@iq2_s"
 dotnet test --filter ServerIntegrationTests
+dotnet test --filter ClickAccuracyTests   # hit rate on named buttons; BB_CLICK_COORDS=pixels|grid to compare
 ```
 
 ## Project structure
 - `src/BlackBox.Core`: OpenAI-compatible streaming client, server probe, agent loop, tools,
   settings. Platform-neutral.
-- `src/BlackBox.Platform.Windows` (net10.0-windows): screen capture (GDI), input (SendInput), windows
-  (EnumWindows), UI Automation (FlaUI), host-window handling. Only referenced when building on Windows.
+- `src/BlackBox.Platform.Windows` (net10.0-windows): screen capture (GDI), input (SendInput),
+  host-window handling. Only referenced when building on Windows.
 - `src/BlackBox.Cli`: headless runner for trying tasks and models.
 - `src/BlackBox.App`: Avalonia 11 UI with CommunityToolkit.Mvvm.
 - `tests/BlackBox.Core.Tests`: xUnit tests (unit tests plus opt-in server integration tests).

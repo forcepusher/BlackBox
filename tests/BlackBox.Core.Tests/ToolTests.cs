@@ -22,8 +22,35 @@ public class ToolTests
         var space = new ScreenSpace(new ScreenRect(0, 0, 2560, 1440), (1280, 720));
         Assert.Equal((1280, 704), (space.ImageWidth, space.ImageHeight)); // 720 snaps to the 32px grid
         Assert.Equal((200, 307), space.ToScreen(100, 150));
-        Assert.Equal((100, 150), space.ToImage(200, 307));
-        Assert.Equal((2558, 1438), space.ToScreen(5000, 5000)); // clamped to the screen
+        Assert.Equal((100, 150), space.ToModel(200, 307));
+        Assert.Equal((2559, 1439), space.ToScreen(5000, 5000)); // clamped to the screen
+    }
+
+    [Fact]
+    public async Task Qwen3_models_point_on_a_0_to_1000_grid()
+    {
+        Assert.Equal(1000, ModelCoordinates.GridFor("qwen3.8-27b@q6_k_xl"));
+        Assert.Equal(1000, ModelCoordinates.GridFor("Qwen/Qwen3-VL-8B-Instruct"));
+        Assert.Null(ModelCoordinates.GridFor("qwen2.5-vl-7b"));
+        Assert.Null(ModelCoordinates.GridFor("gemma-4-31b-it"));
+
+        // The grid spans the whole screen whatever the image size: 500,500 is the middle of a 2560x1080 screen.
+        var space = new ScreenSpace(new ScreenRect(0, 0, 2560, 1080), (1920, 1080), grid: 1000);
+        Assert.Equal((1920, 800), (space.ImageWidth, space.ImageHeight));
+        Assert.Equal((1280, 540), space.ToScreen(500, 500));
+        Assert.Equal((500, 500), space.ToModel(1280, 540));
+        Assert.Equal((2559, 1079), space.ToScreen(1000, 1000));
+
+        var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1080) };
+        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false }, WorkingDirectory = Path.GetTempPath(), CoordinateGrid = 1000 };
+        await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 250, ["y"] = 100 }, ctx, CancellationToken.None);
+        Assert.Equal("move 640,108", platform.Actions[0]);
+        var shot = await new ScreenshotTool().ExecuteAsync([], ctx, CancellationToken.None);
+        Assert.Equal("Screenshot. Mouse cursor at (250, 100).", shot.Text);
+
+        var prompt = BlackBox.Core.Agent.SystemPrompt.Build("Test OS", ctx.ScreenSpaces(), "C:\\", "");
+        Assert.Contains("0-1000 grid", prompt);
+        Assert.DoesNotContain("1920x800", prompt);
     }
 
     [Fact]
@@ -66,13 +93,6 @@ public class ToolTests
         Assert.Contains("move 210,21", platform.Actions);
 
         await Assert.ThrowsAsync<ToolArgumentException>(() => new ScreenshotTool().ExecuteAsync(new JsonObject { ["screen"] = 3 }, ctx, CancellationToken.None));
-
-        // list_windows says which screen a window is on, and focus_window switches to it.
-        var list = await new ListWindowsTool().ExecuteAsync([], ctx, CancellationToken.None);
-        Assert.Contains("screen=1", list.Text);
-        var focus = await new FocusWindowTool().ExecuteAsync(new JsonObject { ["title"] = "Notepad" }, ctx, CancellationToken.None);
-        Assert.Contains("on screen 1", focus.Text);
-        Assert.Equal(0, ctx.CurrentScreen);
     }
 
     [Fact]
@@ -90,37 +110,6 @@ public class ToolTests
         Assert.DoesNotContain("Screens:", BlackBox.Core.Agent.SystemPrompt.Build("Test OS", [spaces[0]], "C:\\", ""));
     }
 
-    [Fact]
-    public async Task Ui_elements_on_another_screen_switch_to_it_and_use_its_coordinates()
-    {
-        var platform = new FakePlatform
-        {
-            Screens = [new ScreenRect(0, 0, 200, 100), new ScreenRect(200, 0, 160, 100)],
-            Elements =
-            [
-                new UiElement(1, "Button", "OK", null, new ScreenRect(300, 40, 20, 10), true),      // screen 2
-                new UiElement(2, "Edit", "Name", "", new ScreenRect(220, 10, 40, 10), true),         // screen 2
-                new UiElement(3, "Button", "Elsewhere", null, new ScreenRect(10, 10, 20, 10), true), // screen 1
-            ],
-        };
-        var ctx = Ctx(platform);
-        Assert.Equal(0, ctx.CurrentScreen);
-
-        var result = await new ListUiElementsTool().ExecuteAsync([], ctx, CancellationToken.None);
-
-        Assert.Equal(1, ctx.CurrentScreen);
-        Assert.StartsWith("These controls are on screen 2", result.Text);
-        // Screen 2 is 160x100, sent as 160x96: x is relative to its left edge, y scaled by 0.96.
-        Assert.Contains("#1 Button \"OK\" at (110, 43)", result.Text);
-        Assert.Contains("#2 Edit \"Name\" at (40, 14)", result.Text);
-        Assert.Contains("#3 Button \"Elsewhere\" at (19, 14) on screen 1", result.Text); // screen 1 is 200x100, sent as 192x96
-
-        // On one screen nothing changes.
-        var single = Ctx(new FakePlatform());
-        var plain = await new ListUiElementsTool().ExecuteAsync([], single, CancellationToken.None);
-        Assert.DoesNotContain("screen", plain.Text);
-        Assert.Contains("#1 Button \"Save\" at (115, 58)", plain.Text);
-    }
 
     [Fact]
     public async Task Press_keys_accepts_plus_separated_strings()
@@ -171,31 +160,6 @@ public class ToolTests
         Assert.Equal(0xFF, result.Image![0]);
         Assert.Equal(0xD8, result.Image[1]);
         Assert.Contains("192x96", result.Text); // 200x100 snapped to the 32px grid
-    }
-
-    [Fact]
-    public async Task Zoom_returns_a_magnified_image_with_rulers()
-    {
-        var result = await new ZoomTool().ExecuteAsync(
-            new JsonObject { ["x"] = 10, ["y"] = 10, ["width"] = 50, ["height"] = 40 }, Ctx(new FakePlatform()), CancellationToken.None);
-        Assert.False(result.IsError);
-        Assert.Equal(0xFF, result.Image![0]);
-        Assert.Contains("Zoomed 4x", result.Text);
-    }
-
-    [Fact]
-    public async Task Ui_elements_are_listed_in_screenshot_coordinates_and_pressed_by_id()
-    {
-        var platform = new FakePlatform();
-        var ctx = Ctx(platform);
-        var list = await new ListUiElementsTool().ExecuteAsync(new JsonObject { ["filter"] = "save" }, ctx, CancellationToken.None);
-        Assert.Contains("#1 Button \"Save\"", list.Text);
-        Assert.DoesNotContain("File name", list.Text);
-
-        var press = await new ClickElementTool().ExecuteAsync(new JsonObject { ["id"] = 1 }, ctx, CancellationToken.None);
-        Assert.False(press.IsError);
-        Assert.Contains("activate 1", platform.Actions);
-        await Assert.ThrowsAsync<ToolArgumentException>(() => new ClickElementTool().ExecuteAsync(new JsonObject { ["id"] = 9 }, ctx, CancellationToken.None));
     }
 
     [Fact]

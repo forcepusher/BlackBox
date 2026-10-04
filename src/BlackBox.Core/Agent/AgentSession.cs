@@ -147,7 +147,7 @@ public sealed partial class AgentSession(
     internal const string RepetitionNote =
         "[BlackBox] Your last reply was cut off because your thinking kept repeating the same lines. " +
         "Don't re-check earlier screens from memory: you may have misread one. Trust what the current screen shows " +
-        "(zoom in if needed), decide, and call the next tool.";
+        "(take a new screenshot if needed), decide, and call the next tool.";
 
     internal const string LongToolCallNote =
         "[BlackBox] Your last reply was lost: the connection drops when a single tool call takes more than about a minute to write. " +

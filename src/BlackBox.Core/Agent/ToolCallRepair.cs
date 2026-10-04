@@ -29,8 +29,6 @@ public static partial class ToolCallRepair
         ["write"] = "write_file", ["create_file"] = "write_file", ["save_file"] = "write_file",
         ["edit"] = "edit_file", ["replace_in_file"] = "edit_file", ["str_replace"] = "edit_file",
         ["ls"] = "list_directory", ["list_files"] = "list_directory", ["list_dir"] = "list_directory", ["dir"] = "list_directory",
-        ["windows"] = "list_windows", ["get_windows"] = "list_windows",
-        ["activate_window"] = "focus_window", ["switch_window"] = "focus_window",
     };
 
     // Argument names models borrow from other agent frameworks, per canonical parameter.
@@ -46,7 +44,6 @@ public static partial class ToolCallRepair
         ["seconds"] = ["duration", "time", "secs", "delay"],
         ["direction"] = ["dir", "scroll_direction"],
         ["amount"] = ["clicks", "scroll_amount", "steps", "distance"],
-        ["title"] = ["name", "window", "window_title"],
     };
 
     /// <summary>Maps a tool name the model produced to a registered tool, or returns null.</summary>
