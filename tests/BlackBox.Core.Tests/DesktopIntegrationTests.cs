@@ -32,7 +32,7 @@ public class DesktopIntegrationTests
         var ctx = new ToolContext
         {
             Platform = platform,
-            Settings = new AgentSettings { FailsafeCorner = false, ScreenshotAfterActions = false },
+            Settings = new AgentSettings { ScreenshotAfterActions = false },
             WorkingDirectory = Path.GetTempPath(),
         };
         var cursorBefore = platform.Input.GetCursorPosition();

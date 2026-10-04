@@ -67,7 +67,7 @@ public sealed class ServerSettings
 
 public sealed class AgentSettings
 {
-    /// <summary>Everything runs without asking by default; Stop and the failsafe corner stay available.</summary>
+    /// <summary>Everything runs without asking by default; Stop and the Break key stay available.</summary>
     public ApprovalMode Approval { get; set; } = ApprovalMode.Never;
 
     /// <summary>Largest size a screenshot is sent at; the screen is scaled down to fit, keeping its shape.</summary>
@@ -82,9 +82,6 @@ public sealed class AgentSettings
     /// Side effect: screen recorders and screen sharing do not show the window either.
     /// </summary>
     public bool HideFromScreenshots { get; set; } = true;
-
-    /// <summary>Moving the mouse into the top-left corner stops the agent.</summary>
-    public bool FailsafeCorner { get; set; } = true;
 
     /// <summary>Show the inputs the agent makes in a fading log in the screen corner, and a ring where it clicks.</summary>
     public bool ShowInputs { get; set; } = true;

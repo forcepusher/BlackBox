@@ -7,7 +7,7 @@ using BlackBox.Core.Tools;
 
 namespace BlackBox.Core.Agent;
 
-public enum AgentStopReason { Completed, Cancelled, Failsafe, Error }
+public enum AgentStopReason { Completed, Cancelled, Error }
 
 /// <summary>Callbacks from the agent loop. Called on a background thread.</summary>
 public interface IAgentObserver
@@ -52,8 +52,8 @@ public sealed partial class AgentSession(
 
         try
         {
-            // No step limit: a run ends when the model is done, the user presses Stop, or the
-            // mouse hits the failsafe corner. Tasks like "keep chatting for 12 hours" are valid;
+            // No step limit: a run ends when the model is done or the user presses Stop or the
+            // Break key. Tasks like "keep chatting for 12 hours" are valid;
             // runaway loops are handled by LoopDetector, and growth by context resets.
             for (var step = 1; ; step++)
             {
@@ -125,10 +125,6 @@ public sealed partial class AgentSession(
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             observer.OnFinished(AgentStopReason.Cancelled, null);
-        }
-        catch (FailsafeTriggeredException ex)
-        {
-            observer.OnFinished(AgentStopReason.Failsafe, ex.Message);
         }
         catch (Exception ex)
         {

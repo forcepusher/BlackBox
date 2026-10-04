@@ -48,11 +48,10 @@
             </Grid>
 
             <TextBlock Classes="h2" Text="Safety" />
-            <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto">
+            <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto">
               <TextBlock Classes="label" Grid.Row="0" Text="Ask me first" />
               <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding ApprovalModes}" SelectedIndex="{Binding ApprovalIndex}" HorizontalAlignment="Stretch" />
-              <CheckBox Grid.Row="1" Grid.Column="1" Content="Stop when I move the mouse to the top-left corner" IsChecked="{Binding Agent.FailsafeCorner}" />
-              <StackPanel Grid.Row="2" Grid.Column="1">
+              <StackPanel Grid.Row="1" Grid.Column="1">
                 <CheckBox Content="Hide BlackBox from the agent's screenshots" IsChecked="{Binding Agent.HideFromScreenshots}" />
                 <TextBlock Classes="muted" TextWrapping="Wrap" Margin="28,0,0,0"
                            Text="The agent then sees the desktop behind this window. Screen recorders and screen sharing won't show it either; turn this off while recording." />

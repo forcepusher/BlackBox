@@ -12,7 +12,7 @@ public class ToolTests
     private static ToolContext Ctx(IPlatformServices platform, string? dir = null, AgentSettings? settings = null) => new()
     {
         Platform = platform,
-        Settings = settings ?? new AgentSettings { ScreenshotAfterActions = false, FailsafeCorner = false },
+        Settings = settings ?? new AgentSettings { ScreenshotAfterActions = false },
         WorkingDirectory = dir ?? Path.GetTempPath(),
     };
 
@@ -38,7 +38,7 @@ public class ToolTests
     {
         var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1440) };
         // 2560x1440 screen sent at 1280x720 (704 after snapping to the 32px grid)
-        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotResolution = ScreenshotResolution.R1280x720, ScreenshotAfterActions = false, FailsafeCorner = false });
+        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotResolution = ScreenshotResolution.R1280x720, ScreenshotAfterActions = false });
 
         await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 10, ["y"] = "20", ["clicks"] = 2 }, ctx, CancellationToken.None);
 
@@ -88,30 +88,6 @@ public class ToolTests
         Assert.Contains("2 (right of screen 1, 1920x1080, screenshots 1920x1088)", prompt);
         Assert.Contains("one screen at a time", prompt);
         Assert.DoesNotContain("Screens:", BlackBox.Core.Agent.SystemPrompt.Build("Test OS", [spaces[0]], "C:\\", ""));
-    }
-
-    [Fact]
-    public async Task Failsafe_corner_stops_desktop_actions()
-    {
-        var platform = new FakePlatform { Cursor = (0, 0) };
-        var ctx = Ctx(platform, settings: new AgentSettings { FailsafeCorner = true });
-        await Assert.ThrowsAsync<FailsafeTriggeredException>(() =>
-            new TypeTextTool().ExecuteAsync(new JsonObject { ["text"] = "x" }, ctx, CancellationToken.None));
-        Assert.Empty(platform.Actions);
-    }
-
-    [Fact]
-    public async Task Failsafe_corner_is_only_the_primary_screens_corner()
-    {
-        // A monitor left of (or above) the primary has negative coordinates; its top edge is not the corner.
-        var platform = new FakePlatform { Screens = [new ScreenRect(0, 0, 200, 100), new ScreenRect(-160, 0, 160, 100)], Cursor = (-80, 0) };
-        var ctx = Ctx(platform, settings: new AgentSettings { FailsafeCorner = true, ScreenshotAfterActions = false });
-        await new TypeTextTool().ExecuteAsync(new JsonObject { ["text"] = "x" }, ctx, CancellationToken.None);
-        Assert.Equal(["type x"], platform.Actions);
-
-        platform.Cursor = (1, 1);
-        await Assert.ThrowsAsync<FailsafeTriggeredException>(() =>
-            new TypeTextTool().ExecuteAsync(new JsonObject { ["text"] = "y" }, ctx, CancellationToken.None));
     }
 
     [Fact]

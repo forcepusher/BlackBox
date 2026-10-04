@@ -426,7 +426,7 @@ public class AgentSessionTests
 
     private static (AgentSession, RecordingObserver) CreateSession(ScriptedServer server, string dir, IPlatformServices platform, int contextTokens = 0)
     {
-        var settings = new AgentSettings { FailsafeCorner = false, ScreenshotAfterActions = false, Approval = ApprovalMode.AskRisky };
+        var settings = new AgentSettings { ScreenshotAfterActions = false, Approval = ApprovalMode.AskRisky };
         var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = dir };
         var client = new OpenAiChatClient(new HttpClient(server), "http://test", null);
         var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(includeScreenTools: true), ctx, "system prompt", contextTokens: contextTokens);

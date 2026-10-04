@@ -495,9 +495,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             case AgentStopReason.Cancelled:
                 AddNotice(StoppedText(), isError: false);
                 break;
-            case AgentStopReason.Failsafe:
-                AddNotice(detail ?? reason.ToString(), isError: false);
-                break;
             case AgentStopReason.Error:
                 AddNotice(detail ?? "Something went wrong.", isError: true);
                 break;

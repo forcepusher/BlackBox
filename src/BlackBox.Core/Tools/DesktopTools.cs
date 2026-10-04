@@ -4,9 +4,6 @@ using BlackBox.Core.Platform;
 
 namespace BlackBox.Core.Tools;
 
-public sealed class FailsafeTriggeredException()
-    : Exception("Stopped: the mouse was moved to the top-left corner of the screen (failsafe).");
-
 /// <summary>Shared behaviour for tools that drive the mouse and keyboard.</summary>
 public abstract class DesktopActionTool : Tool
 {
@@ -14,7 +11,6 @@ public abstract class DesktopActionTool : Tool
 
     public sealed override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
-        CheckFailsafe(ctx);
         var text = await ActAsync(args, ctx, ct).ConfigureAwait(false);
         if (!ctx.Settings.ScreenshotAfterActions)
             return new ToolResult(text);
@@ -26,18 +22,6 @@ public abstract class DesktopActionTool : Tool
     }
 
     protected abstract Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct);
-
-    internal static void CheckFailsafe(ToolContext ctx)
-    {
-        if (!ctx.Settings.FailsafeCorner)
-            return;
-        var screen = ctx.Platform.Screen.GetPrimaryScreen();
-        var (x, y) = ctx.Platform.Input.GetCursorPosition();
-        // The corner itself, not everything left of or above it: monitors placed there have
-        // negative coordinates, and their whole top edge must not count as the corner.
-        if (x >= screen.X && x <= screen.X + 1 && y >= screen.Y && y <= screen.Y + 1)
-            throw new FailsafeTriggeredException();
-    }
 
     protected static (int X, int Y) Point(JsonObject args, ToolContext ctx, string xKey = "x", string yKey = "y") =>
         ctx.GetScreenSpace().ToScreen(RequireNumber(args, xKey), RequireNumber(args, yKey));
