@@ -190,7 +190,7 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
     public void OnToolFinished(ToolCall call, ToolResult result)
     {
         if (result.IsError) ToolErrors++;
-        var text = result.Text.Length > 600 ? result.Text[..600] + "…" : result.Text;
+        var text = result.Text.Length > 1200 ? result.Text[..1200] + "…" : result.Text;
         Console.ForegroundColor = result.IsError ? ConsoleColor.Red : ConsoleColor.DarkCyan;
         Console.WriteLine($"[result] {Now} after {(DateTime.Now - _toolStart).TotalSeconds:0.0}s: {text.TrimEnd()}");
         Console.ResetColor();

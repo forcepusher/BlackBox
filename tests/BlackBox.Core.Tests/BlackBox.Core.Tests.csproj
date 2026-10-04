@@ -20,4 +20,9 @@
     <ProjectReference Include="..\BlackBox.McpTestServer\BlackBox.McpTestServer.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Real screenshots for ClickAccuracyTests. -->
+    <None Include="ClickScenes\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

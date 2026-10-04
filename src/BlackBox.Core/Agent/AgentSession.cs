@@ -46,6 +46,11 @@ public sealed partial class AgentSession(
     public async Task RunAsync(string userText, IAgentObserver observer, CancellationToken ct)
     {
         History.Add(new ChatMessage { Role = ChatRole.User, Content = userText, FromUser = true });
+        if (toolContext.Locate is null && FreshLook.Enabled)
+        {
+            var look = new FreshLook(client, requestOptions);
+            toolContext.Locate = (image, target, ct2) => look.LocateAsync(image, toolContext.GetScreenSpace().Describe(), target, ct2);
+        }
         var nudges = 0;
         var loops = new LoopDetector();
         var justReset = false;

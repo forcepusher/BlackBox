@@ -106,6 +106,15 @@ within two more clicks in 17 of 21 trials with the note, 9 of 21 without it (`Cl
 `BB_CLICK_SHIFT`). A red ring drawn at the click added nothing, nor did a prompt rule about aiming
 carefully (13/24 first clicks against 19/24) or temperature 0.2 instead of 0.6 (19/24).
 
+Deep in a long run the model can also settle on a wrong idea of where something is and click the
+same wrong spot again whatever the note says (in a Unity run: "the menu bar is at y≈3", three
+times, 28 px above the menus), while the same model looking at the same screenshot afresh gets it
+right. So `mouse_click` takes an optional `target` ("File menu"), and after a miss BlackBox asks
+the model, in a separate request with only the current screenshot, where that target is, and adds
+the answer to the note. On a real Unity screenshot (`ClickScenes/unity-editor.png`, 19 menus, tabs
+and buttons, first click shifted 30 px): 11 of 12 misses corrected with the fresh look, 12 of 16
+without it, where 3 of the 4 failures were the same spot clicked again.
+
 ### MCP servers
 BlackBox is an MCP client: any [Model Context Protocol](https://modelcontextprotocol.io) server adds its
 tools to the list above. Paste the `mcpServers` block from the server's README into Settings → Advanced;

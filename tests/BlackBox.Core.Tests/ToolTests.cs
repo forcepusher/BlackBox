@@ -62,6 +62,22 @@ public class ToolTests
         Assert.Contains("Nothing on screen changed after this click", missed.Text);
         Assert.Contains("It landed at (100, 50)", missed.Text);
         Assert.NotNull(missed.Image);
+        Assert.DoesNotContain("fresh look", missed.Text); // no target named
+
+        // With a target, a fresh look says where it really is, or that the click was on it.
+        (double X, double Y)? found = (300, 120);
+        ctx.Locate = (_, target, _) => Task.FromResult(target == "Save button" ? found : null);
+        var looked = await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50, ["target"] = "Save button" }, ctx, CancellationToken.None);
+        Assert.Contains("A fresh look at the screenshot, without your earlier steps, puts the Save button at (300, 120).", looked.Text);
+        found = (101, 51);
+        looked = await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50, ["target"] = "Save button" }, ctx, CancellationToken.None);
+        Assert.Contains("also puts the Save button at about (101, 51)", looked.Text);
+        ctx.Locate = (_, _, _) => Task.FromResult<(double X, double Y)?>(null);
+        looked = await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50, ["target"] = "Save button" }, ctx, CancellationToken.None);
+        Assert.Contains("did not find the Save button", looked.Text);
+        ctx.Locate = null;
+        Assert.Equal((412, 87.5), BlackBox.Core.Agent.FreshLook.Parse("The centre is at (412, 87.5)."));
+        Assert.Null(BlackBox.Core.Agent.FreshLook.Parse("none"));
 
         // A small change right at the click (a checkbox ticking) counts as a reaction.
         platform.OnClick = p => { for (var i = 0; i < 10; i++) p.Desktop!.Bgra[(52 * 384 + 100 + i) * 4 + 1] = 255; };

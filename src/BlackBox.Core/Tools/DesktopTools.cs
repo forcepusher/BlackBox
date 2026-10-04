@@ -17,15 +17,39 @@ public abstract class DesktopActionTool : Tool
 
         // Give the UI a moment to react before looking at it.
         await Task.Delay(500, ct).ConfigureAwait(false);
-        if (check is not null && await check.MissedAtAsync(ctx, ct).ConfigureAwait(false) is { } at)
+        var missedAt = check is null ? null : await check.MissedAtAsync(ctx, ct).ConfigureAwait(false);
+        var shot = ScreenshotTool.Take(ctx);
+        if (missedAt is { } at)
         {
             var (mx, my) = ctx.GetScreenSpace().ToModel(at.X, at.Y);
             text += $"\nNothing on screen changed after this click, so it probably missed what you aimed at. It landed at ({mx}, {my}). " +
                     "Compare that with where your target is and click again at corrected coordinates. " +
-                    "If the target only needs more time to respond, wait instead.";
+                    "If the target only needs more time to respond, wait instead; if you clicked an empty spot only to focus a window, ignore this.";
+            if (Target(args) is { Length: > 0 } target && ctx.Locate is { } locate && shot.Image is { } image)
+                text += await FreshLookNoteAsync(locate, image, target, (mx, my), ctx, ct).ConfigureAwait(false);
         }
-        var shot = ScreenshotTool.Take(ctx);
         return shot with { Text = text + "\n" + shot.Text };
+    }
+
+    /// <summary>What the model said it is clicking, if the tool takes that.</summary>
+    protected virtual string? Target(JsonObject args) => null;
+
+    /// <summary>
+    /// After a miss: where a fresh look at the screenshot, without the run's history, puts the
+    /// target. Long runs can keep clicking a spot they wrongly believe in (see <see cref="Agent.FreshLook"/>).
+    /// </summary>
+    private static async Task<string> FreshLookNoteAsync(Func<byte[], string, CancellationToken, Task<(double X, double Y)?>> locate,
+        byte[] image, string target, (int X, int Y) click, ToolContext ctx, CancellationToken ct)
+    {
+        var space = ctx.GetScreenSpace();
+        if (await locate(image, target, ct).ConfigureAwait(false) is not { } p || p.X < 0 || p.Y < 0 || p.X > space.ModelWidth || p.Y > space.ModelHeight)
+            return $" A fresh look at the screenshot did not find the {target}.";
+        var (x, y) = ((int)Math.Round(p.X), (int)Math.Round(p.Y));
+        // About 1% of the screen: the same spot, as far as a look can tell.
+        var near = Math.Abs(x - click.X) <= space.ModelWidth / 100 && Math.Abs(y - click.Y) <= space.ModelHeight / 100;
+        return near
+            ? $" A fresh look at the screenshot also puts the {target} at about ({x}, {y}), so the click was on it; it may need a moment, a double-click or another way to use it."
+            : $" A fresh look at the screenshot, without your earlier steps, puts the {target} at ({x}, {y}).";
     }
 
     /// <summary>Whether to tell the model when its action left the screen as it was (see <see cref="ClickCheck"/>).</summary>
@@ -95,17 +119,21 @@ public sealed class MouseClickTool : DesktopActionTool
         ("x", Num("X in screenshot coordinates"), true),
         ("y", Num("Y in screenshot coordinates"), true),
         ("button", Str("Mouse button, default left", "left", "right", "middle"), false),
-        ("clicks", Int("1 = single click (default), 2 = double click, 3 = triple click"), false));
+        ("clicks", Int("1 = single click (default), 2 = double click, 3 = triple click"), false),
+        ("target", Str("Short name of what you are clicking, e.g. \"File menu\" or \"Save button\". Used to double-check a click that misses."), false));
 
     public override string Describe(JsonObject args)
     {
         var clicks = (int)(GetNumber(args, "clicks") ?? 1);
         var kind = clicks switch { 2 => "Double-click", 3 => "Triple-click", _ => "Click" };
         var button = GetString(args, "button") is { } b && b != "left" ? $" ({b})" : "";
-        return $"{kind}{button} at {Fmt(args)}";
+        var target = GetString(args, "target") is { Length: > 0 } t ? $" ({t})" : "";
+        return $"{kind}{button} at {Fmt(args)}{target}";
     }
 
     protected override bool ChecksForMiss => true;
+
+    protected override string? Target(JsonObject args) => GetString(args, "target")?.Trim();
 
     protected override async Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
