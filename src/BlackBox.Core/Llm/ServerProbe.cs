@@ -6,7 +6,8 @@ using BlackBox.Core.Settings;
 
 namespace BlackBox.Core.Llm;
 
-public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, int? LoadedContext, bool? Vision, string Message);
+/// <param name="Loaded">False when the server says the model is not loaded yet (LM Studio loads on first use), so it has no context size yet.</param>
+public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, int? LoadedContext, bool? Vision, string Message, bool? Loaded = null);
 
 /// <summary>What the server says about the configured model; nulls where it doesn't say.</summary>
 public readonly record struct ModelFacts(int? Context, bool? Loaded, bool? Vision);
@@ -50,7 +51,7 @@ public static class ServerProbe
                 continue;
             server.BaseUrl = candidates[i];
             var facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
-            return new ProbeResult(true, models, facts.Context, facts.Vision, models.Count == 0 ? "Connected, but the server lists no models." : "Connected.");
+            return new ProbeResult(true, models, facts.Context, facts.Vision, models.Count == 0 ? "Connected, but the server lists no models." : "Connected.", facts.Loaded);
         }
         // The plain-http error reads better than a failed TLS handshake.
         var http0 = Math.Max(0, candidates.ToList().FindIndex(c => c.StartsWith("http://", StringComparison.OrdinalIgnoreCase)));

@@ -70,8 +70,9 @@ using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a mo
         return 1;
     }
     if (await ServerProbe.EnsureLoadedAsync(probeHttp, settings.Server, () => Console.WriteLine("[server] loading the model…"), cts.Token) is { } c)
-        settings.Server.ContextSize = c;
-    Console.WriteLine($"[server] {settings.Server.BaseUrl} · {settings.Server.Model} · {settings.Server.ContextSize / 1024}k context");
+        settings.Server.SetDetectedContext(c);
+    Console.WriteLine($"[server] {settings.Server.BaseUrl} · {settings.Server.Model} · {ContextSizes.Format(settings.Server.ContextSize)} context"
+        + (settings.Server.AutoContext ? "" : " (set by hand)"));
 }
 // MCP servers from Data/mcp.json, as in the app; a broken list is reported and skipped.
 await using var mcp = new McpHost();

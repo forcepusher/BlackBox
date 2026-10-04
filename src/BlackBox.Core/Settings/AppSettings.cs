@@ -57,12 +57,90 @@ public sealed class ServerSettings
     /// <summary>Assumed context window when the server doesn't report one. If the real one is smaller, the server's "too long" error says so and BlackBox adjusts.</summary>
     public const int FallbackContextSize = 100_000;
 
+    /// <summary>Use the context size the server reports (the default), rather than <see cref="ManualContextSize"/>.</summary>
+    public bool AutoContext { get; set; } = true;
+
+    /// <summary>Context size chosen on the slider, used while <see cref="AutoContext"/> is off; 0 until one is chosen.</summary>
+    public int ManualContextSize { get; set; }
+
     /// <summary>
     /// Context window of the model, as reported by the server when the app connects (see
     /// <see cref="Llm.ServerProbe"/>), or learnt from its "too long" error. Not saved.
     /// </summary>
     [JsonIgnore]
-    public int ContextSize { get; set; } = FallbackContextSize;
+    public int DetectedContextSize { get; set; } = FallbackContextSize;
+
+    /// <summary>Whether <see cref="DetectedContextSize"/> came from the server, rather than being <see cref="FallbackContextSize"/>.</summary>
+    [JsonIgnore]
+    public bool ContextReported { get; set; }
+
+    /// <summary>
+    /// The context size BlackBox budgets with and resets by. A manual size never goes above
+    /// what the server reported: the server would refuse the longer requests anyway.
+    /// </summary>
+    [JsonIgnore]
+    public int ContextSize => AutoContext || ManualContextSize <= 0 ? DetectedContextSize
+        : ContextReported ? Math.Min(ManualContextSize, DetectedContextSize)
+        : ManualContextSize;
+
+    /// <summary>Takes in what the server says the context is; a "too long" error only ever lowers it.</summary>
+    public void SetDetectedContext(int? reported)
+    {
+        DetectedContextSize = reported ?? FallbackContextSize;
+        ContextReported = reported is not null;
+    }
+
+    /// <summary>A run found the server's real limit (from its "too long" error); keep it for the next run.</summary>
+    public void LearnContextLimit(int tokens)
+    {
+        if (tokens <= 0 || tokens >= ContextSize)
+            return;
+        DetectedContextSize = tokens;
+        ContextReported = true;
+    }
+}
+
+/// <summary>The sizes the context slider stops at, and how sizes are written.</summary>
+public static class ContextSizes
+{
+    /// <summary>4k up to 1M in steps that get coarser as they grow, so the common sizes (32k, 40k, 64k, 128k, 256k…) are all on it.</summary>
+    public static readonly IReadOnlyList<int> Standard =
+        new[] { 4, 8, 12, 16, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 256, 320, 384, 512, 640, 768, 1024 }
+            .Select(k => k * 1024).ToArray();
+
+    /// <summary>
+    /// The stops the slider offers. When the server reports its size, the slider ends exactly
+    /// there, so its far right is "everything the server has" and nothing beyond it can be picked.
+    /// </summary>
+    public static IReadOnlyList<int> Stops(int? serverMax)
+    {
+        if (serverMax is not > 0)
+            return Standard;
+        var stops = Standard.Where(s => s < serverMax).ToList();
+        stops.Add(serverMax.Value);
+        return stops;
+    }
+
+    /// <summary>Position of a size on the slider: the largest stop not above it (the first stop if all are).</summary>
+    public static int IndexOf(IReadOnlyList<int> stops, int tokens)
+    {
+        var index = 0;
+        for (var i = 0; i < stops.Count; i++)
+            if (stops[i] <= tokens)
+                index = i;
+        return index;
+    }
+
+    /// <summary>
+    /// "64k", "1M". Powers of two are counted in 1024s (65536 is 64k), round numbers in 1000s, so a
+    /// size typed into LM Studio as 250000 reads 250k here too.
+    /// </summary>
+    public static string Format(int tokens)
+    {
+        if (tokens >= 1024 * 1024 && tokens % (1024 * 1024) == 0) return $"{tokens / (1024 * 1024)}M";
+        if (tokens >= 1_000_000 && tokens % 1_000_000 == 0) return $"{tokens / 1_000_000}M";
+        return tokens % 1024 == 0 ? $"{tokens / 1024}k" : $"{Math.Round(tokens / 1000.0)}k";
+    }
 }
 
 public sealed class AgentSettings

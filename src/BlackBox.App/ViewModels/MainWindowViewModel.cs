@@ -97,7 +97,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         catch (AggregateException) { /* a server that would not stop; the process ends anyway */ }
     }
 
-    // ---- server and model (top bar) ---------------------------------------------------
+    // ---- server, API key, model and context size (top bar) ----------------------------
 
     private CancellationTokenSource? _addressEdit;
     private int _checkVersion;
@@ -116,6 +116,110 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             OnPropertyChanged();
             _ = CheckAfterTypingAsync();
         }
+    }
+
+    /// <summary>API key typed in the top bar, for servers that want one. Saved as you type; checked once typing pauses.</summary>
+    public string ApiKey
+    {
+        get => _settings.Server.ApiKey;
+        set
+        {
+            value = value.Trim();
+            if (value == _settings.Server.ApiKey) return;
+            _settings.Server.ApiKey = value;
+            _store.Save(_settings);
+            OnPropertyChanged();
+            _ = CheckAfterTypingAsync();
+        }
+    }
+
+    /// <summary>The eye button next to the API key: shows the key instead of dots.</summary>
+    [ObservableProperty]
+    private bool _showApiKey;
+
+    /// <summary>Context size as the server reports it; the slider only shows it, greyed out.</summary>
+    public bool AutoContext
+    {
+        get => _settings.Server.AutoContext;
+        set
+        {
+            var server = _settings.Server;
+            if (value == server.AutoContext) return;
+            // The slider starts where Auto left it (on a stop), unless a size was picked by hand before.
+            if (!value && server.ManualContextSize <= 0)
+                server.ManualContextSize = ContextStops[ContextSizes.IndexOf(ContextStops, server.DetectedContextSize)];
+            server.AutoContext = value;
+            _store.Save(_settings);
+            OnPropertyChanged();
+            OnContextChanged();
+        }
+    }
+
+    private IReadOnlyList<int> ContextStops =>
+        ContextSizes.Stops(_settings.Server.ContextReported ? _settings.Server.DetectedContextSize : null);
+
+    /// <summary>Last slider position: the server's own size when it reports one, else 1M.</summary>
+    public double ContextMaxIndex => ContextStops.Count - 1;
+
+    /// <summary>Slider position, an index into <see cref="ContextStops"/>.</summary>
+    public double ContextIndex
+    {
+        get => ContextSizes.IndexOf(ContextStops, _settings.Server.ContextSize);
+        set
+        {
+            // The slider is greyed out on Auto; anything it sends then is it adjusting to a new range.
+            var server = _settings.Server;
+            if (server.AutoContext) return;
+            var stops = ContextStops;
+            var size = stops[Math.Clamp((int)Math.Round(value), 0, stops.Count - 1)];
+            if (size == server.ContextSize) return;
+            server.ManualContextSize = size;
+            _store.Save(_settings);
+            OnContextChanged();
+        }
+    }
+
+    /// <summary>LM Studio said the model isn't loaded yet; it has no context size until the first message loads it.</summary>
+    private bool _modelNotLoaded;
+
+    /// <summary>
+    /// The size in use, next to the slider: "64k"; on Auto "not loaded" before LM Studio has loaded
+    /// the model, and "98k?" when the server doesn't say and it is the guess.
+    /// </summary>
+    public string ContextText
+    {
+        get
+        {
+            var server = _settings.Server;
+            if (!server.AutoContext || server.ContextReported)
+                return ContextSizes.Format(server.ContextSize);
+            return _modelNotLoaded ? "not loaded" : ContextSizes.Format(server.ContextSize) + "?";
+        }
+    }
+
+    public string ContextToolTip
+    {
+        get
+        {
+            var server = _settings.Server;
+            var reported = server.ContextReported ? $"The server runs this model with {server.DetectedContextSize:N0} tokens." : null;
+            if (server.AutoContext)
+                return reported is not null ? $"{reported} BlackBox uses all of it. Untick Auto to use less."
+                    : _modelNotLoaded ? "The model isn't loaded on the server yet, so its context size isn't known. Your first message loads it, and the size shows here."
+                    : $"The server doesn't say how large the context is, so BlackBox assumes {server.DetectedContextSize:N0} tokens and goes lower if the server objects.";
+            return $"BlackBox uses {server.ContextSize:N0} tokens: it starts a fresh context (with a handoff note) when a fifth is left. "
+                   + (reported ?? "The server doesn't say how large its context is, so if this is too large its error tells BlackBox the real size.")
+                   + " The model on the server is not reloaded.";
+        }
+    }
+
+    private void OnContextChanged()
+    {
+        // The range first: the slider clamps its value to it.
+        OnPropertyChanged(nameof(ContextMaxIndex));
+        OnPropertyChanged(nameof(ContextIndex));
+        OnPropertyChanged(nameof(ContextText));
+        OnPropertyChanged(nameof(ContextToolTip));
     }
 
     /// <summary>Models the server reports (embedding models left out). Always contains the saved one.</summary>
@@ -194,15 +298,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             return;
         }
 
-        // Trust what the server reports. The context size is not saved; image support is.
-        server.ContextSize = probe.LoadedContext ?? ServerSettings.FallbackContextSize;
+        // Trust what the server reports. The context size is not saved (it shows by the slider); image support is.
+        server.SetDetectedContext(probe.LoadedContext);
+        _modelNotLoaded = probe.Loaded == false;
+        OnContextChanged();
         if (probe.Vision is { } v && v != server.SupportsVision)
         {
             server.SupportsVision = v;
             _store.Save(_settings);
         }
-        var details = (probe.LoadedContext is { } c ? $" · {c / 1024}k context" : "") + (probe.Vision == false ? " · no vision" : "");
-        SetStatus(ServerState.Connected, "Connected" + details, null);
+        SetStatus(ServerState.Connected, "Connected" + (probe.Vision == false ? " · no vision" : ""), null);
     }
 
     /// <summary>
@@ -257,10 +362,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 using var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10));
                 var context = await ServerProbe.EnsureLoadedAsync(probeHttp, _settings.Server,
                     () => Dispatcher.UIThread.Post(() => AddNotice("Loading the model on the server…", isError: false)), ct);
-                if (context is { } c && c != _settings.Server.ContextSize)
+                if (context is not null)
                 {
-                    _settings.Server.ContextSize = c;
-                    ServerStatusText = $"Connected · {c / 1024}k context";
+                    _settings.Server.SetDetectedContext(context);
+                    _modelNotLoaded = false;
+                    OnContextChanged();
                 }
             }
             if (PrepareBackend() is not { } backend)
@@ -292,7 +398,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             var session = new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, _history, backend.ContextTokens);
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
-            _settings.Server.ContextSize = session.ContextTokens;
+            _settings.Server.LearnContextLimit(session.ContextTokens);
+            OnContextChanged();
         }
         catch (OperationCanceledException)
         {
@@ -349,10 +456,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     public async Task ApplySettingsAsync(AppSettings updated, string mcpConfigText)
     {
-        // The address and model live in the top bar, not in the Settings dialog.
-        updated.Server.BaseUrl = _settings.Server.BaseUrl;
-        updated.Server.Model = _settings.Server.Model;
-        updated.Server.ContextSize = _settings.Server.ContextSize; // runtime value, re-detected below
+        // The server, key, model and context size live in the top bar; the dialog only has the vision switch.
+        _settings.Server.SupportsVision = updated.Server.SupportsVision;
+        updated.Server = _settings.Server;
         _settings = updated;
         _store.Save(updated);
         _platform.HostWindow.SetHiddenFromCapture(updated.Agent.HideFromScreenshots);
