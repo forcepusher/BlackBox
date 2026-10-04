@@ -98,11 +98,14 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     public IUiAutomation? Automation => this;
     public IHostWindow HostWindow { get; set; } = NoHostWindow.Instance;
     public IInputOverlay InputOverlay => NoInputOverlay.Instance;
-    public IReadOnlyList<UiElement> GetElements(string? windowTitle, int maxCount) =>
+    /// <summary>Controls list_ui_elements finds; by default a button and a field on the primary screen.</summary>
+    public List<UiElement> Elements { get; set; } =
     [
         new UiElement(1, "Button", "Save", null, new ScreenRect(100, 50, 40, 20), true),
         new UiElement(2, "Edit", "File name", "notes.txt", new ScreenRect(10, 10, 80, 20), true),
     ];
+
+    public IReadOnlyList<UiElement> GetElements(string? windowTitle, int maxCount) => Elements;
     public bool Activate(int id) { Actions.Add($"activate {id}"); return id is 1 or 2; }
 
     public List<string> Actions { get; } = [];

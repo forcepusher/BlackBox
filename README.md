@@ -77,8 +77,8 @@ arguments (`coordinate: [x, y]`) are all accepted, and a model that announces a 
 it gets nudged to continue.
 
 With several monitors the agent sees one at a time: screenshots show the screen it looked at last
-(the primary at first), `screen=N` switches, and `focus_window` follows a window to its screen. All
-coordinates refer to the screen in the latest screenshot.
+(the primary at first), `screen=N` switches, and `focus_window` and `list_ui_elements` follow a
+window to its screen. All coordinates refer to the screen in the latest screenshot.
 
 ### MCP servers
 BlackBox is an MCP client: any [Model Context Protocol](https://modelcontextprotocol.io) server adds its

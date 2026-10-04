@@ -33,7 +33,9 @@ public abstract class DesktopActionTool : Tool
             return;
         var screen = ctx.Platform.Screen.GetPrimaryScreen();
         var (x, y) = ctx.Platform.Input.GetCursorPosition();
-        if (x <= screen.X + 1 && y <= screen.Y + 1)
+        // The corner itself, not everything left of or above it: monitors placed there have
+        // negative coordinates, and their whole top edge must not count as the corner.
+        if (x >= screen.X && x <= screen.X + 1 && y >= screen.Y && y <= screen.Y + 1)
             throw new FailsafeTriggeredException();
     }
 

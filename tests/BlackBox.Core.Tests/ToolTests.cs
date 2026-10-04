@@ -101,6 +101,52 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task Failsafe_corner_is_only_the_primary_screens_corner()
+    {
+        // A monitor left of (or above) the primary has negative coordinates; its top edge is not the corner.
+        var platform = new FakePlatform { Screens = [new ScreenRect(0, 0, 200, 100), new ScreenRect(-160, 0, 160, 100)], Cursor = (-80, 0) };
+        var ctx = Ctx(platform, settings: new AgentSettings { FailsafeCorner = true, ScreenshotAfterActions = false });
+        await new TypeTextTool().ExecuteAsync(new JsonObject { ["text"] = "x" }, ctx, CancellationToken.None);
+        Assert.Equal(["type x"], platform.Actions);
+
+        platform.Cursor = (1, 1);
+        await Assert.ThrowsAsync<FailsafeTriggeredException>(() =>
+            new TypeTextTool().ExecuteAsync(new JsonObject { ["text"] = "y" }, ctx, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Ui_elements_on_another_screen_switch_to_it_and_use_its_coordinates()
+    {
+        var platform = new FakePlatform
+        {
+            Screens = [new ScreenRect(0, 0, 200, 100), new ScreenRect(200, 0, 160, 100)],
+            Elements =
+            [
+                new UiElement(1, "Button", "OK", null, new ScreenRect(300, 40, 20, 10), true),      // screen 2
+                new UiElement(2, "Edit", "Name", "", new ScreenRect(220, 10, 40, 10), true),         // screen 2
+                new UiElement(3, "Button", "Elsewhere", null, new ScreenRect(10, 10, 20, 10), true), // screen 1
+            ],
+        };
+        var ctx = Ctx(platform);
+        Assert.Equal(0, ctx.CurrentScreen);
+
+        var result = await new ListUiElementsTool().ExecuteAsync([], ctx, CancellationToken.None);
+
+        Assert.Equal(1, ctx.CurrentScreen);
+        Assert.StartsWith("These controls are on screen 2", result.Text);
+        // Screen 2 is 160x100, sent as 160x96: x is relative to its left edge, y scaled by 0.96.
+        Assert.Contains("#1 Button \"OK\" at (110, 43)", result.Text);
+        Assert.Contains("#2 Edit \"Name\" at (40, 14)", result.Text);
+        Assert.Contains("#3 Button \"Elsewhere\" at (19, 14) on screen 1", result.Text); // screen 1 is 200x100, sent as 192x96
+
+        // On one screen nothing changes.
+        var single = Ctx(new FakePlatform());
+        var plain = await new ListUiElementsTool().ExecuteAsync([], single, CancellationToken.None);
+        Assert.DoesNotContain("screen", plain.Text);
+        Assert.Contains("#1 Button \"Save\" at (115, 58)", plain.Text);
+    }
+
+    [Fact]
     public async Task Press_keys_accepts_plus_separated_strings()
     {
         var platform = new FakePlatform();
