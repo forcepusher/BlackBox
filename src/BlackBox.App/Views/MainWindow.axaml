@@ -114,10 +114,10 @@
               <StackPanel Spacing="6" Margin="0,0,40,0">
                 <Expander IsVisible="{Binding HasReasoning}" Header="{Binding ThinkingLabel}" HorizontalAlignment="Stretch" IsExpanded="True"
                           Padding="10,6">
-                  <SelectableTextBlock Classes="muted" Text="{Binding Reasoning}" TextWrapping="Wrap" />
+                  <SelectableTextBlock Classes="muted" Text="{Binding ShownReasoning}" TextWrapping="Wrap" />
                 </Expander>
-                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" LineHeight="21" />
-                <TextBlock Classes="muted" Text="…" IsVisible="{Binding IsStreaming}" />
+                <SelectableTextBlock Text="{Binding ShownText}" TextWrapping="Wrap" IsVisible="{Binding HasText}" LineHeight="21" />
+                <TextBlock Classes="muted" Text="…" IsVisible="{Binding ShowTypingDots}" />
               </StackPanel>
             </DataTemplate>
 
@@ -162,14 +162,16 @@
 
     <!-- Input -->
     <Border Grid.Row="4" Padding="16,8,16,14">
-      <Border Classes="card" MaxWidth="860" Padding="8">
+      <!-- One line of text is exactly as tall as the Send button, and both sit on the same
+           bottom edge, so they line up; longer text grows the box upwards with Send staying put. -->
+      <Border Classes="card composer" MaxWidth="860" Padding="6">
         <Grid ColumnDefinitions="*,Auto">
-          <TextBox x:Name="InputBox" Grid.Column="0" Text="{Binding Input}" AcceptsReturn="True" TextWrapping="Wrap"
-                   MaxHeight="200" MinHeight="40" BorderThickness="0" Background="Transparent"
+          <TextBox x:Name="InputBox" Grid.Column="0" Classes="composer" Text="{Binding Input}" AcceptsReturn="True" TextWrapping="Wrap"
+                   MaxHeight="200" VerticalContentAlignment="Center"
                    Watermark="Describe a task… (Enter to send, Shift+Enter for a new line)" />
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Bottom" Margin="8,0,0,0">
-            <Button Classes="primary" Content="Send" Command="{Binding SendCommand}" IsVisible="{Binding !IsBusy}" />
-            <Button Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" Background="{StaticResource BbError}" />
+            <Button Classes="primary" Content="Send" Command="{Binding SendCommand}" IsVisible="{Binding !IsBusy}" MinHeight="32" />
+            <Button Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" Background="{StaticResource BbError}" MinHeight="32" />
           </StackPanel>
         </Grid>
       </Border>
