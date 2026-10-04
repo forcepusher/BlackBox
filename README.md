@@ -143,7 +143,7 @@ Integration tests against a real server (they send prompts larger than the conte
 ```powershell
 $env:BB_SERVER_URL = "http://localhost:1234/v1"; $env:BB_SERVER_MODEL = "qwen3.8-27b@iq2_s"
 dotnet test --filter ServerIntegrationTests
-dotnet test --filter ClickAccuracyTests   # hit rate on named buttons; BB_CLICK_COORDS=pixels|grid to compare
+dotnet test --filter ClickAccuracyTests   # click hit rate in 15 hard scenes; BB_CLICK_SCENES, BB_CLICK_TRIALS, BB_CLICK_COORDS=pixels|grid
 ```
 
 ## Project structure

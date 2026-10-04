@@ -115,8 +115,9 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
 
     public ScreenRect GetPrimaryScreen() => ScreenBounds;
     public IReadOnlyList<ScreenRect> GetScreens() => Screens ?? [ScreenBounds];
-    /// <summary>What the screen shows, if anything (a black screen otherwise).</summary>
+    /// <summary>What the screens show, if anything (black otherwise), with its top-left corner at <see cref="DesktopOrigin"/>.</summary>
     public RawImage? Desktop { get; set; }
+    public (int X, int Y) DesktopOrigin { get; set; }
 
     public RawImage Capture(ScreenRect region, bool includeCursor)
     {
@@ -124,7 +125,7 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
         var pixels = new byte[region.Width * region.Height * 4];
         if (Desktop is { } d)
             for (var row = 0; row < region.Height; row++)
-                Array.Copy(d.Bgra, (region.Y + row) * d.Stride + region.X * 4, pixels, row * region.Width * 4, region.Width * 4);
+                Array.Copy(d.Bgra, (region.Y - DesktopOrigin.Y + row) * d.Stride + (region.X - DesktopOrigin.X) * 4, pixels, row * region.Width * 4, region.Width * 4);
         return new(region.Width, region.Height, pixels);
     }
     public (int X, int Y) GetCursorPosition() => Cursor;
