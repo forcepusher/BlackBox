@@ -202,7 +202,8 @@ public class AgentSessionTests
             session.History.Add(ChatMessage.ToolResult($"c{i}", new string('x', 300)));
         }
 
-        session.FitContext(5_000);
+        // About a third of the steps have to go, whatever the tool schemas weigh.
+        session.FitContext(session.EstimateTokens() - 700);
 
         Assert.Equal("THE TASK", session.History[0].Content);
         Assert.StartsWith("[Earlier steps were removed", session.History[1].Content);

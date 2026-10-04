@@ -69,6 +69,7 @@ cache, so each retry continues where the last one stopped (up to 12 times per st
 | `list_windows`, `focus_window` | Window discovery and activation |
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
+| `<server>__<tool>` | Any tool of the MCP servers you add in Settings → Advanced (see below) |
 
 Models often fumble tool-call syntax, so BlackBox repairs calls on the fly: Qwen XML, Gemma 4 and
 JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…) and misnamed
@@ -78,6 +79,31 @@ it gets nudged to continue.
 With several monitors the agent sees one at a time: screenshots show the screen it looked at last
 (the primary at first), `screen=N` switches, and `focus_window` follows a window to its screen. All
 coordinates refer to the screen in the latest screenshot.
+
+### MCP servers
+BlackBox is an MCP client: any [Model Context Protocol](https://modelcontextprotocol.io) server adds its
+tools to the list above. Paste the `mcpServers` block from the server's README into Settings → Advanced;
+it is the same format Claude Desktop, LM Studio and Cursor use, and it is kept in `Data/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:\\Users\\me\\Documents"] },
+    "remote":     { "url": "https://example.com/mcp", "headers": { "Authorization": "Bearer …" } }
+  }
+}
+```
+
+Servers with a `command` are started with BlackBox (and stopped with it); `env` and `cwd` are passed
+on. Servers with a `url` are connected to over Streamable HTTP, or the older SSE protocol when the
+server only speaks that (`"type": "sse"` forces it). `"disabled": true` keeps an entry without using
+it. The model sees each tool as `server__tool` (`filesystem__read_file`), so names never clash with
+BlackBox's own tools; a call to the bare name still works when only one server has it. Tools a
+server marks read-only are treated like screenshots in the approval settings, all others like shell
+commands. Text results go back to the model as they are; an image result is shown to it like a
+screenshot. Comments and trailing commas in the file are fine. The settings dialog shows what each
+server reported when it started, and a server that fails to start is reported in the chat; the
+others keep working.
 
 Actions run without asking by default (approvals can be switched on in Settings → General).
 Pressing Stop, pressing the Break (Pause) key anywhere, or moving the mouse to the top-left corner of
@@ -116,6 +142,7 @@ dotnet test --filter ServerIntegrationTests
 - `src/BlackBox.Cli`: headless runner for trying tasks and models.
 - `src/BlackBox.App`: Avalonia 11 UI with CommunityToolkit.Mvvm.
 - `tests/BlackBox.Core.Tests`: xUnit tests (unit tests plus opt-in server integration tests).
+- `tests/BlackBox.McpTestServer`: a small MCP server the tests run in-process and as a child process.
 - `scripts/`: `publish.ps1` (portable build), `agent-tasks.ps1` (real desktop task suite) and `game2048-test.ps1` (long self-testing run, judged by `game2048-check.mjs`).
 
 Linux and macOS ports need an `IPlatformServices` implementation (screen, input, windows); the rest

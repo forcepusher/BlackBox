@@ -12,8 +12,9 @@ public sealed class ToolRegistry
             _tools[t.Name] = t;
     }
 
-    public static ToolRegistry CreateDefault(bool includeScreenTools, bool includeUiAutomation = false) =>
-        new(DefaultTools(includeScreenTools, includeUiAutomation));
+    /// <param name="extra">Tools from outside BlackBox (MCP servers), offered after its own.</param>
+    public static ToolRegistry CreateDefault(bool includeScreenTools, bool includeUiAutomation = false, IEnumerable<Tool>? extra = null) =>
+        new(DefaultTools(includeScreenTools, includeUiAutomation).Concat(extra ?? []));
 
     private static IEnumerable<Tool> DefaultTools(bool includeScreenTools, bool includeUiAutomation)
     {
@@ -46,6 +47,28 @@ public sealed class ToolRegistry
     public IReadOnlyCollection<Tool> All => _tools.Values;
 
     public Tool? Find(string name) => _tools.GetValueOrDefault(name);
+
+    /// <summary>
+    /// The one tool whose name ends in <c>__name</c>, for a model that calls an MCP tool by its
+    /// bare name (<c>search</c> instead of <c>brave__search</c>). Null when there is none or more than one.
+    /// </summary>
+    public Tool? FindBySuffix(string name)
+    {
+        var wanted = Loose(name);
+        Tool? found = null;
+        foreach (var t in _tools.Values)
+        {
+            var at = t.Name.LastIndexOf("__", StringComparison.Ordinal);
+            if (at < 0 || Loose(t.Name[(at + 2)..]) != wanted)
+                continue;
+            if (found is not null)
+                return null;
+            found = t;
+        }
+        return found;
+
+        static string Loose(string s) => s.Trim().Replace('-', '_').ToLowerInvariant();
+    }
 
     public IReadOnlyList<ToolDefinition> Definitions() =>
         _tools.Values.Select(t => new ToolDefinition { Name = t.Name, Description = t.Description, Parameters = t.Parameters }).ToList();

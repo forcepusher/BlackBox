@@ -130,4 +130,30 @@ public class ServerIntegrationTests
 
         await AssertAnswersPassword(session);
     }
+
+    /// <summary>The real model, with the test MCP server started as a child process: it must call the server's add tool and use the answer.</summary>
+    [Fact]
+    public async Task Model_calls_an_mcp_tool()
+    {
+        var (server, http, context) = await ConnectAsync();
+        var dll = Path.Combine(AppContext.BaseDirectory, "BlackBox.McpTestServer.dll");
+        await using var mcp = new BlackBox.Core.Mcp.McpHost();
+        await mcp.ConnectAsync([new BlackBox.Core.Mcp.McpServerConfig { Name = "calc", Command = "dotnet", Args = [dll] }], CancellationToken.None);
+        Assert.True(mcp.Statuses[0].State == BlackBox.Core.Mcp.McpServerState.Connected, mcp.Statuses[0].Summary);
+
+        var connection = BackendConnection.Create(http, server);
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var registry = ToolRegistry.CreateDefault(false, extra: mcp.Tools);
+        var prompt = SystemPrompt.Build("Test OS", null, Path.GetTempPath(), "", mcp.Connected);
+        var session = new AgentSession(connection.Client, connection.Options, registry, ctx, prompt, contextTokens: context);
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("Use the calc add tool to add 48213 and 27719, then reply with just the number it returned.", observer, CancellationToken.None);
+
+        TestContext.Current.SendDiagnosticMessage("Tools run: " + string.Join(", ", observer.ToolsRun) + " | reply: " + session.History[^1].Content);
+        Assert.True(observer.StopReason == AgentStopReason.Completed, $"{observer.StopReason}: {observer.Detail}");
+        Assert.Contains(observer.ToolsRun, t => t.EndsWith("add", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("75932", observer.Results.Select(r => r.Text));
+        Assert.Contains("75932", session.History[^1].Content);
+    }
 }

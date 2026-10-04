@@ -336,7 +336,11 @@ public sealed partial class AgentSession(
 
     /// <summary>Rough token count of the conversation (about 3.5 characters per token, ~2000 per screenshot, the size of a 1920x1080 one).</summary>
     internal int EstimateTokens() =>
-        (int)(((long)systemPrompt.Length + 12_000 /* tool schemas */ + History.Sum(CharsOf)) * 2 / 7);
+        (int)(((long)systemPrompt.Length + _toolChars.Value + History.Sum(CharsOf)) * 2 / 7);
+
+    /// <summary>Size of the tool definitions, which go into every request; MCP servers can add a lot.</summary>
+    private readonly Lazy<long> _toolChars = new(() =>
+        tools.Definitions().Sum(d => (long)d.Name.Length + d.Description.Length + d.Parameters.ToJsonString().Length + 40));
 
     /// <summary>Rough token count of one message.</summary>
     internal static int EstimateTokens(ChatMessage m) => (int)((long)CharsOf(m) * 2 / 7);

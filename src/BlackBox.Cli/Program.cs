@@ -1,11 +1,13 @@
 using BlackBox.Core.Agent;
 using BlackBox.Core.Llm;
+using BlackBox.Core.Mcp;
 using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
 
 // Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] "task"
-//   --root        portable folder (default: BLACKBOX_HOME, else .dev/ when run from the repository, else the exe folder)
+//   --root        portable folder (default: BLACKBOX_HOME, else .dev/ when run from the repository, else the exe folder);
+//                 its Data/mcp.json lists the MCP servers to start, as in the app
 //   --url/--model override the server address and model saved in Data/settings.json
 //   --yes         approve risky tools without asking
 //   --save-shots  write every screenshot the model sees to DIR
@@ -71,12 +73,35 @@ using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a mo
         settings.Server.ContextSize = c;
     Console.WriteLine($"[server] {settings.Server.BaseUrl} · {settings.Server.Model} · {settings.Server.ContextSize / 1024}k context");
 }
+// MCP servers from Data/mcp.json, as in the app; a broken list is reported and skipped.
+await using var mcp = new McpHost();
+try
+{
+    var mcpServers = McpConfig.Parse(McpConfig.Load(paths.McpConfigFile)).Servers;
+    if (mcpServers.Count > 0)
+    {
+        Console.WriteLine($"[mcp] starting {mcpServers.Count} server(s)…");
+        await mcp.ConnectAsync(mcpServers, cts.Token);
+        foreach (var status in mcp.Statuses)
+            Console.WriteLine("[mcp] " + status.Summary);
+    }
+}
+catch (McpConfigException ex)
+{
+    Console.Error.WriteLine($"[mcp] {paths.McpConfigFile} could not be read, no MCP tools: {ex.Message}");
+}
+catch (OperationCanceledException)
+{
+    Console.WriteLine("[mcp] stopped while the servers were starting");
+    return 1;
+}
+
 var backend = BackendConnection.Create(http, settings.Server);
 var workDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 var ctx = new ToolContext { Platform = platform, Settings = agent, WorkingDirectory = workDir };
 var screens = backend.Vision ? ctx.ScreenSpaces() : null;
-var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, includeUiAutomation: platform.Automation is not null);
-var session = new AgentSession(backend.Client, backend.Options, registry, ctx, SystemPrompt.Build(platform.Name, screens, workDir, agent.CustomInstructions), contextTokens: backend.ContextTokens);
+var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, includeUiAutomation: platform.Automation is not null, extra: mcp.Tools);
+var session = new AgentSession(backend.Client, backend.Options, registry, ctx, SystemPrompt.Build(platform.Name, screens, workDir, agent.CustomInstructions, mcp.Connected), contextTokens: backend.ContextTokens);
 var observer = new ConsoleObserver(autoYes, shotsDir);
 
 var t0 = DateTime.UtcNow;

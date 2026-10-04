@@ -3,6 +3,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using BlackBox.Core.Agent;
 using BlackBox.Core.Llm;
+using BlackBox.Core.Mcp;
 using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
@@ -21,6 +22,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private readonly IPlatformServices _platform;
     private readonly HttpClient _http = LlmHttp.Create(Timeout.InfiniteTimeSpan);
     private readonly List<ChatMessage> _history = [];
+    private readonly McpHost _mcp = new();
+    private Task _mcpConnect = Task.CompletedTask;
+    private bool _mcpRestartPending;
     private AppSettings _settings;
     private CancellationTokenSource? _runCts;
     private AssistantMessageItem? _current;
@@ -81,6 +85,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoMessages));
         _stopKey = _platform.StopKey.Watch(OnStopKey);
         _ = CheckServerAsync();
+        _mcpConnect = ConnectMcpAsync();
+    }
+
+    /// <summary>Stops the run and the MCP servers; called when the window closes.</summary>
+    public void Shutdown()
+    {
+        _runCts?.Cancel();
+        _stopKey?.Dispose();
+        try { _mcp.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5)); }
+        catch (AggregateException) { /* a server that would not stop; the process ends anyway */ }
     }
 
     // ---- server and model (top bar) ---------------------------------------------------
@@ -251,6 +265,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             }
             if (PrepareBackend() is not { } backend)
                 return;
+            if (!_mcpConnect.IsCompleted)
+            {
+                AddNotice("Starting the MCP servers…", isError: false);
+                await _mcpConnect;
+            }
 
             var agent = _settings.Agent;
             var ctx = new ToolContext
@@ -267,8 +286,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 catch (NotSupportedException) { }
             }
 
-            var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, includeUiAutomation: _platform.Automation is not null);
-            var prompt = SystemPrompt.Build(_platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions);
+            // The MCP tools are a snapshot: the tool list stays the same for the whole run.
+            var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, includeUiAutomation: _platform.Automation is not null, extra: _mcp.Tools);
+            var prompt = SystemPrompt.Build(_platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, _mcp.Connected);
             var session = new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, _history, backend.ContextTokens);
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
@@ -283,6 +303,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             IsBusy = false;
             _runCts.Dispose();
             _runCts = null;
+            if (_mcpRestartPending)
+            {
+                // Changed in Settings during the run; restarting then would have pulled the tools from under it.
+                _mcpRestartPending = false;
+                _mcpConnect = ConnectMcpAsync();
+            }
         }
     }
 
@@ -319,9 +345,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     // ---- settings -------------------------------------------------------------------
 
-    public SettingsViewModel CreateSettingsViewModel() => new(_settings.Clone(), _paths);
+    public SettingsViewModel CreateSettingsViewModel() => new(_settings.Clone(), _paths, McpConfig.Load(_paths.McpConfigFile), _mcp.Statuses);
 
-    public async Task ApplySettingsAsync(AppSettings updated)
+    public async Task ApplySettingsAsync(AppSettings updated, string mcpConfigText)
     {
         // The address and model live in the top bar, not in the Settings dialog.
         updated.Server.BaseUrl = _settings.Server.BaseUrl;
@@ -332,7 +358,33 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _platform.HostWindow.SetHiddenFromCapture(updated.Agent.HideFromScreenshots);
         _platform.InputOverlay.Duration = TimeSpan.FromSeconds(updated.Agent.InputLogSeconds);
         _platform.InputOverlay.Enabled = updated.Agent.ShowInputs;
+        if (mcpConfigText != McpConfig.Load(_paths.McpConfigFile))
+        {
+            McpConfig.Save(_paths.McpConfigFile, mcpConfigText);
+            if (IsBusy) _mcpRestartPending = true;
+            else _mcpConnect = ConnectMcpAsync();
+        }
         await CheckServerAsync();
+    }
+
+    // ---- MCP servers ----------------------------------------------------------------
+
+    /// <summary>Starts the servers in Data/mcp.json (stopping any running ones) and reports the ones that fail in the chat.</summary>
+    private async Task ConnectMcpAsync()
+    {
+        IReadOnlyList<McpServerConfig> servers;
+        try
+        {
+            servers = McpConfig.Parse(McpConfig.Load(_paths.McpConfigFile)).Servers;
+        }
+        catch (Exception ex) when (ex is McpConfigException or IOException or UnauthorizedAccessException)
+        {
+            AddNotice($"The MCP server list could not be read, so no MCP tools are available: {ex.Message} Fix it in Settings → Advanced.", isError: true);
+            servers = [];
+        }
+        await Task.Run(() => _mcp.ConnectAsync(servers, CancellationToken.None));
+        foreach (var s in _mcp.Statuses.Where(s => s.State == McpServerState.Failed))
+            AddNotice($"MCP server \"{s.Name}\" is not available: {s.Error} (Settings → Advanced)", isError: true);
     }
 
     private BackendConnection? PrepareBackend()

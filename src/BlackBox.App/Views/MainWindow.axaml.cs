@@ -85,6 +85,6 @@ public partial class MainWindow : Window
         var settingsVm = Vm.CreateSettingsViewModel();
         var window = new SettingsWindow { DataContext = settingsVm };
         if (await window.ShowDialog<bool>(this))
-            await Vm.ApplySettingsAsync(settingsVm.Settings);
+            await Vm.ApplySettingsAsync(settingsVm.Settings, settingsVm.McpConfigText);
     }
 }

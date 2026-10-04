@@ -58,7 +58,10 @@ public static partial class ToolCallRepair
             .Replace('-', '_').Replace(' ', '_').Replace('.', '_').ToLowerInvariant();
         if (registry.Find(normalized) is { } n)
             return n;
-        return NameAliases.TryGetValue(normalized, out var alias) ? registry.Find(alias) : null;
+        if (NameAliases.TryGetValue(normalized, out var alias) && registry.Find(alias) is { } aliased)
+            return aliased;
+        // An MCP tool called without its server prefix.
+        return registry.FindBySuffix(normalized);
     }
 
     /// <summary>Keeps the intent of aliased names like "double_click" that map onto a more general tool.</summary>

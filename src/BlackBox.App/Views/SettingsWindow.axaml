@@ -30,7 +30,7 @@
       </DockPanel>
     </Border>
 
-    <TabControl Padding="16,8">
+    <TabControl x:Name="Tabs" Padding="16,8">
 
       <!-- ===================== General ===================== -->
       <TabItem Header="General">
@@ -87,6 +87,17 @@
                 <TextBlock Text="seconds" VerticalAlignment="Center" />
               </StackPanel>
             </Grid>
+
+            <TextBlock Classes="h2" Text="MCP servers" />
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Extra tools for the agent from MCP servers. Paste the mcpServers block from a server's README; it is the same format Claude Desktop, LM Studio and Cursor use. Servers with a command are started with BlackBox, servers with a url are connected to. Their tools are offered to the model next to BlackBox's own, named server__tool, and run like any other tool." />
+            <TextBox Text="{Binding McpConfigText}" Watermark="{Binding McpExample}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
+                     FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12" MinHeight="200" Margin="0,8,0,0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+            <SelectableTextBlock Classes="muted error" TextWrapping="Wrap" Text="{Binding McpError}" IsVisible="{Binding HasMcpError}" />
+            <SelectableTextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Text="{Binding Paths.McpConfigFile, StringFormat='Saved to {0}. The servers are started when you save and each time BlackBox starts; what each one reports shows above.'}" />
           </StackPanel>
         </ScrollViewer>
       </TabItem>

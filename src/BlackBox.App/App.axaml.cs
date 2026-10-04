@@ -23,6 +23,8 @@ public partial class App : Application
 
             var vm = new MainWindowViewModel(paths, store, store.Load(), platform);
             desktop.MainWindow = new MainWindow { DataContext = vm };
+            // Stops the MCP server processes with the app; otherwise they would outlive it.
+            desktop.Exit += (_, _) => vm.Shutdown();
             vm.OnStartup();
         }
 
