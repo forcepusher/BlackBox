@@ -11,24 +11,19 @@ namespace BlackBox.Platform.Windows;
 public sealed class WindowsPlatform : IPlatformServices
 {
     private readonly WindowsInputController _input = new();
-    private readonly WindowsWindowManager _windows = new();
     private readonly WindowsInputOverlay _overlay = new();
-    private readonly Lazy<WindowsUiAutomation> _automation;
 
     public WindowsPlatform()
     {
         // Coordinates must be physical pixels. The app manifest already asks for this;
         // calling it again is harmless and covers hosts without the manifest (tests, tools).
         SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-        _automation = new(() => new WindowsUiAutomation(_windows, _input));
         Input = new OverlayInputController(_input, _overlay);
     }
 
     public string Name => $"Windows {Environment.OSVersion.Version}";
     public IScreenCapture Screen { get; } = new WindowsScreenCapture();
     public IInputController Input { get; }
-    public IWindowManager Windows => _windows;
-    public IUiAutomation? Automation => _automation.Value;
     public IHostWindow HostWindow { get; } = new WindowsHostWindow();
     public IInputOverlay InputOverlay => _overlay;
     public IStopKey StopKey { get; } = new WindowsStopKey();

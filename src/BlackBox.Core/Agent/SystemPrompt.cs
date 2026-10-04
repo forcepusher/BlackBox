@@ -25,18 +25,18 @@ public static class SystemPrompt
         {
             sb.AppendLine("- Screens: " + string.Join("; ", screens.Select((s, i) => DescribeScreen(s, i, screens[0]))) + ".");
             sb.AppendLine("- You see one screen at a time. screenshot shows the screen you looked at last (screen 1 at first); pass screen=N to look at another. " +
-                          "All x/y arguments refer to the screen in the latest screenshot, origin top-left. To act on another screen, take its screenshot first; focus_window switches to the window's screen.");
+                          "All x/y arguments refer to the screen in the latest screenshot. To act on another screen, take its screenshot first.");
         }
-        else if (screen is not null)
-            sb.AppendLine($"- Screenshots are {screen.ImageWidth}x{screen.ImageHeight} pixels. All x/y arguments use that coordinate space, origin top-left.");
+        else if (screen is { Grid: null })
+            sb.AppendLine($"- Screenshots are {screen.ImageWidth}x{screen.ImageHeight} pixels.");
+        if (screen is not null)
+            sb.AppendLine("- Coordinates: " + screen.Describe());
         sb.AppendLine();
         sb.AppendLine("How to work:");
         if (screen is not null)
         {
             sb.AppendLine("- Start GUI tasks with a screenshot. Look before you click; never guess coordinates.");
             sb.AppendLine("- Aim for the center of buttons, fields and icons. After each action, check the new screenshot to confirm it worked before moving on.");
-            sb.AppendLine("- To press buttons, menu items, checkboxes or tabs in normal desktop apps, prefer list_ui_elements + click_element: it finds controls by name and does not miss. Use mouse clicks for things it does not list (web page content, games, canvases).");
-            sb.AppendLine("- If text or buttons are small or close together, use zoom on that area first and read the coordinates off its rulers.");
             sb.AppendLine("- Maximize small windows (double-click the title bar or press win+up) when that makes them easier to work with.");
             sb.AppendLine("- Prefer keyboard shortcuts and the shell when they are more reliable than clicking (e.g. win+r, ctrl+l, Start-Process).");
             sb.AppendLine("- Click a text field before typing into it.");
@@ -84,6 +84,8 @@ public static class SystemPrompt
             r.X + r.Width <= p.X ? "left of screen 1" :
             r.Y >= p.Y + p.Height ? "below screen 1" :
             r.Y + r.Height <= p.Y ? "above screen 1" : "overlapping screen 1";
-        return $"{index + 1} ({position}, {r.Width}x{r.Height}, screenshots {s.ImageWidth}x{s.ImageHeight})";
+        return s.Grid is null
+            ? $"{index + 1} ({position}, {r.Width}x{r.Height}, screenshots {s.ImageWidth}x{s.ImageHeight})"
+            : $"{index + 1} ({position}, {r.Width}x{r.Height})";
     }
 }

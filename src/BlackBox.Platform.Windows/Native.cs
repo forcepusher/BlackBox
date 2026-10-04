@@ -204,12 +204,6 @@ internal static partial class Native
 
     // ---- windows -------------------------------------------------------------------
 
-    public delegate bool EnumWindowsProc(nint hWnd, nint lParam);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, nint lParam);
-
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool IsWindowVisible(nint hWnd);
@@ -220,12 +214,6 @@ internal static partial class Native
 
     [LibraryImport("user32.dll", EntryPoint = "GetWindowTextLengthW")]
     public static partial int GetWindowTextLength(nint hWnd);
-
-    [LibraryImport("user32.dll", EntryPoint = "GetWindowTextW", StringMarshalling = StringMarshalling.Utf16)]
-    public static unsafe partial int GetWindowText(nint hWnd, char* lpString, int nMaxCount);
-
-    [LibraryImport("user32.dll")]
-    public static partial uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
 
     public const int GWL_EXSTYLE = -20;
     public const uint WS_POPUP = 0x80000000;
@@ -247,7 +235,7 @@ internal static partial class Native
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetWindowRect(nint hWnd, out RECT lpRect);
 
-    public const int SW_HIDE = 0, SW_RESTORE = 9;
+    public const int SW_HIDE = 0;
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -274,15 +262,7 @@ internal static partial class Native
     [LibraryImport("user32.dll")]
     public static partial nint GetForegroundWindow();
 
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool BringWindowToTop(nint hWnd);
-
-    public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     public const int DWMWA_CLOAKED = 14;
-
-    [LibraryImport("dwmapi.dll")]
-    public static partial int DwmGetWindowAttribute(nint hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(nint hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);

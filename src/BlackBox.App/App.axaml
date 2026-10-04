@@ -74,5 +74,24 @@
       <Setter Property="Padding" Value="12,10" />
     </Style>
 
+    <!-- Fluent gives an Expander a 48px minimum height and applies it to the body as well as
+         the header, so a one-line body (short Thoughts) sat on an empty band. Without it the
+         header is as tall as its chevron button and the body hugs its text. -->
+    <Style Selector="Expander">
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+
+    <!-- The message box: the card around it is the visible field, so the TextBox itself stays
+         flat in every state and the card's border shows focus instead. -->
+    <Style Selector="Border.composer:focus-within">
+      <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
+    </Style>
+    <Style Selector="TextBox.composer /template/ Border#PART_BorderElement,
+                     TextBox.composer:pointerover /template/ Border#PART_BorderElement,
+                     TextBox.composer:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
   </Application.Styles>
 </Application>

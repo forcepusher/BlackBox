@@ -18,8 +18,6 @@ public sealed class RawImage(int width, int height, byte[] bgra)
 
 public enum MouseButton { Left, Right, Middle }
 
-public sealed record WindowInfo(long Handle, string Title, string ProcessName, ScreenRect Bounds, bool IsMinimized);
-
 /// <summary>Screen capture in physical pixels.</summary>
 public interface IScreenCapture
 {
@@ -52,28 +50,6 @@ public interface IInputController
 
     /// <summary>Returns false for key names the platform does not understand.</summary>
     bool IsKnownKey(string key);
-}
-
-public interface IWindowManager
-{
-    IReadOnlyList<WindowInfo> ListWindows();
-    bool FocusWindow(long handle);
-}
-
-/// <summary>A control found through the OS accessibility tree.</summary>
-public sealed record UiElement(int Id, string ControlType, string Name, string? Value, ScreenRect Bounds, bool IsEnabled);
-
-/// <summary>
-/// Accessibility-tree access (UI Automation on Windows, AT-SPI on Linux, AX on macOS).
-/// Lets the model act on controls by name instead of by pixel, which small vision models need.
-/// </summary>
-public interface IUiAutomation
-{
-    /// <summary>Snapshot of the visible controls in the foreground window (or the window whose title contains <paramref name="windowTitle"/>). Ids are valid until the next snapshot.</summary>
-    IReadOnlyList<UiElement> GetElements(string? windowTitle, int maxCount);
-
-    /// <summary>Activates a control from the last snapshot (invoke, toggle or select). Returns false if it has no such action.</summary>
-    bool Activate(int id);
 }
 
 /// <summary>
@@ -166,11 +142,7 @@ public interface IPlatformServices
     string Name { get; }
     IScreenCapture Screen { get; }
     IInputController Input { get; }
-    IWindowManager Windows { get; }
     IStopKey StopKey { get; }
-
-    /// <summary>Null where no accessibility backend exists yet.</summary>
-    IUiAutomation? Automation { get; }
 
     IHostWindow HostWindow { get; }
 
@@ -181,13 +153,11 @@ public interface IPlatformServices
 }
 
 /// <summary>Fallback for operating systems without an implementation yet.</summary>
-public sealed class UnsupportedPlatform : IPlatformServices, IScreenCapture, IInputController, IWindowManager
+public sealed class UnsupportedPlatform : IPlatformServices, IScreenCapture, IInputController
 {
     public string Name => $"{System.Runtime.InteropServices.RuntimeInformation.OSDescription} (desktop control not implemented)";
     public IScreenCapture Screen => this;
     public IInputController Input => this;
-    public IWindowManager Windows => this;
-    public IUiAutomation? Automation => null;
     public IHostWindow HostWindow => NoHostWindow.Instance;
     public IInputOverlay InputOverlay => NoInputOverlay.Instance;
     public IStopKey StopKey => NoStopKey.Instance;
@@ -207,6 +177,4 @@ public sealed class UnsupportedPlatform : IPlatformServices, IScreenCapture, IIn
     public void TypeText(string text) => throw Fail();
     public void PressKeys(IReadOnlyList<string> keys) => throw Fail();
     public bool IsKnownKey(string key) => false;
-    public IReadOnlyList<WindowInfo> ListWindows() => throw Fail();
-    public bool FocusWindow(long handle) => throw Fail();
 }

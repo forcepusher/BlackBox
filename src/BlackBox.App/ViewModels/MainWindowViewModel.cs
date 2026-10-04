@@ -405,6 +405,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 Platform = _platform,
                 Settings = agent,
                 WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                CoordinateGrid = ModelCoordinates.GridFor(backend.Options.Model),
             };
 
             IReadOnlyList<ScreenSpace>? screens = null;
@@ -415,7 +416,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             }
 
             // The MCP tools are a snapshot: the tool list stays the same for the whole run.
-            var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, includeUiAutomation: _platform.Automation is not null, extra: _mcp.Tools);
+            var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: _mcp.Tools);
             var prompt = SystemPrompt.Build(_platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, _mcp.Connected);
             var session = new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, _history, backend.ContextTokens);
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);

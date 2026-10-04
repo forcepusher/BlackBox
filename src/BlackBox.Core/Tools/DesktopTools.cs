@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json.Nodes;
 using BlackBox.Core.Platform;
 
@@ -38,7 +37,7 @@ public sealed class ScreenshotTool : Tool
 {
     public override string Name => "screenshot";
     public override string Description =>
-        "Capture a screen. Returns an image; all x/y coordinates for mouse tools are in this image's pixel space. " +
+        "Capture a screen. Returns an image; the mouse tools' x/y point into it. " +
         "With several monitors, pass screen to look at another one; from then on x/y refer to that screen.";
     public override ToolRisk Risk => ToolRisk.ReadOnly;
     public override JsonObject Parameters => Schema(
@@ -64,10 +63,14 @@ public sealed class ScreenshotTool : Tool
         var frame = ctx.Platform.Screen.Capture(space.Screen, includeCursor: true);
         var jpeg = space.Encode(frame);
         var count = ctx.Screens.Count;
-        var which = count > 1 ? $"Screenshot of screen {ctx.CurrentScreen + 1} of {count}, {space.ImageWidth}x{space.ImageHeight}." : $"Screenshot {space.ImageWidth}x{space.ImageHeight}.";
+        var which = count > 1 ? $"Screenshot of screen {ctx.CurrentScreen + 1} of {count}" : "Screenshot";
+        // The image size only matters when x/y are its pixels.
+        if (space.Grid is null)
+            which += (count > 1 ? ", " : " ") + $"{space.ImageWidth}x{space.ImageHeight}";
+        which += ".";
         var cursor = ctx.Platform.Input.GetCursorPosition();
         var cursorScreen = ctx.ScreenAt(cursor.X, cursor.Y);
-        var (cx, cy) = space.ToImage(cursor.X, cursor.Y);
+        var (cx, cy) = space.ToModel(cursor.X, cursor.Y);
         var where = cursorScreen == ctx.CurrentScreen ? $"Mouse cursor at ({cx}, {cy})." : $"Mouse cursor is on screen {cursorScreen + 1}.";
         return new ToolResult(which + " " + where, jpeg);
     }
@@ -78,8 +81,8 @@ public sealed class MouseClickTool : DesktopActionTool
     public override string Name => "mouse_click";
     public override string Description => "Move the mouse to (x, y) in screenshot coordinates and click.";
     public override JsonObject Parameters => Schema(
-        ("x", Num("X in screenshot pixels"), true),
-        ("y", Num("Y in screenshot pixels"), true),
+        ("x", Num("X in screenshot coordinates"), true),
+        ("y", Num("Y in screenshot coordinates"), true),
         ("button", Str("Mouse button, default left", "left", "right", "middle"), false),
         ("clicks", Int("1 = single click (default), 2 = double click, 3 = triple click"), false));
 
@@ -115,7 +118,7 @@ public sealed class MouseMoveTool : DesktopActionTool
 {
     public override string Name => "mouse_move";
     public override string Description => "Move the mouse to (x, y) in screenshot coordinates without clicking (e.g. to hover).";
-    public override JsonObject Parameters => Schema(("x", Num("X in screenshot pixels"), true), ("y", Num("Y in screenshot pixels"), true));
+    public override JsonObject Parameters => Schema(("x", Num("X in screenshot coordinates"), true), ("y", Num("Y in screenshot coordinates"), true));
     public override string Describe(JsonObject args) => $"Move mouse to {Fmt(args)}";
 
     protected override Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
@@ -296,65 +299,5 @@ public sealed class WaitTool : Tool
         await Task.Delay(TimeSpan.FromSeconds(seconds), ct).ConfigureAwait(false);
         var shot = ScreenshotTool.Take(ctx);
         return shot with { Text = $"Waited {seconds:0.#}s.\n{shot.Text}" };
-    }
-}
-
-public sealed class ListWindowsTool : Tool
-{
-    public override string Name => "list_windows";
-    public override string Description => "List visible top-level windows with their handle, title, process and bounds (in screenshot coordinates).";
-    public override ToolRisk Risk => ToolRisk.ReadOnly;
-    public override JsonObject Parameters => Schema();
-    public override string Describe(JsonObject args) => "List open windows";
-
-    public override Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
-    {
-        var spaces = ctx.ScreenSpaces();
-        var sb = new StringBuilder();
-        foreach (var w in ctx.Platform.Windows.ListWindows())
-        {
-            // Bounds in the coordinates of the screen the window is on (where its centre is).
-            var screen = ScreenOf(ctx, w);
-            var space = spaces[screen];
-            var (x, y) = space.ToImage(w.Bounds.X, w.Bounds.Y);
-            var (r, b) = space.ToImage(w.Bounds.X + w.Bounds.Width, w.Bounds.Y + w.Bounds.Height);
-            var on = spaces.Count > 1 ? $" screen={screen + 1}" : "";
-            sb.AppendLine($"handle={w.Handle} process={w.ProcessName} title=\"{w.Title}\"{on} bounds=({x},{y})-({r},{b}){(w.IsMinimized ? " minimized" : "")}");
-        }
-        return Task.FromResult(new ToolResult(sb.Length > 0 ? sb.ToString() : "No windows found."));
-    }
-
-    internal static int ScreenOf(ToolContext ctx, WindowInfo w) =>
-        ctx.ScreenAt(w.Bounds.X + w.Bounds.Width / 2, w.Bounds.Y + w.Bounds.Height / 2);
-}
-
-public sealed class FocusWindowTool : DesktopActionTool
-{
-    public override string Name => "focus_window";
-    public override string Description => "Bring a window to the front and restore it if minimized. Pass the handle from list_windows, or part of its title.";
-    public override JsonObject Parameters => Schema(
-        ("handle", Int("Window handle from list_windows"), false),
-        ("title", Str("Case-insensitive part of the window title"), false));
-    public override string Describe(JsonObject args) =>
-        "Focus window " + (GetString(args, "title") is { } t ? $"\"{t}\"" : GetNumber(args, "handle")?.ToString());
-
-    protected override Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
-    {
-        var windows = ctx.Platform.Windows.ListWindows();
-        WindowInfo? target = null;
-        if (GetNumber(args, "handle") is { } h)
-            target = windows.FirstOrDefault(w => w.Handle == (long)h);
-        if (target is null && GetString(args, "title") is { Length: > 0 } title)
-            target = windows.FirstOrDefault(w => w.Title.Contains(title, StringComparison.OrdinalIgnoreCase));
-        if (target is null)
-            throw new ToolArgumentException("No matching window. Call list_windows to see what is open.");
-
-        if (!ctx.Platform.Windows.FocusWindow(target.Handle))
-            return Task.FromResult($"Windows refused to focus \"{target.Title}\"; try clicking its taskbar button.");
-        // Look at the screen the window is on, so the screenshot that follows shows it.
-        var screen = ListWindowsTool.ScreenOf(ctx, target);
-        var moved = ctx.Screens.Count > 1 && screen != ctx.CurrentScreen;
-        ctx.CurrentScreen = screen;
-        return Task.FromResult($"Focused \"{target.Title}\"." + (moved ? $" It is on screen {screen + 1}; x/y now refer to that screen." : ""));
     }
 }

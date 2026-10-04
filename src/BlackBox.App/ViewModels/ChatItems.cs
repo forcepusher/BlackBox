@@ -14,20 +14,27 @@ public sealed class UserMessageItem(string text) : ChatItemViewModel
 public sealed partial class AssistantMessageItem : ChatItemViewModel
 {
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasText))]
+    [NotifyPropertyChangedFor(nameof(HasText), nameof(ShownText), nameof(ThinkingLabel), nameof(ShowTypingDots))]
     private string _text = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasReasoning))]
+    [NotifyPropertyChangedFor(nameof(HasReasoning), nameof(ShownReasoning), nameof(ShowTypingDots))]
     private string _reasoning = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ThinkingLabel))]
+    [NotifyPropertyChangedFor(nameof(ThinkingLabel), nameof(ShowTypingDots))]
     private bool _isStreaming = true;
 
-    public bool HasText => Text.Length > 0;
-    public bool HasReasoning => Reasoning.Length > 0;
+    // Streams arrive with blank lines around them (thinking usually ends in "\n\n" until the
+    // reply starts, and the reply opens with them), which showed as empty bands mid-stream.
+    public string ShownText => Text.Trim();
+    public string ShownReasoning => Reasoning.Trim();
+    public bool HasText => !string.IsNullOrWhiteSpace(Text);
+    public bool HasReasoning => !string.IsNullOrWhiteSpace(Reasoning);
     public string ThinkingLabel => IsStreaming && !HasText ? "Thinking…" : "Thoughts";
+
+    /// <summary>The "…" under a reply in progress; while the Thoughts header already says "Thinking…" it would only be a stray line.</summary>
+    public bool ShowTypingDots => IsStreaming && (HasText || !HasReasoning);
 }
 
 public enum ToolItemState { AwaitingApproval, Running, Done, Error, Denied }

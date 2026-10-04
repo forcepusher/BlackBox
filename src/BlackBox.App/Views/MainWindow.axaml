@@ -14,7 +14,7 @@
     <Border Grid.Row="0" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,8">
       <DockPanel LastChildFill="False">
         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <Image Source="/Assets/blackbox.png" Width="22" Height="22" />
+          <Image Source="/Assets/blackbox.png" Width="22" Height="22" RenderOptions.BitmapInterpolationMode="HighQuality" />
           <TextBlock Text="BlackBox" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" />
         </StackPanel>
 
@@ -31,9 +31,10 @@
     </Border>
 
     <!-- What the agent talks to: server and key, then model and how much context to use.
-         The labels share a column so both rows line up. -->
+         The labels share a column so both rows line up, and both rows are exactly as tall as a text
+         box so every field and button in a row shares its top and bottom edges. -->
     <Border Grid.Row="1" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,8">
-      <Grid ColumnDefinitions="Auto,3*,Auto,2*,Auto" RowDefinitions="Auto,Auto" VerticalAlignment="Center">
+      <Grid ColumnDefinitions="Auto,3*,Auto,2*,Auto" RowDefinitions="32,32" RowSpacing="8" VerticalAlignment="Center">
         <TextBlock Grid.Row="0" Grid.Column="0" Classes="muted" Text="Server" VerticalAlignment="Center" Margin="0,0,8,0" />
         <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ServerAddress}" Watermark="http://localhost:1234/v1" MinWidth="270" />
         <TextBlock Grid.Row="0" Grid.Column="2" Classes="muted" Text="API key" VerticalAlignment="Center" Margin="14,0,8,0" />
@@ -50,20 +51,22 @@
           </Panel>
         </ToggleButton>
 
-        <TextBlock Grid.Row="1" Grid.Column="0" Classes="muted" Text="Model" VerticalAlignment="Center" Margin="0,8,8,0" />
-        <DockPanel Grid.Row="1" Grid.Column="1" Margin="0,8,0,0">
-          <Button DockPanel.Dock="Right" Classes="ghost" Content="↻" Margin="6,0,0,0" Command="{Binding CheckServerCommand}"
+        <TextBlock Grid.Row="1" Grid.Column="0" Classes="muted" Text="Model" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <DockPanel Grid.Row="1" Grid.Column="1">
+          <Button DockPanel.Dock="Right" Classes="ghost" Content="↻" Margin="6,0,0,0" VerticalAlignment="Stretch" Command="{Binding CheckServerCommand}"
                   ToolTip.Tip="Ask the server again for its models and context size" />
-          <ComboBox ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" HorizontalAlignment="Stretch"
+          <ComboBox ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                     PlaceholderText="No models: check the server address" />
         </DockPanel>
-        <TextBlock Grid.Row="1" Grid.Column="2" Classes="muted" Text="Context" VerticalAlignment="Center" Margin="14,8,8,0" />
-        <DockPanel Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="2" Margin="0,8,0,0" ToolTip.Tip="{Binding ContextToolTip}">
+        <TextBlock Grid.Row="1" Grid.Column="2" Classes="muted" Text="Context" VerticalAlignment="Center" Margin="14,0,8,0" />
+        <DockPanel Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="2" ToolTip.Tip="{Binding ContextToolTip}">
           <CheckBox DockPanel.Dock="Right" Content="Auto" IsChecked="{Binding AutoContext}" Margin="10,0,0,0" MinWidth="0" />
           <TextBox x:Name="ContextBox" DockPanel.Dock="Right" Text="{Binding ContextInput, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding !AutoContext}"
-                   Width="90" Padding="6,5" TextAlignment="Right" VerticalAlignment="Center" />
+                   Width="90" Padding="6,5" TextAlignment="Right" VerticalAlignment="Stretch" VerticalContentAlignment="Center" />
+          <!-- Fluent's slider is 50px tall with the track in its middle: stretched over the 32px row
+               plus these margins, the track sits on the row's centre line. -->
           <Slider Minimum="0" Maximum="{Binding ContextMaxIndex}" Value="{Binding ContextIndex}" TickFrequency="1" IsSnapToTickEnabled="True"
-                  IsEnabled="{Binding !AutoContext}" VerticalAlignment="Center" Margin="0,-6,6,-6" MinWidth="60" />
+                  IsEnabled="{Binding !AutoContext}" VerticalAlignment="Stretch" Margin="0,-9,6,-9" MinWidth="60" />
         </DockPanel>
       </Grid>
     </Border>
@@ -85,7 +88,7 @@
     <!-- Conversation -->
     <Panel Grid.Row="3">
       <StackPanel IsVisible="{Binding HasNoMessages}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" MaxWidth="460">
-        <Image Source="/Assets/blackbox.png" Width="48" Height="48" Opacity="0.8" />
+        <Image Source="/Assets/blackbox.png" Width="48" Height="48" Opacity="0.8" RenderOptions.BitmapInterpolationMode="HighQuality" />
         <TextBlock Text="What should I do on your computer?" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
         <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
                    Text="I can look at the screen, use the mouse and keyboard, run commands and work with files. To halt me at any time, press Stop or the Break (Pause) key." />
@@ -114,10 +117,10 @@
               <StackPanel Spacing="6" Margin="0,0,40,0">
                 <Expander IsVisible="{Binding HasReasoning}" Header="{Binding ThinkingLabel}" HorizontalAlignment="Stretch" IsExpanded="True"
                           Padding="10,6">
-                  <SelectableTextBlock Classes="muted" Text="{Binding Reasoning}" TextWrapping="Wrap" />
+                  <SelectableTextBlock Classes="muted" Text="{Binding ShownReasoning}" TextWrapping="Wrap" />
                 </Expander>
-                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" LineHeight="21" />
-                <TextBlock Classes="muted" Text="…" IsVisible="{Binding IsStreaming}" />
+                <SelectableTextBlock Text="{Binding ShownText}" TextWrapping="Wrap" IsVisible="{Binding HasText}" LineHeight="21" />
+                <TextBlock Classes="muted" Text="…" IsVisible="{Binding ShowTypingDots}" />
               </StackPanel>
             </DataTemplate>
 
@@ -162,14 +165,16 @@
 
     <!-- Input -->
     <Border Grid.Row="4" Padding="16,8,16,14">
-      <Border Classes="card" MaxWidth="860" Padding="8">
+      <!-- One line of text is exactly as tall as the Send button, and both sit on the same
+           bottom edge, so they line up; longer text grows the box upwards with Send staying put. -->
+      <Border Classes="card composer" MaxWidth="860" Padding="6">
         <Grid ColumnDefinitions="*,Auto">
-          <TextBox x:Name="InputBox" Grid.Column="0" Text="{Binding Input}" AcceptsReturn="True" TextWrapping="Wrap"
-                   MaxHeight="200" MinHeight="40" BorderThickness="0" Background="Transparent"
+          <TextBox x:Name="InputBox" Grid.Column="0" Classes="composer" Text="{Binding Input}" AcceptsReturn="True" TextWrapping="Wrap"
+                   MaxHeight="200" VerticalContentAlignment="Center"
                    Watermark="Describe a task… (Enter to send, Shift+Enter for a new line)" />
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Bottom" Margin="8,0,0,0">
-            <Button Classes="primary" Content="Send" Command="{Binding SendCommand}" IsVisible="{Binding !IsBusy}" />
-            <Button Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" Background="{StaticResource BbError}" />
+            <Button Classes="primary" Content="Send" Command="{Binding SendCommand}" IsVisible="{Binding !IsBusy}" MinHeight="32" />
+            <Button Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" Background="{StaticResource BbError}" MinHeight="32" />
           </StackPanel>
         </Grid>
       </Border>

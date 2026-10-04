@@ -22,7 +22,7 @@ internal sealed class LoopDetector
 
     // Looking at the screen or waiting repeatedly is normal (e.g. watching something for hours).
     private static readonly HashSet<string> Passive = new(StringComparer.OrdinalIgnoreCase)
-        { "screenshot", "wait", "zoom", "list_ui_elements", "list_windows" };
+        { "screenshot", "wait" };
 
     private readonly Queue<string> _recent = new();
     private byte[]? _lastScreen;
@@ -51,7 +51,7 @@ internal sealed class LoopDetector
             _lastScreen = hash;
             _unchanged = same && !Passive.Contains(call.Name) ? _unchanged + 1 : 0;
             if (_unchanged >= NoChangeThreshold)
-                notes.Add($"Note: the screen has not changed after your last {_unchanged} actions. They are probably not working; try something different (another control, the keyboard, or list_ui_elements).");
+                notes.Add($"Note: the screen has not changed after your last {_unchanged} actions. They are probably not working; try something different (another control or the keyboard).");
         }
 
         return notes.Count > 0 ? string.Join("\n", notes) : null;

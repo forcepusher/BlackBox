@@ -100,9 +100,9 @@ catch (OperationCanceledException)
 
 var backend = BackendConnection.Create(http, settings.Server);
 var workDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-var ctx = new ToolContext { Platform = platform, Settings = agent, WorkingDirectory = workDir };
+var ctx = new ToolContext { Platform = platform, Settings = agent, WorkingDirectory = workDir, CoordinateGrid = ModelCoordinates.GridFor(settings.Server.Model) };
 var screens = backend.Vision ? ctx.ScreenSpaces() : null;
-var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, includeUiAutomation: platform.Automation is not null, extra: mcp.Tools);
+var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: mcp.Tools);
 var session = new AgentSession(backend.Client, backend.Options, registry, ctx, SystemPrompt.Build(platform.Name, screens, workDir, agent.CustomInstructions, mcp.Connected), contextTokens: backend.ContextTokens);
 var observer = new ConsoleObserver(autoYes, shotsDir);
 
