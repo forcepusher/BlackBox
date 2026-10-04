@@ -52,21 +52,38 @@ public sealed class ScreenshotTool : Tool
 {
     public override string Name => "screenshot";
     public override string Description =>
-        "Capture the primary screen. Returns an image; all x/y coordinates for mouse tools are in this image's pixel space.";
+        "Capture a screen. Returns an image; all x/y coordinates for mouse tools are in this image's pixel space. " +
+        "With several monitors, pass screen to look at another one; from then on x/y refer to that screen.";
     public override ToolRisk Risk => ToolRisk.ReadOnly;
-    public override JsonObject Parameters => Schema();
-    public override string Describe(JsonObject args) => "Take a screenshot";
+    public override JsonObject Parameters => Schema(
+        ("screen", Int("Which screen to capture: 1 = primary, 2 = the next one... Default: the screen shown last."), false));
+    public override string Describe(JsonObject args) =>
+        GetNumber(args, "screen") is { } n ? $"Take a screenshot of screen {n}" : "Take a screenshot";
 
-    public override Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct) => Task.FromResult(Take(ctx));
+    public override Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    {
+        if (GetNumber(args, "screen") is { } n)
+        {
+            var count = ctx.Screens.Count;
+            if (n < 1 || n > count)
+                throw new ToolArgumentException(count == 1 ? "There is only one screen." : $"There are {count} screens, numbered 1 to {count}.");
+            ctx.CurrentScreen = (int)n - 1;
+        }
+        return Task.FromResult(Take(ctx));
+    }
 
     internal static ToolResult Take(ToolContext ctx)
     {
         var space = ctx.GetScreenSpace();
         var frame = ctx.Platform.Screen.Capture(space.Screen, includeCursor: true);
         var jpeg = space.Encode(frame);
+        var count = ctx.Screens.Count;
+        var which = count > 1 ? $"Screenshot of screen {ctx.CurrentScreen + 1} of {count}, {space.ImageWidth}x{space.ImageHeight}." : $"Screenshot {space.ImageWidth}x{space.ImageHeight}.";
         var cursor = ctx.Platform.Input.GetCursorPosition();
+        var cursorScreen = ctx.ScreenAt(cursor.X, cursor.Y);
         var (cx, cy) = space.ToImage(cursor.X, cursor.Y);
-        return new ToolResult($"Screenshot {space.ImageWidth}x{space.ImageHeight}. Mouse cursor at ({cx}, {cy}).", jpeg);
+        var where = cursorScreen == ctx.CurrentScreen ? $"Mouse cursor at ({cx}, {cy})." : $"Mouse cursor is on screen {cursorScreen + 1}.";
+        return new ToolResult(which + " " + where, jpeg);
     }
 }
 
@@ -306,16 +323,23 @@ public sealed class ListWindowsTool : Tool
 
     public override Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
-        var space = ctx.GetScreenSpace();
+        var spaces = ctx.ScreenSpaces();
         var sb = new StringBuilder();
         foreach (var w in ctx.Platform.Windows.ListWindows())
         {
+            // Bounds in the coordinates of the screen the window is on (where its centre is).
+            var screen = ScreenOf(ctx, w);
+            var space = spaces[screen];
             var (x, y) = space.ToImage(w.Bounds.X, w.Bounds.Y);
             var (r, b) = space.ToImage(w.Bounds.X + w.Bounds.Width, w.Bounds.Y + w.Bounds.Height);
-            sb.AppendLine($"handle={w.Handle} process={w.ProcessName} title=\"{w.Title}\" bounds=({x},{y})-({r},{b}){(w.IsMinimized ? " minimized" : "")}");
+            var on = spaces.Count > 1 ? $" screen={screen + 1}" : "";
+            sb.AppendLine($"handle={w.Handle} process={w.ProcessName} title=\"{w.Title}\"{on} bounds=({x},{y})-({r},{b}){(w.IsMinimized ? " minimized" : "")}");
         }
         return Task.FromResult(new ToolResult(sb.Length > 0 ? sb.ToString() : "No windows found."));
     }
+
+    internal static int ScreenOf(ToolContext ctx, WindowInfo w) =>
+        ctx.ScreenAt(w.Bounds.X + w.Bounds.Width / 2, w.Bounds.Y + w.Bounds.Height / 2);
 }
 
 public sealed class FocusWindowTool : DesktopActionTool
@@ -339,8 +363,12 @@ public sealed class FocusWindowTool : DesktopActionTool
         if (target is null)
             throw new ToolArgumentException("No matching window. Call list_windows to see what is open.");
 
-        return Task.FromResult(ctx.Platform.Windows.FocusWindow(target.Handle)
-            ? $"Focused \"{target.Title}\"."
-            : $"Windows refused to focus \"{target.Title}\"; try clicking its taskbar button.");
+        if (!ctx.Platform.Windows.FocusWindow(target.Handle))
+            return Task.FromResult($"Windows refused to focus \"{target.Title}\"; try clicking its taskbar button.");
+        // Look at the screen the window is on, so the screenshot that follows shows it.
+        var screen = ListWindowsTool.ScreenOf(ctx, target);
+        var moved = ctx.Screens.Count > 1 && screen != ctx.CurrentScreen;
+        ctx.CurrentScreen = screen;
+        return Task.FromResult($"Focused \"{target.Title}\"." + (moved ? $" It is on screen {screen + 1}; x/y now refer to that screen." : ""));
     }
 }

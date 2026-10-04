@@ -27,8 +27,36 @@ public sealed class ToolContext
     /// <summary>Where relative paths and shell commands start (the user's home folder). Not a limit: tools reach the whole PC.</summary>
     public required string WorkingDirectory { get; init; }
 
-    public ScreenSpace GetScreenSpace() =>
-        new(Platform.Screen.GetPrimaryScreen(), Settings.ScreenshotResolution.Box());
+    /// <summary>
+    /// The monitor the agent is looking at (0 = primary): the one the latest screenshot showed.
+    /// Screenshot coordinates are relative to it. Set by the screenshot tool and focus_window.
+    /// </summary>
+    public int CurrentScreen { get; set; }
+
+    /// <summary>All monitors in physical pixels, the primary first.</summary>
+    public IReadOnlyList<ScreenRect> Screens => Platform.Screen.GetScreens();
+
+    public ScreenSpace GetScreenSpace() => GetScreenSpace(CurrentScreen);
+
+    public ScreenSpace GetScreenSpace(int screen)
+    {
+        var screens = Screens;
+        return new(screens[Math.Clamp(screen, 0, screens.Count - 1)], Settings.ScreenshotResolution.Box());
+    }
+
+    /// <summary>One <see cref="ScreenSpace"/> per monitor, in <see cref="Screens"/> order.</summary>
+    public IReadOnlyList<ScreenSpace> ScreenSpaces() =>
+        Screens.Select(s => new ScreenSpace(s, Settings.ScreenshotResolution.Box())).ToList();
+
+    /// <summary>The monitor a physical point lies on; the current one if none contains it.</summary>
+    public int ScreenAt(int x, int y)
+    {
+        var screens = Screens;
+        for (var i = 0; i < screens.Count; i++)
+            if (screens[i].Contains(x, y))
+                return i;
+        return CurrentScreen;
+    }
 
     public string ResolvePath(string path) =>
         Path.GetFullPath(Environment.ExpandEnvironmentVariables(path), WorkingDirectory);

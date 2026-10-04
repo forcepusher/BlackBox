@@ -46,6 +46,13 @@ IPlatformServices platform = new UnsupportedPlatform();
 using var http = LlmHttp.Create(Timeout.InfiniteTimeSpan);
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+using var stopKey = platform.StopKey.Watch(() =>
+{
+    if (cts.IsCancellationRequested) return false;
+    Console.WriteLine($"\n[stop] {DateTime.Now:HH:mm:ss} Break key pressed");
+    cts.Cancel();
+    return true;
+});
 
 var agent = settings.Agent;
 platform.InputOverlay.Duration = TimeSpan.FromSeconds(agent.InputLogSeconds);
@@ -67,9 +74,9 @@ using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a mo
 var backend = BackendConnection.Create(http, settings.Server);
 var workDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 var ctx = new ToolContext { Platform = platform, Settings = agent, WorkingDirectory = workDir };
-var screen = backend.Vision ? ctx.GetScreenSpace() : null;
-var registry = ToolRegistry.CreateDefault(includeScreenTools: screen is not null, includeUiAutomation: platform.Automation is not null);
-var session = new AgentSession(backend.Client, backend.Options, registry, ctx, SystemPrompt.Build(platform.Name, screen, workDir, agent.CustomInstructions), contextTokens: backend.ContextTokens);
+var screens = backend.Vision ? ctx.ScreenSpaces() : null;
+var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, includeUiAutomation: platform.Automation is not null);
+var session = new AgentSession(backend.Client, backend.Options, registry, ctx, SystemPrompt.Build(platform.Name, screens, workDir, agent.CustomInstructions), contextTokens: backend.ContextTokens);
 var observer = new ConsoleObserver(autoYes, shotsDir);
 
 var t0 = DateTime.UtcNow;

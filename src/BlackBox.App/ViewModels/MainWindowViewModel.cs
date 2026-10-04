@@ -24,6 +24,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private AppSettings _settings;
     private CancellationTokenSource? _runCts;
     private AssistantMessageItem? _current;
+    private IDisposable? _stopKey;
+    private volatile bool _stoppedByKey;
 
     public MainWindowViewModel(AppPaths paths, SettingsStore store, AppSettings settings, IPlatformServices platform)
     {
@@ -31,6 +33,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _store = store;
         _settings = settings;
         _platform = platform;
+        // The saved model is in the list before the view binds to it, so the dropdown starts
+        // with it selected; a selection the ComboBox once lost is not restored by rebinding.
+        if (!string.IsNullOrEmpty(settings.Server.Model))
+            Models.Add(settings.Server.Model);
     }
 
     public ObservableCollection<ChatItemViewModel> Items { get; } = [];
@@ -73,8 +79,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     public void OnStartup()
     {
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoMessages));
-        if (!string.IsNullOrEmpty(_settings.Server.Model))
-            Models.Add(_settings.Server.Model);
+        _stopKey = _platform.StopKey.Watch(OnStopKey);
         _ = CheckServerAsync();
     }
 
@@ -140,21 +145,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
         SetStatus(ServerState.Checking, "Checking…", null);
         using var probeHttp = LlmHttp.Create(TimeSpan.FromSeconds(10));
+        var typed = server.BaseUrl;
         var probe = await ServerProbe.CheckAsync(probeHttp, server, CancellationToken.None);
         if (version != _checkVersion)
             return; // the address or model changed while this check was running
+        if (server.BaseUrl != typed)
+        {
+            // "host:1234" became the full URL that answered; show it so there is no doubt.
+            _store.Save(_settings);
+            OnPropertyChanged(nameof(ServerAddress));
+        }
 
-        _refreshingModels = true;
-        Models.Clear();
-        foreach (var m in probe.Models.Where(m => !m.Contains("embed", StringComparison.OrdinalIgnoreCase)))
-            Models.Add(m);
-        if (!string.IsNullOrEmpty(server.Model) && !Models.Contains(server.Model))
-            Models.Insert(0, server.Model);
-        _refreshingModels = false;
-
+        SetModels(probe.Models);
         if (!probe.Reachable)
         {
-            OnPropertyChanged(nameof(SelectedModel));
             SetStatus(ServerState.Failed, "Offline", $"{probe.Message} Check the address at the top and that the server is running.");
             return;
         }
@@ -162,9 +166,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         {
             server.Model = Models[0];
             _store.Save(_settings);
+            OnPropertyChanged(nameof(SelectedModel));
             probe = await ServerProbe.CheckAsync(probeHttp, server, CancellationToken.None); // details for this model
         }
-        OnPropertyChanged(nameof(SelectedModel));
         if (string.IsNullOrEmpty(server.Model))
         {
             SetStatus(ServerState.Failed, "No models", "The server is running but offers no models. Load or download one in LM Studio.");
@@ -185,6 +189,28 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         var details = (probe.LoadedContext is { } c ? $" · {c / 1024}k context" : "") + (probe.Vision == false ? " · no vision" : "");
         SetStatus(ServerState.Connected, "Connected" + details, null);
+    }
+
+    /// <summary>
+    /// Updates the dropdown in place. Clearing it would drop the selection, and the ComboBox
+    /// does not pick it up again when the same value is set back; so the chosen model stays in
+    /// the list throughout, and only the other entries change.
+    /// </summary>
+    private void SetModels(IEnumerable<string> fromServer)
+    {
+        var wanted = fromServer.Where(m => !m.Contains("embed", StringComparison.OrdinalIgnoreCase)).ToList();
+        var chosen = _settings.Server.Model;
+        if (!string.IsNullOrEmpty(chosen) && !wanted.Contains(chosen))
+            wanted.Insert(0, chosen);
+        _refreshingModels = true;
+        for (var i = Models.Count - 1; i >= 0; i--)
+            if (!wanted.Contains(Models[i]))
+                Models.RemoveAt(i);
+        for (var i = 0; i < wanted.Count; i++)
+            if (!Models.Contains(wanted[i]))
+                Models.Insert(Math.Min(i, Models.Count), wanted[i]);
+        _refreshingModels = false;
+        OnPropertyChanged(nameof(SelectedModel));
     }
 
     private void SetStatus(ServerState state, string status, string? setup)
@@ -234,15 +260,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             };
 
-            ScreenSpace? screen = null;
+            IReadOnlyList<ScreenSpace>? screens = null;
             if (backend.Vision)
             {
-                try { screen = ctx.GetScreenSpace(); }
+                try { screens = ctx.ScreenSpaces(); }
                 catch (NotSupportedException) { }
             }
 
-            var registry = ToolRegistry.CreateDefault(includeScreenTools: screen is not null, includeUiAutomation: _platform.Automation is not null);
-            var prompt = SystemPrompt.Build(_platform.Name, screen, ctx.WorkingDirectory, agent.CustomInstructions);
+            var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, includeUiAutomation: _platform.Automation is not null);
+            var prompt = SystemPrompt.Build(_platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions);
             var session = new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, _history, backend.ContextTokens);
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
@@ -250,7 +276,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         catch (OperationCanceledException)
         {
-            AddNotice("Stopped.", isError: false);
+            AddNotice(StoppedText(), isError: false);
         }
         finally
         {
@@ -262,6 +288,25 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     [RelayCommand(CanExecute = nameof(IsBusy))]
     private void Stop() => _runCts?.Cancel();
+
+    /// <summary>The Break key, from the hook's thread: stops the run in progress, if any.</summary>
+    private bool OnStopKey()
+    {
+        var cts = _runCts;
+        if (cts is null || cts.IsCancellationRequested)
+            return false;
+        _stoppedByKey = true;
+        try { cts.Cancel(); }
+        catch (ObjectDisposedException) { return false; } // the run ended at that very moment
+        return true;
+    }
+
+    private string StoppedText()
+    {
+        var byKey = _stoppedByKey;
+        _stoppedByKey = false;
+        return byKey ? "Stopped with the Break key." : "Stopped.";
+    }
 
     [RelayCommand]
     private void NewChat()
@@ -396,7 +441,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         switch (reason)
         {
             case AgentStopReason.Cancelled:
-                AddNotice("Stopped.", isError: false);
+                AddNotice(StoppedText(), isError: false);
                 break;
             case AgentStopReason.Failsafe:
                 AddNotice(detail ?? reason.ToString(), isError: false);

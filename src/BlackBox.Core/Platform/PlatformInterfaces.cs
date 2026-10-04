@@ -2,7 +2,10 @@ using System.Diagnostics;
 
 namespace BlackBox.Core.Platform;
 
-public readonly record struct ScreenRect(int X, int Y, int Width, int Height);
+public readonly record struct ScreenRect(int X, int Y, int Width, int Height)
+{
+    public bool Contains(int x, int y) => x >= X && x < X + Width && y >= Y && y < Y + Height;
+}
 
 /// <summary>A captured frame in 32-bit BGRA, top-down rows.</summary>
 public sealed class RawImage(int width, int height, byte[] bgra)
@@ -22,6 +25,9 @@ public interface IScreenCapture
 {
     /// <summary>Bounds of the primary monitor in physical pixels.</summary>
     ScreenRect GetPrimaryScreen();
+
+    /// <summary>All monitors in physical pixels, the primary first, in a stable order.</summary>
+    IReadOnlyList<ScreenRect> GetScreens();
 
     RawImage Capture(ScreenRect region, bool includeCursor);
 }
@@ -130,6 +136,30 @@ public sealed class NoInputOverlay : IInputOverlay
     public void Show(string text, (int X, int Y)? point = null) { }
 }
 
+/// <summary>
+/// A system-wide stop key (Break, i.e. Pause or Ctrl+Pause) that works whatever window has focus.
+/// </summary>
+public interface IStopKey
+{
+    /// <summary>
+    /// Calls <paramref name="onPressed"/> (on any thread) when the key is pressed. It returns true
+    /// if it stopped something, in which case the press is swallowed; otherwise the key goes
+    /// through to the focused app as usual.
+    /// </summary>
+    IDisposable Watch(Func<bool> onPressed);
+}
+
+public sealed class NoStopKey : IStopKey
+{
+    public static readonly NoStopKey Instance = new();
+    public IDisposable Watch(Func<bool> onPressed) => new Nothing();
+
+    private sealed class Nothing : IDisposable
+    {
+        public void Dispose() { }
+    }
+}
+
 /// <summary>Everything OS-specific the agent needs. One implementation per platform.</summary>
 public interface IPlatformServices
 {
@@ -137,6 +167,7 @@ public interface IPlatformServices
     IScreenCapture Screen { get; }
     IInputController Input { get; }
     IWindowManager Windows { get; }
+    IStopKey StopKey { get; }
 
     /// <summary>Null where no accessibility backend exists yet.</summary>
     IUiAutomation? Automation { get; }
@@ -159,11 +190,13 @@ public sealed class UnsupportedPlatform : IPlatformServices, IScreenCapture, IIn
     public IUiAutomation? Automation => null;
     public IHostWindow HostWindow => NoHostWindow.Instance;
     public IInputOverlay InputOverlay => NoInputOverlay.Instance;
+    public IStopKey StopKey => NoStopKey.Instance;
     public ProcessStartInfo CreateShellStartInfo(string command) => new("/bin/sh") { ArgumentList = { "-c", command } };
 
     private static NotSupportedException Fail() => new("Desktop control is not implemented on this OS yet.");
 
     public ScreenRect GetPrimaryScreen() => throw Fail();
+    public IReadOnlyList<ScreenRect> GetScreens() => throw Fail();
     public RawImage Capture(ScreenRect region, bool includeCursor) => throw Fail();
     public (int X, int Y) GetCursorPosition() => throw Fail();
     public void MoveMouse(int x, int y) => throw Fail();

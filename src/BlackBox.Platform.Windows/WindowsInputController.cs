@@ -11,6 +11,9 @@ internal sealed class WindowsInputController : IInputController
     private const int WheelDelta = 120;
     private static readonly int InputSize = Marshal.SizeOf<INPUT>();
 
+    /// <summary>Marks input as BlackBox's own (dwExtraInfo), so the stop key hook ignores the agent's presses.</summary>
+    internal static readonly nint InputTag = 0x42424F58; // "BBOX"
+
     // Virtual-key codes for named keys. Letters, digits and punctuation are resolved separately.
     private static readonly Dictionary<string, ushort> NamedKeys = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -147,7 +150,7 @@ internal sealed class WindowsInputController : IInputController
     private static INPUT Key(ushort vk, ushort scan, uint flags) => new()
     {
         type = INPUT_KEYBOARD,
-        u = new InputUnion { ki = new KEYBDINPUT { wVk = vk, wScan = scan, dwFlags = flags } },
+        u = new InputUnion { ki = new KEYBDINPUT { wVk = vk, wScan = scan, dwFlags = flags, dwExtraInfo = InputTag } },
     };
 
     private static (uint Down, uint Up) Flags(MouseButton button) => button switch
@@ -160,7 +163,7 @@ internal sealed class WindowsInputController : IInputController
     private static void SendMouse(uint flags, uint data = 0) => Send(new INPUT
     {
         type = INPUT_MOUSE,
-        u = new InputUnion { mi = new MOUSEINPUT { dwFlags = flags, mouseData = data } },
+        u = new InputUnion { mi = new MOUSEINPUT { dwFlags = flags, mouseData = data, dwExtraInfo = InputTag } },
     });
 
     private static void Send(params INPUT[] inputs)

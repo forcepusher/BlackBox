@@ -21,7 +21,10 @@ The agent itself works across the whole PC; relative paths and shell commands st
 
 ## Connecting to a model
 Enter the server address in the bar at the top of the main window (LM Studio's default is
-`http://localhost:1234/v1`); the model dropdown fills in from the models the server reports. An API
+`http://localhost:1234/v1`); the model dropdown fills in from the models the server reports. Any
+form of the address works: `host:1234`, with or without `/v1`, or a full endpoint link such as
+`.../v1/chat/completions`. Without `http://` or `https://`, BlackBox tries both and keeps the one
+that answers. An API
 key, if your server needs one, goes in Settings. For screen control the
 model must accept images (for example Qwen3.5+ VL models or Gemma 4 with their vision projector);
 LM Studio reports this and BlackBox sets it automatically.
@@ -57,7 +60,7 @@ cache, so each retry continues where the last one stopped (up to 12 times per st
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |
-| `screenshot` | Captures the primary screen, scaled to fit the chosen resolution (1920×1080 by default) on the 32px vision grid |
+| `screenshot` | Captures a screen, scaled to fit the chosen resolution (1920×1080 by default) on the 32px vision grid; `screen=N` looks at another monitor |
 | `zoom` | Magnified view of a region with rulers labelled in screenshot coordinates |
 | `list_ui_elements`, `click_element` | Windows UI Automation: find controls by name and press them (no pixel aiming) |
 | `mouse_click`, `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates |
@@ -72,8 +75,14 @@ JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…)
 arguments (`coordinate: [x, y]`) are all accepted, and a model that announces a step without taking
 it gets nudged to continue.
 
+With several monitors the agent sees one at a time: screenshots show the screen it looked at last
+(the primary at first), `screen=N` switches, and `focus_window` follows a window to its screen. All
+coordinates refer to the screen in the latest screenshot.
+
 Actions run without asking by default (approvals can be switched on in Settings → General).
-Moving the mouse to the top-left corner of the screen, or pressing Stop, halts the agent. BlackBox
+Pressing Stop, pressing the Break (Pause) key anywhere, or moving the mouse to the top-left corner of
+the primary screen halts the agent. The Break key works whatever window has focus; the agent's own
+key presses can't trigger it. BlackBox
 stays on screen while it works but is hidden from the agent's screenshots, and steps behind other
 windows for the moment a click lands on it. Every click and key press the agent makes shows up in a
 log in the bottom-right corner that fades after 15 seconds (adjustable), with a ring where it clicked. The agent

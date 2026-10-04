@@ -84,6 +84,28 @@ internal static partial class Native
     public const int SM_CXSCREEN = 0;
     public const int SM_CYSCREEN = 1;
 
+    public const uint MONITORINFOF_PRIMARY = 1;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct MONITORINFOEX
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string szDevice;
+    }
+
+    public delegate bool MonitorEnumProc(nint hMonitor, nint hdc, ref RECT rect, nint lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool EnumDisplayMonitors(nint hdc, nint clip, MonitorEnumProc proc, nint lParam);
+
+    [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetMonitorInfo(nint hMonitor, ref MONITORINFOEX info);
+
     [LibraryImport("user32.dll")]
     public static partial int GetSystemMetrics(int nIndex);
 
@@ -265,9 +287,30 @@ internal static partial class Native
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(nint hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
 
+    // ---- keyboard hook (the stop key) --------------------------------------------------
+
+    public const int WH_KEYBOARD_LL = 13;
+    public const uint WM_KEYDOWN = 0x0100, WM_SYSKEYDOWN = 0x0104;
+    public const uint VK_CANCEL = 0x03, VK_PAUSE = 0x13;
+
+    public delegate nint LowLevelKeyboardProc(int nCode, nint wParam, nint lParam);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct KBDLLHOOKSTRUCT { public uint vkCode, scanCode, flags, time; public nint dwExtraInfo; }
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowsHookExW", SetLastError = true)]
+    public static extern nint SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, nint hMod, uint dwThreadId);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool UnhookWindowsHookEx(nint hhk);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint CallNextHookEx(nint hhk, int nCode, nint wParam, nint lParam);
+
     // ---- own windows: class, message loop, layering (the input overlay) ----------------
 
-    public const uint WM_TIMER = 0x0113, WM_APP = 0x8000;
+    public const uint WM_QUIT = 0x0012, WM_TIMER = 0x0113, WM_APP = 0x8000;
     public const uint LWA_COLORKEY = 1, LWA_ALPHA = 2;
     public const uint SPI_GETWORKAREA = 0x0030;
 
