@@ -24,9 +24,9 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
     [
         "1280 × 720",
         "1600 × 900",
-        "1920 × 1080 (default)",
+        "1920 × 1080",
         "2560 × 1440",
-        "Full screen resolution",
+        "Full screen resolution (default)",
     ];
 
     public int ResolutionIndex

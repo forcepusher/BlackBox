@@ -178,8 +178,13 @@ public sealed class AgentSettings
     /// <summary>Everything runs without asking by default; Stop and the Break key stay available.</summary>
     public ApprovalMode Approval { get; set; } = ApprovalMode.Never;
 
-    /// <summary>Largest size a screenshot is sent at; the screen is scaled down to fit, keeping its shape.</summary>
-    public ScreenshotResolution ScreenshotResolution { get; set; } = ScreenshotResolution.R1920x1080;
+    /// <summary>
+    /// Largest size a screenshot is sent at; the screen is scaled down to fit, keeping its shape.
+    /// Full resolution by default: with qwen3.8 on LM Studio (its "never exceed 2048 px" image
+    /// option off) it hit text links 15/16 against 8/16 at 1920x1080, and buttons on a 5120x1440
+    /// screen 7/16 against 4/16 (ClickAccuracyTests, two rounds).
+    /// </summary>
+    public ScreenshotResolution ScreenshotResolution { get; set; } = ScreenshotResolution.Native;
 
     /// <summary>Attach a fresh screenshot after mouse/keyboard actions. Internal (tests turn it off).</summary>
     [JsonIgnore]

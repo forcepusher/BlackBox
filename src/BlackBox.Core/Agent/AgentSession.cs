@@ -330,7 +330,7 @@ public sealed partial class AgentSession(
         }
     }
 
-    /// <summary>Rough token count of the conversation (about 3.5 characters per token, ~2000 per screenshot, the size of a 1920x1080 one).</summary>
+    /// <summary>Rough token count of the conversation (about 3.5 characters per token; a screenshot one per 32x32 pixels).</summary>
     internal int EstimateTokens() =>
         (int)(((long)systemPrompt.Length + _toolChars.Value + History.Sum(CharsOf)) * 2 / 7);
 
@@ -344,7 +344,14 @@ public sealed partial class AgentSession(
     private static long CharsOf(ChatMessage m) =>
         (m.Content?.Length ?? 0) + (m.Reasoning?.Length ?? 0) +
         (m.ToolCalls?.Sum(c => c.Name.Length + c.Arguments.Length) ?? 0) +
-        (m.Parts?.Sum(p => p.IsImage ? 7_000 : p.Text?.Length ?? 0) ?? 0);
+        (m.Parts?.Sum(p => p.IsImage ? ImageTokens(p.ImageBytes!) * 7 / 2 : p.Text?.Length ?? 0) ?? 0);
+
+    /// <summary>What the Qwen vision encoder spends on an image: a token per 32x32 pixels (2000 if it can't be read).</summary>
+    internal static long ImageTokens(byte[] image)
+    {
+        using var codec = SkiaSharp.SKCodec.Create(new SkiaSharp.SKMemoryStream(image));
+        return codec is null ? 2000 : (long)Math.Ceiling(codec.Info.Width / 32.0) * (long)Math.Ceiling(codec.Info.Height / 32.0);
+    }
 
     /// <summary>
     /// Keeps the prompt under <paramref name="budget"/> tokens. Preserved thinking is the bulk of

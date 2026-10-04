@@ -18,7 +18,7 @@ namespace BlackBox.Core.Tests;
 /// Opt-in like <see cref="ServerIntegrationTests"/>: set BB_SERVER_URL and BB_SERVER_MODEL. Optional:
 /// BB_CLICK_SCENES (comma-separated, default all), BB_CLICK_TRIALS (per scene, default 5),
 /// BB_CLICK_COORDS=pixels|grid (default: what BlackBox picks for the model), BB_CLICK_RES (a
-/// <see cref="ScreenshotResolution"/> name), BB_CLICK_TAG (report name). The report goes to
+/// <see cref="ScreenshotResolution"/> name), BB_CLICK_SEED (first layout, default 1000), BB_CLICK_TAG (report name). The report goes to
 /// bb-click-TAG.txt in the temp folder, with the first screenshot of each scene next to it.
 /// </summary>
 public class ClickAccuracyTests
@@ -98,6 +98,7 @@ public class ClickAccuracyTests
         var only = Env("BB_CLICK_SCENES")?.Split(',', StringSplitOptions.TrimEntries);
         var resolution = Env("BB_CLICK_RES") is { } res ? Enum.Parse<ScreenshotResolution>(res) : new AgentSettings().ScreenshotResolution;
         var tag = Env("BB_CLICK_TAG") ?? "accuracy";
+        var seed = int.TryParse(Env("BB_CLICK_SEED"), out var s0) ? s0 : 1000;
         var grid = Coords switch { "pixels" => null, "grid" => 1000, _ => ModelCoordinates.GridFor(Model) };
 
         var report = new List<string>();
@@ -110,7 +111,7 @@ public class ClickAccuracyTests
             var misses = new List<double>();
             for (var trial = 0; trial < trials; trial++)
             {
-                var rng = new Random(1000 + trial);
+                var rng = new Random(seed + trial);
                 var (desktop, origin, targets) = Render(scene, rng);
                 var target = targets[rng.Next(targets.Count)];
                 var platform = new FakePlatform { Screens = scene.Screens.ToList(), ScreenBounds = scene.Screens[0], Desktop = desktop, DesktopOrigin = origin };

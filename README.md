@@ -70,7 +70,7 @@ cache, so each retry continues where the last one stopped (up to 12 times per st
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |
-| `screenshot` | Captures a screen, scaled to fit the chosen resolution (1920×1080 by default) on the 32px vision grid; `screen=N` looks at another monitor |
+| `screenshot` | Captures a screen at full resolution, or scaled to fit the chosen size, on the 32px vision grid; `screen=N` looks at another monitor |
 | `mouse_click`, `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …) |
 | `wait` | Waits, then screenshots |
@@ -91,6 +91,11 @@ Coordinates follow what the model was trained on. Qwen3 and later point on a 0-1
 image, so for them x/y are on that grid; asked for pixels, qwen3.8 slipped back to the grid in about
 a third of its clicks and missed by hundreds of pixels (11/16 hits against 16/16 on the grid in
 `ClickAccuracyTests`). Every other model gets screenshot pixels.
+
+Screenshots go out at full resolution by default. In LM Studio, turn off the model's "Image Input:
+Never exceed 2048 px" option, or it shrinks them back to about 2048×864 (qwen3.8 hit text links
+15/16 at full resolution, 8/16 at 1920×1080). For models that point in pixels, keep that option and the screenshot size in
+step, since a server that resizes the image moves every click.
 
 ### MCP servers
 BlackBox is an MCP client: any [Model Context Protocol](https://modelcontextprotocol.io) server adds its
