@@ -95,7 +95,16 @@ a third of its clicks and missed by hundreds of pixels (11/16 hits against 16/16
 Screenshots go out at full resolution by default. In LM Studio, turn off the model's "Image Input:
 Never exceed 2048 px" option, or it shrinks them back to about 2048×864 (qwen3.8 hit text links
 15/16 at full resolution, 8/16 at 1920×1080). For models that point in pixels, keep that option and the screenshot size in
-step, since a server that resizes the image moves every click.
+step, since a server that resizes the image moves every click. A `settings.json` saved before full
+resolution became the default keeps 1920×1080; choose "Full screen resolution" in Settings.
+
+After each click BlackBox compares the screen before and after it. When nothing changed near the
+click and nothing big changed anywhere (a dialog opening), the click almost certainly missed, and
+the result says so and where it landed; otherwise a model keeps clicking the same wrong spot.
+With the first screenshot shifted 30 px so that the first click misses, qwen3.8 hit the target
+within two more clicks in 17 of 21 trials with the note, 9 of 21 without it (`ClickAccuracyTests`,
+`BB_CLICK_SHIFT`). A red ring drawn at the click added nothing, nor did a prompt rule about aiming
+carefully (13/24 first clicks against 19/24) or temperature 0.2 instead of 0.6 (19/24).
 
 ### MCP servers
 BlackBox is an MCP client: any [Model Context Protocol](https://modelcontextprotocol.io) server adds its

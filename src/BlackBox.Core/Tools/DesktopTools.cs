@@ -10,15 +10,26 @@ public abstract class DesktopActionTool : Tool
 
     public sealed override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
+        var check = ChecksForMiss && ClickCheck.Enabled && ctx.Settings.ScreenshotAfterActions ? ClickCheck.Start(ctx) : null;
         var text = await ActAsync(args, ctx, ct).ConfigureAwait(false);
         if (!ctx.Settings.ScreenshotAfterActions)
             return new ToolResult(text);
 
         // Give the UI a moment to react before looking at it.
         await Task.Delay(500, ct).ConfigureAwait(false);
+        if (check is not null && await check.MissedAtAsync(ctx, ct).ConfigureAwait(false) is { } at)
+        {
+            var (mx, my) = ctx.GetScreenSpace().ToModel(at.X, at.Y);
+            text += $"\nNothing on screen changed after this click, so it probably missed what you aimed at. It landed at ({mx}, {my}). " +
+                    "Compare that with where your target is and click again at corrected coordinates. " +
+                    "If the target only needs more time to respond, wait instead.";
+        }
         var shot = ScreenshotTool.Take(ctx);
         return shot with { Text = text + "\n" + shot.Text };
     }
+
+    /// <summary>Whether to tell the model when its action left the screen as it was (see <see cref="ClickCheck"/>).</summary>
+    protected virtual bool ChecksForMiss => false;
 
     protected abstract Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct);
 
@@ -93,6 +104,8 @@ public sealed class MouseClickTool : DesktopActionTool
         var button = GetString(args, "button") is { } b && b != "left" ? $" ({b})" : "";
         return $"{kind}{button} at {Fmt(args)}";
     }
+
+    protected override bool ChecksForMiss => true;
 
     protected override async Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {

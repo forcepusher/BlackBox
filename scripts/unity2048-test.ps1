@@ -5,7 +5,8 @@
   It drives your actual mouse and keyboard for as long as the run takes: don't touch the PC.
 
   Everything lands in .dev\game2048\<time>-unity\: run.txt (the full log), shots\ (what the model
-  saw), game\ (the Unity project and the build), summary.txt.
+  saw), game\ (the Unity project and the build), summary.txt. Earlier Unity runs are moved to
+  .dev\unity2048-archive\ first.
 
 .EXAMPLE
   ./scripts/unity2048-test.ps1                         # server and model from Data/settings.json
@@ -16,6 +17,12 @@ param([string]$Root = "", [string]$Url = "", [string]$Model = "", [double]$Hours
 $repo = Split-Path $PSScriptRoot
 $cli = Join-Path $repo "src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe"
 dotnet build (Join-Path $repo "src\BlackBox.Cli") -v q | Out-Null
+# Earlier Unity runs move to .dev\unity2048-archive first, so the agent can't reuse their code.
+$archive = Join-Path $repo ".dev\unity2048-archive"
+Get-ChildItem (Join-Path $repo ".dev\game2048") -Directory -Filter *-unity -ErrorAction SilentlyContinue | ForEach-Object {
+  New-Item -ItemType Directory -Force $archive | Out-Null
+  Move-Item $_.FullName $archive
+}
 $out = Join-Path $repo (".dev\game2048\" + (Get-Date -Format "yyyyMMdd-HHmmss") + "-unity")
 $game = Join-Path $out "game"
 New-Item -ItemType Directory -Force $game | Out-Null

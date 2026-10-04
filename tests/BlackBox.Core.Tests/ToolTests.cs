@@ -54,6 +54,28 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task A_click_that_changes_nothing_is_reported_as_a_miss()
+    {
+        var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 384, 192), Desktop = new RawImage(384, 192, new byte[384 * 192 * 4]) };
+        var ctx = Ctx(platform, settings: new AgentSettings());
+        var missed = await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None);
+        Assert.Contains("Nothing on screen changed after this click", missed.Text);
+        Assert.Contains("It landed at (100, 50)", missed.Text);
+        Assert.NotNull(missed.Image);
+
+        // A small change right at the click (a checkbox ticking) counts as a reaction.
+        platform.OnClick = p => { for (var i = 0; i < 10; i++) p.Desktop!.Bgra[(52 * 384 + 100 + i) * 4 + 1] = 255; };
+        var hit = await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None);
+        Assert.DoesNotContain("Nothing on screen changed", hit.Text);
+
+        // So does a big one elsewhere (a dialog); a tiny one elsewhere (a clock) does not.
+        platform.OnClick = p => p.Desktop!.Bgra[(180 * 384 + 370) * 4] ^= 255;
+        Assert.Contains("Nothing on screen changed", (await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None)).Text);
+        platform.OnClick = p => { for (var y = 120; y < 160; y++) for (var x = 300; x < 340; x++) p.Desktop!.Bgra[(y * 384 + x) * 4] ^= 255; };
+        Assert.DoesNotContain("Nothing on screen changed", (await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None)).Text);
+    }
+
+    [Fact]
     public void Small_screens_are_not_upscaled()
     {
         var space = new ScreenSpace(new ScreenRect(0, 0, 1024, 768), (1600, 900));

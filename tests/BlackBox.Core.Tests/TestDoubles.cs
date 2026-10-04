@@ -119,20 +119,35 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     public RawImage? Desktop { get; set; }
     public (int X, int Y) DesktopOrigin { get; set; }
 
+    /// <summary>
+    /// Rows the first screenshot (a capture with the cursor) shows the desktop shifted up by, so the
+    /// model misjudges where things are, as when it misreads a screen. Later captures are true.
+    /// </summary>
+    public int ShiftFirstShot { get; set; }
+
     public RawImage Capture(ScreenRect region, bool includeCursor)
     {
         Captures.Add(region);
+        var shift = 0;
+        if (includeCursor && ShiftFirstShot != 0)
+            (shift, ShiftFirstShot) = (ShiftFirstShot, 0);
         var pixels = new byte[region.Width * region.Height * 4];
         if (Desktop is { } d)
             for (var row = 0; row < region.Height; row++)
-                Array.Copy(d.Bgra, (region.Y - DesktopOrigin.Y + row) * d.Stride + (region.X - DesktopOrigin.X) * 4, pixels, row * region.Width * 4, region.Width * 4);
+            {
+                var from = Math.Clamp(region.Y - DesktopOrigin.Y + row + shift, 0, d.Height - 1);
+                Array.Copy(d.Bgra, from * d.Stride + (region.X - DesktopOrigin.X) * 4, pixels, row * region.Width * 4, region.Width * 4);
+            }
         return new(region.Width, region.Height, pixels);
     }
     public (int X, int Y) GetCursorPosition() => Cursor;
     public void MoveMouse(int x, int y) { Cursor = (x, y); Actions.Add($"move {x},{y}"); }
     public void MouseDown(MouseButton button) => Actions.Add($"down {button}");
     public void MouseUp(MouseButton button) => Actions.Add($"up {button}");
-    public void Click(MouseButton button, int count) => Actions.Add($"click {button} x{count}");
+    public void Click(MouseButton button, int count) { Actions.Add($"click {button} x{count}"); OnClick?.Invoke(this); }
+
+    /// <summary>How the fake screen reacts to a click (e.g. by changing <see cref="Desktop"/>).</summary>
+    public Action<FakePlatform>? OnClick { get; set; }
     public void Scroll(int dx, int dy) => Actions.Add($"scroll {dx},{dy}");
     public void TypeText(string text) => Actions.Add($"type {text}");
     public void PressKeys(IReadOnlyList<string> keys) => Actions.Add("keys " + string.Join("+", keys));
