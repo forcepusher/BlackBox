@@ -363,6 +363,14 @@ public class ToolTests
         Assert.Contains("héllo 'quoted' wörld", result.Text);
         Assert.Contains("Exit code 3", result.Text);
         Assert.True(result.IsError);
+
+        // Errors come back as text, not as PowerShell's CLIXML.
+        var failed = await new ShellTool().ExecuteAsync(
+            new JsonObject { ["command"] = "Write-Output before; Write-Error 'no such <thing>'; Write-Output after" }, Ctx(platform), CancellationToken.None);
+        Assert.DoesNotContain("CLIXML", failed.Text);
+        Assert.DoesNotContain("_x000D_", failed.Text);
+        Assert.Contains("no such <thing>", failed.Text);
+        Assert.Contains("after", failed.Text);
     }
 }
 
