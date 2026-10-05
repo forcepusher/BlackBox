@@ -15,6 +15,19 @@
 param([string]$Root = "", [string]$Url = "", [string]$Model = "", [double]$Hours = 10,
   [string]$Unity = "C:\Program Files\Unity\Hub\Editor\6000.3.23f1\Editor\Unity.exe")
 $repo = Split-Path $PSScriptRoot
+
+# Keep this log window out of the agent's way: on another monitor if there is one (in run 4 the
+# agent spent steps minimizing it on the main screen).
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -Namespace Harness -Name Win -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
+[DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr hWnd, int x, int y, int w, int h, bool repaint);
+'@
+$other = [System.Windows.Forms.Screen]::AllScreens | Where-Object { -not $_.Primary } | Select-Object -First 1
+if ($other) {
+  $b = $other.WorkingArea
+  [Harness.Win]::MoveWindow([Harness.Win]::GetConsoleWindow(), $b.X, $b.Y, $b.Width, $b.Height, $true) | Out-Null
+}
 $cli = Join-Path $repo "src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe"
 dotnet build (Join-Path $repo "src\BlackBox.Cli") -v q | Out-Null
 # Earlier Unity runs move to .dev\unity2048-archive first, so the agent can't reuse their code.
