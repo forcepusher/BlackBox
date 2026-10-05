@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
@@ -10,11 +11,11 @@ public sealed class WebSearchException(string message) : Exception(message);
 
 /// <summary>
 /// Web search without an API key. DuckDuckGo's HTML page (the one it serves browsers without
-/// JavaScript) answers a plain HTTP request in a fraction of a second, but refuses a computer that
-/// searched about ten times in a few minutes. Then, or when it finds nothing, Bing is searched in
-/// the PC's own browser run headless (<see cref="HeadlessBrowser"/>), which takes a second or two.
-/// Bing can't be asked directly: to a plain HTTP request it returns results for the first word of
-/// the query only. Brave, Mojeek and Startpage answer one with a captcha.
+/// JavaScript) answers in a fraction of a second, but refuses a computer that searched about ten
+/// times in a few minutes. Then, or when it finds nothing, Bing is searched in the PC's own browser
+/// run headless (<see cref="HeadlessBrowser"/>), which takes a second or two. Bing can't be asked
+/// directly: to a plain HTTP request it returns results for the first word of the query only.
+/// Brave, Mojeek and Startpage answer one with a captcha.
 /// </summary>
 public static class WebSearch
 {
@@ -58,35 +59,76 @@ public static class WebSearch
         }
     }
 
+    /// <summary>
+    /// Asks DuckDuckGo through the system's curl (built into Windows 10 and later, macOS and most
+    /// Linux). DuckDuckGo tells clients apart by how they open the TLS connection and turns .NET's
+    /// HttpClient away with a captcha even on the first search, while the same request from curl
+    /// gets results.
+    /// </summary>
     private static async Task<List<SearchHit>> DuckDuckGoAsync(string query, CancellationToken ct)
     {
-        const string endpoint = "https://html.duckduckgo.com/html/";
+        if (Curl is not { } curl)
+            throw new WebSearchException("No curl was found to ask DuckDuckGo with.");
+        var psi = new ProcessStartInfo(curl)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+        };
+        foreach (var arg in new[]
+                 {
+                     "--silent", "--show-error", "--max-time", "20", "--compressed",
+                     "--user-agent", WebHttp.UserAgent, "--header", "Accept-Language: en-US,en;q=0.9",
+                     // Encoded here, so the command line stays ASCII whatever language the query is in.
+                     "--data", "q=" + Uri.EscapeDataString(query) + "&kl=wt-wt",
+                     // The status code on a line of its own after the page.
+                     "--write-out", "\n%{http_code}",
+                     "https://html.duckduckgo.com/html/",
+                 })
+            psi.ArgumentList.Add(arg);
+
+        using var process = new Process { StartInfo = psi };
+        process.Start();
+        var stdout = process.StandardOutput.ReadToEndAsync(ct);
+        var stderr = process.StandardError.ReadToEndAsync(ct);
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
-            {
-                Content = new FormUrlEncodedContent([new("q", query), new("kl", "wt-wt")]),
-            };
-            request.Headers.Referrer = new Uri(endpoint);
-            using var response = await WebHttp.Client.SendAsync(request, ct).ConfigureAwait(false);
-            var html = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            // A refusal comes as 202 or 403 with a captcha page instead of results.
-            if (!response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.Accepted
-                || html.Contains("anomaly-modal", StringComparison.Ordinal))
-            {
-                _duckDuckGoRefusedAt = DateTime.UtcNow;
-                throw new WebSearchException($"DuckDuckGo refused the search (HTTP {(int)response.StatusCode}); it limits how often one computer may search.");
-            }
-            return ParseDuckDuckGo(html);
+            await process.WaitForExitAsync(ct).ConfigureAwait(false);
         }
-        catch (HttpRequestException ex)
+        catch (OperationCanceledException)
         {
-            throw new WebSearchException($"Could not reach DuckDuckGo: {ex.Message}");
+            try { process.Kill(); } catch (InvalidOperationException) { }
+            throw;
         }
-        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        var output = await stdout.ConfigureAwait(false);
+        if (process.ExitCode != 0)
+            throw new WebSearchException($"Could not reach DuckDuckGo: {(await stderr.ConfigureAwait(false)).Trim()}");
+
+        var split = output.LastIndexOf('\n');
+        var status = split >= 0 && int.TryParse(output[(split + 1)..], out var code) ? code : 0;
+        var html = split >= 0 ? output[..split] : output;
+        // A refusal comes as 202 or 403 with a captcha page instead of results.
+        if (status != 200 || html.Contains("anomaly-modal", StringComparison.Ordinal))
         {
-            throw new WebSearchException("DuckDuckGo did not answer in time.");
+            _duckDuckGoRefusedAt = DateTime.UtcNow;
+            throw new WebSearchException($"DuckDuckGo refused the search (HTTP {status}); it limits how often one computer may search.");
         }
+        return ParseDuckDuckGo(html);
+    }
+
+    private static readonly string? Curl = FindCurl();
+
+    private static string? FindCurl()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var system = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "curl.exe");
+            return File.Exists(system) ? system : null;
+        }
+        return (Environment.GetEnvironmentVariable("PATH") ?? "").Split(':', StringSplitOptions.RemoveEmptyEntries)
+            .Select(dir => Path.Combine(dir, "curl")).FirstOrDefault(File.Exists);
     }
 
     /// <summary>html.duckduckgo.com: one div.result per hit, ads marked result--ad.</summary>

@@ -124,11 +124,13 @@ tells it to whenever it isn't sure of an exact name or meets an error it doesn't
 Unity's CS0117 error for `KeyCode.Left`, qwen3.8 searched, read the `KeyCode` page with
 `find=Arrow` and fixed the file in 55 s.
 
-No API key and nothing to install. `web_search` asks DuckDuckGo's HTML page over plain HTTP (a
-fraction of a second). DuckDuckGo refuses a computer that searched about ten times in a few
-minutes; then, for the next 10 minutes, or when it finds nothing, Bing is searched in the PC's own
-Edge or Chrome run headless (one to three seconds). Bing can't be asked directly: to a plain request
-it answers with results for the first word only; Brave, Mojeek and Startpage answer with a captcha.
+No API key and nothing to install. `web_search` asks DuckDuckGo's HTML page through the system's
+`curl` (built into Windows 10 and later; a fraction of a second): DuckDuckGo recognizes .NET's own
+HTTP client by its TLS handshake and answers it with a captcha, even on the first search.
+DuckDuckGo also refuses a computer that searched about ten times in a few minutes; then, for the
+next 10 minutes, or when it finds nothing, Bing is searched in the PC's own Edge or Chrome run
+headless (one to three seconds). Bing can't be asked directly: to a plain request it answers with
+results for the first word only; Brave, Mojeek and Startpage answer with a captcha.
 
 `fetch_page` keeps only a page's main content (no menus, sidebars, cookie banners or footers) and
 writes it as text: `#` headings, `-` lists, fenced code blocks, `| a | b |` table rows; links keep only
