@@ -106,10 +106,17 @@ public sealed partial class AgentSession(
                     return;
                 }
 
+                var space = toolContext.Platform.Screen is null ? null : TryScreenSpace();
+                var intentNote = space is null ? null : ClickIntent.Reconcile(reply, space.ModelWidth, space.ModelHeight);
+                if (intentNote is not null)
+                    observer.OnNotice(intentNote);
+
                 var screenshots = new List<ContentPart>();
                 foreach (var call in reply.ToolCalls!)
                 {
                     var result = await RunToolAsync(call, observer, ct).ConfigureAwait(false);
+                    if (intentNote is not null && call.Name == "mouse_click")
+                        result = result with { Text = intentNote + "\n" + result.Text };
                     if (loops.Check(call, result) is { } warning)
                         result = result with { Text = result.Text + "\n" + warning };
                     History.Add(ChatMessage.ToolResult(call.Id, result.Image is null ? result.Text : result.Text + "\n(The screenshot is attached in the next message.)"));
@@ -234,6 +241,13 @@ public sealed partial class AgentSession(
         }
         observer.OnToolFinished(call, result);
         return result;
+    }
+
+    /// <summary>The coordinate space clicks are in, or null where there are no screens (tests, no vision).</summary>
+    private Platform.ScreenSpace? TryScreenSpace()
+    {
+        try { return toolContext.GetScreenSpace(); }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or ArgumentException) { return null; }
     }
 
     private bool NeedsApproval(Tool tool) => toolContext.Settings.Approval switch

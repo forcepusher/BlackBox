@@ -22,8 +22,10 @@ public abstract class DesktopActionTool : Tool
         if (missedAt is { } at)
         {
             var (mx, my) = ctx.GetScreenSpace().ToModel(at.X, at.Y);
-            text += $"\nNothing on screen changed after this click, so it probably missed what you aimed at. It landed at ({mx}, {my}). " +
-                    "Compare that with where your target is and click again at corrected coordinates. " +
+            // The point itself is left out: the call and the cursor position already say it, and
+            // each repeat makes a long run likelier to copy it into the next call.
+            text += "\nNothing on screen changed after this click, so it probably missed what you aimed at. " +
+                    "Compare where the mouse pointer is in the screenshot with where your target is and click again at corrected coordinates. " +
                     "If the target only needs more time to respond, wait instead; if you clicked an empty spot only to focus a window, ignore this.";
             if (Target(args) is { Length: > 0 } target && ctx.Locate is { } locate && shot.Image is { } image)
                 text += await FreshLookNoteAsync(locate, image, target, (mx, my), ctx, ct).ConfigureAwait(false);
@@ -144,7 +146,7 @@ public sealed class MouseClickTool : DesktopActionTool
         ctx.Platform.Input.MoveMouse(x, y);
         await Task.Delay(60, ct).ConfigureAwait(false);
         ctx.Platform.Input.Click(button, clicks);
-        return Describe(args) + " done.";
+        return clicks switch { 2 => "Double-clicked.", 3 => "Triple-clicked.", _ => "Clicked." };
     }
 
     internal static MouseButton ParseButton(string? s) => s?.ToLowerInvariant() switch
@@ -167,7 +169,7 @@ public sealed class MouseMoveTool : DesktopActionTool
         var (x, y) = Point(args, ctx);
         using var aside = Aside(ctx, (x, y));
         ctx.Platform.Input.MoveMouse(x, y);
-        return Task.FromResult(Describe(args) + " done.");
+        return Task.FromResult("Moved the mouse.");
     }
 }
 
@@ -203,7 +205,7 @@ public sealed class MouseDragTool : DesktopActionTool
         {
             input.MouseUp(MouseButton.Left);
         }
-        return Describe(args) + " done.";
+        return "Dragged.";
     }
 }
 

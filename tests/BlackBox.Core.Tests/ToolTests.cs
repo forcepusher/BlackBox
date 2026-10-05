@@ -60,7 +60,7 @@ public class ToolTests
         var ctx = Ctx(platform, settings: new AgentSettings());
         var missed = await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None);
         Assert.Contains("Nothing on screen changed after this click", missed.Text);
-        Assert.Contains("It landed at (100, 50)", missed.Text);
+        Assert.Contains("Mouse cursor at (100, 50)", missed.Text);
         Assert.NotNull(missed.Image);
         Assert.DoesNotContain("fresh look", missed.Text); // no target named
 
@@ -89,6 +89,29 @@ public class ToolTests
         Assert.Contains("Nothing on screen changed", (await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None)).Text);
         platform.OnClick = p => { for (var y = 120; y < 160; y++) for (var x = 300; x < 340; x++) p.Desktop!.Bgra[(y * 384 + x) * 4] ^= 255; };
         Assert.DoesNotContain("Nothing on screen changed", (await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None)).Text);
+    }
+
+    [Fact]
+    public void A_click_that_contradicts_what_the_model_wrote_goes_where_it_wrote()
+    {
+        ChatMessage Reply(string reasoning, string content, params string[] args) => new()
+        {
+            Role = ChatRole.Assistant, Reasoning = reasoning, Content = content,
+            ToolCalls = args.Select((a, i) => new ToolCall { Id = "c" + i, Name = "mouse_click", Arguments = a }).ToList(),
+        };
+
+        // Copied from the previous call: the text says (34, 26), the call (34, 3).
+        var copied = Reply("My y=3 click hit the title bar. Let me try clicking on \"Assets\" at (34, 26).", "Let me click Assets there.", "{\"x\":34,\"y\":3}");
+        Assert.Equal("Note: your call said (34, 3), but you wrote that you would click (34, 26), so BlackBox clicked there.",
+            BlackBox.Core.Agent.ClickIntent.Reconcile(copied, 1000, 1000));
+        Assert.Equal("{\"x\":34,\"y\":26}", copied.ToolCalls![0].Arguments);
+
+        // Close enough, or no point stated in a sentence about clicking, or more than one click: left alone.
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("I'll click the Play button at (521, 52).", "", "{\"x\":522,\"y\":55}"), 1000, 1000));
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("The Play button is at (521, 52). Stop is just right of it.", "Clicking Stop.", "{\"x\":536,\"y\":52}"), 1000, 1000));
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("Click (10, 10) then (500, 500).", "", "{\"x\":10,\"y\":10}", "{\"x\":500,\"y\":500}"), 1000, 1000));
+        // A point outside the coordinate range is in other units (pixels): left alone.
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("Click the tab at (1598, 90).", "", "{\"x\":624,\"y\":83}"), 1000, 1000));
     }
 
     [Fact]
