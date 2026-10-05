@@ -126,15 +126,18 @@ public class ToolTests
         // Copied from the previous call: the text says (34, 26), the call (34, 3).
         var copied = Reply("My y=3 click hit the title bar. Let me try clicking on \"Assets\" at (34, 26).", "Let me click Assets there.", "{\"x\":34,\"y\":3}");
         Assert.Equal("Note: your call said (34, 3), but you wrote that you would click (34, 26), so BlackBox clicked there.",
-            BlackBox.Core.Agent.ClickIntent.Reconcile(copied, 1000, 1000));
+            BlackBox.Core.Agent.ClickIntent.Reconcile(copied, 1000, 1000, (34, 3)));
         Assert.Equal("{\"x\":34,\"y\":26}", copied.ToolCalls![0].Arguments);
 
         // Close enough, or no point stated in a sentence about clicking, or more than one click: left alone.
-        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("I'll click the Play button at (521, 52).", "", "{\"x\":522,\"y\":55}"), 1000, 1000));
-        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("The Play button is at (521, 52). Stop is just right of it.", "Clicking Stop.", "{\"x\":536,\"y\":52}"), 1000, 1000));
-        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("Click (10, 10) then (500, 500).", "", "{\"x\":10,\"y\":10}", "{\"x\":500,\"y\":500}"), 1000, 1000));
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("I'll click the Play button at (521, 52).", "", "{\"x\":522,\"y\":55}"), 1000, 1000, (522, 55)));
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("The Play button is at (521, 52). Stop is just right of it.", "Clicking Stop.", "{\"x\":536,\"y\":52}"), 1000, 1000, (536, 52)));
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("Click (10, 10) then (500, 500).", "", "{\"x\":10,\"y\":10}", "{\"x\":500,\"y\":500}"), 1000, 1000, (10, 10)));
+        // A sentence naming two points (run 4: Clear, then Play), or a call that isn't a repeat: left alone.
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("I'll click the Clear button (955, 82) and then press Play (503, 54).", "", "{\"x\":746,\"y\":82}"), 1000, 1000, (746, 82)));
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("Let me click Assets at (34, 26).", "", "{\"x\":34,\"y\":3}"), 1000, 1000, (500, 500)));
         // A point outside the coordinate range is in other units (pixels): left alone.
-        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("Click the tab at (1598, 90).", "", "{\"x\":624,\"y\":83}"), 1000, 1000));
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("Click the tab at (1598, 90).", "", "{\"x\":624,\"y\":83}"), 1000, 1000, (624, 83)));
     }
 
     [Fact]

@@ -9,9 +9,8 @@ namespace BlackBox.Core.Agent;
 /// Catches a click whose arguments contradict what the model just wrote. Deep in a run the
 /// model can reason its way to the right spot ("let me click Assets at (34, 26)") and then emit
 /// the arguments of its previous, wrong call ({"x":34,"y":3}): in one Unity run, nine times in a
-/// row, plus twice (409, 5) for a Play button it had just placed at (521, 52). When the last
-/// sentence about clicking states a point and the call's point is clearly elsewhere, the stated
-/// point is used and the model is told.
+/// row. When a click repeats the previous click's point and the last sentence about clicking
+/// names one other point, the stated point is used and the model is told.
 /// </summary>
 internal static partial class ClickIntent
 {
@@ -19,11 +18,16 @@ internal static partial class ClickIntent
     private const int Tail = 600;
 
     /// <summary>
-    /// If the reply has exactly one click and its x/y differ from the point the reply's text says
-    /// it will click by more than 2% of the screen, moves the call to the stated point and returns
-    /// a note for the tool result; null otherwise.
+    /// If the reply has exactly one click, that click repeats <paramref name="previous"/> (the last
+    /// click made), and the point the reply's text says it will click is more than 2% of the screen
+    /// away, moves the call to the stated point and returns a note for the tool result; null otherwise.
     /// </summary>
-    public static string? Reconcile(ChatMessage reply, int modelWidth, int modelHeight)
+    /// <remarks>
+    /// Only a repeated point counts as copied: in run 4 a reply said "click Clear (955, 82) and then
+    /// press Play (503, 54)" and called Clear at (746, 82); moving that click to Play started Play
+    /// mode. Sentences naming more than one point are left alone for the same reason.
+    /// </remarks>
+    public static string? Reconcile(ChatMessage reply, int modelWidth, int modelHeight, (double X, double Y)? previous)
     {
         var clicks = reply.ToolCalls?.Where(c => c.Name == "mouse_click").ToList();
         if (clicks is not { Count: 1 } || reply.ToolCalls!.Count(c => c.Name.Contains("click") || c.Name == "mouse_drag") != 1)
@@ -33,6 +37,8 @@ internal static partial class ClickIntent
         try { args = ToolCallRepair.ParseArguments(call.Arguments); }
         catch (Tools.ToolArgumentException) { return null; }
         if (Number(args["x"]) is not { } x || Number(args["y"]) is not { } y)
+            return null;
+        if (previous is not { } prev || Math.Abs(prev.X - x) > 1 || Math.Abs(prev.Y - y) > 1)
             return null;
         if (Stated(reply.Reasoning, reply.Content) is not { } said || said.X > modelWidth || said.Y > modelHeight)
             return null;
@@ -53,10 +59,24 @@ internal static partial class ClickIntent
         {
             if (!ClickWord().IsMatch(sentence))
                 continue;
-            if (Point().Matches(sentence).LastOrDefault() is { } m)
-                return (double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture), double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture));
+            var points = PointPattern().Matches(sentence);
+            if (points.Count > 1)
+                return null; // "click A (x1, y1) and then B (x2, y2)": which one this call is, is unclear
+            if (points.Count == 1)
+                return (double.Parse(points[0].Groups[1].Value, CultureInfo.InvariantCulture), double.Parse(points[0].Groups[2].Value, CultureInfo.InvariantCulture));
         }
         return null;
+    }
+
+    /// <summary>The x/y of a click call's arguments, or null.</summary>
+    public static (double X, double Y)? Point(string arguments)
+    {
+        try
+        {
+            var args = ToolCallRepair.ParseArguments(arguments);
+            return Number(args["x"]) is { } x && Number(args["y"]) is { } y ? (x, y) : null;
+        }
+        catch (Tools.ToolArgumentException) { return null; }
     }
 
     private static double? Number(JsonNode? node) =>
@@ -71,5 +91,5 @@ internal static partial class ClickIntent
     private static partial Regex ClickWord();
 
     [GeneratedRegex(@"\(\s*(\d{1,4}(?:\.\d+)?)\s*,\s*(\d{1,4}(?:\.\d+)?)\s*\)")]
-    private static partial Regex Point();
+    private static partial Regex PointPattern();
 }
