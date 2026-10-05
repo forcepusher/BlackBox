@@ -10,15 +10,82 @@ public abstract class DesktopActionTool : Tool
 
     public sealed override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
+        var check = ChecksForMiss && ClickCheck.Enabled && ctx.Settings.ScreenshotAfterActions ? ClickCheck.Start(ctx) : null;
         var text = await ActAsync(args, ctx, ct).ConfigureAwait(false);
         if (!ctx.Settings.ScreenshotAfterActions)
             return new ToolResult(text);
 
         // Give the UI a moment to react before looking at it.
         await Task.Delay(500, ct).ConfigureAwait(false);
+        var missedAt = check is null ? null : await check.MissedAtAsync(ctx, ct).ConfigureAwait(false);
+        var hunting = Hunting(ctx, ChecksForMiss);
         var shot = ScreenshotTool.Take(ctx);
+        if (missedAt is not null || hunting)
+        {
+            var click = ctx.Platform.Input.GetCursorPosition();
+            var (mx, my) = ctx.GetScreenSpace().ToModel(click.X, click.Y);
+            // The point itself is left out: the call and the cursor position already say it, and
+            // each repeat makes a long run likelier to copy it into the next call.
+            text += missedAt is not null
+                ? "\nNothing on screen changed after this click, so it probably missed what you aimed at. " +
+                  "Compare where the mouse pointer is in the screenshot with where your target is and click again at corrected coordinates. " +
+                  "If the target only needs more time to respond, wait instead; if you clicked an empty spot only to focus a window, ignore this."
+                : $"\nYou have now clicked {ctx.RecentClicks.Count} times in a row in this small area. If you are still looking for something here, " +
+                  "check in the screenshot what is really under the mouse pointer (a tooltip may name it) before clicking nearby again.";
+            if (Target(args) is { Length: > 0 } target && ctx.Locate is { } locate && shot.Image is { } image)
+                text += await FreshLookNoteAsync(locate, image, target, (mx, my), ctx, ct).ConfigureAwait(false);
+        }
         return shot with { Text = text + "\n" + shot.Text };
     }
+
+    /// <summary>Clicks in a row this close (a share of the screen) count as searching one spot.</summary>
+    private const double HuntRadius = 0.03;
+
+    /// <summary>
+    /// Whether this click is the third or later in a row within a small area: the model is
+    /// feeling its way to something it can't find (Unity's Stop button, believed to be right of
+    /// Step: six clicks creeping right). A tooltip or hover highlight makes each of those clicks
+    /// "change" the screen, so the miss check alone doesn't catch it. Any other action ends the row.
+    /// </summary>
+    private static bool Hunting(ToolContext ctx, bool isClick)
+    {
+        if (!isClick)
+        {
+            ctx.RecentClicks.Clear();
+            return false;
+        }
+        var screen = ctx.GetScreenSpace().Screen;
+        var p = ctx.Platform.Input.GetCursorPosition();
+        if (ctx.RecentClicks.Count > 0 &&
+            ctx.RecentClicks.Any(c => Math.Abs(c.X - p.X) > screen.Width * HuntRadius || Math.Abs(c.Y - p.Y) > screen.Height * HuntRadius))
+            ctx.RecentClicks.Clear();
+        ctx.RecentClicks.Add(p);
+        return ctx.RecentClicks.Count >= 3;
+    }
+
+    /// <summary>What the model said it is clicking, if the tool takes that.</summary>
+    protected virtual string? Target(JsonObject args) => null;
+
+    /// <summary>
+    /// After a miss: where a fresh look at the screenshot, without the run's history, puts the
+    /// target. Long runs can keep clicking a spot they wrongly believe in (see <see cref="Agent.FreshLook"/>).
+    /// </summary>
+    private static async Task<string> FreshLookNoteAsync(Func<byte[], string, CancellationToken, Task<(double X, double Y)?>> locate,
+        byte[] image, string target, (int X, int Y) click, ToolContext ctx, CancellationToken ct)
+    {
+        var space = ctx.GetScreenSpace();
+        if (await locate(image, target, ct).ConfigureAwait(false) is not { } p || p.X < 0 || p.Y < 0 || p.X > space.ModelWidth || p.Y > space.ModelHeight)
+            return $" A fresh look at the screenshot did not find the {target}.";
+        var (x, y) = ((int)Math.Round(p.X), (int)Math.Round(p.Y));
+        // About 1% of the screen: the same spot, as far as a look can tell.
+        var near = Math.Abs(x - click.X) <= space.ModelWidth / 100 && Math.Abs(y - click.Y) <= space.ModelHeight / 100;
+        return near
+            ? $" A fresh look at the screenshot also puts the {target} at about ({x}, {y}), so the click was on it; it may need a moment, a double-click or another way to use it."
+            : $" A fresh look at the screenshot, without your earlier steps, puts the {target} at ({x}, {y}).";
+    }
+
+    /// <summary>Whether to tell the model when its action left the screen as it was (see <see cref="ClickCheck"/>).</summary>
+    protected virtual bool ChecksForMiss => false;
 
     protected abstract Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct);
 
@@ -84,15 +151,21 @@ public sealed class MouseClickTool : DesktopActionTool
         ("x", Num("X in screenshot coordinates"), true),
         ("y", Num("Y in screenshot coordinates"), true),
         ("button", Str("Mouse button, default left", "left", "right", "middle"), false),
-        ("clicks", Int("1 = single click (default), 2 = double click, 3 = triple click"), false));
+        ("clicks", Int("1 = single click (default), 2 = double click, 3 = triple click"), false),
+        ("target", Str("Short name of what you are clicking, e.g. \"File menu\" or \"Save button\". Used to double-check a click that misses."), false));
 
     public override string Describe(JsonObject args)
     {
         var clicks = (int)(GetNumber(args, "clicks") ?? 1);
         var kind = clicks switch { 2 => "Double-click", 3 => "Triple-click", _ => "Click" };
         var button = GetString(args, "button") is { } b && b != "left" ? $" ({b})" : "";
-        return $"{kind}{button} at {Fmt(args)}";
+        var target = GetString(args, "target") is { Length: > 0 } t ? $" ({t})" : "";
+        return $"{kind}{button} at {Fmt(args)}{target}";
     }
+
+    protected override bool ChecksForMiss => true;
+
+    protected override string? Target(JsonObject args) => GetString(args, "target")?.Trim();
 
     protected override async Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
@@ -103,7 +176,7 @@ public sealed class MouseClickTool : DesktopActionTool
         ctx.Platform.Input.MoveMouse(x, y);
         await Task.Delay(60, ct).ConfigureAwait(false);
         ctx.Platform.Input.Click(button, clicks);
-        return Describe(args) + " done.";
+        return clicks switch { 2 => "Double-clicked.", 3 => "Triple-clicked.", _ => "Clicked." };
     }
 
     internal static MouseButton ParseButton(string? s) => s?.ToLowerInvariant() switch
@@ -126,7 +199,7 @@ public sealed class MouseMoveTool : DesktopActionTool
         var (x, y) = Point(args, ctx);
         using var aside = Aside(ctx, (x, y));
         ctx.Platform.Input.MoveMouse(x, y);
-        return Task.FromResult(Describe(args) + " done.");
+        return Task.FromResult("Moved the mouse.");
     }
 }
 
@@ -162,7 +235,7 @@ public sealed class MouseDragTool : DesktopActionTool
         {
             input.MouseUp(MouseButton.Left);
         }
-        return Describe(args) + " done.";
+        return "Dragged.";
     }
 }
 

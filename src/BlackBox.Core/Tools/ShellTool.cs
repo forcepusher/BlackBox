@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 
 namespace BlackBox.Core.Tools;
 
-public sealed class ShellTool : Tool
+public sealed partial class ShellTool : Tool
 {
     private const int MaxOutput = 30_000;
 
@@ -42,7 +42,8 @@ public sealed class ShellTool : Tool
         var gate = new object();
         void Append(string? line)
         {
-            if (line is null) return;
+            if (line is null || line == ClixmlMarker) return;
+            line = DecodeClixml(line);
             lock (gate)
                 if (output.Length < MaxOutput) output.AppendLine(line);
         }
@@ -75,4 +76,29 @@ public sealed class ShellTool : Tool
 
         string Snapshot() { lock (gate) return output.ToString(); }
     }
+
+    private const string ClixmlMarker = "#< CLIXML";
+
+    /// <summary>
+    /// Windows PowerShell writes its error stream as CLIXML when stderr is redirected ("#&lt; CLIXML"
+    /// and then &lt;Objs&gt;&lt;S S="Error"&gt;Add-Type : Cannot add type..._x000D__x000A_&lt;/S&gt;...), which
+    /// buries the message in markup. Turns such a line back into the plain text PowerShell would
+    /// have shown; any other line is returned as it is.
+    /// </summary>
+    internal static string DecodeClixml(string line)
+    {
+        if (!line.StartsWith("<Objs ", StringComparison.Ordinal))
+            return line;
+        var text = new StringBuilder();
+        foreach (System.Text.RegularExpressions.Match m in ClixmlString().Matches(line))
+            text.Append(System.Net.WebUtility.HtmlDecode(ClixmlEscape().Replace(m.Groups[1].Value,
+                e => ((char)Convert.ToInt32(e.Groups[1].Value, 16)).ToString())));
+        return text.ToString().TrimEnd('\r', '\n').Replace("\r\n", "\n");
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"<S S=""(?:Error|Warning|Verbose|Debug|Information)"">(.*?)</S>")]
+    private static partial System.Text.RegularExpressions.Regex ClixmlString();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"_x([0-9A-Fa-f]{4})_")]
+    private static partial System.Text.RegularExpressions.Regex ClixmlEscape();
 }

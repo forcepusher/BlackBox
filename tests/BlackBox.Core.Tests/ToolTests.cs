@@ -54,6 +54,93 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task A_click_that_changes_nothing_is_reported_as_a_miss()
+    {
+        var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 384, 192), Desktop = new RawImage(384, 192, new byte[384 * 192 * 4]) };
+        var ctx = Ctx(platform, settings: new AgentSettings());
+        var missed = await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None);
+        Assert.Contains("Nothing on screen changed after this click", missed.Text);
+        Assert.Contains("Mouse cursor at (100, 50)", missed.Text);
+        Assert.NotNull(missed.Image);
+        Assert.DoesNotContain("fresh look", missed.Text); // no target named
+
+        // With a target, a fresh look says where it really is, or that the click was on it.
+        (double X, double Y)? found = (300, 120);
+        ctx.Locate = (_, target, _) => Task.FromResult(target == "Save button" ? found : null);
+        var looked = await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50, ["target"] = "Save button" }, ctx, CancellationToken.None);
+        Assert.Contains("A fresh look at the screenshot, without your earlier steps, puts the Save button at (300, 120).", looked.Text);
+        found = (101, 51);
+        looked = await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50, ["target"] = "Save button" }, ctx, CancellationToken.None);
+        Assert.Contains("also puts the Save button at about (101, 51)", looked.Text);
+        ctx.Locate = (_, _, _) => Task.FromResult<(double X, double Y)?>(null);
+        looked = await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50, ["target"] = "Save button" }, ctx, CancellationToken.None);
+        Assert.Contains("did not find the Save button", looked.Text);
+        ctx.Locate = null;
+        Assert.Equal((412, 87.5), BlackBox.Core.Agent.FreshLook.Parse("The centre is at (412, 87.5)."));
+        Assert.Null(BlackBox.Core.Agent.FreshLook.Parse("none"));
+
+        // A small change right at the click (a checkbox ticking) counts as a reaction.
+        platform.OnClick = p => { for (var i = 0; i < 10; i++) p.Desktop!.Bgra[(52 * 384 + 100 + i) * 4 + 1] = 255; };
+        var hit = await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None);
+        Assert.DoesNotContain("Nothing on screen changed", hit.Text);
+
+        // So does a big one elsewhere (a dialog); a tiny one elsewhere (a clock) does not.
+        platform.OnClick = p => p.Desktop!.Bgra[(180 * 384 + 370) * 4] ^= 255;
+        Assert.Contains("Nothing on screen changed", (await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None)).Text);
+        platform.OnClick = p => { for (var y = 120; y < 160; y++) for (var x = 300; x < 340; x++) p.Desktop!.Bgra[(y * 384 + x) * 4] ^= 255; };
+        Assert.DoesNotContain("Nothing on screen changed", (await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None)).Text);
+    }
+
+    [Fact]
+    public async Task Three_clicks_in_a_row_in_one_spot_get_a_fresh_look()
+    {
+        var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 384, 192), Desktop = new RawImage(384, 192, new byte[384 * 192 * 4]) };
+        platform.OnClick = p => { for (var i = 0; i < 10; i++) p.Desktop!.Bgra[((p.Cursor.Y + 12) * 384 + p.Cursor.X + i) * 4 + 2] ^= 0xFF; }; // a tooltip at each click
+        var ctx = Ctx(platform, settings: new AgentSettings());
+        ctx.Locate = (_, _, _) => Task.FromResult<(double X, double Y)?>((20, 20));
+        JsonObject Click(int x) => new() { ["x"] = x, ["y"] = 100, ["target"] = "Stop button" };
+        var click = new MouseClickTool();
+
+        Assert.DoesNotContain("in a row", (await click.ExecuteAsync(Click(200), ctx, CancellationToken.None)).Text);
+        Assert.DoesNotContain("in a row", (await click.ExecuteAsync(Click(203), ctx, CancellationToken.None)).Text);
+        var third = await click.ExecuteAsync(Click(206), ctx, CancellationToken.None);
+        Assert.Contains("You have now clicked 3 times in a row in this small area", third.Text);
+        Assert.Contains("puts the Stop button at (20, 20)", third.Text);
+
+        // Anything else in between, or a click elsewhere, starts a new row.
+        await new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = new JsonArray("left") }, ctx, CancellationToken.None);
+        Assert.DoesNotContain("in a row", (await click.ExecuteAsync(Click(206), ctx, CancellationToken.None)).Text);
+        Assert.DoesNotContain("in a row", (await click.ExecuteAsync(Click(206), ctx, CancellationToken.None)).Text);
+        Assert.DoesNotContain("in a row", (await click.ExecuteAsync(Click(50), ctx, CancellationToken.None)).Text);
+    }
+
+    [Fact]
+    public void A_click_that_contradicts_what_the_model_wrote_goes_where_it_wrote()
+    {
+        ChatMessage Reply(string reasoning, string content, params string[] args) => new()
+        {
+            Role = ChatRole.Assistant, Reasoning = reasoning, Content = content,
+            ToolCalls = args.Select((a, i) => new ToolCall { Id = "c" + i, Name = "mouse_click", Arguments = a }).ToList(),
+        };
+
+        // Copied from the previous call: the text says (34, 26), the call (34, 3).
+        var copied = Reply("My y=3 click hit the title bar. Let me try clicking on \"Assets\" at (34, 26).", "Let me click Assets there.", "{\"x\":34,\"y\":3}");
+        Assert.Equal("Note: your call said (34, 3), but you wrote that you would click (34, 26), so BlackBox clicked there.",
+            BlackBox.Core.Agent.ClickIntent.Reconcile(copied, 1000, 1000, (34, 3)));
+        Assert.Equal("{\"x\":34,\"y\":26}", copied.ToolCalls![0].Arguments);
+
+        // Close enough, or no point stated in a sentence about clicking, or more than one click: left alone.
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("I'll click the Play button at (521, 52).", "", "{\"x\":522,\"y\":55}"), 1000, 1000, (522, 55)));
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("The Play button is at (521, 52). Stop is just right of it.", "Clicking Stop.", "{\"x\":536,\"y\":52}"), 1000, 1000, (536, 52)));
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("Click (10, 10) then (500, 500).", "", "{\"x\":10,\"y\":10}", "{\"x\":500,\"y\":500}"), 1000, 1000, (10, 10)));
+        // A sentence naming two points (run 4: Clear, then Play), or a call that isn't a repeat: left alone.
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("I'll click the Clear button (955, 82) and then press Play (503, 54).", "", "{\"x\":746,\"y\":82}"), 1000, 1000, (746, 82)));
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("Let me click Assets at (34, 26).", "", "{\"x\":34,\"y\":3}"), 1000, 1000, (500, 500)));
+        // A point outside the coordinate range is in other units (pixels): left alone.
+        Assert.Null(BlackBox.Core.Agent.ClickIntent.Reconcile(Reply("Click the tab at (1598, 90).", "", "{\"x\":624,\"y\":83}"), 1000, 1000, (624, 83)));
+    }
+
+    [Fact]
     public void Small_screens_are_not_upscaled()
     {
         var space = new ScreenSpace(new ScreenRect(0, 0, 1024, 768), (1600, 900));
@@ -279,6 +366,14 @@ public class ToolTests
         Assert.Contains("héllo 'quoted' wörld", result.Text);
         Assert.Contains("Exit code 3", result.Text);
         Assert.True(result.IsError);
+
+        // Errors come back as text, not as PowerShell's CLIXML.
+        var failed = await new ShellTool().ExecuteAsync(
+            new JsonObject { ["command"] = "Write-Output before; Write-Error 'no such <thing>'; Write-Output after" }, Ctx(platform), CancellationToken.None);
+        Assert.DoesNotContain("CLIXML", failed.Text);
+        Assert.DoesNotContain("_x000D_", failed.Text);
+        Assert.Contains("no such <thing>", failed.Text);
+        Assert.Contains("after", failed.Text);
     }
 }
 

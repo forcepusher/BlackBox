@@ -1,0 +1,106 @@
+using BlackBox.Core.Platform;
+
+namespace BlackBox.Core.Tools;
+
+/// <summary>
+/// Notices a click that changed nothing on screen, which almost always means it missed its target
+/// (a menu a few pixels lower, a tab next to the spot). Without this the result reads like a
+/// success, and the model clicks the same spot again and again. The screen is compared before and
+/// after the click (without the mouse cursor); a change near the click, or a big one anywhere
+/// (a dialog opening), counts as a reaction. Small changes elsewhere (a clock, a blinking caret,
+/// the hover highlight under the old mouse position) don't.
+/// Measured with ClickAccuracyTests (BB_CLICK_SHIFT=30, two more tries): qwen3.8 corrected 17 of 21
+/// misses with the note. A red ring drawn at the click in the screenshot added nothing (17 of 21
+/// as well), so the note is text only.
+/// </summary>
+internal sealed class ClickCheck
+{
+    /// <summary>Radius around the click, in screen pixels, where any change counts as a reaction.</summary>
+    private const int NearRadius = 60;
+
+    /// <summary>Changed pixels near the click that count as a reaction (a checkbox tick, a caret).</summary>
+    private const int NearPixels = 6;
+
+    /// <summary>Changed share of the screen elsewhere that counts as a reaction (about 55x50 px on 2560x1080).</summary>
+    private const double FarShare = 0.001;
+
+    /// <summary>A pixel counts as changed when a colour channel moves by more than this.</summary>
+    private const int Threshold = 24;
+
+    /// <summary>When nothing has changed yet, how long to keep looking for a slow reaction.</summary>
+    private static readonly TimeSpan[] Rechecks = [TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(700)];
+
+    /// <summary>Off only to measure what the check adds (ClickAccuracyTests).</summary>
+    internal static bool Enabled { get; set; } = true;
+
+    private readonly ScreenRect _screen;
+    private readonly RawImage _before;
+    private readonly (int X, int Y) _oldCursor;
+
+    private ClickCheck(ScreenRect screen, RawImage before, (int X, int Y) oldCursor)
+    {
+        _screen = screen;
+        _before = before;
+        _oldCursor = oldCursor;
+    }
+
+    /// <summary>Remembers the screen the click is about to happen on.</summary>
+    public static ClickCheck Start(ToolContext ctx)
+    {
+        var screen = ctx.GetScreenSpace().Screen;
+        return new(screen, ctx.Platform.Screen.Capture(screen, includeCursor: false), ctx.Platform.Input.GetCursorPosition());
+    }
+
+    /// <summary>
+    /// After the click (and the usual pause for the UI to react): the screen point it landed on if
+    /// nothing changed, rechecking a couple of times for slow reactions; null if the screen reacted.
+    /// </summary>
+    public async Task<(int X, int Y)?> MissedAtAsync(ToolContext ctx, CancellationToken ct)
+    {
+        var click = ctx.Platform.Input.GetCursorPosition();
+        if (!_screen.Contains(click.X, click.Y))
+            return null;
+        if (Reacted(ctx.Platform.Screen.Capture(_screen, includeCursor: false), click))
+            return null;
+        foreach (var delay in Rechecks)
+        {
+            await Task.Delay(delay, ct).ConfigureAwait(false);
+            if (Reacted(ctx.Platform.Screen.Capture(_screen, includeCursor: false), click))
+                return null;
+        }
+        return click;
+    }
+
+    private bool Reacted(RawImage after, (int X, int Y) click)
+    {
+        if (after.Width != _before.Width || after.Height != _before.Height)
+            return true;
+        var (cx, cy) = (click.X - _screen.X, click.Y - _screen.Y);
+        var (ox, oy) = (_oldCursor.X - _screen.X, _oldCursor.Y - _screen.Y);
+        const int r2 = NearRadius * NearRadius;
+        var hover2 = 2 * r2; // the old hover highlight can be a bit bigger than the click's surroundings
+        var farLimit = (long)(after.Width * (long)after.Height * FarShare);
+        long near = 0, far = 0;
+        var a = _before.Bgra;
+        var b = after.Bgra;
+        for (var y = 0; y < after.Height; y++)
+        {
+            var row = y * after.Stride;
+            var dyc = (y - cy) * (y - cy);
+            var dyo = (y - oy) * (y - oy);
+            for (var x = 0; x < after.Width; x++)
+            {
+                var i = row + x * 4;
+                if (Math.Abs(a[i] - b[i]) <= Threshold && Math.Abs(a[i + 1] - b[i + 1]) <= Threshold && Math.Abs(a[i + 2] - b[i + 2]) <= Threshold)
+                    continue;
+                if ((x - cx) * (x - cx) + dyc <= r2)
+                {
+                    if (++near >= NearPixels) return true;
+                }
+                else if ((x - ox) * (x - ox) + dyo > hover2 && ++far >= farLimit)
+                    return true;
+            }
+        }
+        return false;
+    }
+}

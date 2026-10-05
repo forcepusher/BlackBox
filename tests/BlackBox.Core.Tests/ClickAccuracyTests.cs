@@ -18,7 +18,13 @@ namespace BlackBox.Core.Tests;
 /// Opt-in like <see cref="ServerIntegrationTests"/>: set BB_SERVER_URL and BB_SERVER_MODEL. Optional:
 /// BB_CLICK_SCENES (comma-separated, default all), BB_CLICK_TRIALS (per scene, default 5),
 /// BB_CLICK_COORDS=pixels|grid (default: what BlackBox picks for the model), BB_CLICK_RES (a
-/// <see cref="ScreenshotResolution"/> name), BB_CLICK_SEED (first layout, default 1000), BB_CLICK_TAG (report name). The report goes to
+/// <see cref="ScreenshotResolution"/> name), BB_CLICK_SEED (first layout, default 1000), BB_CLICK_TAG (report name),
+/// BB_CLICK_RETRY (extra clicks allowed after a miss, default 0: the target reacts when hit, so a
+/// miss gets BlackBox's miss note), BB_CLICK_CHECK=0 (no miss note, as before it existed), BB_CLICK_LOOK=0 (miss note without a fresh look), BB_CLICK_RULE
+/// (extra instructions for the system prompt, to measure a prompt rule), BB_CLICK_TEMP (a temperature
+/// sent with the benchmark's own requests instead of the server's), BB_CLICK_SHIFT (the first screenshot
+/// shows everything this many pixels higher, so the first click misses as a misjudged one does; with
+/// BB_CLICK_RETRY it measures how well the model corrects a miss). The report goes to
 /// bb-click-TAG.txt in the temp folder, with the first screenshot of each scene next to it.
 /// </summary>
 public class ClickAccuracyTests
@@ -48,7 +54,7 @@ public class ClickAccuracyTests
         ["Item 12", "Item 21", "Item 112", "Item 121"], ["Page 1", "Page 11", "Page 7", "Page 17"],
     ];
 
-    private sealed record Target(string Label, ScreenRect Bounds);
+    private sealed record Target(string Label, ScreenRect Bounds, string? Noun = null);
 
     private sealed record Theme(SKColor Background, SKColor Face, SKColor Border, SKColor Ink)
     {
@@ -61,7 +67,7 @@ public class ClickAccuracyTests
 
     private delegate List<Target> Draw(Random rng, SKCanvas canvas, int width, int height, Theme theme, List<string> labels);
 
-    private sealed record Scene(string Name, ScreenRect[] Screens, int On, Draw Draw, Theme? Theme = null, string Noun = "button", Degrade Degrade = Degrade.None);
+    private sealed record Scene(string Name, ScreenRect[] Screens, int On, Draw Draw, Theme? Theme = null, string Noun = "button", Degrade Degrade = Degrade.None, bool EveryTarget = false);
 
     private static readonly ScreenRect Primary = new(0, 0, 2560, 1080);
 
@@ -85,7 +91,31 @@ public class ClickAccuracyTests
         new("left", [Primary, new(-1920, 0, 1920, 1080)], 1, Buttons(12, 20, 30, 20)),
         new("ultrawide", [new(0, 0, 5120, 1440)], 0, Buttons(12, 20, 50, 20)),
         new("portrait", [new(0, 0, 1080, 1920)], 0, Buttons(12, 20, 30, 20)),
+        // A real screenshot of the Unity editor (2560x1080): menu bar, tabs, toolbar buttons. Each target once.
+        new("unity", [Primary], 0, Screenshot("unity-editor.png", UnityTargets), EveryTarget: true),
     ];
+
+    // A property, not a field: Scenes above is initialized first.
+    private static Target[] UnityTargets =>
+    [
+        new("File", new(3, 21, 27, 20), "menu"), new("Edit", new(33, 21, 30, 20), "menu"),
+        new("Assets", new(66, 21, 44, 20), "menu"), new("Services", new(113, 21, 54, 20), "menu"),
+        new("GameObject", new(170, 21, 78, 20), "menu"), new("Component", new(251, 21, 74, 20), "menu"),
+        new("Window", new(328, 21, 55, 20), "menu"), new("Help", new(386, 21, 35, 20), "menu"),
+        new("Play", new(1326, 51, 31, 19)), new("Pause", new(1360, 51, 31, 19)),
+        new("Scene", new(0, 79, 75, 21), "tab"), new("Hierarchy", new(1321, 80, 95, 22), "tab"),
+        new("Inspector", new(1893, 79, 87, 23), "tab"), new("Console", new(1982, 79, 88, 23), "tab"),
+        new("Game", new(0, 357, 73, 24), "tab"), new("Project", new(1320, 442, 83, 23), "tab"),
+        new("Clear", new(1888, 103, 39, 19)), new("Collapse", new(1944, 103, 56, 19)), new("Error Pause", new(2003, 103, 74, 19)),
+    ];
+
+    /// <summary>A real screenshot from ClickScenes, with its targets marked by hand.</summary>
+    private static Draw Screenshot(string file, Target[] targets) => (_, c, _, _, _, _) =>
+    {
+        using var image = SKBitmap.Decode(Path.Combine(AppContext.BaseDirectory, "ClickScenes", file));
+        c.DrawBitmap(image, 0, 0);
+        return targets.ToList();
+    };
 
     [Fact]
     public async Task Model_clicks_the_named_target()
@@ -105,15 +135,21 @@ public class ClickAccuracyTests
         var summary = new List<string>();
         void Log(string line) { report.Add(line); TestContext.Current.SendDiagnosticMessage(line); }
         var (allHits, allTrials) = (0, 0);
+        var retries = int.TryParse(Env("BB_CLICK_RETRY"), out var rt) ? rt : 0;
+        ClickCheck.Enabled = Env("BB_CLICK_CHECK") != "0";
+        FreshLook.Enabled = Env("BB_CLICK_LOOK") != "0";
+        var (retried, fixedLater) = (0, 0);
+        var shift = int.TryParse(Env("BB_CLICK_SHIFT"), out var sh) ? sh : 0;
         foreach (var scene in Scenes.Where(s => only is null || only.Contains(s.Name)))
         {
             var hits = 0;
             var misses = new List<double>();
-            for (var trial = 0; trial < trials; trial++)
+            var count = scene.EveryTarget ? Render(scene, new Random(seed)).Targets.Count : trials;
+            for (var trial = 0; trial < count; trial++)
             {
                 var rng = new Random(seed + trial);
                 var (desktop, origin, targets) = Render(scene, rng);
-                var target = targets[rng.Next(targets.Count)];
+                var target = scene.EveryTarget ? targets[trial] : targets[rng.Next(targets.Count)];
                 var platform = new FakePlatform { Screens = scene.Screens.ToList(), ScreenBounds = scene.Screens[0], Desktop = desktop, DesktopOrigin = origin };
                 var settings = new AgentSettings { ScreenshotResolution = resolution };
                 var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = Path.GetTempPath(), CoordinateGrid = grid };
@@ -122,16 +158,39 @@ public class ClickAccuracyTests
                     {
                         Platform = platform, Settings = settings, WorkingDirectory = "", CoordinateGrid = grid, CurrentScreen = scene.On,
                     }).Image!);
+                platform.ShiftFirstShot = shift;
                 var connection = BackendConnection.Create(http, server);
-                var prompt = SystemPrompt.Build(platform.Name, ctx.ScreenSpaces(), Path.GetTempPath(), "");
+                if (Env("BB_CLICK_TEMP") is { } temperature) // BlackBox itself sends no sampling settings
+                    connection.Options.Extra!["temperature"] = double.Parse(temperature, System.Globalization.CultureInfo.InvariantCulture);
+                var prompt = SystemPrompt.Build(platform.Name, ctx.ScreenSpaces(), Path.GetTempPath(), Env("BB_CLICK_RULE") ?? "");
                 var session = new AgentSession(connection.Client, connection.Options, ToolRegistry.CreateDefault(true), ctx, prompt, contextTokens: context ?? 0);
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-                var observer = new FirstClickObserver(cts);
+                // The target reacts when it is hit (its pixels invert), so a click that misses leaves
+                // the screen as it was, which BlackBox reports as a miss.
+                var landed = new List<(int X, int Y)>();
+                platform.OnClick = p =>
+                {
+                    landed.Add(p.Cursor);
+                    var b = target.Bounds;
+                    if (!b.Contains(p.Cursor.X, p.Cursor.Y)) return;
+                    for (var y = b.Y; y < b.Y + b.Height; y++)
+                        for (var x = b.X; x < b.X + b.Width; x++)
+                            for (var c = 0; c < 3; c++)
+                                p.Desktop!.Bgra[(y - origin.Y) * p.Desktop.Stride + (x - origin.X) * 4 + c] ^= 0xFF;
+                };
+                var observer = new FirstClickObserver(cts, retries + 1, () => landed.Count > 0 && target.Bounds.Contains(landed[^1].X, landed[^1].Y));
                 var where = scene.On > 0 ? $" It is on screen {scene.On + 1}." : "";
-                await session.RunAsync($"Click the \"{target.Label}\" {scene.Noun}.{where}", observer, cts.Token);
+                await session.RunAsync($"Click the \"{target.Label}\" {target.Noun ?? scene.Noun}.{where}", observer, cts.Token);
+                var later = landed.Skip(1).Select((l, i) => (l, i)).FirstOrDefault(x => target.Bounds.Contains(x.l.X, x.l.Y));
+                if (retries > 0 && landed.Count > 0 && !target.Bounds.Contains(landed[0].X, landed[0].Y))
+                {
+                    retried++;
+                    if (later != default) fixedLater++;
+                }
+                var retryNote = retries == 0 || landed.Count < 2 ? "" : later != default ? $"; HIT on try {later.i + 2}" : $"; still missed after {landed.Count} tries";
 
-                var click = platform.Actions.LastOrDefault(a => a.StartsWith("move "));
+                var click = platform.Actions.FirstOrDefault(a => a.StartsWith("move "));
                 var label = $"{scene.Name,-9} #{trial} {target.Label,-12}";
                 if (click is null || observer.Args is null)
                 {
@@ -148,16 +207,18 @@ public class ClickAccuracyTests
                 var dy = Math.Max(Math.Max(b.Y - p[1], p[1] - (b.Y + b.Height - 1)), 0);
                 if (!hit) misses.Add(Math.Sqrt(dx * dx + dy * dy));
                 Log($"{label} {(hit ? "HIT " : "miss")} model said {observer.Args} -> ({p[0]}, {p[1]}); target {b.X},{b.Y} {b.Width}x{b.Height}" +
-                    (hit ? "" : $", {dx},{dy} px outside") + $" [{observer.Calls}]");
+                    (hit ? "" : $", {dx},{dy} px outside") + retryNote + $" [{observer.Calls}]");
             }
             allHits += hits;
-            allTrials += trials;
+            allTrials += count;
             var far = misses.Count(m => double.IsNaN(m) || m > 40);
-            summary.Add($"{scene.Name,-9} {hits}/{trials}" + (misses.Count > 0 ? $"  misses: {misses.Count - far} near (≤40px), {far} far or none" : ""));
+            summary.Add($"{scene.Name,-9} {hits}/{count}" + (misses.Count > 0 ? $"  misses: {misses.Count - far} near (≤40px), {far} far or none" : ""));
         }
         foreach (var line in summary)
             Log(line);
         Log($"TOTAL {allHits}/{allTrials} with {Model}, coordinates: {grid?.ToString() ?? "pixels"}, screenshots: {resolution}");
+        if (retries > 0)
+            Log($"RETRY {fixedLater}/{retried} first-click misses hit within {retries} more tries (miss check {(ClickCheck.Enabled ? "on" : "off")}, fresh look {(FreshLook.Enabled ? "on" : "off")})");
         File.WriteAllLines(Path.Combine(Path.GetTempPath(), $"bb-click-{tag}.txt"), report);
     }
 
@@ -400,8 +461,10 @@ public class ClickAccuracyTests
     }
 
     /// <summary>Stops the run after the first click, or after a few calls without one.</summary>
-    private sealed class FirstClickObserver(CancellationTokenSource cts) : IAgentObserver
+    /// <summary>Stops the run at the first click, or with retries, at a hit or after <paramref name="maxClicks"/> clicks.</summary>
+    private sealed class FirstClickObserver(CancellationTokenSource cts, int maxClicks = 1, Func<bool>? hit = null) : IAgentObserver
     {
+        private int _clicks;
         public string? Args { get; private set; }
         public string Calls { get; private set; } = "";
         private int _count;
@@ -417,12 +480,15 @@ public class ClickAccuracyTests
         {
             Calls += (Calls.Length > 0 ? ", " : "") + summary;
             if (call.Name.Contains("click", StringComparison.OrdinalIgnoreCase))
-                Args = call.Arguments;
+            {
+                Args ??= call.Arguments;
+                _clicks++;
+            }
         }
 
         public void OnToolFinished(ToolCall call, ToolResult result)
         {
-            if (Args is not null || ++_count >= 4)
+            if (_clicks >= maxClicks || (_clicks > 0 && hit?.Invoke() != false) || ++_count >= 4 + 2 * (maxClicks - 1))
                 cts.Cancel();
         }
     }

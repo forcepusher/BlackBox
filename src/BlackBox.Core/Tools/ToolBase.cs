@@ -36,6 +36,16 @@ public sealed class ToolContext
     /// </summary>
     public int CurrentScreen { get; set; }
 
+    /// <summary>
+    /// Finds a named thing on a screenshot (JPEG) in a fresh conversation with the model; returns its
+    /// centre in the model's coordinates, or null. Set by the agent session; used after a click that
+    /// missed (see <see cref="Agent.FreshLook"/>).
+    /// </summary>
+    public Func<byte[], string, CancellationToken, Task<(double X, double Y)?>>? Locate { get; set; }
+
+    /// <summary>Screen points of the latest clicks in a row in one small area (see DesktopActionTool).</summary>
+    internal List<(int X, int Y)> RecentClicks { get; } = [];
+
     /// <summary>All monitors in physical pixels, the primary first.</summary>
     public IReadOnlyList<ScreenRect> Screens => Platform.Screen.GetScreens();
 
