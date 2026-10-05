@@ -18,19 +18,49 @@ public abstract class DesktopActionTool : Tool
         // Give the UI a moment to react before looking at it.
         await Task.Delay(500, ct).ConfigureAwait(false);
         var missedAt = check is null ? null : await check.MissedAtAsync(ctx, ct).ConfigureAwait(false);
+        var hunting = Hunting(ctx, ChecksForMiss);
         var shot = ScreenshotTool.Take(ctx);
-        if (missedAt is { } at)
+        if (missedAt is not null || hunting)
         {
-            var (mx, my) = ctx.GetScreenSpace().ToModel(at.X, at.Y);
+            var click = ctx.Platform.Input.GetCursorPosition();
+            var (mx, my) = ctx.GetScreenSpace().ToModel(click.X, click.Y);
             // The point itself is left out: the call and the cursor position already say it, and
             // each repeat makes a long run likelier to copy it into the next call.
-            text += "\nNothing on screen changed after this click, so it probably missed what you aimed at. " +
-                    "Compare where the mouse pointer is in the screenshot with where your target is and click again at corrected coordinates. " +
-                    "If the target only needs more time to respond, wait instead; if you clicked an empty spot only to focus a window, ignore this.";
+            text += missedAt is not null
+                ? "\nNothing on screen changed after this click, so it probably missed what you aimed at. " +
+                  "Compare where the mouse pointer is in the screenshot with where your target is and click again at corrected coordinates. " +
+                  "If the target only needs more time to respond, wait instead; if you clicked an empty spot only to focus a window, ignore this."
+                : $"\nYou have now clicked {ctx.RecentClicks.Count} times in a row in this small area. If you are still looking for something here, " +
+                  "check in the screenshot what is really under the mouse pointer (a tooltip may name it) before clicking nearby again.";
             if (Target(args) is { Length: > 0 } target && ctx.Locate is { } locate && shot.Image is { } image)
                 text += await FreshLookNoteAsync(locate, image, target, (mx, my), ctx, ct).ConfigureAwait(false);
         }
         return shot with { Text = text + "\n" + shot.Text };
+    }
+
+    /// <summary>Clicks in a row this close (a share of the screen) count as searching one spot.</summary>
+    private const double HuntRadius = 0.03;
+
+    /// <summary>
+    /// Whether this click is the third or later in a row within a small area: the model is
+    /// feeling its way to something it can't find (Unity's Stop button, believed to be right of
+    /// Step: six clicks creeping right). A tooltip or hover highlight makes each of those clicks
+    /// "change" the screen, so the miss check alone doesn't catch it. Any other action ends the row.
+    /// </summary>
+    private static bool Hunting(ToolContext ctx, bool isClick)
+    {
+        if (!isClick)
+        {
+            ctx.RecentClicks.Clear();
+            return false;
+        }
+        var screen = ctx.GetScreenSpace().Screen;
+        var p = ctx.Platform.Input.GetCursorPosition();
+        if (ctx.RecentClicks.Count > 0 &&
+            ctx.RecentClicks.Any(c => Math.Abs(c.X - p.X) > screen.Width * HuntRadius || Math.Abs(c.Y - p.Y) > screen.Height * HuntRadius))
+            ctx.RecentClicks.Clear();
+        ctx.RecentClicks.Add(p);
+        return ctx.RecentClicks.Count >= 3;
     }
 
     /// <summary>What the model said it is clicking, if the tool takes that.</summary>

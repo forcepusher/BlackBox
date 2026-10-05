@@ -92,6 +92,29 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task Three_clicks_in_a_row_in_one_spot_get_a_fresh_look()
+    {
+        var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 384, 192), Desktop = new RawImage(384, 192, new byte[384 * 192 * 4]) };
+        platform.OnClick = p => { for (var i = 0; i < 10; i++) p.Desktop!.Bgra[((p.Cursor.Y + 12) * 384 + p.Cursor.X + i) * 4 + 2] ^= 0xFF; }; // a tooltip at each click
+        var ctx = Ctx(platform, settings: new AgentSettings());
+        ctx.Locate = (_, _, _) => Task.FromResult<(double X, double Y)?>((20, 20));
+        JsonObject Click(int x) => new() { ["x"] = x, ["y"] = 100, ["target"] = "Stop button" };
+        var click = new MouseClickTool();
+
+        Assert.DoesNotContain("in a row", (await click.ExecuteAsync(Click(200), ctx, CancellationToken.None)).Text);
+        Assert.DoesNotContain("in a row", (await click.ExecuteAsync(Click(203), ctx, CancellationToken.None)).Text);
+        var third = await click.ExecuteAsync(Click(206), ctx, CancellationToken.None);
+        Assert.Contains("You have now clicked 3 times in a row in this small area", third.Text);
+        Assert.Contains("puts the Stop button at (20, 20)", third.Text);
+
+        // Anything else in between, or a click elsewhere, starts a new row.
+        await new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = new JsonArray("left") }, ctx, CancellationToken.None);
+        Assert.DoesNotContain("in a row", (await click.ExecuteAsync(Click(206), ctx, CancellationToken.None)).Text);
+        Assert.DoesNotContain("in a row", (await click.ExecuteAsync(Click(206), ctx, CancellationToken.None)).Text);
+        Assert.DoesNotContain("in a row", (await click.ExecuteAsync(Click(50), ctx, CancellationToken.None)).Text);
+    }
+
+    [Fact]
     public void A_click_that_contradicts_what_the_model_wrote_goes_where_it_wrote()
     {
         ChatMessage Reply(string reasoning, string content, params string[] args) => new()
