@@ -47,6 +47,11 @@
               </StackPanel>
             </Grid>
 
+            <TextBlock Classes="h2" Text="Web" />
+            <CheckBox Content="Let the agent search the web and read pages" IsChecked="{Binding Agent.WebSearch}" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" Margin="28,0,0,8"
+                       Text="So it can look up what it doesn't know, like the exact names in an API it writes code for. Searches go to DuckDuckGo, or to Bing through Edge or Chrome running hidden when DuckDuckGo is busy. No account or key needed." />
+
             <TextBlock Classes="h2" Text="Things BlackBox should always know" />
             <TextBox Text="{Binding Agent.CustomInstructions}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100"
                      Watermark="For example: my documents are in D:\Docs. Use Firefox for browsing. Answer in German." />

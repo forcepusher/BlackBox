@@ -204,6 +204,9 @@ public sealed class AgentSettings
     /// <summary>How long each line of the on-screen input log stays before it has faded out.</summary>
     public int InputLogSeconds { get; set; } = DefaultInputLogSeconds;
 
+    /// <summary>Give the agent web_search and fetch_page, so it can look up what it doesn't know.</summary>
+    public bool WebSearch { get; set; } = true;
+
     public string CustomInstructions { get; set; } = "";
 }
 

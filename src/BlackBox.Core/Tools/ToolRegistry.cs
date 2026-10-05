@@ -13,10 +13,10 @@ public sealed class ToolRegistry
     }
 
     /// <param name="extra">Tools from outside BlackBox (MCP servers), offered after its own.</param>
-    public static ToolRegistry CreateDefault(bool includeScreenTools, IEnumerable<Tool>? extra = null) =>
-        new(DefaultTools(includeScreenTools).Concat(extra ?? []));
+    public static ToolRegistry CreateDefault(bool includeScreenTools, IEnumerable<Tool>? extra = null, bool includeWebTools = true) =>
+        new(DefaultTools(includeScreenTools, includeWebTools).Concat(extra ?? []));
 
-    private static IEnumerable<Tool> DefaultTools(bool includeScreenTools)
+    private static IEnumerable<Tool> DefaultTools(bool includeScreenTools, bool includeWebTools)
     {
         if (includeScreenTools)
         {
@@ -34,6 +34,11 @@ public sealed class ToolRegistry
         yield return new EditFileTool();
         yield return new ListDirectoryTool();
         yield return new ShellTool();
+        if (includeWebTools)
+        {
+            yield return new WebSearchTool();
+            yield return new FetchPageTool();
+        }
     }
 
     public IReadOnlyCollection<Tool> All => _tools.Values;

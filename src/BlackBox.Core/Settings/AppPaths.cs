@@ -7,6 +7,7 @@ namespace BlackBox.Core.Settings;
 ///   BlackBox.exe
 ///   Data/settings.json
 ///   Data/mcp.json  (MCP servers, if any)
+///   Data/browser/  (profile of the headless browser web search falls back on)
 ///   Data/runtime/  (native libraries unpacked by the single-file build)
 /// </code>
 /// </summary>
@@ -18,6 +19,9 @@ public sealed class AppPaths(string root)
 
     /// <summary>The MCP server list, in the format MCP READMEs show (see <see cref="Mcp.McpConfig"/>).</summary>
     public string McpConfigFile => Path.Combine(DataDir, "mcp.json");
+
+    /// <summary>Profile of the headless browser the web tools fall back on (see <see cref="Web.HeadlessBrowser"/>).</summary>
+    public string BrowserProfileDir => Path.Combine(DataDir, "browser");
 
     /// <summary>Where the single-file build unpacks its native libraries.</summary>
     public string RuntimeDir => Path.Combine(DataDir, "runtime");
