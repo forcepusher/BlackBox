@@ -37,9 +37,10 @@ public sealed partial class AgentSession
     /// <summary>The prompt size (in server-reported tokens where known) at which the context is reset.</summary>
     /// <remarks>
     /// A fifth of the context (at least 16k) stays free: enough for the reply in progress and for
-    /// the handoff note, which is written in the same context before the reset.
+    /// the handoff note, which is written in the same context before the reset. Never more than
+    /// half, though: with 16k or less, 16k free would mean a reset before every step.
     /// </remarks>
-    internal int ResetThreshold => contextTokens - Math.Max(contextTokens / 5, 16_384);
+    public int ResetThreshold => contextTokens - Math.Min(Math.Max(contextTokens / 5, 16_384), contextTokens / 2);
 
     // Last exact size the server reported, and how many history messages it covered.
     private int? _measuredTokens;
@@ -49,7 +50,7 @@ public sealed partial class AgentSession
     /// The conversation's size in tokens: the server's last exact count plus an estimate for the
     /// messages added since; a pure estimate when the server reports no usage.
     /// </summary>
-    internal int TokensInUse()
+    public int TokensInUse()
     {
         if (_measuredTokens is { } measured && _measuredCount <= History.Count)
             return measured + History.Skip(_measuredCount).Sum(EstimateTokens);

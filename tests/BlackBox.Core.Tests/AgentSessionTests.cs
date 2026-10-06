@@ -460,6 +460,18 @@ public class AgentSessionTests
         Assert.Contains(observer.Notices, n => n.StartsWith("Context reset"));
     }
 
+    [Theory]
+    [InlineData(100_000, 80_000)]  // a fifth stays free
+    [InlineData(65_536, 49_152)]   // at least 16k
+    [InlineData(32_768, 16_384)]
+    [InlineData(16_384, 8_192)]    // but never more than half: 16k free of 16k reset before every step
+    [InlineData(8_192, 4_096)]
+    public void The_context_is_reset_with_room_left_for_the_reply_and_the_note(int context, int threshold)
+    {
+        var (session, _) = CreateSession(new ScriptedServer(), Path.GetTempPath(), new FakePlatform(), contextTokens: context);
+        Assert.Equal(threshold, session.ResetThreshold);
+    }
+
     [Fact]
     public async Task After_a_reset_the_next_reply_gets_a_step_of_its_own()
     {

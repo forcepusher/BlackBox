@@ -60,7 +60,7 @@ too; the server refuses requests longer than its own size, and a run that hits t
 size the server names. The choice is saved; it only changes BlackBox's budgeting and when it
 resets, and does not reload the model on the server.
 
-Until the context is nearly full (a fifth left, at least 16k), the conversation only grows at the
+Until the context is nearly full (a fifth left, at least 16k but at most half), the conversation only grows at the
 end, so the server reuses its cache and each step processes only the new messages. Then BlackBox
 does a **context reset**: the model writes a handoff note for itself on the cached history (it
 streams at once), and the conversation is replaced by your messages, that note and the current
