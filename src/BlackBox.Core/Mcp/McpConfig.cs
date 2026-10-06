@@ -60,13 +60,7 @@ public sealed class McpConfig
     /// <summary>The file's text, or the empty template if there is no file yet.</summary>
     public static string Load(string path) => File.Exists(path) ? File.ReadAllText(path) : Template;
 
-    public static void Save(string path, string text)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var tmp = path + ".tmp";
-        File.WriteAllText(tmp, text);
-        File.Move(tmp, path, overwrite: true);
-    }
+    public static void Save(string path, string text) => Settings.AtomicFile.Write(path, text);
 
     /// <summary>Parses the file text; a readable <see cref="McpConfigException"/> says what is wrong with it.</summary>
     public static McpConfig Parse(string json)

@@ -238,17 +238,27 @@ public sealed class SettingsStore(AppPaths paths)
             var text = File.ReadAllText(paths.SettingsFile);
             var settings = JsonSerializer.Deserialize<AppSettings>(Migrate(text), JsonOptions) ?? new AppSettings();
             // Rewrite the file if it still has keys from older versions, so it only ever holds
-            // settings that exist.
+            // settings that exist. A folder that can't be written to (a read-only stick) can wait.
             if (JsonSerializer.Serialize(settings, JsonOptions) != text)
-                Save(settings);
+                TryWrite(() => Save(settings));
             return settings;
         }
         catch (JsonException)
         {
             // A hand-edited file that no longer parses: keep a copy and start from defaults.
-            File.Copy(paths.SettingsFile, paths.SettingsFile + ".bad", overwrite: true);
+            TryWrite(() => File.Copy(paths.SettingsFile, paths.SettingsFile + ".bad", overwrite: true));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Unreadable for now (locked by another program): defaults, and the file is left as it is.
         }
         return new AppSettings();
+    }
+
+    private static void TryWrite(Action write)
+    {
+        try { write(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     /// <summary>
@@ -274,11 +284,5 @@ public sealed class SettingsStore(AppPaths paths)
         return root.ToJsonString();
     }
 
-    public void Save(AppSettings settings)
-    {
-        Directory.CreateDirectory(paths.DataDir);
-        var tmp = paths.SettingsFile + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(settings, JsonOptions));
-        File.Move(tmp, paths.SettingsFile, overwrite: true);
-    }
+    public void Save(AppSettings settings) => AtomicFile.Write(paths.SettingsFile, JsonSerializer.Serialize(settings, JsonOptions));
 }

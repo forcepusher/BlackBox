@@ -107,12 +107,12 @@ public sealed partial class OpenAiChatClient
         if (!resp.IsSuccessStatusCode)
             throw new LlmException($"GET /models failed ({(int)resp.StatusCode}): {body.Clip(500)}");
 
-        var ids = new List<string>();
-        if (JsonNode.Parse(body)?["data"] is JsonArray data)
-            foreach (var m in data)
-                if (m?["id"]?.GetValue<string>() is { } id)
-                    ids.Add(id);
-        return ids;
+        JsonNode? list;
+        try { list = JsonNode.Parse(body); }
+        catch (JsonException) { throw new LlmException("The answer at /models is not a model list (is this the right address?)."); }
+        return list?["data"] is JsonArray data
+            ? data.OfType<JsonObject>().Select(m => GetString(m, "id")).OfType<string>().ToList()
+            : [];
     }
 
     /// <summary>

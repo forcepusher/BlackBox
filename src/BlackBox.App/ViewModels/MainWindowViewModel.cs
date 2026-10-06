@@ -120,7 +120,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             value = value.Trim();
             if (value == _settings.Server.BaseUrl) return;
             _settings.Server.BaseUrl = value;
-            _store.Save(_settings);
+            SaveSettings();
             OnPropertyChanged();
             _ = CheckAfterTypingAsync();
         }
@@ -135,7 +135,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             value = value.Trim();
             if (value == _settings.Server.ApiKey) return;
             _settings.Server.ApiKey = value;
-            _store.Save(_settings);
+            SaveSettings();
             OnPropertyChanged();
             _ = CheckAfterTypingAsync();
         }
@@ -157,7 +157,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             if (!value && server.ManualContextSize <= 0)
                 server.ManualContextSize = ContextStops[ContextSizes.IndexOf(ContextStops, server.DetectedContextSize)];
             server.AutoContext = value;
-            _store.Save(_settings);
+            SaveSettings();
             OnPropertyChanged();
             OnContextChanged();
         }
@@ -206,7 +206,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private void SetManualContext(int size)
     {
         _settings.Server.ManualContextSize = size;
-        _store.Save(_settings);
+        SaveSettings();
         OnContextChanged();
     }
 
@@ -268,7 +268,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             if (_refreshingModels || string.IsNullOrEmpty(value) || value == _settings.Server.Model)
                 return;
             _settings.Server.Model = value;
-            _store.Save(_settings);
+            SaveSettings();
             OnPropertyChanged();
             _ = CheckServerAsync();
         }
@@ -297,14 +297,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
         SetStatus(ServerState.Checking, "Checking…", null);
         using var probeHttp = LlmHttp.Create(TimeSpan.FromSeconds(10));
-        var typed = server.BaseUrl;
         var probe = await ServerProbe.CheckAsync(probeHttp, server, CancellationToken.None);
         if (version != _checkVersion)
             return; // the address or model changed while this check was running
-        if (server.BaseUrl != typed)
+        if (probe.BaseUrl is { } found && found != server.BaseUrl)
         {
             // "host:1234" became the full URL that answered; show it so there is no doubt.
-            _store.Save(_settings);
+            server.BaseUrl = found;
+            SaveSettings();
             OnPropertyChanged(nameof(ServerAddress));
         }
 
@@ -317,9 +317,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         if (string.IsNullOrEmpty(server.Model) && Models.Count > 0)
         {
             server.Model = Models[0];
-            _store.Save(_settings);
+            SaveSettings();
             OnPropertyChanged(nameof(SelectedModel));
             probe = await ServerProbe.CheckAsync(probeHttp, server, CancellationToken.None); // details for this model
+            if (version != _checkVersion)
+                return;
         }
         if (string.IsNullOrEmpty(server.Model))
         {
@@ -390,28 +392,31 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
         try
         {
-            if (_settings.Server.BaseUrl.Length > 0 && _settings.Server.Model.Length > 0)
+            var server = _settings.Server;
+            if (Core.Llm.ServerAddress.Candidates(server.BaseUrl).Count == 0 || string.IsNullOrWhiteSpace(server.Model))
             {
-                // LM Studio loads models on first use; do that now so we know the real context size.
-                using var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10));
-                var context = await ServerProbe.EnsureLoadedAsync(probeHttp, _settings.Server,
+                AddNotice("Enter your model server's address and pick a model at the top first.", isError: true);
+                return;
+            }
+            // LM Studio loads models on first use; do that now so we know the real context size.
+            using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10)))
+            {
+                var context = await ServerProbe.EnsureLoadedAsync(probeHttp, server,
                     () => Dispatcher.UIThread.Post(() => AddNotice("Loading the model on the server…", isError: false)), ct);
                 if (context is not null)
                 {
-                    _settings.Server.SetDetectedContext(context);
+                    server.SetDetectedContext(context);
                     _modelNotLoaded = false;
                     OnContextChanged();
                 }
             }
-            if (PrepareBackend() is not { } backend)
-                return;
             if (!_mcpConnect.IsCompleted)
             {
                 AddNotice("Starting the MCP servers…", isError: false);
-                await _mcpConnect;
+                await _mcpConnect.WaitAsync(ct);
             }
 
-            var session = AgentSetup.Create(backend, _platform, _settings.Agent, _paths, _mcp, history);
+            var session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, history);
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
             _settings.Server.LearnContextLimit(session.ContextTokens);
@@ -421,6 +426,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         {
             var stopped = StoppedText();
             if (!_runDetached) AddNotice(stopped, isError: false);
+        }
+        catch (Exception ex)
+        {
+            // The run itself never throws; this is the preparation (an address that isn't one, say).
+            if (!_runDetached) AddNotice(ex.Message, isError: true);
         }
         finally
         {
@@ -616,17 +626,39 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         // The server, key, model and context size live in the top bar, not in the dialog.
         updated.Server = _settings.Server;
         _settings = updated;
-        _store.Save(updated);
+        SaveSettings();
         _platform.HostWindow.SetHiddenFromCapture(updated.Agent.HideFromScreenshots);
         _platform.InputOverlay.Duration = TimeSpan.FromSeconds(updated.Agent.InputLogSeconds);
         _platform.InputOverlay.Enabled = updated.Agent.ShowInputs;
         if (mcpConfigText != McpConfig.Load(_paths.McpConfigFile))
         {
-            McpConfig.Save(_paths.McpConfigFile, mcpConfigText);
+            try { McpConfig.Save(_paths.McpConfigFile, mcpConfigText); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                AddNotice($"The MCP server list could not be saved: {ex.Message}", isError: true);
+                return;
+            }
             if (IsBusy) _mcpRestartPending = true;
             else _mcpConnect = ConnectMcpAsync();
         }
         await CheckServerAsync();
+    }
+
+    private bool _saveFailed;
+
+    /// <summary>Writes the settings; a disk that refuses (read-only, full) is reported once, and BlackBox goes on with them in memory.</summary>
+    private void SaveSettings()
+    {
+        try
+        {
+            _store.Save(_settings);
+            _saveFailed = false;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (!_saveFailed) AddNotice($"Settings could not be saved, so they last only until BlackBox closes: {ex.Message}", isError: true);
+            _saveFailed = true;
+        }
     }
 
     // ---- MCP servers ----------------------------------------------------------------
@@ -647,17 +679,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         await Task.Run(() => _mcp.ConnectAsync(servers, CancellationToken.None));
         foreach (var s in _mcp.Statuses.Where(s => s.State == McpServerState.Failed))
             AddNotice($"MCP server \"{s.Name}\" is not available: {s.Error} (Settings → Advanced)", isError: true);
-    }
-
-    private BackendConnection? PrepareBackend()
-    {
-        var server = _settings.Server;
-        if (string.IsNullOrWhiteSpace(server.BaseUrl) || string.IsNullOrWhiteSpace(server.Model))
-        {
-            AddNotice("Enter your model server's address and pick a model at the top first.", isError: true);
-            return null;
-        }
-        return BackendConnection.Create(_http, server);
     }
 
     private void AddNotice(string text, bool isError) => Items.Add(new NoticeItem(text, isError));

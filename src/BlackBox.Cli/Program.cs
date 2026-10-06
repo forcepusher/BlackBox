@@ -69,6 +69,7 @@ using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a mo
         Console.Error.WriteLine("[server] " + probe.Message);
         return 1;
     }
+    settings.Server.BaseUrl = probe.BaseUrl!;
     settings.Server.SupportsVision = probe.Vision ?? true;
     if (await ServerProbe.EnsureLoadedAsync(probeHttp, settings.Server, () => Console.WriteLine("[server] loading the model…"), cts.Token) is { } c)
         settings.Server.SetDetectedContext(c);

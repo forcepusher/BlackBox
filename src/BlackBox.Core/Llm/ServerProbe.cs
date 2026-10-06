@@ -7,7 +7,8 @@ using BlackBox.Core.Settings;
 namespace BlackBox.Core.Llm;
 
 /// <param name="Loaded">False when the server says the model is not loaded yet (LM Studio loads on first use), so it has no context size yet.</param>
-public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, int? LoadedContext, bool? Vision, string Message, bool? Loaded = null);
+/// <param name="BaseUrl">The complete address that answered ("host:1234" typed, "http://host:1234/v1" found).</param>
+public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, int? LoadedContext, bool? Vision, string Message, bool? Loaded = null, string? BaseUrl = null);
 
 /// <summary>What the server says about the configured model; nulls where it doesn't say.</summary>
 public readonly record struct ModelFacts(int? Context, bool? Loaded, bool? Vision);
@@ -33,14 +34,14 @@ public static class ServerProbe
 {
     /// <summary>
     /// The address may be typed in any form (see <see cref="ServerAddress"/>); the first form that
-    /// lists models wins and replaces <see cref="ServerSettings.BaseUrl"/>, so everything after
-    /// uses a complete URL.
+    /// lists models wins and comes back as <see cref="ProbeResult.BaseUrl"/>, for the caller to
+    /// keep if the address hasn't changed in the meantime.
     /// </summary>
     public static async Task<ProbeResult> CheckAsync(HttpClient http, ServerSettings server, CancellationToken ct)
     {
         var candidates = ServerAddress.Candidates(server.BaseUrl);
         if (candidates.Count == 0)
-            return new ProbeResult(false, [], null, null, "No server address.");
+            return new ProbeResult(false, [], null, null, server.BaseUrl.Trim().Length == 0 ? "No server address." : "That is not a server address.");
 
         // https and http are tried at the same time; whichever answers is the one.
         var attempts = candidates.Select(url => ListModelsAsync(http, url, server.ApiKey, ct)).ToList();
@@ -49,9 +50,10 @@ public static class ServerProbe
         {
             if (attempts[i].Result.Models is not { } models)
                 continue;
-            server.BaseUrl = candidates[i];
-            var facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
-            return new ProbeResult(true, models, facts.Context, facts.Vision, models.Count == 0 ? "Connected, but the server lists no models." : "Connected.", facts.Loaded);
+            var found = new ServerSettings { BaseUrl = candidates[i], ApiKey = server.ApiKey, Model = server.Model };
+            var facts = await TryContextAsync(http, found, ct).ConfigureAwait(false);
+            return new ProbeResult(true, models, facts.Context, facts.Vision, models.Count == 0 ? "Connected, but the server lists no models." : "Connected.",
+                facts.Loaded, candidates[i]);
         }
         // The plain-http error reads better than a failed TLS handshake.
         var http0 = Math.Max(0, candidates.ToList().FindIndex(c => c.StartsWith("http://", StringComparison.OrdinalIgnoreCase)));
@@ -64,9 +66,10 @@ public static class ServerProbe
         {
             return (await new OpenAiChatClient(http, baseUrl, apiKey).ListModelsAsync(ct).ConfigureAwait(false), null);
         }
-        catch (Exception ex) when (ex is LlmException or HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        // Anything from a web page where the model list should be to a timeout: not this address.
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
-            return (null, ex.Message);
+            return (null, ex is OperationCanceledException ? "it did not answer in time." : ex.Message);
         }
     }
 
@@ -166,7 +169,8 @@ public static class ServerProbe
                 return null;
             return JsonNode.Parse(await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException && !ct.IsCancellationRequested)
+        // Whatever fails (no such endpoint, not JSON, an address that isn't one): this server doesn't say.
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             return null;
         }
