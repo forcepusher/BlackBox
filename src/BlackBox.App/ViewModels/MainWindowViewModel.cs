@@ -651,14 +651,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _platform.InputOverlay.Enabled = updated.Agent.ShowInputs;
         if (mcpConfigText != McpConfig.Load(_paths.McpConfigFile))
         {
-            try { McpConfig.Save(_paths.McpConfigFile, mcpConfigText); }
+            try
+            {
+                McpConfig.Save(_paths.McpConfigFile, mcpConfigText);
+                if (IsBusy) _mcpRestartPending = true;
+                else _mcpConnect = ConnectMcpAsync();
+            }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 AddNotice($"The MCP server list could not be saved: {ex.Message}", isError: true);
-                return;
             }
-            if (IsBusy) _mcpRestartPending = true;
-            else _mcpConnect = ConnectMcpAsync();
         }
         await CheckServerAsync();
     }

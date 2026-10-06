@@ -406,9 +406,9 @@ public sealed class WaitTool : Tool
         var screen = ctx.GetScreenSpace().Screen;
         var first = ctx.Platform.Screen.Capture(screen, includeCursor: false);
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        while (clock.Elapsed < limit)
+        while (limit - clock.Elapsed is var left && left > TimeSpan.Zero)
         {
-            await Task.Delay(Poll < limit - clock.Elapsed ? Poll : limit - clock.Elapsed, ct).ConfigureAwait(false);
+            await Task.Delay(left < Poll ? left : Poll, ct).ConfigureAwait(false);
             if (ClickCheck.Differ(first, ctx.Platform.Screen.Capture(screen, includeCursor: false)))
                 return clock.Elapsed;
         }
