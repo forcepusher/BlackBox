@@ -271,23 +271,41 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         OnPropertyChanged(nameof(ContextToolTip));
     }
 
-    /// <summary>Models the server reports (embedding models left out). Always contains the saved one.</summary>
+    /// <summary>Models the server offers that can chat. Always contains the one shown, even while the server doesn't offer it.</summary>
     public ObservableCollection<string> Models { get; } = [];
 
+    /// <summary>
+    /// The model picked by hand; until there is one, the strongest the server offers, which BlackBox
+    /// picks anew at every check. A picked model stays shown while the server doesn't offer it, and
+    /// the setup banner says which model stands in for it meanwhile.
+    /// </summary>
     public string? SelectedModel
     {
-        get => string.IsNullOrEmpty(_settings.Server.Model) ? null : _settings.Server.Model;
+        get => _settings.Server.Model is { Length: > 0 } picked ? picked : _settings.Server.AutoModel;
         set
         {
             // Refilling the list briefly clears the selection; that is not the user choosing nothing.
-            if (_refreshingModels || string.IsNullOrEmpty(value) || value == _settings.Server.Model)
+            if (_refreshingModels || string.IsNullOrEmpty(value) || value == SelectedModel)
                 return;
             _settings.Server.Model = value;
+            _settings.Server.AutoModel = null;
             SaveSettings();
             OnPropertyChanged();
+            OnPropertyChanged(nameof(ModelToolTip));
             _ = CheckServerAsync();
         }
     }
+
+    /// <summary>Size and quantization of the model BlackBox picked ("31B, 5-bit"), if the server or its name tells them.</summary>
+    private string? _autoModelSize;
+
+    private string AutoModelSize => _autoModelSize is { } size ? $" ({size})" : "";
+
+    /// <summary>Why the model shown is the one, when BlackBox picked it.</summary>
+    public string? ModelToolTip => string.IsNullOrEmpty(_settings.Server.Model) && _settings.Server.AutoModel is not null
+        ? $"Picked by BlackBox as the strongest model the server offers{AutoModelSize}: the most parameters, then the most bits per weight. " +
+          "Pick one yourself to keep using it."
+        : null;
 
     private async Task CheckAfterTypingAsync()
     {
@@ -298,9 +316,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         await CheckServerAsync();
     }
 
-    /// <summary>Asks the server for its models and the chosen model's details; updates the top bar.</summary>
+    /// <summary>Asks the server for its models and the details of the one to use; updates the top bar.</summary>
     [RelayCommand]
-    private async Task CheckServerAsync()
+    private Task CheckServerAsync() => ProbeServerAsync(quiet: false, CancellationToken.None);
+
+    /// <summary>
+    /// The check behind <see cref="CheckServerCommand"/>. Quiet, before a task: no "Checking…" in the
+    /// top bar meanwhile, and the context size known for the model stays (a run may have learnt it
+    /// from the server's "too long" error) unless the model to use changed.
+    /// </summary>
+    private async Task ProbeServerAsync(bool quiet, CancellationToken ct)
     {
         var version = ++_checkVersion;
         var server = _settings.Server;
@@ -310,9 +335,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             return;
         }
 
-        SetStatus(ServerState.Checking, "Checking…", null);
+        if (!quiet)
+            SetStatus(ServerState.Checking, "Checking…", null);
         using var probeHttp = LlmHttp.Create(TimeSpan.FromSeconds(10));
-        var probe = await ServerProbe.CheckAsync(probeHttp, server, CancellationToken.None);
+        var probe = await ServerProbe.CheckAsync(probeHttp, server, ct);
         if (version != _checkVersion)
             return; // the address or model changed while this check was running
         if (probe.BaseUrl is { } found && found != server.BaseUrl)
@@ -323,68 +349,82 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             OnPropertyChanged(nameof(ServerAddress));
         }
 
+        // With no model picked by hand, or one the server doesn't offer, the strongest one it offers
+        // is used; it isn't saved, so the picked one is back as soon as the server lists it again.
+        // A server that can't be asked keeps the model it last said to use.
+        var before = server.ModelInUse;
+        if (probe.Reachable)
+        {
+            server.AutoModel = probe.AutoPicked ? probe.Model : null;
+            _autoModelSize = probe.ModelSize;
+        }
         SetModels(probe.Models);
+        OnPropertyChanged(nameof(ModelToolTip));
         if (!probe.Reachable)
         {
             SetStatus(ServerState.Failed, "Offline", $"{probe.Message} Check the address at the top and that the server is running.");
             return;
         }
-        if (string.IsNullOrEmpty(server.Model) && Models.Count > 0)
+        if (probe.Model is null)
         {
-            server.Model = Models[0];
-            SaveSettings();
-            OnPropertyChanged(nameof(SelectedModel));
-            probe = await ServerProbe.CheckAsync(probeHttp, server, CancellationToken.None); // details for this model
-            if (version != _checkVersion)
-                return;
-        }
-        if (string.IsNullOrEmpty(server.Model))
-        {
-            SetStatus(ServerState.Failed, "No models", "The server is running but offers no models. Load or download one in LM Studio.");
-            return;
-        }
-        if (probe.Models.Count > 0 && !probe.Models.Contains(server.Model))
-        {
-            SetStatus(ServerState.Failed, "Model not found", $"The server doesn't offer \"{server.Model}\" anymore. Pick another model at the top.");
+            SetStatus(ServerState.Failed, "No models", string.IsNullOrEmpty(server.Model)
+                ? "The server is running but offers no models. Load or download one in LM Studio."
+                : $"The server doesn't offer \"{server.Model}\" anymore, nor any other model to chat with. Load or download one in LM Studio.");
             return;
         }
 
-        // Trust what the server reports; neither the context size (it shows by the slider) nor image support is saved.
-        server.SetDetectedContext(probe.LoadedContext);
-        _modelNotLoaded = probe.Loaded == false;
-        OnContextChanged();
+        if (!quiet || server.ModelInUse != before)
+        {
+            // Trust what the server reports; neither the context size (it shows by the slider) nor image support is saved.
+            server.SetDetectedContext(probe.LoadedContext);
+            _modelNotLoaded = probe.Loaded == false;
+            OnContextChanged();
+        }
         server.SupportsVision = probe.Vision ?? true;
-        SetStatus(ServerState.Connected, "Connected" + (probe.Vision == false ? " · no vision" : ""), null);
+        var status = "Connected" + (probe.Vision == false ? " · no vision" : "");
+        if (probe.AutoPicked && server.Model.Length > 0)
+            SetStatus(ServerState.Connected, status,
+                $"The server doesn't offer \"{server.Model}\" right now, so BlackBox uses {probe.Model}{AutoModelSize}, the strongest model it offers, " +
+                "and goes back to yours as soon as the server lists it again. To stop waiting for it, pick another model at the top.",
+                "Your model isn't on the server");
+        else
+            SetStatus(ServerState.Connected, status, null);
     }
 
     /// <summary>
-    /// Updates the dropdown in place. Clearing it would drop the selection, and the ComboBox
-    /// does not pick it up again when the same value is set back; so the chosen model stays in
-    /// the list throughout, and only the other entries change.
+    /// Updates the dropdown in place, so the ComboBox never loses its selection: once lost, it does
+    /// not pick it up again when the same value is set back. The model shown stays in the list
+    /// throughout; new entries go in, then the selection moves, and only then do old ones go.
     /// </summary>
-    private void SetModels(IEnumerable<string> fromServer)
+    private void SetModels(IReadOnlyList<string> fromServer)
     {
-        var wanted = fromServer.Where(m => !m.Contains("embed", StringComparison.OrdinalIgnoreCase)).ToList();
-        var chosen = _settings.Server.Model;
-        if (!string.IsNullOrEmpty(chosen) && !wanted.Contains(chosen))
-            wanted.Insert(0, chosen);
+        var wanted = fromServer.ToList();
+        if (SelectedModel is { } shown && !wanted.Contains(shown))
+            wanted.Insert(0, shown);
         _refreshingModels = true;
-        for (var i = Models.Count - 1; i >= 0; i--)
-            if (!wanted.Contains(Models[i]))
-                Models.RemoveAt(i);
         for (var i = 0; i < wanted.Count; i++)
             if (!Models.Contains(wanted[i]))
                 Models.Insert(Math.Min(i, Models.Count), wanted[i]);
-        _refreshingModels = false;
         OnPropertyChanged(nameof(SelectedModel));
+        for (var i = Models.Count - 1; i >= 0; i--)
+            if (!wanted.Contains(Models[i]))
+                Models.RemoveAt(i);
+        _refreshingModels = false;
     }
 
-    private void SetStatus(ServerState state, string status, string? setup)
+    private const string NotConnectedTitle = "BlackBox isn't connected to a model yet";
+
+    /// <summary>The setup banner's heading.</summary>
+    [ObservableProperty]
+    private string _setupTitle = NotConnectedTitle;
+
+    private void SetStatus(ServerState state, string status, string? setup, string title = NotConnectedTitle)
     {
         ServerState = state;
         ServerStatusText = status;
         ShowSetupBanner = setup is not null;
         SetupText = setup ?? "";
+        SetupTitle = title;
     }
 
     // ---- commands -------------------------------------------------------------------
@@ -408,7 +448,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         try
         {
             var server = _settings.Server;
-            if (Core.Llm.ServerAddress.Candidates(server.BaseUrl).Count == 0 || string.IsNullOrWhiteSpace(server.Model))
+            // The server may offer other models than at the last check: the picked one back, or the one in use gone.
+            if (Core.Llm.ServerAddress.Candidates(server.BaseUrl).Count > 0)
+                await ProbeServerAsync(quiet: true, ct);
+            if (Core.Llm.ServerAddress.Candidates(server.BaseUrl).Count == 0 || string.IsNullOrWhiteSpace(server.ModelInUse))
             {
                 AddNotice("Enter your model server's address and pick a model at the top first.", isError: true);
                 return;

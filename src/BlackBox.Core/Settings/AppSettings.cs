@@ -49,7 +49,21 @@ public sealed class ServerSettings
     /// <summary>LM Studio's default local address.</summary>
     public string BaseUrl { get; set; } = "http://localhost:1234/v1";
     public string ApiKey { get; set; } = "";
+
+    /// <summary>The model picked by hand in the dropdown (or with --model); empty until one is. Kept while the server doesn't offer it.</summary>
     public string Model { get; set; } = "";
+
+    /// <summary>
+    /// The strongest model the server offers (see <see cref="Llm.ModelChoice"/>), used while
+    /// <see cref="Model"/> is empty or not on the server. Found again at every check and not
+    /// saved, so the picked model is back in use as soon as the server lists it again.
+    /// </summary>
+    [JsonIgnore]
+    public string? AutoModel { get; set; }
+
+    /// <summary>The model requests go to.</summary>
+    [JsonIgnore]
+    public string ModelInUse => AutoModel ?? Model;
 
     /// <summary>
     /// Whether the model accepts images, which screen control needs. Read from LM Studio each time

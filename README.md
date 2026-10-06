@@ -36,6 +36,18 @@ shows it). For screen control the
 model must accept images (for example Qwen3.5+ VL models or Gemma 4 with their vision projector);
 LM Studio reports this and BlackBox follows it; models on other servers are assumed to see images.
 
+Until you pick a model, BlackBox uses the strongest one the server offers: one that takes images
+first, then the most parameters, then the most bits per weight (Q6 before Q4), and between equals
+one the server has loaded already. That choice isn't saved, so a stronger model added later takes
+over. LM Studio reports each model's size, quantization and image support; for other servers they
+are read from the names (`qwen3.8-27b@q6_k_xl`, `Llama-3.3-70B-Instruct-AWQ`), and a mixture of
+experts such as `30b-a3b` counts as the dense model it is about as strong as (the geometric mean of
+30B and 3B, about 9.5B). Embedding models are left out, and so is a file far too small for its size
+and quantization, such as a broken download. A model you pick yourself is kept, also while the
+server doesn't offer it: the strongest one stands in, a banner says so, and BlackBox goes back to
+yours as soon as the server lists it again. It checks when it connects, on ↻ and before each task.
+The command-line runner picks the same way for the saved model or `--model`.
+
 BlackBox sends no sampling parameters: temperature, top-k/p, reply length and thinking come from
 the server's own model configuration (in LM Studio, per model).
 

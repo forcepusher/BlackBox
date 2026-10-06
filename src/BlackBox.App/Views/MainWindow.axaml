@@ -91,8 +91,8 @@
         <DockPanel Grid.Row="1" Grid.Column="1">
           <Button DockPanel.Dock="Right" Classes="ghost" Content="↻" Margin="6,0,0,0" VerticalAlignment="Stretch" Command="{Binding CheckServerCommand}"
                   ToolTip.Tip="Ask the server again for its models and context size" />
-          <ComboBox ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                    PlaceholderText="No models: check the server address" />
+          <ComboBox x:Name="ModelBox" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                    PlaceholderText="No models: check the server address" ToolTip.Tip="{Binding ModelToolTip}" />
         </DockPanel>
         <TextBlock Grid.Row="1" Grid.Column="2" Classes="muted" Text="Context" VerticalAlignment="Center" Margin="14,0,8,0" />
         <DockPanel Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="2" ToolTip.Tip="{Binding ContextToolTip}">
@@ -107,12 +107,12 @@
       </Grid>
     </Border>
 
-    <!-- Not connected yet: what to do about it -->
+    <!-- Not connected yet, or the picked model isn't on the server: what to do about it -->
     <Border Grid.Row="2" IsVisible="{Binding ShowSetupBanner}" Background="{StaticResource BbSurfaceRaised}"
             BorderBrush="{StaticResource BbAccent}" BorderThickness="0,0,0,2" Padding="16,12">
       <Grid ColumnDefinitions="*,Auto" MaxWidth="860">
         <StackPanel Spacing="6">
-          <TextBlock Text="BlackBox isn't connected to a model yet" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding SetupTitle}" FontWeight="SemiBold" />
           <TextBlock Classes="muted" Text="{Binding SetupText}" TextWrapping="Wrap" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="12,0,0,0">
