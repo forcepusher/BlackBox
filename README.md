@@ -67,13 +67,19 @@ streams at once), and the conversation is replaced by your messages, that note a
 screenshot, a few thousand tokens. When to reset is decided from the token counts the server
 reports, not guessed. If the model can't write the note, a record of its last steps is used
 instead; a reply cut off by the context limit, or a server's "context length exceeded" error,
-triggers the same reset and a retry.
+triggers the same reset and a retry. A reply cut off by a reply-length limit set on the server
+(the token counts show the context isn't full) is kept, and the model is asked to go on.
+
+The system prompt holds the date but not the time, so it stays the same for every message of a
+chat and the server never has to read the whole conversation again because of it.
 
 ### Unstable connections
 VPNs and proxies often cut a connection that has been silent for about a minute, which happens
 while a server processes a long prompt. BlackBox resends the identical request when a connection
-drops or a reply stream stops early; the server still has the already-processed prompt in its
-cache, so each retry continues where the last one stopped (up to 12 times per step).
+drops, a reply stream stops early, or the server (or a proxy in front of it) answers with a
+server error or "busy" (HTTP 5xx or 429); the server still has the already-processed prompt in
+its cache, so each retry continues where the last one stopped (up to 12 times per step). A tool
+that fails, however it fails, reports the error to the model and the run goes on.
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |

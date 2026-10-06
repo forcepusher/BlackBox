@@ -20,7 +20,9 @@ public static class SystemPrompt
         sb.AppendLine();
         sb.AppendLine("Environment:");
         sb.AppendLine($"- OS: {platformName}");
-        sb.AppendLine($"- Date: {DateTime.Now.ToString("dddd, d MMMM yyyy, HH:mm", CultureInfo.InvariantCulture)}");
+        // The date, not the time: the prompt starts every request, and if it changed between the
+        // messages of a chat the server would have to read the whole conversation again.
+        sb.AppendLine($"- Date: {DateTime.Now.ToString("dddd, d MMMM yyyy", CultureInfo.InvariantCulture)}");
         sb.AppendLine($"- Home folder: {workingDirectory}. Relative paths and shell commands start here; you can work with any file or folder on this PC.");
         if (screens is { Count: > 1 })
         {
