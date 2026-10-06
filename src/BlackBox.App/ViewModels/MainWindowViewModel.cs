@@ -29,9 +29,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private bool _mcpRestartPending;
     private AppSettings _settings;
     private CancellationTokenSource? _runCts;
+    private AgentSession? _session;
     private AssistantMessageItem? _current;
     private IDisposable? _stopKey;
     private volatile bool _stoppedByKey;
+
+    /// <summary>Ticks once a second during a run, for the reply in progress to count the wait.</summary>
+    private readonly DispatcherTimer _tick;
 
     public MainWindowViewModel(AppPaths paths, SettingsStore store, AppSettings settings, IPlatformServices platform)
     {
@@ -40,6 +44,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _settings = settings;
         _platform = platform;
         _chats = new ChatStore(paths.ChatsDir);
+        _tick = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => _current?.Tick());
         // The saved model is in the list before the view binds to it, so the dropdown starts
         // with it selected; a selection the ComboBox once lost is not restored by rebinding.
         if (!string.IsNullOrEmpty(settings.Server.Model))
@@ -73,6 +78,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     [ObservableProperty]
     private string _setupText = "";
+
+    /// <summary>How full the model's context is, next to the server status: "35k of 100k used". Empty until a run's first step.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasContextUsage))]
+    private string _contextUsage = "";
+
+    [ObservableProperty]
+    private string _contextUsageTip = "";
+
+    public bool HasContextUsage => ContextUsage.Length > 0;
 
     public bool HasNoMessages => Items.Count == 0;
 
@@ -416,7 +431,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 await _mcpConnect.WaitAsync(ct);
             }
 
-            var session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, history);
+            var session = _session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, history);
+            _tick.Start();
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
             _settings.Server.LearnContextLimit(session.ContextTokens);
@@ -438,6 +454,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             var chatId = _chatId;
             if (!_runDetached)
                 Dispatcher.UIThread.Post(() => { if (_chatId == chatId) SaveChat(SnapshotHistory()); }, DispatcherPriority.Background);
+            _tick.Stop();
+            _session = null;
             IsBusy = false;
             _runCts.Dispose();
             _runCts = null;
@@ -513,6 +531,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _current = null;
         _chatId = null;
         _chatTitle = null;
+        ContextUsage = "";
     }
 
     private void OpenChat(PastChat row)
@@ -710,8 +729,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     void IAgentObserver.OnStepStarted(int step)
     {
-        // The agent waits for this call, so its conversation holds still while it is copied.
+        // The agent waits for this call, so its conversation holds still while it is copied and measured.
         var history = _runDetached ? null : SnapshotHistory();
+        var session = _session;
+        var usage = session is null ? default : (Used: session.TokensInUse(), Size: session.ContextTokens, Reset: session.ResetThreshold);
         var bubble = _streaming = new AssistantMessageItem();
         Dispatcher.UIThread.Post(() =>
         {
@@ -722,6 +743,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             FinishCurrent(); // a bubble nothing streamed into (a request that failed) leaves no "…" behind
             _current = bubble;
             Items.Add(bubble);
+            if (usage.Size > 0)
+            {
+                ContextUsage = $"{usage.Used / 1000.0:0}k of {ContextSizes.Format(usage.Size)} used";
+                ContextUsageTip = $"The conversation fills about {usage.Used:N0} of the model's {usage.Size:N0} tokens of context. " +
+                                  $"At {usage.Reset:N0} the model writes a handoff note and BlackBox starts a fresh context with it.";
+            }
         });
     }
 

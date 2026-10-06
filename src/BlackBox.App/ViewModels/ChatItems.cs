@@ -68,16 +68,29 @@ public sealed partial class AssistantMessageItem : ChatItemViewModel
     }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasText), nameof(ShownText), nameof(ThinkingLabel), nameof(ShowTypingDots))]
+    [NotifyPropertyChangedFor(nameof(HasText), nameof(ShownText), nameof(ThinkingLabel), nameof(ShowTypingDots), nameof(TypingText))]
     private string _text = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasReasoning), nameof(ShownReasoning), nameof(ShowTypingDots))]
+    [NotifyPropertyChangedFor(nameof(HasReasoning), nameof(ShownReasoning), nameof(ShowTypingDots), nameof(TypingText))]
     private string _reasoning = "";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ThinkingLabel), nameof(ShowTypingDots))]
     private bool _isStreaming = true;
+
+    private readonly DateTime _started = DateTime.UtcNow;
+
+    /// <summary>
+    /// Under a reply in progress: "…", or while nothing has come yet, for how long. A server
+    /// reading a long prompt sends nothing for minutes; the count shows BlackBox is waiting, not stuck.
+    /// </summary>
+    public string TypingText => !HasText && !HasReasoning && DateTime.UtcNow - _started is { TotalSeconds: >= 3 } waited
+        ? $"Waiting for the model… {waited:m\\:ss}"
+        : "…";
+
+    /// <summary>Called every second while a run is on, for <see cref="TypingText"/>.</summary>
+    public void Tick() => OnPropertyChanged(nameof(TypingText));
 
     // Streams arrive with blank lines around them (thinking usually ends in "\n\n" until the
     // reply starts, and the reply opens with them), which showed as empty bands mid-stream.

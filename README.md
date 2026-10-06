@@ -73,6 +73,10 @@ triggers the same reset and a retry. A reply cut off by a reply-length limit set
 The system prompt holds the date but not the time, so it stays the same for every message of a
 chat and the server never has to read the whole conversation again because of it.
 
+During a run the top bar shows how full the context is ("35k of 100k used"; its tooltip says where
+the reset comes), and a reply that hasn't started yet counts how long BlackBox has been waiting for
+it: a server reading a long prompt sends nothing for minutes.
+
 ### Unstable connections
 VPNs and proxies often cut a connection that has been silent for about a minute, which happens
 while a server processes a long prompt. BlackBox resends the identical request when a connection
