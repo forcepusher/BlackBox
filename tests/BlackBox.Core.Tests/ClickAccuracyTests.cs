@@ -20,11 +20,11 @@ namespace BlackBox.Core.Tests;
 /// BB_CLICK_COORDS=pixels|grid (default: what BlackBox picks for the model), BB_CLICK_RES (a
 /// <see cref="ScreenshotResolution"/> name), BB_CLICK_SEED (first layout, default 1000), BB_CLICK_TAG (report name),
 /// BB_CLICK_RETRY (extra clicks allowed after a miss, default 0: the target reacts when hit, so a
-/// miss gets BlackBox's miss note), BB_CLICK_CHECK=0 (no miss note, as before it existed), BB_CLICK_LOOK=0 (miss note without a fresh look), BB_CLICK_RULE
+/// miss gets BlackBox's miss note), BB_CLICK_CHECK=0 (no miss note), BB_CLICK_LOOK=0 (clicks go to the model's own x/y instead of where a fresh look finds the target), BB_CLICK_RULE
 /// (extra instructions for the system prompt, to measure a prompt rule), BB_CLICK_TEMP (a temperature
 /// sent with the benchmark's own requests instead of the server's), BB_CLICK_SHIFT (the first screenshot
-/// shows everything this many pixels higher, so the first click misses as a misjudged one does; with
-/// BB_CLICK_RETRY it measures how well the model corrects a miss). The report goes to
+/// shows everything this many pixels higher, so the model misjudges where things are, as one deep in a
+/// long run does; the fresh look sees the true screen). The report goes to
 /// bb-click-TAG.txt in the temp folder, with the first screenshot of each scene next to it.
 /// </summary>
 public class ClickAccuracyTests
@@ -460,7 +460,6 @@ public class ClickAccuracyTests
         return visible;
     }
 
-    /// <summary>Stops the run after the first click, or after a few calls without one.</summary>
     /// <summary>Stops the run at the first click, or with retries, at a hit or after <paramref name="maxClicks"/> clicks.</summary>
     private sealed class FirstClickObserver(CancellationTokenSource cts, int maxClicks = 1, Func<bool>? hit = null) : IAgentObserver
     {

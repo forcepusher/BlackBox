@@ -71,7 +71,8 @@ cache, so each retry continues where the last one stopped (up to 12 times per st
 | Tool | What it does |
 | --- | --- |
 | `screenshot` | Captures a screen at full resolution, or scaled to fit the chosen size, on the 32px vision grid; `screen=N` looks at another monitor |
-| `mouse_click`, `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates |
+| `mouse_click` | Clicks a named target where a fresh look at the screen finds it (see below) |
+| `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …) |
 | `wait` | Waits, then screenshots |
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work |
@@ -100,22 +101,26 @@ Never exceed 2048 px" option, or it shrinks them back to about 2048×864 (qwen3.
 step, since a server that resizes the image moves every click. A `settings.json` saved before full
 resolution became the default keeps 1920×1080; choose "Full screen resolution" in Settings.
 
-After each click BlackBox compares the screen before and after it. When nothing changed near the
-click and nothing big changed anywhere (a dialog opening), the click almost certainly missed, and
-the result says so and where it landed; otherwise a model keeps clicking the same wrong spot.
-With the first screenshot shifted 30 px so that the first click misses, qwen3.8 hit the target
-within two more clicks in 17 of 21 trials with the note, 9 of 21 without it (`ClickAccuracyTests`,
-`BB_CLICK_SHIFT`). A red ring drawn at the click added nothing, nor did a prompt rule about aiming
-carefully (13/24 first clicks against 19/24) or temperature 0.2 instead of 0.6 (19/24).
+Every click is aimed by a fresh look. `mouse_click` names its `target` ("File menu", "Save button
+in the Export dialog"); BlackBox takes a new screenshot and asks the model, in a separate request
+with only that screenshot, where the target is, and clicks there. The x/y the model gives are used
+only when the look can't find the target, or when the model leaves `target` out to click a spot
+that has no name. Deep in a long run the model settles on wrong ideas of where things are (in a
+Unity run: "the menu bar is at y≈3", three times, 28 px above the menus) and copies its previous
+call's coordinates after writing the right ones, while the same model looking at the screen afresh
+gets them right. In `ClickAccuracyTests` (qwen3.8, 79 trials in 16 scenes) first clicks hit 69 times
+against 57 with the model's own coordinates, and 19 of 19 menus, tabs and buttons on a real Unity
+screenshot (`ClickScenes/unity-editor.png`) against 10; with the first screenshot shifted 30 px, as
+a misjudged screen would be, 30 of 31 against 0. The look costs about 15 s per click on that server.
 
-Deep in a long run the model can also settle on a wrong idea of where something is and click the
-same wrong spot again whatever the note says (in a Unity run: "the menu bar is at y≈3", three
-times, 28 px above the menus), while the same model looking at the same screenshot afresh gets it
-right. So `mouse_click` takes an optional `target` ("File menu"), and after a miss BlackBox asks
-the model, in a separate request with only the current screenshot, where that target is, and adds
-the answer to the note. On a real Unity screenshot (`ClickScenes/unity-editor.png`, 19 menus, tabs
-and buttons, first click shifted 30 px): 11 of 12 misses corrected with the fresh look, 12 of 16
-without it, where 3 of the 4 failures were the same spot clicked again.
+After each click BlackBox also compares the screen before and after it. When nothing changed near
+the click and nothing big changed anywhere (a dialog opening), the click almost certainly missed,
+and the result says so. A fresh look that misses misses the same way again, so the note tells the
+model to click again with `target` left out and its own x/y. On the scenes where looks miss (a dense
+table, half-covered buttons, an ultrawide screen) 4 of 9 misses were fixed within two more clicks
+with the note, 0 of 8 without it, and 4 of 10 when every click used the model's own coordinates.
+Before the fresh look, a red ring drawn at the click added nothing to the note, nor did a prompt
+rule about aiming carefully or temperature 0.2 instead of 0.6.
 
 ### Web search
 A local model's memory of APIs is where it slips most (qwen3.8 writes Unity's `KeyCode.Left`, which

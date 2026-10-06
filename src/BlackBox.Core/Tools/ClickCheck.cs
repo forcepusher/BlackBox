@@ -9,9 +9,8 @@ namespace BlackBox.Core.Tools;
 /// after the click (without the mouse cursor); a change near the click, or a big one anywhere
 /// (a dialog opening), counts as a reaction. Small changes elsewhere (a clock, a blinking caret,
 /// the hover highlight under the old mouse position) don't.
-/// Measured with ClickAccuracyTests (BB_CLICK_SHIFT=30, two more tries): qwen3.8 corrected 17 of 21
-/// misses with the note. A red ring drawn at the click in the screenshot added nothing (17 of 21
-/// as well), so the note is text only.
+/// Clicks are aimed by a fresh look (see Agent.FreshLook); when that misses, it misses the same
+/// way again, and only the note gets the model to aim itself (ClickAccuracyTests, two more tries).
 /// </summary>
 internal sealed class ClickCheck
 {
@@ -52,23 +51,23 @@ internal sealed class ClickCheck
     }
 
     /// <summary>
-    /// After the click (and the usual pause for the UI to react): the screen point it landed on if
-    /// nothing changed, rechecking a couple of times for slow reactions; null if the screen reacted.
+    /// After the click (and the usual pause for the UI to react): whether nothing changed,
+    /// rechecking a couple of times for slow reactions.
     /// </summary>
-    public async Task<(int X, int Y)?> MissedAtAsync(ToolContext ctx, CancellationToken ct)
+    public async Task<bool> MissedAsync(ToolContext ctx, CancellationToken ct)
     {
         var click = ctx.Platform.Input.GetCursorPosition();
         if (!_screen.Contains(click.X, click.Y))
-            return null;
+            return false;
         if (Reacted(ctx.Platform.Screen.Capture(_screen, includeCursor: false), click))
-            return null;
+            return false;
         foreach (var delay in Rechecks)
         {
             await Task.Delay(delay, ct).ConfigureAwait(false);
             if (Reacted(ctx.Platform.Screen.Capture(_screen, includeCursor: false), click))
-                return null;
+                return false;
         }
-        return click;
+        return true;
     }
 
     private bool Reacted(RawImage after, (int X, int Y) click)
