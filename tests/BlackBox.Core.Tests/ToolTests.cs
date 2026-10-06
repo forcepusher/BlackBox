@@ -76,7 +76,8 @@ public class ToolTests
         found = (5000, 20);
         await click.ExecuteAsync(new JsonObject { ["target"] = "Save button", ["x"] = 10, ["y"] = 20 }, ctx, CancellationToken.None);
         Assert.Equal("move 20,41", platform.Actions[4]);
-        await Assert.ThrowsAsync<ToolArgumentException>(() => click.ExecuteAsync(new JsonObject { ["target"] = "Save button" }, ctx, CancellationToken.None));
+        // Not found and no x/y: an error for the model, not an argument problem (no parameter list).
+        await Assert.ThrowsAsync<InvalidOperationException>(() => click.ExecuteAsync(new JsonObject { ["target"] = "Save button" }, ctx, CancellationToken.None));
 
         // No target: exactly x/y, without a look.
         looked = null;
@@ -108,6 +109,15 @@ public class ToolTests
         Assert.Contains("Nothing on screen changed", (await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None)).Text);
         platform.OnClick = p => { for (var y = 120; y < 160; y++) for (var x = 300; x < 340; x++) p.Desktop!.Bgra[(y * 384 + x) * 4] ^= 255; };
         Assert.DoesNotContain("Nothing on screen changed", (await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None)).Text);
+
+        // What changes while the model looks for the target (a dialog closing elsewhere) is no reaction to the click.
+        platform.OnClick = null;
+        ctx.Locate = (_, _, _) =>
+        {
+            for (var y = 120; y < 160; y++) for (var x = 300; x < 340; x++) platform.Desktop!.Bgra[(y * 384 + x) * 4] ^= 255;
+            return Task.FromResult<(double X, double Y)?>((100, 50));
+        };
+        Assert.Contains("Nothing on screen changed", (await new MouseClickTool().ExecuteAsync(new JsonObject { ["target"] = "OK button", ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None)).Text);
     }
 
     [Fact]
@@ -234,6 +244,82 @@ public class ToolTests
         var ok = await tool.ExecuteAsync(new JsonObject { ["path"] = "a.txt", ["old_text"] = "one", ["new_text"] = "1" }, ctx, CancellationToken.None);
         Assert.False(ok.IsError);
         Assert.Equal("1 two two", File.ReadAllText(file));
+    }
+
+    [Fact]
+    public async Task Edit_file_matches_windows_line_endings_and_keeps_the_encoding()
+    {
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        var file = Path.Combine(dir, "Game.cs");
+        // Saved by Visual Studio or Unity: a UTF-8 signature and \r\n, while the model writes \n.
+        File.WriteAllText(file, "class Game\r\n{\r\n    int score;\r\n}\r\n", new System.Text.UTF8Encoding(true));
+        var tool = new EditFileTool();
+
+        var result = await tool.ExecuteAsync(new JsonObject { ["path"] = file, ["old_text"] = "{\n    int score;\n}", ["new_text"] = "{\n    int score;\n    int best;\n}" }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+
+        Assert.False(result.IsError, result.Text);
+        var bytes = File.ReadAllBytes(file);
+        Assert.Equal([0xEF, 0xBB, 0xBF], bytes[..3]);
+        Assert.Equal("class Game\r\n{\r\n    int score;\r\n    int best;\r\n}\r\n", System.Text.Encoding.UTF8.GetString(bytes[3..]));
+    }
+
+    [Fact]
+    public async Task Edit_file_replaces_every_occurrence_when_asked()
+    {
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        var file = Path.Combine(dir, "a.txt");
+        File.WriteAllText(file, "speed = speed + 1; // speed");
+        var tool = new EditFileTool();
+
+        var once = await tool.ExecuteAsync(new JsonObject { ["path"] = file, ["old_text"] = "speed", ["new_text"] = "velocity" }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+        Assert.True(once.IsError);
+        Assert.Contains("3 times", once.Text);
+
+        var all = await tool.ExecuteAsync(new JsonObject { ["path"] = file, ["old_text"] = "speed", ["new_text"] = "velocity", ["replace_all"] = true }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+        Assert.Equal($"Edited {file}: replaced 3 occurrences.", all.Text);
+        Assert.Equal("velocity = velocity + 1; // velocity", File.ReadAllText(file));
+    }
+
+    [Fact]
+    public async Task Read_file_reads_a_part_of_a_long_file_and_turns_down_binary_ones()
+    {
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        var log = Path.Combine(dir, "big.log");
+        File.WriteAllLines(log, Enumerable.Range(1, 100_000).Select(i => $"line {i}"));
+        var tool = new ReadFileTool();
+
+        var part = (await tool.ExecuteAsync(new JsonObject { ["path"] = log, ["offset"] = 50_000, ["limit"] = 2 }, Ctx(new FakePlatform(), dir), CancellationToken.None)).Text;
+        Assert.Equal("50000\tline 50000\n50001\tline 50001\n[showing lines 50000-50001 of 100000; use offset to read more]\n", part.ReplaceLineEndings("\n"));
+        var past = await tool.ExecuteAsync(new JsonObject { ["path"] = log, ["offset"] = 200_000 }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+        Assert.Equal("The file has only 100000 lines.", past.Text);
+
+        var png = Path.Combine(dir, "picture.png");
+        File.WriteAllBytes(png, TestPng);
+        var binary = await tool.ExecuteAsync(new JsonObject { ["path"] = png }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+        Assert.True(binary.IsError);
+        Assert.Contains("not a text file", binary.Text);
+
+        // UTF-16 text has zero bytes too, but it is text.
+        var wide = Path.Combine(dir, "wide.txt");
+        File.WriteAllText(wide, "hello", System.Text.Encoding.Unicode);
+        Assert.Equal("1\thello", (await tool.ExecuteAsync(new JsonObject { ["path"] = wide }, Ctx(new FakePlatform(), dir), CancellationToken.None)).Text.TrimEnd());
+    }
+
+    private static readonly byte[] TestPng = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==");
+
+    [Fact]
+    public async Task A_directory_search_stops_on_stop()
+    {
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        File.WriteAllText(Path.Combine(dir, "a.txt"), "x");
+        using var stopped = new CancellationTokenSource();
+        stopped.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new ListDirectoryTool().ExecuteAsync(new JsonObject { ["path"] = dir, ["pattern"] = "*.nothing" }, Ctx(new FakePlatform(), dir), stopped.Token));
+
+        var found = await new ListDirectoryTool().ExecuteAsync(new JsonObject { ["path"] = dir, ["pattern"] = "*.TXT" }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+        Assert.Contains("a.txt  (1 bytes)", found.Text);
     }
 
     [Fact]

@@ -125,7 +125,19 @@ public static class WebPage
 
             var finalUri = response.RequestMessage?.RequestUri ?? uri;
             var mediaType = response.Content.Headers.ContentType?.MediaType?.ToLowerInvariant() ?? "";
-            var body = await WebHttp.ReadBodyAsync(response, ct).ConfigureAwait(false);
+            byte[] body;
+            try
+            {
+                body = await WebHttp.ReadBodyAsync(response, ct).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                throw new WebPageException($"{uri.Host} sent the page too slowly; it didn't arrive in {WebHttp.Client.Timeout.TotalSeconds:0} seconds.");
+            }
+            catch (Exception ex) when (ex is IOException or HttpRequestException)
+            {
+                throw new WebPageException($"The connection to {uri.Host} broke while the page came in: {ex.Message}");
+            }
 
             if (mediaType is "application/pdf" || body.AsSpan().StartsWith("%PDF"u8))
                 throw new WebPageException("This is a PDF, which fetch_page can't read. Try another result, or download it with run_shell.");

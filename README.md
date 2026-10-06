@@ -88,7 +88,7 @@ that fails, however it fails, reports the error to the model and the run goes on
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …) |
 | `wait` | Waits, then screenshots |
-| `read_file`, `write_file`, `edit_file`, `list_directory` | File work |
+| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `web_search` | Searches the web: titles, links and snippets (see below) |
 | `fetch_page` | Reads a web page as plain text; `find` returns only the passages that mention some words, `start` reads on in a long page |
@@ -126,7 +126,8 @@ against 57 with the model's own coordinates, and 19 of 19 menus, tabs and button
 screenshot (`ClickScenes/unity-editor.png`) against 10; with the first screenshot shifted 30 px, as
 a misjudged screen would be, 30 of 31 against 0. The look costs about 15 s per click on that server.
 
-After each click BlackBox also compares the screen before and after it. When nothing changed near
+After each click BlackBox also compares the screen just before it (after the look, so what changed
+while the model looked doesn't count) with the screen after it. When nothing changed near
 the click and nothing big changed anywhere (a dialog opening), the click almost certainly missed,
 and the result says so. A fresh look that misses misses the same way again, so the note tells the
 model to click again with `target` left out and its own x/y. On the scenes where looks miss (a dense

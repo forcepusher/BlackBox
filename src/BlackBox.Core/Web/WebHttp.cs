@@ -36,15 +36,28 @@ internal static class WebHttp
         return client;
     }
 
-    /// <summary>Reads at most <see cref="MaxBytes"/> of a response body.</summary>
+    /// <summary>
+    /// Reads at most <see cref="MaxBytes"/> of a response body, within the client's timeout: that
+    /// timeout ends once the headers are in, and a server trickling the body would hang the tool.
+    /// </summary>
+    /// <exception cref="TimeoutException">The body took longer than the timeout.</exception>
     public static async Task<byte[]> ReadBodyAsync(HttpResponseMessage response, CancellationToken ct)
     {
-        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        using var buffer = new MemoryStream();
-        var chunk = new byte[81920];
-        int read;
-        while (buffer.Length < MaxBytes && (read = await stream.ReadAsync(chunk, ct).ConfigureAwait(false)) > 0)
-            buffer.Write(chunk, 0, read);
-        return buffer.ToArray();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(Client.Timeout);
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
+            using var buffer = new MemoryStream();
+            var chunk = new byte[81920];
+            int read;
+            while (buffer.Length < MaxBytes && (read = await stream.ReadAsync(chunk, timeout.Token).ConfigureAwait(false)) > 0)
+                buffer.Write(chunk, 0, read);
+            return buffer.ToArray();
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException();
+        }
     }
 }

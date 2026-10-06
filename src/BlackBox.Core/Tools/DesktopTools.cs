@@ -10,8 +10,7 @@ public abstract class DesktopActionTool : Tool
 
     public sealed override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
-        var check = ChecksForMiss && ClickCheck.Enabled && ctx.Settings.ScreenshotAfterActions ? ClickCheck.Start(ctx) : null;
-        var text = await ActAsync(args, ctx, ct).ConfigureAwait(false);
+        var (text, check) = await ActAsync(args, ctx, ct).ConfigureAwait(false);
         if (!ctx.Settings.ScreenshotAfterActions)
             return new ToolResult(text);
 
@@ -26,10 +25,13 @@ public abstract class DesktopActionTool : Tool
         return shot with { Text = text + "\n" + shot.Text };
     }
 
-    /// <summary>Whether to tell the model when its action left the screen as it was (see <see cref="ClickCheck"/>).</summary>
-    protected virtual bool ChecksForMiss => false;
+    /// <summary>What an action did; for a click, also the screen just before it, to tell a miss by (see <see cref="ClickCheck"/>).</summary>
+    private protected readonly record struct Acted(string Text, ClickCheck? Check = null)
+    {
+        public static implicit operator Acted(string text) => new(text);
+    }
 
-    protected abstract Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct);
+    private protected abstract Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct);
 
     protected static (int X, int Y) Point(JsonObject args, ToolContext ctx, string xKey = "x", string yKey = "y") =>
         ctx.GetScreenSpace().ToScreen(RequireNumber(args, xKey), RequireNumber(args, yKey));
@@ -108,18 +110,19 @@ public sealed class MouseClickTool : DesktopActionTool
         return GetString(args, "target") is { Length: > 0 } t ? $"{kind}{button} {t}" : $"{kind}{button} at {Fmt(args)}";
     }
 
-    protected override bool ChecksForMiss => true;
-
-    protected override async Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    private protected override async Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var (point, note) = await AimAsync(args, ctx, ct).ConfigureAwait(false);
         var button = ParseButton(GetString(args, "button"));
         var clicks = Math.Clamp((int)(GetNumber(args, "clicks") ?? 1), 1, 3);
+        // The screen just before the click, not before the look: what changed while the model
+        // looked (some 15 s) is no reaction to the click.
+        var check = ClickCheck.Enabled && ctx.Settings.ScreenshotAfterActions ? ClickCheck.Start(ctx) : null;
         using var aside = Aside(ctx, point);
         ctx.Platform.Input.MoveMouse(point.X, point.Y);
         await Task.Delay(60, ct).ConfigureAwait(false);
         ctx.Platform.Input.Click(button, clicks);
-        return note + clicks switch { 2 => "Double-clicked.", 3 => "Triple-clicked.", _ => "Clicked." };
+        return new(note + clicks switch { 2 => "Double-clicked.", 3 => "Triple-clicked.", _ => "Clicked." }, check);
     }
 
     /// <summary>
@@ -139,7 +142,7 @@ public sealed class MouseClickTool : DesktopActionTool
             return (space.ToScreen(p.X, p.Y), "");
         return given is { } g
             ? (g, $"BlackBox could not find the {target} on the screen by name, so it clicked at your x, y. ")
-            : throw new ToolArgumentException($"BlackBox could not find the {target} on the screen. Name it differently, or give x and y.");
+            : throw new InvalidOperationException($"BlackBox could not find the {target} on the screen. Name it differently, or give x and y.");
     }
 
     internal static MouseButton ParseButton(string? s) => s?.ToLowerInvariant() switch
@@ -157,12 +160,12 @@ public sealed class MouseMoveTool : DesktopActionTool
     public override JsonObject Parameters => Schema(("x", Num("X in screenshot coordinates"), true), ("y", Num("Y in screenshot coordinates"), true));
     public override string Describe(JsonObject args) => $"Move mouse to {Fmt(args)}";
 
-    protected override Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    private protected override Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var (x, y) = Point(args, ctx);
         using var aside = Aside(ctx, (x, y));
         ctx.Platform.Input.MoveMouse(x, y);
-        return Task.FromResult("Moved the mouse.");
+        return Task.FromResult<Acted>("Moved the mouse.");
     }
 }
 
@@ -175,7 +178,7 @@ public sealed class MouseDragTool : DesktopActionTool
         ("to_x", Num("End X"), true), ("to_y", Num("End Y"), true));
     public override string Describe(JsonObject args) => $"Drag from {Fmt(args)} to {Fmt(args, "to_x", "to_y")}";
 
-    protected override async Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    private protected override async Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var (x1, y1) = Point(args, ctx);
         var (x2, y2) = Point(args, ctx, "to_x", "to_y");
@@ -214,7 +217,7 @@ public sealed class ScrollTool : DesktopActionTool
     public override string Describe(JsonObject args) =>
         $"Scroll {GetString(args, "direction")} x{GetNumber(args, "amount") ?? 3}" + (args["x"] is not null ? $" at {Fmt(args)}" : "");
 
-    protected override Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    private protected override Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var at = ctx.Platform.Input.GetCursorPosition();
         if (args["x"] is not null && args["y"] is not null)
@@ -233,7 +236,7 @@ public sealed class ScrollTool : DesktopActionTool
             var d => throw new ToolArgumentException($"Unknown direction '{d}'."),
         };
         ctx.Platform.Input.Scroll(dx, dy);
-        return Task.FromResult(Describe(args) + " done.");
+        return Task.FromResult<Acted>(Describe(args) + " done.");
     }
 }
 
@@ -245,12 +248,12 @@ public sealed class TypeTextTool : DesktopActionTool
     public override JsonObject Parameters => Schema(("text", Str("Text to type"), true));
     public override string Describe(JsonObject args) => $"Type \"{(GetString(args, "text") ?? "").Clip(60)}\"";
 
-    protected override Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    private protected override Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var text = RequireString(args, "text");
         ctx.Platform.HostWindow.YieldFocus();
         ctx.Platform.Input.TypeText(text);
-        return Task.FromResult($"Typed {text.Length} characters.");
+        return Task.FromResult<Acted>($"Typed {text.Length} characters.");
     }
 }
 
@@ -292,7 +295,7 @@ public sealed class PressKeysTool : DesktopActionTool
     private static string[] Split(string chord) =>
         chord.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    protected override async Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    private protected override async Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var presses = Sequence(args);
         if (presses.Count == 0 && Keys(args) is { Count: > 0 } chord)
