@@ -705,43 +705,37 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     // Every callback below is dropped once the run is detached: the chat it belongs to is no longer on screen.
 
+    /// <summary>The reply bubble the agent streams into; only touched on the agent's thread.</summary>
+    private AssistantMessageItem? _streaming;
+
     void IAgentObserver.OnStepStarted(int step)
     {
         // The agent waits for this call, so its conversation holds still while it is copied.
         var history = _runDetached ? null : SnapshotHistory();
+        var bubble = _streaming = new AssistantMessageItem();
         Dispatcher.UIThread.Post(() =>
         {
             if (_runDetached) return;
             // Saved at every step, so a crash or power cut loses at most the step in progress.
             SaveChat(history);
             TrimChat();
-            _current = new AssistantMessageItem();
-            Items.Add(_current);
+            _current = bubble;
+            Items.Add(bubble);
         });
     }
 
-    void IAgentObserver.OnDelta(StreamDelta delta) => Dispatcher.UIThread.Post(() =>
-    {
-        if (_current is null || _runDetached) return;
-        if (delta.Channel == StreamChannel.Reasoning)
-            _current.Reasoning += delta.Text;
-        else
-            _current.Text += delta.Text;
-    });
+    void IAgentObserver.OnDelta(StreamDelta delta) => _streaming?.Append(delta);
 
     void IAgentObserver.OnAssistantMessage(ChatMessage message) => Dispatcher.UIThread.Post(() =>
     {
-        if (_current is null || _runDetached) return;
-        _current.Text = (message.Content ?? "").Trim();
-        _current.Reasoning = (message.Reasoning ?? _current.Reasoning).Trim();
-        FinishCurrent();
+        if (!_runDetached) FinishCurrent(message);
     });
 
     /// <summary>Ends the streaming bubble; an empty one (a discarded reply) leaves no trace.</summary>
-    private void FinishCurrent()
+    private void FinishCurrent(ChatMessage? message = null)
     {
         if (_current is null) return;
-        _current.IsStreaming = false;
+        _current.Finish(message);
         if (!_current.HasText && !_current.HasReasoning)
             Items.Remove(_current);
         _current = null;

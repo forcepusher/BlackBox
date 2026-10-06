@@ -1,4 +1,7 @@
+using System.Text;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using BlackBox.Core.Llm;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -13,6 +16,57 @@ public sealed class UserMessageItem(string text) : ChatItemViewModel
 
 public sealed partial class AssistantMessageItem : ChatItemViewModel
 {
+    private readonly object _gate = new();
+    private readonly StringBuilder _newText = new(), _newReasoning = new();
+    private bool _flushQueued;
+
+    /// <summary>
+    /// Takes a streamed piece, on any thread. The pieces that arrive until the window is idle are
+    /// shown together: one update per piece laid out the whole growing text again each time, and
+    /// a long reply froze the window for minutes (6,000 pieces: 139 s).
+    /// </summary>
+    public void Append(StreamDelta delta)
+    {
+        lock (_gate)
+        {
+            (delta.Channel == StreamChannel.Reasoning ? _newReasoning : _newText).Append(delta.Text);
+            if (_flushQueued) return;
+            _flushQueued = true;
+        }
+        Dispatcher.UIThread.Post(Flush, DispatcherPriority.Background);
+    }
+
+    private void Flush()
+    {
+        string text, reasoning;
+        lock (_gate)
+        {
+            (text, reasoning) = (_newText.ToString(), _newReasoning.ToString());
+            _newText.Clear();
+            _newReasoning.Clear();
+            _flushQueued = false;
+        }
+        if (!IsStreaming)
+            return; // the finished message has replaced what streamed
+        if (reasoning.Length > 0) Reasoning += reasoning;
+        if (text.Length > 0) Text += text;
+    }
+
+    /// <summary>
+    /// Ends the stream: the finished message replaces what streamed. Without one (a reply thrown
+    /// away, or the run ended), what streamed stays as it is.
+    /// </summary>
+    public void Finish(ChatMessage? message = null)
+    {
+        Flush();
+        if (message is not null)
+        {
+            Text = (message.Content ?? "").Trim();
+            Reasoning = (message.Reasoning ?? Reasoning).Trim();
+        }
+        IsStreaming = false;
+    }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasText), nameof(ShownText), nameof(ThinkingLabel), nameof(ShowTypingDots))]
     private string _text = "";
