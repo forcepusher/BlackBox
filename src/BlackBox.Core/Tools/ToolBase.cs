@@ -43,6 +43,9 @@ public sealed class ToolContext
     /// </summary>
     public Func<byte[], string, CancellationToken, Task<(double X, double Y)?>>? Locate { get; set; }
 
+    /// <summary>The PC's own browser, run headless, for the web tools to fall back on; null when there is none.</summary>
+    public Web.HeadlessBrowser? Browser { get; init; }
+
     /// <summary>Screen points of the latest clicks in a row in one small area (see DesktopActionTool).</summary>
     internal List<(int X, int Y)> RecentClicks { get; } = [];
 

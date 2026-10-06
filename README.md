@@ -13,7 +13,7 @@ unpacks its native UI libraries into `Data/runtime` next to itself.
 ```
 BlackBox/
   BlackBox.exe
-  Data/        settings.json, runtime/ (unpacked by the single-file exe)
+  Data/        settings.json, runtime/ (unpacked by the single-file exe), browser/ (see Web search)
 ```
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
@@ -76,6 +76,8 @@ cache, so each retry continues where the last one stopped (up to 12 times per st
 | `wait` | Waits, then screenshots |
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
+| `web_search` | Searches the web: titles, links and snippets (see below) |
+| `fetch_page` | Reads a web page as plain text; `find` returns only the passages that mention some words, `start` reads on in a long page |
 | `<server>__<tool>` | Any tool of the MCP servers you add in Settings → Advanced (see below) |
 
 Models often fumble tool-call syntax, so BlackBox repairs calls on the fly: Qwen XML, Gemma 4 and
@@ -114,6 +116,30 @@ the model, in a separate request with only the current screenshot, where that ta
 the answer to the note. On a real Unity screenshot (`ClickScenes/unity-editor.png`, 19 menus, tabs
 and buttons, first click shifted 30 px): 11 of 12 misses corrected with the fresh look, 12 of 16
 without it, where 3 of the 4 failures were the same spot clicked again.
+
+### Web search
+A local model's memory of APIs is where it slips most (qwen3.8 writes Unity's `KeyCode.Left`, which
+doesn't exist, for `KeyCode.LeftArrow`), so the agent can look things up, and the system prompt
+tells it to whenever it isn't sure of an exact name or meets an error it doesn't understand. Given
+Unity's CS0117 error for `KeyCode.Left`, qwen3.8 searched, read the `KeyCode` page with
+`find=Arrow` and fixed the file in 55 s.
+
+No API key and nothing to install. `web_search` asks DuckDuckGo's HTML page through the system's
+`curl` (built into Windows 10 and later; a fraction of a second): DuckDuckGo recognizes .NET's own
+HTTP client by its TLS handshake and answers it with a captcha, even on the first search.
+DuckDuckGo also refuses a computer that searched about ten times in a few minutes; then, for the
+next 10 minutes, or when it finds nothing, Bing is searched in the PC's own Edge or Chrome run
+headless (one to three seconds). Bing can't be asked directly: to a plain request it answers with
+results for the first word only; Brave, Mojeek and Startpage answer with a captcha.
+
+`fetch_page` keeps only a page's main content (no menus, sidebars, cookie banners or footers) and
+writes it as text: `#` headings, `-` lists, fenced code blocks, `| a | b |` table rows; links keep only
+their text. A page comes in parts of 6,000 characters (about 1.5k tokens), so a long page can't
+flood the context, and `find` returns just the matching lines with a little context and the heading
+they sit under. A page that turns away plain requests, or that its scripts build, is loaded in the
+headless browser instead. PDFs aren't read. The last eight pages are kept in memory, so reading on
+doesn't download a page again. The browser's profile is `Data/browser`. Turn web access off in
+Settings → General.
 
 ### MCP servers
 BlackBox is an MCP client: any [Model Context Protocol](https://modelcontextprotocol.io) server adds its

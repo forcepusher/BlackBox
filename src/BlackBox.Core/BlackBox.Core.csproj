@@ -5,8 +5,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Same SkiaSharp line as Avalonia 11 so the app ships a single native Skia. -->
+    <!-- HTML parsing for the web tools; fully managed. -->
+    <PackageReference Include="AngleSharp" Version="1.8.3" />
     <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
+    <!-- Same SkiaSharp line as Avalonia 11 so the app ships a single native Skia. -->
     <PackageReference Include="SkiaSharp" Version="2.88.9" />
   </ItemGroup>
 

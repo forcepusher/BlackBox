@@ -9,8 +9,9 @@ public static class SystemPrompt
 {
     /// <param name="screens">One per monitor, the primary first; null when the model can't see images.</param>
     /// <param name="mcpServers">Connected MCP servers whose tools are in the tool list.</param>
+    /// <param name="webSearch">Whether web_search and fetch_page are in the tool list.</param>
     public static string Build(string platformName, IReadOnlyList<ScreenSpace>? screens, string workingDirectory, string customInstructions,
-        IReadOnlyList<McpServerStatus>? mcpServers = null)
+        IReadOnlyList<McpServerStatus>? mcpServers = null, bool webSearch = false)
     {
         var screen = screens is { Count: > 0 } ? screens[0] : null;
         var sb = new StringBuilder();
@@ -42,6 +43,10 @@ public static class SystemPrompt
             sb.AppendLine("- Click a text field before typing into it.");
             sb.AppendLine("- When you don't need to look at the screen in between, make several tool calls in one reply (for example click a field and type, or press a few keys in a row). You get one screenshot after the last of them, so to check exactly what one action did, do it on its own.");
         }
+        if (webSearch)
+            sb.AppendLine("- Your memory of APIs, libraries, programs and recent events can be wrong or out of date. Before you write code against an API " +
+                          "whose exact names you are not sure of (classes, methods, enum values, arguments), or rely on a fact that may have changed, " +
+                          "look it up with web_search and fetch_page (find= gets just the part you need). After an error you don't understand, search for it.");
         sb.AppendLine("- Keep each tool call short: write long files in parts of at most about 100 lines (write_file, then write_file with append=true for each next part).");
         sb.AppendLine("- Do one step at a time and keep going until the task is finished, then reply with a short summary of what you did.");
         sb.AppendLine("- If something fails twice, try a different approach. If you are blocked or the task is ambiguous, stop and ask the user.");

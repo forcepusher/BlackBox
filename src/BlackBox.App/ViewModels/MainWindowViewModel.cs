@@ -7,6 +7,7 @@ using BlackBox.Core.Mcp;
 using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
+using BlackBox.Core.Web;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -406,6 +407,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 Settings = agent,
                 WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                 CoordinateGrid = ModelCoordinates.GridFor(backend.Options.Model),
+                Browser = agent.WebSearch ? HeadlessBrowser.Find(_paths.BrowserProfileDir) : null,
             };
 
             IReadOnlyList<ScreenSpace>? screens = null;
@@ -416,8 +418,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             }
 
             // The MCP tools are a snapshot: the tool list stays the same for the whole run.
-            var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: _mcp.Tools);
-            var prompt = SystemPrompt.Build(_platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, _mcp.Connected);
+            var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: _mcp.Tools, includeWebTools: agent.WebSearch);
+            var prompt = SystemPrompt.Build(_platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, _mcp.Connected, agent.WebSearch);
             var session = new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, _history, backend.ContextTokens);
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.

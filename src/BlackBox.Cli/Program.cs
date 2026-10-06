@@ -100,10 +100,14 @@ catch (OperationCanceledException)
 
 var backend = BackendConnection.Create(http, settings.Server);
 var workDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-var ctx = new ToolContext { Platform = platform, Settings = agent, WorkingDirectory = workDir, CoordinateGrid = ModelCoordinates.GridFor(settings.Server.Model) };
+var ctx = new ToolContext
+{
+    Platform = platform, Settings = agent, WorkingDirectory = workDir, CoordinateGrid = ModelCoordinates.GridFor(settings.Server.Model),
+    Browser = agent.WebSearch ? BlackBox.Core.Web.HeadlessBrowser.Find(paths.BrowserProfileDir) : null,
+};
 var screens = backend.Vision ? ctx.ScreenSpaces() : null;
-var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: mcp.Tools);
-var session = new AgentSession(backend.Client, backend.Options, registry, ctx, SystemPrompt.Build(platform.Name, screens, workDir, agent.CustomInstructions, mcp.Connected), contextTokens: backend.ContextTokens);
+var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: mcp.Tools, includeWebTools: agent.WebSearch);
+var session = new AgentSession(backend.Client, backend.Options, registry, ctx, SystemPrompt.Build(platform.Name, screens, workDir, agent.CustomInstructions, mcp.Connected, agent.WebSearch), contextTokens: backend.ContextTokens);
 var observer = new ConsoleObserver(autoYes, shotsDir);
 
 var t0 = DateTime.UtcNow;
