@@ -397,17 +397,20 @@ public sealed partial class AgentSession(
     /// If a run was interrupted between the model asking for tools and the results arriving,
     /// add placeholder results so the next request is still a valid conversation.
     /// </summary>
-    private void RepairDanglingToolCalls()
+    private void RepairDanglingToolCalls() => RepairDanglingToolCalls(History);
+
+    /// <inheritdoc cref="RepairDanglingToolCalls()"/>
+    public static void RepairDanglingToolCalls(List<ChatMessage> history)
     {
-        for (var i = History.Count - 1; i >= 0; i--)
+        for (var i = history.Count - 1; i >= 0; i--)
         {
-            var msg = History[i];
+            var msg = history[i];
             if (msg.Role != ChatRole.Assistant || !msg.HasToolCalls)
                 continue;
-            var answered = History.Skip(i + 1).Where(m => m.Role == ChatRole.Tool).Select(m => m.ToolCallId).ToHashSet();
-            var insertAt = i + 1 + History.Skip(i + 1).TakeWhile(m => m.Role == ChatRole.Tool).Count();
+            var answered = history.Skip(i + 1).Where(m => m.Role == ChatRole.Tool).Select(m => m.ToolCallId).ToHashSet();
+            var insertAt = i + 1 + history.Skip(i + 1).TakeWhile(m => m.Role == ChatRole.Tool).Count();
             foreach (var call in msg.ToolCalls!.Where(c => !answered.Contains(c.Id)))
-                History.Insert(insertAt++, ChatMessage.ToolResult(call.Id, "Not run: the user stopped the agent."));
+                history.Insert(insertAt++, ChatMessage.ToolResult(call.Id, "Not run: the user stopped the agent."));
             break;
         }
     }

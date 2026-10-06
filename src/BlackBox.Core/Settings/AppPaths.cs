@@ -7,6 +7,7 @@ namespace BlackBox.Core.Settings;
 ///   BlackBox.exe
 ///   Data/settings.json
 ///   Data/mcp.json  (MCP servers, if any)
+///   Data/chats/    (saved chats, one file each)
 ///   Data/browser/  (profile of the headless browser web search falls back on)
 ///   Data/runtime/  (native libraries unpacked by the single-file build)
 /// </code>
@@ -22,6 +23,9 @@ public sealed class AppPaths(string root)
 
     /// <summary>Profile of the headless browser the web tools fall back on (see <see cref="Web.HeadlessBrowser"/>).</summary>
     public string BrowserProfileDir => Path.Combine(DataDir, "browser");
+
+    /// <summary>Saved chats, one file each (see <see cref="Chats.ChatStore"/>).</summary>
+    public string ChatsDir => Path.Combine(DataDir, "chats");
 
     /// <summary>Where the single-file build unpacks its native libraries.</summary>
     public string RuntimeDir => Path.Combine(DataDir, "runtime");

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using BlackBox.Core.Agent;
+using BlackBox.Core.Chats;
 using BlackBox.Core.Llm;
 using BlackBox.Core.Mcp;
 using BlackBox.Core.Platform;
@@ -22,7 +23,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private readonly SettingsStore _store;
     private readonly IPlatformServices _platform;
     private readonly HttpClient _http = LlmHttp.Create(Timeout.InfiniteTimeSpan);
-    private readonly List<ChatMessage> _history = [];
+    private List<ChatMessage> _history = [];
+    private readonly ChatStore _chats;
     private readonly McpHost _mcp = new();
     private Task _mcpConnect = Task.CompletedTask;
     private bool _mcpRestartPending;
@@ -38,6 +40,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _store = store;
         _settings = settings;
         _platform = platform;
+        _chats = new ChatStore(paths.ChatsDir);
         // The saved model is in the list before the view binds to it, so the dropdown starts
         // with it selected; a selection the ComboBox once lost is not restored by rebinding.
         if (!string.IsNullOrEmpty(settings.Server.Model))
@@ -85,6 +88,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoMessages));
         _stopKey = _platform.StopKey.Watch(OnStopKey);
+        foreach (var header in _chats.List())
+            PastChats.Add(NewRow(header));
+        OnPropertyChanged(nameof(HasPastChats));
         _ = CheckServerAsync();
         _mcpConnect = ConnectMcpAsync();
     }
@@ -92,6 +98,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>Stops the run and the MCP servers; called when the window closes.</summary>
     public void Shutdown()
     {
+        // A chat is saved at every step and when its run ends, so only one in progress needs it here.
+        if (IsBusy) SaveChat(SnapshotHistory());
         _runCts?.Cancel();
         _stopKey?.Dispose();
         try { _mcp.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5)); }
@@ -373,9 +381,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var text = Input.Trim();
         Input = "";
         Items.Add(new UserMessageItem(text));
+        SaveChat(SnapshotHistory());
+        _runDetached = false;
         IsBusy = true;
         _runCts = new CancellationTokenSource();
         var ct = _runCts.Token;
+        // This chat's conversation: picking another chat while the run starts up replaces _history.
+        var history = _history;
 
         try
         {
@@ -420,7 +432,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             // The MCP tools are a snapshot: the tool list stays the same for the whole run.
             var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: _mcp.Tools, includeWebTools: agent.WebSearch);
             var prompt = SystemPrompt.Build(_platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, _mcp.Connected, agent.WebSearch);
-            var session = new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, _history, backend.ContextTokens);
+            var session = new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, history, backend.ContextTokens);
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
             _settings.Server.LearnContextLimit(session.ContextTokens);
@@ -428,10 +440,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         catch (OperationCanceledException)
         {
-            AddNotice(StoppedText(), isError: false);
+            var stopped = StoppedText();
+            if (!_runDetached) AddNotice(stopped, isError: false);
         }
         finally
         {
+            // After the run's last posted updates (its "Stopped." notice) have reached the chat.
+            var chatId = _chatId;
+            if (!_runDetached)
+                Dispatcher.UIThread.Post(() => { if (_chatId == chatId) SaveChat(SnapshotHistory()); }, DispatcherPriority.Background);
             IsBusy = false;
             _runCts.Dispose();
             _runCts = null;
@@ -469,11 +486,147 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     [RelayCommand]
     private void NewChat()
     {
-        _runCts?.Cancel();
-        _history.Clear();
+        LeaveChat(save: true);
+        MarkCurrentChat();
+    }
+
+    // ---- saved chats (the History dropdown) --------------------------------------------
+
+    /// <summary>Saved chats, the most recently changed first.</summary>
+    public ObservableCollection<PastChat> PastChats { get; } = [];
+
+    public bool HasPastChats => PastChats.Count > 0;
+
+    /// <summary>The file the chat on screen is saved in; null until its first message.</summary>
+    private string? _chatId;
+    private string? _chatTitle;
+
+    /// <summary>
+    /// The run in progress belongs to a chat that is no longer on screen (New chat or another chat
+    /// was picked while it ran): it is being stopped, and what it still reports is dropped.
+    /// </summary>
+    private bool _runDetached;
+
+    private PastChat NewRow(ChatHeader header) => new(header, OpenChat, DeleteChat);
+
+    /// <summary>Clears the screen for another chat. A run in progress is stopped, and saved as it is unless the chat is being deleted.</summary>
+    private void LeaveChat(bool save)
+    {
+        if (IsBusy)
+        {
+            if (save) SaveChat(SnapshotHistory());
+            _runDetached = true;
+            _runCts?.Cancel();
+        }
+        // The stopped run keeps its own list until it ends, so it can't write into the next chat.
+        _history = [];
         Items.Clear();
         _current = null;
+        _chatId = null;
+        _chatTitle = null;
     }
+
+    private void OpenChat(PastChat row)
+    {
+        if (row.Id == _chatId)
+            return;
+        if (_chats.Load(row.Id) is not { } chat)
+        {
+            PastChats.Remove(row);
+            OnPropertyChanged(nameof(HasPastChats));
+            return;
+        }
+        LeaveChat(save: true);
+        _chatId = chat.Id;
+        _chatTitle = chat.Title;
+        _history = chat.History;
+        foreach (var entry in chat.Entries)
+            Items.Add(FromEntry(entry));
+        MarkCurrentChat();
+    }
+
+    private void DeleteChat(PastChat row)
+    {
+        if (row.Id == _chatId)
+            LeaveChat(save: false);
+        _chats.Delete(row.Id);
+        PastChats.Remove(row);
+        OnPropertyChanged(nameof(HasPastChats));
+    }
+
+    private void MarkCurrentChat()
+    {
+        foreach (var row in PastChats)
+            row.IsCurrent = row.Id == _chatId;
+    }
+
+    /// <summary>A copy of the model's conversation to save; null if a run changed it while it was being copied.</summary>
+    private List<ChatMessage>? SnapshotHistory()
+    {
+        try { return ChatStore.ForSaving(_history); }
+        catch (InvalidOperationException) { return null; }
+    }
+
+    /// <summary>Writes the chat on screen to its file and moves it to the top of the History list. A chat with nothing typed yet isn't saved.</summary>
+    private void SaveChat(List<ChatMessage>? history)
+    {
+        if (history is null || Items.OfType<UserMessageItem>().FirstOrDefault() is not { } first)
+            return;
+        _chatId ??= ChatStore.NewId();
+        _chatTitle ??= ChatStore.TitleFrom(first.Text);
+        var chat = new SavedChat
+        {
+            Id = _chatId,
+            Title = _chatTitle,
+            Updated = DateTime.UtcNow,
+            // A reply bubble with nothing in it yet (a step just started) is left out.
+            Entries = Items.Where(i => i is not AssistantMessageItem { HasText: false, HasReasoning: false }).Select(ToEntry).ToList(),
+            History = history,
+        };
+        try { _chats.Save(chat); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return; // a full or read-only disk: the chat goes on, just unsaved
+        }
+
+        var row = PastChats.FirstOrDefault(r => r.Id == chat.Id);
+        if (row is null)
+        {
+            row = NewRow(new ChatHeader { Id = chat.Id, Title = chat.Title, Updated = chat.Updated });
+            PastChats.Insert(0, row);
+            OnPropertyChanged(nameof(HasPastChats));
+        }
+        else
+        {
+            row.Updated = chat.Updated;
+            if (PastChats.IndexOf(row) != 0)
+                PastChats.Move(PastChats.IndexOf(row), 0);
+        }
+        MarkCurrentChat();
+    }
+
+    private static ChatEntry ToEntry(ChatItemViewModel item) => item switch
+    {
+        UserMessageItem u => new ChatEntry { Kind = ChatEntryKind.User, Text = u.Text },
+        AssistantMessageItem a => new ChatEntry { Kind = ChatEntryKind.Assistant, Text = a.Text, Reasoning = a.Reasoning },
+        ToolCallItem t => new ChatEntry { Kind = ChatEntryKind.Tool, CallId = t.CallId, Name = t.Name, Summary = t.Summary, State = t.State.ToString(), Text = t.ResultText },
+        NoticeItem n => new ChatEntry { Kind = ChatEntryKind.Notice, Text = n.Text, IsError = n.IsError },
+        _ => throw new ArgumentOutOfRangeException(nameof(item)),
+    };
+
+    private static ChatItemViewModel FromEntry(ChatEntry e) => e.Kind switch
+    {
+        ChatEntryKind.User => new UserMessageItem(e.Text ?? ""),
+        ChatEntryKind.Assistant => new AssistantMessageItem { Text = e.Text ?? "", Reasoning = e.Reasoning ?? "", IsStreaming = false },
+        ChatEntryKind.Tool => new ToolCallItem(e.CallId ?? "", e.Name ?? "", e.Summary ?? "")
+        {
+            ResultText = e.Text ?? "",
+            // A call that was still running or waiting when the chat was saved never finished.
+            State = Enum.TryParse<ToolItemState>(e.State, out var state) && state is not (ToolItemState.Running or ToolItemState.AwaitingApproval)
+                ? state : ToolItemState.Denied,
+        },
+        _ => new NoticeItem(e.Text ?? "", e.IsError),
+    };
 
     // ---- settings -------------------------------------------------------------------
 
@@ -549,16 +702,27 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
     }
 
-    void IAgentObserver.OnStepStarted(int step) => Dispatcher.UIThread.Post(() =>
+
+    // Every callback below is dropped once the run is detached: the chat it belongs to is no longer on screen.
+
+    void IAgentObserver.OnStepStarted(int step)
     {
-        TrimChat();
-        _current = new AssistantMessageItem();
-        Items.Add(_current);
-    });
+        // The agent waits for this call, so its conversation holds still while it is copied.
+        var history = _runDetached ? null : SnapshotHistory();
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_runDetached) return;
+            // Saved at every step, so a crash or power cut loses at most the step in progress.
+            SaveChat(history);
+            TrimChat();
+            _current = new AssistantMessageItem();
+            Items.Add(_current);
+        });
+    }
 
     void IAgentObserver.OnDelta(StreamDelta delta) => Dispatcher.UIThread.Post(() =>
     {
-        if (_current is null) return;
+        if (_current is null || _runDetached) return;
         if (delta.Channel == StreamChannel.Reasoning)
             _current.Reasoning += delta.Text;
         else
@@ -567,7 +731,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     void IAgentObserver.OnAssistantMessage(ChatMessage message) => Dispatcher.UIThread.Post(() =>
     {
-        if (_current is null) return;
+        if (_current is null || _runDetached) return;
         _current.Text = (message.Content ?? "").Trim();
         _current.Reasoning = (message.Reasoning ?? _current.Reasoning).Trim();
         FinishCurrent();
@@ -587,15 +751,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         return await Dispatcher.UIThread.InvokeAsync(() =>
         {
+            if (_runDetached) return Task.FromResult(false);
             var item = FindOrAddTool(call, summary);
             return item.WaitForApprovalAsync(ct);
         });
     }
 
-    void IAgentObserver.OnNotice(string text) => Dispatcher.UIThread.Post(() => AddNotice(text, isError: false));
+    void IAgentObserver.OnNotice(string text) => Dispatcher.UIThread.Post(() =>
+    {
+        if (!_runDetached) AddNotice(text, isError: false);
+    });
 
     void IAgentObserver.OnToolStarted(ToolCall call, string summary) => Dispatcher.UIThread.Post(() =>
     {
+        if (_runDetached) return;
         var item = FindOrAddTool(call, summary);
         item.Summary = summary;
         item.State = ToolItemState.Running;
@@ -603,6 +772,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     void IAgentObserver.OnToolFinished(ToolCall call, ToolResult result) => Dispatcher.UIThread.Post(() =>
     {
+        if (_runDetached) return;
         var item = FindOrAddTool(call, call.Name);
         item.ResultText = result.Text.Length > 3000 ? result.Text[..3000] + "\n…" : result.Text.TrimEnd();
         if (result.Image is not null)
@@ -616,6 +786,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     void IAgentObserver.OnFinished(AgentStopReason reason, string? detail) => Dispatcher.UIThread.Post(() =>
     {
+        var stopped = StoppedText();
+        if (_runDetached) return;
         FinishCurrent();
         foreach (var t in Items.OfType<ToolCallItem>().Where(t => t.State is ToolItemState.Running or ToolItemState.AwaitingApproval))
             t.State = ToolItemState.Denied;
@@ -623,7 +795,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         switch (reason)
         {
             case AgentStopReason.Cancelled:
-                AddNotice(StoppedText(), isError: false);
+                AddNotice(stopped, isError: false);
                 break;
             case AgentStopReason.Error:
                 AddNotice(detail ?? "Something went wrong.", isError: true);

@@ -95,6 +95,19 @@ public partial class MainWindow : Window
             vm.AttachHostWindow(handle);
     }
 
+    /// <summary>A chat picked in the History dropdown (its command opens it): close the list and get back to typing.</summary>
+    private void OnPastChatClick(object? sender, RoutedEventArgs e)
+    {
+        _stickToBottom = true;
+        // Closed afterwards: the Click event comes before the command, and closing detaches the
+        // row, which unbinds its command.
+        Dispatcher.UIThread.Post(() =>
+        {
+            HistoryButton.Flyout?.Hide();
+            InputBox.Focus();
+        });
+    }
+
     private async void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
         var settingsVm = Vm.CreateSettingsViewModel();

@@ -24,6 +24,40 @@
                      Width="9" Height="9" VerticalAlignment="Center" />
             <TextBlock Classes="muted" Text="{Binding ServerStatusText}" VerticalAlignment="Center" />
           </StackPanel>
+          <!-- Earlier chats, newest first: a row opens one, its trash button deletes it. -->
+          <Button x:Name="HistoryButton" Classes="ghost" ToolTip.Tip="Earlier chats" AutomationProperties.Name="History">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="History" VerticalAlignment="Center" />
+              <PathIcon Width="10" Height="10" VerticalAlignment="Center" Data="M7 10l5 5 5-5z" />
+            </StackPanel>
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedRight" FlyoutPresenterClasses="history">
+                <Panel Width="340">
+                  <TextBlock Classes="muted" IsVisible="{Binding !HasPastChats}" TextWrapping="Wrap" Margin="10,8"
+                             Text="No chats yet. Every chat is kept here from its first message on." />
+                  <ItemsControl ItemsSource="{Binding PastChats}" IsVisible="{Binding HasPastChats}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PastChat">
+                        <Border Classes="pastChat" Classes.current="{Binding IsCurrent}">
+                          <Grid ColumnDefinitions="*,Auto">
+                            <Button Grid.ColumnSpan="2" Classes="pastChat" Command="{Binding OpenCommand}" Click="OnPastChatClick" AutomationProperties.Name="{Binding Title}">
+                              <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Classes="muted" Text="{Binding When}" />
+                              </StackPanel>
+                            </Button>
+                            <Button Grid.Column="1" Classes="deleteChat" Command="{Binding DeleteCommand}" ToolTip.Tip="Delete this chat" AutomationProperties.Name="Delete chat">
+                              <PathIcon Width="16" Height="16" Data="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
+                            </Button>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Panel>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
           <Button Classes="ghost" Content="New chat" Command="{Binding NewChatCommand}" />
           <Button Classes="ghost" Content="Settings" Click="OnSettingsClick" />
         </StackPanel>
