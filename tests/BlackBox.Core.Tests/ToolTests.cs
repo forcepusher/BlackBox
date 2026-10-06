@@ -1,5 +1,4 @@
 using System.Text.Json.Nodes;
-using BlackBox.Core.Llm;
 using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
@@ -272,7 +271,7 @@ public class ToolTests
 #else
         var platform = new BlackBox.Platform.Windows.WindowsPlatform();
 #endif
-        var screen = platform.Screen.GetPrimaryScreen();
+        var screen = platform.Screen.GetScreens()[0];
         Assert.True(screen.Width >= 640 && screen.Height >= 480);
 
         var result = await new ScreenshotTool().ExecuteAsync([], Ctx(platform), CancellationToken.None);
@@ -289,7 +288,7 @@ public class ToolTests
 #else
         var capture = new BlackBox.Platform.Windows.WindowsPlatform().Screen;
         var screens = capture.GetScreens();
-        Assert.Equal(capture.GetPrimaryScreen(), screens[0]);
+        Assert.Equal((0, 0), (screens[0].X, screens[0].Y)); // the primary, which Windows puts at the origin
         // Every monitor can be captured, not just the primary.
         foreach (var screen in screens)
             Assert.Equal(screen.Width * screen.Height * 4, capture.Capture(screen, includeCursor: false).Bgra.Length);

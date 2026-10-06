@@ -147,17 +147,18 @@ public sealed partial class AgentSession
         {
             if (m.Role == ChatRole.Assistant)
             {
-                if (!string.IsNullOrWhiteSpace(m.Content)) sb.Append("You said: ").AppendLine(Clip(m.Content, 600));
+                if (!string.IsNullOrWhiteSpace(m.Content)) sb.Append("You said: ").AppendLine(ClipMiddle(m.Content, 600));
                 foreach (var c in m.ToolCalls ?? [])
-                    sb.Append("You called ").Append(c.Name).Append(' ').AppendLine(Clip(c.Arguments, 300));
+                    sb.Append("You called ").Append(c.Name).Append(' ').AppendLine(ClipMiddle(c.Arguments, 300));
             }
             else if (m.Role == ChatRole.Tool)
-                sb.Append("Result: ").AppendLine(Clip(m.Content, 300));
+                sb.Append("Result: ").AppendLine(ClipMiddle(m.Content, 300));
         }
         return sb.ToString();
     }
 
-    private static string Clip(string? s, int max)
+    /// <summary>The start and the end of a long text, which say most about a step.</summary>
+    private static string ClipMiddle(string? s, int max)
     {
         s = (s ?? "").Trim();
         return s.Length <= max ? s : s[..(max / 2)] + " … " + s[^(max / 2)..];

@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Text;
-using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 
 namespace BlackBox.Core.Web;

@@ -113,7 +113,6 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     public List<ScreenRect> Captures { get; } = [];
     public IStopKey StopKey => NoStopKey.Instance;
 
-    public ScreenRect GetPrimaryScreen() => ScreenBounds;
     public IReadOnlyList<ScreenRect> GetScreens() => Screens ?? [ScreenBounds];
     /// <summary>What the screens show, if anything (black otherwise), with its top-left corner at <see cref="DesktopOrigin"/>.</summary>
     public RawImage? Desktop { get; set; }

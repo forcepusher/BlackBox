@@ -54,12 +54,8 @@ public sealed partial class McpTool : Tools.Tool
 
     public override JsonObject Parameters { get; }
 
-    public override string Describe(JsonObject args)
-    {
-        var text = args.Count == 0 ? "" : " " + args.ToJsonString();
-        if (text.Length > 200) text = text[..200] + "…";
-        return $"{ServerName}: {OriginalName}{text}";
-    }
+    public override string Describe(JsonObject args) =>
+        $"{ServerName}: {OriginalName}" + (args.Count == 0 ? "" : " " + args.ToJsonString().Clip(200));
 
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {

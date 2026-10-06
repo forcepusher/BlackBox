@@ -37,9 +37,6 @@ public sealed class McpHost : IAsyncDisposable
     /// <summary>Tests put a server in-process by handing out its transport here.</summary>
     internal Func<McpServerConfig, IClientTransport>? TransportFactory { get; set; }
 
-    /// <summary>Where the SDK's own log lines go; none by default.</summary>
-    internal Microsoft.Extensions.Logging.ILoggerFactory? LoggerFactory { get; set; }
-
     public IReadOnlyList<McpServerStatus> Statuses
     {
         get { lock (_gate) return _connections.Select(c => c.Status).ToList(); }
@@ -79,7 +76,7 @@ public sealed class McpHost : IAsyncDisposable
         {
             var transport = TransportFactory?.Invoke(c.Config) ?? CreateTransport(c.Config, stderr);
             var options = new McpClientOptions { ClientInfo = new() { Name = "BlackBox", Version = "0.1" } };
-            var client = await McpClient.CreateAsync(transport, options, LoggerFactory, timeout.Token).ConfigureAwait(false);
+            var client = await McpClient.CreateAsync(transport, options, cancellationToken: timeout.Token).ConfigureAwait(false);
             try
             {
                 var tools = await client.ListToolsAsync(cancellationToken: timeout.Token).ConfigureAwait(false);
@@ -124,7 +121,7 @@ public sealed class McpHost : IAsyncDisposable
             };
             if (config.Env.Count > 0)
                 options.EnvironmentVariables = config.Env.ToDictionary(kv => kv.Key, kv => (string?)kv.Value);
-            return new StdioClientTransport(options, LoggerFactory);
+            return new StdioClientTransport(options);
         }
 
         var http = new HttpClientTransportOptions
@@ -140,7 +137,7 @@ public sealed class McpHost : IAsyncDisposable
         };
         if (config.Headers.Count > 0)
             http.AdditionalHeaders = config.Headers.ToDictionary(kv => kv.Key, kv => kv.Value);
-        return new HttpClientTransport(http, _http, LoggerFactory, ownsHttpClient: false);
+        return new HttpClientTransport(http, _http, ownsHttpClient: false);
     }
 
     private static string Describe(Exception ex)

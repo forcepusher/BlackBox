@@ -105,7 +105,7 @@ public sealed partial class OpenAiChatClient
         using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
         var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
-            throw new LlmException($"GET /models failed ({(int)resp.StatusCode}): {Truncate(body, 500)}");
+            throw new LlmException($"GET /models failed ({(int)resp.StatusCode}): {body.Clip(500)}");
 
         var ids = new List<string>();
         if (JsonNode.Parse(body)?["data"] is JsonArray data)
@@ -163,8 +163,8 @@ public sealed partial class OpenAiChatClient
                     return await CompleteAsync(messages, tools, options, onDelta, ct).ConfigureAwait(false);
                 }
                 if (LooksLikeContextOverflow(err))
-                    throw new ContextOverflowException(Truncate(err, 500));
-                throw new LlmException($"Chat request failed ({(int)resp.StatusCode}): {Truncate(err, 1000)}");
+                    throw new ContextOverflowException(err.Clip(500));
+                throw new LlmException($"Chat request failed ({(int)resp.StatusCode}): {err.Clip(1000)}");
             }
 
             var received = false;
@@ -430,8 +430,6 @@ public sealed partial class OpenAiChatClient
 
     private static string? GetString(JsonNode node, string key) =>
         node[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
-
-    private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 
     /// <summary>Gemma 4 marks its thinking as a "thought" channel.</summary>
     [GeneratedRegex(@"<\|channel>thought\s*(.*?)<channel\|>\s*", RegexOptions.Singleline)]

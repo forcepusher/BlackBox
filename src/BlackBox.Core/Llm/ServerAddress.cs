@@ -26,9 +26,6 @@ public static partial class ServerAddress
         return IsLocal(text) ? [http, https] : [https, http];
     }
 
-    /// <summary>True if the address has a scheme, i.e. is already a usable URL.</summary>
-    public static bool IsResolved(string input) => Scheme().IsMatch(input.Trim());
-
     private static bool IsLocal(string address)
     {
         var host = address.Split('/', 2)[0].Split(':', 2)[0].Trim('[', ']').ToLowerInvariant();

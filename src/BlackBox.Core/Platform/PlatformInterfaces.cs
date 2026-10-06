@@ -21,9 +21,6 @@ public enum MouseButton { Left, Right, Middle }
 /// <summary>Screen capture in physical pixels.</summary>
 public interface IScreenCapture
 {
-    /// <summary>Bounds of the primary monitor in physical pixels.</summary>
-    ScreenRect GetPrimaryScreen();
-
     /// <summary>All monitors in physical pixels, the primary first, in a stable order.</summary>
     IReadOnlyList<ScreenRect> GetScreens();
 
@@ -165,7 +162,6 @@ public sealed class UnsupportedPlatform : IPlatformServices, IScreenCapture, IIn
 
     private static NotSupportedException Fail() => new("Desktop control is not implemented on this OS yet.");
 
-    public ScreenRect GetPrimaryScreen() => throw Fail();
     public IReadOnlyList<ScreenRect> GetScreens() => throw Fail();
     public RawImage Capture(ScreenRect region, bool includeCursor) => throw Fail();
     public (int X, int Y) GetCursorPosition() => throw Fail();

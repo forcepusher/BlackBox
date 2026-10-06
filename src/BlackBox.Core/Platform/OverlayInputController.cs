@@ -40,10 +40,7 @@ public sealed class OverlayInputController(IInputController inner, IInputOverlay
     public void TypeText(string text)
     {
         inner.TypeText(text);
-        var shown = text.Replace("\r\n", "⏎").Replace('\n', '⏎').Replace('\t', '⇥');
-        if (shown.Length > MaxTypedChars)
-            shown = shown[..MaxTypedChars] + "…";
-        Show($"Type “{shown}”");
+        Show($"Type “{text.Replace("\r\n", "⏎").Replace('\n', '⏎').Replace('\t', '⇥').Clip(MaxTypedChars)}”");
     }
 
     public void PressKeys(IReadOnlyList<string> keys)

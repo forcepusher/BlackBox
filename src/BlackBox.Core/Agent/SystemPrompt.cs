@@ -60,9 +60,9 @@ public static class SystemPrompt
             sb.AppendLine("Tools from the user's MCP servers are named <server>__<tool>; use them like any other tool when they fit the task:");
             foreach (var s in mcp)
             {
-                sb.Append("- ").Append(McpToolPrefix(s.Name)).Append(": ").Append(s.ToolNames.Count).Append(s.ToolNames.Count == 1 ? " tool" : " tools");
+                sb.Append("- ").Append(McpTool.Prefix(s.Name)).Append("*: ").Append(s.ToolNames.Count).Append(s.ToolNames.Count == 1 ? " tool" : " tools");
                 if (s.Instructions is { } instructions)
-                    sb.Append(". ").Append(Clip(instructions.ReplaceLineEndings(" "), 1_000));
+                    sb.Append(". ").Append(instructions.ReplaceLineEndings(" ").Clip(1_000));
                 sb.AppendLine();
             }
         }
@@ -75,10 +75,6 @@ public static class SystemPrompt
         }
         return sb.ToString();
     }
-
-    private static string McpToolPrefix(string server) => McpTool.Prefix(server) + "*";
-
-    private static string Clip(string s, int max) => s.Length <= max ? s : s[..max].TrimEnd() + "…";
 
     private static string DescribeScreen(ScreenSpace s, int index, ScreenSpace primary)
     {

@@ -243,11 +243,7 @@ public sealed class TypeTextTool : DesktopActionTool
     public override string Description =>
         "Type text into the focused control, exactly as given. Use \\n for Enter. Click the target field first.";
     public override JsonObject Parameters => Schema(("text", Str("Text to type"), true));
-    public override string Describe(JsonObject args)
-    {
-        var t = GetString(args, "text") ?? "";
-        return $"Type \"{(t.Length > 60 ? t[..60] + "…" : t)}\"";
-    }
+    public override string Describe(JsonObject args) => $"Type \"{(GetString(args, "text") ?? "").Clip(60)}\"";
 
     protected override Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {

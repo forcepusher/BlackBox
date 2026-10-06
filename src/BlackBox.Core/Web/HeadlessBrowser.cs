@@ -14,8 +14,6 @@ public sealed class HeadlessBrowser(string executable, string profileDirectory)
 {
     private const string UserAgent = WebHttp.UserAgent + " Edg/140.0.0.0";
 
-    public string Executable { get; } = executable;
-
     /// <summary>One page at a time: two browsers on one profile fight over its lock.</summary>
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -61,7 +59,7 @@ public sealed class HeadlessBrowser(string executable, string profileDirectory)
         try
         {
             Directory.CreateDirectory(profileDirectory);
-            var psi = new ProcessStartInfo(Executable)
+            var psi = new ProcessStartInfo(executable)
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
