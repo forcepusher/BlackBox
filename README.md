@@ -13,11 +13,18 @@ unpacks its native UI libraries into `Data/runtime` next to itself.
 ```
 BlackBox/
   BlackBox.exe
-  Data/        settings.json, runtime/ (unpacked by the single-file exe), browser/ (see Web search)
+  Data/        settings.json, chats/ (see Chat history), runtime/ (unpacked by the single-file exe), browser/ (see Web search)
 ```
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
 The agent itself works across the whole PC; relative paths and shell commands start in your home folder.
+
+## Chat history
+Every chat is saved on its own in `Data/chats/` from its first message on, after every step, and
+named after that message. **History** next to **New chat** lists them, the latest first: pick one to
+read it and carry on where it stopped (the model gets the conversation back), or delete it with its
+trash button. Screenshots are not kept in the saved file; the model takes a new one when it carries
+on. Picking another chat or New chat while a task runs stops the task, and keeps it as far as it got.
 
 ## Connecting to a model
 Enter the server address in the bar at the top of the main window (LM Studio's default is
