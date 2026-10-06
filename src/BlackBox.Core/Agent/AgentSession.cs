@@ -62,9 +62,11 @@ public sealed partial class AgentSession(
             for (var step = 1; ; step++)
             {
                 ct.ThrowIfCancellationRequested();
-                observer.OnStepStarted(step);
+                // The reset first: its handoff note is a reply of its own, and the step's reply
+                // comes after it, in a new step.
                 if (contextTokens > 0 && TokensInUse() > ResetThreshold)
                     await ResetContextAsync(observer, ct).ConfigureAwait(false);
+                observer.OnStepStarted(step);
 
                 var request = new List<ChatMessage>(History.Count + 1) { ChatMessage.System(systemPrompt) };
                 request.AddRange(History);
@@ -299,6 +301,7 @@ public sealed partial class AgentSession(
                 request.Clear();
                 request.Add(ChatMessage.System(systemPrompt));
                 request.AddRange(History);
+                observer.OnStepStarted(0); // the retried reply is a new one, after the handoff note
             }
         }
     }

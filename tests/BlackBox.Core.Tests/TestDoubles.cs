@@ -69,9 +69,12 @@ internal sealed class RecordingObserver : IAgentObserver
     public AgentStopReason? StopReason { get; private set; }
     public string? Detail { get; private set; }
 
-    public void OnStepStarted(int step) { }
+    /// <summary>Step starts and replies in order: "step 1", "reply Done.".</summary>
+    public List<string> Events { get; } = [];
+
+    public void OnStepStarted(int step) => Events.Add($"step {step}");
     public void OnDelta(StreamDelta delta) { }
-    public void OnAssistantMessage(ChatMessage message) { }
+    public void OnAssistantMessage(ChatMessage message) => Events.Add("reply " + message.Content);
 
     public Task<bool> RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct)
     {

@@ -461,6 +461,27 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task After_a_reset_the_next_reply_gets_a_step_of_its_own()
+    {
+        // The window shows each step's reply in its own bubble; a reply right after the handoff
+        // note, with no step between them, went into the note's finished bubble and never showed.
+        var server = new ScriptedServer
+        {
+            Responder = req => LastText(req) == AgentSession.HandoffRequest ? Sse.Text("NOTE: all fine.") : Sse.Text("Done."),
+        };
+        var (session, observer) = LongSession(server, contextTokens: 40_000);
+        await session.RunAsync("and now finish", observer, CancellationToken.None);
+        Assert.Equal(["step 0", "reply NOTE: all fine.", "step 1", "reply Done."], observer.Events);
+
+        // The same when the server refuses the request as too long.
+        var tooLong = new ScriptedServer(Sse.Text("NOTE: nothing done yet."), Sse.Text("Short answer."));
+        tooLong.Failures.Enqueue((HttpStatusCode.BadRequest, """{"error":{"message":"This model's maximum context length is 8192 tokens."}}"""));
+        var (second, events) = CreateSession(tooLong, Path.GetTempPath(), new FakePlatform(), contextTokens: 100_000);
+        await second.RunAsync("question", events, CancellationToken.None);
+        Assert.Equal(["step 1", "step 0", "reply NOTE: nothing done yet.", "step 0", "reply Short answer."], events.Events);
+    }
+
+    [Fact]
     public async Task The_servers_token_count_triggers_the_reset_even_when_the_estimate_is_small()
     {
         // A short history the estimate considers tiny, but the server says the prompt was 90k tokens.

@@ -719,6 +719,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             // Saved at every step, so a crash or power cut loses at most the step in progress.
             SaveChat(history);
             TrimChat();
+            FinishCurrent(); // a bubble nothing streamed into (a request that failed) leaves no "…" behind
             _current = bubble;
             Items.Add(bubble);
         });
