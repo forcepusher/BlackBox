@@ -9,8 +9,8 @@ namespace BlackBox.Core.Agent;
 /// long run the model can settle on a wrong idea of where something is ("the menu bar is at
 /// y≈3") and click there again and again, whatever the miss notes say; the same model looking at
 /// the same screenshot without that history gets it right (17 of 19 targets, all eight menus
-/// included, on a real Unity screenshot in ClickAccuracyTests). Used after a click that changed
-/// nothing.
+/// included, on a real Unity screenshot in ClickAccuracyTests). So every mouse_click is aimed this
+/// way: the model names the target, and a fresh look finds it.
 /// </summary>
 internal sealed partial class FreshLook(OpenAiChatClient client, ChatRequestOptions options)
 {
@@ -19,7 +19,7 @@ internal sealed partial class FreshLook(OpenAiChatClient client, ChatRequestOpti
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(120);
 
-    /// <summary>Off only to measure what the fresh look adds (ClickAccuracyTests).</summary>
+    /// <summary>Off only to measure what the fresh look adds (ClickAccuracyTests): clicks then go to the model's own x/y.</summary>
     internal static bool Enabled { get; set; } = true;
 
     /// <param name="coordinates">How x/y relate to the screenshot (<see cref="Platform.ScreenSpace.Describe"/>).</param>

@@ -38,16 +38,13 @@ public sealed class ToolContext
 
     /// <summary>
     /// Finds a named thing on a screenshot (JPEG) in a fresh conversation with the model; returns its
-    /// centre in the model's coordinates, or null. Set by the agent session; used after a click that
-    /// missed (see <see cref="Agent.FreshLook"/>).
+    /// centre in the model's coordinates, or null. Set by the agent session; mouse_click aims with it
+    /// (see <see cref="Agent.FreshLook"/>).
     /// </summary>
     public Func<byte[], string, CancellationToken, Task<(double X, double Y)?>>? Locate { get; set; }
 
     /// <summary>The PC's own browser, run headless, for the web tools to fall back on; null when there is none.</summary>
     public Web.HeadlessBrowser? Browser { get; init; }
-
-    /// <summary>Screen points of the latest clicks in a row in one small area (see DesktopActionTool).</summary>
-    internal List<(int X, int Y)> RecentClicks { get; } = [];
 
     /// <summary>All monitors in physical pixels, the primary first.</summary>
     public IReadOnlyList<ScreenRect> Screens => Platform.Screen.GetScreens();
