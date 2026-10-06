@@ -42,28 +42,23 @@ public sealed partial class AgentSession
     /// </remarks>
     public int ResetThreshold => contextTokens - Math.Min(Math.Max(contextTokens / 5, 16_384), contextTokens / 2);
 
-    // Last exact size the server reported, and how many history messages it covered.
-    private int? _measuredTokens;
-    private int _measuredCount;
-
     /// <summary>
-    /// The conversation's size in tokens: the server's last exact count plus an estimate for the
-    /// messages added since; a pure estimate when the server reports no usage.
+    /// The conversation's size in tokens: the server's exact count for the last reply (its prompt
+    /// and the reply itself) plus an estimate for the messages added since; a pure estimate before
+    /// the first reply, after a reset, or when the server reports no usage.
     /// </summary>
+    /// <remarks>
+    /// The count is read from the history, so a session that continues a chat (the app starts one
+    /// for every message) starts from the server's count too. The estimate alone can be a third
+    /// too low on text full of numbers, which put the reset too late.
+    /// </remarks>
     public int TokensInUse()
     {
-        if (_measuredTokens is { } measured && _measuredCount <= History.Count)
-            return measured + History.Skip(_measuredCount).Sum(EstimateTokens);
-        return EstimateTokens();
-    }
-
-    private void RecordUsage(ChatMessage reply)
-    {
-        if (reply.PromptTokens is { } prompt)
-        {
-            _measuredTokens = prompt + (reply.CompletionTokens ?? EstimateTokens(reply));
-            _measuredCount = History.Count; // the reply has just been added
-        }
+        var last = History.FindLastIndex(m => m.PromptTokens is not null);
+        if (last < 0)
+            return EstimateTokens();
+        var reply = History[last];
+        return reply.PromptTokens!.Value + (reply.CompletionTokens ?? EstimateTokens(reply)) + History.Skip(last + 1).Sum(EstimateTokens);
     }
 
     /// <summary>
@@ -96,7 +91,6 @@ public sealed partial class AgentSession
         History.Add(ChatMessage.User(HandoffHeader + "\n\n" + note));
         if (screen is not null)
             History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText(CurrentScreenText), screen] });
-        _measuredTokens = null;
 
         // Very long user messages alone could still be too big; trimming is the last resort.
         if (EstimateTokens() > ResetThreshold)

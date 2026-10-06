@@ -733,8 +733,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         // The agent waits for this call, so its conversation holds still while it is copied and measured.
         var history = _runDetached ? null : SnapshotHistory();
-        var session = _session;
-        var usage = session is null ? default : (Used: session.TokensInUse(), Size: session.ContextTokens, Reset: session.ResetThreshold);
+        var usage = MeasureContext();
         var bubble = _streaming = new AssistantMessageItem();
         Dispatcher.UIThread.Post(() =>
         {
@@ -745,21 +744,35 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             FinishCurrent(); // a bubble nothing streamed into (a request that failed) leaves no "…" behind
             _current = bubble;
             Items.Add(bubble);
-            if (usage.Size > 0)
-            {
-                ContextUsage = $"{usage.Used / 1000.0:0}k of {ContextSizes.Format(usage.Size)} used";
-                ContextUsageTip = $"The conversation fills about {usage.Used:N0} of the model's {usage.Size:N0} tokens of context. " +
-                                  $"At {usage.Reset:N0} the model writes a handoff note and BlackBox starts a fresh context with it.";
-            }
+            ShowContextUsage(usage);
         });
     }
 
     void IAgentObserver.OnDelta(StreamDelta delta) => _streaming?.Append(delta);
 
-    void IAgentObserver.OnAssistantMessage(ChatMessage message) => Dispatcher.UIThread.Post(() =>
+    void IAgentObserver.OnAssistantMessage(ChatMessage message)
     {
-        if (!_runDetached) FinishCurrent(message);
-    });
+        // A reply carries the server's own token count, so the top bar is exact after each one.
+        var usage = MeasureContext();
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_runDetached) return;
+            FinishCurrent(message);
+            ShowContextUsage(usage);
+        });
+    }
+
+    /// <summary>How full the context is; on the agent's thread, while it waits and its conversation holds still.</summary>
+    private (int Used, int Size, int Reset) MeasureContext() =>
+        _session is { } session ? (session.TokensInUse(), session.ContextTokens, session.ResetThreshold) : default;
+
+    private void ShowContextUsage((int Used, int Size, int Reset) usage)
+    {
+        if (usage.Size <= 0) return;
+        ContextUsage = $"{usage.Used / 1000.0:0}k of {ContextSizes.Format(usage.Size)} used";
+        ContextUsageTip = $"The conversation fills about {usage.Used:N0} of the model's {usage.Size:N0} tokens of context. " +
+                          $"At {usage.Reset:N0} the model writes a handoff note and BlackBox starts a fresh context with it.";
+    }
 
     /// <summary>Ends the streaming bubble; an empty one (a discarded reply) leaves no trace.</summary>
     private void FinishCurrent(ChatMessage? message = null)

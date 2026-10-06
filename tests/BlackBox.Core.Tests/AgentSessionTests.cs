@@ -516,6 +516,24 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_session_that_continues_a_chat_counts_from_the_servers_last_usage()
+    {
+        // The app starts a session for every message, on the chat's history. By the server's
+        // count the last prompt was 90k tokens; the estimate of this short history is tiny.
+        var server = new ScriptedServer(Sse.Text("NOTE: answered once."), Sse.Text("Done."));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 100_000);
+        session.History.Add(new ChatMessage { Role = ChatRole.User, Content = "first question", FromUser = true });
+        session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "first answer", PromptTokens = 90_000, CompletionTokens = 50 });
+        Assert.Equal(90_050, session.TokensInUse());
+
+        await session.RunAsync("second question", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(AgentSession.HandoffRequest, LastText(server.Requests[0]));
+        Assert.Equal(session.EstimateTokens(), session.TokensInUse()); // the old count went with the reset
+    }
+
+    [Fact]
     public async Task A_reply_cut_off_by_the_context_limit_is_redone_after_a_reset()
     {
         var cutOff = "data: " + new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["reasoning_content"] = "Let me think about the board" }, ["finish_reason"] = "length" }) }.ToJsonString() + "\n\ndata: [DONE]\n\n";

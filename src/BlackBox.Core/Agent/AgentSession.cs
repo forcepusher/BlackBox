@@ -93,7 +93,6 @@ public sealed partial class AgentSession(
                     reply.ToolCalls!.All(c => ToolCallRepair.ResolveTool(c.Name, tools)?.Risk == ToolRisk.ReadOnly))
                     reply.ToolCalls = null;
                 History.Add(reply);
-                RecordUsage(reply);
                 observer.OnAssistantMessage(reply);
 
                 if (!reply.HasToolCalls)
