@@ -211,7 +211,7 @@ public sealed partial class AgentSession(
         try
         {
             args = ToolCallRepair.ParseArguments(call.Arguments);
-            ToolCallRepair.ApplyNameHints(call.Name, args);
+            ToolCallRepair.ApplyNameHints(call.Name, args, tool);
             ToolCallRepair.NormalizeArguments(args, tool);
             summary = tool.Describe(args);
         }

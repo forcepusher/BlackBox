@@ -150,5 +150,16 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     public void Scroll(int dx, int dy) => Actions.Add($"scroll {dx},{dy}");
     public void TypeText(string text) => Actions.Add($"type {text}");
     public void PressKeys(IReadOnlyList<string> keys) => Actions.Add("keys " + string.Join("+", keys));
-    public bool IsKnownKey(string key) => key.Length > 0;
+    public IDisposable HoldKeys(IReadOnlyList<string> keys)
+    {
+        var chord = string.Join("+", keys);
+        Actions.Add("hold " + chord);
+        return new Released(() => Actions.Add("release " + chord));
+    }
+    public bool IsKnownKey(string key) => key.Length > 0 && key != "nokey";
+
+    private sealed class Released(Action onRelease) : IDisposable
+    {
+        public void Dispose() => onRelease();
+    }
 }

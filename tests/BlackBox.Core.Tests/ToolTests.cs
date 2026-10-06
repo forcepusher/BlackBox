@@ -179,6 +179,73 @@ public class ToolTests
 
 
     [Fact]
+    public async Task Clicks_and_drags_can_hold_keys_like_a_person_selecting_things()
+    {
+        var platform = new FakePlatform();
+        var click = new MouseClickTool();
+        var args = new JsonObject { ["x"] = 10, ["y"] = 20, ["modifiers"] = new JsonArray("ctrl") };
+        Assert.Equal("Ctrl+click at (10, 20)", click.Describe(args));
+
+        await click.ExecuteAsync(args, Ctx(platform), CancellationToken.None);
+        Assert.Equal(["move 10,21", "hold ctrl", "click Left x1", "release ctrl"], platform.Actions); // 200x100 is sent as 192x96
+
+        platform.Actions.Clear();
+        await new MouseDragTool().ExecuteAsync(new JsonObject { ["x"] = 0, ["y"] = 0, ["to_x"] = 50, ["to_y"] = 50, ["modifiers"] = "shift" }, Ctx(platform), CancellationToken.None);
+        Assert.Equal("hold shift", platform.Actions[1]);
+        Assert.Equal("down Left", platform.Actions[2]);
+        Assert.Equal(["up Left", "release shift"], platform.Actions[^2..]);
+
+        // A key name the platform doesn't know is caught before anything moves.
+        platform.Actions.Clear();
+        await Assert.ThrowsAsync<ToolArgumentException>(() => click.ExecuteAsync(new JsonObject { ["x"] = 1, ["y"] = 1, ["modifiers"] = new JsonArray("nokey") }, Ctx(platform), CancellationToken.None));
+        Assert.Empty(platform.Actions);
+    }
+
+    [Fact]
+    public async Task Press_keys_can_hold_keys_down()
+    {
+        var platform = new FakePlatform();
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        var result = await new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = new JsonArray("shift", "w"), ["hold_seconds"] = 0.3 }, Ctx(platform), CancellationToken.None);
+        Assert.Equal(["hold shift+w", "release shift+w"], platform.Actions);
+        Assert.True(started.ElapsedMilliseconds >= 280, $"held for {started.ElapsedMilliseconds} ms");
+        Assert.Equal("Press shift+w, held 0.3s done.", result.Text);
+
+        // Stopped mid-hold: the keys still come up.
+        platform.Actions.Clear();
+        using var stop = new CancellationTokenSource(100);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = "w", ["hold_seconds"] = 10 }, Ctx(platform), stop.Token));
+        Assert.Equal(["hold w", "release w"], platform.Actions);
+    }
+
+    [Fact]
+    public async Task Wait_can_stop_as_soon_as_the_screen_changes()
+    {
+        var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 320, 160), Desktop = new RawImage(320, 160, new byte[320 * 160 * 4]) };
+        var ctx = Ctx(platform);
+        var wait = new WaitTool();
+
+        // A message arrives in a chat 300 ms in: a block of new pixels.
+        var arrive = Task.Run(async () =>
+        {
+            await Task.Delay(300);
+            for (var y = 100; y < 140; y++) for (var x = 20; x < 220; x++) platform.Desktop!.Bgra[(y * 320 + x) * 4 + 1] = 200;
+        }, TestContext.Current.CancellationToken);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var changed = await wait.ExecuteAsync(new JsonObject { ["seconds"] = 60, ["until_change"] = true }, ctx, CancellationToken.None);
+        await arrive;
+        Assert.StartsWith("The screen changed after", changed.Text);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), $"took {clock.Elapsed}");
+        Assert.NotNull(changed.Image);
+
+        // A tiny change (a blinking caret) isn't one.
+        var caret = Task.Run(async () => { await Task.Delay(200); platform.Desktop!.Bgra[(10 * 320 + 10) * 4] = 255; }, TestContext.Current.CancellationToken);
+        var quiet = await wait.ExecuteAsync(new JsonObject { ["seconds"] = 1.5, ["until_change"] = true }, ctx, CancellationToken.None);
+        await caret;
+        Assert.StartsWith("Waited 1.5s; nothing on the screen changed.", quiet.Text);
+    }
+
+    [Fact]
     public async Task Press_keys_accepts_plus_separated_strings()
     {
         var platform = new FakePlatform();
@@ -408,6 +475,31 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task Held_keys_stay_down_on_windows_until_let_go()
+    {
+#if !WINDOWS
+        Assert.Skip("Windows only");
+        await Task.CompletedTask;
+#else
+        // F24: on every keyboard layout, and no app reacts to it. Games read the key state, which is what holding sets.
+        static bool Down() => (GetAsyncKeyState(0x87) & 0x8000) != 0;
+        var input = new BlackBox.Platform.Windows.WindowsPlatform().Input;
+        using (input.HoldKeys(["f24"]))
+        {
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+            Assert.True(Down());
+        }
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        Assert.False(Down());
+#endif
+    }
+
+#if WINDOWS
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vk);
+#endif
+
+    [Fact]
     public async Task Shell_on_windows_returns_utf8_output()
     {
 #if !WINDOWS
@@ -456,6 +548,7 @@ public class OverlayInputTests
         input.PressKeys(["left"]);
         input.TypeText("hello\nworld, this is a long line that keeps going and going");
         input.Scroll(0, 3);
+        input.HoldKeys(["ctrl"]).Dispose();
 
         Assert.Equal("Left double click", overlay.Shown[0].Text);
         Assert.Equal((40, 30), overlay.Shown[0].Point);
@@ -464,6 +557,8 @@ public class OverlayInputTests
         Assert.Equal("Type “hello⏎world, this is a long line that ke…”", overlay.Shown[3].Text);
         Assert.Null(overlay.Shown[3].Point);
         Assert.Equal("Scroll down 3", overlay.Shown[4].Text);
+        Assert.Equal("Hold Ctrl", overlay.Shown[5].Text);
         Assert.Contains("click Left x2", platform.Actions); // the real input still happened
+        Assert.Equal(["hold ctrl", "release ctrl"], platform.Actions[^2..]);
     }
 }

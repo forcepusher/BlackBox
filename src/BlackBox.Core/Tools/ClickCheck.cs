@@ -90,7 +90,7 @@ internal sealed class ClickCheck
             for (var x = 0; x < after.Width; x++)
             {
                 var i = row + x * 4;
-                if (Math.Abs(a[i] - b[i]) <= Threshold && Math.Abs(a[i + 1] - b[i + 1]) <= Threshold && Math.Abs(a[i + 2] - b[i + 2]) <= Threshold)
+                if (!Changed(a, b, i))
                     continue;
                 if ((x - cx) * (x - cx) + dyc <= r2)
                 {
@@ -102,4 +102,23 @@ internal sealed class ClickCheck
         }
         return false;
     }
+
+    /// <summary>
+    /// Whether two pictures of a screen differ by more than a sliver: what counts as a big change
+    /// for a click (a reply in a chat, a window opening), while a clock or a blinking caret doesn't.
+    /// </summary>
+    internal static bool Differ(RawImage before, RawImage after)
+    {
+        if (after.Width != before.Width || after.Height != before.Height)
+            return true;
+        var limit = (long)(after.Width * (long)after.Height * FarShare);
+        long changed = 0;
+        for (var i = 0; i < after.Bgra.Length; i += 4)
+            if (Changed(before.Bgra, after.Bgra, i) && ++changed >= limit)
+                return true;
+        return false;
+    }
+
+    private static bool Changed(byte[] a, byte[] b, int i) =>
+        Math.Abs(a[i] - b[i]) > Threshold || Math.Abs(a[i + 1] - b[i + 1]) > Threshold || Math.Abs(a[i + 2] - b[i + 2]) > Threshold;
 }

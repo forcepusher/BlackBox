@@ -16,7 +16,8 @@ public static partial class ToolCallRepair
     private static readonly Dictionary<string, string> NameAliases = new(StringComparer.OrdinalIgnoreCase)
     {
         ["click"] = "mouse_click", ["left_click"] = "mouse_click", ["double_click"] = "mouse_click",
-        ["right_click"] = "mouse_click", ["mouse_double_click"] = "mouse_click",
+        ["right_click"] = "mouse_click", ["mouse_double_click"] = "mouse_click", ["ctrl_click"] = "mouse_click", ["shift_click"] = "mouse_click",
+        ["hold_key"] = "press_keys", ["hold_keys"] = "press_keys", ["key_hold"] = "press_keys",
         ["move_mouse"] = "mouse_move", ["hover"] = "mouse_move", ["mouse_hover"] = "mouse_move",
         ["drag"] = "mouse_drag", ["left_click_drag"] = "mouse_drag",
         ["type"] = "type_text", ["typing"] = "type_text", ["input_text"] = "type_text", ["write_text"] = "type_text",
@@ -44,6 +45,9 @@ public static partial class ToolCallRepair
         ["seconds"] = ["duration", "time", "secs", "delay"],
         ["direction"] = ["dir", "scroll_direction"],
         ["amount"] = ["clicks", "scroll_amount", "steps", "distance"],
+        ["modifiers"] = ["modifier", "keys", "hold_keys", "holding", "with_keys"],
+        ["hold_seconds"] = ["hold", "hold_time", "hold_duration", "duration", "seconds"],
+        ["until_change"] = ["until_changed", "wait_for_change", "on_change"],
     };
 
     /// <summary>Maps a tool name the model produced to a registered tool, or returns null.</summary>
@@ -61,14 +65,30 @@ public static partial class ToolCallRepair
         return registry.FindBySuffix(normalized);
     }
 
-    /// <summary>Keeps the intent of aliased names like "double_click" that map onto a more general tool.</summary>
-    public static void ApplyNameHints(string calledName, JsonObject args)
+    /// <summary>
+    /// Keeps the intent of aliased names like "double_click" or "ctrl_click" that map onto a more
+    /// general tool. Only parameters the tool has are filled in, so an MCP tool whose name happens
+    /// to contain "double" gets no clicks argument.
+    /// </summary>
+    public static void ApplyNameHints(string calledName, JsonObject args, Tool tool)
     {
+        if (tool.Parameters["properties"] is not JsonObject props)
+            return;
         var n = calledName.Trim().ToLowerInvariant().Replace('-', '_');
-        if (n.Contains("double") && !args.ContainsKey("clicks")) args["clicks"] = 2;
-        if (n.Contains("triple") && !args.ContainsKey("clicks")) args["clicks"] = 3;
-        if (n.Contains("right") && n.Contains("click") && !args.ContainsKey("button")) args["button"] = "right";
-        if (n.Contains("middle") && n.Contains("click") && !args.ContainsKey("button")) args["button"] = "middle";
+        if (n.Contains("double")) Hint("clicks", 2);
+        if (n.Contains("triple")) Hint("clicks", 3);
+        if (!n.Contains("click"))
+            return;
+        if (n.Contains("right")) Hint("button", "right");
+        if (n.Contains("middle")) Hint("button", "middle");
+        if (new[] { "ctrl", "shift", "alt" }.Where(k => n.Contains(k)).ToArray() is { Length: > 0 } held)
+            Hint("modifiers", new JsonArray(held.Select(k => (JsonNode)k).ToArray()));
+
+        void Hint(string key, JsonNode value)
+        {
+            if (props.ContainsKey(key) && !args.ContainsKey(key))
+                args[key] = value;
+        }
     }
 
     /// <summary>Parses tool arguments, repairing the usual JSON mistakes if strict parsing fails.</summary>

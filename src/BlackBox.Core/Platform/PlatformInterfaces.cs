@@ -45,6 +45,12 @@ public interface IInputController
     /// <summary>Presses a chord such as ["ctrl", "shift", "s"] and releases it in reverse order.</summary>
     void PressKeys(IReadOnlyList<string> keys);
 
+    /// <summary>
+    /// Presses keys down and keeps them down until the result is disposed, then releases them in
+    /// reverse order: modifiers held through a click or drag, or a key held for a while in a game.
+    /// </summary>
+    IDisposable HoldKeys(IReadOnlyList<string> keys);
+
     /// <summary>Returns false for key names the platform does not understand.</summary>
     bool IsKnownKey(string key);
 }
@@ -172,5 +178,6 @@ public sealed class UnsupportedPlatform : IPlatformServices, IScreenCapture, IIn
     public void Scroll(int dx, int dy) => throw Fail();
     public void TypeText(string text) => throw Fail();
     public void PressKeys(IReadOnlyList<string> keys) => throw Fail();
+    public IDisposable HoldKeys(IReadOnlyList<string> keys) => throw Fail();
     public bool IsKnownKey(string key) => false;
 }

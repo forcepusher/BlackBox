@@ -271,11 +271,22 @@ public class ChatClientTests
         Assert.Equal(expected, ToolCallRepair.ResolveTool(called, Registry)!.Name);
 
     [Fact]
-    public void Double_click_alias_keeps_its_meaning()
+    public void Aliases_like_double_click_and_ctrl_click_keep_their_meaning()
     {
+        var click = Registry.Find("mouse_click")!;
         var args = new JsonObject { ["x"] = 1, ["y"] = 2 };
-        ToolCallRepair.ApplyNameHints("double_click", args);
+        ToolCallRepair.ApplyNameHints("double_click", args, click);
         Assert.Equal(2, args["clicks"]!.GetValue<int>());
+
+        Assert.Equal("mouse_click", ToolCallRepair.ResolveTool("ctrl_click", Registry)!.Name);
+        var ctrl = new JsonObject { ["x"] = 1, ["y"] = 2 };
+        ToolCallRepair.ApplyNameHints("ctrl_click", ctrl, click);
+        Assert.Equal("""["ctrl"]""", ctrl["modifiers"]!.ToJsonString());
+
+        // Only parameters the tool has: a tool named like a double click gets no clicks argument.
+        var other = new JsonObject();
+        ToolCallRepair.ApplyNameHints("double_size", other, Registry.Find("read_file")!);
+        Assert.Empty(other);
     }
 
     [Theory]

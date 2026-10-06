@@ -49,6 +49,13 @@ public sealed class OverlayInputController(IInputController inner, IInputOverlay
         Show("Keys " + string.Join("+", keys.Select(KeyName)));
     }
 
+    public IDisposable HoldKeys(IReadOnlyList<string> keys)
+    {
+        var held = inner.HoldKeys(keys);
+        Show("Hold " + string.Join("+", keys.Select(KeyName)));
+        return held;
+    }
+
     internal static string KeyName(string key) => key.Trim().ToLowerInvariant() switch
     {
         "left" or "arrowleft" => "←",

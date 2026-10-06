@@ -84,10 +84,10 @@ that fails, however it fails, reports the error to the model and the run goes on
 | Tool | What it does |
 | --- | --- |
 | `screenshot` | Captures a screen at full resolution, or scaled to fit the chosen size, on the 32px vision grid; `screen=N` looks at another monitor |
-| `mouse_click` | Clicks a named target where a fresh look at the screen finds it (see below) |
-| `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates |
-| `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …) |
-| `wait` | Waits, then screenshots |
+| `mouse_click` | Clicks a named target where a fresh look at the screen finds it (see below); `modifiers` holds keys through the click, as in Ctrl+click to add to a selection or Shift+click to select a range |
+| `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
+| `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
+| `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `web_search` | Searches the web: titles, links and snippets (see below) |
