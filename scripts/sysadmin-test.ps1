@@ -24,9 +24,10 @@
   ./scripts/sysadmin-test.ps1 -Tasks game-server,fix-website -Model qwen3.8-27b@q6_k_xl
   ./scripts/sysadmin-test.ps1 -SelfTest                    # reference solutions only: checks the checks, no model
   ./scripts/sysadmin-test.ps1 -Cli D:\old\blackbox-cli.exe # another build, e.g. to compare with a baseline
+  ./scripts/sysadmin-test.ps1 -Recheck 20261014-041653 -Tasks game-server   # reboot and check a finished run's VM again
 #>
 param([string[]]$Tasks = @(), [string]$Url = "", [string]$Model = "", [string]$Root = "",
-  [double]$Minutes = 75, [switch]$SelfTest, [string]$Cli = "")
+  [double]$Minutes = 75, [switch]$SelfTest, [string]$Cli = "", [string]$Recheck = "")
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\sysadmin\lab.ps1"
 $taskRoot = Join-Path $PSScriptRoot "sysadmin\tasks"
@@ -66,15 +67,17 @@ if ($Cli) {
 }
 Write-Host "BlackBox: $cli"
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$out = Join-Path $LabRepo (".dev\sysadmin\" + $stamp + $(if ($SelfTest) { "-selftest" } else { "" }))
+$out = if ($Recheck) { Join-Path $LabRepo ".dev\sysadmin\$Recheck" } else { Join-Path $LabRepo (".dev\sysadmin\" + $stamp + $(if ($SelfTest) { "-selftest" } else { "" })) }
 New-Item -ItemType Directory -Force $out | Out-Null
 
 # BlackBox's copy of the admin key.
 $key = Join-Path $out "key\admin_ed25519"
-New-Item -ItemType Directory -Force (Split-Path $key) | Out-Null
-Copy-Item $LabKey $key
-Copy-Item "$LabKey.pub" "$key.pub"
-Protect-LabKey $key
+if (-not $Recheck) {
+  New-Item -ItemType Directory -Force (Split-Path $key) | Out-Null
+  Copy-Item $LabKey $key
+  Copy-Item "$LabKey.pub" "$key.pub"
+  Protect-LabKey $key
+}
 
 # If BlackBox calls ssh.exe itself, it adds the VM to the user's known_hosts; that entry is taken
 # out again at the end (and known_hosts.old, which ssh-keygen -R overwrites, put back).
@@ -124,13 +127,21 @@ try {
     $tdir = Join-Path $out $task.Name
     New-Item -ItemType Directory -Force $tdir | Out-Null
     $vars = Join-Path $tdir "vars.env"
-    $token = -join ((1..16) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) })
-    # A task's own values (vars.txt, KEY=value lines) come after the common ones.
     $extra = Join-Path $task.FullName "vars.txt"
     $extra = if (Test-Path $extra) { (Get-Content $extra) -join "`n" } else { "" }
-    [IO.File]::WriteAllText($vars, "LAB_IP=$LabIp`nLAB_GUEST_IP=$LabGuestIp`nLAB_HOST_SEEN_AS=$LabHostSeenAs`nLAB_USER=$LabUser`nTOKEN=$token`nLAB_SUDO_PASSWORD=`n$extra`n")
+    if ($Recheck) {
+      # The VM still holds the run's end state; only the reboot and the checks are done again.
+      $token = ((Get-Content $vars) -match '^TOKEN=' -replace '^TOKEN=', '') | Select-Object -First 1
+    } else {
+      $token = -join ((1..16) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) })
+      # A task's own values (vars.txt, KEY=value lines) come after the common ones.
+      [IO.File]::WriteAllText($vars, "LAB_IP=$LabIp`nLAB_GUEST_IP=$LabGuestIp`nLAB_HOST_SEEN_AS=$LabHostSeenAs`nLAB_USER=$LabUser`nTOKEN=$token`nLAB_SUDO_PASSWORD=`n$extra`n")
+    }
     # Restart-LabVm needs it too, when the task makes sudo ask for a password.
     $script:LabSudoPassword = if ($extra -match '(?m)^LAB_SUDO_PASSWORD=(.*)$') { $Matches[1].Trim() } else { "" }
+    $log = Join-Path $tdir "run.txt"
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    if ($Recheck) { $sw.Stop() } else {
 
     Log "$($task.Name): resetting the lab VM"
     try { Reset-LabVm } catch { Log "reset failed ($($_.Exception.Message)); once more"; Reset-LabVm }
@@ -146,8 +157,7 @@ try {
 
     $text = Fill ($preamble + (Get-Content (Join-Path $task.FullName "task.txt") -Raw).Trim())
     Set-Content -Encoding utf8 (Join-Path $tdir "task.txt") $text
-    $log = Join-Path $tdir "run.txt"
-    $sw = [Diagnostics.Stopwatch]::StartNew()
+    $sw.Restart()
     if ($SelfTest) {
       Log "$($task.Name): reference solution"
       $hostSolution = Join-Path $task.FullName "solution-host.ps1"
@@ -180,6 +190,7 @@ try {
       $reader.Dispose()
     }
     $sw.Stop()
+    } # not -Recheck
 
     Log "$($task.Name): rebooting the VM and checking"
     $lines = @()

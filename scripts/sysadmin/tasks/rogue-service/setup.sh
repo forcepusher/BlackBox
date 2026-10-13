@@ -34,4 +34,4 @@ EOF
 systemctl daemon-reload
 systemctl enable --now systemd-netlogd
 # While the service holds the port this copy just fails to bind and exits.
-( crontab -l -u root 2>/dev/null; echo '@reboot sleep 20 && /usr/local/lib/netlogd/netlogd >/dev/null 2>&1' ) | crontab -u root -
+{ crontab -l -u root 2>/dev/null || true; echo '@reboot sleep 20 && /usr/local/lib/netlogd/netlogd >/dev/null 2>&1'; } | crontab -u root -
