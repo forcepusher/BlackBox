@@ -154,6 +154,30 @@ public class SshIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task Silence_ends_the_default_wait_early_but_not_a_chosen_one()
+    {
+        if (Host is null) return;
+        var saved = SshHost.QuietReturn;
+        SshHost.QuietReturn = TimeSpan.FromSeconds(3);
+        try
+        {
+            // Without wait_seconds, a command that goes quiet (a server in the foreground, say) returns after the silence.
+            var quiet = await new SshTool().ExecuteAsync(new JsonObject { ["host"] = Host, ["key_file"] = Key, ["command"] = "echo serving; sleep 8; echo finished" },
+                _ctx, CancellationToken.None);
+            Assert.Contains("No output for 3 s", quiet.Text);
+            Assert.Matches(@"still running after [3-5] s", quiet.Text);
+            Assert.Contains("finished", (await Ssh(wait: 20)).Text);
+            // With wait_seconds, the model means to sit it out (sleep 60 until cron's next run).
+            var chosen = await Ssh("echo waiting; sleep 8; echo finished", wait: 20);
+            Assert.Contains("finished\n[exit code 0", chosen.Text);
+        }
+        finally
+        {
+            SshHost.QuietReturn = saved;
+        }
+    }
+
+    [Fact]
     public async Task A_key_the_connection_did_not_use_is_tested_with_a_fresh_login()
     {
         if (Host is null) return;

@@ -30,7 +30,8 @@ public sealed partial class SshTool : Tool
         ("command", Str("bash command(s) to run; several lines are fine"), false),
         ("input", Str("Text to type into the running command, followed by Enter"), false),
         ("interrupt", Bool("Press Ctrl+C to stop the running command"), false),
-        ("wait_seconds", Int("How long to wait for the command before returning (default 120, max 1800); it keeps running after that"), false),
+        ("wait_seconds", Int("How long to wait for the command before returning (default 120, max 1800); it keeps running after that. " +
+            "Without it, a call also returns once the command has printed nothing for 30 s"), false),
         ("key_file", Str("Private key file on this PC to log in with (default: the keys in ~/.ssh). A key the open connection didn't use logs in afresh with it alone: the way to test a key you installed"), false),
         ("password", Str("The login or sudo password, if the user gave you one: pass it once and BlackBox answers sudo's prompts itself (no echo pw | sudo -S)"), false));
 
@@ -55,6 +56,8 @@ public sealed partial class SshTool : Tool
         var input = GetString(args, "input");
         var interrupt = GetBool(args, "interrupt");
         var wait = TimeSpan.FromSeconds(Math.Clamp(GetNumber(args, "wait_seconds") ?? 120, 1, 1800));
+        // A wait the model chose is sat out (sleep 60 on purpose); the default one ends early on silence.
+        var returnWhenQuiet = GetNumber(args, "wait_seconds") is null;
         if (command is { Length: > 0 } && Refusal(command) is { } refused)
             return ToolResult.Error(refused);
 
@@ -71,21 +74,22 @@ public sealed partial class SshTool : Tool
         }
 
         ShellResult result;
+        var started = DateTime.UtcNow;
         try
         {
             if (interrupt)
                 result = await host.InterruptAsync(ct).ConfigureAwait(false);
             else if (input is not null && command is not { Length: > 0 })
-                result = await host.SendInputAsync(input, wait, ct).ConfigureAwait(false);
+                result = await host.SendInputAsync(input, wait, ct, returnWhenQuiet).ConfigureAwait(false);
             else if (command is { Length: > 0 })
             {
                 if (host.IsBusy)
                     return ToolResult.Error(Prefix(notice) + "The previous command is still running in this terminal. Call ssh with no command to wait for it, " +
                                             "with input to answer it, or with interrupt to stop it; then run the next one.");
-                result = await host.RunAsync(command, wait, ct).ConfigureAwait(false);
+                result = await host.RunAsync(command, wait, ct, returnWhenQuiet).ConfigureAwait(false);
             }
             else if (host.IsBusy)
-                result = await host.WaitAsync(wait, ct).ConfigureAwait(false);
+                result = await host.WaitAsync(wait, ct, returnWhenQuiet).ConfigureAwait(false);
             else
                 return new ToolResult(Prefix(notice) + "Nothing is running in the terminal; give a command.");
         }
@@ -97,10 +101,11 @@ public sealed partial class SshTool : Tool
         {
             return ToolResult.Error(Prefix(notice) + $"The connection to {host.Target} failed: {ex.Message}. If the server is rebooting, wait a little and try again.");
         }
-        return Format(result, notice, wait);
+        return Format(result, notice, DateTime.UtcNow - started);
     }
 
-    internal static ToolResult Format(ShellResult r, string? notice, TimeSpan wait)
+    /// <param name="waited">How long this call waited for the command.</param>
+    internal static ToolResult Format(ShellResult r, string? notice, TimeSpan waited)
     {
         var sb = new StringBuilder(Prefix(notice));
         var output = TerminalText.Clip(r.Output, MaxOutput);
@@ -114,7 +119,7 @@ public sealed partial class SshTool : Tool
                 sb.Append($"[exit code {r.ExitCode} · {r.Directory}]");
                 return new ToolResult(sb.ToString(), IsError: r.ExitCode != 0);
             case ShellState.Running:
-                sb.Append($"[still running after {wait.TotalSeconds:0} s. Call ssh with the same host and no command to wait for more output, " +
+                sb.Append($"[still running after {waited.TotalSeconds:0} s. Call ssh with the same host and no command to wait for more output, " +
                           "input to answer it, or interrupt to stop it.]");
                 break;
             case ShellState.WaitingForInput:

@@ -87,7 +87,8 @@ public sealed partial class SshHost : IDisposable
     // ---- the terminal --------------------------------------------------------------------
 
     /// <summary>Starts a command in the terminal and waits for it at most <paramref name="wait"/>.</summary>
-    public async Task<ShellResult> RunAsync(string command, TimeSpan wait, CancellationToken ct)
+    /// <param name="returnWhenQuiet">Return early once it has printed nothing for <see cref="QuietReturn"/> (a server started in the foreground).</param>
+    public async Task<ShellResult> RunAsync(string command, TimeSpan wait, CancellationToken ct, bool returnWhenQuiet = true)
     {
         if (IsBusy)
             throw new InvalidOperationException("The previous command is still running.");
@@ -105,11 +106,11 @@ public sealed partial class SshHost : IDisposable
                    $"declare -f >{f}.fn; alias -p >{f}.al' EXIT; . {f}.sh )\n";
         _shell!.Write(line);
         _shell.Flush();
-        return await CollectAsync(wait, ct).ConfigureAwait(false);
+        return await CollectAsync(wait, ct, returnWhenQuiet: returnWhenQuiet).ConfigureAwait(false);
     }
 
     /// <summary>Types <paramref name="text"/> and Enter into the running command, then waits for what it does.</summary>
-    public async Task<ShellResult> SendInputAsync(string text, TimeSpan wait, CancellationToken ct)
+    public async Task<ShellResult> SendInputAsync(string text, TimeSpan wait, CancellationToken ct, bool returnWhenQuiet = true)
     {
         if (!IsBusy)
             throw new InvalidOperationException("No command is running, so nothing waits for input.");
@@ -125,15 +126,15 @@ public sealed partial class SshHost : IDisposable
         _shell!.Write(text + "\r");
         _shell.Flush();
         await Task.Delay(200, ct).ConfigureAwait(false);
-        return await CollectAsync(wait, ct).ConfigureAwait(false);
+        return await CollectAsync(wait, ct, returnWhenQuiet: returnWhenQuiet).ConfigureAwait(false);
     }
 
     /// <summary>Waits for more output from the running command.</summary>
-    public Task<ShellResult> WaitAsync(TimeSpan wait, CancellationToken ct)
+    public Task<ShellResult> WaitAsync(TimeSpan wait, CancellationToken ct, bool returnWhenQuiet = true)
     {
         if (!IsBusy)
             throw new InvalidOperationException("No command is running.");
-        return CollectAsync(wait, ct);
+        return CollectAsync(wait, ct, returnWhenQuiet: returnWhenQuiet);
     }
 
     /// <summary>Ctrl+C, and if the command doesn't stop, its processes are killed (the terminal stays).</summary>
@@ -154,7 +155,7 @@ public sealed partial class SshHost : IDisposable
     /// <summary>How long a command may print nothing (after printing something) before the call returns anyway.</summary>
     internal static TimeSpan QuietReturn { get; set; } = TimeSpan.FromSeconds(30);
 
-    private async Task<ShellResult> CollectAsync(TimeSpan wait, CancellationToken ct, bool waitForPrompt = true)
+    private async Task<ShellResult> CollectAsync(TimeSpan wait, CancellationToken ct, bool waitForPrompt = true, bool returnWhenQuiet = true)
     {
         var until = DateTime.UtcNow + wait;
         var notes = new List<string>();
@@ -230,7 +231,7 @@ public sealed partial class SshHost : IDisposable
                 return Waiting(raw, lastLine, null);
             // Silent for long after printing something: often a server started in the foreground,
             // and the model may want to move on rather than sit out the whole wait.
-            var silent = waitForPrompt && quiet > QuietReturn && DateTime.UtcNow - (until - wait) > QuietReturn && raw.Trim().Length > 0;
+            var silent = waitForPrompt && returnWhenQuiet && quiet > QuietReturn && DateTime.UtcNow - (until - wait) > QuietReturn && raw.Trim().Length > 0;
             if (silent) notes.Add($"No output for {QuietReturn.TotalSeconds:0} s.");
             if (DateTime.UtcNow >= until || silent)
             {
