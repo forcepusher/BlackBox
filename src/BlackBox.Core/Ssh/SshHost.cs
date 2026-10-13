@@ -279,6 +279,8 @@ public sealed partial class SshHost : IDisposable
         _shell = shell;
         _reader = new Thread(() => ReadLoop(shell)) { IsBackground = true, Name = "ssh terminal " + Target };
         _reader.Start();
+        // What follows is bash: a login shell that is another one (sh, zsh, fish) makes way for it.
+        shell.Write("[ -n \"$BASH_VERSION\" ] || exec bash -l\n");
         // No echo and no line editing, no prompt, no history; programs told not to page. Before
         // each prompt, __bb_done takes over the state the last command's subshell left (its
         // directory, exports, functions, aliases) and prints the marker with its exit code.
@@ -291,7 +293,7 @@ public sealed partial class SshHost : IDisposable
                     "while read -r -t 0.05 __bb_junk; do :; done; " +
                     "cd \"$(cat \"$f.pwd\" 2>/dev/null || pwd)\" 2>/dev/null; . \"$f.env\" 2>/dev/null; . \"$f.fn\" 2>/dev/null; . \"$f.al\" 2>/dev/null; " +
                     "printf '\\036BB-%s-%s-%s\\036\\n' \"$__bb_id\" \"$rc\" \"$PWD\"; rm -f \"$f\".*; __bb_id=; }; " +
-                    "PROMPT_COMMAND=__bb_done; printf '\\036BB-INIT-%s\\036\\n' \"$__bb_d\"\n");
+                    "PROMPT_COMMAND=__bb_done; printf '\\036BB-INIT-%s-%s\\036\\n' \"${BASH_VERSION:+bash}\" \"$__bb_d\"\n");
         shell.Flush();
         var until = DateTime.UtcNow + TimeSpan.FromSeconds(20);
         while (DateTime.UtcNow < until)
@@ -301,10 +303,15 @@ public sealed partial class SshHost : IDisposable
                 raw = _raw.ToString();
             if (InitMarker().Match(raw) is { Success: true } m)
             {
-                _dir = m.Groups[1].Value;
+                _dir = m.Groups[2].Value;
                 lock (_gate)
                     _raw.Clear();
-                return;
+                if (m.Groups[1].Value == "bash")
+                    return;
+                shell.Dispose();
+                _shell = null;
+                throw new IOException($"{Target} has no bash, which the ssh tool's terminal needs (its login shell is another one). " +
+                                      "Use the file tools with host, and copy.");
             }
             if (_shellClosed)
                 break;
@@ -490,6 +497,6 @@ public sealed partial class SshHost : IDisposable
     [GeneratedRegex(@"\x1eBB-(\d+)-(-?\d+)-([^\x1e]*)\x1e\r?\n?")]
     private static partial Regex Marker();
 
-    [GeneratedRegex(@"\x1eBB-INIT-([^\x1e]+)\x1e")]
+    [GeneratedRegex(@"\x1eBB-INIT-(bash)?-([^\x1e]+)\x1e")]
     private static partial Regex InitMarker();
 }

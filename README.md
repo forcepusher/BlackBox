@@ -182,7 +182,8 @@ Settings → General.
 `ssh` logs in to a server (`user@host`, `user@host:port` or a `Host` from `~/.ssh/config`) with
 the key the task names, the keys in `~/.ssh`, or a password the user gave, and keeps a terminal
 open there for the rest of the chat: `cd`, exported variables and functions carry over from one
-command to the next, as for a person at a terminal. The SSH client is built in (SSH.NET), so no
+command to the next, as for a person at a terminal. The terminal is bash, also for a user whose
+login shell is another one (sh, zsh). The SSH client is built in (SSH.NET), so no
 `ssh.exe`, PuTTY or key-file permissions matter, and it works the same on every OS.
 
 - A command still running when `wait_seconds` (default 120) are up keeps running; the model

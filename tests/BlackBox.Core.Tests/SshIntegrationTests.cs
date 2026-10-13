@@ -190,6 +190,50 @@ public class SshIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task A_password_alone_logs_in()
+    {
+        if (Host is null) return;
+        var server = Host[(Host.IndexOf('@') + 1)..];
+        try
+        {
+            // A user that may log in with a password (the cloud image allows keys only).
+            await Ssh("sudo useradd -m -s /bin/bash bbpw 2>/dev/null; echo 'bbpw:Pw-Test-123' | sudo chpasswd && " +
+                      "printf 'Match User bbpw\\n  PasswordAuthentication yes\\n' | sudo tee /etc/ssh/sshd_config.d/10-bbpw.conf >/dev/null && sudo systemctl reload ssh");
+            var wrong = await new SshTool().ExecuteAsync(new JsonObject { ["host"] = $"bbpw@{server}", ["password"] = "nope", ["command"] = "whoami" }, _ctx, CancellationToken.None);
+            Assert.True(wrong.IsError);
+            Assert.Contains("did not accept the login", wrong.Text);
+            var right = await new SshTool().ExecuteAsync(new JsonObject { ["host"] = $"bbpw@{server}", ["password"] = "Pw-Test-123", ["command"] = "whoami" }, _ctx, CancellationToken.None);
+            Assert.Contains("Connected to", right.Text);
+            Assert.Contains("bbpw\n[exit code 0", right.Text);
+        }
+        finally
+        {
+            await Ssh("sudo rm -f /etc/ssh/sshd_config.d/10-bbpw.conf; sudo systemctl reload ssh; sudo pkill -u bbpw; sudo userdel -r bbpw 2>/dev/null; true");
+        }
+    }
+
+    [Fact]
+    public async Task A_user_whose_login_shell_is_sh_gets_bash()
+    {
+        if (Host is null) return;
+        var server = Host[(Host.IndexOf('@') + 1)..];
+        try
+        {
+            await Ssh("sudo useradd -m -s /bin/sh bbsh 2>/dev/null; sudo install -d -m 700 -o bbsh -g bbsh ~bbsh/.ssh && " +
+                      "sudo install -m 600 -o bbsh -g bbsh ~/.ssh/authorized_keys ~bbsh/.ssh/authorized_keys");
+            Task<ToolResult> AsSh(string command) => new SshTool().ExecuteAsync(
+                new JsonObject { ["host"] = $"bbsh@{server}", ["key_file"] = Key, ["command"] = command }, _ctx, CancellationToken.None);
+            var first = await AsSh("cd /tmp && export BB_Y=7; echo ${BASH_VERSION:+bash}");
+            Assert.Contains("bash\n[exit code 0 · /tmp]", first.Text);
+            Assert.Contains("/tmp\n7", (await AsSh("pwd; echo $BB_Y")).Text);
+        }
+        finally
+        {
+            await Ssh("sudo pkill -u bbsh; sudo userdel -r bbsh 2>/dev/null; true");
+        }
+    }
+
+    [Fact]
     public async Task After_a_reboot_the_next_call_logs_in_again()
     {
         if (Host is null || Environment.GetEnvironmentVariable("BB_SSH_TEST_REBOOT") != "1") return;
