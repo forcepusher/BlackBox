@@ -1,0 +1,1 @@
+Please install PostgreSQL and create a database called shop, owned by a new database user shop with the password Sh0p-Lab-2026. Our app servers in 10.0.2.0/24 must be able to connect to it over the network with that password; nobody else from outside, and no access without a password. It must start on boot.

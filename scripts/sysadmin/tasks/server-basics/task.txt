@@ -1,0 +1,1 @@
+This is a new server; please do the basic setup: hostname web01, time zone Europe/Berlin, a 2 GB swap file that is also used after reboots, and vm.swappiness set to 10. Note that sudo asks for a password on this server; it is Lab-Sudo-77.

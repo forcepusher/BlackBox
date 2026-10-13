@@ -1,0 +1,1 @@
+This server ran out of disk space and things are failing. Please free up space: old logs and temporary dumps can go, but nothing else may be deleted, especially not the backups. Then make sure reportd's logs can't fill up the disk again.

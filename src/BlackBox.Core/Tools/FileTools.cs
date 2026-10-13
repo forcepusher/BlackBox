@@ -1,8 +1,36 @@
 using System.IO.Enumeration;
 using System.Text;
 using System.Text.Json.Nodes;
+using BlackBox.Core.Ssh;
 
 namespace BlackBox.Core.Tools;
+
+/// <summary>The file tools' host argument: the same work on an SSH host instead of this PC (see <see cref="RemoteFiles"/>).</summary>
+internal static class RemoteHost
+{
+    public const string Description = "Do it on this SSH host instead of this PC: user@host, as for ssh (files the login user can't reach are handled with sudo)";
+
+    public static string? Of(JsonObject args) => args["host"] is JsonValue v && v.TryGetValue<string>(out var s) && s.Trim().Length > 0 ? s.Trim() : null;
+
+    public static string On(JsonObject args) => Of(args) is { } h ? $" on {h}" : "";
+
+    /// <summary>Runs <paramref name="work"/> on the logged-in host, with what logging in said in front of its result.</summary>
+    public static async Task<ToolResult> RunAsync(string target, ToolContext ctx, Func<SshHost, Task<(string Text, bool IsError)>> work, CancellationToken ct)
+    {
+        if (ctx.Ssh is null)
+            return ToolResult.Error("SSH is not available in this run.");
+        try
+        {
+            var (host, notice) = await ctx.Ssh.GetAsync(target, null, null, ct).ConfigureAwait(false);
+            var (text, isError) = await work(host).ConfigureAwait(false);
+            return new ToolResult(notice is null ? text : $"[{notice}]\n{text}", IsError: isError);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or Renci.SshNet.Common.SshException or System.Net.Sockets.SocketException or ObjectDisposedException)
+        {
+            return ToolResult.Error(ex.Message);
+        }
+    }
+}
 
 public sealed class ReadFileTool : Tool
 {
@@ -14,11 +42,17 @@ public sealed class ReadFileTool : Tool
     public override JsonObject Parameters => Schema(
         ("path", Str("File path"), true),
         ("offset", Int("First line to read, 1-based (default 1)"), false),
-        ("limit", Int("Max lines to read (default 400)"), false));
-    public override string Describe(JsonObject args) => $"Read {GetString(args, "path")}";
+        ("limit", Int("Max lines to read (default 400)"), false),
+        ("host", Str(RemoteHost.Description), false));
+    public override string Describe(JsonObject args) => $"Read {GetString(args, "path")}{RemoteHost.On(args)}";
 
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
+        if (RemoteHost.Of(args) is { } remote)
+        {
+            var (file, from, count) = (RequireString(args, "path"), Math.Max(1, (int)(GetNumber(args, "offset") ?? 1)), Math.Clamp((int)(GetNumber(args, "limit") ?? 400), 1, 5000));
+            return await RemoteHost.RunAsync(remote, ctx, h => RemoteFiles.ReadAsync(h, file, from, count, MaxChars, ct), ct).ConfigureAwait(false);
+        }
         var path = ctx.ResolvePath(RequireString(args, "path"));
         if (!File.Exists(path))
             return ToolResult.Error($"File not found: {path}");
@@ -73,12 +107,18 @@ public sealed class WriteFileTool : Tool
     public override JsonObject Parameters => Schema(
         ("path", Str("File path"), true),
         ("content", Str("File content, or the part to add when appending"), true),
-        ("append", Bool("Add the content to the end of the file instead of replacing it (default false)"), false));
+        ("append", Bool("Add the content to the end of the file instead of replacing it (default false)"), false),
+        ("host", Str(RemoteHost.Description), false));
     public override string Describe(JsonObject args) =>
-        $"{(GetBool(args, "append") ? "Append to" : "Write")} {GetString(args, "path")} ({GetString(args, "content")?.Length ?? 0} chars)";
+        $"{(GetBool(args, "append") ? "Append to" : "Write")} {GetString(args, "path")}{RemoteHost.On(args)} ({GetString(args, "content")?.Length ?? 0} chars)";
 
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
+        if (RemoteHost.Of(args) is { } remote)
+        {
+            var (file, text, add) = (RequireString(args, "path"), RequireString(args, "content"), GetBool(args, "append"));
+            return await RemoteHost.RunAsync(remote, ctx, h => RemoteFiles.WriteAsync(h, file, text, add, ct), ct).ConfigureAwait(false);
+        }
         var path = ctx.ResolvePath(RequireString(args, "path"));
         var content = RequireString(args, "content");
         var existed = File.Exists(path);
@@ -105,11 +145,19 @@ public sealed class EditFileTool : Tool
         ("path", Str("File path"), true),
         ("old_text", Str("Exact text to find; must occur exactly once unless replace_all is set"), true),
         ("new_text", Str("Replacement text"), true),
-        ("replace_all", Bool("Replace every occurrence, e.g. to rename something throughout the file (default false)"), false));
-    public override string Describe(JsonObject args) => $"Edit {GetString(args, "path")}";
+        ("replace_all", Bool("Replace every occurrence, e.g. to rename something throughout the file (default false)"), false),
+        ("host", Str(RemoteHost.Description), false));
+    public override string Describe(JsonObject args) => $"Edit {GetString(args, "path")}{RemoteHost.On(args)}";
 
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
+        if (RemoteHost.Of(args) is { } remote)
+        {
+            var (file, before, after, every) = (RequireString(args, "path"), RequireString(args, "old_text"), RequireString(args, "new_text"), GetBool(args, "replace_all"));
+            if (before.Length == 0)
+                return ToolResult.Error("old_text must not be empty.");
+            return await RemoteHost.RunAsync(remote, ctx, h => RemoteFiles.EditAsync(h, file, before, after, every, ct), ct).ConfigureAwait(false);
+        }
         var path = ctx.ResolvePath(RequireString(args, "path"));
         if (!File.Exists(path))
             return ToolResult.Error($"File not found: {path}");
@@ -161,14 +209,20 @@ public sealed class ListDirectoryTool : Tool
     public override ToolRisk Risk => ToolRisk.ReadOnly;
     public override JsonObject Parameters => Schema(
         ("path", Str("Directory path (default: working directory)"), false),
-        ("pattern", Str("Optional glob; when given, searches subfolders too"), false));
-    public override string Describe(JsonObject args) => $"List {GetString(args, "path") ?? "."}{(GetString(args, "pattern") is { } p ? " " + p : "")}";
+        ("pattern", Str("Optional glob; when given, searches subfolders too"), false),
+        ("host", Str(RemoteHost.Description), false));
+    public override string Describe(JsonObject args) => $"List {GetString(args, "path") ?? "."}{(GetString(args, "pattern") is { } p ? " " + p : "")}{RemoteHost.On(args)}";
 
     private const int MaxEntries = 500;
     private static readonly TimeSpan SearchTime = TimeSpan.FromSeconds(20);
 
     public override Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
+        if (RemoteHost.Of(args) is { } remote)
+        {
+            var (folder, glob) = (GetString(args, "path") is { Length: > 0 } d ? d : ".", GetString(args, "pattern"));
+            return RemoteHost.RunAsync(remote, ctx, h => RemoteFiles.ListAsync(h, folder, glob, ct), ct);
+        }
         var dir = ctx.ResolvePath(GetString(args, "path") ?? ".");
         if (!Directory.Exists(dir))
             return Task.FromResult(ToolResult.Error($"Directory not found: {dir}"));

@@ -46,6 +46,9 @@ public sealed class ToolContext
     /// <summary>The PC's own browser, run headless, for the web tools to fall back on; null when there is none.</summary>
     public Web.HeadlessBrowser? Browser { get; init; }
 
+    /// <summary>The servers this chat is logged in to over SSH (the ssh tool, and the file tools with host); null when SSH is off.</summary>
+    public Ssh.SshHosts? Ssh { get; init; }
+
     /// <summary>All monitors in physical pixels, the primary first.</summary>
     public IReadOnlyList<ScreenRect> Screens => Platform.Screen.GetScreens();
 

@@ -104,8 +104,9 @@ that fails, however it fails, reports the error to the model and the run goes on
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
-| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`) |
+| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
+| `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
 | `web_search` | Searches the web: titles, links and snippets (see below) |
 | `fetch_page` | Reads a web page as plain text; `find` returns only the passages that mention some words, `start` reads on in a long page |
 | `<server>__<tool>` | Any tool of the MCP servers you add in Settings → Advanced (see below) |
@@ -176,6 +177,32 @@ headless browser instead. PDFs aren't read. The last eight pages are kept in mem
 doesn't download a page again. The browser's profile is `Data/browser`. Turn web access off in
 Settings → General.
 
+### Servers over SSH
+`ssh` logs in to a server (`user@host`, `user@host:port` or a `Host` from `~/.ssh/config`) with
+the key the task names, the keys in `~/.ssh`, or a password the user gave, and keeps a terminal
+open there for the rest of the chat: `cd`, exported variables and functions carry over from one
+command to the next, as for a person at a terminal. The SSH client is built in (SSH.NET), so no
+`ssh.exe`, PuTTY or key-file permissions matter, and it works the same on every OS.
+
+- A command still running when `wait_seconds` (default 120) are up keeps running; the model
+  calls `ssh` again with no command to see more output, `input` to answer a question it asks
+  (apt's Y/n, a passphrase), or `interrupt` for Ctrl+C. A call also returns as soon as the
+  command seems to wait for an answer, or has printed nothing for 30 seconds.
+- sudo's password prompt is answered with the user's `password`, if they gave one; the model
+  never has to type it.
+- Each command is written to a file on the server and run from there in a subshell, so quotes,
+  `$` and heredocs arrive as written, nothing it reads swallows the next command, and an `exit`
+  or `set -e` in it ends only that command. Interactive shells (`sudo -i`, `su -`) and
+  full-screen programs (nano, vim, less, `top`, `crontab -e`, `systemctl edit`) are turned away
+  with what to use instead; a pager that slips through is stopped.
+- With `host`, the four file tools read, write, edit and list files on the server, using sudo
+  for what the login user can't reach (most of `/etc`). An existing file keeps its owner and
+  permissions; a new one written with sudo belongs to root. No quoting through the shell, so a
+  config full of `$uri` survives.
+- Host keys are checked against `Data/known_hosts`: the first key a server shows is saved, a
+  different one later is refused, as OpenSSH does. A connection lost to a reboot is made
+  again on the next call, retried for 45 seconds while the server comes back.
+
 ### MCP servers
 BlackBox is an MCP client: any [Model Context Protocol](https://modelcontextprotocol.io) server adds its
 tools to the list above. Paste the `mcpServers` block from the server's README into Settings → Advanced;
@@ -220,7 +247,24 @@ dotnet test                       # unit tests
 dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   # headless run
 ./scripts/agent-tasks.ps1         # real desktop task suite (drives your mouse and keyboard)
 ./scripts/game2048-test.ps1       # long run: BlackBox writes, play-tests and fixes its own 2048
+./scripts/sysadmin-vm.ps1         # once: the portable Ubuntu lab VM (QEMU in .dev/sysadmin-lab, nothing installed)
+./scripts/sysadmin-test.ps1       # sysadmin tickets on that VM over SSH, checked over SSH and from this PC
 ```
+
+### Sysadmin benchmark
+`sysadmin-test.ps1` gives BlackBox a fresh Ubuntu 24.04 server per task, with only its address,
+a user name and a key, as a hired admin gets them, and a ticket in plain words: deploy the
+Tiny Arena WebSocket game server behind nginx, serve a site over HTTPS, onboard two developers
+and lock down SSH, set up a firewall, free a full disk, schedule backups, install PostgreSQL,
+find and remove a rogue service, fix a site a colleague broke, do a new server's basic setup
+with a sudo password. Then the VM is rebooted and scripts check the end state over SSH and from
+this PC (a WebSocket game played by two clients, ports probed, logins tried with each user's
+key). `-SelfTest` runs each task's reference solution instead of BlackBox, to prove the checks.
+
+The VM is QEMU (from qemu.weilnetz.de, unpacked, not installed) running Ubuntu's cloud image in
+software emulation: portable, no admin rights or Windows features, everything in
+`.dev/sysadmin-lab`. Each task runs on a throwaway disk over the clean one, so a reset takes a
+second. The VM's ports are forwarded to 127.0.0.2; inside it, this PC is 10.0.2.2.
 
 Integration tests against a real server (they send prompts larger than the context):
 
@@ -239,7 +283,7 @@ dotnet test --filter ClickAccuracyTests   # click hit rate in 16 hard scenes; BB
 - `src/BlackBox.App`: Avalonia 11 UI with CommunityToolkit.Mvvm.
 - `tests/BlackBox.Core.Tests`: xUnit tests (unit tests plus opt-in server integration tests).
 - `tests/BlackBox.McpTestServer`: a small MCP server the tests run in-process and as a child process.
-- `scripts/`: `publish.ps1` (portable build), `agent-tasks.ps1` (real desktop task suite) and `game2048-test.ps1` (long self-testing run, judged by `game2048-check.mjs`).
+- `scripts/`: `publish.ps1` (portable build), `agent-tasks.ps1` (real desktop task suite), `game2048-test.ps1` (long self-testing run, judged by `game2048-check.mjs`), and `sysadmin-vm.ps1` / `sysadmin-test.ps1` with the tickets in `sysadmin/tasks/` (the sysadmin benchmark).
 
 Linux and macOS ports need an `IPlatformServices` implementation (screen, input, windows); the rest
 of the code is already cross-platform.

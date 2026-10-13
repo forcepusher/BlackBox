@@ -150,10 +150,11 @@ public class AgentSessionTests
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
         Assert.Equal(3, server.Requests.Count); // rejected, handoff note, retry
-        Assert.True(JsonSize(server.Requests[2]) < JsonSize(server.Requests[0]) / 4);
+        // The conversation, not the tool list (the same in both), is what has to shrink.
+        Assert.True(JsonSize(server.Requests[2]["messages"]!) < JsonSize(server.Requests[0]["messages"]!) / 4);
         Assert.Equal("Short answer.", session.History[^1].Content);
 
-        static int JsonSize(JsonObject o) => o.ToJsonString().Length;
+        static int JsonSize(JsonNode o) => o.ToJsonString().Length;
     }
 
     [Fact]

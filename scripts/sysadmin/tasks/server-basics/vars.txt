@@ -1,0 +1,1 @@
+LAB_SUDO_PASSWORD=Lab-Sudo-77

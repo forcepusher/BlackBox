@@ -1,0 +1,1 @@
+Please turn on a firewall on this server. From outside, only SSH, HTTP and HTTPS may be reachable, plus the metrics exporter on port 9100, but that one only from our monitoring host {monitor}. Everything else must be blocked, and the firewall has to survive a reboot. Careful not to lock yourself out.

@@ -1,0 +1,1 @@
+Please set up nginx to serve the website in ~/site.tar.gz on the server over HTTPS, as https://studio.lab.test/ (we'll point that name at the server; for now that is {ip}). We have no real certificate yet, so make a self-signed one for studio.lab.test that is valid for a year. Plain http:// must redirect to https://. Keep the site's files under /var/www/site.

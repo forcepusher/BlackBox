@@ -10,6 +10,7 @@ namespace BlackBox.Core.Settings;
 ///   Data/chats/    (saved chats, one file each)
 ///   Data/browser/  (profile of the headless browser web search falls back on)
 ///   Data/runtime/  (native libraries unpacked by the single-file build)
+///   Data/known_hosts (host keys of the servers the agent logged in to over SSH)
 /// </code>
 /// </summary>
 public sealed class AppPaths(string root)
@@ -29,6 +30,9 @@ public sealed class AppPaths(string root)
 
     /// <summary>Where the single-file build unpacks its native libraries.</summary>
     public string RuntimeDir => Path.Combine(DataDir, "runtime");
+
+    /// <summary>The SSH host keys BlackBox has seen, in OpenSSH's known_hosts format (see <see cref="Ssh.SshHosts"/>).</summary>
+    public string KnownHostsFile => Path.Combine(DataDir, "known_hosts");
 
     public void EnsureCreated() => Directory.CreateDirectory(DataDir);
 

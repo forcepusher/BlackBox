@@ -2,6 +2,7 @@ using BlackBox.Core.Llm;
 using BlackBox.Core.Mcp;
 using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
+using BlackBox.Core.Ssh;
 using BlackBox.Core.Tools;
 using BlackBox.Core.Web;
 
@@ -11,8 +12,9 @@ namespace BlackBox.Core.Agent;
 public static class AgentSetup
 {
     /// <param name="history">The conversation to carry on; a new one when null.</param>
+    /// <param name="ssh">The chat's SSH logins, kept by the caller across the chat's runs and disposed with it.</param>
     public static AgentSession Create(BackendConnection backend, IPlatformServices platform, AgentSettings agent, AppPaths paths,
-        McpHost mcp, List<ChatMessage>? history = null)
+        McpHost mcp, SshHosts ssh, List<ChatMessage>? history = null)
     {
         var ctx = new ToolContext
         {
@@ -21,6 +23,7 @@ public static class AgentSetup
             WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             CoordinateGrid = ModelCoordinates.GridFor(backend.Options.Model),
             Browser = agent.WebSearch ? HeadlessBrowser.Find(paths.BrowserProfileDir) : null,
+            Ssh = ssh,
         };
 
         // A model that can't see gets no screen tools, nor does an OS without desktop control.

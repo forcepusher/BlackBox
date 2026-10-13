@@ -25,6 +25,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private List<ChatMessage> _history = [];
     private readonly ChatStore _chats;
     private readonly McpHost _mcp = new();
+    /// <summary>The chat's SSH logins: they last from one message to the next, and end with the chat.</summary>
+    private Core.Ssh.SshHosts _ssh;
     private Task _mcpConnect = Task.CompletedTask;
     private bool _mcpRestartPending;
     private AppSettings _settings;
@@ -44,6 +46,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _settings = settings;
         _platform = platform;
         _chats = new ChatStore(paths.ChatsDir);
+        _ssh = new Core.Ssh.SshHosts(paths.KnownHostsFile);
         _tick = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => _current?.Tick());
         // The saved model is in the list before the view binds to it, so the dropdown starts
         // with it selected; a selection the ComboBox once lost is not restored by rebinding.
@@ -116,6 +119,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         if (IsBusy) SaveChat(SnapshotHistory());
         _runCts?.Cancel();
         _stopKey?.Dispose();
+        _ssh.Dispose();
         try { _mcp.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5)); }
         catch (AggregateException) { /* a server that would not stop; the process ends anyway */ }
     }
@@ -474,7 +478,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 await _mcpConnect.WaitAsync(ct);
             }
 
-            var session = _session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, history);
+            var session = _session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, _ssh, history);
             _tick.Start();
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
@@ -570,6 +574,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         // The stopped run keeps its own list until it ends, so it can't write into the next chat.
         _history = [];
+        // Logins belong to the chat: the next one starts logged out (the stopped run's tools fail).
+        _ssh.Dispose();
+        _ssh = new Core.Ssh.SshHosts(_paths.KnownHostsFile);
         Items.Clear();
         _current = null;
         _chatId = null;
