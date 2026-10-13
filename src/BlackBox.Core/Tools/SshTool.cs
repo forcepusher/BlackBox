@@ -17,7 +17,9 @@ public sealed partial class SshTool : Tool
     public override string Name => "ssh";
     public override string Description =>
         "Run a command on another computer (a Linux server) over SSH, in a terminal that stays open between calls: " +
-        "the directory and exported variables carry over, as in a real terminal. The first call to a host logs in; later calls reuse it. " +
+        "the directory and exported variables carry over, as in a real terminal. The first call to a host logs in, and its result begins with " +
+        "what the server is (system, hostname, the address this PC connects from, whether sudo needs a password), so make it a real step of the work; " +
+        "later calls reuse the login. " +
         "Returns the output and the exit code. A command still running when wait_seconds are up goes on running: call ssh again with the same host " +
         "and no command to see more of its output, with input to answer a question it asks (y, a password), or with interrupt to stop it (Ctrl+C). " +
         "Put sudo in front of each command that needs root instead of opening a root shell. Don't start full-screen programs (nano, vim, less, top): " +

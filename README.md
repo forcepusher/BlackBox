@@ -272,9 +272,11 @@ a user name and a key, as a hired admin gets them, and a ticket in plain words: 
 Tiny Arena WebSocket game server behind nginx, serve a site over HTTPS, onboard two developers
 and lock down SSH, set up a firewall, free a full disk, schedule backups, install PostgreSQL,
 find and remove a rogue service, fix a site a colleague broke, do a new server's basic setup
-with a sudo password. Then the VM is rebooted and scripts check the end state over SSH and from
-this PC (a WebSocket game played by two clients, ports probed, logins tried with each user's
-key). `-SelfTest` runs each task's reference solution instead of BlackBox, to prove the checks.
+with a sudo password, publish a site from this PC, find why an API answers 500, revive a cron
+job that stopped, run an app from this PC in Docker, and secure a new server that only has a
+root password. Then the VM is rebooted and scripts check the end state over SSH and from this
+PC (a WebSocket game played by two clients, ports probed, logins tried with each user's key).
+`-SelfTest` runs each task's reference solution instead of BlackBox, to prove the checks.
 
 The VM is QEMU (from qemu.weilnetz.de, unpacked, not installed) running Ubuntu's cloud image in
 software emulation: portable, no admin rights or Windows features, everything in
