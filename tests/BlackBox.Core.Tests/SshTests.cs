@@ -20,6 +20,36 @@ public class SshTests
     }
 
     [Fact]
+    public void Progress_redrawn_with_cursor_moves_keeps_its_last_state()
+    {
+        // docker pull on a terminal: a line per layer, each update goes up to its line, erases it,
+        // writes it and comes back down (jsonmessage.DisplayJSONMessagesStream).
+        string Update(int up, string text) => $"\x1b[{up}A\x1b[2K\r{text}\r\x1b[{up}B";
+        var pull = "3.12-alpine: Pulling from library/python\n" +
+                   "\n" + Update(1, "a1: Pulling fs layer") +
+                   "\n" + Update(1, "b2: Pulling fs layer") +
+                   Update(2, "a1: Downloading [=====>      ]  1.2MB/3.6MB") +
+                   Update(1, "b2: Downloading [==>         ]  2.1MB/15MB") +
+                   Update(2, "a1: Pull complete") +
+                   Update(1, "b2: Pull complete") +
+                   "Digest: sha256:0f1e\nStatus: Downloaded newer image for python:3.12-alpine\n";
+        Assert.Equal("3.12-alpine: Pulling from library/python\na1: Pull complete\nb2: Pull complete\n" +
+                     "Digest: sha256:0f1e\nStatus: Downloaded newer image for python:3.12-alpine\n", TerminalText.Clean(pull));
+
+        // apt's progress bar on the bottom row, drawn between saving and restoring the cursor, is left out.
+        var apt = "Setting up a ...\n\n\x1b" + "7\x1b[0;49r\x1b" + "8\x1b[1A" +
+                  "\x1b" + "7\x1b[50;0f\x1b[42m\x1b[30mProgress: [ 40%]\x1b[49m\x1b[39m [#####.......] \x1b" + "8" +
+                  "Setting up b ...\n";
+        Assert.Equal("Setting up a ...\nSetting up b ...\n", TerminalText.Clean(apt));
+
+        // A spinner that goes back to column 1 and erases the rest of the line; clear doesn't take the output.
+        Assert.Equal("added 3 packages", TerminalText.Clean("|\x1b[1G\x1b[0K/\x1b[1G\x1b[0K-\x1b[1G\x1b[0Kadded 3 packages"));
+        Assert.Equal("before\nafter", TerminalText.Clean("before\n\x1b[H\x1b[2Jafter"));
+        // Erasing below the cursor after going up: a redrawn block shrinks.
+        Assert.Equal("one\ntwo", TerminalText.Clean("one\nold two\nold three\n\x1b[2A\x1b[2Ktwo\x1b[J"));
+    }
+
+    [Fact]
     public void Long_output_keeps_its_start_and_its_larger_end()
     {
         var text = string.Join("\n", Enumerable.Range(1, 5000).Select(i => $"line {i}"));

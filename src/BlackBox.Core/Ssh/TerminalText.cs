@@ -6,24 +6,39 @@ namespace BlackBox.Core.Ssh;
 /// <summary>What a terminal shows, from what a program sent to it.</summary>
 public static partial class TerminalText
 {
+    /// <summary>The terminal's height (the ssh tool asks for 200 x 50): cursor moves can't reach above it.</summary>
+    private const int Rows = 50;
+
     /// <summary>
-    /// Removes escape sequences (colours, cursor moves, window titles) and other control
-    /// characters, and applies carriage returns and backspaces the way a terminal shows them:
-    /// a progress bar redrawn with \r leaves only its last state. Lines end in \n.
+    /// What a terminal shows for a program's output, as plain lines ending in \n: colours,
+    /// window titles and other escape sequences are removed; carriage returns, backspaces and
+    /// the cursor moves and line erases of progress displays are applied, so a redrawn line
+    /// keeps only its last state (a \r progress bar, docker pull's line per layer). A status bar
+    /// drawn at a fixed place between saving and restoring the cursor (apt's) is left out.
     /// </summary>
     public static string Clean(string raw)
     {
-        var text = Escape().Replace(raw, "").Replace("\r\n", "\n");
-        var sb = new StringBuilder(text.Length);
-        var line = new StringBuilder();
-        var col = 0;
-        foreach (var c in text)
+        var lines = new List<StringBuilder> { new() };
+        int row = 0, col = 0;
+        (int Row, int Col)? saved = null;
+        var away = false; // at a fixed place on the screen, between saving and restoring the cursor
+        for (var i = 0; i < raw.Length; i++)
         {
+            var c = raw[i];
+            if (c == '\x1b')
+            {
+                if (EscapeAt().Match(raw, i) is { Success: true } m)
+                {
+                    Apply(m.Value);
+                    i += m.Length - 1;
+                }
+                continue;
+            }
             switch (c)
             {
                 case '\n':
-                    sb.Append(line).Append('\n');
-                    line.Clear();
+                    if (away) break;
+                    if (++row == lines.Count) lines.Add(new StringBuilder());
                     col = 0;
                     break;
                 case '\r':
@@ -32,22 +47,68 @@ public static partial class TerminalText
                 case '\b':
                     if (col > 0) col--;
                     break;
-                case '\t':
-                    Put(c);
-                    break;
                 default:
-                    if (!char.IsControl(c)) Put(c);
+                    if (c == '\t' || !char.IsControl(c)) Put(c);
                     break;
             }
         }
-        sb.Append(line);
-        return sb.ToString();
+        return string.Join('\n', lines);
 
-        void Put(char c)
+        void Put(char ch)
         {
-            if (col < line.Length) line[col] = c;
-            else line.Append(c);
+            if (away) return;
+            var line = lines[row];
+            if (col > line.Length) line.Append(' ', col - line.Length);
+            if (col < line.Length) line[col] = ch;
+            else line.Append(ch);
             col++;
+        }
+
+        void Apply(string esc)
+        {
+            switch (esc)
+            {
+                case "\x1b" + "7":
+                    saved = (row, col);
+                    return;
+                case "\x1b" + "8":
+                    if (saved is { } s) (row, col) = s;
+                    saved = null;
+                    away = false;
+                    return;
+            }
+            if (esc.Length < 3 || esc[1] != '[' || away)
+                return;
+            var args = esc[2..^1];
+            var n = int.TryParse(args.Split(';')[0], out var v) && v > 0 ? v : 1;
+            var top = Math.Max(0, lines.Count - Rows);
+            switch (esc[^1])
+            {
+                case 'A': row = Math.Max(top, row - n); break;
+                case 'B': row = Math.Min(lines.Count - 1, row + n); break;
+                case 'C': col += n; break;
+                case 'D': col = Math.Max(0, col - n); break;
+                case 'E': row = Math.Min(lines.Count - 1, row + n); col = 0; break;
+                case 'F': row = Math.Max(top, row - n); col = 0; break;
+                case 'G': col = n - 1; break;
+                case 'H' or 'f':
+                    // A place on the screen: only followed while the cursor is saved, to be put back.
+                    away = saved is not null;
+                    break;
+                case 'K':
+                    var line = lines[row];
+                    if (args is "" or "0") line.Length = Math.Min(col, line.Length);
+                    else if (args == "1") for (var k = 0; k < Math.Min(col + 1, line.Length); k++) line[k] = ' ';
+                    else if (args == "2") line.Clear();
+                    break;
+                case 'J':
+                    if (args is "" or "0")
+                    {
+                        lines[row].Length = Math.Min(col, lines[row].Length);
+                        lines.RemoveRange(row + 1, lines.Count - row - 1);
+                    }
+                    break;
+            }
         }
     }
 
@@ -94,8 +155,9 @@ public static partial class TerminalText
     /// <summary>sudo's own password prompt.</summary>
     public static bool IsSudoPrompt(string lastLine) => SudoPrompt().IsMatch(lastLine.Trim());
 
-    [GeneratedRegex(@"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b[PX^_][^\x1b]*\x1b\\|\x1b[()*+][0-9A-Za-z]|\x1b[@-Z\\-_=>78]")]
-    private static partial Regex Escape();
+    /// <summary>An escape sequence starting right at the position the match starts from.</summary>
+    [GeneratedRegex(@"\G(?:\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[PX^_][^\x1b]*\x1b\\|\x1b[()*+][0-9A-Za-z]|\x1b[@-Z\\-_=>78])")]
+    private static partial Regex EscapeAt();
 
     [GeneratedRegex(@"(?i)(password|passphrase|\[y/n\]|\(y/n\)|\by/n\b|\(yes/no|continue\?|press (enter|return|any key))[^\n]*$")]
     private static partial Regex PromptWords();
