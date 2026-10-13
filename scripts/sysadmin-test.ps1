@@ -11,7 +11,9 @@
   it), check.sh (root, on the VM, after the reboot) and check-host.ps1 (on this PC), both
   printing PASS/FAIL lines, and solution.sh, a reference fix that -SelfTest uses to prove the
   checks pass. Optional: vars.txt (KEY=value lines for the scripts, such as LAB_SUDO_PASSWORD
-  when a task makes sudo ask for one) and setup-host.ps1 (makes per-run files in $tdir\upload,
+  when a task makes sudo ask for one; {KEY} in the ticket is filled in too), preamble.txt (in
+  place of the standard opening, which says to log in as admin with the key), solution-host.ps1
+  (the reference solution's part on this PC) and setup-host.ps1 (makes per-run files in $tdir\upload,
   which go to the VM with setup.sh). The scripts see LAB_IP, LAB_USER and a random TOKEN; the
   PowerShell ones also $token, $tdir and the lab helpers. Nothing of this is left on the VM while
   BlackBox works.
@@ -102,7 +104,12 @@ $preamble = "Our Ubuntu server runs in a VM on this PC and is reachable at {ip}:
   "(QEMU forwards them, so from this PC a TCP connect to any of them succeeds even when nothing answers on the VM; only a real reply counts). " +
   "Log in over SSH as {user} with the private key {key}; {user} has sudo rights. "
 
-function Fill([string]$text) { $text.Replace("{ip}", $LabIp).Replace("{user}", $LabUser).Replace("{key}", $key).Replace("{monitor}", $LabHostSeenAs).Replace("{tdir}", $tdir) }
+function Fill([string]$text) {
+  $text = $text.Replace("{ip}", $LabIp).Replace("{user}", $LabUser).Replace("{key}", $key).Replace("{monitor}", $LabHostSeenAs).Replace("{tdir}", $tdir)
+  # A task's own values: {KEY} for each KEY=value line of its vars.txt.
+  foreach ($line in ($extra -split "`n")) { if ($line -match '^(\w+)=(.*)$') { $text = $text.Replace("{$($Matches[1])}", $Matches[2].Trim()) } }
+  $text
+}
 function Log([string]$text) { Write-Host ("[{0:HH:mm:ss}] {1}" -f (Get-Date), $text) -ForegroundColor Yellow }
 
 # Uploads the named files of a task (and its files\ folder) to /tmp/bb-task and runs one of them as root.
@@ -155,7 +162,10 @@ try {
       continue
     }
 
-    $text = Fill ($preamble + (Get-Content (Join-Path $task.FullName "task.txt") -Raw).Trim())
+    # A task can bring its own preamble (preamble.txt), e.g. one where root logs in with a password.
+    $pre = Join-Path $task.FullName "preamble.txt"
+    $pre = if (Test-Path $pre) { (Get-Content $pre -Raw).Trim() + " " } else { $preamble }
+    $text = Fill ($pre + (Get-Content (Join-Path $task.FullName "task.txt") -Raw).Trim())
     Set-Content -Encoding utf8 (Join-Path $tdir "task.txt") $text
     $sw.Restart()
     if ($SelfTest) {
