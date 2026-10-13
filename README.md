@@ -182,16 +182,19 @@ Settings → General.
 `ssh` logs in to a server (`user@host`, `user@host:port` or a `Host` from `~/.ssh/config`) with
 the key the task names, the keys in `~/.ssh`, or a password the user gave, and keeps a terminal
 open there for the rest of the chat: `cd`, exported variables and functions carry over from one
-command to the next, as for a person at a terminal. The terminal is bash, also for a user whose
-login shell is another one (sh, zsh). The SSH client is built in (SSH.NET), so no
+command to the next, as for a person at a terminal. The first call reports the system, the
+address this PC connects from (what a firewall rule must let in) and whether sudo needs a
+password. The terminal is bash, also for a user whose login shell is another one (sh, zsh).
+The SSH client is built in (SSH.NET), so no
 `ssh.exe`, PuTTY or key-file permissions matter, and it works the same on every OS.
 
 - A command still running when `wait_seconds` (default 120) are up keeps running; the model
   calls `ssh` again with no command to see more output, `input` to answer a question it asks
   (apt's Y/n, a passphrase), or `interrupt` for Ctrl+C. A call also returns as soon as the
   command waits for an answer (a question on its last line, its processes idle for a second:
-  `echo y | ufw enable` works on quietly after its question), or has printed nothing for 30
-  seconds. An answer that arrives after the command finished isn't typed, or bash would run it.
+  `echo y | ufw enable` works on quietly after its question), or, unless the model chose
+  `wait_seconds`, has printed nothing for 30 seconds (a server started in the foreground). An
+  answer that arrives after the command finished isn't typed, or bash would run it.
 - sudo's password prompt is answered with the user's `password`, if they gave one; the model
   never has to type it.
 - The output is what the terminal would show: colours go, and progress redrawn in place (a `\r`
@@ -205,7 +208,8 @@ login shell is another one (sh, zsh). The SSH client is built in (SSH.NET), so n
   for what the login user can't reach (most of `/etc`). An existing file keeps its owner and
   permissions; a new one written with sudo belongs to root. No quoting through the shell, so a
   config full of `$uri` survives.
-- `copy` moves files and whole folders between this PC and a server, or within either, the way
+- `copy` moves files and whole folders between this PC and a server, from one server to another
+  (through this PC), or within either, the way
   `scp -r` does (a folder copied into a folder goes inside it; `/*` at the end copies only its
   contents). It travels as one tar stream over the same connection, binary files intact, and is
   unpacked with sudo where the login user can't write; what only root can read comes down with
