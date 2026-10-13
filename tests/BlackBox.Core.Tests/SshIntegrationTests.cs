@@ -101,6 +101,57 @@ public class SshIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task Copy_moves_folders_both_ways_byte_for_byte_with_sudo_where_needed()
+    {
+        if (Host is null) return;
+        var local = Path.Combine(Path.GetTempPath(), "bb-copy-" + Guid.NewGuid().ToString("N"));
+        var site = Path.Combine(local, "site");
+        Directory.CreateDirectory(Path.Combine(site, "img"));
+        var image = new byte[200_000];
+        new Random(5).NextBytes(image);
+        await File.WriteAllBytesAsync(Path.Combine(site, "img", "a.png"), image);
+        await File.WriteAllTextAsync(Path.Combine(site, "index.html"), "v2\n");
+        try
+        {
+            await Ssh("sudo rm -rf /srv/bb-copy; sudo mkdir -p /srv/bb-copy");
+            var up = await new CopyTool().ExecuteAsync(new() { ["from"] = site, ["to"] = $"{Host}:/srv/bb-copy" }, _ctx, CancellationToken.None);
+            Assert.False(up.IsError, up.Text);
+            Assert.Contains("with sudo", up.Text); // /srv/bb-copy belongs to root
+            var sum = await Ssh("sha256sum /srv/bb-copy/site/img/a.png; stat -c '%U %a' /srv/bb-copy/site/index.html");
+            Assert.Contains(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(image)).ToLowerInvariant(), sum.Text);
+
+            var back = Path.Combine(local, "back");
+            var down = await new CopyTool().ExecuteAsync(new() { ["from"] = $"{Host}:/srv/bb-copy/site", ["to"] = back }, _ctx, CancellationToken.None);
+            Assert.False(down.IsError, down.Text);
+            Assert.Equal(image, await File.ReadAllBytesAsync(Path.Combine(back, "img", "a.png")));
+
+            // A root-only file comes down with sudo.
+            var shadow = await new CopyTool().ExecuteAsync(new() { ["from"] = $"{Host}:/etc/shadow", ["to"] = Path.Combine(local, "shadow") }, _ctx, CancellationToken.None);
+            Assert.False(shadow.IsError, shadow.Text);
+            Assert.Contains("root:", await File.ReadAllTextAsync(Path.Combine(local, "shadow")));
+        }
+        finally
+        {
+            Directory.Delete(local, recursive: true);
+            await Ssh("sudo rm -rf /srv/bb-copy");
+        }
+    }
+
+    [Fact]
+    public async Task After_a_reboot_the_next_call_logs_in_again()
+    {
+        if (Host is null || Environment.GetEnvironmentVariable("BB_SSH_TEST_REBOOT") != "1") return;
+        await Ssh("cd /tmp");
+        await Ssh("sudo systemctl reboot", wait: 20); // returns at once, or as the connection drops
+        await Task.Delay(TimeSpan.FromSeconds(10));
+        SshHosts.RetryFor = TimeSpan.FromMinutes(4); // software-emulated VMs boot slowly
+        var back = await Ssh("pwd; uptime", wait: 30);
+        Assert.Contains("The earlier connection was lost", back.Text);
+        Assert.Contains("/home/", back.Text);
+        Assert.Contains("[exit code 0", back.Text);
+    }
+
+    [Fact]
     public async Task File_tools_work_on_the_host_with_sudo_where_needed()
     {
         if (Host is null) return;

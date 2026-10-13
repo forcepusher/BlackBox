@@ -35,6 +35,7 @@ public sealed class ToolRegistry
         yield return new ListDirectoryTool();
         yield return new ShellTool();
         yield return new SshTool();
+        yield return new CopyTool();
         if (includeWebTools)
         {
             yield return new WebSearchTool();

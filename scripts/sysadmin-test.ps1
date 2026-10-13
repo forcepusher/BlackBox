@@ -93,10 +93,13 @@ $cliArgs = @()
 if ($Root) { $cliArgs += @("--root", $Root) }
 if ($Url) { $cliArgs += @("--url", $Url) }
 if ($Model) { $cliArgs += @("--model", $Model) }
-$preamble = "Our Ubuntu server runs in a VM on this PC and is reachable at {ip}: SSH on port 22, and its other ports at {ip} too. " +
+# QEMU's port forwarding accepts a connection on this PC before it knows whether the VM does, so
+# the ticket says so: otherwise a bare connect test from the PC (Test-NetConnection) misleads.
+$preamble = "Our Ubuntu server runs in a VM on this PC and is reachable at {ip}: SSH on port 22, and its other ports at {ip} too " +
+  "(QEMU forwards them, so from this PC a TCP connect to any of them succeeds even when nothing answers on the VM; only a real reply counts). " +
   "Log in over SSH as {user} with the private key {key}; {user} has sudo rights. "
 
-function Fill([string]$text) { $text.Replace("{ip}", $LabIp).Replace("{user}", $LabUser).Replace("{key}", $key).Replace("{monitor}", $LabHostSeenAs) }
+function Fill([string]$text) { $text.Replace("{ip}", $LabIp).Replace("{user}", $LabUser).Replace("{key}", $key).Replace("{monitor}", $LabHostSeenAs).Replace("{tdir}", $tdir) }
 function Log([string]$text) { Write-Host ("[{0:HH:mm:ss}] {1}" -f (Get-Date), $text) -ForegroundColor Yellow }
 
 # Uploads the named files of a task (and its files\ folder) to /tmp/bb-task and runs one of them as root.
@@ -130,12 +133,16 @@ try {
     $script:LabSudoPassword = if ($extra -match '(?m)^LAB_SUDO_PASSWORD=(.*)$') { $Matches[1].Trim() } else { "" }
 
     Log "$($task.Name): resetting the lab VM"
-    Reset-LabVm
+    try { Reset-LabVm } catch { Log "reset failed ($($_.Exception.Message)); once more"; Reset-LabVm }
     $hostSetup = Join-Path $task.FullName "setup-host.ps1"
     if (Test-Path $hostSetup) { & $hostSetup }
     $r = Invoke-TaskScript $task "setup.sh" $vars
     ($r.Out + $r.Err) | Set-Content -Encoding utf8 (Join-Path $tdir "setup.txt")
-    if ($r.Code -ne 0) { throw "$($task.Name): setup failed (see $tdir\setup.txt)" }
+    if ($r.Code -ne 0) {
+      Log "$($task.Name): setup failed (see $tdir\setup.txt); next task"
+      $rows += [pscustomobject]@{ Task = $task.Name; Result = "SETUP FAILED"; Checks = ""; Minutes = 0; Steps = 0; Tools = 0; Errors = 0; Done = "" }
+      continue
+    }
 
     $text = Fill ($preamble + (Get-Content (Join-Path $task.FullName "task.txt") -Raw).Trim())
     Set-Content -Encoding utf8 (Join-Path $tdir "task.txt") $text
@@ -143,6 +150,8 @@ try {
     $sw = [Diagnostics.Stopwatch]::StartNew()
     if ($SelfTest) {
       Log "$($task.Name): reference solution"
+      $hostSolution = Join-Path $task.FullName "solution-host.ps1"
+      if (Test-Path $hostSolution) { & $hostSolution }
       $r = Invoke-TaskScript $task "solution.sh" $vars -TimeoutSec 1800
       ($r.Out + $r.Err) | Set-Content -Encoding utf8 $log
       Add-Content $log "`n[done] solution.sh exit code $($r.Code)"
@@ -180,9 +189,13 @@ try {
       if (Test-Path $hostCheck) {
         try { $lines += @(& $hostCheck) } catch { $lines += "FAIL check-host.ps1 crashed: $($_.Exception.Message)" }
       }
-      $r = Invoke-TaskScript $task "check.sh" $vars -TimeoutSec 600
-      $lines += @(($r.Out -split "`n") | Where-Object { $_.Trim() })
-      if ($r.Code -ne 0) { $lines += "FAIL check.sh exit code $($r.Code): $($r.Err.Trim())" }
+      try {
+        $r = Invoke-TaskScript $task "check.sh" $vars -TimeoutSec 600
+        $lines += @(($r.Out -split "`n") | Where-Object { $_.Trim() })
+        if ($r.Code -ne 0) { $lines += "FAIL check.sh exit code $($r.Code): $($r.Err.Trim())" }
+      } catch {
+        $lines += "FAIL check.sh could not run: $($_.Exception.Message)"
+      }
     } else {
       $lines += "FAIL admin can still log in after a reboot"
     }

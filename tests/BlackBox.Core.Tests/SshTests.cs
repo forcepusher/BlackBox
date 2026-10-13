@@ -126,6 +126,55 @@ public class SshTests
     public void Ordinary_commands_run(string command) =>
         Assert.Null(SshTool.Refusal(command));
 
+    [Theory]
+    [InlineData("admin@127.0.0.2:/var/www/html", "admin@127.0.0.2", "/var/www/html", false)]
+    [InlineData("deploy@web01:2222:/srv/app/", "deploy@web01:2222", "/srv/app/", false)]
+    [InlineData("admin@host:/tmp/site/*", "admin@host", "/tmp/site", true)]
+    [InlineData(@"C:\Users\me\site-v2", null, @"C:\Users\me\site-v2", false)]
+    [InlineData(@"C:\Users\me\site-v2\*", null, @"C:\Users\me\site-v2", true)]
+    [InlineData("admin@host:", "admin@host", ".", false)]
+    public void Copy_sides_parse_like_scp(string text, string? host, string path, bool contents)
+    {
+        var side = CopyTool.Side.Parse(text);
+        Assert.Equal((host, path, contents), (side.Host, side.Path, side.ContentsOnly));
+    }
+
+    [Fact]
+    public async Task Copy_on_this_pc_keeps_bytes_and_follows_cp()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "bb-copy-" + Guid.NewGuid().ToString("N"));
+        var src = Path.Combine(root, "site");
+        Directory.CreateDirectory(Path.Combine(src, "img"));
+        var image = new byte[70000];
+        new Random(3).NextBytes(image);
+        image[1] = 0; image[2] = (byte)'\n';
+        await File.WriteAllBytesAsync(Path.Combine(src, "img", "logo.png"), image);
+        await File.WriteAllTextAsync(Path.Combine(src, "index.html"), "<h1>hi</h1>\n");
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = root };
+        try
+        {
+            // Into an existing folder: it goes inside, as cp -r and scp -r do.
+            Directory.CreateDirectory(Path.Combine(root, "www"));
+            var r = await new CopyTool().ExecuteAsync(new() { ["from"] = src, ["to"] = Path.Combine(root, "www") }, ctx, CancellationToken.None);
+            Assert.False(r.IsError, r.Text);
+            Assert.Contains("Copied 2 files", r.Text);
+            Assert.Equal(image, await File.ReadAllBytesAsync(Path.Combine(root, "www", "site", "img", "logo.png")));
+            // To a new name: the folder takes it. With /*: only what is in it.
+            await new CopyTool().ExecuteAsync(new() { ["from"] = src, ["to"] = Path.Combine(root, "renamed") }, ctx, CancellationToken.None);
+            Assert.True(File.Exists(Path.Combine(root, "renamed", "index.html")));
+            Directory.CreateDirectory(Path.Combine(root, "flat"));
+            await new CopyTool().ExecuteAsync(new() { ["from"] = src + "\\*", ["to"] = Path.Combine(root, "flat") }, ctx, CancellationToken.None);
+            Assert.True(File.Exists(Path.Combine(root, "flat", "img", "logo.png")));
+            // A single file to a new name.
+            await new CopyTool().ExecuteAsync(new() { ["from"] = Path.Combine(src, "index.html"), ["to"] = Path.Combine(root, "home.html") }, ctx, CancellationToken.None);
+            Assert.Equal("<h1>hi</h1>\n", await File.ReadAllTextAsync(Path.Combine(root, "home.html")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public void Results_say_what_to_do_next()
     {

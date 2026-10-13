@@ -107,6 +107,7 @@ that fails, however it fails, reports the error to the model and the run goes on
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
+| `copy` | Files and folders between this PC and an SSH host (`user@host:/path`, as for scp), byte for byte |
 | `web_search` | Searches the web: titles, links and snippets (see below) |
 | `fetch_page` | Reads a web page as plain text; `find` returns only the passages that mention some words, `start` reads on in a long page |
 | `<server>__<tool>` | Any tool of the MCP servers you add in Settings → Advanced (see below) |
@@ -199,6 +200,12 @@ command to the next, as for a person at a terminal. The SSH client is built in (
   for what the login user can't reach (most of `/etc`). An existing file keeps its owner and
   permissions; a new one written with sudo belongs to root. No quoting through the shell, so a
   config full of `$uri` survives.
+- `copy` moves files and whole folders between this PC and a server, or within either, the way
+  `scp -r` does (a folder copied into a folder goes inside it; `/*` at the end copies only its
+  contents). It travels as one tar stream over the same connection, binary files intact, and is
+  unpacked with sudo where the login user can't write; what only root can read comes down with
+  sudo too. In the baseline run the model wrote configs to a local file and called scp.exe
+  through PowerShell for want of this.
 - Host keys are checked against `Data/known_hosts`: the first key a server shows is saved, a
   different one later is refused, as OpenSSH does. A connection lost to a reboot is made
   again on the next call, retried for 45 seconds while the server comes back.

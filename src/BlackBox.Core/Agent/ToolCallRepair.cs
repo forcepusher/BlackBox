@@ -30,6 +30,8 @@ public static partial class ToolCallRepair
         ["write"] = "write_file", ["create_file"] = "write_file", ["save_file"] = "write_file",
         ["edit"] = "edit_file", ["replace_in_file"] = "edit_file", ["str_replace"] = "edit_file",
         ["ls"] = "list_directory", ["list_files"] = "list_directory", ["list_dir"] = "list_directory", ["dir"] = "list_directory",
+        ["scp"] = "copy", ["copy_file"] = "copy", ["copy_files"] = "copy", ["upload"] = "copy", ["download"] = "copy",
+        ["ssh_run"] = "ssh", ["ssh_command"] = "ssh", ["remote_shell"] = "ssh", ["run_ssh"] = "ssh",
     };
 
     // Argument names models borrow from other agent frameworks, per canonical parameter.
@@ -48,6 +50,9 @@ public static partial class ToolCallRepair
         ["modifiers"] = ["modifier", "keys", "hold_keys", "holding", "with_keys"],
         ["hold_seconds"] = ["hold", "hold_time", "hold_duration", "duration", "seconds"],
         ["until_change"] = ["until_changed", "wait_for_change", "on_change"],
+        ["from"] = ["source", "src", "local_path", "remote_path"],
+        ["to"] = ["destination", "dest", "target_path"],
+        ["host"] = ["server", "hostname", "ssh_host"],
     };
 
     /// <summary>Maps a tool name the model produced to a registered tool, or returns null.</summary>

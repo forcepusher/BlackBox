@@ -331,6 +331,41 @@ public sealed partial class SshHost : IDisposable
     /// <summary>Runs a command outside the terminal; <paramref name="stdin"/> is sent to it, then end of input.</summary>
     public async Task<ExecResult> ExecAsync(string command, string? stdin, TimeSpan timeout, CancellationToken ct)
     {
+        var (code, output, error) = await RunExecAsync(command, stdin is null ? null : Encoding.UTF8.GetBytes(stdin), timeout, ct).ConfigureAwait(false);
+        return new(code, Encoding.UTF8.GetString(output), error);
+    }
+
+    /// <summary>A command's output as bytes (an archive, say); with <paramref name="sudo"/> run as root. Throws when it fails.</summary>
+    public async Task<byte[]> ExecBytesAsync(string command, bool sudo, TimeSpan timeout, CancellationToken ct)
+    {
+        var (text, prefix) = await SudoWrapAsync(command, sudo, ct).ConfigureAwait(false);
+        var (code, output, error) = await RunExecAsync(text, prefix, timeout, ct).ConfigureAwait(false);
+        if (code != 0)
+            throw new IOException($"{command} failed on {Target}: {error.Trim()}");
+        return output;
+    }
+
+    /// <summary>A command that reads bytes (an archive, say) from its input; with <paramref name="sudo"/> run as root.</summary>
+    public async Task<ExecResult> ExecBytesInAsync(string command, byte[] stdin, bool sudo, TimeSpan timeout, CancellationToken ct)
+    {
+        var (text, prefix) = await SudoWrapAsync(command, sudo, ct).ConfigureAwait(false);
+        var input = prefix is null ? stdin : [.. prefix, .. stdin];
+        var (code, output, error) = await RunExecAsync(text, input, timeout, ct).ConfigureAwait(false);
+        return new(code, Encoding.UTF8.GetString(output), error);
+    }
+
+    /// <summary>The command wrapped in sudo when asked, and the password line sudo -S reads first, if one is needed.</summary>
+    private async Task<(string Command, byte[]? Prefix)> SudoWrapAsync(string command, bool sudo, CancellationToken ct)
+    {
+        if (!sudo)
+            return (command, null);
+        if (await CheckSudoAsync(ct).ConfigureAwait(false) && Password is { Length: > 0 } pw)
+            return ($"sudo -S -p '' sh -c {Quote(command)}", Encoding.UTF8.GetBytes(pw + "\n"));
+        return ($"sudo -n sh -c {Quote(command)}", null);
+    }
+
+    private async Task<(int Code, byte[] Output, string Error)> RunExecAsync(string command, byte[]? stdin, TimeSpan timeout, CancellationToken ct)
+    {
         using var cmd = _client.CreateCommand(command);
         cmd.CommandTimeout = timeout;
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -339,10 +374,13 @@ public sealed partial class SshHost : IDisposable
         using (var input = cmd.CreateInputStream())
         {
             if (stdin is { Length: > 0 })
-                await input.WriteAsync(Encoding.UTF8.GetBytes(stdin), cts.Token).ConfigureAwait(false);
+                await input.WriteAsync(stdin, cts.Token).ConfigureAwait(false);
         }
         await run.ConfigureAwait(false);
-        return new(cmd.ExitStatus ?? -1, cmd.Result, cmd.Error);
+        // As SshCommand.Result does, but as bytes: the stream ends with the command.
+        using var output = new MemoryStream();
+        await cmd.OutputStream.CopyToAsync(output, cts.Token).ConfigureAwait(false);
+        return (cmd.ExitStatus ?? -1, output.ToArray(), cmd.Error);
     }
 
     /// <summary>Whether sudo asks this user for a password; null until <see cref="CheckSudoAsync"/> ran.</summary>
@@ -359,12 +397,8 @@ public sealed partial class SshHost : IDisposable
     /// wants one and there is one (sudo reads it from the first line of the input, the command
     /// gets the rest), else only if sudo needs none.
     /// </summary>
-    public async Task<ExecResult> SudoAsync(string command, string? stdin, TimeSpan timeout, CancellationToken ct)
-    {
-        if (await CheckSudoAsync(ct).ConfigureAwait(false) && Password is { Length: > 0 } pw)
-            return await ExecAsync($"sudo -S -p '' sh -c {Quote(command)}", pw + "\n" + stdin, timeout, ct).ConfigureAwait(false);
-        return await ExecAsync($"sudo -n sh -c {Quote(command)}", stdin, timeout, ct).ConfigureAwait(false);
-    }
+    public async Task<ExecResult> SudoAsync(string command, string? stdin, TimeSpan timeout, CancellationToken ct) =>
+        await ExecBytesInAsync(command, Encoding.UTF8.GetBytes(stdin ?? ""), sudo: true, timeout, ct).ConfigureAwait(false);
 
     private async Task WriteRemoteAsync(string path, string content, CancellationToken ct)
     {
