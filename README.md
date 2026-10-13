@@ -188,7 +188,9 @@ command to the next, as for a person at a terminal. The SSH client is built in (
 - A command still running when `wait_seconds` (default 120) are up keeps running; the model
   calls `ssh` again with no command to see more output, `input` to answer a question it asks
   (apt's Y/n, a passphrase), or `interrupt` for Ctrl+C. A call also returns as soon as the
-  command seems to wait for an answer, or has printed nothing for 30 seconds.
+  command waits for an answer (a question on its last line, its processes idle for a second:
+  `echo y | ufw enable` works on quietly after its question), or has printed nothing for 30
+  seconds. An answer that arrives after the command finished isn't typed, or bash would run it.
 - sudo's password prompt is answered with the user's `password`, if they gave one; the model
   never has to type it.
 - Each command is written to a file on the server and run from there in a subshell, so quotes,

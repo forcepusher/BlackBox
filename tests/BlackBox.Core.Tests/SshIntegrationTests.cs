@@ -80,6 +80,21 @@ public class SshIntegrationTests : IDisposable
         Assert.Contains("answer=y", answered.Text);
         Assert.Contains("[exit code 0", answered.Text);
 
+        // A question answered through a pipe, then quiet work (echo y | ufw enable): not a wait for input.
+        var piped = await Ssh("echo y | { printf 'Proceed with operation (y|n)? '; read a; end=$((SECONDS + 6)); while [ $SECONDS -lt $end ]; do :; done; echo; echo got=$a; }");
+        Assert.DoesNotContain("waits for input", piped.Text);
+        Assert.Contains("got=y", piped.Text);
+        Assert.Contains("[exit code 0", piped.Text);
+
+        // An answer that comes after the question went away isn't typed: bash would run it.
+        var timed = await Ssh("read -t 8 -p 'Name? ' a; echo; echo timed-out");
+        Assert.Contains("waits for input", timed.Text);
+        await Task.Delay(TimeSpan.FromSeconds(8));
+        var late = await Ssh(input: "late-answer");
+        Assert.Contains("nothing was typed", late.Text);
+        Assert.Contains("timed-out", late.Text);
+        Assert.DoesNotContain("late-answer", (await Ssh("echo clean")).Text);
+
         var slow = await Ssh("for i in 1 2 3 4 5 6; do echo tick $i; sleep 1; done", wait: 2);
         Assert.Contains("still running", slow.Text);
         var busy = await Ssh("echo next");

@@ -59,6 +59,9 @@ public sealed partial class SshHost : IDisposable
         public int Id { get; } = id;
         public int SudoAnswers { get; set; }
         public bool FullScreen { get; set; }
+        /// <summary>The output (by its time) after which the command's processes were found idle.</summary>
+        public DateTime IdleAfter { get; set; }
+        public DateTime NextIdleCheck { get; set; }
     }
 
     internal SshHost(SshClient client, SshTarget target, string? password)
@@ -107,6 +110,15 @@ public sealed partial class SshHost : IDisposable
     {
         if (!IsBusy)
             throw new InvalidOperationException("No command is running, so nothing waits for input.");
+        // If the command finished meanwhile, bash would run the answer as a command line.
+        bool finished;
+        lock (_gate)
+            finished = Marker().Match(_raw.ToString()) is { Success: true } m && m.Groups[1].Value == _running!.Id.ToString();
+        if (finished)
+        {
+            var r = await CollectAsync(TimeSpan.Zero, ct).ConfigureAwait(false);
+            return r with { Note = (r.Note is null ? "" : r.Note + " ") + "It had finished before the input came, so nothing was typed." };
+        }
         _shell!.Write(text + "\r");
         _shell.Flush();
         await Task.Delay(200, ct).ConfigureAwait(false);
@@ -180,7 +192,21 @@ public sealed partial class SshHost : IDisposable
             // sudo prints its prompt also when it reads the password from a pipe (echo pw | sudo -S),
             // and checking a password can take seconds on a slow machine: only a prompt that stays
             // unanswered for a while is one that waits for the terminal.
-            if (running is not null && quiet > TimeSpan.FromSeconds(3) && TerminalText.IsSudoPrompt(lastLine))
+            var sudoPrompt = quiet > TimeSpan.FromSeconds(3) && TerminalText.IsSudoPrompt(lastLine);
+            var prompt = waitForPrompt && quiet > TimeSpan.FromSeconds(2.5) && TerminalText.LooksLikePrompt(lastLine);
+            if (running is not null && (sudoPrompt || prompt) && running.IdleAfter != last)
+            {
+                // A question answered through a pipe (echo y | ufw enable) can be followed by quiet
+                // work: it waits for the terminal only while the command's processes sit idle.
+                if (DateTime.UtcNow >= running.NextIdleCheck)
+                {
+                    if (await IsIdleAsync(ct).ConfigureAwait(false))
+                        running.IdleAfter = last;
+                    running.NextIdleCheck = DateTime.UtcNow + TimeSpan.FromSeconds(3);
+                    continue;
+                }
+            }
+            else if (running is not null && sudoPrompt)
             {
                 if (Password is { Length: > 0 } pw && running.SudoAnswers == 0)
                 {
@@ -197,7 +223,7 @@ public sealed partial class SshHost : IDisposable
                     ? "sudo asked again, so the password BlackBox has for this server is wrong."
                     : "sudo asks for the password; if the user gave you one, send it with input, or pass password to ssh.");
             }
-            if (waitForPrompt && running is not null && quiet > TimeSpan.FromSeconds(2.5) && TerminalText.LooksLikePrompt(lastLine))
+            else if (running is not null && prompt)
                 return Waiting(raw, lastLine, null);
             // Silent for long after printing something: often a server started in the foreground,
             // and the model may want to move on rather than sit out the whole wait.
@@ -330,6 +356,27 @@ public sealed partial class SshHost : IDisposable
         var r = await ExecAsync($"for p in $({list}); do kill -9 $p 2>/dev/null; done; sleep 0.3; {list}", null, TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
         if (r.Output.Trim() is { Length: > 0 } left)
             await SudoAsync($"kill -9 {left}", null, TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Whether the command's processes (everything under the terminal's bash, also what sudo runs
+    /// on a terminal of its own) used no CPU time for a second, and none started or ended.
+    /// </summary>
+    private async Task<bool> IsIdleAsync(CancellationToken ct)
+    {
+        // CPU ticks (also of finished children), count and pid sum of the descendants of the terminal's bash.
+        const string snapshot = "cat /proc/[0-9]*/stat 2>/dev/null | awk -v s=\"$s\" '{ p = $1; sub(/^.*\\) /, \"\"); pp[p] = $2; t[p] = $12 + $13 + $14 + $15 } " +
+                                "END { d[s] = 1; do { n = 0; for (p in pp) if (!(p in d) && (pp[p] in d)) { d[p] = 1; n++ } } while (n); " +
+                                "for (p in d) if (p != s) { c += t[p]; k++; q += p } printf \"%.0f %d %.0f\\n\", c, k, q }'";
+        try
+        {
+            var r = await ExecAsync($"s=$(cat {_dir}/pid); a=$({snapshot}); sleep 1; b=$({snapshot}); [ \"$a\" = \"$b\" ]", null, TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
+            return r.ExitCode == 0;
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return true; // as before: the question counts
+        }
     }
 
     // ---- side channels -------------------------------------------------------------------
