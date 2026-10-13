@@ -170,17 +170,22 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
         }
     }
 
-    /// <summary>The system, and whether sudo asks for a password: what an admin checks first.</summary>
+    /// <summary>
+    /// The system, the address this PC comes from as the server sees it (what a firewall rule or
+    /// an allow list must let in), and whether sudo asks for a password: what an admin checks first.
+    /// </summary>
     private static async Task<string> DescribeAsync(SshHost host, CancellationToken ct)
     {
         try
         {
-            var r = await host.ExecAsync(". /etc/os-release 2>/dev/null; printf '%s\\n' \"${PRETTY_NAME:-$(uname -s)}\"; uname -r; hostname", null, TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
+            var r = await host.ExecAsync(". /etc/os-release 2>/dev/null; printf '%s\\n' \"${PRETTY_NAME:-$(uname -s)}\"; uname -r; hostname; echo \"${SSH_CLIENT%% *}\"",
+                null, TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
             var lines = r.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             var sudo = await host.CheckSudoAsync(ct).ConfigureAwait(false)
                 ? host.Password is null ? "sudo asks for a password" : "sudo asks for a password (BlackBox types the one given)"
                 : "sudo works without a password";
-            return lines.Length >= 3 ? $"{lines[0]}, kernel {lines[1]}, hostname {lines[2]}; {sudo}." : $"{sudo}.";
+            var from = lines.Length >= 4 ? $"; this PC connects from {lines[3]}" : "";
+            return lines.Length >= 3 ? $"{lines[0]}, kernel {lines[1]}, hostname {lines[2]}{from}; {sudo}." : $"{sudo}.";
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

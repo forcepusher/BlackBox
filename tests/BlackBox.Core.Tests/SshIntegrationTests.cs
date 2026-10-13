@@ -50,6 +50,7 @@ public class SshIntegrationTests : IDisposable
         if (Host is null) return;
         var first = await Ssh("cd /etc && export BB_X=42 && greet() { echo hi-$1; }");
         Assert.Contains("Connected to", first.Text);
+        Assert.Matches(@"this PC connects from [0-9a-f.:]+;", first.Text);
         Assert.Contains("[exit code 0 · /etc]", first.Text);
         var again = await Ssh("pwd; echo $BB_X; greet there");
         Assert.Contains("/etc\n42\nhi-there", again.Text);
