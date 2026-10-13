@@ -194,6 +194,8 @@ login shell is another one (sh, zsh). The SSH client is built in (SSH.NET), so n
   seconds. An answer that arrives after the command finished isn't typed, or bash would run it.
 - sudo's password prompt is answered with the user's `password`, if they gave one; the model
   never has to type it.
+- The output is what the terminal would show: colours go, and progress redrawn in place (a `\r`
+  bar, docker pull's line per layer) keeps only its last state; apt's status bar is left out.
 - Each command is written to a file on the server and run from there in a subshell, so quotes,
   `$` and heredocs arrive as written, nothing it reads swallows the next command, and an `exit`
   or `set -e` in it ends only that command. Interactive shells (`sudo -i`, `su -`) and
