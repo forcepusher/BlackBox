@@ -23,6 +23,8 @@
             <Ellipse Classes="status" Classes.checking="{Binding IsChecking}" Classes.connected="{Binding IsConnected}" Classes.failed="{Binding IsFailed}"
                      Width="9" Height="9" VerticalAlignment="Center" />
             <TextBlock Classes="muted" Text="{Binding ServerStatusText}" VerticalAlignment="Center" />
+            <TextBlock Classes="muted" Text="{Binding ContextUsage, StringFormat='· {0}'}" IsVisible="{Binding HasContextUsage}"
+                       ToolTip.Tip="{Binding ContextUsageTip}" VerticalAlignment="Center" />
           </StackPanel>
           <!-- Earlier chats, newest first: a row opens one, its trash button deletes it. -->
           <Button x:Name="HistoryButton" Classes="ghost" ToolTip.Tip="Earlier chats" AutomationProperties.Name="History">
@@ -76,7 +78,7 @@
                  Watermark="Optional"
                  ToolTip.Tip="Sent to the server with every request. Saved in plain text in the Data folder next to BlackBox, so keep that folder private." />
         <ToggleButton Grid.Row="0" Grid.Column="4" Classes="ghost" IsChecked="{Binding ShowApiKey}" Margin="6,0,0,0" Padding="8,6"
-                      VerticalAlignment="Stretch" ToolTip.Tip="Show or hide the API key">
+                      VerticalAlignment="Stretch" ToolTip.Tip="Show or hide the API key" AutomationProperties.Name="Show API key">
           <Panel>
             <PathIcon Width="16" Height="16" IsVisible="{Binding !ShowApiKey}"
                       Data="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
@@ -89,8 +91,8 @@
         <DockPanel Grid.Row="1" Grid.Column="1">
           <Button DockPanel.Dock="Right" Classes="ghost" Content="↻" Margin="6,0,0,0" VerticalAlignment="Stretch" Command="{Binding CheckServerCommand}"
                   ToolTip.Tip="Ask the server again for its models and context size" />
-          <ComboBox ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                    PlaceholderText="No models: check the server address" />
+          <ComboBox x:Name="ModelBox" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                    PlaceholderText="No models: check the server address" ToolTip.Tip="{Binding ModelToolTip}" />
         </DockPanel>
         <TextBlock Grid.Row="1" Grid.Column="2" Classes="muted" Text="Context" VerticalAlignment="Center" Margin="14,0,8,0" />
         <DockPanel Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="2" ToolTip.Tip="{Binding ContextToolTip}">
@@ -105,12 +107,12 @@
       </Grid>
     </Border>
 
-    <!-- Not connected yet: what to do about it -->
+    <!-- Not connected yet, or the picked model isn't on the server: what to do about it -->
     <Border Grid.Row="2" IsVisible="{Binding ShowSetupBanner}" Background="{StaticResource BbSurfaceRaised}"
             BorderBrush="{StaticResource BbAccent}" BorderThickness="0,0,0,2" Padding="16,12">
       <Grid ColumnDefinitions="*,Auto" MaxWidth="860">
         <StackPanel Spacing="6">
-          <TextBlock Text="BlackBox isn't connected to a model yet" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding SetupTitle}" FontWeight="SemiBold" />
           <TextBlock Classes="muted" Text="{Binding SetupText}" TextWrapping="Wrap" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="12,0,0,0">
@@ -154,7 +156,7 @@
                   <SelectableTextBlock Classes="muted" Text="{Binding ShownReasoning}" TextWrapping="Wrap" />
                 </Expander>
                 <SelectableTextBlock Text="{Binding ShownText}" TextWrapping="Wrap" IsVisible="{Binding HasText}" LineHeight="21" />
-                <TextBlock Classes="muted" Text="…" IsVisible="{Binding ShowTypingDots}" />
+                <TextBlock Classes="muted" Text="{Binding TypingText}" IsVisible="{Binding ShowTypingDots}" />
               </StackPanel>
             </DataTemplate>
 

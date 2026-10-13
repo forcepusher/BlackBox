@@ -84,6 +84,36 @@ public class ChatStoreTests : IDisposable
         Assert.Equal(3, history.Count); // the live conversation is left as it is
     }
 
+    [Fact]
+    public void The_list_reads_only_the_start_of_each_file()
+    {
+        var store = new ChatStore(_dir);
+        var huge = new string('r', 200_000);
+        var history = Enumerable.Range(0, 50).Select(i => new ChatMessage { Role = ChatRole.Assistant, Content = "step", Reasoning = huge }).ToList();
+        var updated = new DateTime(2026, 10, 6, 12, 30, 0, DateTimeKind.Utc);
+        store.Save(new SavedChat { Id = "long-run", Title = "Make a game", Updated = updated, History = history });
+        Assert.True(new FileInfo(Path.Combine(_dir, "long-run.json")).Length > 10_000_000);
+
+        var header = Assert.Single(store.List());
+        Assert.Equal(("long-run", "Make a game", updated), (header.Id, header.Title, header.Updated.ToUniversalTime()));
+    }
+
+    [Fact]
+    public async Task A_chat_is_saved_even_while_another_program_holds_the_file_for_a_moment()
+    {
+        var store = new ChatStore(_dir);
+        store.Save(new SavedChat { Id = "c", Title = "First" });
+        // An antivirus scanner or indexer that has the file open blocks replacing it.
+        var held = new FileStream(Path.Combine(_dir, "c.json"), FileMode.Open, FileAccess.Read, FileShare.Read);
+        var release = Task.Run(async () => { await Task.Delay(120); held.Dispose(); }, TestContext.Current.CancellationToken);
+
+        store.Save(new SavedChat { Id = "c", Title = "Second" });
+
+        await release;
+        Assert.Equal("Second", store.Load("c")!.Title);
+        Assert.False(File.Exists(Path.Combine(_dir, "c.json.tmp")));
+    }
+
     [Theory]
     [InlineData("  Open Notepad  ", "Open Notepad")]
     [InlineData("First line\nsecond line", "First line")]

@@ -44,12 +44,10 @@ public sealed class WebSearchTool : Tool
             sb.Append(i + 1).Append(". ").AppendLine(h.Title.Length > 0 ? h.Title : h.Url);
             sb.Append("   ").AppendLine(h.Url);
             if (h.Snippet.Length > 0)
-                sb.Append("   ").AppendLine(Clip(h.Snippet, 300));
+                sb.Append("   ").AppendLine(h.Snippet.Clip(300));
         }
         return sb.ToString().TrimEnd();
     }
-
-    internal static string Clip(string s, int max) => s.Length <= max ? s : s[..max].TrimEnd() + "…";
 }
 
 public sealed class FetchPageTool : Tool

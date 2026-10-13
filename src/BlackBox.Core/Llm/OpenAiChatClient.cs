@@ -105,14 +105,14 @@ public sealed partial class OpenAiChatClient
         using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
         var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
-            throw new LlmException($"GET /models failed ({(int)resp.StatusCode}): {Truncate(body, 500)}");
+            throw new LlmException($"GET /models failed ({(int)resp.StatusCode}): {body.Clip(500)}");
 
-        var ids = new List<string>();
-        if (JsonNode.Parse(body)?["data"] is JsonArray data)
-            foreach (var m in data)
-                if (m?["id"]?.GetValue<string>() is { } id)
-                    ids.Add(id);
-        return ids;
+        JsonNode? list;
+        try { list = JsonNode.Parse(body); }
+        catch (JsonException) { throw new LlmException("The answer at /models is not a model list (is this the right address?)."); }
+        return list?["data"] is JsonArray data
+            ? data.OfType<JsonObject>().Select(m => GetString(m, "id")).OfType<string>().ToList()
+            : [];
     }
 
     /// <summary>
@@ -154,17 +154,22 @@ public sealed partial class OpenAiChatClient
         {
             if (!resp.IsSuccessStatusCode)
             {
+                var status = (int)resp.StatusCode;
                 var err = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                if (LooksLikeContextOverflow(err))
+                    throw new ContextOverflowException(err.Clip(500));
                 // Strict providers reject fields they do not know. Drop ours and try once more.
-                if ((int)resp.StatusCode is 400 or 422 && (sendReasoning || sendExtras) && LooksLikeUnknownField(err))
+                if (status is 400 or 422 && (sendReasoning || sendExtras) && LooksLikeUnknownField(err))
                 {
                     _reasoningRejected |= sendReasoning;
                     _extrasRejected |= sendExtras;
                     return await CompleteAsync(messages, tools, options, onDelta, ct).ConfigureAwait(false);
                 }
-                if (LooksLikeContextOverflow(err))
-                    throw new ContextOverflowException(Truncate(err, 500));
-                throw new LlmException($"Chat request failed ({(int)resp.StatusCode}): {Truncate(err, 1000)}");
+                // A proxy whose link hiccuped, a server that is restarting or busy: worth sending
+                // again, like a dropped connection, rather than ending a long run.
+                if (status is 429 or >= 500)
+                    throw new ConnectionLostException($"{_baseUrl} answered {status}: {err.Clip(300)}", false);
+                throw new LlmException($"Chat request failed ({status}): {err.Clip(1000)}");
             }
 
             var received = false;
@@ -176,7 +181,8 @@ public sealed partial class OpenAiChatClient
                 return await ReadStreamAsync(reader, d => { received = true; onDelta?.Invoke(d); }, ct,
                     onToolCall: name => { received = true; toolCall = name; }).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is IOException or HttpRequestException || ex is TaskCanceledException && !ct.IsCancellationRequested)
+            // After Stop the read fails too; that is the stop, not a dropped connection to resend on.
+            catch (Exception ex) when (!ct.IsCancellationRequested && ex is IOException or HttpRequestException or TaskCanceledException)
             {
                 throw new ConnectionLostException($"The connection to {_baseUrl} dropped: {ex.Message}", received, ex, toolCall);
             }
@@ -217,8 +223,8 @@ public sealed partial class OpenAiChatClient
 
             if (chunk?["usage"] is JsonObject usage)
             {
-                promptTokens = usage["prompt_tokens"]?.GetValue<int>() ?? promptTokens;
-                completionTokens = usage["completion_tokens"]?.GetValue<int>() ?? completionTokens;
+                promptTokens = GetInt(usage, "prompt_tokens") ?? promptTokens;
+                completionTokens = GetInt(usage, "completion_tokens") ?? completionTokens;
             }
             if (chunk?["choices"] is not JsonArray { Count: > 0 } choices || choices[0] is not JsonObject choice)
                 continue;
@@ -247,7 +253,7 @@ public sealed partial class OpenAiChatClient
                 foreach (var tc in toolCalls)
                 {
                     if (tc is null) continue;
-                    var index = tc["index"]?.GetValue<int>() ?? calls.Count;
+                    var index = GetInt(tc, "index") ?? calls.Count;
                     if (!calls.TryGetValue(index, out var acc))
                         acc = ("", "", new StringBuilder());
                     if (GetString(tc, "id") is { Length: > 0 } id) acc.Id = id;
@@ -431,7 +437,9 @@ public sealed partial class OpenAiChatClient
     private static string? GetString(JsonNode node, string key) =>
         node[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
 
-    private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
+    /// <summary>A whole number, or null for anything else, so an odd value can't break a reply.</summary>
+    private static int? GetInt(JsonNode node, string key) =>
+        node[key] is JsonValue v && v.TryGetValue<int>(out var n) ? n : null;
 
     /// <summary>Gemma 4 marks its thinking as a "thought" channel.</summary>
     [GeneratedRegex(@"<\|channel>thought\s*(.*?)<channel\|>\s*", RegexOptions.Singleline)]

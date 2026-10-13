@@ -10,8 +10,7 @@ public abstract class DesktopActionTool : Tool
 
     public sealed override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
-        var check = ChecksForMiss && ClickCheck.Enabled && ctx.Settings.ScreenshotAfterActions ? ClickCheck.Start(ctx) : null;
-        var text = await ActAsync(args, ctx, ct).ConfigureAwait(false);
+        var (text, check) = await ActAsync(args, ctx, ct).ConfigureAwait(false);
         if (!ctx.Settings.ScreenshotAfterActions)
             return new ToolResult(text);
 
@@ -26,10 +25,13 @@ public abstract class DesktopActionTool : Tool
         return shot with { Text = text + "\n" + shot.Text };
     }
 
-    /// <summary>Whether to tell the model when its action left the screen as it was (see <see cref="ClickCheck"/>).</summary>
-    protected virtual bool ChecksForMiss => false;
+    /// <summary>What an action did; for a click, also the screen just before it, to tell a miss by (see <see cref="ClickCheck"/>).</summary>
+    private protected readonly record struct Acted(string Text, ClickCheck? Check = null)
+    {
+        public static implicit operator Acted(string text) => new(text);
+    }
 
-    protected abstract Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct);
+    private protected abstract Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct);
 
     protected static (int X, int Y) Point(JsonObject args, ToolContext ctx, string xKey = "x", string yKey = "y") =>
         ctx.GetScreenSpace().ToScreen(RequireNumber(args, xKey), RequireNumber(args, yKey));
@@ -40,6 +42,25 @@ public abstract class DesktopActionTool : Tool
 
     protected static string Fmt(JsonObject args, string xKey = "x", string yKey = "y") =>
         $"({GetNumber(args, xKey)}, {GetNumber(args, yKey)})";
+
+    /// <summary>The schema of the keys a click or drag can hold, as a person does to select several things.</summary>
+    protected static JsonObject ModifiersParameter() =>
+        StrArray("Keys to hold down during it, e.g. [\"ctrl\"] to add to a selection, [\"shift\"] to select a range");
+
+    /// <summary>The keys in modifiers ("ctrl", "shift+alt"…); an unknown name is an argument error, found before anything moves.</summary>
+    protected static List<string> Modifiers(JsonObject args, ToolContext? ctx = null)
+    {
+        var keys = (GetStringList(args, "modifiers") ?? []).SelectMany(k => k.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).ToList();
+        if (ctx is not null && keys.Where(k => !ctx.Platform.Input.IsKnownKey(k)).ToList() is { Count: > 0 } unknown)
+            throw new ToolArgumentException($"Unknown key name(s) in modifiers: {string.Join(", ", unknown)}.");
+        return keys;
+    }
+
+    /// <summary>Holds the keys until disposed; with none, nothing is pressed.</summary>
+    protected static IDisposable? Hold(ToolContext ctx, List<string> keys) => keys.Count > 0 ? ctx.Platform.Input.HoldKeys(keys) : null;
+
+    /// <summary>"Ctrl+Shift" for a description.</summary>
+    protected static string Held(List<string> keys) => string.Join("+", keys.Select(OverlayInputController.KeyName));
 }
 
 public sealed class ScreenshotTool : Tool
@@ -98,28 +119,36 @@ public sealed class MouseClickTool : DesktopActionTool
         ("x", Num("X in screenshot coordinates"), true),
         ("y", Num("Y in screenshot coordinates"), true),
         ("button", Str("Mouse button, default left", "left", "right", "middle"), false),
-        ("clicks", Int("1 = single click (default), 2 = double click, 3 = triple click"), false));
+        ("clicks", Int("1 = single click (default), 2 = double click, 3 = triple click"), false),
+        ("modifiers", ModifiersParameter(), false));
 
     public override string Describe(JsonObject args)
     {
         var clicks = (int)(GetNumber(args, "clicks") ?? 1);
         var kind = clicks switch { 2 => "Double-click", 3 => "Triple-click", _ => "Click" };
+        if (Modifiers(args) is { Count: > 0 } held)
+            kind = Held(held) + "+" + kind.ToLowerInvariant();
         var button = GetString(args, "button") is { } b && b != "left" ? $" ({b})" : "";
         return GetString(args, "target") is { Length: > 0 } t ? $"{kind}{button} {t}" : $"{kind}{button} at {Fmt(args)}";
     }
 
-    protected override bool ChecksForMiss => true;
-
-    protected override async Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    private protected override async Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
+        var modifiers = Modifiers(args, ctx);
         var (point, note) = await AimAsync(args, ctx, ct).ConfigureAwait(false);
         var button = ParseButton(GetString(args, "button"));
         var clicks = Math.Clamp((int)(GetNumber(args, "clicks") ?? 1), 1, 3);
+        // The screen just before the click, not before the look: what changed while the model
+        // looked (some 15 s) is no reaction to the click.
+        var check = ClickCheck.Enabled && ctx.Settings.ScreenshotAfterActions ? ClickCheck.Start(ctx) : null;
         using var aside = Aside(ctx, point);
         ctx.Platform.Input.MoveMouse(point.X, point.Y);
-        await Task.Delay(60, ct).ConfigureAwait(false);
-        ctx.Platform.Input.Click(button, clicks);
-        return note + clicks switch { 2 => "Double-clicked.", 3 => "Triple-clicked.", _ => "Clicked." };
+        using (Hold(ctx, modifiers))
+        {
+            await Task.Delay(60, ct).ConfigureAwait(false);
+            ctx.Platform.Input.Click(button, clicks);
+        }
+        return new(note + clicks switch { 2 => "Double-clicked.", 3 => "Triple-clicked.", _ => "Clicked." }, check);
     }
 
     /// <summary>
@@ -139,7 +168,7 @@ public sealed class MouseClickTool : DesktopActionTool
             return (space.ToScreen(p.X, p.Y), "");
         return given is { } g
             ? (g, $"BlackBox could not find the {target} on the screen by name, so it clicked at your x, y. ")
-            : throw new ToolArgumentException($"BlackBox could not find the {target} on the screen. Name it differently, or give x and y.");
+            : throw new InvalidOperationException($"BlackBox could not find the {target} on the screen. Name it differently, or give x and y.");
     }
 
     internal static MouseButton ParseButton(string? s) => s?.ToLowerInvariant() switch
@@ -157,12 +186,12 @@ public sealed class MouseMoveTool : DesktopActionTool
     public override JsonObject Parameters => Schema(("x", Num("X in screenshot coordinates"), true), ("y", Num("Y in screenshot coordinates"), true));
     public override string Describe(JsonObject args) => $"Move mouse to {Fmt(args)}";
 
-    protected override Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    private protected override Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var (x, y) = Point(args, ctx);
         using var aside = Aside(ctx, (x, y));
         ctx.Platform.Input.MoveMouse(x, y);
-        return Task.FromResult("Moved the mouse.");
+        return Task.FromResult<Acted>("Moved the mouse.");
     }
 }
 
@@ -172,16 +201,20 @@ public sealed class MouseDragTool : DesktopActionTool
     public override string Description => "Press the left button at (x, y), drag to (to_x, to_y) and release. Screenshot coordinates.";
     public override JsonObject Parameters => Schema(
         ("x", Num("Start X"), true), ("y", Num("Start Y"), true),
-        ("to_x", Num("End X"), true), ("to_y", Num("End Y"), true));
-    public override string Describe(JsonObject args) => $"Drag from {Fmt(args)} to {Fmt(args, "to_x", "to_y")}";
+        ("to_x", Num("End X"), true), ("to_y", Num("End Y"), true),
+        ("modifiers", ModifiersParameter(), false));
+    public override string Describe(JsonObject args) =>
+        $"Drag from {Fmt(args)} to {Fmt(args, "to_x", "to_y")}" + (Modifiers(args) is { Count: > 0 } held ? $" holding {Held(held)}" : "");
 
-    protected override async Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    private protected override async Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
+        var modifiers = Modifiers(args, ctx);
         var (x1, y1) = Point(args, ctx);
         var (x2, y2) = Point(args, ctx, "to_x", "to_y");
         var input = ctx.Platform.Input;
         using var aside = Aside(ctx, (x1, y1), (x2, y2));
         input.MoveMouse(x1, y1);
+        using var held = Hold(ctx, modifiers);
         await Task.Delay(80, ct).ConfigureAwait(false);
         input.MouseDown(MouseButton.Left);
         try
@@ -214,7 +247,7 @@ public sealed class ScrollTool : DesktopActionTool
     public override string Describe(JsonObject args) =>
         $"Scroll {GetString(args, "direction")} x{GetNumber(args, "amount") ?? 3}" + (args["x"] is not null ? $" at {Fmt(args)}" : "");
 
-    protected override Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    private protected override Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var at = ctx.Platform.Input.GetCursorPosition();
         if (args["x"] is not null && args["y"] is not null)
@@ -233,7 +266,7 @@ public sealed class ScrollTool : DesktopActionTool
             var d => throw new ToolArgumentException($"Unknown direction '{d}'."),
         };
         ctx.Platform.Input.Scroll(dx, dy);
-        return Task.FromResult(Describe(args) + " done.");
+        return Task.FromResult<Acted>(Describe(args) + " done.");
     }
 }
 
@@ -243,18 +276,14 @@ public sealed class TypeTextTool : DesktopActionTool
     public override string Description =>
         "Type text into the focused control, exactly as given. Use \\n for Enter. Click the target field first.";
     public override JsonObject Parameters => Schema(("text", Str("Text to type"), true));
-    public override string Describe(JsonObject args)
-    {
-        var t = GetString(args, "text") ?? "";
-        return $"Type \"{(t.Length > 60 ? t[..60] + "…" : t)}\"";
-    }
+    public override string Describe(JsonObject args) => $"Type \"{(GetString(args, "text") ?? "").Clip(60)}\"";
 
-    protected override Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    private protected override Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var text = RequireString(args, "text");
         ctx.Platform.HostWindow.YieldFocus();
         ctx.Platform.Input.TypeText(text);
-        return Task.FromResult($"Typed {text.Length} characters.");
+        return Task.FromResult<Acted>($"Typed {text.Length} characters.");
     }
 }
 
@@ -263,24 +292,30 @@ public sealed class PressKeysTool : DesktopActionTool
     /// <summary>Pause between the presses of a sequence, so apps (and game animations) keep up.</summary>
     private const int DefaultGapMs = 150;
 
+    /// <summary>Longest a press may be held.</summary>
+    private const int MaxHoldSeconds = 60;
+
     public override string Name => "press_keys";
     public override string Description =>
         "Press a key or shortcut, or a whole series of them in one go. For one chord give its keys in order, e.g. [\"ctrl\",\"c\"], [\"alt\",\"tab\"], [\"enter\"]. " +
         "For several presses one after another, give sequence instead, e.g. [\"left\",\"down\",\"left\",\"tab\",\"ctrl+s\"]: much faster than one call per key. " +
+        "To keep keys down for a while (walking in a game, a long press), give hold_seconds. " +
         "Names: ctrl, alt, shift, win, enter, esc, tab, backspace, delete, space, up, down, left, right, home, end, pageup, pagedown, f1-f12, a-z, 0-9.";
     public override JsonObject Parameters => Schema(
         ("keys", StrArray("Keys of one chord, modifiers first"), false),
         ("sequence", StrArray("Presses to make one after another; each is a key or a chord like ctrl+s. Use instead of keys."), false),
         ("repeat", Int("How many times to press the chord or run the sequence, default 1"), false),
-        ("gap_ms", Int($"Pause between presses in milliseconds, default {DefaultGapMs}"), false));
+        ("gap_ms", Int($"Pause between presses in milliseconds, default {DefaultGapMs}"), false),
+        ("hold_seconds", Num($"Keep each press held down this long before letting go, e.g. [\"w\"] for 2 seconds to walk forward (max {MaxHoldSeconds}); default: a quick press"), false));
 
     public override string Describe(JsonObject args)
     {
         var repeat = GetNumber(args, "repeat") is > 1 and var r ? $" x{r}" : "";
+        var hold = GetNumber(args, "hold_seconds") is > 0 and var h ? $", held {h}s" : "";
         var sequence = Sequence(args);
         return sequence.Count > 0
-            ? $"Press {sequence.Count} keys: {string.Join(" ", sequence.Select(c => string.Join("+", c)))}{repeat}"
-            : $"Press {string.Join("+", Keys(args))}{repeat}";
+            ? $"Press {sequence.Count} keys: {string.Join(" ", sequence.Select(c => string.Join("+", c)))}{repeat}{hold}"
+            : $"Press {string.Join("+", Keys(args))}{repeat}{hold}";
     }
 
     private static List<string> Keys(JsonObject args)
@@ -296,7 +331,7 @@ public sealed class PressKeysTool : DesktopActionTool
     private static string[] Split(string chord) =>
         chord.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    protected override async Task<string> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    private protected override async Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var presses = Sequence(args);
         if (presses.Count == 0 && Keys(args) is { Count: > 0 } chord)
@@ -309,11 +344,20 @@ public sealed class PressKeysTool : DesktopActionTool
 
         var repeat = Math.Clamp((int)(GetNumber(args, "repeat") ?? 1), 1, 100);
         var gap = Math.Clamp((int)(GetNumber(args, "gap_ms") ?? (presses.Count > 1 ? DefaultGapMs : 40)), 0, 5000);
+        var hold = TimeSpan.FromSeconds(Math.Clamp(GetNumber(args, "hold_seconds") ?? 0, 0, MaxHoldSeconds));
         ctx.Platform.HostWindow.YieldFocus();
         var total = repeat * presses.Count;
         for (var i = 0; i < total; i++)
         {
-            ctx.Platform.Input.PressKeys(presses[i % presses.Count]);
+            var press = presses[i % presses.Count];
+            if (hold > TimeSpan.Zero)
+            {
+                // Released on Stop too, so no key is left held down.
+                using (ctx.Platform.Input.HoldKeys(press))
+                    await Task.Delay(hold, ct).ConfigureAwait(false);
+            }
+            else
+                ctx.Platform.Input.PressKeys(press);
             if (i < total - 1)
                 await Task.Delay(gap, ct).ConfigureAwait(false);
         }
@@ -323,17 +367,51 @@ public sealed class PressKeysTool : DesktopActionTool
 
 public sealed class WaitTool : Tool
 {
+    private const int MaxSeconds = 600;
+
+    /// <summary>How often the screen is looked at while waiting for a change.</summary>
+    private static readonly TimeSpan Poll = TimeSpan.FromSeconds(1);
+
     public override string Name => "wait";
-    public override string Description => "Wait for a number of seconds (max 30), e.g. for an app to load, then take a screenshot.";
+    public override string Description =>
+        $"Wait, then take a screenshot. With until_change it stops as soon as the screen changes (a reply arrives in a chat, a window or page finishes loading), " +
+        $"waiting at most seconds; without it, it waits the whole time. Max {MaxSeconds} seconds.";
     public override ToolRisk Risk => ToolRisk.ReadOnly;
-    public override JsonObject Parameters => Schema(("seconds", Num("Seconds to wait"), true));
-    public override string Describe(JsonObject args) => $"Wait {GetNumber(args, "seconds")}s";
+    public override JsonObject Parameters => Schema(
+        ("seconds", Num($"Seconds to wait, at most {MaxSeconds}"), true),
+        ("until_change", Bool("Stop waiting as soon as something on the screen changes (default false)"), false));
+    public override string Describe(JsonObject args) =>
+        GetBool(args, "until_change") ? $"Wait up to {GetNumber(args, "seconds")}s for the screen to change" : $"Wait {GetNumber(args, "seconds")}s";
 
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
-        var seconds = Math.Clamp(GetNumber(args, "seconds") ?? 1, 0.1, 30);
-        await Task.Delay(TimeSpan.FromSeconds(seconds), ct).ConfigureAwait(false);
+        var seconds = TimeSpan.FromSeconds(Math.Clamp(GetNumber(args, "seconds") ?? 1, 0.1, MaxSeconds));
+        string waited;
+        if (GetBool(args, "until_change"))
+            waited = await WaitForChangeAsync(ctx, seconds, ct).ConfigureAwait(false) is { } after
+                ? $"The screen changed after {after.TotalSeconds:0.#}s."
+                : $"Waited {seconds.TotalSeconds:0.#}s; nothing on the screen changed.";
+        else
+        {
+            await Task.Delay(seconds, ct).ConfigureAwait(false);
+            waited = $"Waited {seconds.TotalSeconds:0.#}s.";
+        }
         var shot = ScreenshotTool.Take(ctx);
-        return shot with { Text = $"Waited {seconds:0.#}s.\n{shot.Text}" };
+        return shot with { Text = $"{waited}\n{shot.Text}" };
+    }
+
+    /// <summary>How long it took the screen to change, or null if it didn't within <paramref name="limit"/>.</summary>
+    private static async Task<TimeSpan?> WaitForChangeAsync(ToolContext ctx, TimeSpan limit, CancellationToken ct)
+    {
+        var screen = ctx.GetScreenSpace().Screen;
+        var first = ctx.Platform.Screen.Capture(screen, includeCursor: false);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (limit - clock.Elapsed is var left && left > TimeSpan.Zero)
+        {
+            await Task.Delay(left < Poll ? left : Poll, ct).ConfigureAwait(false);
+            if (ClickCheck.Differ(first, ctx.Platform.Screen.Capture(screen, includeCursor: false)))
+                return clock.Elapsed;
+        }
+        return null;
     }
 }

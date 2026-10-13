@@ -118,6 +118,25 @@ internal sealed class WindowsInputController : IInputController
         Send(inputs.ToArray());
     }
 
+    public IDisposable HoldKeys(IReadOnlyList<string> keys)
+    {
+        var vks = keys.Select(k => ResolveKey(k) ?? throw new ArgumentException($"Unknown key '{k}'.")).ToList();
+        Send(vks.Select(vk => VkInput(vk, up: false)).ToArray());
+        return new Release(vks);
+    }
+
+    /// <summary>Lets go of held keys, once, in reverse order.</summary>
+    private sealed class Release(List<ushort> vks) : IDisposable
+    {
+        private int _released;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _released, 1) == 0)
+                Send(Enumerable.Reverse(vks).Select(vk => VkInput(vk, up: true)).ToArray());
+        }
+    }
+
     public bool IsKnownKey(string key) => ResolveKey(key) is not null;
 
     private static ushort? ResolveKey(string key)

@@ -1,5 +1,4 @@
 using System.Text.Json.Nodes;
-using BlackBox.Core.Llm;
 using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
@@ -77,7 +76,8 @@ public class ToolTests
         found = (5000, 20);
         await click.ExecuteAsync(new JsonObject { ["target"] = "Save button", ["x"] = 10, ["y"] = 20 }, ctx, CancellationToken.None);
         Assert.Equal("move 20,41", platform.Actions[4]);
-        await Assert.ThrowsAsync<ToolArgumentException>(() => click.ExecuteAsync(new JsonObject { ["target"] = "Save button" }, ctx, CancellationToken.None));
+        // Not found and no x/y: an error for the model, not an argument problem (no parameter list).
+        await Assert.ThrowsAsync<InvalidOperationException>(() => click.ExecuteAsync(new JsonObject { ["target"] = "Save button" }, ctx, CancellationToken.None));
 
         // No target: exactly x/y, without a look.
         looked = null;
@@ -109,6 +109,15 @@ public class ToolTests
         Assert.Contains("Nothing on screen changed", (await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None)).Text);
         platform.OnClick = p => { for (var y = 120; y < 160; y++) for (var x = 300; x < 340; x++) p.Desktop!.Bgra[(y * 384 + x) * 4] ^= 255; };
         Assert.DoesNotContain("Nothing on screen changed", (await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None)).Text);
+
+        // What changes while the model looks for the target (a dialog closing elsewhere) is no reaction to the click.
+        platform.OnClick = null;
+        ctx.Locate = (_, _, _) =>
+        {
+            for (var y = 120; y < 160; y++) for (var x = 300; x < 340; x++) platform.Desktop!.Bgra[(y * 384 + x) * 4] ^= 255;
+            return Task.FromResult<(double X, double Y)?>((100, 50));
+        };
+        Assert.Contains("Nothing on screen changed", (await new MouseClickTool().ExecuteAsync(new JsonObject { ["target"] = "OK button", ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None)).Text);
     }
 
     [Fact]
@@ -168,6 +177,73 @@ public class ToolTests
         Assert.DoesNotContain("Screens:", BlackBox.Core.Agent.SystemPrompt.Build("Test OS", [spaces[0]], "C:\\", ""));
     }
 
+
+    [Fact]
+    public async Task Clicks_and_drags_can_hold_keys_like_a_person_selecting_things()
+    {
+        var platform = new FakePlatform();
+        var click = new MouseClickTool();
+        var args = new JsonObject { ["x"] = 10, ["y"] = 20, ["modifiers"] = new JsonArray("ctrl") };
+        Assert.Equal("Ctrl+click at (10, 20)", click.Describe(args));
+
+        await click.ExecuteAsync(args, Ctx(platform), CancellationToken.None);
+        Assert.Equal(["move 10,21", "hold ctrl", "click Left x1", "release ctrl"], platform.Actions); // 200x100 is sent as 192x96
+
+        platform.Actions.Clear();
+        await new MouseDragTool().ExecuteAsync(new JsonObject { ["x"] = 0, ["y"] = 0, ["to_x"] = 50, ["to_y"] = 50, ["modifiers"] = "shift" }, Ctx(platform), CancellationToken.None);
+        Assert.Equal("hold shift", platform.Actions[1]);
+        Assert.Equal("down Left", platform.Actions[2]);
+        Assert.Equal(["up Left", "release shift"], platform.Actions[^2..]);
+
+        // A key name the platform doesn't know is caught before anything moves.
+        platform.Actions.Clear();
+        await Assert.ThrowsAsync<ToolArgumentException>(() => click.ExecuteAsync(new JsonObject { ["x"] = 1, ["y"] = 1, ["modifiers"] = new JsonArray("nokey") }, Ctx(platform), CancellationToken.None));
+        Assert.Empty(platform.Actions);
+    }
+
+    [Fact]
+    public async Task Press_keys_can_hold_keys_down()
+    {
+        var platform = new FakePlatform();
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        var result = await new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = new JsonArray("shift", "w"), ["hold_seconds"] = 0.3 }, Ctx(platform), CancellationToken.None);
+        Assert.Equal(["hold shift+w", "release shift+w"], platform.Actions);
+        Assert.True(started.ElapsedMilliseconds >= 280, $"held for {started.ElapsedMilliseconds} ms");
+        Assert.Equal("Press shift+w, held 0.3s done.", result.Text);
+
+        // Stopped mid-hold: the keys still come up.
+        platform.Actions.Clear();
+        using var stop = new CancellationTokenSource(100);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = "w", ["hold_seconds"] = 10 }, Ctx(platform), stop.Token));
+        Assert.Equal(["hold w", "release w"], platform.Actions);
+    }
+
+    [Fact]
+    public async Task Wait_can_stop_as_soon_as_the_screen_changes()
+    {
+        var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 320, 160), Desktop = new RawImage(320, 160, new byte[320 * 160 * 4]) };
+        var ctx = Ctx(platform);
+        var wait = new WaitTool();
+
+        // A message arrives in a chat 300 ms in: a block of new pixels.
+        var arrive = Task.Run(async () =>
+        {
+            await Task.Delay(300);
+            for (var y = 100; y < 140; y++) for (var x = 20; x < 220; x++) platform.Desktop!.Bgra[(y * 320 + x) * 4 + 1] = 200;
+        }, TestContext.Current.CancellationToken);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var changed = await wait.ExecuteAsync(new JsonObject { ["seconds"] = 60, ["until_change"] = true }, ctx, CancellationToken.None);
+        await arrive;
+        Assert.StartsWith("The screen changed after", changed.Text);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), $"took {clock.Elapsed}");
+        Assert.NotNull(changed.Image);
+
+        // A tiny change (a blinking caret) isn't one.
+        var caret = Task.Run(async () => { await Task.Delay(200); platform.Desktop!.Bgra[(10 * 320 + 10) * 4] = 255; }, TestContext.Current.CancellationToken);
+        var quiet = await wait.ExecuteAsync(new JsonObject { ["seconds"] = 1.5, ["until_change"] = true }, ctx, CancellationToken.None);
+        await caret;
+        Assert.StartsWith("Waited 1.5s; nothing on the screen changed.", quiet.Text);
+    }
 
     [Fact]
     public async Task Press_keys_accepts_plus_separated_strings()
@@ -238,6 +314,82 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task Edit_file_matches_windows_line_endings_and_keeps_the_encoding()
+    {
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        var file = Path.Combine(dir, "Game.cs");
+        // Saved by Visual Studio or Unity: a UTF-8 signature and \r\n, while the model writes \n.
+        File.WriteAllText(file, "class Game\r\n{\r\n    int score;\r\n}\r\n", new System.Text.UTF8Encoding(true));
+        var tool = new EditFileTool();
+
+        var result = await tool.ExecuteAsync(new JsonObject { ["path"] = file, ["old_text"] = "{\n    int score;\n}", ["new_text"] = "{\n    int score;\n    int best;\n}" }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+
+        Assert.False(result.IsError, result.Text);
+        var bytes = File.ReadAllBytes(file);
+        Assert.Equal([0xEF, 0xBB, 0xBF], bytes[..3]);
+        Assert.Equal("class Game\r\n{\r\n    int score;\r\n    int best;\r\n}\r\n", System.Text.Encoding.UTF8.GetString(bytes[3..]));
+    }
+
+    [Fact]
+    public async Task Edit_file_replaces_every_occurrence_when_asked()
+    {
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        var file = Path.Combine(dir, "a.txt");
+        File.WriteAllText(file, "speed = speed + 1; // speed");
+        var tool = new EditFileTool();
+
+        var once = await tool.ExecuteAsync(new JsonObject { ["path"] = file, ["old_text"] = "speed", ["new_text"] = "velocity" }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+        Assert.True(once.IsError);
+        Assert.Contains("3 times", once.Text);
+
+        var all = await tool.ExecuteAsync(new JsonObject { ["path"] = file, ["old_text"] = "speed", ["new_text"] = "velocity", ["replace_all"] = true }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+        Assert.Equal($"Edited {file}: replaced 3 occurrences.", all.Text);
+        Assert.Equal("velocity = velocity + 1; // velocity", File.ReadAllText(file));
+    }
+
+    [Fact]
+    public async Task Read_file_reads_a_part_of_a_long_file_and_turns_down_binary_ones()
+    {
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        var log = Path.Combine(dir, "big.log");
+        File.WriteAllLines(log, Enumerable.Range(1, 100_000).Select(i => $"line {i}"));
+        var tool = new ReadFileTool();
+
+        var part = (await tool.ExecuteAsync(new JsonObject { ["path"] = log, ["offset"] = 50_000, ["limit"] = 2 }, Ctx(new FakePlatform(), dir), CancellationToken.None)).Text;
+        Assert.Equal("50000\tline 50000\n50001\tline 50001\n[showing lines 50000-50001 of 100000; use offset to read more]\n", part.ReplaceLineEndings("\n"));
+        var past = await tool.ExecuteAsync(new JsonObject { ["path"] = log, ["offset"] = 200_000 }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+        Assert.Equal("The file has only 100000 lines.", past.Text);
+
+        var png = Path.Combine(dir, "picture.png");
+        File.WriteAllBytes(png, TestPng);
+        var binary = await tool.ExecuteAsync(new JsonObject { ["path"] = png }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+        Assert.True(binary.IsError);
+        Assert.Contains("not a text file", binary.Text);
+
+        // UTF-16 text has zero bytes too, but it is text.
+        var wide = Path.Combine(dir, "wide.txt");
+        File.WriteAllText(wide, "hello", System.Text.Encoding.Unicode);
+        Assert.Equal("1\thello", (await tool.ExecuteAsync(new JsonObject { ["path"] = wide }, Ctx(new FakePlatform(), dir), CancellationToken.None)).Text.TrimEnd());
+    }
+
+    private static readonly byte[] TestPng = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==");
+
+    [Fact]
+    public async Task A_directory_search_stops_on_stop()
+    {
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        File.WriteAllText(Path.Combine(dir, "a.txt"), "x");
+        using var stopped = new CancellationTokenSource();
+        stopped.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new ListDirectoryTool().ExecuteAsync(new JsonObject { ["path"] = dir, ["pattern"] = "*.nothing" }, Ctx(new FakePlatform(), dir), stopped.Token));
+
+        var found = await new ListDirectoryTool().ExecuteAsync(new JsonObject { ["path"] = dir, ["pattern"] = "*.TXT" }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+        Assert.Contains("a.txt  (1 bytes)", found.Text);
+    }
+
+    [Fact]
     public void Settings_from_the_local_model_versions_are_migrated_and_cleaned()
     {
         var root = Directory.CreateTempSubdirectory("bb-settings-").FullName;
@@ -272,7 +424,7 @@ public class ToolTests
 #else
         var platform = new BlackBox.Platform.Windows.WindowsPlatform();
 #endif
-        var screen = platform.Screen.GetPrimaryScreen();
+        var screen = platform.Screen.GetScreens()[0];
         Assert.True(screen.Width >= 640 && screen.Height >= 480);
 
         var result = await new ScreenshotTool().ExecuteAsync([], Ctx(platform), CancellationToken.None);
@@ -289,7 +441,7 @@ public class ToolTests
 #else
         var capture = new BlackBox.Platform.Windows.WindowsPlatform().Screen;
         var screens = capture.GetScreens();
-        Assert.Equal(capture.GetPrimaryScreen(), screens[0]);
+        Assert.Equal((0, 0), (screens[0].X, screens[0].Y)); // the primary, which Windows puts at the origin
         // Every monitor can be captured, not just the primary.
         foreach (var screen in screens)
             Assert.Equal(screen.Width * screen.Height * 4, capture.Capture(screen, includeCursor: false).Bgra.Length);
@@ -321,6 +473,31 @@ public class ToolTests
         Assert.Same(pressed.Task, await Task.WhenAny(pressed.Task, Task.Delay(3000, TestContext.Current.CancellationToken)));
 #endif
     }
+
+    [Fact]
+    public async Task Held_keys_stay_down_on_windows_until_let_go()
+    {
+#if !WINDOWS
+        Assert.Skip("Windows only");
+        await Task.CompletedTask;
+#else
+        // F24: on every keyboard layout, and no app reacts to it. Games read the key state, which is what holding sets.
+        static bool Down() => (GetAsyncKeyState(0x87) & 0x8000) != 0;
+        var input = new BlackBox.Platform.Windows.WindowsPlatform().Input;
+        using (input.HoldKeys(["f24"]))
+        {
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+            Assert.True(Down());
+        }
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        Assert.False(Down());
+#endif
+    }
+
+#if WINDOWS
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vk);
+#endif
 
     [Fact]
     public async Task Shell_on_windows_returns_utf8_output()
@@ -371,6 +548,7 @@ public class OverlayInputTests
         input.PressKeys(["left"]);
         input.TypeText("hello\nworld, this is a long line that keeps going and going");
         input.Scroll(0, 3);
+        input.HoldKeys(["ctrl"]).Dispose();
 
         Assert.Equal("Left double click", overlay.Shown[0].Text);
         Assert.Equal((40, 30), overlay.Shown[0].Point);
@@ -379,6 +557,8 @@ public class OverlayInputTests
         Assert.Equal("Type “hello⏎world, this is a long line that ke…”", overlay.Shown[3].Text);
         Assert.Null(overlay.Shown[3].Point);
         Assert.Equal("Scroll down 3", overlay.Shown[4].Text);
+        Assert.Equal("Hold Ctrl", overlay.Shown[5].Text);
         Assert.Contains("click Left x2", platform.Actions); // the real input still happened
+        Assert.Equal(["hold ctrl", "release ctrl"], platform.Actions[^2..]);
     }
 }

@@ -36,6 +36,6 @@ foreach ($name in $tasks.Keys) {
   $c = Get-Content $log
   "{0,-7} {1,5:N0}s calls={2,3} errors={3,2} recovered={4,2} cut={5} | {6}" -f $name, $sw.Elapsed.TotalSeconds,
     ($c | Select-String '^\[call\]').Count, ($c | Select-String '^\[result\].*(not valid|Missing|Unknown tool|Failed|Exit code [1-9])').Count,
-    ($c | Select-String 'recovered from text').Count, ($c | Select-String 'thinking cut short').Count,
+    ($c | Select-String 'recovered from text').Count, ($c | Select-String 'thinking started repeating').Count,
     (($c | Select-String '^\[done\]' | Select -Last 1).Line)
 }

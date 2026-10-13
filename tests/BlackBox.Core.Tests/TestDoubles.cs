@@ -69,9 +69,12 @@ internal sealed class RecordingObserver : IAgentObserver
     public AgentStopReason? StopReason { get; private set; }
     public string? Detail { get; private set; }
 
-    public void OnStepStarted(int step) { }
+    /// <summary>Step starts and replies in order: "step 1", "reply Done.".</summary>
+    public List<string> Events { get; } = [];
+
+    public void OnStepStarted(int step) => Events.Add($"step {step}");
     public void OnDelta(StreamDelta delta) { }
-    public void OnAssistantMessage(ChatMessage message) { }
+    public void OnAssistantMessage(ChatMessage message) => Events.Add("reply " + message.Content);
 
     public Task<bool> RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct)
     {
@@ -113,7 +116,6 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     public List<ScreenRect> Captures { get; } = [];
     public IStopKey StopKey => NoStopKey.Instance;
 
-    public ScreenRect GetPrimaryScreen() => ScreenBounds;
     public IReadOnlyList<ScreenRect> GetScreens() => Screens ?? [ScreenBounds];
     /// <summary>What the screens show, if anything (black otherwise), with its top-left corner at <see cref="DesktopOrigin"/>.</summary>
     public RawImage? Desktop { get; set; }
@@ -151,5 +153,16 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     public void Scroll(int dx, int dy) => Actions.Add($"scroll {dx},{dy}");
     public void TypeText(string text) => Actions.Add($"type {text}");
     public void PressKeys(IReadOnlyList<string> keys) => Actions.Add("keys " + string.Join("+", keys));
-    public bool IsKnownKey(string key) => key.Length > 0;
+    public IDisposable HoldKeys(IReadOnlyList<string> keys)
+    {
+        var chord = string.Join("+", keys);
+        Actions.Add("hold " + chord);
+        return new Released(() => Actions.Add("release " + chord));
+    }
+    public bool IsKnownKey(string key) => key.Length > 0 && key != "nokey";
+
+    private sealed class Released(Action onRelease) : IDisposable
+    {
+        public void Dispose() => onRelease();
+    }
 }

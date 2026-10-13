@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -251,6 +250,110 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task Server_errors_and_busy_answers_are_sent_again_like_drops()
+    {
+        var server = new ScriptedServer(Sse.Text("Made it."));
+        server.Failures.Enqueue((HttpStatusCode.BadGateway, "upstream connection reset"));
+        server.Failures.Enqueue(((HttpStatusCode)429, """{"error":"busy"}"""));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("go", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(3, server.Requests.Count);
+        Assert.Equal(server.Requests[0].ToJsonString(), server.Requests[2].ToJsonString());
+        Assert.Contains(observer.Notices, n => n.Contains("answered 502"));
+    }
+
+    [Fact]
+    public async Task A_tool_that_fails_in_an_unexpected_way_reports_it_and_the_run_goes_on()
+    {
+        var server = new ScriptedServer(Sse.ToolCall("b1", "broken", "{}"), Sse.Text("I'll try something else."));
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null),
+            new ChatRequestOptions(), new ToolRegistry([new ThrowingTool()]), ctx, "sys");
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("go", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.True(observer.Results[0].IsError);
+        Assert.Contains("the format was odd", observer.Results[0].Text);
+    }
+
+    private sealed class ThrowingTool : Tool
+    {
+        public override string Name => "broken";
+        public override string Description => "Always throws.";
+        public override ToolRisk Risk => ToolRisk.ReadOnly;
+        public override JsonObject Parameters => Schema();
+        public override Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct) => throw new FormatException("the format was odd");
+    }
+
+    [Fact]
+    public async Task A_reply_cut_by_the_servers_length_cap_is_continued_not_reset()
+    {
+        // 6k of a 100k context: the server stopped at its reply-length limit, not at the context's end.
+        var capped = "data: " + new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["reasoning_content"] = "Long thoughts" }, ["finish_reason"] = "length" }) }.ToJsonString() +
+                     "\n\ndata: " + new JsonObject { ["choices"] = new JsonArray(), ["usage"] = new JsonObject { ["prompt_tokens"] = 2_000, ["completion_tokens"] = 4_096 } }.ToJsonString() + "\n\ndata: [DONE]\n\n";
+        var server = new ScriptedServer(capped, Sse.Text("Done."));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 100_000);
+
+        await session.RunAsync("think hard", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count); // no handoff request in between
+        Assert.Contains(observer.Notices, n => n.Contains("length limit"));
+        Assert.Contains(session.History, m => m.Reasoning == "Long thoughts"); // kept, and the model asked to go on
+        Assert.StartsWith("Continue with the task", LastText(server.Requests[1]));
+    }
+
+    [Fact]
+    public async Task Nudges_start_over_once_the_model_is_moving_again()
+    {
+        // Three stalls in one run, with steps in between: each one gets its nudge.
+        var server = new ScriptedServer(
+            Sse.Text("Let me look."), Sse.ToolCall("w1", "wait", """{"seconds":0}"""),
+            Sse.Text("Let me look again."), Sse.ToolCall("w2", "wait", """{"seconds":0}"""),
+            Sse.Text("Let me check once more."), Sse.ToolCall("w3", "wait", """{"seconds":0}"""),
+            Sse.Text("Done."));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("go", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(7, server.Requests.Count);
+        Assert.Equal("Done.", session.History[^1].Content);
+    }
+
+    [Fact]
+    public async Task Only_the_result_whose_screenshot_follows_says_so()
+    {
+        var calls = new JsonArray(
+            new JsonObject { ["index"] = 0, ["id"] = "a", ["function"] = new JsonObject { ["name"] = "screenshot", ["arguments"] = "{}" } },
+            new JsonObject { ["index"] = 1, ["id"] = "b", ["function"] = new JsonObject { ["name"] = "screenshot", ["arguments"] = "{}" } });
+        var both = $"data: {new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["tool_calls"] = calls } }) }.ToJsonString()}\n\ndata: [DONE]\n\n";
+        var server = new ScriptedServer(both, Sse.Text("Done."));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("look twice", observer, CancellationToken.None);
+
+        var results = session.History.Where(m => m.Role == ChatRole.Tool).ToList();
+        Assert.DoesNotContain("attached", results[0].Content);
+        Assert.EndsWith("(The screenshot is attached in the next message.)", results[1].Content);
+        Assert.Equal(1, Images(server.Requests[1]));
+    }
+
+    [Fact]
+    public void The_system_prompt_is_the_same_all_day()
+    {
+        // It starts every request; a clock in it would make the server reread a whole chat at each message.
+        var prompt = SystemPrompt.Build("Test OS", null, "C:\\", "");
+        Assert.Contains(DateTime.Now.ToString("d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture), prompt);
+        Assert.DoesNotMatch(@"\d{1,2}:\d{2}", prompt);
+    }
+
+    [Fact]
     public async Task A_tool_call_lost_to_a_drop_makes_the_model_write_in_parts()
     {
         // LM Studio sends a call's name first and its arguments only when the call is complete;
@@ -357,6 +460,39 @@ public class AgentSessionTests
         Assert.Contains(observer.Notices, n => n.StartsWith("Context reset"));
     }
 
+    [Theory]
+    [InlineData(100_000, 80_000)]  // a fifth stays free
+    [InlineData(65_536, 49_152)]   // at least 16k
+    [InlineData(32_768, 16_384)]
+    [InlineData(16_384, 8_192)]    // but never more than half: 16k free of 16k reset before every step
+    [InlineData(8_192, 4_096)]
+    public void The_context_is_reset_with_room_left_for_the_reply_and_the_note(int context, int threshold)
+    {
+        var (session, _) = CreateSession(new ScriptedServer(), Path.GetTempPath(), new FakePlatform(), contextTokens: context);
+        Assert.Equal(threshold, session.ResetThreshold);
+    }
+
+    [Fact]
+    public async Task After_a_reset_the_next_reply_gets_a_step_of_its_own()
+    {
+        // The window shows each step's reply in its own bubble; a reply right after the handoff
+        // note, with no step between them, went into the note's finished bubble and never showed.
+        var server = new ScriptedServer
+        {
+            Responder = req => LastText(req) == AgentSession.HandoffRequest ? Sse.Text("NOTE: all fine.") : Sse.Text("Done."),
+        };
+        var (session, observer) = LongSession(server, contextTokens: 40_000);
+        await session.RunAsync("and now finish", observer, CancellationToken.None);
+        Assert.Equal(["step 0", "reply NOTE: all fine.", "step 1", "reply Done."], observer.Events);
+
+        // The same when the server refuses the request as too long.
+        var tooLong = new ScriptedServer(Sse.Text("NOTE: nothing done yet."), Sse.Text("Short answer."));
+        tooLong.Failures.Enqueue((HttpStatusCode.BadRequest, """{"error":{"message":"This model's maximum context length is 8192 tokens."}}"""));
+        var (second, events) = CreateSession(tooLong, Path.GetTempPath(), new FakePlatform(), contextTokens: 100_000);
+        await second.RunAsync("question", events, CancellationToken.None);
+        Assert.Equal(["step 1", "step 0", "reply NOTE: nothing done yet.", "step 0", "reply Short answer."], events.Events);
+    }
+
     [Fact]
     public async Task The_servers_token_count_triggers_the_reset_even_when_the_estimate_is_small()
     {
@@ -380,6 +516,24 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_session_that_continues_a_chat_counts_from_the_servers_last_usage()
+    {
+        // The app starts a session for every message, on the chat's history. By the server's
+        // count the last prompt was 90k tokens; the estimate of this short history is tiny.
+        var server = new ScriptedServer(Sse.Text("NOTE: answered once."), Sse.Text("Done."));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 100_000);
+        session.History.Add(new ChatMessage { Role = ChatRole.User, Content = "first question", FromUser = true });
+        session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "first answer", PromptTokens = 90_000, CompletionTokens = 50 });
+        Assert.Equal(90_050, session.TokensInUse());
+
+        await session.RunAsync("second question", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(AgentSession.HandoffRequest, LastText(server.Requests[0]));
+        Assert.Equal(session.EstimateTokens(), session.TokensInUse()); // the old count went with the reset
+    }
+
+    [Fact]
     public async Task A_reply_cut_off_by_the_context_limit_is_redone_after_a_reset()
     {
         var cutOff = "data: " + new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["reasoning_content"] = "Let me think about the board" }, ["finish_reason"] = "length" }) }.ToJsonString() + "\n\ndata: [DONE]\n\n";
@@ -398,7 +552,7 @@ public class AgentSessionTests
     public async Task Without_a_note_from_the_model_the_reset_keeps_a_record_of_the_last_steps()
     {
         var server = new ScriptedServer(Sse.Text("Done."));
-        server.Failures.Enqueue((HttpStatusCode.InternalServerError, """{"error":"boom"}"""));
+        server.Failures.Enqueue((HttpStatusCode.BadRequest, """{"error":"boom"}"""));
         var (session, observer) = LongSession(server, contextTokens: 40_000);
 
         await session.RunAsync("and now finish", observer, CancellationToken.None);

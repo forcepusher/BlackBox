@@ -21,9 +21,6 @@ public enum MouseButton { Left, Right, Middle }
 /// <summary>Screen capture in physical pixels.</summary>
 public interface IScreenCapture
 {
-    /// <summary>Bounds of the primary monitor in physical pixels.</summary>
-    ScreenRect GetPrimaryScreen();
-
     /// <summary>All monitors in physical pixels, the primary first, in a stable order.</summary>
     IReadOnlyList<ScreenRect> GetScreens();
 
@@ -47,6 +44,12 @@ public interface IInputController
 
     /// <summary>Presses a chord such as ["ctrl", "shift", "s"] and releases it in reverse order.</summary>
     void PressKeys(IReadOnlyList<string> keys);
+
+    /// <summary>
+    /// Presses keys down and keeps them down until the result is disposed, then releases them in
+    /// reverse order: modifiers held through a click or drag, or a key held for a while in a game.
+    /// </summary>
+    IDisposable HoldKeys(IReadOnlyList<string> keys);
 
     /// <summary>Returns false for key names the platform does not understand.</summary>
     bool IsKnownKey(string key);
@@ -165,7 +168,6 @@ public sealed class UnsupportedPlatform : IPlatformServices, IScreenCapture, IIn
 
     private static NotSupportedException Fail() => new("Desktop control is not implemented on this OS yet.");
 
-    public ScreenRect GetPrimaryScreen() => throw Fail();
     public IReadOnlyList<ScreenRect> GetScreens() => throw Fail();
     public RawImage Capture(ScreenRect region, bool includeCursor) => throw Fail();
     public (int X, int Y) GetCursorPosition() => throw Fail();
@@ -176,5 +178,6 @@ public sealed class UnsupportedPlatform : IPlatformServices, IScreenCapture, IIn
     public void Scroll(int dx, int dy) => throw Fail();
     public void TypeText(string text) => throw Fail();
     public void PressKeys(IReadOnlyList<string> keys) => throw Fail();
+    public IDisposable HoldKeys(IReadOnlyList<string> keys) => throw Fail();
     public bool IsKnownKey(string key) => false;
 }

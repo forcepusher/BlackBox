@@ -1,3 +1,4 @@
+using System.IO.Enumeration;
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -21,18 +22,44 @@ public sealed class ReadFileTool : Tool
         var path = ctx.ResolvePath(RequireString(args, "path"));
         if (!File.Exists(path))
             return ToolResult.Error($"File not found: {path}");
+        if (IsBinary(path))
+            return ToolResult.Error($"{path} is not a text file ({new FileInfo(path).Length:N0} bytes); read_file reads text only.");
 
         var offset = Math.Max(1, (int)(GetNumber(args, "offset") ?? 1));
         var limit = Math.Clamp((int)(GetNumber(args, "limit") ?? 400), 1, 5000);
-        var lines = await File.ReadAllLinesAsync(path, ct).ConfigureAwait(false);
 
+        // Line by line, so a log of gigabytes doesn't have to fit in memory to read a part of it.
         var sb = new StringBuilder();
-        var end = Math.Min(lines.Length, offset - 1 + limit);
-        for (var i = offset - 1; i < end && sb.Length < MaxChars; i++)
-            sb.Append(i + 1).Append('\t').AppendLine(lines[i]);
-        if (end < lines.Length)
-            sb.AppendLine($"[showing lines {offset}-{end} of {lines.Length}; use offset to read more]");
-        return new ToolResult(sb.Length > 0 ? sb.ToString() : "(empty file)");
+        int total = 0, last = 0;
+        using (var reader = new StreamReader(path, detectEncodingFromByteOrderMarks: true))
+        {
+            while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
+            {
+                if (++total >= offset && total < offset + limit && sb.Length < MaxChars)
+                {
+                    sb.Append(total).Append('\t').AppendLine(line);
+                    last = total;
+                }
+            }
+        }
+        if (total == 0)
+            return new ToolResult("(empty file)");
+        if (last == 0)
+            return ToolResult.Error($"The file has only {total} lines.");
+        if (offset > 1 || last < total)
+            sb.AppendLine($"[showing lines {offset}-{last} of {total}; use offset to read more]");
+        return new ToolResult(sb.ToString());
+    }
+
+    /// <summary>A zero byte near the start, outside UTF-16 text: an image, an exe, an archive.</summary>
+    private static bool IsBinary(string path)
+    {
+        Span<byte> head = stackalloc byte[8000];
+        int read;
+        using (var stream = File.OpenRead(path))
+            read = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
+        head = head[..read];
+        return !head.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xFE]) && !head.StartsWith((ReadOnlySpan<byte>)[0xFE, 0xFF]) && head.Contains((byte)0);
     }
 }
 
@@ -72,12 +99,13 @@ public sealed class WriteFileTool : Tool
 public sealed class EditFileTool : Tool
 {
     public override string Name => "edit_file";
-    public override string Description => "Replace an exact, unique snippet of text in a file with new text.";
+    public override string Description => "Replace an exact, unique snippet of text in a file with new text, or every occurrence of it with replace_all.";
     public override ToolRisk Risk => ToolRisk.Risky;
     public override JsonObject Parameters => Schema(
         ("path", Str("File path"), true),
-        ("old_text", Str("Exact text to find; must occur exactly once"), true),
-        ("new_text", Str("Replacement text"), true));
+        ("old_text", Str("Exact text to find; must occur exactly once unless replace_all is set"), true),
+        ("new_text", Str("Replacement text"), true),
+        ("replace_all", Bool("Replace every occurrence, e.g. to rename something throughout the file (default false)"), false));
     public override string Describe(JsonObject args) => $"Edit {GetString(args, "path")}";
 
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
@@ -90,15 +118,39 @@ public sealed class EditFileTool : Tool
         if (oldText.Length == 0)
             return ToolResult.Error("old_text must not be empty.");
 
-        var text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
-        var first = text.IndexOf(oldText, StringComparison.Ordinal);
-        if (first < 0)
-            return ToolResult.Error("old_text was not found in the file. Read the file again and copy the text exactly.");
-        if (text.IndexOf(oldText, first + 1, StringComparison.Ordinal) >= 0)
-            return ToolResult.Error("old_text occurs more than once. Include more surrounding text to make it unique.");
+        // Read and written back in the file's own encoding: a UTF-8 signature or UTF-16 stays.
+        string text;
+        Encoding encoding;
+        using (var reader = new StreamReader(path, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: true))
+        {
+            text = await reader.ReadToEndAsync(ct).ConfigureAwait(false);
+            encoding = reader.CurrentEncoding;
+        }
 
-        await File.WriteAllTextAsync(path, text[..first] + newText + text[(first + oldText.Length)..], ct).ConfigureAwait(false);
-        return new ToolResult($"Edited {path}.");
+        var count = Count(text, oldText);
+        // The model writes \n; in a file saved with Windows line endings that never matches.
+        if (count == 0 && text.Contains("\r\n") && oldText.Contains('\n') && !oldText.Contains('\r'))
+        {
+            oldText = oldText.Replace("\n", "\r\n");
+            newText = newText.ReplaceLineEndings("\r\n");
+            count = Count(text, oldText);
+        }
+        if (count == 0)
+            return ToolResult.Error("old_text was not found in the file. Read the file again and copy the text exactly.");
+        var all = GetBool(args, "replace_all");
+        if (count > 1 && !all)
+            return ToolResult.Error($"old_text occurs {count} times. Include more surrounding text to make it unique, or set replace_all to change every one.");
+
+        await File.WriteAllTextAsync(path, text.Replace(oldText, newText, StringComparison.Ordinal), encoding, ct).ConfigureAwait(false);
+        return new ToolResult(count > 1 ? $"Edited {path}: replaced {count} occurrences." : $"Edited {path}.");
+    }
+
+    private static int Count(string text, string part)
+    {
+        var count = 0;
+        for (var i = text.IndexOf(part, StringComparison.Ordinal); i >= 0; i = text.IndexOf(part, i + part.Length, StringComparison.Ordinal))
+            count++;
+        return count;
     }
 }
 
@@ -112,27 +164,51 @@ public sealed class ListDirectoryTool : Tool
         ("pattern", Str("Optional glob; when given, searches subfolders too"), false));
     public override string Describe(JsonObject args) => $"List {GetString(args, "path") ?? "."}{(GetString(args, "pattern") is { } p ? " " + p : "")}";
 
+    private const int MaxEntries = 500;
+    private static readonly TimeSpan SearchTime = TimeSpan.FromSeconds(20);
+
     public override Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var dir = ctx.ResolvePath(GetString(args, "path") ?? ".");
         if (!Directory.Exists(dir))
             return Task.FromResult(ToolResult.Error($"Directory not found: {dir}"));
 
-        var sb = new StringBuilder().AppendLine(dir);
-        const int max = 500;
-        var count = 0;
         var pattern = GetString(args, "pattern");
-        var options = new EnumerationOptions { RecurseSubdirectories = pattern is not null, IgnoreInaccessible = true };
-
-        foreach (var entry in new DirectoryInfo(dir).EnumerateFileSystemInfos(pattern ?? "*", options))
+        var giveUp = DateTime.UtcNow + SearchTime;
+        var entries = new FileSystemEnumerable<string>(dir,
+            (ref FileSystemEntry e) => e.IsDirectory
+                ? Path.GetRelativePath(dir, e.ToFullPath()) + Path.DirectorySeparatorChar
+                : $"{Path.GetRelativePath(dir, e.ToFullPath())}  ({e.Length:N0} bytes)",
+            new EnumerationOptions { RecurseSubdirectories = pattern is not null, IgnoreInaccessible = true })
         {
-            if (++count > max)
+            // Asked for every entry looked at, matching or not, so a search through a whole drive
+            // for something that isn't there still ends on time, or at once on Stop.
+            ShouldIncludePredicate = (ref FileSystemEntry e) =>
             {
-                sb.AppendLine($"[stopped after {max} entries]");
-                break;
+                ct.ThrowIfCancellationRequested();
+                if (DateTime.UtcNow > giveUp)
+                    throw new TimeoutException();
+                return pattern is null || FileSystemName.MatchesSimpleExpression(pattern, e.FileName);
+            },
+        };
+
+        var sb = new StringBuilder().AppendLine(dir);
+        var count = 0;
+        try
+        {
+            foreach (var entry in entries)
+            {
+                if (++count > MaxEntries)
+                {
+                    sb.AppendLine($"[stopped after {MaxEntries} entries]");
+                    break;
+                }
+                sb.AppendLine(entry);
             }
-            var rel = Path.GetRelativePath(dir, entry.FullName);
-            sb.AppendLine(entry is DirectoryInfo ? rel + Path.DirectorySeparatorChar : $"{rel}  ({((FileInfo)entry).Length:N0} bytes)");
+        }
+        catch (TimeoutException)
+        {
+            sb.AppendLine($"[stopped after searching for {SearchTime.TotalSeconds:0} seconds; give a narrower path or pattern]");
         }
         return Task.FromResult(new ToolResult(sb.ToString()));
     }

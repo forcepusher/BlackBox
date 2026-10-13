@@ -14,7 +14,7 @@ public sealed record BackendConnection(OpenAiChatClient Client, ChatRequestOptio
         new OpenAiChatClient(http, server.BaseUrl, server.ApiKey),
         new ChatRequestOptions
         {
-            Model = server.Model,
+            Model = server.ModelInUse,
             // Thinking models (Qwen3.5+, Gemma 4) expect their earlier reasoning back, in the
             // message field and via the template switch that llama-server and vLLM honor.
             SendReasoning = true,

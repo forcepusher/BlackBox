@@ -40,16 +40,20 @@ public sealed class OverlayInputController(IInputController inner, IInputOverlay
     public void TypeText(string text)
     {
         inner.TypeText(text);
-        var shown = text.Replace("\r\n", "⏎").Replace('\n', '⏎').Replace('\t', '⇥');
-        if (shown.Length > MaxTypedChars)
-            shown = shown[..MaxTypedChars] + "…";
-        Show($"Type “{shown}”");
+        Show($"Type “{text.Replace("\r\n", "⏎").Replace('\n', '⏎').Replace('\t', '⇥').Clip(MaxTypedChars)}”");
     }
 
     public void PressKeys(IReadOnlyList<string> keys)
     {
         inner.PressKeys(keys);
         Show("Keys " + string.Join("+", keys.Select(KeyName)));
+    }
+
+    public IDisposable HoldKeys(IReadOnlyList<string> keys)
+    {
+        var held = inner.HoldKeys(keys);
+        Show("Hold " + string.Join("+", keys.Select(KeyName)));
+        return held;
     }
 
     internal static string KeyName(string key) => key.Trim().ToLowerInvariant() switch

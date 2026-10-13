@@ -8,7 +8,8 @@ using BlackBox.Core.Tools;
 // Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] "task"
 //   --root        portable folder (default: BLACKBOX_HOME, else .dev/ when run from the repository, else the exe folder);
 //                 its Data/mcp.json lists the MCP servers to start, as in the app
-//   --url/--model override the server address and model saved in Data/settings.json
+//   --url/--model override the server address and model saved in Data/settings.json; with no model, or one the
+//                 server doesn't offer, the strongest model it offers is used
 //   --yes         approve risky tools without asking
 //   --save-shots  write every screenshot the model sees to DIR
 
@@ -69,10 +70,25 @@ using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a mo
         Console.Error.WriteLine("[server] " + probe.Message);
         return 1;
     }
+    settings.Server.BaseUrl = probe.BaseUrl!;
+    if (probe.Model is null)
+    {
+        Console.Error.WriteLine("[server] the server offers no model to chat with");
+        return 1;
+    }
+    if (probe.AutoPicked)
+    {
+        // As in the app: the strongest model the server offers, until the picked one is back.
+        settings.Server.AutoModel = probe.Model;
+        var size = probe.ModelSize is { } s ? $" ({s})" : "";
+        Console.WriteLine(settings.Server.Model.Length == 0
+            ? $"[server] no model picked: using {probe.Model}{size}, the strongest the server offers"
+            : $"[server] the server doesn't offer {settings.Server.Model}: using {probe.Model}{size}, the strongest it offers");
+    }
     settings.Server.SupportsVision = probe.Vision ?? true;
     if (await ServerProbe.EnsureLoadedAsync(probeHttp, settings.Server, () => Console.WriteLine("[server] loading the model…"), cts.Token) is { } c)
         settings.Server.SetDetectedContext(c);
-    Console.WriteLine($"[server] {settings.Server.BaseUrl} · {settings.Server.Model} · {ContextSizes.Format(settings.Server.ContextSize)} context"
+    Console.WriteLine($"[server] {settings.Server.BaseUrl} · {settings.Server.ModelInUse} · {ContextSizes.Format(settings.Server.ContextSize)} context"
         + (settings.Server.AutoContext ? "" : " (set by hand)"));
 }
 // MCP servers from Data/mcp.json, as in the app; a broken list is reported and skipped.
@@ -98,16 +114,7 @@ catch (OperationCanceledException)
     return 1;
 }
 
-var backend = BackendConnection.Create(http, settings.Server);
-var workDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-var ctx = new ToolContext
-{
-    Platform = platform, Settings = agent, WorkingDirectory = workDir, CoordinateGrid = ModelCoordinates.GridFor(settings.Server.Model),
-    Browser = agent.WebSearch ? BlackBox.Core.Web.HeadlessBrowser.Find(paths.BrowserProfileDir) : null,
-};
-var screens = backend.Vision ? ctx.ScreenSpaces() : null;
-var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: mcp.Tools, includeWebTools: agent.WebSearch);
-var session = new AgentSession(backend.Client, backend.Options, registry, ctx, SystemPrompt.Build(platform.Name, screens, workDir, agent.CustomInstructions, mcp.Connected, agent.WebSearch), contextTokens: backend.ContextTokens);
+var session = AgentSetup.Create(BackendConnection.Create(http, settings.Server), platform, agent, paths, mcp);
 var observer = new ConsoleObserver(autoYes, shotsDir);
 
 var t0 = DateTime.UtcNow;

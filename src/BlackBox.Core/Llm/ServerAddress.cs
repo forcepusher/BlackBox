@@ -12,22 +12,23 @@ namespace BlackBox.Core.Llm;
 /// </remarks>
 public static partial class ServerAddress
 {
+    /// <summary>The base URLs to try, best first; none when the text can't be a server's address (half-typed "http://").</summary>
     public static IReadOnlyList<string> Candidates(string input)
     {
         var text = input.Trim();
         if (text.Length == 0)
             return [];
         if (Scheme().IsMatch(text))
-            return [OpenAiChatClient.NormalizeBaseUrl(text)];
+            return Valid(OpenAiChatClient.NormalizeBaseUrl(text));
 
         text = text.TrimStart('/');
         var http = OpenAiChatClient.NormalizeBaseUrl("http://" + text);
         var https = OpenAiChatClient.NormalizeBaseUrl("https://" + text);
-        return IsLocal(text) ? [http, https] : [https, http];
+        return IsLocal(text) ? Valid(http, https) : Valid(https, http);
     }
 
-    /// <summary>True if the address has a scheme, i.e. is already a usable URL.</summary>
-    public static bool IsResolved(string input) => Scheme().IsMatch(input.Trim());
+    private static string[] Valid(params string[] urls) =>
+        urls.Where(u => Uri.TryCreate(u, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && uri.Host.Length > 0).ToArray();
 
     private static bool IsLocal(string address)
     {

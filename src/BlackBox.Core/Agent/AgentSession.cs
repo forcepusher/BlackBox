@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using BlackBox.Core.Llm;
@@ -63,15 +62,18 @@ public sealed partial class AgentSession(
             for (var step = 1; ; step++)
             {
                 ct.ThrowIfCancellationRequested();
-                observer.OnStepStarted(step);
+                // The reset first: its handoff note is a reply of its own, and the step's reply
+                // comes after it, in a new step.
                 if (contextTokens > 0 && TokensInUse() > ResetThreshold)
                     await ResetContextAsync(observer, ct).ConfigureAwait(false);
+                observer.OnStepStarted(step);
 
                 var request = new List<ChatMessage>(History.Count + 1) { ChatMessage.System(systemPrompt) };
                 request.AddRange(History);
 
                 var reply = await CompleteWithResetAsync(request, observer, ct).ConfigureAwait(false);
-                if (reply.FinishReason == "length" && !reply.HasToolCalls && contextTokens > 0 && !justReset)
+                var cutOff = reply.FinishReason == "length" && !reply.HasToolCalls;
+                if (cutOff && contextTokens > 0 && !justReset && OutOfRoom(reply))
                 {
                     // The server ran out of context mid-reply, so the size estimate was off. The
                     // cut-off reply is thrown away and this step is redone after a reset.
@@ -81,6 +83,8 @@ public sealed partial class AgentSession(
                     justReset = true;
                     continue;
                 }
+                if (cutOff && !justReset)
+                    observer.OnNotice("The server stopped the reply at its length limit (in LM Studio: Limit Response Length); asking the model to go on.");
                 justReset = false;
                 TextToolCallParser.TryExtract(reply, tools);
                 // "The task is complete" followed by yet another screenshot: small models can keep
@@ -89,14 +93,13 @@ public sealed partial class AgentSession(
                     reply.ToolCalls!.All(c => ToolCallRepair.ResolveTool(c.Name, tools)?.Risk == ToolRisk.ReadOnly))
                     reply.ToolCalls = null;
                 History.Add(reply);
-                RecordUsage(reply);
                 observer.OnAssistantMessage(reply);
 
                 if (!reply.HasToolCalls)
                 {
                     // Small models sometimes announce an action ("Let me click Save.") and stop,
                     // or return nothing at all. Push them on a couple of times before giving up.
-                    if (nudges < MaxNudges && LooksUnfinished(reply))
+                    if (nudges < MaxNudges && (cutOff || LooksUnfinished(reply)))
                     {
                         nudges++;
                         History.Add(ChatMessage.User(NudgeText));
@@ -105,25 +108,28 @@ public sealed partial class AgentSession(
                     observer.OnFinished(AgentStopReason.Completed, null);
                     return;
                 }
+                nudges = 0; // it is moving again; a later stall gets its own nudges
 
-                var screenshots = new List<ContentPart>();
+                // Only the last screenshot goes to the model: the tools' results come before it.
+                ChatMessage? shown = null;
+                ContentPart? screenshot = null;
                 foreach (var call in reply.ToolCalls!)
                 {
                     var result = await RunToolAsync(call, observer, ct).ConfigureAwait(false);
                     if (loops.Check(call, result) is { } warning)
                         result = result with { Text = result.Text + "\n" + warning };
-                    History.Add(ChatMessage.ToolResult(call.Id, result.Image is null ? result.Text : result.Text + "\n(The screenshot is attached in the next message.)"));
+                    var message = ChatMessage.ToolResult(call.Id, result.Text);
+                    History.Add(message);
                     if (result.Image is not null)
-                        screenshots.Add(ContentPart.FromImage(result.Image, result.ImageMime));
+                        (shown, screenshot) = (message, ContentPart.FromImage(result.Image, result.ImageMime));
                 }
 
                 // Most OpenAI-compatible servers only accept images in user messages,
-                // so screenshots produced by tools are delivered right after the tool results.
-                if (screenshots.Count > 0)
+                // so the screenshot is delivered right after the tool results.
+                if (screenshot is not null)
                 {
-                    var parts = new List<ContentPart> { ContentPart.FromText("Screenshot after the last action:") };
-                    parts.AddRange(screenshots.TakeLast(1));
-                    History.Add(new ChatMessage { Role = ChatRole.User, Parts = parts });
+                    shown!.Content += "\n(The screenshot is attached in the next message.)";
+                    History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText("Screenshot after the last action:"), screenshot] });
                 }
             }
         }
@@ -166,6 +172,13 @@ public sealed partial class AgentSession(
     private const string NudgeText =
         "Continue with the task. If there is another step, call the tool for it now. If the task is finished, reply with a short summary of what you did.";
 
+    /// <summary>
+    /// Whether a reply cut off by the length limit ran out of context, rather than into a
+    /// reply-length cap set on the server; without a token count it is taken as out of context.
+    /// </summary>
+    private bool OutOfRoom(ChatMessage reply) =>
+        reply.PromptTokens is not { } prompt || prompt + (reply.CompletionTokens ?? 0) >= contextTokens * 9L / 10;
+
     internal static bool LooksFinished(string? content) => content is { Length: > 0 } && CompletionClaim().IsMatch(content);
 
     internal static bool LooksUnfinished(ChatMessage reply)
@@ -199,7 +212,7 @@ public sealed partial class AgentSession(
         try
         {
             args = ToolCallRepair.ParseArguments(call.Arguments);
-            ToolCallRepair.ApplyNameHints(call.Name, args);
+            ToolCallRepair.ApplyNameHints(call.Name, args, tool);
             ToolCallRepair.NormalizeArguments(args, tool);
             summary = tool.Describe(args);
         }
@@ -228,8 +241,10 @@ public sealed partial class AgentSession(
         {
             result = ToolResult.Error($"{ex.Message} Parameters for {tool.Name}: {tool.Parameters.ToJsonString()}");
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException or ArgumentException or ExternalException or TimeoutException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
+            // Whatever goes wrong in one tool (a timeout, a file in use, a bug) is the model's to
+            // work around; only Stop ends the run.
             result = ToolResult.Error(ex.Message);
         }
         observer.OnToolFinished(call, result);
@@ -285,6 +300,7 @@ public sealed partial class AgentSession(
                 request.Clear();
                 request.Add(ChatMessage.System(systemPrompt));
                 request.AddRange(History);
+                observer.OnStepStarted(0); // the retried reply is a new one, after the handoff note
             }
         }
     }

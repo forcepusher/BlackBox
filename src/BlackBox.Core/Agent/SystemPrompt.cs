@@ -20,7 +20,9 @@ public static class SystemPrompt
         sb.AppendLine();
         sb.AppendLine("Environment:");
         sb.AppendLine($"- OS: {platformName}");
-        sb.AppendLine($"- Date: {DateTime.Now.ToString("dddd, d MMMM yyyy, HH:mm", CultureInfo.InvariantCulture)}");
+        // The date, not the time: the prompt starts every request, and if it changed between the
+        // messages of a chat the server would have to read the whole conversation again.
+        sb.AppendLine($"- Date: {DateTime.Now.ToString("dddd, d MMMM yyyy", CultureInfo.InvariantCulture)}");
         sb.AppendLine($"- Home folder: {workingDirectory}. Relative paths and shell commands start here; you can work with any file or folder on this PC.");
         if (screens is { Count: > 1 })
         {
@@ -60,9 +62,9 @@ public static class SystemPrompt
             sb.AppendLine("Tools from the user's MCP servers are named <server>__<tool>; use them like any other tool when they fit the task:");
             foreach (var s in mcp)
             {
-                sb.Append("- ").Append(McpToolPrefix(s.Name)).Append(": ").Append(s.ToolNames.Count).Append(s.ToolNames.Count == 1 ? " tool" : " tools");
+                sb.Append("- ").Append(McpTool.Prefix(s.Name)).Append("*: ").Append(s.ToolNames.Count).Append(s.ToolNames.Count == 1 ? " tool" : " tools");
                 if (s.Instructions is { } instructions)
-                    sb.Append(". ").Append(Clip(instructions.ReplaceLineEndings(" "), 1_000));
+                    sb.Append(". ").Append(instructions.ReplaceLineEndings(" ").Clip(1_000));
                 sb.AppendLine();
             }
         }
@@ -75,10 +77,6 @@ public static class SystemPrompt
         }
         return sb.ToString();
     }
-
-    private static string McpToolPrefix(string server) => McpTool.Prefix(server) + "*";
-
-    private static string Clip(string s, int max) => s.Length <= max ? s : s[..max].TrimEnd() + "…";
 
     private static string DescribeScreen(ScreenSpace s, int index, ScreenSpace primary)
     {

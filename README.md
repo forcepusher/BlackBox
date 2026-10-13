@@ -36,6 +36,18 @@ shows it). For screen control the
 model must accept images (for example Qwen3.5+ VL models or Gemma 4 with their vision projector);
 LM Studio reports this and BlackBox follows it; models on other servers are assumed to see images.
 
+Until you pick a model, BlackBox uses the strongest one the server offers: one that takes images
+first, then the most parameters, then the most bits per weight (Q6 before Q4), and between equals
+one the server has loaded already. That choice isn't saved, so a stronger model added later takes
+over. LM Studio reports each model's size, quantization and image support; for other servers they
+are read from the names (`qwen3.8-27b@q6_k_xl`, `Llama-3.3-70B-Instruct-AWQ`), and a mixture of
+experts such as `30b-a3b` counts as the dense model it is about as strong as (the geometric mean of
+30B and 3B, about 9.5B). Embedding models are left out, and so is a file far too small for its size
+and quantization, such as a broken download. A model you pick yourself is kept, also while the
+server doesn't offer it: the strongest one stands in, a banner says so, and BlackBox goes back to
+yours as soon as the server lists it again. It checks when it connects, on ↻ and before each task.
+The command-line runner picks the same way for the saved model or `--model`.
+
 BlackBox sends no sampling parameters: temperature, top-k/p, reply length and thinking come from
 the server's own model configuration (in LM Studio, per model).
 
@@ -60,29 +72,39 @@ too; the server refuses requests longer than its own size, and a run that hits t
 size the server names. The choice is saved; it only changes BlackBox's budgeting and when it
 resets, and does not reload the model on the server.
 
-Until the context is nearly full (a fifth left, at least 16k), the conversation only grows at the
-end, so the server reuses its cache and each step processes only the new messages. Then BlackBox
-does a **context reset**: the model writes a handoff note for itself on the cached history (it
-streams at once), and the conversation is replaced by your messages, that note and the current
-screenshot, a few thousand tokens. When to reset is decided from the token counts the server
+Until the context is nearly full (a fifth left, at least 16k but at most half), the conversation
+only grows at the end, so the server reuses its cache and each step processes only the new
+messages. Then BlackBox does a **context reset**: the model writes a handoff note for itself on the
+cached history (it streams at once), and the conversation is replaced by your messages, that note
+and the current screenshot, a few thousand tokens. When to reset is decided from the token counts the server
 reports, not guessed. If the model can't write the note, a record of its last steps is used
 instead; a reply cut off by the context limit, or a server's "context length exceeded" error,
-triggers the same reset and a retry.
+triggers the same reset and a retry. A reply cut off by a reply-length limit set on the server
+(the token counts show the context isn't full) is kept, and the model is asked to go on.
+
+The system prompt holds the date but not the time, so it stays the same for every message of a
+chat and the server never has to read the whole conversation again because of it.
+
+During a run the top bar shows how full the context is ("35k of 100k used"; its tooltip says where
+the reset comes), and a reply that hasn't started yet counts how long BlackBox has been waiting for
+it: a server reading a long prompt sends nothing for minutes.
 
 ### Unstable connections
 VPNs and proxies often cut a connection that has been silent for about a minute, which happens
 while a server processes a long prompt. BlackBox resends the identical request when a connection
-drops or a reply stream stops early; the server still has the already-processed prompt in its
-cache, so each retry continues where the last one stopped (up to 12 times per step).
+drops, a reply stream stops early, or the server (or a proxy in front of it) answers with a
+server error or "busy" (HTTP 5xx or 429); the server still has the already-processed prompt in
+its cache, so each retry continues where the last one stopped (up to 12 times per step). A tool
+that fails, however it fails, reports the error to the model and the run goes on.
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |
 | `screenshot` | Captures a screen at full resolution, or scaled to fit the chosen size, on the 32px vision grid; `screen=N` looks at another monitor |
-| `mouse_click` | Clicks a named target where a fresh look at the screen finds it (see below) |
-| `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates |
-| `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …) |
-| `wait` | Waits, then screenshots |
-| `read_file`, `write_file`, `edit_file`, `list_directory` | File work |
+| `mouse_click` | Clicks a named target where a fresh look at the screen finds it (see below); `modifiers` holds keys through the click, as in Ctrl+click to add to a selection or Shift+click to select a range |
+| `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
+| `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
+| `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
+| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `web_search` | Searches the web: titles, links and snippets (see below) |
 | `fetch_page` | Reads a web page as plain text; `find` returns only the passages that mention some words, `start` reads on in a long page |
@@ -120,7 +142,8 @@ against 57 with the model's own coordinates, and 19 of 19 menus, tabs and button
 screenshot (`ClickScenes/unity-editor.png`) against 10; with the first screenshot shifted 30 px, as
 a misjudged screen would be, 30 of 31 against 0. The look costs about 15 s per click on that server.
 
-After each click BlackBox also compares the screen before and after it. When nothing changed near
+After each click BlackBox also compares the screen just before it (after the look, so what changed
+while the model looked doesn't count) with the screen after it. When nothing changed near
 the click and nothing big changed anywhere (a dialog opening), the click almost certainly missed,
 and the result says so. A fresh look that misses misses the same way again, so the note tells the
 model to click again with `target` left out and its own x/y. On the scenes where looks miss (a dense
@@ -204,7 +227,7 @@ Integration tests against a real server (they send prompts larger than the conte
 ```powershell
 $env:BB_SERVER_URL = "http://localhost:1234/v1"; $env:BB_SERVER_MODEL = "qwen3.8-27b@iq2_s"
 dotnet test --filter ServerIntegrationTests
-dotnet test --filter ClickAccuracyTests   # click hit rate in 15 hard scenes; BB_CLICK_SCENES, BB_CLICK_TRIALS, BB_CLICK_COORDS=pixels|grid
+dotnet test --filter ClickAccuracyTests   # click hit rate in 16 hard scenes; BB_CLICK_SCENES, BB_CLICK_TRIALS, BB_CLICK_COORDS=pixels|grid
 ```
 
 ## Project structure

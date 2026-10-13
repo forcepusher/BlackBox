@@ -9,8 +9,6 @@ namespace BlackBox.Platform.Windows;
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsScreenCapture : IScreenCapture
 {
-    public ScreenRect GetPrimaryScreen() => new(0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
-
     public IReadOnlyList<ScreenRect> GetScreens()
     {
         var monitors = new List<(ScreenRect Rect, bool Primary)>();
@@ -25,7 +23,7 @@ internal sealed class WindowsScreenCapture : IScreenCapture
             return true;
         }, 0);
         if (monitors.Count == 0)
-            return [GetPrimaryScreen()];
+            return [new(0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN))];
         // The primary first, then left to right and top to bottom: the same numbering every call.
         return monitors.OrderByDescending(m => m.Primary).ThenBy(m => m.Rect.X).ThenBy(m => m.Rect.Y).Select(m => m.Rect).ToList();
     }

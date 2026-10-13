@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using BlackBox.Core.Agent;
 using BlackBox.Core.Llm;
+using BlackBox.Core.Settings;
 
 namespace BlackBox.Core.Chats;
 
@@ -74,19 +75,41 @@ public sealed class ChatStore(string dir)
             return [];
         var headers = new List<ChatHeader>();
         foreach (var file in Directory.EnumerateFiles(Folder, "*.json"))
-        {
-            try
-            {
-                using var stream = File.OpenRead(file);
-                if (JsonSerializer.Deserialize<ChatHeader>(stream, JsonOptions) is { } header)
-                {
-                    header.Id = Path.GetFileNameWithoutExtension(file);
-                    headers.Add(header);
-                }
-            }
-            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException) { }
-        }
+            if (ReadHeader(file) is { } header)
+                headers.Add(header);
         return headers.OrderByDescending(h => h.Updated).ToList();
+    }
+
+    /// <summary>
+    /// The title and time from the start of the file, where <see cref="Save"/> puts them: a long
+    /// run's chat is megabytes, and reading every file whole made the list slower with each chat.
+    /// </summary>
+    private static ChatHeader? ReadHeader(string file)
+    {
+        try
+        {
+            var head = new byte[4096];
+            int length;
+            using (var stream = File.OpenRead(file))
+                length = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
+            var json = new Utf8JsonReader(head.AsSpan(0, length), isFinalBlock: length < head.Length, state: default);
+            if (!json.Read() || json.TokenType != JsonTokenType.StartObject)
+                return null;
+            var header = new ChatHeader { Id = Path.GetFileNameWithoutExtension(file) };
+            while (json.Read() && json.TokenType == JsonTokenType.PropertyName)
+            {
+                var name = json.GetString();
+                if (name is not ("id" or "title" or "updated") || !json.Read())
+                    break; // the contents follow
+                if (name == "title") header.Title = json.GetString() ?? "";
+                if (name == "updated") header.Updated = json.GetDateTime();
+            }
+            return header;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or InvalidOperationException or FormatException)
+        {
+            return null;
+        }
     }
 
     public SavedChat? Load(string id)
@@ -104,14 +127,7 @@ public sealed class ChatStore(string dir)
     }
 
     /// <summary>Writes the chat; through a temporary file, so a crash mid-write leaves the previous version.</summary>
-    public void Save(SavedChat chat)
-    {
-        Directory.CreateDirectory(Folder);
-        var path = PathOf(chat.Id);
-        var temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(chat, JsonOptions));
-        File.Move(temp, path, overwrite: true);
-    }
+    public void Save(SavedChat chat) => AtomicFile.Write(PathOf(chat.Id), JsonSerializer.Serialize(chat, JsonOptions));
 
     public void Delete(string id)
     {

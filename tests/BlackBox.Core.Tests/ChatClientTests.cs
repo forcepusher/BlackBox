@@ -109,14 +109,37 @@ public class ChatClientTests
     }
 
     [Fact]
-    public async Task The_probe_keeps_the_protocol_that_answers()
+    public async Task The_probe_finds_the_protocol_that_answers()
     {
         var server = new BlackBox.Core.Settings.ServerSettings { BaseUrl = "host:1234", Model = "m" };
         var http = new HttpClient(new SchemeServer("http"));
         var probe = await ServerProbe.CheckAsync(http, server, CancellationToken.None);
         Assert.True(probe.Reachable);
-        Assert.Equal("http://host:1234/v1", server.BaseUrl);
+        Assert.Equal("http://host:1234/v1", probe.BaseUrl);
+        Assert.Equal("host:1234", server.BaseUrl); // the caller keeps it, if nobody has typed another address meanwhile
         Assert.Equal(["m"], probe.Models);
+    }
+
+    [Fact]
+    public async Task Addresses_that_are_not_a_model_server_are_reported_not_thrown()
+    {
+        Assert.Empty(ServerAddress.Candidates("http://")); // half typed
+        var halfTyped = await ServerProbe.CheckAsync(new HttpClient(new SchemeServer("http")), new BlackBox.Core.Settings.ServerSettings { BaseUrl = "http://" }, CancellationToken.None);
+        Assert.False(halfTyped.Reachable);
+        Assert.Equal("That is not a server address.", halfTyped.Message);
+
+        // A web server (or a captive portal) answers with a page instead of a model list.
+        var page = new HttpClient(new HtmlServer());
+        var probe = await ServerProbe.CheckAsync(page, new BlackBox.Core.Settings.ServerSettings { BaseUrl = "http://host:80", Model = "m" }, CancellationToken.None);
+        Assert.False(probe.Reachable);
+        Assert.Contains("not a model list", probe.Message);
+        Assert.Null((await ServerProbe.TryContextAsync(page, new BlackBox.Core.Settings.ServerSettings { BaseUrl = "http://host:80", Model = "m" }, CancellationToken.None)).Context);
+    }
+
+    private sealed class HtmlServer : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent("<html><body>Welcome</body></html>") });
     }
 
     /// <summary>Answers /v1/models only over one scheme, like a plain-http LM Studio.</summary>
@@ -248,11 +271,22 @@ public class ChatClientTests
         Assert.Equal(expected, ToolCallRepair.ResolveTool(called, Registry)!.Name);
 
     [Fact]
-    public void Double_click_alias_keeps_its_meaning()
+    public void Aliases_like_double_click_and_ctrl_click_keep_their_meaning()
     {
+        var click = Registry.Find("mouse_click")!;
         var args = new JsonObject { ["x"] = 1, ["y"] = 2 };
-        ToolCallRepair.ApplyNameHints("double_click", args);
+        ToolCallRepair.ApplyNameHints("double_click", args, click);
         Assert.Equal(2, args["clicks"]!.GetValue<int>());
+
+        Assert.Equal("mouse_click", ToolCallRepair.ResolveTool("ctrl_click", Registry)!.Name);
+        var ctrl = new JsonObject { ["x"] = 1, ["y"] = 2 };
+        ToolCallRepair.ApplyNameHints("ctrl_click", ctrl, click);
+        Assert.Equal("""["ctrl"]""", ctrl["modifiers"]!.ToJsonString());
+
+        // Only parameters the tool has: a tool named like a double click gets no clicks argument.
+        var other = new JsonObject();
+        ToolCallRepair.ApplyNameHints("double_size", other, Registry.Find("read_file")!);
+        Assert.Empty(other);
     }
 
     [Theory]

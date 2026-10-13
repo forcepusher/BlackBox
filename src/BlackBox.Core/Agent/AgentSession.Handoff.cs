@@ -37,32 +37,28 @@ public sealed partial class AgentSession
     /// <summary>The prompt size (in server-reported tokens where known) at which the context is reset.</summary>
     /// <remarks>
     /// A fifth of the context (at least 16k) stays free: enough for the reply in progress and for
-    /// the handoff note, which is written in the same context before the reset.
+    /// the handoff note, which is written in the same context before the reset. Never more than
+    /// half, though: with 16k or less, 16k free would mean a reset before every step.
     /// </remarks>
-    internal int ResetThreshold => contextTokens - Math.Max(contextTokens / 5, 16_384);
-
-    // Last exact size the server reported, and how many history messages it covered.
-    private int? _measuredTokens;
-    private int _measuredCount;
+    public int ResetThreshold => contextTokens - Math.Min(Math.Max(contextTokens / 5, 16_384), contextTokens / 2);
 
     /// <summary>
-    /// The conversation's size in tokens: the server's last exact count plus an estimate for the
-    /// messages added since; a pure estimate when the server reports no usage.
+    /// The conversation's size in tokens: the server's exact count for the last reply (its prompt
+    /// and the reply itself) plus an estimate for the messages added since; a pure estimate before
+    /// the first reply, after a reset, or when the server reports no usage.
     /// </summary>
-    internal int TokensInUse()
+    /// <remarks>
+    /// The count is read from the history, so a session that continues a chat (the app starts one
+    /// for every message) starts from the server's count too. The estimate alone can be a third
+    /// too low on text full of numbers, which put the reset too late.
+    /// </remarks>
+    public int TokensInUse()
     {
-        if (_measuredTokens is { } measured && _measuredCount <= History.Count)
-            return measured + History.Skip(_measuredCount).Sum(EstimateTokens);
-        return EstimateTokens();
-    }
-
-    private void RecordUsage(ChatMessage reply)
-    {
-        if (reply.PromptTokens is { } prompt)
-        {
-            _measuredTokens = prompt + (reply.CompletionTokens ?? EstimateTokens(reply));
-            _measuredCount = History.Count; // the reply has just been added
-        }
+        var last = History.FindLastIndex(m => m.PromptTokens is not null);
+        if (last < 0)
+            return EstimateTokens();
+        var reply = History[last];
+        return reply.PromptTokens!.Value + (reply.CompletionTokens ?? EstimateTokens(reply)) + History.Skip(last + 1).Sum(EstimateTokens);
     }
 
     /// <summary>
@@ -95,7 +91,6 @@ public sealed partial class AgentSession
         History.Add(ChatMessage.User(HandoffHeader + "\n\n" + note));
         if (screen is not null)
             History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText(CurrentScreenText), screen] });
-        _measuredTokens = null;
 
         // Very long user messages alone could still be too big; trimming is the last resort.
         if (EstimateTokens() > ResetThreshold)
@@ -147,17 +142,18 @@ public sealed partial class AgentSession
         {
             if (m.Role == ChatRole.Assistant)
             {
-                if (!string.IsNullOrWhiteSpace(m.Content)) sb.Append("You said: ").AppendLine(Clip(m.Content, 600));
+                if (!string.IsNullOrWhiteSpace(m.Content)) sb.Append("You said: ").AppendLine(ClipMiddle(m.Content, 600));
                 foreach (var c in m.ToolCalls ?? [])
-                    sb.Append("You called ").Append(c.Name).Append(' ').AppendLine(Clip(c.Arguments, 300));
+                    sb.Append("You called ").Append(c.Name).Append(' ').AppendLine(ClipMiddle(c.Arguments, 300));
             }
             else if (m.Role == ChatRole.Tool)
-                sb.Append("Result: ").AppendLine(Clip(m.Content, 300));
+                sb.Append("Result: ").AppendLine(ClipMiddle(m.Content, 300));
         }
         return sb.ToString();
     }
 
-    private static string Clip(string? s, int max)
+    /// <summary>The start and the end of a long text, which say most about a step.</summary>
+    private static string ClipMiddle(string? s, int max)
     {
         s = (s ?? "").Trim();
         return s.Length <= max ? s : s[..(max / 2)] + " … " + s[^(max / 2)..];

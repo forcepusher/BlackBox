@@ -57,7 +57,7 @@ public class McpTransportTests
         {
             try { gone = Process.GetProcessById(pid).HasExited; }
             catch (ArgumentException) { gone = true; }
-            if (!gone) await Task.Delay(100);
+            if (!gone) await Task.Delay(100, TestContext.Current.CancellationToken);
         }
         Assert.True(gone, "the server process is still running");
     }
