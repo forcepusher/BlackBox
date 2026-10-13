@@ -107,7 +107,7 @@ that fails, however it fails, reports the error to the model and the run goes on
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
-| `copy` | Files and folders between this PC and an SSH host (`user@host:/path`, as for scp), byte for byte |
+| `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |
 | `web_search` | Searches the web: titles, links and snippets (see below) |
 | `fetch_page` | Reads a web page as plain text; `find` returns only the passages that mention some words, `start` reads on in a long page |
 | `<server>__<tool>` | Any tool of the MCP servers you add in Settings → Advanced (see below) |
@@ -213,7 +213,9 @@ login shell is another one (sh, zsh). The SSH client is built in (SSH.NET), so n
   through PowerShell for want of this.
 - A `key_file` the open connection didn't log in with logs in afresh with that key alone, in a
   new terminal: the test an admin makes in a second terminal before turning passwords off. If
-  the server refuses the key, the old connection stays.
+  the server refuses the key, the old connection stays. `new_login` does the same with exactly
+  the key and/or password given, also to see that a login is now refused. A key that worked once
+  in the chat is offered to the next servers too, as ssh-agent does.
 - Host keys are checked against `Data/known_hosts`: the first key a server shows is saved, a
   different one later is refused, as OpenSSH does. A connection lost to a reboot is made
   again on the next call, retried for 45 seconds while the server comes back.

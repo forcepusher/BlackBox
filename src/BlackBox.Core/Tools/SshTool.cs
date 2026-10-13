@@ -32,8 +32,10 @@ public sealed partial class SshTool : Tool
         ("interrupt", Bool("Press Ctrl+C to stop the running command"), false),
         ("wait_seconds", Int("How long to wait for the command before returning (default 120, max 1800); it keeps running after that. " +
             "Without it, a call also returns once the command has printed nothing for 30 s"), false),
-        ("key_file", Str("Private key file on this PC to log in with (default: the keys in ~/.ssh). A key the open connection didn't use logs in afresh with it alone: the way to test a key you installed"), false),
-        ("password", Str("The login or sudo password, if the user gave you one: pass it once and BlackBox answers sudo's prompts itself (no echo pw | sudo -S)"), false));
+        ("key_file", Str("Private key file on this PC to log in with (default: the keys in ~/.ssh and those used before in this chat). A key the open connection didn't use logs in afresh with it alone"), false),
+        ("password", Str("The login or sudo password, if the user gave you one: pass it once and BlackBox answers sudo's prompts itself (no echo pw | sudo -S)"), false),
+        ("new_login", Bool("Log in afresh, with only the key_file and/or password given, in a new terminal: the test that a login works or is refused " +
+            "after changing SSH settings (a refused login leaves the open connection as it is)"), false));
 
     public override string Describe(JsonObject args)
     {
@@ -66,7 +68,7 @@ public sealed partial class SshTool : Tool
         try
         {
             (host, notice) = await ctx.Ssh.GetAsync(target, GetString(args, "key_file") is { Length: > 0 } k ? ctx.ResolvePath(k) : null,
-                GetString(args, "password"), ct).ConfigureAwait(false);
+                GetString(args, "password"), ct, GetBool(args, "new_login")).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or Renci.SshNet.Common.SshException or System.Net.Sockets.SocketException)
         {

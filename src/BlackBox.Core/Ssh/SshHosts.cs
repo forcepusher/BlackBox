@@ -31,47 +31,63 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
     /// says what a new connection found (the system, whether sudo asks for a password, a new
     /// host key), or that an old one was lost and a new one made; null for a connection reused.
     /// </summary>
-    public async Task<(SshHost Host, string? Notice)> GetAsync(string target, string? keyFile, string? password, CancellationToken ct)
+    /// <param name="newLogin">
+    /// Log in afresh even though a connection is open, with only the key file and password given
+    /// (the usual way if neither is): the test that a login works, or is refused, after the SSH
+    /// settings changed. If the server refuses it, the open connection stays.
+    /// </param>
+    public async Task<(SshHost Host, string? Notice)> GetAsync(string target, string? keyFile, string? password, CancellationToken ct, bool newLogin = false)
     {
         var t = SshTarget.Parse(target);
+        var given = keyFile is not null || password is { Length: > 0 };
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             string? lost = null;
             if (_hosts.TryGetValue(t.Key, out var known))
             {
-                if (password is { Length: > 0 }) known.Password = password;
-                if (known.IsConnected && (keyFile is null || known.LoginKeys.Contains(Path.GetFullPath(keyFile), StringComparer.OrdinalIgnoreCase)))
+                // A key this connection didn't log in with (one just installed, say) is a login to test too.
+                var otherKey = keyFile is not null && !known.LoginKeys.Contains(Path.GetFullPath(keyFile), StringComparer.OrdinalIgnoreCase);
+                if (known.IsConnected && !newLogin && !otherKey)
                 {
+                    if (password is { Length: > 0 }) known.Password = password;
                     LastTarget = target;
                     return (known, null);
                 }
                 if (known.IsConnected)
                 {
-                    // A key this connection didn't log in with (one just installed, say): a real
-                    // login with that key alone. If the server refuses it, the old connection stays.
+                    // A real login, beside the open connection; if the server refuses it, that one stays.
                     SshHost fresh;
                     string about;
                     try
                     {
-                        (fresh, about) = await ConnectAsync(t, keyFile, password ?? known.Password, ct, keyOnly: true).ConfigureAwait(false);
+                        (fresh, about) = newLogin
+                            ? await ConnectAsync(t, keyFile, given ? password : known.Password, ct, onlyGiven: given).ConfigureAwait(false)
+                            : await ConnectAsync(t, keyFile, password ?? known.Password, ct, keyOnly: true).ConfigureAwait(false);
                     }
                     catch (IOException ex)
                     {
-                        throw new IOException(ex.Message + " The connection made earlier, without this key, still works.", ex);
+                        throw new IOException(ex.Message + " The connection made earlier is still open.", ex);
                     }
-                    fresh.Password = known.Password;
+                    fresh.Password = password is { Length: > 0 } ? password : known.Password;
                     known.Dispose();
                     _hosts[t.Key] = fresh;
                     LastTarget = target;
                     Remember(keyFile);
-                    return (fresh, $"Logged in again with {keyFile} alone, so the server accepts that key; this is a new terminal. " + about);
+                    var with = !newLogin ? $"{keyFile} alone" : (keyFile, password) switch
+                    {
+                        (not null, { Length: > 0 }) => $"{keyFile} or the password",
+                        (not null, _) => $"{keyFile} alone",
+                        (_, { Length: > 0 }) => "the password alone",
+                        _ => "the usual keys",
+                    };
+                    return (fresh, $"Logged in afresh with {with}: the server accepts that login. This is a new terminal. " + about);
                 }
                 known.Dispose();
                 _hosts.Remove(t.Key);
                 lost = "The earlier connection was lost (a reboot?), so this is a new one: the directory and variables start fresh.";
             }
-            var (host, notice) = await ConnectAsync(t, keyFile, password, ct).ConfigureAwait(false);
+            var (host, notice) = await ConnectAsync(t, keyFile, password, ct, onlyGiven: newLogin && given).ConfigureAwait(false);
             _hosts[t.Key] = host;
             LastTarget = target;
             Remember(keyFile);
@@ -98,13 +114,15 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
     }
 
     /// <param name="keyOnly">Log in with <paramref name="keyFile"/> alone (<paramref name="password"/> only unlocks it).</param>
-    private async Task<(SshHost, string)> ConnectAsync(SshTarget t, string? keyFile, string? password, CancellationToken ct, bool keyOnly = false)
+    /// <param name="onlyGiven">Log in with <paramref name="keyFile"/> and <paramref name="password"/> only, no other key.</param>
+    private async Task<(SshHost, string)> ConnectAsync(SshTarget t, string? keyFile, string? password, CancellationToken ct, bool keyOnly = false, bool onlyGiven = false)
     {
         var auth = new List<AuthenticationMethod>();
         var keys = new List<IPrivateKeySource>();
         var offered = new List<string>();
         var keyErrors = new List<string>();
-        foreach (var path in keyOnly ? [keyFile!] : KeyFiles(keyFile, t.IdentityFile, _keysUsed))
+        IEnumerable<string> paths = keyOnly || onlyGiven ? keyFile is null ? [] : [keyFile] : KeyFiles(keyFile, t.IdentityFile, _keysUsed);
+        foreach (var path in paths)
         {
             try
             {

@@ -198,14 +198,14 @@ public class SshIntegrationTests : IDisposable
             // A key the server doesn't take is refused, and the first connection goes on (still in /tmp).
             var refused = await SshWithKey("bb-j", "pwd");
             Assert.True(refused.IsError);
-            Assert.Contains("still works", refused.Text);
+            Assert.Contains("still open", refused.Text);
             Assert.Contains("[exit code 0 · /tmp]", (await Ssh("pwd")).Text);
 
             // The installed key: a new login with it alone, in a new terminal; then that one is used.
             var fresh = await SshWithKey("bb-k", "pwd");
-            Assert.Contains("Logged in again", fresh.Text);
+            Assert.Contains("Logged in afresh", fresh.Text);
             Assert.Contains("[exit code 0 · /home/", fresh.Text);
-            Assert.DoesNotContain("Logged in again", (await SshWithKey("bb-k", "true")).Text);
+            Assert.DoesNotContain("Logged in afresh", (await SshWithKey("bb-k", "true")).Text);
         }
         finally
         {
@@ -230,6 +230,15 @@ public class SshIntegrationTests : IDisposable
             var right = await new SshTool().ExecuteAsync(new JsonObject { ["host"] = $"bbpw@{server}", ["password"] = "Pw-Test-123", ["command"] = "whoami" }, _ctx, CancellationToken.None);
             Assert.Contains("Connected to", right.Text);
             Assert.Contains("bbpw\n[exit code 0", right.Text);
+
+            // Passwords turned off: a new login with the password is refused, the open terminal goes on.
+            await Ssh("sudo rm /etc/ssh/sshd_config.d/10-bbpw.conf && sudo systemctl reload ssh");
+            var again = await new SshTool().ExecuteAsync(new JsonObject { ["host"] = $"bbpw@{server}", ["password"] = "Pw-Test-123", ["new_login"] = true, ["command"] = "whoami" },
+                _ctx, CancellationToken.None);
+            Assert.True(again.IsError);
+            Assert.Contains("did not accept the login", again.Text);
+            Assert.Contains("still open", again.Text);
+            Assert.Contains("bbpw\n[exit code 0", (await new SshTool().ExecuteAsync(new JsonObject { ["host"] = $"bbpw@{server}", ["command"] = "whoami" }, _ctx, CancellationToken.None)).Text);
         }
         finally
         {
