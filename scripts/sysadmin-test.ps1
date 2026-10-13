@@ -12,7 +12,9 @@
   printing PASS/FAIL lines, and solution.sh, a reference fix that -SelfTest uses to prove the
   checks pass. Optional: vars.txt (KEY=value lines for the scripts, such as LAB_SUDO_PASSWORD
   when a task makes sudo ask for one; {KEY} in the ticket is filled in too), preamble.txt (in
-  place of the standard opening, which says to log in as admin with the key), solution-host.ps1
+  place of the standard opening, which says to log in as admin with the key), old\ (setup.sh and
+  files for an "old server": a second VM at {ip2}, set up before BlackBox starts and switched off
+  before the checks, for tasks that move things from one server to another), solution-host.ps1
   (the reference solution's part on this PC) and setup-host.ps1 (makes per-run files in $tdir\upload,
   which go to the VM with setup.sh). The scripts see LAB_IP, LAB_USER and a random TOKEN; the
   PowerShell ones also $token, $tdir and the lab helpers. Nothing of this is left on the VM while
@@ -33,6 +35,12 @@ param([string[]]$Tasks = @(), [string]$Url = "", [string]$Model = "", [string]$R
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\sysadmin\lab.ps1"
 $taskRoot = Join-Path $PSScriptRoot "sysadmin\tasks"
+# A two-server task (one with an old\ folder) gets its "old server" on the next lab instance.
+$LabIp2 = "127.0.0.$(3 + $LabInstance)"
+$oldServer = Join-Path $PSScriptRoot "sysadmin\old-server.ps1"
+function Invoke-OldServer([string[]]$arguments) {
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $oldServer -Instance ($LabInstance + 1) @arguments 2>&1
+}
 
 # Keep this log window out of the agent's screenshots: on another monitor if there is one.
 if (-not $SelfTest) {
@@ -91,7 +99,7 @@ if (Test-Path $userKnownOld) { Copy-Item $userKnownOld $savedOld }
 # BlackBox's own known_hosts: a rebuilt lab has new host keys, which BlackBox would rightly refuse.
 $bbKnown = Join-Path $(if ($Root) { $Root } else { Join-Path $LabRepo ".dev" }) "Data\known_hosts"
 if (Test-Path $bbKnown) {
-  @(Get-Content $bbKnown | Where-Object { $_ -notlike "$LabIp *" }) | Set-Content -Encoding ascii $bbKnown
+  @(Get-Content $bbKnown | Where-Object { $_ -notlike "$LabIp *" -and $_ -notlike "$LabIp2 *" }) | Set-Content -Encoding ascii $bbKnown
 }
 
 $cliArgs = @()
@@ -105,7 +113,7 @@ $preamble = "Our Ubuntu server runs in a VM on this PC and is reachable at {ip}:
   "Log in over SSH as {user} with the private key {key}; {user} has sudo rights. "
 
 function Fill([string]$text) {
-  $text = $text.Replace("{ip}", $LabIp).Replace("{user}", $LabUser).Replace("{key}", $key).Replace("{monitor}", $LabHostSeenAs).Replace("{tdir}", $tdir)
+  $text = $text.Replace("{ip2}", $LabIp2).Replace("{ip}", $LabIp).Replace("{user}", $LabUser).Replace("{key}", $key).Replace("{monitor}", $LabHostSeenAs).Replace("{tdir}", $tdir)
   # A task's own values: {KEY} for each KEY=value line of its vars.txt.
   foreach ($line in ($extra -split "`n")) { if ($line -match '^(\w+)=(.*)$') { $text = $text.Replace("{$($Matches[1])}", $Matches[2].Trim()) } }
   $text
@@ -152,6 +160,16 @@ try {
 
     Log "$($task.Name): resetting the lab VM"
     try { Reset-LabVm } catch { Log "reset failed ($($_.Exception.Message)); once more"; Reset-LabVm }
+    $hasOld = Test-Path (Join-Path $task.FullName "old\setup.sh")
+    if ($hasOld) {
+      Log "$($task.Name): setting up the old server at $LabIp2"
+      Invoke-OldServer @("-TaskDir", $task.FullName, "-Vars", $vars) | Set-Content -Encoding utf8 (Join-Path $tdir "setup-old.txt")
+      if ($LASTEXITCODE -ne 0) {
+        Log "$($task.Name): the old server's setup failed (see $tdir\setup-old.txt); next task"
+        $rows += [pscustomobject]@{ Task = $task.Name; Result = "SETUP FAILED"; Checks = ""; Minutes = 0; Steps = 0; Tools = 0; Errors = 0; Done = "" }
+        continue
+      }
+    }
     $hostSetup = Join-Path $task.FullName "setup-host.ps1"
     if (Test-Path $hostSetup) { & $hostSetup }
     $r = Invoke-TaskScript $task "setup.sh" $vars
@@ -200,6 +218,8 @@ try {
       $reader.Dispose()
     }
     $sw.Stop()
+    # The old server is switched off, as the ticket says: nothing may depend on it.
+    if ($hasOld) { Invoke-OldServer @("-Stop") | Out-Null }
     } # not -Recheck
 
     Log "$($task.Name): rebooting the VM and checking"
@@ -238,9 +258,10 @@ try {
     }
   }
 } finally {
-  # Leave the user's known_hosts as it was.
-  if ((Test-Path $userKnown) -and (Invoke-LabExe "ssh-keygen.exe" @("-F", $LabIp, "-f", $userKnown)).Code -eq 0) {
-    Invoke-LabExe "ssh-keygen.exe" @("-R", $LabIp, "-f", $userKnown) | Out-Null
+  # Leave the user's known_hosts as it was (the old server of a two-server task included).
+  $added = @($LabIp, $LabIp2 | Where-Object { (Test-Path $userKnown) -and (Invoke-LabExe "ssh-keygen.exe" @("-F", $_, "-f", $userKnown)).Code -eq 0 })
+  foreach ($ip in $added) { Invoke-LabExe "ssh-keygen.exe" @("-R", $ip, "-f", $userKnown) | Out-Null }
+  if ($added.Count -gt 0) {
     if (Test-Path $savedOld) { Copy-Item $savedOld $userKnownOld -Force } else { Remove-Item $userKnownOld -ErrorAction SilentlyContinue }
   }
 }
