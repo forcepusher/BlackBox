@@ -235,6 +235,30 @@ public class SshIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task A_key_named_once_is_offered_to_the_next_server()
+    {
+        if (Host is null) return;
+        var server = Host[(Host.IndexOf('@') + 1)..];
+        try
+        {
+            // Another account that takes the same key, logged in to without naming it, as ssh-agent would.
+            await Ssh("sudo useradd -m -s /bin/bash bbagent 2>/dev/null; sudo install -d -m 700 -o bbagent -g bbagent ~bbagent/.ssh && " +
+                      "sudo install -m 600 -o bbagent -g bbagent ~/.ssh/authorized_keys ~bbagent/.ssh/authorized_keys");
+            var other = await new SshTool().ExecuteAsync(new JsonObject { ["host"] = $"bbagent@{server}", ["command"] = "whoami" }, _ctx, CancellationToken.None);
+            Assert.Contains("bbagent\n[exit code 0", other.Text);
+            // And copy goes from one login to the other through this PC.
+            await Ssh("echo moved > /tmp/bb-agent.txt");
+            var copy = await new CopyTool().ExecuteAsync(new() { ["from"] = $"{Host}:/tmp/bb-agent.txt", ["to"] = $"bbagent@{server}:/home/bbagent/" }, _ctx, CancellationToken.None);
+            Assert.False(copy.IsError, copy.Text);
+            Assert.Contains("moved", (await new SshTool().ExecuteAsync(new JsonObject { ["host"] = $"bbagent@{server}", ["command"] = "cat ~/bb-agent.txt" }, _ctx, CancellationToken.None)).Text);
+        }
+        finally
+        {
+            await Ssh("rm -f /tmp/bb-agent.txt; sudo pkill -u bbagent; sudo userdel -r bbagent 2>/dev/null; true");
+        }
+    }
+
+    [Fact]
     public async Task After_a_reboot_the_next_call_logs_in_again()
     {
         if (Host is null || Environment.GetEnvironmentVariable("BB_SSH_TEST_REBOOT") != "1") return;

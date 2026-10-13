@@ -6,14 +6,17 @@ namespace BlackBox.Core.Ssh;
 
 /// <summary>
 /// The servers a chat is logged in to, one <see cref="SshHost"/> per user, host and port, kept
-/// until the chat ends. Logs in with the key the model names, the keys in ~/.ssh, or a password
-/// the user gave. Host keys are checked against BlackBox's own known_hosts (Data/known_hosts):
-/// the first key a server shows is saved, and a different one later is refused, as OpenSSH does.
+/// until the chat ends. Logs in with the key the model names, keys named earlier in the chat (as
+/// ssh-agent offers the keys it holds), the keys in ~/.ssh, or a password the user gave. Host
+/// keys are checked against BlackBox's own known_hosts (Data/known_hosts): the first key a server
+/// shows is saved, and a different one later is refused, as OpenSSH does.
 /// </summary>
 public sealed class SshHosts(string knownHostsFile) : IDisposable
 {
     private readonly Dictionary<string, SshHost> _hosts = [];
     private readonly SemaphoreSlim _lock = new(1, 1);
+    /// <summary>Key files named in this chat that a server took: also offered to the next servers.</summary>
+    private readonly List<string> _keysUsed = [];
 
     /// <summary>How long a server that refuses connections (rebooting, say) is retried before giving up.</summary>
     internal static TimeSpan RetryFor { get; set; } = TimeSpan.FromSeconds(45);
@@ -61,6 +64,7 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
                     known.Dispose();
                     _hosts[t.Key] = fresh;
                     LastTarget = target;
+                    Remember(keyFile);
                     return (fresh, $"Logged in again with {keyFile} alone, so the server accepts that key; this is a new terminal. " + about);
                 }
                 known.Dispose();
@@ -70,12 +74,27 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
             var (host, notice) = await ConnectAsync(t, keyFile, password, ct).ConfigureAwait(false);
             _hosts[t.Key] = host;
             LastTarget = target;
+            Remember(keyFile);
             return (host, lost is null ? notice : lost + " " + notice);
         }
         finally
         {
             _lock.Release();
         }
+    }
+
+    /// <summary>
+    /// The server ended the connection for too many failed logins ("Too many authentication
+    /// failures"): a login problem, not a server on its way back up, so not worth retrying.
+    /// </summary>
+    private static bool AuthGaveUp(Exception ex) => ex is SshConnectionException c &&
+        (c.DisconnectReason == Renci.SshNet.Messages.Transport.DisconnectReason.NoMoreAuthenticationMethodsAvailable ||
+         c.Message.Contains("authentication", StringComparison.OrdinalIgnoreCase));
+
+    private void Remember(string? keyFile)
+    {
+        if (keyFile is not null && !_keysUsed.Contains(Path.GetFullPath(keyFile), StringComparer.OrdinalIgnoreCase))
+            _keysUsed.Add(Path.GetFullPath(keyFile));
     }
 
     /// <param name="keyOnly">Log in with <paramref name="keyFile"/> alone (<paramref name="password"/> only unlocks it).</param>
@@ -85,7 +104,7 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
         var keys = new List<IPrivateKeySource>();
         var offered = new List<string>();
         var keyErrors = new List<string>();
-        foreach (var path in keyOnly ? [keyFile!] : KeyFiles(keyFile, t.IdentityFile))
+        foreach (var path in keyOnly ? [keyFile!] : KeyFiles(keyFile, t.IdentityFile, _keysUsed))
         {
             try
             {
@@ -101,8 +120,8 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
         }
         if (keyFile is not null && !File.Exists(keyFile))
             throw new FileNotFoundException($"The key file {keyFile} does not exist.");
-        if (keys.Count > 0)
-            auth.Add(new PrivateKeyAuthenticationMethod(t.User, [.. keys]));
+        // A password goes first where the server takes one: every key refused before it counts
+        // toward the server's limit (MaxAuthTries, 6), and an RSA key can count three times.
         if (password is { Length: > 0 } && !keyOnly)
         {
             auth.Add(new PasswordAuthenticationMethod(t.User, password));
@@ -110,6 +129,8 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
             kbd.AuthenticationPrompt += (_, e) => { foreach (var p in e.Prompts) p.Response = password; };
             auth.Add(kbd);
         }
+        if (keys.Count > 0)
+            auth.Add(new PrivateKeyAuthenticationMethod(t.User, [.. keys]));
         if (auth.Count == 0)
             throw new IOException($"No way to log in to {t}: no key was given, none is in ~/.ssh{(keyErrors.Count > 0 ? " (" + string.Join("; ", keyErrors) + ")" : "")}, and no password.");
 
@@ -141,7 +162,8 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
             {
                 await client.ConnectAsync(ct).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is SocketException or SshConnectionException or SshOperationTimeoutException or TimeoutException && mismatch is null && DateTime.UtcNow < giveUp && !ct.IsCancellationRequested)
+            catch (Exception ex) when (ex is SocketException or SshConnectionException or SshOperationTimeoutException or TimeoutException && !AuthGaveUp(ex) &&
+                                       mismatch is null && DateTime.UtcNow < giveUp && !ct.IsCancellationRequested)
             {
                 // Refused or unreachable: often a server on its way back up from a reboot.
                 client.Dispose();
@@ -157,8 +179,9 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
                                           "if they confirm the server was rebuilt, they can delete its line in that file.");
                 throw ex switch
                 {
-                    SshAuthenticationException => new IOException($"{t} did not accept the login ({ex.Message}). " +
-                        (keyFile is null ? "Check the user name, and give key_file if the user named a key." : "Check the user name and the key.")),
+                    _ when ex is SshAuthenticationException || AuthGaveUp(ex) =>
+                        new IOException($"{t} did not accept the login ({ex.Message}). " +
+                            (keyFile is null ? "Check the user name, and give key_file if the user named a key." : "Check the user name and the key.")),
                     SocketException s => new IOException($"Can't reach {t.Host}:{t.Port}: {s.Message}"),
                     _ => new IOException($"Can't connect to {t}: {ex.Message}"),
                 };
@@ -193,15 +216,18 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
         }
     }
 
-    /// <summary>The named key first, then the one ~/.ssh/config gives, then the usual ones in ~/.ssh.</summary>
-    private static IEnumerable<string> KeyFiles(string? keyFile, string? fromConfig)
+    /// <summary>
+    /// The named key first, then the one ~/.ssh/config gives and the keys named earlier in the
+    /// chat; the usual ones in ~/.ssh only when no key is named (each refused key counts toward
+    /// the server's limit of failed logins). Each once.
+    /// </summary>
+    private static IEnumerable<string> KeyFiles(string? keyFile, string? fromConfig, IEnumerable<string> used)
     {
-        if (keyFile is not null) yield return keyFile;
-        if (fromConfig is not null && File.Exists(fromConfig)) yield return fromConfig;
         var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh");
-        foreach (var name in new[] { "id_ed25519", "id_ecdsa", "id_rsa" })
-            if (Path.Combine(dir, name) is var p && File.Exists(p) && p != keyFile && p != fromConfig)
-                yield return p;
+        var all = new[] { keyFile, fromConfig is not null && File.Exists(fromConfig) ? fromConfig : null }
+            .Concat(used.Where(File.Exists))
+            .Concat(keyFile is not null ? [] : new[] { "id_ed25519", "id_ecdsa", "id_rsa" }.Select(n => Path.Combine(dir, n)).Where(File.Exists));
+        return all.OfType<string>().DistinctBy(Path.GetFullPath, StringComparer.OrdinalIgnoreCase);
     }
 
     // ---- known_hosts: "host keytype base64", or "[host]:port keytype base64" -------------

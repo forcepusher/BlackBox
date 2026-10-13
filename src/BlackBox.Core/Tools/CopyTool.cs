@@ -14,7 +14,8 @@ public sealed partial class CopyTool : Tool
 {
     public override string Name => "copy";
     public override string Description =>
-        "Copy a file or a folder (with everything in it) between this PC and an SSH host, or within either. Write a host's paths as user@host:/path, " +
+        "Copy a file or a folder (with everything in it) between this PC and an SSH host, from one host to another (through this PC), or within " +
+        "either. Write a host's paths as user@host:/path, " +
         "as for scp. Binary files arrive byte for byte. A folder copied to a folder that exists goes inside it; end the source with /* to copy only " +
         "what is in it. Where the login user can't write on the host, sudo is used (new files then belong to root).";
     public override ToolRisk Risk => ToolRisk.Risky;
