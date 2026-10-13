@@ -177,7 +177,10 @@ public sealed partial class SshHost : IDisposable
 
             var quiet = DateTime.UtcNow - last;
             var lastLine = TerminalText.Clean(raw[(raw.LastIndexOf('\n') + 1)..]);
-            if (running is not null && quiet > TimeSpan.FromSeconds(0.7) && TerminalText.IsSudoPrompt(lastLine))
+            // sudo prints its prompt also when it reads the password from a pipe (echo pw | sudo -S),
+            // and checking a password can take seconds on a slow machine: only a prompt that stays
+            // unanswered for a while is one that waits for the terminal.
+            if (running is not null && quiet > TimeSpan.FromSeconds(3) && TerminalText.IsSudoPrompt(lastLine))
             {
                 if (Password is { Length: > 0 } pw && running.SudoAnswers == 0)
                 {
@@ -253,7 +256,10 @@ public sealed partial class SshHost : IDisposable
         shell.Write("stty -echo 2>/dev/null; set +o emacs +o vi 2>/dev/null; unset HISTFILE; " +
                     "export TERM=dumb PAGER=cat SYSTEMD_PAGER=cat GIT_PAGER=cat MANPAGER=cat SYSTEMD_COLORS=0 LESS=FRX; PS1=; PS2=; " +
                     "__bb_d=$(mktemp -d /tmp/.blackbox-XXXXXX) && echo $$ >\"$__bb_d/pid\" && tty | sed 's|^/dev/||' >\"$__bb_d/tty\"; " +
+                    // Typed-ahead input no program read (an answer sent just after its question went away) is
+                    // dropped here, or bash would run it as the next command line.
                     "__bb_done() { local rc=$? f; [ -n \"$__bb_id\" ] || return 0; f=$__bb_d/$__bb_id; stty -echo 2>/dev/null; " +
+                    "while read -r -t 0.05 __bb_junk; do :; done; " +
                     "cd \"$(cat \"$f.pwd\" 2>/dev/null || pwd)\" 2>/dev/null; . \"$f.env\" 2>/dev/null; . \"$f.fn\" 2>/dev/null; . \"$f.al\" 2>/dev/null; " +
                     "printf '\\036BB-%s-%s-%s\\036\\n' \"$__bb_id\" \"$rc\" \"$PWD\"; rm -f \"$f\".*; __bb_id=; }; " +
                     "PROMPT_COMMAND=__bb_done; printf '\\036BB-INIT-%s\\036\\n' \"$__bb_d\"\n");

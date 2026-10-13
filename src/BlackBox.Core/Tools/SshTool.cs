@@ -30,7 +30,7 @@ public sealed partial class SshTool : Tool
         ("interrupt", Bool("Press Ctrl+C to stop the running command"), false),
         ("wait_seconds", Int("How long to wait for the command before returning (default 120, max 1800); it keeps running after that"), false),
         ("key_file", Str("Private key file on this PC to log in with (default: the keys in ~/.ssh)"), false),
-        ("password", Str("Password to log in with, also typed into sudo's password prompt; only one the user gave you"), false));
+        ("password", Str("The login or sudo password, if the user gave you one: pass it once and BlackBox answers sudo's prompts itself (no echo pw | sudo -S)"), false));
 
     public override string Describe(JsonObject args)
     {
