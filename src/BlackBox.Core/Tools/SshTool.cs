@@ -24,7 +24,7 @@ public sealed partial class SshTool : Tool
         "read and change files on the host with read_file, write_file, edit_file and list_directory and their host argument.";
     public override ToolRisk Risk => ToolRisk.Risky;
     public override JsonObject Parameters => Schema(
-        ("host", Str("user@host, user@host:port, or a Host from ~/.ssh/config"), true),
+        ("host", Str("user@host, user@host:port, or a Host from ~/.ssh/config; leave it out to stay on the server of your last ssh call"), false),
         ("command", Str("bash command(s) to run; several lines are fine"), false),
         ("input", Str("Text to type into the running command, followed by Enter"), false),
         ("interrupt", Bool("Press Ctrl+C to stop the running command"), false),
@@ -34,7 +34,7 @@ public sealed partial class SshTool : Tool
 
     public override string Describe(JsonObject args)
     {
-        var host = GetString(args, "host");
+        var host = GetString(args, "host") ?? "(same server)";
         if (GetBool(args, "interrupt")) return $"SSH {host}: Ctrl+C";
         if (GetString(args, "input") is { } input)
             return $"SSH {host}: type {(LooksSecret(input, GetString(args, "password")) ? "(password)" : input)}";
@@ -45,7 +45,10 @@ public sealed partial class SshTool : Tool
     {
         if (ctx.Ssh is null)
             return ToolResult.Error("SSH is not available in this run.");
-        var target = RequireString(args, "host");
+        // Models often leave the host out once they are "in" a server, as a person at a terminal would.
+        var target = GetString(args, "host") is { Length: > 0 } h ? h : ctx.Ssh.LastTarget;
+        if (target is null)
+            return ToolResult.Error("Give host as user@host (with key_file if the user named a key) for the first ssh call.");
         var command = GetString(args, "command");
         var input = GetString(args, "input");
         var interrupt = GetBool(args, "interrupt");

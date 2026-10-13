@@ -20,6 +20,9 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
 
     public IReadOnlyCollection<SshHost> Connected => _hosts.Values.Where(h => h.IsConnected).ToList();
 
+    /// <summary>The host of the last successful GetAsync: where an ssh call without a host goes.</summary>
+    public string? LastTarget { get; private set; }
+
     /// <summary>
     /// The logged-in host for <paramref name="target"/>, connecting first if needed. The notice
     /// says what a new connection found (the system, whether sudo asks for a password, a new
@@ -36,13 +39,17 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
             {
                 if (password is { Length: > 0 }) known.Password = password;
                 if (known.IsConnected)
+                {
+                    LastTarget = target;
                     return (known, null);
+                }
                 known.Dispose();
                 _hosts.Remove(t.Key);
                 lost = "The earlier connection was lost (a reboot?), so this is a new one: the directory and variables start fresh.";
             }
             var (host, notice) = await ConnectAsync(t, keyFile, password, ct).ConfigureAwait(false);
             _hosts[t.Key] = host;
+            LastTarget = target;
             return (host, lost is null ? notice : lost + " " + notice);
         }
         finally

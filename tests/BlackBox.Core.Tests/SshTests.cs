@@ -176,6 +176,16 @@ public class SshTests
     }
 
     [Fact]
+    public async Task Ssh_without_a_host_needs_one_the_first_time()
+    {
+        using var hosts = new SshHosts(Path.Combine(Path.GetTempPath(), "bb-known-" + Guid.NewGuid().ToString("N")));
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = Path.GetTempPath(), Ssh = hosts };
+        var r = await new SshTool().ExecuteAsync(new() { ["command"] = "uptime" }, ctx, CancellationToken.None);
+        Assert.True(r.IsError);
+        Assert.Contains("Give host", r.Text);
+    }
+
+    [Fact]
     public void Results_say_what_to_do_next()
     {
         var done = SshTool.Format(new ShellResult(ShellState.Done, "active", 0, "/etc/nginx"), null, TimeSpan.FromSeconds(120));
