@@ -153,6 +153,43 @@ public class SshIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task A_key_the_connection_did_not_use_is_tested_with_a_fresh_login()
+    {
+        if (Host is null) return;
+        var local = Path.Combine(Path.GetTempPath(), "bb-key-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(local);
+        Task<ToolResult> SshWithKey(string name, string command) => new SshTool().ExecuteAsync(
+            new JsonObject { ["host"] = Host, ["key_file"] = Path.Combine(local, name), ["command"] = command }, _ctx, CancellationToken.None);
+        try
+        {
+            await Ssh("cd /tmp; rm -f bb-k bb-k.pub bb-j bb-j.pub; ssh-keygen -q -t ed25519 -N '' -f bb-k -C bb-test-key && " +
+                      "ssh-keygen -q -t ed25519 -N '' -f bb-j -C bb-other-key && cat bb-k.pub >> ~/.ssh/authorized_keys");
+            foreach (var name in new[] { "bb-k", "bb-j" })
+            {
+                var down = await new CopyTool().ExecuteAsync(new() { ["from"] = $"{Host}:/tmp/{name}", ["to"] = Path.Combine(local, name) }, _ctx, CancellationToken.None);
+                Assert.False(down.IsError, down.Text);
+            }
+
+            // A key the server doesn't take is refused, and the first connection goes on (still in /tmp).
+            var refused = await SshWithKey("bb-j", "pwd");
+            Assert.True(refused.IsError);
+            Assert.Contains("still works", refused.Text);
+            Assert.Contains("[exit code 0 · /tmp]", (await Ssh("pwd")).Text);
+
+            // The installed key: a new login with it alone, in a new terminal; then that one is used.
+            var fresh = await SshWithKey("bb-k", "pwd");
+            Assert.Contains("Logged in again", fresh.Text);
+            Assert.Contains("[exit code 0 · /home/", fresh.Text);
+            Assert.DoesNotContain("Logged in again", (await SshWithKey("bb-k", "true")).Text);
+        }
+        finally
+        {
+            await Ssh("sed -i '/bb-test-key/d' ~/.ssh/authorized_keys; rm -f /tmp/bb-k /tmp/bb-k.pub /tmp/bb-j /tmp/bb-j.pub");
+            Directory.Delete(local, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task After_a_reboot_the_next_call_logs_in_again()
     {
         if (Host is null || Environment.GetEnvironmentVariable("BB_SSH_TEST_REBOOT") != "1") return;

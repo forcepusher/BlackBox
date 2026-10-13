@@ -29,7 +29,7 @@ public sealed partial class SshTool : Tool
         ("input", Str("Text to type into the running command, followed by Enter"), false),
         ("interrupt", Bool("Press Ctrl+C to stop the running command"), false),
         ("wait_seconds", Int("How long to wait for the command before returning (default 120, max 1800); it keeps running after that"), false),
-        ("key_file", Str("Private key file on this PC to log in with (default: the keys in ~/.ssh)"), false),
+        ("key_file", Str("Private key file on this PC to log in with (default: the keys in ~/.ssh). A key the open connection didn't use logs in afresh with it alone: the way to test a key you installed"), false),
         ("password", Str("The login or sudo password, if the user gave you one: pass it once and BlackBox answers sudo's prompts itself (no echo pw | sudo -S)"), false));
 
     public override string Describe(JsonObject args)

@@ -38,10 +38,30 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
             if (_hosts.TryGetValue(t.Key, out var known))
             {
                 if (password is { Length: > 0 }) known.Password = password;
-                if (known.IsConnected)
+                if (known.IsConnected && (keyFile is null || known.LoginKeys.Contains(Path.GetFullPath(keyFile), StringComparer.OrdinalIgnoreCase)))
                 {
                     LastTarget = target;
                     return (known, null);
+                }
+                if (known.IsConnected)
+                {
+                    // A key this connection didn't log in with (one just installed, say): a real
+                    // login with that key alone. If the server refuses it, the old connection stays.
+                    SshHost fresh;
+                    string about;
+                    try
+                    {
+                        (fresh, about) = await ConnectAsync(t, keyFile, password ?? known.Password, ct, keyOnly: true).ConfigureAwait(false);
+                    }
+                    catch (IOException ex)
+                    {
+                        throw new IOException(ex.Message + " The connection made earlier, without this key, still works.", ex);
+                    }
+                    fresh.Password = known.Password;
+                    known.Dispose();
+                    _hosts[t.Key] = fresh;
+                    LastTarget = target;
+                    return (fresh, $"Logged in again with {keyFile} alone, so the server accepts that key; this is a new terminal. " + about);
                 }
                 known.Dispose();
                 _hosts.Remove(t.Key);
@@ -58,14 +78,20 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
         }
     }
 
-    private async Task<(SshHost, string)> ConnectAsync(SshTarget t, string? keyFile, string? password, CancellationToken ct)
+    /// <param name="keyOnly">Log in with <paramref name="keyFile"/> alone (<paramref name="password"/> only unlocks it).</param>
+    private async Task<(SshHost, string)> ConnectAsync(SshTarget t, string? keyFile, string? password, CancellationToken ct, bool keyOnly = false)
     {
         var auth = new List<AuthenticationMethod>();
         var keys = new List<IPrivateKeySource>();
+        var offered = new List<string>();
         var keyErrors = new List<string>();
-        foreach (var path in KeyFiles(keyFile, t.IdentityFile))
+        foreach (var path in keyOnly ? [keyFile!] : KeyFiles(keyFile, t.IdentityFile))
         {
-            try { keys.Add(password is { Length: > 0 } ? new PrivateKeyFile(path, password) : new PrivateKeyFile(path)); }
+            try
+            {
+                keys.Add(password is { Length: > 0 } ? new PrivateKeyFile(path, password) : new PrivateKeyFile(path));
+                offered.Add(Path.GetFullPath(path));
+            }
             catch (SshPassPhraseNullOrEmptyException) { keyErrors.Add($"{path} is protected by a passphrase"); }
             catch (Exception ex) when (ex is SshException or IOException or UnauthorizedAccessException or ArgumentException)
             {
@@ -77,7 +103,7 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
             throw new FileNotFoundException($"The key file {keyFile} does not exist.");
         if (keys.Count > 0)
             auth.Add(new PrivateKeyAuthenticationMethod(t.User, [.. keys]));
-        if (password is { Length: > 0 })
+        if (password is { Length: > 0 } && !keyOnly)
         {
             auth.Add(new PasswordAuthenticationMethod(t.User, password));
             var kbd = new KeyboardInteractiveAuthenticationMethod(t.User);
@@ -138,7 +164,7 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
                 };
             }
 
-            var host = new SshHost(client, t, password);
+            var host = new SshHost(client, t, password) { LoginKeys = offered };
             var about = await DescribeAsync(host, ct).ConfigureAwait(false);
             return (host, $"Connected to {t}: {about}" + (newKey is null ? "" : $" Its host key {newKey} was saved."));
         }

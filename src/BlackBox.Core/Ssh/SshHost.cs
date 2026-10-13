@@ -73,6 +73,9 @@ public sealed partial class SshHost : IDisposable
 
     public SshTarget Target { get; }
 
+    /// <summary>The key files (full paths) offered when logging in.</summary>
+    internal IReadOnlyList<string> LoginKeys { get; init; } = [];
+
     /// <summary>The user's password for this server, if they gave one: typed into sudo's prompt.</summary>
     public string? Password { get; set; }
 

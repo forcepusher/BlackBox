@@ -208,6 +208,9 @@ command to the next, as for a person at a terminal. The SSH client is built in (
   unpacked with sudo where the login user can't write; what only root can read comes down with
   sudo too. In the baseline run the model wrote configs to a local file and called scp.exe
   through PowerShell for want of this.
+- A `key_file` the open connection didn't log in with logs in afresh with that key alone, in a
+  new terminal: the test an admin makes in a second terminal before turning passwords off. If
+  the server refuses the key, the old connection stays.
 - Host keys are checked against `Data/known_hosts`: the first key a server shows is saved, a
   different one later is refused, as OpenSSH does. A connection lost to a reboot is made
   again on the next call, retried for 45 seconds while the server comes back.
