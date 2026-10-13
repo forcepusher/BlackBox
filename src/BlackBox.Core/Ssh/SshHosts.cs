@@ -197,10 +197,12 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
         File.AppendAllText(knownHostsFile, $"{Name(t)} {key}\n");
     }
 
+    /// <summary>Logs out of every server (removing each terminal's private folder; at most 5 seconds per server).</summary>
     public void Dispose()
     {
         foreach (var h in _hosts.Values)
             h.Dispose();
         _hosts.Clear();
+        LastTarget = null;
     }
 }

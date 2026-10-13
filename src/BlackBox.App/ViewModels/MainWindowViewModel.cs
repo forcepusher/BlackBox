@@ -575,7 +575,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         // The stopped run keeps its own list until it ends, so it can't write into the next chat.
         _history = [];
         // Logins belong to the chat: the next one starts logged out (the stopped run's tools fail).
-        _ssh.Dispose();
+        // Logging out talks to the servers, so it happens off the UI thread.
+        var ended = _ssh;
+        _ = Task.Run(ended.Dispose);
         _ssh = new Core.Ssh.SshHosts(_paths.KnownHostsFile);
         Items.Clear();
         _current = null;

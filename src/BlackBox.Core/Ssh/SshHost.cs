@@ -416,8 +416,13 @@ public sealed partial class SshHost : IDisposable
         if (_disposed) return;
         try
         {
+            // The private folder goes with the terminal; a server that doesn't answer gets 5 seconds.
             if (_client.IsConnected && _dir.Length > 0)
-                _client.RunCommand($"rm -rf {Quote(_dir)}").Dispose();
+            {
+                using var rm = _client.CreateCommand($"rm -rf {Quote(_dir)}");
+                rm.CommandTimeout = TimeSpan.FromSeconds(5);
+                rm.Execute();
+            }
         }
         catch (Exception) { }
         _disposed = true;
