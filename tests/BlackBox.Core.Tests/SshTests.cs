@@ -38,6 +38,12 @@ public class SshTests
         foreach (var line in new[] { "\x1b[32mPASS\x1b[0m two players\x1b[0m see each other move", "name\tsize\tdate\tpath\towner\tmode", "Привет, это обычный текст на сервере", "ab�cd" })
             Assert.False(TerminalText.LooksBinary(line), line);
         Assert.Equal("plain\ntext", TerminalText.DropBinary("plain\ntext"));
+
+        // Russian in code page 866 read as UTF-8 ("Ошибка: файл не найден"): all undecodable letters, but no
+        // control characters, so run_shell (which asks for them) keeps it; real binary has plenty.
+        var cp866 = System.Text.Encoding.UTF8.GetString([0x8E, 0xE8, 0xA8, 0xA1, 0xAA, 0xA0, 0x3A, 0x20, 0xE4, 0xA0, 0xA9, 0xAB, 0x20, 0xAD, 0xA5, 0x20, 0xAD, 0xA0, 0xA9, 0xA4, 0xA5, 0xAD]);
+        Assert.False(TerminalText.LooksBinary(cp866, needControl: true));
+        Assert.True(TerminalText.LooksBinary(image.Split('\n').First(l => l.Length > 100), needControl: true));
     }
 
     [Fact]

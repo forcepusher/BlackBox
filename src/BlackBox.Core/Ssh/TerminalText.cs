@@ -118,12 +118,23 @@ public static partial class TerminalText
     /// codes (escape) and tabs don't count; short lines never do.
     /// </summary>
     /// <param name="afterBinary">The line before was binary: then a short line with any such character is a piece of it too.</param>
-    public static bool LooksBinary(string line, bool afterBinary = false)
+    /// <param name="needControl">
+    /// Count it as binary only with control characters in it too: text in a legacy code page read
+    /// as UTF-8 (a Russian Windows tool's output) is all undecodable letters, but never control characters.
+    /// </param>
+    public static bool LooksBinary(string line, bool afterBinary = false, bool needControl = false)
     {
-        var odd = 0;
+        int odd = 0, control = 0;
         foreach (var c in line)
-            if (c == '�' || char.IsControl(c) && c is not ('\t' or '\r' or '\x1b'))
-                odd++;
+        {
+            if (char.IsControl(c) && c is not ('\t' or '\r' or '\x1b'))
+                control++;
+            else if (c != '�')
+                continue;
+            odd++;
+        }
+        if (needControl && control * 50 < line.Length)
+            return false;
         return line.Length < 16 ? afterBinary && odd > 0 : odd * 10 > line.Length;
     }
 

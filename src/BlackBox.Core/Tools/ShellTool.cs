@@ -49,7 +49,7 @@ public sealed partial class ShellTool : Tool
             lock (gate)
             {
                 // An image or an archive printed as text says nothing and would fill the context.
-                if (Ssh.TerminalText.LooksBinary(line, afterBinary: binary > 0))
+                if (Ssh.TerminalText.LooksBinary(line, afterBinary: binary > 0, needControl: binary == 0))
                 {
                     binary += line.Length + 1;
                     return;
