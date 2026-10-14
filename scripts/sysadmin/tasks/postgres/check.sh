@@ -13,7 +13,9 @@ out=$(PGPASSWORD='wrong' PGCONNECT_TIMEOUT=5 psql "host=$LAB_GUEST_IP user=shop 
 [ "$out" != "1" ] && pass "a wrong password is refused" || fail "a wrong password is refused"
 out=$(PGPASSWORD='' PGCONNECT_TIMEOUT=5 psql -w "host=$LAB_GUEST_IP user=postgres dbname=postgres" -tAc "select 1" 2>&1)
 [ "$out" != "1" ] && pass "postgres can't be logged in to over the network without a password" || fail "postgres can't be logged in to over the network without a password"
-owner=$(sudo -u postgres psql -tAc "select pg_get_userbyid(datdba) from pg_database where datname = 'shop'" 2>/dev/null)
+owner=$(sudo -u postgres psql -tAc "select pg_get_userbyid(datdba) from pg_database where datname = 'shop'" 2>&1)
+# If the postgres superuser can't log in on the server itself (local peer login removed), say so.
+case "$owner" in *"authentication failed"*|*"no password supplied"*) owner="unknown: the postgres superuser can't log in on the server any more ($(echo "$owner" | head -1 | cut -c1-80))";; esac
 [ "$owner" = shop ] && pass "the database shop belongs to the user shop" || fail "the database shop belongs to the user shop (owner: $owner)"
 hba=$(sudo -u postgres psql -tAc "show hba_file" 2>/dev/null)
 rules=$(grep -vE '^\s*(#|$)' "$hba" 2>/dev/null)
