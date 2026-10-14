@@ -196,7 +196,9 @@ The SSH client is built in (SSH.NET), so no
   command waits for an answer (a question on its last line, its processes idle for a second:
   `echo y | ufw enable` works on quietly after its question), or, unless the model chose
   `wait_seconds`, has printed nothing for 30 seconds (a server started in the foreground). An
-  answer that arrives after the command finished isn't typed, or bash would run it.
+  answer that arrives after the command finished isn't typed, or bash would run it. A wait that
+  brings no output at all says which of the command's programs are running and for how long
+  (apt behind `| tail`, a slow download, a build).
 - sudo's password prompt is answered with the user's `password`, if they gave one; the model
   never has to type it.
 - The output is what the terminal would show: colours go, and progress redrawn in place (a `\r`
@@ -216,8 +218,9 @@ The SSH client is built in (SSH.NET), so no
   and a group written without `%`), `sshd -t` and, for what a drop-in sets, the value sshd
   really uses when a file it reads earlier wins, `nginx -t`, `systemd-analyze verify`,
   `findmnt --verify` for fstab, cron.d names, owner, mode and line endings, `logrotate -d`,
-  `netplan generate`, and pg_hba.conf errors or a postgres superuser locked out locally. The
-  costliest mistakes in the benchmark were configs like these that looked right.
+  `netplan generate`, PostgreSQL's own reading of pg_hba.conf and its settings (errors, a
+  setting only a restart applies, a postgres superuser locked out locally). The costliest
+  mistakes in the benchmark were configs like these that looked right.
 - `copy` moves files and whole folders between this PC and a server, from one server to another
   (through this PC), or within either, the way
   `scp -r` does (a folder copied into a folder goes inside it; `/*` at the end copies only its
@@ -296,9 +299,13 @@ PC (a WebSocket game played by two clients, ports probed, logins tried with each
 `-SelfTest` runs each task's reference solution instead of BlackBox, to prove the checks.
 
 On 14 October 2026, with qwen3.8-27b (q6_k_xl) on LM Studio, every ticket passed on its first
-run (17 of 17, 140 of 140 checks), and a second pass of the first 16 with the final build passed
+run on Ubuntu 24.04 (17 of 17, 140 of 140 checks), and a second pass of the first 16 with the final build passed
 15 (131 of 133 checks). On seven tickets that both ran, the build before the ssh tools took 52 minutes, 123 model
 calls and 26 failed tool calls; the ssh tools took about 28 minutes, 93 calls and 9 failed calls.
+The lab then moved to Debian 13, whose cloud image has no cron, logrotate, ufw, nft or lsof:
+16 of 17 tickets passed on their first Debian run (139 of 140 checks, game-server counted from
+its rerun after a timing bug in its check was fixed), installing what was missing as they went;
+rogue-service missed root's crontab, then passed when run again.
 
 The VM is QEMU (from qemu.weilnetz.de, unpacked, not installed) running Debian's cloud image in
 software emulation: portable, no admin rights or Windows features, everything in
