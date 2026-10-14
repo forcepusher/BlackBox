@@ -313,10 +313,13 @@ public sealed partial class SshHost : IDisposable
         // What follows is bash: a login shell that is another one (sh, zsh, fish) makes way for it,
         // if there is one (a shell whose exec fails may end, so it is looked up first).
         shell.Write("command -v bash >/dev/null 2>&1 && [ -z \"$BASH_VERSION\" ] && exec bash -l\n");
-        // No echo and no line editing, no prompt, no history; programs told not to page. Before
-        // each prompt, __bb_done takes over the state the last command's subshell left (its
-        // directory, exports, functions, aliases) and prints the marker with its exit code.
+        // No echo and no line editing, no prompt, no history; programs told not to page; the sbin
+        // folders on the PATH, as Ubuntu and sudo have them (Debian leaves them out for users, so
+        // `sysctl` or `swapon --show` without sudo read as "command not found"). Before each
+        // prompt, __bb_done takes over the state the last command's subshell left (its directory,
+        // exports, functions, aliases) and prints the marker with its exit code.
         shell.Write("stty -echo 2>/dev/null; set +o emacs +o vi 2>/dev/null; unset HISTFILE; " +
+                    "case :$PATH: in *:/usr/sbin:*) ;; *) PATH=$PATH:/usr/local/sbin:/usr/sbin:/sbin;; esac; " +
                     "export TERM=dumb PAGER=cat SYSTEMD_PAGER=cat GIT_PAGER=cat MANPAGER=cat SYSTEMD_COLORS=0 LESS=FRX; PS1=; PS2=; " +
                     "__bb_d=$(mktemp -d /tmp/.blackbox-XXXXXX) && echo $$ >\"$__bb_d/pid\" && tty | sed 's|^/dev/||' >\"$__bb_d/tty\"; " +
                     // Typed-ahead input no program read (an answer sent just after its question went away) is
