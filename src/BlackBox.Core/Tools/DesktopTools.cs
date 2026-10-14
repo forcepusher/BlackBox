@@ -431,9 +431,12 @@ public sealed class WaitTool : Tool
         var seconds = TimeSpan.FromSeconds(Math.Clamp(GetNumber(args, "seconds") ?? 1, 0.1, MaxSeconds));
         string waited;
         if (GetBool(args, "until_change"))
-            waited = await WaitForChangeAsync(ctx, seconds, ct).ConfigureAwait(false) is { } after
-                ? $"The screen changed after {after.TotalSeconds:0.#}s."
-                : $"Waited {seconds.TotalSeconds:0.#}s; nothing on the screen changed.";
+            waited = await WaitForChangeAsync(ctx, seconds, ct).ConfigureAwait(false) switch
+            {
+                { } after when after == TimeSpan.Zero => "The screen had already changed since your last screenshot, so there was no wait.",
+                { } after => $"The screen changed after {after.TotalSeconds:0.#}s.",
+                null => $"Waited {seconds.TotalSeconds:0.#}s; nothing on the screen changed.",
+            };
         else
         {
             await Task.Delay(seconds, ct).ConfigureAwait(false);
@@ -443,11 +446,18 @@ public sealed class WaitTool : Tool
         return shot with { Text = $"{waited}\n{shot.Text}" };
     }
 
-    /// <summary>How long it took the screen to change, or null if it didn't within <paramref name="limit"/>.</summary>
+    /// <summary>
+    /// How long it took the screen to change, or null if it didn't within <paramref name="limit"/>;
+    /// zero when it had already changed since the screenshot the model decided on. A chat message
+    /// that arrived while the model was thinking about waiting is a change too: compared only with
+    /// the screen at the start, it went unseen for the whole wait (three minutes in a chat run).
+    /// </summary>
     private static async Task<TimeSpan?> WaitForChangeAsync(ToolContext ctx, TimeSpan limit, CancellationToken ct)
     {
         var screen = ctx.GetScreenSpace().Screen;
         var first = ctx.Platform.Screen.Capture(screen, includeCursor: false);
+        if (ctx.Seen is { } seen && seen.Screen == screen && ClickCheck.Differ(seen.Frame, first))
+            return TimeSpan.Zero;
         var clock = System.Diagnostics.Stopwatch.StartNew();
         while (limit - clock.Elapsed is var left && left > TimeSpan.Zero)
         {

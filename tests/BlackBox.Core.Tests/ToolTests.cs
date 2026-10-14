@@ -287,6 +287,19 @@ public class ToolTests
         var quiet = await wait.ExecuteAsync(new JsonObject { ["seconds"] = 1.5, ["until_change"] = true }, ctx, CancellationToken.None);
         await caret;
         Assert.StartsWith("Waited 1.5s; nothing on the screen changed.", quiet.Text);
+
+        // A message that arrived while the model was deciding to wait: the screen already differs from
+        // the screenshot it decided on, so the wait ends at once rather than sleeping through it.
+        ctx.Seen = (platform.ScreenBounds, new RawImage(320, 160, new byte[320 * 160 * 4]));
+        clock.Restart();
+        var already = await wait.ExecuteAsync(new JsonObject { ["seconds"] = 60, ["until_change"] = true }, ctx, CancellationToken.None);
+        Assert.StartsWith("The screen had already changed since your last screenshot", already.Text);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), $"took {clock.Elapsed}");
+
+        // The same screen as the one it decided on: it waits as before.
+        ctx.Seen = (platform.ScreenBounds, platform.Screen.Capture(platform.ScreenBounds, includeCursor: false));
+        Assert.StartsWith("Waited 1s; nothing on the screen changed.",
+            (await wait.ExecuteAsync(new JsonObject { ["seconds"] = 1, ["until_change"] = true }, ctx, CancellationToken.None)).Text);
     }
 
     [Fact]
