@@ -311,5 +311,7 @@ public class SshTests
             ConfigChecks.Note("OK visudo -cf /etc/sudoers.d/devs\nNOTE in /etc/sudoers.d/devs, devs is a group, not a user: a rule for a group needs %devs\n"));
         Assert.Equal("Checked after writing: Problem: nginx -t: unexpected end of file.", ConfigChecks.Note("ERR nginx -t: unexpected end of file\n"));
         Assert.Null(ConfigChecks.Note("sudo: a password is required\n"));
+        Assert.Equal("Checked after writing: sshd -t passed. Note: /etc/ssh/sshd_config still says passwordauthentication yes, but sshd uses passwordauthentication no from a file or line it reads earlier.",
+            ConfigChecks.Note("OK sshd -t\nINFO /etc/ssh/sshd_config still says passwordauthentication yes, but sshd uses passwordauthentication no from a file or line it reads earlier\n"));
     }
 }

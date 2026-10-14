@@ -344,6 +344,11 @@ public class SshIntegrationTests : IDisposable
             var sshd = await Write("/etc/ssh/sshd_config.d/90-bbtest.conf", "PasswordAuthentication no\n");
             Assert.Contains("sshd -t passed", sshd.Text);
             Assert.Contains("sets passwordauthentication no, but sshd uses passwordauthentication yes", sshd.Text);
+            // The other way round the stricter value wins: worth a note, not a problem.
+            await Ssh("printf 'PasswordAuthentication no\\n' | sudo tee /etc/ssh/sshd_config.d/50-bbtest.conf >/dev/null");
+            var leftover = await Write("/etc/ssh/sshd_config.d/90-bbtest.conf", "PasswordAuthentication yes\n");
+            Assert.Contains("Note: /etc/ssh/sshd_config.d/90-bbtest.conf still says passwordauthentication yes, but sshd uses passwordauthentication no", leftover.Text);
+            Assert.DoesNotContain("Problem", leftover.Text);
 
             // Through a shell command: a cron.d file cron skips (a dot in its name, group-writable).
             var cron = await Ssh("printf '*/5 * * * * root true\\n' | sudo tee /etc/cron.d/bb.job >/dev/null && sudo chmod 664 /etc/cron.d/bb.job");

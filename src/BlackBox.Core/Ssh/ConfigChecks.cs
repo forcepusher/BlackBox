@@ -103,27 +103,32 @@ public static partial class ConfigChecks
         return calls.Count == 0 ? null : Functions + string.Join('\n', calls) + "\n";
     }
 
-    /// <summary>The note from the script's OK, ERR and NOTE lines.</summary>
+    /// <summary>The note from the script's OK, ERR and NOTE (problems) and INFO (worth knowing) lines.</summary>
     internal static string? Note(string output)
     {
         var ok = new List<string>();
         var problems = new List<string>();
+        var infos = new List<string>();
         foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             if (line.StartsWith("OK ", StringComparison.Ordinal)) ok.Add(line[3..]);
             else if (line.StartsWith("ERR ", StringComparison.Ordinal) || line.StartsWith("NOTE ", StringComparison.Ordinal))
                 problems.Add(line[(line.IndexOf(' ') + 1)..]);
+            else if (line.StartsWith("INFO ", StringComparison.Ordinal)) infos.Add(line[5..]);
         }
-        if (ok.Count == 0 && problems.Count == 0)
+        if (ok.Count == 0 && problems.Count == 0 && infos.Count == 0)
             return null;
         var sb = new StringBuilder("Checked after writing: ");
         sb.Append(ok.Count > 0 ? string.Join(", ", ok.Distinct()) + " passed." : "");
         foreach (var p in problems.Distinct())
             sb.Append(sb[^1] == ' ' ? "" : " ").Append("Problem: ").Append(p.TrimEnd('.')).Append('.');
+        foreach (var i in infos.Distinct())
+            sb.Append(sb[^1] == ' ' ? "" : " ").Append("Note: ").Append(i.TrimEnd('.')).Append('.');
         return sb.ToString().Trim();
     }
 
-    // The checks, one bash function each; they print OK, ERR (the program rejects the config) or NOTE lines.
+    // The checks, one bash function each; they print OK, ERR (the program rejects the config), NOTE
+    // (a problem it doesn't see) or INFO (worth knowing) lines.
     private const string Functions = """
         chk_sudoers() { local f=$1 o m out n; [ -e "$f" ] || return
           out=$(visudo -cf "$f" 2>&1) && echo "OK visudo -cf $f" || echo "ERR visudo -cf $f: $(echo "$out" | head -3 | tr '\n' ' ')"
@@ -144,7 +149,11 @@ public static partial class ConfigChecks
               case "$k" in passwordauthentication|permitrootlogin|pubkeyauthentication|kbdinteractiveauthentication|permitemptypasswords|port|x11forwarding|maxauthtries) ;; *) continue;; esac
               e=$(echo "$eff" | awk -v k="$k" '$1==k {print $2; exit}')
               [ "$v" = without-password ] && v=prohibit-password; [ "$e" = without-password ] && e=prohibit-password
-              [ -n "$e" ] && [ "$e" != "$v" ] && echo "NOTE $f sets $k $v, but sshd uses $k $e: a file or line it reads earlier sets it first (sshd keeps the first value)"
+              [ -n "$e" ] && [ "$e" != "$v" ] || continue
+              # The stricter value winning (a leftover "PasswordAuthentication yes" under an earlier "no") is worth knowing, not a problem.
+              case "$k:$e:$v" in passwordauthentication:no:*|kbdinteractiveauthentication:no:*|permitemptypasswords:no:*|x11forwarding:no:*|permitrootlogin:no:*|permitrootlogin:prohibit-password:yes)
+                echo "INFO $f still says $k $v, but sshd uses $k $e from a file or line it reads earlier";;
+              *) echo "NOTE $f sets $k $v, but sshd uses $k $e: a file or line it reads earlier sets it first (sshd keeps the first value)";; esac
             done
           done; }
         chk_nginx() { local out; command -v nginx >/dev/null || return
