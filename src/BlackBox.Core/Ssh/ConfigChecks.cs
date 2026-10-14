@@ -149,7 +149,8 @@ public static partial class ConfigChecks
           done; }
         chk_nginx() { local out; command -v nginx >/dev/null || return
           out=$(nginx -t 2>&1) && echo "OK nginx -t" || echo "ERR nginx -t: $(echo "$out" | grep -v 'test failed' | head -3 | tr '\n' ' ')"; }
-        chk_unit() { local f=$1 u v out; [ -e "$f" ] || return; u=$(basename "$f"); v=$f
+        chk_unit() { local f=$1 u v out; [ -e "$f" ] || return; [ "$(readlink -f "$f")" = /dev/null ] && return # masked on purpose
+          u=$(basename "$f"); v=$f
           case "$f" in *.d/*) u=$(basename "$(dirname "$f")" .d); v=$u;; esac
           out=$(systemd-analyze verify "$v" 2>&1 | grep -F "$u" | head -3)
           [ -n "$out" ] && echo "NOTE systemd-analyze verify $u: $(echo "$out" | tr '\n' ' ')" || echo "OK systemd-analyze verify $u"
