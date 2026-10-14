@@ -228,6 +228,12 @@ The SSH client is built in (SSH.NET), so no
   unpacked with sudo where the login user can't write; what only root can read comes down with
   sudo too. In the baseline run the model wrote configs to a local file and called scp.exe
   through PowerShell for want of this.
+- `copy` streams, so size doesn't matter: no more than 32 MB of it waits in memory. A server that
+  sends can't be made to wait, so from one server to another whatever the target can't take yet
+  waits on this PC's disk instead, in 64 MB temporary files each deleted once read. On the lab
+  VMs a 3 GB file went from this PC to a server at 25 to 30 MB/s, back at 16 MB/s and on to a
+  second server at 16 MB/s, while BlackBox's memory rose by 68 MB at most; with the second server
+  held back at first, up to 634 MB waited on disk, and nothing was left there afterwards.
 - A `key_file` the open connection didn't log in with logs in afresh with that key alone, in a
   new terminal: the test an admin makes in a second terminal before turning passwords off. If
   the server refuses the key, the old connection stays. `new_login` does the same with exactly
@@ -312,12 +318,15 @@ software emulation: portable, no admin rights or Windows features, everything in
 `.dev/sysadmin-lab`. Each task runs on a throwaway disk over the clean one, so a reset takes a
 second. The VM's ports are forwarded to 127.0.0.2; inside it, this PC is 10.0.2.2.
 
-Integration tests against a real server (they send prompts larger than the context):
+Integration tests against a real server (they send prompts larger than the context), and the
+SSH tests against a lab VM started with `. ./scripts/sysadmin/lab.ps1; Reset-LabVm`:
 
 ```powershell
 $env:BB_SERVER_URL = "http://localhost:1234/v1"; $env:BB_SERVER_MODEL = "qwen3.8-27b@iq2_s"
 dotnet test --filter ServerIntegrationTests
 dotnet test --filter ClickAccuracyTests   # click hit rate in 16 hard scenes; BB_CLICK_SCENES, BB_CLICK_TRIALS, BB_CLICK_COORDS=pixels|grid
+$env:BB_SSH_TEST_HOST = "admin@127.0.0.2"; $env:BB_SSH_TEST_KEY = "$PWD\.dev\sysadmin-lab\key\admin_ed25519"
+dotnet test --filter SshIntegrationTests  # ssh, file tools and copy; BB_SSH_TEST_BIG_GB=3 adds a 3 GB copy each way (BB_SSH_TEST_HOST2: a second server)
 ```
 
 ## Project structure
