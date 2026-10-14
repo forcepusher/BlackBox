@@ -482,6 +482,59 @@ public sealed partial class SshHost : IDisposable
         return new(code, Encoding.UTF8.GetString(output), error);
     }
 
+    /// <summary>
+    /// Runs a command whose input comes from <paramref name="stdin"/> and whose output goes to
+    /// <paramref name="stdout"/> as it is produced (an archive of any size), with sudo when asked.
+    /// No time limit: the caller stops it with <paramref name="ct"/>. Returns the exit code and stderr.
+    /// </summary>
+    public async Task<(int Code, string Error)> ExecStreamAsync(string command, bool sudo, Stream? stdin, Stream? stdout, CancellationToken ct)
+    {
+        var (text, prefix) = await SudoWrapAsync(command, sudo, ct).ConfigureAwait(false);
+        using var cmd = _client.CreateCommand(text);
+        cmd.CommandTimeout = System.Threading.Timeout.InfiniteTimeSpan;
+        var run = cmd.ExecuteAsync(ct);
+        var input = cmd.CreateInputStream();
+        using var stopSending = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var send = Task.Run(async () =>
+        {
+            try
+            {
+                if (prefix is not null)
+                    await input.WriteAsync(prefix, stopSending.Token).ConfigureAwait(false);
+                if (stdin is not null)
+                    await stdin.CopyToAsync(input, 1 << 16, stopSending.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                try { input.Dispose(); } catch (Exception e) when (e is not OutOfMemoryException) { } // end of input; the channel may be gone
+            }
+        }, CancellationToken.None);
+        // The output is read while the command runs: SSH.NET keeps all that arrives until it is read.
+        var receive = stdout is null ? Task.CompletedTask : Task.Run(async () =>
+        {
+            var buffer = new byte[1 << 16];
+            int n;
+            while ((n = await cmd.OutputStream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+                await stdout.WriteAsync(buffer.AsMemory(0, n), ct).ConfigureAwait(false);
+        }, CancellationToken.None);
+        _ = send.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+        _ = receive.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+        try
+        {
+            await run.ConfigureAwait(false);
+        }
+        finally
+        {
+            // A command that ended early (an error) reads no more; a write still waiting for room
+            // in the channel is given up after a moment rather than waited for.
+            stopSending.Cancel();
+            await Task.WhenAny(send, Task.Delay(TimeSpan.FromSeconds(5), CancellationToken.None)).ConfigureAwait(false);
+        }
+        await receive.ConfigureAwait(false);
+        // A source that failed (stdin) shows in the caller's own error; here the command just saw its input end.
+        return (cmd.ExitStatus ?? -1, cmd.Error);
+    }
+
     /// <summary>The command wrapped in sudo when asked, and the password line sudo -S reads first, if one is needed.</summary>
     private async Task<(string Command, byte[]? Prefix)> SudoWrapAsync(string command, bool sudo, CancellationToken ct)
     {
