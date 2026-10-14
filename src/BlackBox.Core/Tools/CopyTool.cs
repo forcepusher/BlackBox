@@ -32,7 +32,7 @@ public sealed partial class CopyTool : Tool
     /// <summary>A copy in which no byte moved for this long is stopped (a server gone, a command hanging).</summary>
     internal static TimeSpan IdleLimit { get; set; } = TimeSpan.FromMinutes(5);
 
-    /// <summary>The most bytes the last copy kept in its temporary file (for tests).</summary>
+    /// <summary>The most bytes of the last copy that waited on disk at once (for tests).</summary>
     internal static long LastSpilledPeak { get; private set; }
 
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
@@ -137,7 +137,7 @@ public sealed partial class CopyTool : Tool
 
     private static async Task TryTransferAsync(Source source, Target target, bool sudo, CancellationToken ct)
     {
-        // From a host to a host the pipe may spill to a temporary file: the source can't be slowed
+        // From a host to a host the pipe may spill to temporary files: the source can't be slowed
         // down, and the target may take bytes more slowly than the source sends them.
         using var pipe = new CopyPipe(MemoryLimit, spillToDisk: source.Host is not null && target.Host is not null);
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);

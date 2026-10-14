@@ -4,33 +4,40 @@ namespace BlackBox.Core.Tools;
 /// Bytes from one writer to one reader, in order: what <see cref="CopyTool"/> streams through on
 /// the way from one end of a copy to the other, so a copy of any size needs only a little memory.
 /// Up to <see cref="MemoryLimit"/> bytes wait in memory. Beyond that the writer either waits for
-/// the reader (files on this PC, which can wait) or, with spilling on, the bytes wait in a
-/// temporary file (an archive coming from a server: SSH.NET takes in what the server sends
-/// whether or not anyone reads it, so the reader of that stream must never stop). The file is
-/// emptied whenever the reader catches up and deleted at the end.
+/// the reader (files on this PC, which can wait) or, with spilling on, the bytes wait on disk (an
+/// archive coming from a server: SSH.NET takes in what the server sends whether or not anyone
+/// reads it, so the reader of that stream must never stop). On disk they wait in temporary files
+/// of <see cref="SegmentSize"/> bytes, each deleted as soon as it is read, so the disk holds about
+/// what waits rather than all that ever waited; once the reader catches up, new bytes wait in
+/// memory again.
 /// </summary>
 internal sealed class CopyPipe : IDisposable
 {
+    internal const long DefaultSegmentSize = 64L << 20;
+
     private readonly object _gate = new();
     private readonly Queue<byte[]> _chunks = new();
+    private readonly Queue<Segment> _segments = new();
     private readonly bool _spill;
+    private Segment? _last;
     private int _offset;
-    private long _inMemory;
-    private FileStream? _file;
-    private long _fileWritten, _fileRead;
-    private bool _spilling;
+    private long _inMemory, _onDisk;
     private bool _done;
     private Exception? _failure;
 
-    public CopyPipe(long memoryLimit, bool spillToDisk)
+    public CopyPipe(long memoryLimit, bool spillToDisk, long segmentSize = DefaultSegmentSize)
     {
         MemoryLimit = memoryLimit;
+        SegmentSize = segmentSize;
         _spill = spillToDisk;
         Writer = new WriteEnd(this);
         Reader = new ReadEnd(this);
     }
 
     public long MemoryLimit { get; }
+
+    /// <summary>The size of each temporary file the bytes past the memory limit wait in.</summary>
+    public long SegmentSize { get; }
 
     /// <summary>The end the source writes to; <see cref="Complete"/> marks the end of the data.</summary>
     public Stream Writer { get; }
@@ -42,7 +49,7 @@ internal sealed class CopyPipe : IDisposable
     public long BytesWritten { get; private set; }
     public long BytesRead { get; private set; }
 
-    /// <summary>The most bytes that waited in the temporary file at once (0 if it was never needed).</summary>
+    /// <summary>The most bytes that waited on disk at once (0 if the disk was never needed).</summary>
     public long SpilledPeak { get; private set; }
 
     public void Complete()
@@ -74,31 +81,36 @@ internal sealed class CopyPipe : IDisposable
             {
                 if (_failure is not null) throw new CopyStoppedException(_failure);
                 if (_done) throw new InvalidOperationException("The copy's data was already complete.");
-                if (_spilling) break;
-                if (_inMemory == 0 || _inMemory + data.Length <= MemoryLimit) break;
-                if (_spill)
-                {
-                    _spilling = true;
-                    break;
-                }
+                // With spilling on the writer never waits; without, it waits for room in memory.
+                if (_spill || _inMemory == 0 || _inMemory + data.Length <= MemoryLimit) break;
                 Monitor.Wait(_gate);
             }
-            if (_spilling)
-            {
-                _file ??= new FileStream(Path.Combine(Path.GetTempPath(), $"blackbox-copy-{Guid.NewGuid():N}.tmp"), FileMode.CreateNew,
-                    FileAccess.ReadWrite, FileShare.None, 1 << 16, FileOptions.DeleteOnClose);
-                _file.Position = _fileWritten;
-                _file.Write(data);
-                _fileWritten += data.Length;
-                SpilledPeak = Math.Max(SpilledPeak, _fileWritten - _fileRead);
-            }
-            else
+            BytesWritten += data.Length;
+            // While anything waits on disk, new bytes go after it.
+            if (_segments.Count == 0 && (_inMemory == 0 || _inMemory + data.Length <= MemoryLimit))
             {
                 _chunks.Enqueue(data.ToArray());
                 _inMemory += data.Length;
             }
-            BytesWritten += data.Length;
+            else
+                ToDisk(data);
             Monitor.PulseAll(_gate);
+        }
+    }
+
+    private void ToDisk(ReadOnlySpan<byte> data)
+    {
+        _onDisk += data.Length;
+        SpilledPeak = Math.Max(SpilledPeak, _onDisk);
+        while (!data.IsEmpty)
+        {
+            if (_last is null || _last.Written == SegmentSize)
+                _segments.Enqueue(_last = new Segment());
+            var n = (int)Math.Min(data.Length, SegmentSize - _last.Written);
+            _last.File.Position = _last.Written;
+            _last.File.Write(data[..n]);
+            _last.Written += n;
+            data = data[n..];
         }
     }
 
@@ -111,7 +123,7 @@ internal sealed class CopyPipe : IDisposable
             while (true)
             {
                 if (_failure is not null) throw new CopyStoppedException(_failure);
-                // What waits in memory was written before what waits in the file.
+                // What waits in memory was written before what waits on disk.
                 if (_chunks.Count > 0)
                 {
                     var chunk = _chunks.Peek();
@@ -126,17 +138,21 @@ internal sealed class CopyPipe : IDisposable
                     }
                     return Took(n);
                 }
-                if (_fileRead < _fileWritten)
+                if (_segments.TryPeek(out var first))
                 {
-                    _file!.Position = _fileRead;
-                    var n = _file.Read(buffer[..(int)Math.Min(buffer.Length, _fileWritten - _fileRead)]);
-                    _fileRead += n;
-                    if (_fileRead == _fileWritten)
+                    first.File.Position = first.Read;
+                    var n = first.File.Read(buffer[..(int)Math.Min(buffer.Length, first.Written - first.Read)]);
+                    if (n == 0)
+                        throw new IOException("The copy's temporary file ended early.");
+                    first.Read += n;
+                    _onDisk -= n;
+                    // A file read to its end goes: a full one gets nothing more, and the last one read
+                    // to its end means the reader caught up (new bytes wait in memory again).
+                    if (first.Read == first.Written && (first.Written == SegmentSize || _segments.Count == 1))
                     {
-                        // Caught up: the file starts over, and new bytes go to memory again.
-                        _file.SetLength(0);
-                        _fileRead = _fileWritten = 0;
-                        _spilling = false;
+                        _segments.Dequeue().File.Dispose();
+                        if (_segments.Count == 0)
+                            _last = null;
                     }
                     return Took(n);
                 }
@@ -160,9 +176,21 @@ internal sealed class CopyPipe : IDisposable
         {
             _failure ??= new ObjectDisposedException(nameof(CopyPipe));
             Monitor.PulseAll(_gate);
-            _file?.Dispose();
-            _file = null;
+            while (_segments.TryDequeue(out var segment))
+                segment.File.Dispose();
+            _last = null;
         }
+    }
+
+    /// <summary>
+    /// One temporary file of the bytes waiting on disk; the system deletes it when it is closed. Not
+    /// buffered: the bytes come and go in chunks of tens of kilobytes already.
+    /// </summary>
+    private sealed class Segment
+    {
+        public FileStream File { get; } = new(Path.Combine(Path.GetTempPath(), $"blackbox-copy-{Guid.NewGuid():N}.tmp"), FileMode.CreateNew,
+            FileAccess.ReadWrite, FileShare.None, 0, FileOptions.DeleteOnClose);
+        public long Written, Read;
     }
 
     private sealed class WriteEnd(CopyPipe pipe) : Stream
