@@ -1,0 +1,16 @@
+{
+  "name": "tiny-arena-server",
+  "version": "1.4.2",
+  "private": true,
+  "description": "Multiplayer server for Tiny Arena",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

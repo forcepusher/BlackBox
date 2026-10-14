@@ -30,8 +30,11 @@ public sealed class WindowsPlatform : IPlatformServices
     public ProcessStartInfo CreateShellStartInfo(string command)
     {
         // -EncodedCommand sidesteps every quoting problem; forcing UTF-8 output keeps
-        // non-ASCII file names and text intact when we read the redirected stream.
-        var script = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $ProgressPreference = 'SilentlyContinue'\n" + command;
+        // non-ASCII file names and text intact when we read the redirected stream. Windows
+        // PowerShell's curl is an alias of Invoke-WebRequest, which rejects curl's options;
+        // models mean the real curl.exe (in Windows since 10 1803), so the alias goes.
+        var script = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $ProgressPreference = 'SilentlyContinue'; " +
+                     "Remove-Item Alias:curl -Force -ErrorAction SilentlyContinue\n" + command;
         var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
         return new ProcessStartInfo("powershell.exe")
         {

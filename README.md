@@ -104,8 +104,10 @@ that fails, however it fails, reports the error to the model and the run goes on
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
-| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`) |
+| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
+| `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
+| `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |
 | `web_search` | Searches the web: titles, links and snippets (see below) |
 | `fetch_page` | Reads a web page as plain text; `find` returns only the passages that mention some words, `start` reads on in a long page |
 | `<server>__<tool>` | Any tool of the MCP servers you add in Settings → Advanced (see below) |
@@ -176,6 +178,65 @@ headless browser instead. PDFs aren't read. The last eight pages are kept in mem
 doesn't download a page again. The browser's profile is `Data/browser`. Turn web access off in
 Settings → General.
 
+### Servers over SSH
+`ssh` logs in to a server (`user@host`, `user@host:port` or a `Host` from `~/.ssh/config`) with
+the key the task names, the keys in `~/.ssh`, or a password the user gave, and keeps a terminal
+open there for the rest of the chat: `cd`, exported variables and functions carry over from one
+command to the next, as for a person at a terminal. The first call reports the system, the
+address this PC connects from (what a firewall rule must let in) and whether sudo needs a
+password. The terminal is bash, also for a user whose login shell is another one (sh, zsh); on
+a server without bash (a router, a NAS, Alpine) each command runs on its own instead, as
+`ssh host command` runs it.
+The SSH client is built in (SSH.NET), so no
+`ssh.exe`, PuTTY or key-file permissions matter, and it works the same on every OS.
+
+- A command still running when `wait_seconds` (default 120) are up keeps running; the model
+  calls `ssh` again with no command to see more output, `input` to answer a question it asks
+  (apt's Y/n, a passphrase), or `interrupt` for Ctrl+C. A call also returns as soon as the
+  command waits for an answer (a question on its last line, its processes idle for a second:
+  `echo y | ufw enable` works on quietly after its question), or, unless the model chose
+  `wait_seconds`, has printed nothing for 30 seconds (a server started in the foreground). An
+  answer that arrives after the command finished isn't typed, or bash would run it. A wait that
+  brings no output at all says which of the command's programs are running and for how long
+  (apt behind `| tail`, a slow download, a build).
+- sudo's password prompt is answered with the user's `password`, if they gave one; the model
+  never has to type it.
+- The output is what the terminal would show: colours go, and progress redrawn in place (a `\r`
+  bar, docker pull's line per layer) keeps only its last state; apt's status bar is left out.
+- Each command is written to a file on the server and run from there in a subshell, so quotes,
+  `$` and heredocs arrive as written, nothing it reads swallows the next command, and an `exit`
+  or `set -e` in it ends only that command. Interactive shells (`sudo -i`, `su -`) and
+  full-screen programs (nano, vim, less, `top`, `crontab -e`, `systemctl edit`) are turned away
+  with what to use instead; a pager that slips through is stopped.
+- With `host`, the four file tools read, write, edit and list files on the server, using sudo
+  for what the login user can't reach (most of `/etc`). An existing file keeps its owner and
+  permissions; a new one written with sudo belongs to root. No quoting through the shell, so a
+  config full of `$uri` survives.
+- A config file written any of these ways (the file tools, `copy`, or a command such as `tee`,
+  `sed -i`, `cp` or a redirection) is checked at once, as root, by the program that reads it,
+  and the verdict comes back with the result: `visudo -cf` for sudoers (plus names sudo skips
+  and a group written without `%`), `sshd -t` and, for what a drop-in sets, the value sshd
+  really uses when a file it reads earlier wins, `nginx -t`, `systemd-analyze verify`,
+  `findmnt --verify` for fstab, cron.d names, owner, mode and line endings, `logrotate -d`,
+  `netplan generate`, PostgreSQL's own reading of pg_hba.conf and its settings (errors, a
+  setting only a restart applies, a postgres superuser locked out locally). The costliest
+  mistakes in the benchmark were configs like these that looked right.
+- `copy` moves files and whole folders between this PC and a server, from one server to another
+  (through this PC), or within either, the way
+  `scp -r` does (a folder copied into a folder goes inside it; `/*` at the end copies only its
+  contents). It travels as one tar stream over the same connection, binary files intact, and is
+  unpacked with sudo where the login user can't write; what only root can read comes down with
+  sudo too. In the baseline run the model wrote configs to a local file and called scp.exe
+  through PowerShell for want of this.
+- A `key_file` the open connection didn't log in with logs in afresh with that key alone, in a
+  new terminal: the test an admin makes in a second terminal before turning passwords off. If
+  the server refuses the key, the old connection stays. `new_login` does the same with exactly
+  the key and/or password given, also to see that a login is now refused. A key that worked once
+  in the chat is offered to the next servers too, as ssh-agent does.
+- Host keys are checked against `Data/known_hosts`: the first key a server shows is saved, a
+  different one later is refused, as OpenSSH does. A connection lost to a reboot is made
+  again on the next call, retried for 45 seconds while the server comes back.
+
 ### MCP servers
 BlackBox is an MCP client: any [Model Context Protocol](https://modelcontextprotocol.io) server adds its
 tools to the list above. Paste the `mcpServers` block from the server's README into Settings → Advanced;
@@ -220,7 +281,36 @@ dotnet test                       # unit tests
 dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   # headless run
 ./scripts/agent-tasks.ps1         # real desktop task suite (drives your mouse and keyboard)
 ./scripts/game2048-test.ps1       # long run: BlackBox writes, play-tests and fixes its own 2048
+./scripts/sysadmin-vm.ps1         # once: the portable Debian lab VM (QEMU in .dev/sysadmin-lab, nothing installed)
+./scripts/sysadmin-test.ps1       # sysadmin tickets on that VM over SSH, checked over SSH and from this PC
 ```
+
+### Sysadmin benchmark
+`sysadmin-test.ps1` gives BlackBox a fresh Debian 13 server per task, with only its address,
+a user name and a key, as a hired admin gets them, and a ticket in plain words: deploy the
+Tiny Arena WebSocket game server behind nginx, serve a site over HTTPS, onboard two developers
+and lock down SSH, set up a firewall, free a full disk, schedule backups, install PostgreSQL,
+find and remove a rogue service, fix a site a colleague broke, do a new server's basic setup
+with a sudo password, publish a site from this PC, find why an API answers 500, revive a cron
+job that stopped, run an app from this PC in Docker, secure a new server that only has a root
+password, move a shop (site, API, PostgreSQL) from an old server to a new one, and free a disk
+filled by a deleted log a service still holds open. Then the VM is rebooted and scripts check the end state over SSH and from this
+PC (a WebSocket game played by two clients, ports probed, logins tried with each user's key).
+`-SelfTest` runs each task's reference solution instead of BlackBox, to prove the checks.
+
+On 14 October 2026, with qwen3.8-27b (q6_k_xl) on LM Studio, every ticket passed on its first
+run on Ubuntu 24.04 (17 of 17, 140 of 140 checks), and a second pass of the first 16 with the final build passed
+15 (131 of 133 checks). On seven tickets that both ran, the build before the ssh tools took 52 minutes, 123 model
+calls and 26 failed tool calls; the ssh tools took about 28 minutes, 93 calls and 9 failed calls.
+The lab then moved to Debian 13, whose cloud image has no cron, logrotate, ufw, nft or lsof:
+16 of 17 tickets passed on their first Debian run (139 of 140 checks, game-server counted from
+its rerun after a timing bug in its check was fixed), installing what was missing as they went;
+rogue-service missed root's crontab, then passed when run again.
+
+The VM is QEMU (from qemu.weilnetz.de, unpacked, not installed) running Debian's cloud image in
+software emulation: portable, no admin rights or Windows features, everything in
+`.dev/sysadmin-lab`. Each task runs on a throwaway disk over the clean one, so a reset takes a
+second. The VM's ports are forwarded to 127.0.0.2; inside it, this PC is 10.0.2.2.
 
 Integration tests against a real server (they send prompts larger than the context):
 
@@ -239,7 +329,7 @@ dotnet test --filter ClickAccuracyTests   # click hit rate in 16 hard scenes; BB
 - `src/BlackBox.App`: Avalonia 11 UI with CommunityToolkit.Mvvm.
 - `tests/BlackBox.Core.Tests`: xUnit tests (unit tests plus opt-in server integration tests).
 - `tests/BlackBox.McpTestServer`: a small MCP server the tests run in-process and as a child process.
-- `scripts/`: `publish.ps1` (portable build), `agent-tasks.ps1` (real desktop task suite) and `game2048-test.ps1` (long self-testing run, judged by `game2048-check.mjs`).
+- `scripts/`: `publish.ps1` (portable build), `agent-tasks.ps1` (real desktop task suite), `game2048-test.ps1` (long self-testing run, judged by `game2048-check.mjs`), and `sysadmin-vm.ps1` / `sysadmin-test.ps1` with the tickets in `sysadmin/tasks/` (the sysadmin benchmark).
 
 Linux and macOS ports need an `IPlatformServices` implementation (screen, input, windows); the rest
 of the code is already cross-platform.

@@ -1,0 +1,1 @@
+Please set up nightly backups of /srv/app/data: every night at 02:30 it should make a compressed archive in /var/backups/app named app-YYYY-MM-DD.tar.gz (the date of that night), and keep only the 7 newest archives. Run it once now as well, so we can see that it works.

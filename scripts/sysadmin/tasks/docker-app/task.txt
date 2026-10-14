@@ -1,0 +1,1 @@
+Our status page app is in the folder {tdir}\statuspage on this PC: a Dockerfile and a small Python app (see its README). Please run it on the server in Docker: it must answer at http://{ip}:8080/, come back by itself after a reboot, and keep its data (/data in the container) when the container is removed and created again, as it will be for every update.

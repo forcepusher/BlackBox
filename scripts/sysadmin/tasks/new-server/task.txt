@@ -1,0 +1,1 @@
+Please set it up the usual way before it goes online: a user deploy for us to work as, who logs in with our key (the public key is {tdir}\keys\ops_ed25519.pub on this PC, the private key next to it) and can use sudo without a password. After that, no root logins and no password logins at all. Don't lock us out.

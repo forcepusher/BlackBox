@@ -1,0 +1,1 @@
+Our sales report job is supposed to add a line to the day's report in /var/reports every 2 minutes, but nothing has appeared there for days. Please find out why and fix it, so that it runs on its own again.

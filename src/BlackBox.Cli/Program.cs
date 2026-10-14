@@ -114,7 +114,8 @@ catch (OperationCanceledException)
     return 1;
 }
 
-var session = AgentSetup.Create(BackendConnection.Create(http, settings.Server), platform, agent, paths, mcp);
+using var ssh = new BlackBox.Core.Ssh.SshHosts(paths.KnownHostsFile);
+var session = AgentSetup.Create(BackendConnection.Create(http, settings.Server), platform, agent, paths, mcp, ssh);
 var observer = new ConsoleObserver(autoYes, shotsDir);
 
 var t0 = DateTime.UtcNow;
@@ -201,7 +202,8 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
     public void OnToolFinished(ToolCall call, ToolResult result)
     {
         if (result.IsError) ToolErrors++;
-        var text = result.Text.Length > 1200 ? result.Text[..1200] + "…" : result.Text;
+        // The start and the end: an error or an exit code is usually at the end.
+        var text = result.Text.Length > 1600 ? result.Text[..500] + " … " + result.Text[^1100..] : result.Text;
         Console.ForegroundColor = result.IsError ? ConsoleColor.Red : ConsoleColor.DarkCyan;
         Console.WriteLine($"[result] {Now} after {(DateTime.Now - _toolStart).TotalSeconds:0.0}s: {text.TrimEnd()}");
         Console.ResetColor();

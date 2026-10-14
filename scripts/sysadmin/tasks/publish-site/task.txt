@@ -1,0 +1,1 @@
+The new version of our website is in the folder {tdir}\site-v2 on this PC. Please publish it on the server: http://{ip}/ must show the new site (nginx there already serves /var/www/html), with all of its files, the images too.
