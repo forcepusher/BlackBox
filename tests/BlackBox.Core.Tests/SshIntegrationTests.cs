@@ -68,6 +68,11 @@ public class SshIntegrationTests : IDisposable
         // Quotes, dollars and heredocs arrive as written.
         var heredoc = await Ssh("cat <<'EOF'\nlocation / { try_files $uri $uri/ =404; }\nit's \"quoted\"\nEOF");
         Assert.Contains("location / { try_files $uri $uri/ =404; }\nit's \"quoted\"", heredoc.Text);
+
+        // Admin tools in the sbin folders are found without sudo (Debian leaves those off a user's PATH).
+        var sbin = await Ssh("command -v sysctl swapon");
+        Assert.Contains("sbin/sysctl\n", sbin.Text);
+        Assert.Contains("sbin/swapon\n", sbin.Text);
     }
 
     [Fact]
@@ -348,7 +353,7 @@ public class SshIntegrationTests : IDisposable
             // A unit with a typo.
             var unit = await Write("/etc/systemd/system/bbtest.service", "[Service]\nExecStar=/bin/true\n");
             Assert.Contains("systemd-analyze verify bbtest.service", unit.Text);
-            Assert.Contains("Unknown key name 'ExecStar'", unit.Text);
+            Assert.Matches("Unknown key (name )?'ExecStar'", unit.Text); // systemd 255 says "key name", 257 "key"
         }
         finally
         {

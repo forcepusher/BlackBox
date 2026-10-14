@@ -154,8 +154,10 @@ public static partial class ConfigChecks
           [ $(( 8#$m & 8#022 )) -eq 0 ] || n+="NOTE cron ignores $f: it is writable by group or others (mode $m); use 0644"$'\n'
           grep -q $'\r' "$f" && n+="NOTE $f has Windows line endings, which cron can't read"$'\n'
           [ -z "$(tail -c1 "$f")" ] || n+="NOTE $f doesn't end with a newline: cron skips its last line"$'\n'
+          command -v cron >/dev/null || command -v crond >/dev/null || n+="NOTE no cron daemon is installed here, so nothing runs $f"$'\n'
           [ -n "$n" ] && printf '%s' "$n" || echo "OK cron's rules for $f"; }
         chk_logrotate() { local f=$1 out; [ -f "$f" ] || return
+          command -v logrotate >/dev/null || { echo "NOTE logrotate is not installed here, so nothing reads $f"; return; }
           out=$(logrotate -d "$f" 2>&1 | grep -iE '^error|: error|bad file mode' | head -3)
           [ -n "$out" ] && echo "NOTE logrotate -d $f: $(echo "$out" | tr '\n' ' ')" || echo "OK logrotate -d $f"; }
         chk_netplan() { local out; command -v netplan >/dev/null || return
