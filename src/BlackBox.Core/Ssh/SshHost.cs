@@ -93,6 +93,8 @@ public sealed partial class SshHost : IDisposable
         if (IsBusy)
             throw new InvalidOperationException("The previous command is still running.");
         await EnsureShellAsync(ct).ConfigureAwait(false);
+        if (_noBash)
+            return await RunAloneAsync(command, wait, ct).ConfigureAwait(false);
         var id = ++_commandId;
         var f = $"{_dir}/{id}";
         await WriteRemoteAsync($"{f}.sh", command.ReplaceLineEndings("\n") + "\n", ct).ConfigureAwait(false);
@@ -107,6 +109,30 @@ public sealed partial class SshHost : IDisposable
         _shell!.Write(line);
         _shell.Flush();
         return await CollectAsync(wait, ct, returnWhenQuiet: returnWhenQuiet).ConfigureAwait(false);
+    }
+
+    /// <summary>The server has no bash (a router, a NAS, Alpine): commands run one by one on a side channel.</summary>
+    private bool _noBash;
+    private bool _noBashTold;
+
+    /// <summary>
+    /// A command without the terminal, as <c>ssh host command</c> runs it: in the login shell, from
+    /// the home folder, with nothing carried over and no way to answer or interrupt it.
+    /// </summary>
+    private async Task<ShellResult> RunAloneAsync(string command, TimeSpan wait, CancellationToken ct)
+    {
+        var note = _noBashTold ? null : "This server has no bash, so each command runs on its own, in its login shell from the home folder: " +
+                                         "no directory or variables carried over, no input or interrupt.";
+        _noBashTold = true;
+        try
+        {
+            var r = await ExecAsync(command.ReplaceLineEndings("\n"), null, wait, ct).ConfigureAwait(false);
+            return new(ShellState.Done, TerminalText.Clean(r.Output + r.Error).TrimEnd('\n'), r.ExitCode, "~", Note: note);
+        }
+        catch (Exception e) when (e is Renci.SshNet.Common.SshOperationTimeoutException or OperationCanceledException && !ct.IsCancellationRequested)
+        {
+            return new(ShellState.Done, "", -1, "~", Note: (note is null ? "" : note + " ") + $"It ran longer than {wait.TotalSeconds:0} s and was stopped.");
+        }
     }
 
     /// <summary>Types <paramref name="text"/> and Enter into the running command, then waits for what it does.</summary>
@@ -267,7 +293,7 @@ public sealed partial class SshHost : IDisposable
 
     private async Task EnsureShellAsync(CancellationToken ct)
     {
-        if (_shell is not null && !_shellClosed)
+        if (_noBash || _shell is not null && !_shellClosed)
             return;
         _shell?.Dispose();
         _shellClosed = false;
@@ -280,8 +306,9 @@ public sealed partial class SshHost : IDisposable
         _shell = shell;
         _reader = new Thread(() => ReadLoop(shell)) { IsBackground = true, Name = "ssh terminal " + Target };
         _reader.Start();
-        // What follows is bash: a login shell that is another one (sh, zsh, fish) makes way for it.
-        shell.Write("[ -n \"$BASH_VERSION\" ] || exec bash -l\n");
+        // What follows is bash: a login shell that is another one (sh, zsh, fish) makes way for it,
+        // if there is one (a shell whose exec fails may end, so it is looked up first).
+        shell.Write("command -v bash >/dev/null 2>&1 && [ -z \"$BASH_VERSION\" ] && exec bash -l\n");
         // No echo and no line editing, no prompt, no history; programs told not to page. Before
         // each prompt, __bb_done takes over the state the last command's subshell left (its
         // directory, exports, functions, aliases) and prints the marker with its exit code.
@@ -309,10 +336,11 @@ public sealed partial class SshHost : IDisposable
                     _raw.Clear();
                 if (m.Groups[1].Value == "bash")
                     return;
+                // No bash to keep a terminal with: RunAsync runs each command on its own instead.
                 shell.Dispose();
                 _shell = null;
-                throw new IOException($"{Target} has no bash, which the ssh tool's terminal needs (its login shell is another one). " +
-                                      "Use the file tools with host, and copy.");
+                _noBash = true;
+                return;
             }
             if (_shellClosed)
                 break;

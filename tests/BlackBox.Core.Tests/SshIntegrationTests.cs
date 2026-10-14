@@ -292,6 +292,33 @@ public class SshIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task Without_bash_each_command_runs_on_its_own()
+    {
+        if (Host is null) return;
+        var server = Host[(Host.IndexOf('@') + 1)..];
+        try
+        {
+            // As on a router, a NAS or Alpine: the login shell is sh and no bash is on its PATH.
+            await Ssh("sudo useradd -m -s /bin/sh bbnob 2>/dev/null; sudo install -d -m 700 -o bbnob -g bbnob ~bbnob/.ssh ~bbnob/bin && " +
+                      "sudo install -m 600 -o bbnob -g bbnob ~/.ssh/authorized_keys ~bbnob/.ssh/authorized_keys && " +
+                      "for c in stty mktemp tty sed cat rm whoami ls; do sudo ln -sf \"$(command -v $c)\" ~bbnob/bin/$c; done && " +
+                      "echo 'PATH=$HOME/bin; export PATH' | sudo tee ~bbnob/.profile >/dev/null");
+            Task<ToolResult> AsNob(string command) => new SshTool().ExecuteAsync(
+                new JsonObject { ["host"] = $"bbnob@{server}", ["key_file"] = Key, ["command"] = command }, _ctx, CancellationToken.None);
+            var first = await AsNob("cd /tmp; echo ${BASH_VERSION:-nobash}; whoami");
+            Assert.Contains("no bash", first.Text);
+            Assert.Contains("nobash\nbbnob", first.Text);
+            var second = await AsNob("pwd");
+            Assert.Contains("/home/bbnob", second.Text); // nothing carries over
+            Assert.DoesNotContain("no bash", second.Text); // said once
+        }
+        finally
+        {
+            await Ssh("sudo pkill -u bbnob; sudo userdel -r bbnob 2>/dev/null; true");
+        }
+    }
+
+    [Fact]
     public async Task After_a_reboot_the_next_call_logs_in_again()
     {
         if (Host is null || Environment.GetEnvironmentVariable("BB_SSH_TEST_REBOOT") != "1") return;

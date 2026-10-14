@@ -184,7 +184,9 @@ the key the task names, the keys in `~/.ssh`, or a password the user gave, and k
 open there for the rest of the chat: `cd`, exported variables and functions carry over from one
 command to the next, as for a person at a terminal. The first call reports the system, the
 address this PC connects from (what a firewall rule must let in) and whether sudo needs a
-password. The terminal is bash, also for a user whose login shell is another one (sh, zsh).
+password. The terminal is bash, also for a user whose login shell is another one (sh, zsh); on
+a server without bash (a router, a NAS, Alpine) each command runs on its own instead, as
+`ssh host command` runs it.
 The SSH client is built in (SSH.NET), so no
 `ssh.exe`, PuTTY or key-file permissions matter, and it works the same on every OS.
 
