@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Your Orders · GadgetHub</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23f76707'/%3E%3Ctext x='16' y='23' font-size='19' font-family='Arial' font-weight='bold' fill='white' text-anchor='middle'%3EG%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/lab.css">
+<style>
+  body { background: #f5f6f8; }
+  .top { background: #1e2a3a; color: #fff; }
+  .bar { display: flex; align-items: center; gap: 20px; padding: 10px 24px; }
+  .logo { font-size: 24px; font-weight: 800; color: #fff; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+  .logo b { background: #f76707; border-radius: 7px; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; }
+  .search { flex: 1; display: flex; max-width: 640px; }
+  .search input { flex: 1; border: none; border-radius: 6px 0 0 6px; padding: 10px 14px; outline: none; }
+  .search button { border: none; background: #f76707; color: #fff; padding: 0 18px; border-radius: 0 6px 6px 0; font-weight: 600; }
+  .account { font-size: 13px; line-height: 1.2; } .account b { font-size: 15px; }
+  .cart { font-size: 22px; position: relative; } .cart span { position: absolute; top: -6px; right: -10px; background: #f76707; border-radius: 9px; font-size: 11px; padding: 1px 6px; font-weight: 700; }
+  .cats { background: #2b3a4f; display: flex; gap: 22px; padding: 8px 24px; font-size: 14px; }
+  .cats a { color: #e9ecef; text-decoration: none; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 18px 24px 120px; display: grid; grid-template-columns: 220px 1fr; gap: 28px; }
+  .crumbs { grid-column: 1 / -1; font-size: 13px; color: #6c757d; }
+  .crumbs a { color: #1c7ed6; text-decoration: none; }
+  .acct-nav a { display: block; padding: 9px 12px; border-radius: 6px; color: #343a40; text-decoration: none; }
+  .acct-nav a.on { background: #fff; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+  h1 { margin: 0 0 16px; font-size: 26px; }
+  .tabs { display: flex; gap: 22px; border-bottom: 1px solid #dee2e6; margin-bottom: 16px; font-size: 14px; }
+  .tabs span { padding-bottom: 8px; color: #495057; }
+  .tabs span.on { border-bottom: 3px solid #f76707; font-weight: 600; color: #212529; }
+  .order { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; margin-bottom: 18px; overflow: hidden; }
+  .order-head { display: flex; gap: 40px; background: #f1f3f5; padding: 12px 18px; font-size: 13px; color: #495057; }
+  .order-head div b { display: block; color: #212529; font-size: 14px; margin-top: 2px; }
+  .order-head .num { margin-left: auto; text-align: right; }
+  .order-body { display: flex; gap: 20px; padding: 18px; }
+  .thumb { width: 120px; height: 120px; border-radius: 8px; background: #e9ecef; display: flex; align-items: center; justify-content: center; flex: none; }
+  .tablet { width: 64px; height: 88px; border-radius: 8px; background: #343a40; border: 5px solid #495057; box-shadow: inset 0 0 0 3px #212529; background: linear-gradient(135deg, #4dabf7, #845ef7); }
+  .charger { width: 44px; height: 54px; border-radius: 8px; background: #f8f9fa; border: 2px solid #ced4da; }
+  .item { flex: 1; }
+  .status { font-weight: 700; font-size: 17px; margin-bottom: 4px; }
+  .status.ok { color: #2b8a3e; }
+  .item a.name { color: #1c7ed6; font-weight: 600; text-decoration: none; }
+  .item .sub { color: #6c757d; font-size: 14px; margin: 4px 0; }
+  .buttons { display: flex; flex-direction: column; gap: 8px; width: 230px; }
+  .btn { border: 1px solid #ced4da; background: #fff; border-radius: 20px; padding: 7px 14px; font-size: 14px; }
+  .btn.primary { background: #ffd43b; border-color: #fcc419; }
+  .btn:hover { filter: brightness(.97); }
+  .note { display: none; margin: 0 18px 16px; padding: 10px 14px; border-radius: 6px; background: #fff4e6; border: 1px solid #ffd8a8; font-size: 14px; }
+  .note.show { display: block; }
+  .note a { color: #1c7ed6; cursor: pointer; font-weight: 600; }
+  .help { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; }
+  .help .t { flex: 1; } .help b { display: block; }
+
+  .launcher { position: fixed; right: 24px; bottom: 24px; display: flex; align-items: center; gap: 10px; border: none; background: #f76707; color: #fff;
+    border-radius: 28px; padding: 0 20px 0 16px; height: 56px; font-weight: 700; font-size: 15px; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+  .launcher svg { width: 26px; height: 26px; }
+  .widget { position: fixed; right: 24px; bottom: 24px; width: 400px; height: min(620px, calc(100vh - 48px)); background: #fff; border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.3); display: flex; flex-direction: column; overflow: hidden; }
+  .w-head { background: #f76707; color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+  .w-head .t { flex: 1; } .w-head b { display: block; font-size: 16px; } .w-head span { font-size: 13px; opacity: .9; }
+  .w-head button { border: none; background: rgba(255,255,255,.2); color: #fff; width: 32px; height: 32px; border-radius: 50%; font-size: 18px; }
+  .w-pane { flex: 1; min-height: 0; }
+  .w-pane .cp-messages { background: #f8f9fa; }
+  .w-pane .cp-bubble { box-shadow: none; background: #e9ecef; border-radius: 14px 14px 14px 4px; }
+  .w-pane .cp-msg.out .cp-bubble { background: #f76707; color: #fff; border-radius: 14px 14px 4px 14px; }
+  .w-pane .cp-msg.out .cp-meta { color: #ffe8cc; }
+  .w-pane .cp-name { color: #495057 !important; }
+  .w-pane .cp-composer { border-top: 1px solid #e9ecef; background: #fff; padding: 10px; }
+  .w-pane .cp-input { box-shadow: none; background: #f1f3f5; border-radius: 10px; }
+  .w-pane .cp-send { border-radius: 10px; width: auto; padding: 0 16px; box-shadow: none; background: #f1f3f5; color: #868e96; font-weight: 700; }
+  .w-pane .cp-send.ready { background: #f76707; color: #fff; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body data-app="gadgethub">
+<header class="top">
+  <div class="bar">
+    <a class="logo" href="#"><b>G</b>GadgetHub</a>
+    <form class="search" onsubmit="return false"><input placeholder="Search GadgetHub" aria-label="Search GadgetHub"><button>Search</button></form>
+    <div class="account">Hello, Alex<br><b>Account &amp; Orders</b></div>
+    <div class="cart">🛒<span>0</span></div>
+  </div>
+  <nav class="cats"><a href="#">Today's Deals</a><a href="#">Laptops</a><a href="#">Phones</a><a href="#">Tablets</a><a href="#">Audio</a><a href="#">Smart Home</a><a href="#">Gaming</a><a href="#">Help</a></nav>
+</header>
+
+<div class="wrap">
+  <div class="crumbs"><a href="#">Your Account</a> › Your Orders</div>
+  <nav class="acct-nav">
+    <a href="#" class="on">Your Orders</a><a href="#">Returns</a><a href="#">Addresses</a><a href="#">Payment methods</a><a href="#">Login &amp; security</a><a href="#">Messages</a>
+  </nav>
+  <main>
+    <h1>Your Orders</h1>
+    <div class="tabs"><span class="on">Orders</span><span>Buy Again</span><span>Not Yet Shipped</span><span>Cancelled Orders</span></div>
+
+    <section class="order">
+      <div class="order-head">
+        <div>ORDER PLACED<b>October 6, 2026</b></div>
+        <div>TOTAL<b>$329.00</b></div>
+        <div>SHIP TO<b>Alex Morgan</b></div>
+        <div class="num">ORDER # GH-30571<b><a href="#" style="color:#1c7ed6;font-size:13px">View order details</a></b></div>
+      </div>
+      <div class="order-body">
+        <div class="thumb"><div class="tablet"></div></div>
+        <div class="item">
+          <div class="status ok">Delivered October 10</div>
+          <a class="name" href="#">Nova Tab 11 — 11" tablet, 128 GB, Graphite</a>
+          <div class="sub">Sold by GadgetHub · Qty 1 · $329.00</div>
+          <div class="sub">Return or replace items: eligible through November 9</div>
+        </div>
+        <div class="buttons">
+          <button class="btn primary">Track package</button>
+          <button class="btn" id="return-btn">Return or replace items</button>
+          <button class="btn" id="help-btn">Get help with order</button>
+          <button class="btn">Write a product review</button>
+        </div>
+      </div>
+      <div class="note" id="return-note">Item arrived damaged or not working? Our support team will sort it out quickly: <a id="note-chat">chat with us</a>.</div>
+    </section>
+
+    <section class="order">
+      <div class="order-head">
+        <div>ORDER PLACED<b>August 28, 2026</b></div>
+        <div>TOTAL<b>$39.99</b></div>
+        <div>SHIP TO<b>Alex Morgan</b></div>
+        <div class="num">ORDER # GH-29114<b><a href="#" style="color:#1c7ed6;font-size:13px">View order details</a></b></div>
+      </div>
+      <div class="order-body">
+        <div class="thumb"><div class="charger"></div></div>
+        <div class="item">
+          <div class="status ok">Delivered September 2</div>
+          <a class="name" href="#">PowerCube 65 W USB-C charger, white</a>
+          <div class="sub">Sold by GadgetHub · Qty 1 · $39.99</div>
+        </div>
+        <div class="buttons"><button class="btn primary">Buy it again</button><button class="btn">Write a product review</button></div>
+      </div>
+    </section>
+
+    <div class="help"><div style="font-size:30px">💬</div><div class="t"><b>Need help with an order?</b>Our support team is available 24/7 in the chat.</div><button class="btn primary" id="help-chat">Chat with us</button></div>
+  </main>
+</div>
+
+<button class="launcher" id="launcher" aria-label="Chat with us"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2z"/></svg>Chat with us</button>
+<section class="widget hidden" id="widget" aria-label="GadgetHub Support chat">
+  <div class="w-head"><div class="avatar" style="width:38px;height:38px;background:#fff;color:#f76707">G</div>
+    <div class="t"><b>GadgetHub Support</b><span id="w-status">We typically reply in a few minutes</span></div>
+    <button id="w-close" title="Close chat" aria-label="Close chat">×</button></div>
+  <div class="w-pane" id="w-pane"></div>
+</section>
+
+<script src="/assets/lab.js"></script>
+<script>
+  const pane = new ChatPane(document.getElementById('w-pane'), { names: true, avatars: true, placeholder: 'Type your message…', sendLabel: 'Send' });
+  const CHAT = 'support';
+  let open = false;
+
+  function openWidget() {
+    open = true;
+    document.getElementById('widget').classList.remove('hidden');
+    document.getElementById('launcher').classList.add('hidden');
+    pane.setChat(CHAT);
+    Lab.open(CHAT);
+    pane.focus();
+  }
+  function closeWidget() {
+    open = false;
+    document.getElementById('widget').classList.add('hidden');
+    document.getElementById('launcher').classList.remove('hidden');
+  }
+  document.getElementById('launcher').onclick = openWidget;
+  document.getElementById('help-chat').onclick = openWidget;
+  document.getElementById('help-btn').onclick = openWidget;
+  document.getElementById('note-chat').onclick = openWidget;
+  document.getElementById('w-close').onclick = closeWidget;
+  document.getElementById('return-btn').onclick = () => document.getElementById('return-note').classList.add('show');
+
+  Lab.onState(state => {
+    const chat = Lab.chat(CHAT);
+    if (!chat) return;
+    const typing = chat.typing.length ? Lab.person(chat.typing[0]).name.split(' ')[0] + ' is typing…' : null;
+    const agent = chat.messages.some(m => m.from === 'maria');
+    document.getElementById('w-status').textContent = typing ?? (agent ? 'Maria · Support agent' : 'We typically reply in a few minutes');
+    if (open) {
+      pane.render(state);
+      if (chat.unread) Lab.open(CHAT);
+    }
+    document.getElementById('launcher').lastChild.textContent = chat.unread && !open ? `Chat with us (${chat.unread})` : 'Chat with us';
+  });
+</script>
+</body>
+</html>

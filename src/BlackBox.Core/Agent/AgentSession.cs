@@ -113,6 +113,8 @@ public sealed partial class AgentSession(
                 // Only the last screenshot goes to the model: the tools' results come before it.
                 ChatMessage? shown = null;
                 ContentPart? screenshot = null;
+                // This reply's calls were decided on the screen in the last screenshot.
+                toolContext.Seen = toolContext.LastShot;
                 foreach (var call in reply.ToolCalls!)
                 {
                     var result = await RunToolAsync(call, observer, ct).ConfigureAwait(false);

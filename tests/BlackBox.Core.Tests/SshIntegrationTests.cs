@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Ssh;
@@ -156,6 +159,141 @@ public class SshIntegrationTests : IDisposable
             Directory.Delete(local, recursive: true);
             await Ssh("sudo rm -rf /srv/bb-copy");
         }
+    }
+
+    [Fact]
+    public async Task A_copy_of_several_GB_streams_in_every_direction_in_little_memory()
+    {
+        // Opt-in: the file goes three ways (minutes on the lab VM) and needs that much free disk on
+        // this PC and on the server: $env:BB_SSH_TEST_BIG_GB = "3". The copy between servers goes to
+        // a login of its own on the server of $env:BB_SSH_TEST_HOST2 (same key, sudo without a
+        // password) if set, else on the same server.
+        if (Host is null || !double.TryParse(Environment.GetEnvironmentVariable("BB_SSH_TEST_BIG_GB"), NumberStyles.Float, CultureInfo.InvariantCulture, out var gb))
+            return;
+        var admin = Environment.GetEnvironmentVariable("BB_SSH_TEST_HOST2") ?? Host;
+        var target = $"bbbig@{admin[(admin.IndexOf('@') + 1)..]}";
+        Task<ToolResult> On(string host, string command, int wait = 30) => new SshTool().ExecuteAsync(
+            new JsonObject { ["host"] = host, ["key_file"] = Key, ["command"] = command, ["wait_seconds"] = wait }, _ctx, CancellationToken.None);
+        // A CPU quota on the target login's slice holds back its sshd and tar, as a slower server
+        // would; set from the admin login, which the quota leaves alone.
+        Task<ToolResult> Quota(string value) => On(admin, $"sudo systemctl set-property --runtime user-$(id -u bbbig).slice CPUQuota={value}");
+        const string dir = "/var/tmp/bb-big", to = "/var/tmp/bb-big-to"; // not /tmp: a tmpfs on Debian 13, half the RAM
+        var local = Path.Combine(Path.GetTempPath(), "bb-big-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(local);
+        try
+        {
+            // A dump of random bytes, which nothing on the way can make smaller.
+            var dump = Path.Combine(local, "dump.bin");
+            var hash = WriteRandomFile(dump, (long)(gb * (1L << 30)));
+            await Ssh($"rm -rf {dir} && mkdir {dir}");
+
+            var up = await Measured("This PC to the server", () => Copy(dump, $"{Host}:{dir}/"));
+            Assert.Contains(hash, (await Ssh($"sha256sum {dir}/dump.bin", wait: 1800)).Text);
+            Assert.InRange(up.Memory, 0, MemoryBound);
+
+            var back = Path.Combine(local, "back.bin");
+            var down = await Measured("The server to this PC", () => Copy($"{Host}:{dir}/dump.bin", back));
+            Assert.Equal(hash, HashOf(back));
+            Assert.InRange(down.Memory, 0, MemoryBound);
+            File.Delete(back);
+
+            // Server to server through this PC, the target held back for the first half minute. The
+            // source can't be slowed down, so what the target can't take yet waits on disk here rather
+            // than in memory, in files deleted as they are read: the disk holds about what waits.
+            await On(admin, "sudo useradd -m -s /bin/bash bbbig 2>/dev/null; sudo install -d -m 700 -o bbbig -g bbbig ~bbbig/.ssh && " +
+                            "sudo install -m 600 -o bbbig -g bbbig ~/.ssh/authorized_keys ~bbbig/.ssh/authorized_keys");
+            Assert.Contains("[exit code 0", (await On(target, $"rm -rf {to} && mkdir {to}")).Text); // logged in: its slice exists
+            await Quota("5%");
+            var release = Task.Delay(TimeSpan.FromSeconds(30), CancellationToken.None).ContinueWith(_ => Quota(""), TaskScheduler.Default).Unwrap();
+            (ToolResult Result, long Memory, long OnDisk) across;
+            try
+            {
+                across = await Measured("Server to server", () => Copy($"{Host}:{dir}/dump.bin", $"{target}:{to}/"));
+            }
+            finally
+            {
+                await release;
+            }
+            Assert.Contains(hash, (await On(target, $"sha256sum {to}/dump.bin", wait: 1800)).Text);
+            Assert.InRange(across.Memory, 0, MemoryBound);
+            Assert.InRange(CopyTool.LastSpilledPeak, 4 * CopyTool.MemoryLimit, long.MaxValue);
+            Assert.InRange(across.OnDisk, 1, CopyTool.LastSpilledPeak + 2 * CopyPipe.DefaultSegmentSize);
+            var settled = DateTime.UtcNow.AddSeconds(3); // a closed file lingers while a virus scanner has it open
+            while (SpillFiles().Length > 0 && DateTime.UtcNow < settled)
+                await Task.Delay(50, CancellationToken.None);
+            Assert.Empty(SpillFiles());
+        }
+        finally
+        {
+            Directory.Delete(local, recursive: true);
+            await Ssh($"rm -rf {dir}");
+            await On(admin, $"sudo systemctl set-property --runtime user-$(id -u bbbig).slice CPUQuota=; sudo pkill -u bbbig; sudo rm -rf {to}; sudo userdel -r bbbig 2>/dev/null; true");
+        }
+    }
+
+    /// <summary>The most a big copy may add to this process's memory: a few times the pipe, nothing like the file.</summary>
+    private const long MemoryBound = 256L << 20;
+
+    private Task<ToolResult> Copy(string from, string to) =>
+        new CopyTool().ExecuteAsync(new() { ["from"] = from, ["to"] = to }, _ctx, CancellationToken.None);
+
+    private static string[] SpillFiles() => Directory.GetFiles(Path.GetTempPath(), "blackbox-copy-*.tmp");
+
+    /// <summary>
+    /// Runs a copy while watching how far this process's private memory rises above where it
+    /// started, and how much its temporary files hold on disk; both go to the test output.
+    /// </summary>
+    private static async Task<(ToolResult Result, long Memory, long OnDisk)> Measured(string what, Func<Task<ToolResult>> copy)
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        using var me = Process.GetCurrentProcess();
+        var start = me.PrivateMemorySize64;
+        long peak = start, onDisk = 0;
+        using var done = new CancellationTokenSource();
+        var watch = Task.Run(async () =>
+        {
+            while (!done.IsCancellationRequested)
+            {
+                me.Refresh();
+                peak = Math.Max(peak, me.PrivateMemorySize64);
+                var bytes = 0L;
+                foreach (var file in SpillFiles())
+                    try { bytes += new FileInfo(file).Length; } catch (IOException) { }
+                onDisk = Math.Max(onDisk, bytes);
+                try { await Task.Delay(100, done.Token); } catch (OperationCanceledException) { }
+            }
+        });
+        var clock = Stopwatch.StartNew();
+        var result = await copy();
+        done.Cancel();
+        await watch;
+        TestContext.Current.TestOutputHelper?.WriteLine($"{what}: {result.Text} ({clock.Elapsed:m\\:ss}) Memory rose by {(peak - start) / 1048576.0:0} MB. " +
+                                                        $"Waiting on disk: up to {CopyTool.LastSpilledPeak / 1048576.0:0} MB, in files holding up to {onDisk / 1048576.0:0} MB.");
+        Assert.False(result.IsError, result.Text);
+        return (result, peak - start, onDisk);
+    }
+
+    private static string WriteRandomFile(string path, long size)
+    {
+        using var output = File.Create(path);
+        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var block = new byte[1 << 20];
+        for (var left = size; left > 0; left -= block.Length)
+        {
+            var n = (int)Math.Min(left, block.Length);
+            RandomNumberGenerator.Fill(block.AsSpan(0, n));
+            output.Write(block, 0, n);
+            sha.AppendData(block, 0, n);
+        }
+        return Convert.ToHexStringLower(sha.GetHashAndReset());
+    }
+
+    private static string HashOf(string path)
+    {
+        using var input = File.OpenRead(path);
+        return Convert.ToHexStringLower(SHA256.HashData(input));
     }
 
     [Fact]
