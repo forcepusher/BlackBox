@@ -8,7 +8,7 @@ namespace BlackBox.Core.Ssh;
 /// it, as a careful admin does before a restart: visudo for sudoers, sshd -t (and what sshd will
 /// really use) for sshd, nginx -t, systemd-analyze verify for units, findmnt --verify for fstab,
 /// the rules cron and logrotate apply to their files, netplan generate, and PostgreSQL's view of
-/// pg_hba.conf. A broken sudoers or sshd config can lock everyone out, a broken fstab can stop the
+/// pg_hba.conf and of its settings. A broken sudoers or sshd config can lock everyone out, a broken fstab can stop the
 /// next boot; most of the traps here passed a model by unnoticed in the benchmark (a sudoers rule
 /// for a group written without %, an sshd drop-in that sorts after the one that turns passwords on).
 /// </summary>
@@ -30,6 +30,8 @@ public static partial class ConfigChecks
         _ when path.StartsWith("/etc/logrotate.d/", StringComparison.Ordinal) => "logrotate",
         _ when path.StartsWith("/etc/netplan/", StringComparison.Ordinal) && (path.EndsWith(".yaml") || path.EndsWith(".yml")) => "netplan",
         _ when path.EndsWith("/pg_hba.conf", StringComparison.Ordinal) => "pghba",
+        _ when path.EndsWith("/postgresql.conf", StringComparison.Ordinal) ||
+               path.StartsWith("/etc/postgresql/", StringComparison.Ordinal) && path.Contains("/conf.d/") && path.EndsWith(".conf") => "pgconf",
         _ => null,
     };
 
@@ -87,6 +89,7 @@ public static partial class ConfigChecks
                 case "logrotate": calls.Add($"chk_logrotate {q}"); break;
                 case "netplan": if (!calls.Contains("chk_netplan")) calls.Add("chk_netplan"); break;
                 case "pghba": if (!calls.Contains("chk_pghba")) calls.Add("chk_pghba"); break;
+                case "pgconf": if (!calls.Contains("chk_pgconf")) calls.Add("chk_pgconf"); break;
             }
         }
         if (sshd.Count > 0)
@@ -162,19 +165,34 @@ public static partial class ConfigChecks
           [ -n "$out" ] && echo "NOTE logrotate -d $f: $(echo "$out" | tr '\n' ' ')" || echo "OK logrotate -d $f"; }
         chk_netplan() { local out; command -v netplan >/dev/null || return
           out=$(netplan generate 2>&1) && echo "OK netplan generate" || echo "ERR netplan generate: $(echo "$out" | head -3 | tr '\n' ' ')"; }
+        chk_pgpsql_failed() { case "$1" in
+            *"invalid line "*) # Debian's and Ubuntu's psql wrapper reads the config first and stops at a line it can't parse.
+              echo "ERR $(echo "$1" | grep -m1 'invalid line' | sed 's/^Error: //') (PostgreSQL can't parse this line: it won't start or reload with it)";;
+            *"authentication failed"*|*"no password supplied"*|*"no pg_hba.conf entry"*)
+              echo "NOTE the postgres superuser can't log in on the server ($(echo "$1" | head -1)): with no peer rule for it only a password works";;
+            *) echo "NOTE psql as postgres fails here: $(echo "$1" | head -2 | tr '\n' ' ')";; esac; }
         chk_pghba() { local out m; command -v psql >/dev/null || return
           if ! out=$(sudo -u postgres psql -XtAc "select coalesce(string_agg(line_number || ': ' || error, '; '), '') from pg_hba_file_rules where error is not null" 2>&1); then
-            echo "NOTE the postgres superuser can't log in on the server ($(echo "$out" | head -1)): with no peer rule for it only a password works"; return; fi
+            chk_pgpsql_failed "$out"; return; fi
           [ -n "$out" ] && echo "ERR pg_hba.conf: $out"
           m=$(sudo -u postgres psql -XtAc "select auth_method from pg_hba_file_rules where type = 'local' and ('all' = any(database) or 'postgres' = any(database)) and ('all' = any(user_name) or 'postgres' = any(user_name)) order by line_number limit 1" 2>/dev/null)
           case "$m" in peer|trust|ident) echo "OK pg_hba.conf";; *) echo "NOTE pg_hba.conf: the first rule for local logins of postgres is ${m:-missing}, not peer; after a reload the postgres superuser can't log in on the server without a password";; esac; }
+        chk_pgconf() { local out l; command -v psql >/dev/null || return
+          # PostgreSQL reads its config files afresh for pg_file_settings: syntax errors and bad values
+          # show there, and so does a setting only a restart applies (listen_addresses, port, ...).
+          if ! out=$(sudo -u postgres psql -XtAc "select string_agg(case when f.error = 'setting could not be applied' and s.context = 'postmaster' then 'RESTART ' || f.name else 'BAD ' || f.sourcefile || ' line ' || f.sourceline || ': ' || coalesce(f.name || ': ', '') || f.error end, E'\n') from pg_file_settings f left join pg_settings s on s.name = f.name where f.error is not null" 2>&1); then
+            chk_pgpsql_failed "$out"; return; fi
+          [ -z "$out" ] && { echo "OK PostgreSQL's settings"; return; }
+          while read -r l; do case "$l" in
+            RESTART*) echo "NOTE ${l#RESTART } changes only when PostgreSQL restarts (a reload doesn't apply it)";;
+            BAD*) echo "ERR PostgreSQL rejects ${l#BAD }";; esac; done <<<"$out"; }
 
         """;
 
     [GeneratedRegex(@"^/etc/systemd/system/[\w@:.-]+\.(service|timer|socket|path|mount)(\.d/[\w.-]+\.conf)?$")]
     private static partial Regex UnitPath();
 
-    [GeneratedRegex(@"/etc/(sudoers(\.d/[\w.~-]+)?|ssh/sshd_config(\.d/[\w.-]+)?|nginx/[\w./-]+|systemd/system/[\w@:.-]+\.(service|timer|socket|path|mount)(\.d/[\w.-]+\.conf)?|fstab|cron\.d/[\w.-]+|logrotate\.d/[\w.-]+|netplan/[\w.-]+\.ya?ml)|/[\w./-]*pg_hba\.conf")]
+    [GeneratedRegex(@"/etc/(sudoers(\.d/[\w.~-]+)?|ssh/sshd_config(\.d/[\w.-]+)?|nginx/[\w./-]+|systemd/system/[\w@:.-]+\.(service|timer|socket|path|mount)(\.d/[\w.-]+\.conf)?|fstab|cron\.d/[\w.-]+|logrotate\.d/[\w.-]+|netplan/[\w.-]+\.ya?ml)|/[\w./-]*(pg_hba|postgresql)\.conf|/etc/postgresql/[\w./-]+/conf\.d/[\w.-]+\.conf")]
     private static partial Regex ConfigPath();
 
     [GeneratedRegex(@"\btee\b|>|\bsed\s+(-\w*i|--in-place)|\bcp\b|\bmv\b|\binstall\b|\bln\b|\bchmod\b|\bchown\b|\bvisudo\b")]

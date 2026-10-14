@@ -363,6 +363,32 @@ public class SshIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task PostgreSQL_settings_are_checked_after_they_are_written()
+    {
+        if (Host is null) return;
+        var dir = (await Ssh("ls -d /etc/postgresql/*/main/conf.d 2>/dev/null | head -1")).Text.Split('\n')[0].Trim();
+        if (!dir.StartsWith("/etc/postgresql/")) return; // no PostgreSQL on this server
+        var file = dir + "/bbtest.conf";
+        Task<ToolResult> Write(string content) => new WriteFileTool().ExecuteAsync(
+            new JsonObject { ["path"] = file, ["content"] = content, ["host"] = Host }, _ctx, CancellationToken.None);
+        try
+        {
+            // A comment PostgreSQL doesn't know (seen in a run): the server would not start again.
+            var bad = await Write("work_mem = '8MB' /* more for sorts */\n");
+            Assert.Matches("PostgreSQL rejects .*bbtest.conf|invalid line 1 in .*bbtest.conf.*can't parse this line", bad.Text);
+            Assert.DoesNotContain("can't log in", bad.Text);
+
+            // listen_addresses is valid, but a reload doesn't apply it.
+            var restart = await Write("listen_addresses = '*'\n");
+            Assert.Contains("listen_addresses changes only when PostgreSQL restarts", restart.Text);
+        }
+        finally
+        {
+            await Ssh($"sudo rm -f {file}; sudo systemctl reload postgresql; true");
+        }
+    }
+
+    [Fact]
     public async Task After_a_reboot_the_next_call_logs_in_again()
     {
         if (Host is null || Environment.GetEnvironmentVariable("BB_SSH_TEST_REBOOT") != "1") return;

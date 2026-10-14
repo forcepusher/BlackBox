@@ -270,6 +270,10 @@ public class SshTests
             ConfigChecks.PathsIn("sudo ln -sf /etc/nginx/sites-available/shop /etc/nginx/sites-enabled/shop"));
         Assert.Equal(["/etc/systemd/system/tiny-arena.service"], ConfigChecks.PathsIn("sudo cp unit /etc/systemd/system/tiny-arena.service && sudo systemctl daemon-reload"));
         Assert.Equal(["/etc/postgresql/16/main/pg_hba.conf"], ConfigChecks.PathsIn("echo 'host shop shop 10.0.2.0/24 scram-sha-256' | sudo tee -a /etc/postgresql/16/main/pg_hba.conf"));
+        Assert.Equal(["/etc/postgresql/17/main/postgresql.conf"],
+            ConfigChecks.PathsIn("sudo sed -i \"s/^#listen_addresses = 'localhost'/listen_addresses = '*'/\" /etc/postgresql/17/main/postgresql.conf"));
+        Assert.Equal(["/etc/postgresql/17/main/conf.d/listen.conf"], ConfigChecks.PathsIn("echo \"listen_addresses = '*'\" | sudo tee /etc/postgresql/17/main/conf.d/listen.conf"));
+        Assert.Equal(1, ConfigChecks.Script(["/etc/postgresql/17/main/postgresql.conf", "/etc/postgresql/17/main/conf.d/listen.conf"])!.Split('\n').Count(l => l == "chk_pgconf"));
         // Reading isn't writing, and 2>/dev/null writes nothing that matters.
         Assert.Empty(ConfigChecks.PathsIn("sudo cat /etc/sudoers.d/devs 2>/dev/null; grep -n Port /etc/ssh/sshd_config"));
         Assert.Empty(ConfigChecks.PathsIn("sudo tee /etc/motd < banner.txt"));
