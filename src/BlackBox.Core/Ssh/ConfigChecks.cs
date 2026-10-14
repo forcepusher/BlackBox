@@ -40,12 +40,13 @@ public static partial class ConfigChecks
 
     /// <summary>
     /// The config files a shell command seems to write: a checked path in a command that also has
-    /// a writing word in it (tee, a redirection, sed -i, cp, mv, install, ln, chmod, chown).
+    /// a writing word in it (tee, a redirection, sed -i, cp, mv, install, ln, chmod, chown, rm).
     /// </summary>
     public static IReadOnlyList<string> PathsIn(string command)
     {
-        // 2>/dev/null and 2>&1 write nothing anyone checks.
-        if (!Writes().IsMatch(Discards().Replace(command, "")))
+        // 2>/dev/null and 2>&1 write nothing anyone checks, and neither does quoted text without a
+        // config path in it (an echo's "-> yes", a sed expression; unlike sh -c 'cmd > /etc/fstab').
+        if (!Writes().IsMatch(Quoted().Replace(Discards().Replace(command, ""), m => ConfigPath().IsMatch(m.Value) ? m.Value : "''")))
             return [];
         return ConfigPath().Matches(command).Select(m => m.Value.TrimEnd('.', ',', ';', ')', '\'', '"'))
             .Where(p => KindOf(p) is not null).Distinct().ToList();
@@ -207,9 +208,12 @@ public static partial class ConfigChecks
     [GeneratedRegex(@"/etc/(sudoers(\.d/[\w.~-]+)?|ssh/sshd_config(\.d/[\w.-]+)?|nginx/[\w./-]+|systemd/system/[\w@:.-]+\.(service|timer|socket|path|mount)(\.d/[\w.-]+\.conf)?|fstab|cron\.d/[\w.-]+|logrotate\.d/[\w.-]+|netplan/[\w.-]+\.ya?ml|nftables\.conf|nftables(\.d)?/[\w.-]+|iptables/rules\.v[46]|sysconfig/(nftables\.conf|ip6?tables))|/[\w./-]*(pg_hba|postgresql)\.conf|/etc/postgresql/[\w./-]+/conf\.d/[\w.-]+\.conf")]
     private static partial Regex ConfigPath();
 
-    [GeneratedRegex(@"\btee\b|>|\bsed\s+(-\w*i|--in-place)|\bcp\b|\bmv\b|\binstall\b|\bln\b|\bchmod\b|\bchown\b|\bvisudo\b")]
+    [GeneratedRegex(@"\btee\b|>|\bsed\s+(-\w*i|--in-place)|\bcp\b|\bmv\b|\binstall\b|\bln\b|\bchmod\b|\bchown\b|\brm\b|\bvisudo\b")]
     private static partial Regex Writes();
 
     [GeneratedRegex(@"\d?>&\d|&?\d?>>?\s*/dev/null")]
     private static partial Regex Discards();
+
+    [GeneratedRegex(@"'[^']*'|""(\\.|[^""\\])*""")]
+    private static partial Regex Quoted();
 }

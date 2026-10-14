@@ -278,6 +278,12 @@ public class SshTests
         Assert.Equal(["/etc/iptables/rules.v4"], ConfigChecks.PathsIn("sudo sh -c 'iptables-save > /etc/iptables/rules.v4'"));
         Assert.Contains("chk_iptables '/etc/iptables/rules.v6'", ConfigChecks.Script(["/etc/iptables/rules.v6"]));
         Assert.Empty(ConfigChecks.PathsIn("sudo nft -f /etc/nftables.conf && sudo systemctl enable nftables"));
+        // A > in an echo's text writes nothing (seen in a run); a sed expression full of | still edits in place.
+        Assert.Empty(ConfigChecks.PathsIn("sudo cat /etc/sudoers.d/devs\necho \"keys present? -> $(sudo test -f /home/carol/.ssh/authorized_keys && echo YES)\""));
+        Assert.Equal(["/etc/postgresql/17/main/postgresql.conf"],
+            ConfigChecks.PathsIn("sudo sed -i \"60s|.*|listen_addresses = '*'|\" /etc/postgresql/17/main/postgresql.conf"));
+        Assert.Equal(["/etc/ssh/sshd_config.d/50-cloud-init.conf"], ConfigChecks.PathsIn("sudo rm -f /etc/ssh/sshd_config.d/50-cloud-init.conf"));
+        Assert.Equal(["/etc/sudoers.d/devs"], ConfigChecks.PathsIn("echo '%devs ALL=(ALL) NOPASSWD: ALL' | sudo tee \"/etc/sudoers.d/devs\""));
         // Reading isn't writing, and 2>/dev/null writes nothing that matters.
         Assert.Empty(ConfigChecks.PathsIn("sudo cat /etc/sudoers.d/devs 2>/dev/null; grep -n Port /etc/ssh/sshd_config"));
         Assert.Empty(ConfigChecks.PathsIn("sudo tee /etc/motd < banner.txt"));
