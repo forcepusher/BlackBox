@@ -198,8 +198,9 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
                 throw ex switch
                 {
                     _ when ex is SshAuthenticationException || AuthGaveUp(ex) =>
-                        new IOException($"{t} did not accept the login ({ex.Message}). " +
-                            (keyFile is null ? "Check the user name, and give key_file if the user named a key." : "Check the user name and the key.")),
+                        new IOException($"{t} did not accept the login ({ex.Message})." +
+                            // A test of a given key or password needs no advice: a refusal may be the answer sought.
+                            (keyOnly || onlyGiven ? "" : keyFile is null ? " Check the user name, and give key_file if the user named a key." : " Check the user name and the key.")),
                     SocketException s => new IOException($"Can't reach {t.Host}:{t.Port}: {s.Message}"),
                     _ => new IOException($"Can't connect to {t}: {ex.Message}"),
                 };
