@@ -210,6 +210,14 @@ The SSH client is built in (SSH.NET), so no
   for what the login user can't reach (most of `/etc`). An existing file keeps its owner and
   permissions; a new one written with sudo belongs to root. No quoting through the shell, so a
   config full of `$uri` survives.
+- A config file written any of these ways (the file tools, `copy`, or a command such as `tee`,
+  `sed -i`, `cp` or a redirection) is checked at once, as root, by the program that reads it,
+  and the verdict comes back with the result: `visudo -cf` for sudoers (plus names sudo skips
+  and a group written without `%`), `sshd -t` and, for what a drop-in sets, the value sshd
+  really uses when a file it reads earlier wins, `nginx -t`, `systemd-analyze verify`,
+  `findmnt --verify` for fstab, cron.d names, owner, mode and line endings, `logrotate -d`,
+  `netplan generate`, and pg_hba.conf errors or a postgres superuser locked out locally. The
+  costliest mistakes in the benchmark were configs like these that looked right.
 - `copy` moves files and whole folders between this PC and a server, from one server to another
   (through this PC), or within either, the way
   `scp -r` does (a folder copied into a folder goes inside it; `/*` at the end copies only its
@@ -270,12 +278,12 @@ dotnet test                       # unit tests
 dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   # headless run
 ./scripts/agent-tasks.ps1         # real desktop task suite (drives your mouse and keyboard)
 ./scripts/game2048-test.ps1       # long run: BlackBox writes, play-tests and fixes its own 2048
-./scripts/sysadmin-vm.ps1         # once: the portable Ubuntu lab VM (QEMU in .dev/sysadmin-lab, nothing installed)
+./scripts/sysadmin-vm.ps1         # once: the portable Debian lab VM (QEMU in .dev/sysadmin-lab, nothing installed)
 ./scripts/sysadmin-test.ps1       # sysadmin tickets on that VM over SSH, checked over SSH and from this PC
 ```
 
 ### Sysadmin benchmark
-`sysadmin-test.ps1` gives BlackBox a fresh Ubuntu 24.04 server per task, with only its address,
+`sysadmin-test.ps1` gives BlackBox a fresh Debian 13 server per task, with only its address,
 a user name and a key, as a hired admin gets them, and a ticket in plain words: deploy the
 Tiny Arena WebSocket game server behind nginx, serve a site over HTTPS, onboard two developers
 and lock down SSH, set up a firewall, free a full disk, schedule backups, install PostgreSQL,
@@ -292,7 +300,7 @@ run (17 of 17, 140 of 140 checks), and a second pass of the first 16 with the fi
 15 (131 of 133 checks). On seven tickets that both ran, the build before the ssh tools took 52 minutes, 123 model
 calls and 26 failed tool calls; the ssh tools took about 28 minutes, 93 calls and 9 failed calls.
 
-The VM is QEMU (from qemu.weilnetz.de, unpacked, not installed) running Ubuntu's cloud image in
+The VM is QEMU (from qemu.weilnetz.de, unpacked, not installed) running Debian's cloud image in
 software emulation: portable, no admin rights or Windows features, everything in
 `.dev/sysadmin-lab`. Each task runs on a throwaway disk over the clean one, so a reset takes a
 second. The VM's ports are forwarded to 127.0.0.2; inside it, this PC is 10.0.2.2.

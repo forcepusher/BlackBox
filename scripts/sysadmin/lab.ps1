@@ -1,5 +1,5 @@
 <#
-  Shared helpers for the sysadmin lab: the Ubuntu VM BlackBox administers over SSH in
+  Shared helpers for the sysadmin lab: the Debian VM BlackBox administers over SSH in
   sysadmin-test.ps1, built by sysadmin-vm.ps1. Dot-source it: . "$PSScriptRoot\sysadmin\lab.ps1"
 
   The lab is portable: QEMU runs from .dev\sysadmin-lab\qemu\ (no install, no driver, no admin
@@ -27,7 +27,7 @@ $LabKey = Join-Path $LabDir "key\admin_ed25519"
 $LabKnownHosts = Join-Path $LabDir "known_hosts"
 $LabQemu = Join-Path $LabDir "qemu\qemu-system-x86_64.exe"
 $LabQemuImg = Join-Path $LabDir "qemu\qemu-img.exe"
-$LabImage = Join-Path $LabDir "image\noble-server-cloudimg-amd64.img"
+$LabImage = Join-Path $LabDir "image\debian-13-genericcloud-amd64-20261001-2618.qcow2"
 $LabBase = Join-Path $LabDir "disks\base.qcow2"
 $LabSuffix = if ($LabInstance) { "-$LabInstance" } else { "" }
 $LabTaskDisk = Join-Path $LabDir "disks\task$LabSuffix.qcow2"

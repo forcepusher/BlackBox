@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Sysadmin benchmark: BlackBox gets a fresh Ubuntu server (the lab VM from sysadmin-vm.ps1) and
+  Sysadmin benchmark: BlackBox gets a fresh Debian server (the lab VM from sysadmin-vm.ps1) and
   a real ticket per task, with only the IP, the user name and a key, like a hired admin. After
   each run the VM is rebooted and scripts check the end state over SSH and from this PC: the
   game server answers over WebSocket, the site has HTTPS, password logins are really off, the
@@ -108,7 +108,7 @@ if ($Url) { $cliArgs += @("--url", $Url) }
 if ($Model) { $cliArgs += @("--model", $Model) }
 # QEMU's port forwarding accepts a connection on this PC before it knows whether the VM does, so
 # the ticket says so: otherwise a bare connect test from the PC (Test-NetConnection) misleads.
-$preamble = "Our Ubuntu server runs in a VM on this PC and is reachable at {ip}: SSH on port 22, and its other ports at {ip} too " +
+$preamble = "Our Debian server runs in a VM on this PC and is reachable at {ip}: SSH on port 22, and its other ports at {ip} too " +
   "(QEMU forwards them, so from this PC a TCP connect to any of them succeeds even when nothing answers on the VM; only a real reply counts). " +
   "Log in over SSH as {user} with the private key {key}; {user} has sudo rights. "
 
@@ -226,6 +226,9 @@ try {
     $lines = @()
     if (Restart-LabVm) {
       $lines += "PASS admin can still log in after a reboot"
+      # SSH answers before the boot is over (on Debian early on): the checks start once systemd has
+      # started everything, as a visitor coming a minute later would find the server.
+      Invoke-LabSsh "timeout 120 systemctl is-system-running --wait >/dev/null 2>&1; true" -TimeoutSec 150 | Out-Null
       $hostCheck = Join-Path $task.FullName "check-host.ps1"
       if (Test-Path $hostCheck) {
         try { $lines += @(& $hostCheck) } catch { $lines += "FAIL check-host.ps1 crashed: $($_.Exception.Message)" }

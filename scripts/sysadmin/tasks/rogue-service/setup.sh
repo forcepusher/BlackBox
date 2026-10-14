@@ -3,6 +3,8 @@
 # systemd service, and an @reboot line in root's crontab that brings it back if the service is
 # only stopped and disabled.
 set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+command -v cron >/dev/null || { apt-get update -q && apt-get install -y -q cron; } # not in Debian's cloud image
 install -d /usr/local/lib/netlogd
 cat > /usr/local/lib/netlogd/netlogd <<'EOF'
 #!/usr/bin/env python3

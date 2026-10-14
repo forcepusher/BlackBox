@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Builds the sysadmin lab that sysadmin-test.ps1 hands to BlackBox: an Ubuntu 24.04 server in
+  Builds the sysadmin lab that sysadmin-test.ps1 hands to BlackBox: a Debian 13 server in
   QEMU, admin@127.0.0.2 with a key. Portable: QEMU and everything else lives in
   .dev\sysadmin-lab\; nothing is installed, no admin rights or Windows features are needed, and
   deleting the folder removes it all. QEMU runs in software emulation, several times slower
@@ -9,7 +9,8 @@
   Downloads (once, checked against the publishers' checksums): QEMU for Windows from
   qemu.weilnetz.de (the build qemu.org links to; its server is slow per connection, so it is
   fetched in parallel parts), 7-Zip's standalone 7zr to unpack it if no 7-Zip is around, and
-  Ubuntu's official cloud image. The first boot is set up by cloud-init from a seed ISO built
+  Debian's official cloud image (genericcloud, the one for virtual machines; a fixed release, so
+  a rebuild gets the same server). The first boot is set up by cloud-init from a seed ISO built
   with Windows' own IMAPI2; the apt timers that would grab the dpkg lock at random moments in a
   run are turned off, cloud-init is disabled, and the result is the clean disk base.qcow2.
 
@@ -24,7 +25,8 @@ $ProgressPreference = "SilentlyContinue"
 
 $qemuBuild = "20260811"
 $qemuUrl = "https://qemu.weilnetz.de/w64/2026/qemu-w64-setup-$qemuBuild.exe"
-$imageUrl = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+$imageRelease = "https://cloud.debian.org/images/cloud/trixie/20261001-2618"
+$imageUrl = "$imageRelease/$(Split-Path $LabImage -Leaf)"
 $downloads = Join-Path $LabDir "downloads"
 $seedIso = Join-Path $LabDir "seed\seed.iso"
 
@@ -97,21 +99,23 @@ if (-not (Test-Path $LabQemu)) {
 }
 Step ((& $LabQemu --version | Select-Object -First 1) + " ok")
 
-# 2. The official cloud image, checked against Ubuntu's SHA256SUMS.
+# 2. The official cloud image, checked against Debian's SHA512SUMS. (A built lab is left alone
+#    before this: its clean disk is a layer on top of the image file.)
+if ((Test-Path $LabBase) -and -not $Rebuild) { Step "The lab is already built ($LabBase); use -Rebuild to make it again"; return }
 New-Item -ItemType Directory -Force (Split-Path $LabImage), (Split-Path $LabKey), (Split-Path $seedIso), (Split-Path $LabBase) | Out-Null
-$sums = Join-Path (Split-Path $LabImage) "SHA256SUMS"
-& curl.exe -fsSLo $sums "https://cloud-images.ubuntu.com/noble/current/SHA256SUMS"
+$sums = Join-Path (Split-Path $LabImage) "SHA512SUMS"
+& curl.exe -fsSLo $sums "$imageRelease/SHA512SUMS"
 $name = Split-Path $LabImage -Leaf
 $want = ((Get-Content $sums | Where-Object { $_ -match " \*?$([regex]::Escape($name))$" }) -split '\s+')[0].ToUpper()
-if (-not (Test-Path $LabImage) -or (Get-FileHash $LabImage -Algorithm SHA256).Hash -ne $want) {
+if (-not $want) { throw "$name is not listed in $imageRelease/SHA512SUMS" }
+if (-not (Test-Path $LabImage) -or (Get-FileHash $LabImage -Algorithm SHA512).Hash -ne $want) {
   Step "Downloading $imageUrl"
   & curl.exe -fL --retry 3 -C - -o $LabImage $imageUrl
-  if ((Get-FileHash $LabImage -Algorithm SHA256).Hash -ne $want) { throw "$name does not match SHA256SUMS" }
+  if ((Get-FileHash $LabImage -Algorithm SHA512).Hash -ne $want) { throw "$name does not match SHA512SUMS" }
 }
 Step "Image ok: $LabImage"
 
 if (Test-Path $LabBase) {
-  if (-not $Rebuild) { Step "The lab is already built ($LabBase); use -Rebuild to make it again"; return }
   Stop-LabVm
   Set-ItemProperty $LabBase -Name IsReadOnly -Value $false
   Remove-Item $LabBase, $LabTaskDisk -ErrorAction SilentlyContinue
@@ -126,8 +130,7 @@ Protect-LabKey $LabKey
 $pub = (Get-Content "$LabKey.pub" -Raw).Trim()
 Remove-Item $LabKnownHosts -ErrorAction SilentlyContinue
 
-# 4. cloud-init seed: the admin user with the key and passwordless sudo, the apt lists. Ubuntu
-#    images already have a group "admin" (an old sudo group), so useradd must be told to use it.
+# 4. cloud-init seed: the admin user with the key and passwordless sudo, the apt lists.
 $seedDir = Join-Path $LabDir "seed\files"
 New-Item -ItemType Directory -Force $seedDir | Out-Null
 $userData = @"
@@ -137,7 +140,6 @@ manage_etc_hosts: true
 users:
   - name: $LabUser
     gecos: Lab Admin
-    primary_group: $LabUser
     groups: [adm, sudo]
     shell: /bin/bash
     sudo: "ALL=(ALL) NOPASSWD:ALL"
@@ -180,17 +182,18 @@ Step "Seed ISO ok: $seedIso"
 $r = Invoke-LabExe $LabQemuImg @("create", "-q", "-f", "qcow2", "-F", "qcow2", "-b", "../image/$name", $LabBase, "${DiskGB}G")
 if ($r.Code -ne 0) { throw "qemu-img create failed: $($r.Err)" }
 Step "First boot (cloud-init); software emulation takes a while"
-Start-LabVm $LabBase @("-drive", "file=$seedIso,media=cdrom,readonly=on")
+# The seed goes in as a virtio disk: genericcloud's kernel has virtio for sure, a CD drive maybe not.
+Start-LabVm $LabBase @("-drive", "file=$seedIso,if=virtio,format=raw,readonly=on")
 if (-not (Wait-LabSsh 1800)) { throw "No SSH on $LabIp after the first boot; see $LabSerial" }
 $r = Invoke-LabSsh "sudo cloud-init status --wait --long" -TimeoutSec 3600
 Write-Host $r.Out.Trim()
 if ($r.Out -notmatch "status: done") { throw "cloud-init did not finish cleanly" }
 
 # 6. Freeze it: cloud-init off (without its seed it would treat the next boot as a new
-#    instance), snapd's first-boot seeding done, logs emptied, powered off, read-only.
-$prep = "sudo snap wait system seed.loaded; sudo touch /etc/cloud/cloud-init.disabled && sudo apt-get clean && " +
+#    instance), logs emptied, powered off, read-only.
+$prep = "sudo touch /etc/cloud/cloud-init.disabled && sudo apt-get clean && " +
   "sudo rm -f /var/log/cloud-init*.log && sudo journalctl --rotate && sudo journalctl --vacuum-time=1s && " +
-  "lsb_release -ds; uname -r; ip -4 -br addr; df -h / | tail -1; systemctl is-system-running"
+  "grep PRETTY_NAME /etc/os-release; cat /etc/debian_version; uname -r; ip -4 -br addr; df -h / | tail -1; systemctl is-system-running"
 $r = Invoke-LabSsh $prep -TimeoutSec 1800
 Write-Host $r.Out.Trim()
 Invoke-LabSsh "sudo systemctl poweroff" -TimeoutSec 20 | Out-Null

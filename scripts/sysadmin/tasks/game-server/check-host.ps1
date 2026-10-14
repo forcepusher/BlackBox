@@ -29,6 +29,13 @@ function Receive-Ws($ws, [string]$type, [scriptblock]$where = { $true }, [int]$T
   $null
 }
 
+# The game server may start a little after SSH is back from the reboot (node takes seconds to
+# start under emulation), and nginx answers 502 until it does: a minute and a half to get through.
+$until = (Get-Date).AddSeconds(90)
+while ((Get-Date) -lt $until) {
+  try { (Connect-Ws).Abort(); break } catch { Start-Sleep -Seconds 3 }
+}
+
 try {
   $a = Connect-Ws
   Send-Ws $a '{"type":"join","name":"checker-a"}'

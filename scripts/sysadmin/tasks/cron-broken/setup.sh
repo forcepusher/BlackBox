@@ -3,6 +3,8 @@
 # wrong when someone edited it on a Windows PC: the script now has CRLF line endings (bash can't be
 # found as "/bin/bash\r"), and the cron.d file was saved group-writable, which cron refuses to load.
 set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+command -v cron >/dev/null || { apt-get update -q && apt-get install -y -q cron; } # not in Debian's cloud image
 useradd --system --create-home --home-dir /home/reports --shell /usr/sbin/nologin reports
 install -d -o reports -g reports -m 755 /var/reports
 printf '#!/bin/bash\n# Appends the current sales total to the day'"'"'s report.\nset -eu\nf=/var/reports/sales-$(date +%%F).txt\necho "$(date -Is) total=$((RANDOM %% 900 + 100)) EUR (%s)" >> "$f"\n' "$TOKEN" | sed 's/$/\r/' > /usr/local/bin/sales-report

@@ -18,7 +18,7 @@ PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin no
 EOF
-sed -i 's/^PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
+sed -i 's/^PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/50-cloud-init.conf
 sed -i 's/^PermitRootLogin .*/PermitRootLogin no/' /etc/ssh/sshd_config
 sshd -t
 systemctl restart ssh
