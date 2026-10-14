@@ -286,6 +286,11 @@ root password. Then the VM is rebooted and scripts check the end state over SSH 
 PC (a WebSocket game played by two clients, ports probed, logins tried with each user's key).
 `-SelfTest` runs each task's reference solution instead of BlackBox, to prove the checks.
 
+On 14 October 2026, with qwen3.8-27b (q6_k_xl) on LM Studio, every ticket passed on its first
+run (16 of 16, 133 of 133 checks), and a second pass with the final build passed 15 of 16 (131 of
+133). On seven tickets that both ran, the build before the ssh tools took 52 minutes, 123 model
+calls and 26 failed tool calls; the ssh tools took about 28 minutes, 93 calls and 9 failed calls.
+
 The VM is QEMU (from qemu.weilnetz.de, unpacked, not installed) running Ubuntu's cloud image in
 software emulation: portable, no admin rights or Windows features, everything in
 `.dev/sysadmin-lab`. Each task runs on a throwaway disk over the clean one, so a reset takes a
