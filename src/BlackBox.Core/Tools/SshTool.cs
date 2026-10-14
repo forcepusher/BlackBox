@@ -107,7 +107,29 @@ public sealed partial class SshTool : Tool
         if (result.State == ShellState.Done && host.LastCommand is { } last && ConfigChecks.PathsIn(last) is { Count: > 0 } paths &&
             await ConfigChecks.RunAsync(host, paths, ct).ConfigureAwait(false) is { } checkedNote)
             result = result with { Note = result.Note is null ? checkedNote : result.Note + " " + checkedNote };
+        if (result.State == ShellState.Done && host.LastCommand is { } ran && HiddenDenials(ran, host.Target.User) is { } hidden)
+            result = result with { Note = result.Note is null ? hidden : result.Note + " " + hidden };
         return Format(result, notice, DateTime.UtcNow - started);
+    }
+
+    /// <summary>
+    /// A note for a search that can't have seen everything: a part of the command that looks in a
+    /// place only root can read (root's crontab, /root, /etc/shadow, ...) without sudo, with its
+    /// errors thrown away, finds nothing there and says nothing about it. Seen in a run: a grep for
+    /// a rogue program through /var/spool/cron as admin, 2>/dev/null, and then "no cron jobs".
+    /// </summary>
+    internal static string? HiddenDenials(string command, string user)
+    {
+        if (user == "root")
+            return null;
+        foreach (var part in Segments().Split(command))
+        {
+            if (part.Contains("sudo") || !Discarded().IsMatch(part) || RootOnly().Match(part) is not { Success: true } m)
+                continue;
+            return $"{m.Value} can be read only by root, and this command looked there without sudo and threw its errors away " +
+                   "(2>/dev/null): it can't have seen what is there. Run that part with sudo.";
+        }
+        return null;
     }
 
     /// <param name="waited">How long this call waited for the command.</param>
@@ -201,4 +223,13 @@ public sealed partial class SshTool : Tool
 
     [GeneratedRegex(@"[^\s]+")]
     private static partial Regex Words();
+
+    [GeneratedRegex(@"\|\||&&|[;|\n]")]
+    private static partial Regex Segments();
+
+    [GeneratedRegex(@"2>\s*/dev/null|&>\s*/dev/null|2>&-")]
+    private static partial Regex Discarded();
+
+    [GeneratedRegex(@"(?<![\w./-])(/var/spool/cron|/root|/etc/g?shadow|/etc/sudoers(\.d)?|/etc/ssl/private)(?![\w.-])")]
+    private static partial Regex RootOnly();
 }

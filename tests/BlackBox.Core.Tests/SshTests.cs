@@ -293,6 +293,18 @@ public class SshTests
     }
 
     [Fact]
+    public void A_search_without_sudo_that_hid_its_errors_gets_a_note()
+    {
+        // As seen in a run: root's crontab never searched, and the answer was "no cron jobs".
+        Assert.Contains("/var/spool/cron can be read only by root", SshTool.HiddenDenials("grep -rl netlogd /etc /var/spool/cron /home 2>/dev/null", "admin"));
+        Assert.Contains("/root can be read only by root", SshTool.HiddenDenials("sudo systemctl stop x; ls -la /root/ 2>/dev/null | head", "admin"));
+        Assert.Null(SshTool.HiddenDenials("sudo grep -rl netlogd /var/spool/cron 2>/dev/null", "admin"));
+        Assert.Null(SshTool.HiddenDenials("grep -rl netlogd /var/spool/cron", "admin")); // its errors are there to see
+        Assert.Null(SshTool.HiddenDenials("grep -rl netlogd /var/spool/cron 2>/dev/null", "root"));
+        Assert.Null(SshTool.HiddenDenials("ls /rootfs /etc/sudoers.conf 2>/dev/null", "admin"));
+    }
+
+    [Fact]
     public void Config_check_output_becomes_a_short_note()
     {
         Assert.Equal("Checked after writing: visudo -cf /etc/sudoers.d/devs passed. Problem: in /etc/sudoers.d/devs, devs is a group, not a user: a rule for a group needs %devs.",

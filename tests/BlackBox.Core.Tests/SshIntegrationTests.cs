@@ -403,6 +403,17 @@ public class SshIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task A_search_that_could_not_see_root_only_places_says_so()
+    {
+        if (Host is null || Host.StartsWith("root@")) return;
+        var hidden = await Ssh("grep -rl nothing-here /etc/cron.d /var/spool/cron 2>/dev/null; echo searched");
+        Assert.Contains("searched", hidden.Text);
+        Assert.Contains("/var/spool/cron can be read only by root", hidden.Text);
+        var withSudo = await Ssh("sudo grep -rl nothing-here /var/spool/cron 2>/dev/null; echo searched");
+        Assert.DoesNotContain("can be read only by root", withSudo.Text);
+    }
+
+    [Fact]
     public async Task Firewall_rule_files_are_checked_after_they_are_written()
     {
         if (Host is null) return;
