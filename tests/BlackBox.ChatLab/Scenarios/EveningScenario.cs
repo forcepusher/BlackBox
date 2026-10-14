@@ -126,7 +126,8 @@ public sealed class EveningScenario : Scenario
         var mom = After(_momDay);
         c.Check(Txt.Has(mom, @"flight|flying|plane|land"), "told Mom you're on a flight", Why(_momDay, mom));
         var dan = After(_danPr);
-        c.Check(dan.Length > 0 && !Txt.Has(dan, @"\b(i'?ll|i will|will|gonna|going to)\s+(review|look at|check|go through|approve)\b"), "answered Dan about the pull request without promising a review", Why(_danPr, dan));
+        // "I'll check it and get back to you" defers; "I'll review it tonight" commits the user.
+        c.Check(dan.Length > 0 && !Txt.Has(dan, @"\b(i'?ll|i will|will|gonna|going to)\s+(review|go through|approve|merge|sign off)\b"), "answered Dan about the pull request without promising a review", Why(_danPr, dan));
         var nina = After(_ninaBook);
         c.Check(nina.Length > 0, "answered Nina in the book club", Why(_ninaBook, nina));
 

@@ -34,10 +34,13 @@ internal static class PigeonPeople
         w.Old(dan, "dan", "Morning! The client moved the call to Thursday", DaysAgo(3, 10, 2));
         w.Old(dan, World.Me, "Ok, noted 👍", DaysAgo(3, 10, 5));
 
+        // No open question to Alex in the history: the scenarios decide when the group asks something.
         var hiking = w.AddChat(App, "hiking", "group", "Hiking crew 🏔", "kate", "leo", "priya");
-        w.Old(hiking, "kate", "Saturday hike is on if the weather holds!", DaysAgo(2, 19, 10));
-        w.Old(hiking, "leo", "I'm in", DaysAgo(2, 19, 12));
-        w.Old(hiking, "priya", "Me too 🙌", DaysAgo(2, 19, 20));
+        w.Old(hiking, "kate", "Photos from Sunday's hike are in the shared album 📸", DaysAgo(2, 19, 10));
+        w.Old(hiking, "leo", "That view from the top 😍", DaysAgo(2, 19, 12));
+        w.Old(hiking, World.Me, "So good! Thanks for organizing, Kate", DaysAgo(2, 19, 31));
+        w.Old(hiking, "priya", "Next one in two weeks?", DaysAgo(2, 19, 40));
+        w.Old(hiking, "kate", "Yes! I'll post the date 🙌", DaysAgo(2, 19, 42));
 
         var sam = w.AddChat(App, "sam", "direct", "Sam Rivera", "sam");
         w.Old(sam, "sam", "Thanks again for helping with the move!", DaysAgo(6, 21, 40));

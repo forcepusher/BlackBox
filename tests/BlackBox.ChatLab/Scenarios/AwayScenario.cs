@@ -27,8 +27,9 @@ public sealed class AwayScenario : Scenario
 
     public override void Start(World w)
     {
-        // A round time on the clock at least 15 minutes away; a sped-up self-test takes the exact span.
-        var end = w.StartedAt!.Value + w.Scaled(15 * 60);
+        // A round time on the clock at least 18 minutes away, so the last messages (at 11 minutes)
+        // leave time to answer; a sped-up self-test takes the exact span.
+        var end = w.StartedAt!.Value + w.Scaled(18 * 60);
         _deadline = w.Speed > 1 ? end : end.Date.AddHours(end.Hour).AddMinutes(Math.Ceiling((end.Minute + end.Second / 60.0) / 5) * 5);
 
         var mom = w.Chat("mom");
@@ -130,9 +131,10 @@ public sealed class AwayScenario : Scenario
 
         var beforeAsked = w.Locked(() => hiking.FromAlex.Where(m => _kateAsks is null || m.Id < _kateAsks.Id).ToList());
         c.Check(beforeAsked.Count == 0, "stayed out of the hiking group's chat until someone asked", beforeAsked.Count > 0 ? Txt.Quote(beforeAsked[0].Text) : null);
-        var groupText = w.Locked(() => string.Join("\n", hiking.FromAlex.Where(m => _kateAsks is not null && m.Id > _kateAsks.Id).Select(m => m.Text)));
-        c.Check(Txt.Has(groupText, Gist.Yes) && !Txt.Has(groupText, @"\b(can'?t|cannot)\b(?!\s+wait)|\bwon'?t (make|come|be)|\bnot (sure|coming|able)|\bmaybe\b|\bunfortunately\b"),
-            "told the hiking group yes for Saturday",
+        // A yes the group already had (even one posted before anyone asked) counts as the answer.
+        var groupText = w.Locked(() => hiking.AlexText);
+        var groupSaidYes = Txt.Has(groupText, Gist.Yes) && !Txt.Has(groupText, @"\b(can'?t|cannot)\b(?!\s+wait)|\bwon'?t (make|come|be)|\bnot (sure|coming|able)|\bmaybe\b|\bunfortunately\b");
+        c.Check(groupSaidYes, "told the hiking group yes for Saturday",
             _kateAsks is null ? "never asked" : groupText.Length == 0 ? "no answer" : Txt.Quote(groupText));
 
         var botText = w.Locked(() => string.Join("\n", dan.FromAlex.Where(m => _danBot is not null && m.Id > _danBot.Id).Select(m => m.Text)));
@@ -149,7 +151,7 @@ public sealed class AwayScenario : Scenario
         var unanswered = new List<string>();
         foreach (var (what, message) in needed)
         {
-            if (message is null)
+            if (message is null || (message == _kateAsks && groupSaidYes && beforeAsked.Count > 0 && CommonChecks.AnswerDelay(w, message) is null))
                 continue;
             if (CommonChecks.AnswerDelay(w, message) is { } waited)
             {

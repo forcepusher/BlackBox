@@ -30,7 +30,8 @@ public static class Gist
     {
         var h12 = t.Hour % 12 == 0 ? 12 : t.Hour % 12;
         var mm = t.Minute.ToString("00");
-        var alternatives = new List<string> { $@"\b{t.Hour}[:.]{mm}\b", $@"\b{h12}[:.]{mm}\b" };
+        // 09:30 and 9:30, 00:04 and 0:04.
+        var alternatives = new List<string> { $@"\b0?{t.Hour}[:.]{mm}\b", $@"\b{h12}[:.]{mm}\b" };
         if (t.Minute == 0)
             alternatives.Add($@"\b{h12}\s*(pm|p\.m\.|o'?clock)");
         return string.Join("|", alternatives);
