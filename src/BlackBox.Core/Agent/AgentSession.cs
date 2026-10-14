@@ -57,7 +57,7 @@ public sealed partial class AgentSession(
         try
         {
             // No step limit: a run ends when the model is done or the user presses Stop or the
-            // Break key. Tasks like "keep chatting for 12 hours" are valid;
+            // Windows key. Tasks like "keep chatting for 12 hours" are valid;
             // runaway loops are handled by LoopDetector, and growth by context resets.
             for (var step = 1; ; step++)
             {
