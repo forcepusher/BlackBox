@@ -39,6 +39,13 @@ if [ -z "$job" ]; then
   exit 0
 fi
 pass "it is scheduled for 02:30 every night ($how)"
+# A schedule nothing reads doesn't run: the timer must be active after the reboot, or cron must run
+# (Debian's cloud image has no cron).
+case "$how" in
+  "systemd timer "*) what="the timer is active after the reboot"; systemctl is-active --quiet "${how#systemd timer }" && ok=1 || ok=0;;
+  *) what="cron, which reads that line, runs after the reboot"; { systemctl is-active --quiet cron || systemctl is-active --quiet crond; } && ok=1 || ok=0;;
+esac
+[ $ok = 1 ] && pass "$what" || fail "$what"
 
 # Retention: nine older archives, one per day before today; after one more run, 7 must be left.
 for d in $(seq 1 9); do
