@@ -259,4 +259,31 @@ public class SshTests
         Assert.Contains("still running after 60 s", running.Text);
         Assert.Contains("no command to wait", running.Text);
     }
+
+    [Fact]
+    public void Config_files_a_command_writes_are_found()
+    {
+        Assert.Equal(["/etc/sudoers.d/devs"], ConfigChecks.PathsIn("echo 'devs ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/devs"));
+        Assert.Equal(["/etc/ssh/sshd_config.d/90-hardening.conf"], ConfigChecks.PathsIn("sudo tee /etc/ssh/sshd_config.d/90-hardening.conf >/dev/null <<'EOF'\nPasswordAuthentication no\nEOF"));
+        Assert.Equal(["/etc/ssh/sshd_config"], ConfigChecks.PathsIn("sudo sed -i 's/^PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config"));
+        Assert.Equal(["/etc/nginx/sites-available/shop", "/etc/nginx/sites-enabled/shop"],
+            ConfigChecks.PathsIn("sudo ln -sf /etc/nginx/sites-available/shop /etc/nginx/sites-enabled/shop"));
+        Assert.Equal(["/etc/systemd/system/tiny-arena.service"], ConfigChecks.PathsIn("sudo cp unit /etc/systemd/system/tiny-arena.service && sudo systemctl daemon-reload"));
+        Assert.Equal(["/etc/postgresql/16/main/pg_hba.conf"], ConfigChecks.PathsIn("echo 'host shop shop 10.0.2.0/24 scram-sha-256' | sudo tee -a /etc/postgresql/16/main/pg_hba.conf"));
+        // Reading isn't writing, and 2>/dev/null writes nothing that matters.
+        Assert.Empty(ConfigChecks.PathsIn("sudo cat /etc/sudoers.d/devs 2>/dev/null; grep -n Port /etc/ssh/sshd_config"));
+        Assert.Empty(ConfigChecks.PathsIn("sudo tee /etc/motd < banner.txt"));
+        Assert.Null(ConfigChecks.Script(["/etc/motd", "/home/admin/notes.txt"]));
+        Assert.Contains("chk_sshd '/etc/ssh/sshd_config.d/a.conf' '/etc/ssh/sshd_config'", ConfigChecks.Script(["/etc/ssh/sshd_config.d/a.conf", "/etc/ssh/sshd_config"]));
+        Assert.Equal(1, ConfigChecks.Script(["/etc/nginx/a", "/etc/nginx/b"])!.Split('\n').Count(l => l == "chk_nginx"));
+    }
+
+    [Fact]
+    public void Config_check_output_becomes_a_short_note()
+    {
+        Assert.Equal("Checked after writing: visudo -cf /etc/sudoers.d/devs passed. Problem: in /etc/sudoers.d/devs, devs is a group, not a user: a rule for a group needs %devs.",
+            ConfigChecks.Note("OK visudo -cf /etc/sudoers.d/devs\nNOTE in /etc/sudoers.d/devs, devs is a group, not a user: a rule for a group needs %devs\n"));
+        Assert.Equal("Checked after writing: Problem: nginx -t: unexpected end of file.", ConfigChecks.Note("ERR nginx -t: unexpected end of file\n"));
+        Assert.Null(ConfigChecks.Note("sudo: a password is required\n"));
+    }
 }

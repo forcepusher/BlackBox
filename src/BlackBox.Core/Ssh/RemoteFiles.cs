@@ -56,7 +56,8 @@ public static class RemoteFiles
     }
 
     /// <summary>Creates, replaces or appends to a file; parent folders are created.</summary>
-    public static async Task<(string Text, bool IsError)> WriteAsync(SshHost host, string path, string content, bool append, CancellationToken ct)
+    /// <param name="checkConfig">Check the file afterwards if it is a config a program verifies (see <see cref="ConfigChecks"/>).</param>
+    public static async Task<(string Text, bool IsError)> WriteAsync(SshHost host, string path, string content, bool append, CancellationToken ct, bool checkConfig = true)
     {
         var p = SshHost.Quote(path);
         var check = $"[ -e {p} ] && echo exists; [ -d {p} ] && echo directory; true";
@@ -70,9 +71,14 @@ public static class RemoteFiles
         if (r.Output.Contains("BB-DENIED") || r.ExitCode != 0)
             return (r.Output.Contains("BB-DENIED") ? Denied(host, path, "write") : $"Could not write {path} on {host.Target}: {r.Error.Trim()}", true);
         var how = sudo ? " with sudo" : "";
-        return (append ? $"Appended {content.Length} chars to {path} on {host.Target}{how}."
-                       : $"{(existed ? "Overwrote" : "Created")} {path} on {host.Target}{how} ({content.Length} chars).", false);
+        var done = append ? $"Appended {content.Length} chars to {path} on {host.Target}{how}."
+                          : $"{(existed ? "Overwrote" : "Created")} {path} on {host.Target}{how} ({content.Length} chars).";
+        return (done + (checkConfig ? await CheckAsync(host, path, ct).ConfigureAwait(false) : ""), false);
     }
+
+    /// <summary>A line "[Checked after writing: ...]" for a config file, or nothing.</summary>
+    private static async Task<string> CheckAsync(SshHost host, string path, CancellationToken ct) =>
+        ConfigChecks.KindOf(path) is null ? "" : await ConfigChecks.RunAsync(host, [path], ct).ConfigureAwait(false) is { } note ? $"\n[{note}]" : "";
 
     /// <summary>Replaces an exact snippet (or every occurrence) and writes the file back in place.</summary>
     public static async Task<(string Text, bool IsError)> EditAsync(SshHost host, string path, string oldText, string newText, bool all, CancellationToken ct)
@@ -95,11 +101,12 @@ public static class RemoteFiles
             return ("old_text was not found in the file. Read the file again and copy the text exactly.", true);
         if (count > 1 && !all)
             return ($"old_text occurs {count} times. Include more surrounding text to make it unique, or set replace_all to change every one.", true);
-        var written = await WriteAsync(host, path, text.Replace(oldText, newText, StringComparison.Ordinal), append: false, ct).ConfigureAwait(false);
+        var written = await WriteAsync(host, path, text.Replace(oldText, newText, StringComparison.Ordinal), append: false, ct, checkConfig: false).ConfigureAwait(false);
         if (written.IsError)
             return written;
         var how = sudoRead || written.Text.Contains("with sudo") ? " with sudo" : "";
-        return (count > 1 ? $"Edited {path} on {host.Target}{how}: replaced {count} occurrences." : $"Edited {path} on {host.Target}{how}.", false);
+        var done = count > 1 ? $"Edited {path} on {host.Target}{how}: replaced {count} occurrences." : $"Edited {path} on {host.Target}{how}.";
+        return (done + await CheckAsync(host, path, ct).ConfigureAwait(false), false);
     }
 
     /// <summary>A folder's entries, or with a pattern a search through its subfolders.</summary>

@@ -103,6 +103,10 @@ public sealed partial class SshTool : Tool
         {
             return ToolResult.Error(Prefix(notice) + $"The connection to {host.Target} failed: {ex.Message}. If the server is rebooting, wait a little and try again.");
         }
+        // A command that wrote a config file (sudoers, sshd, nginx, ...) gets that file checked once it's done.
+        if (result.State == ShellState.Done && host.LastCommand is { } last && ConfigChecks.PathsIn(last) is { Count: > 0 } paths &&
+            await ConfigChecks.RunAsync(host, paths, ct).ConfigureAwait(false) is { } checkedNote)
+            result = result with { Note = result.Note is null ? checkedNote : result.Note + " " + checkedNote };
         return Format(result, notice, DateTime.UtcNow - started);
     }
 

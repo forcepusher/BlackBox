@@ -54,6 +54,9 @@ public sealed partial class CopyTool : Tool
                 ? (UnpackLocal(tar, ctx.ResolvePath(to.Path), from), false)
                 : await UnpackRemoteAsync(dst, tar, to.Path, from, ct).ConfigureAwait(false);
             var text = $"Copied {count} file{(count == 1 ? "" : "s")} ({Size(bytes)}) to {(to.Host is null ? where : $"{to.Host}:{where}")}{(sudo ? " with sudo" : "")}.";
+            // A config file copied into place (sudoers, sshd, nginx, ...) is checked as if written.
+            if (dst is not null && ConfigChecks.KindOf(where) is not null && await ConfigChecks.RunAsync(dst, [where], ct).ConfigureAwait(false) is { } checkedNote)
+                text += $"\n[{checkedNote}]";
             return new ToolResult(notice is null ? text : $"[{notice}]\n{text}");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or Renci.SshNet.Common.SshException or System.Net.Sockets.SocketException or InvalidDataException)

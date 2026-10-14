@@ -321,6 +321,43 @@ public class SshIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task Config_files_are_checked_right_after_they_are_written()
+    {
+        if (Host is null) return;
+        Task<ToolResult> Write(string path, string content) => new WriteFileTool().ExecuteAsync(
+            new JsonObject { ["path"] = path, ["content"] = content, ["host"] = Host }, _ctx, CancellationToken.None);
+        try
+        {
+            // A sudoers rule for a group written without % (seen in a run): visudo passes it, sudo ignores it for the group.
+            await Ssh("sudo groupadd -f bbdevs");
+            var sudoers = await Write("/etc/sudoers.d/bbdevs", "bbdevs ALL=(ALL) NOPASSWD:ALL\n");
+            Assert.Contains("visudo -cf /etc/sudoers.d/bbdevs passed", sudoers.Text);
+            Assert.Contains("bbdevs is a group, not a user: a rule for a group needs %bbdevs", sudoers.Text);
+
+            // An sshd drop-in that sorts after the one turning passwords on (seen in a run): sshd -t passes, the setting doesn't win.
+            await Ssh("printf 'PasswordAuthentication yes\\n' | sudo tee /etc/ssh/sshd_config.d/50-bbtest.conf >/dev/null");
+            var sshd = await Write("/etc/ssh/sshd_config.d/90-bbtest.conf", "PasswordAuthentication no\n");
+            Assert.Contains("sshd -t passed", sshd.Text);
+            Assert.Contains("sets passwordauthentication no, but sshd uses passwordauthentication yes", sshd.Text);
+
+            // Through a shell command: a cron.d file cron skips (a dot in its name, group-writable).
+            var cron = await Ssh("printf '*/5 * * * * root true\\n' | sudo tee /etc/cron.d/bb.job >/dev/null && sudo chmod 664 /etc/cron.d/bb.job");
+            Assert.Contains("cron ignores /etc/cron.d/bb.job: names in /etc/cron.d may only have", cron.Text);
+            Assert.Contains("writable by group or others (mode 664)", cron.Text);
+
+            // A unit with a typo.
+            var unit = await Write("/etc/systemd/system/bbtest.service", "[Service]\nExecStar=/bin/true\n");
+            Assert.Contains("systemd-analyze verify bbtest.service", unit.Text);
+            Assert.Contains("Unknown key name 'ExecStar'", unit.Text);
+        }
+        finally
+        {
+            await Ssh("sudo rm -f /etc/sudoers.d/bbdevs /etc/ssh/sshd_config.d/50-bbtest.conf /etc/ssh/sshd_config.d/90-bbtest.conf /etc/cron.d/bb.job " +
+                      "/etc/systemd/system/bbtest.service; sudo groupdel bbdevs 2>/dev/null; sudo systemctl daemon-reload; true");
+        }
+    }
+
+    [Fact]
     public async Task After_a_reboot_the_next_call_logs_in_again()
     {
         if (Host is null || Environment.GetEnvironmentVariable("BB_SSH_TEST_REBOOT") != "1") return;

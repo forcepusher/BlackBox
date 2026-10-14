@@ -84,6 +84,9 @@ public sealed partial class SshHost : IDisposable
     /// <summary>Whether a command started in the terminal hasn't finished yet.</summary>
     public bool IsBusy => _running is not null && !_shellClosed;
 
+    /// <summary>The text of the last command started in the terminal.</summary>
+    public string? LastCommand { get; private set; }
+
     // ---- the terminal --------------------------------------------------------------------
 
     /// <summary>Starts a command in the terminal and waits for it at most <paramref name="wait"/>.</summary>
@@ -93,6 +96,7 @@ public sealed partial class SshHost : IDisposable
         if (IsBusy)
             throw new InvalidOperationException("The previous command is still running.");
         await EnsureShellAsync(ct).ConfigureAwait(false);
+        LastCommand = command;
         if (_noBash)
             return await RunAloneAsync(command, wait, ct).ConfigureAwait(false);
         var id = ++_commandId;
