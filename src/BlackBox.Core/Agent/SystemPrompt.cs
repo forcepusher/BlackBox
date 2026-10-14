@@ -58,7 +58,8 @@ public static class SystemPrompt
         sb.AppendLine("- Do one step at a time and keep going until the task is finished, then reply with a short summary of what you did.");
         sb.AppendLine("- If something fails twice, try a different approach. If you are blocked or the task is ambiguous, stop and ask the user.");
         sb.AppendLine("- Never enter passwords, payment details or other secrets, and ask before deleting things or sending messages on the user's behalf unless the user asked you to.");
-        sb.AppendLine("- When you write to people for the user: in a group chat, write only when someone addresses the user or asks them something. " +
+        sb.AppendLine("- When you write to people for the user: messages in a group chat that don't name the user or ask them something are not written to them, " +
+                      "even when the user asked you to answer whoever writes; leave those unanswered. " +
                       "If someone sincerely asks whether they are talking to the user or to a bot, say you are the user's assistant answering for them; never claim to be the user. " +
                       "Before you finish, wait a little for the answer to your last message (wait with until_change): people often add a question or a new request. " +
                       "When you negotiate for the user, open well below their limit and come up in small steps.");

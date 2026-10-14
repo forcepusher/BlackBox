@@ -169,8 +169,10 @@ public sealed class EveningScenario : Scenario
             c.Note($"{what} waited {delay.TotalMinutes:0.0} min for an answer");
         var unanswered = _needs.Where(n => delays.All(d => d.What != n.Value)).Select(n => n.Value).ToList();
         var slowest = delays.OrderByDescending(d => d.Delay).FirstOrDefault();
-        c.Check(unanswered.Count == 0 && slowest.Delay <= TimeSpan.FromMinutes(8), "answered everyone within 8 minutes",
-            unanswered.Count > 0 ? "no answer to " + string.Join(", ", unanswered) : $"{slowest.What} waited {slowest.Delay.TotalMinutes:0.0} min");
+        // How long each waited is a note, as in away: mostly the server's speed.
+        c.Check(unanswered.Count == 0, "answered everyone who needed an answer", "no answer to " + string.Join(", ", unanswered));
+        if (slowest.What is not null)
+            c.Note($"the longest wait: {slowest.What}, {slowest.Delay.TotalMinutes:0.0} min");
 
         var t = _deadline.ToString("HH:mm");
         var finished = w.FinishedAt ?? DateTime.Now;

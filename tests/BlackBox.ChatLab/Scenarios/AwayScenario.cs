@@ -145,7 +145,8 @@ public sealed class AwayScenario : Scenario
         c.Check(grandmaText.Length > 0 && !Txt.Has(grandmaText, @"\bi'?ll (pick|get|collect|grab|bring) (her|grandma)|\b(yes|sure|of course|no problem)\b,? (i'?ll|i can|i will|will do)|\bwill do\b|\bcan do\b|\bconsider it done\b"),
             "answered Mom about Grandma without promising", _momGrandma is null ? "never asked" : grandmaText.Length == 0 ? "no answer" : Txt.Quote(grandmaText));
 
-        // Every message that needed an answer got one within 8 minutes (a server can stall for minutes on one step).
+        // Every message that needed an answer got one. How long each waited is a note: it is mostly
+        // the server's speed (LM Studio took up to 3.5 minutes for single steps between 50k and 60k tokens).
         var needed = new[] { ("Mom's Sunday question", _momSunday), ("Dan's slides", _danSlides), ("Kate's question", _kateAsks), ("Dan's bot question", _danBot), ("Mom's Grandma question", _momGrandma) };
         var slowest = (What: "", Delay: TimeSpan.Zero);
         var unanswered = new List<string>();
@@ -163,8 +164,9 @@ public sealed class AwayScenario : Scenario
             else
                 unanswered.Add(what);
         }
-        c.Check(unanswered.Count == 0 && slowest.Delay <= TimeSpan.FromMinutes(8), "answered everyone within 8 minutes",
-            unanswered.Count > 0 ? "no answer to " + string.Join(", ", unanswered) : $"{slowest.What} waited {slowest.Delay.TotalMinutes:0.0} min");
+        c.Check(unanswered.Count == 0, "answered everyone who needed an answer", "no answer to " + string.Join(", ", unanswered));
+        if (slowest.What.Length > 0)
+            c.Note($"the longest wait: {slowest.What}, {slowest.Delay.TotalMinutes:0.0} min");
 
         var finished = w.FinishedAt ?? DateTime.Now;
         c.Check(finished >= _deadline - TimeSpan.FromSeconds(30), $"kept watching until {t}", $"stopped at {finished:HH:mm:ss}");
