@@ -195,10 +195,14 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
                     throw new IOException($"{t.Host} showed a different host key ({mismatch}) than the one saved in {knownHostsFile} the first time. " +
                                           "That happens when the server was reinstalled, and also when someone is in between. Tell the user; " +
                                           "if they confirm the server was rebuilt, they can delete its line in that file.");
+                // What the server still offers after refusing (SSH.NET's message names only the method it
+                // tried last): a refused password with "password" still offered means password logins are on.
+                var offers = auth.SelectMany(a => a.AllowedAuthentications ?? []).Distinct().ToList();
                 throw ex switch
                 {
                     _ when ex is SshAuthenticationException || AuthGaveUp(ex) =>
                         new IOException($"{t} did not accept the login ({ex.Message})." +
+                            (offers.Count > 0 ? $" The server offers these login methods: {string.Join(", ", offers)}." : "") +
                             // A test of a given key or password needs no advice: a refusal may be the answer sought.
                             (keyOnly || onlyGiven ? "" : keyFile is null ? " Check the user name, and give key_file if the user named a key." : " Check the user name and the key.")),
                     SocketException s => new IOException($"Can't reach {t.Host}:{t.Port}: {s.Message}"),

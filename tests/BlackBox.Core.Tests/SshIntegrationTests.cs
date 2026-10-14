@@ -227,6 +227,7 @@ public class SshIntegrationTests : IDisposable
             var wrong = await new SshTool().ExecuteAsync(new JsonObject { ["host"] = $"bbpw@{server}", ["password"] = "nope", ["command"] = "whoami" }, _ctx, CancellationToken.None);
             Assert.True(wrong.IsError);
             Assert.Contains("did not accept the login", wrong.Text);
+            Assert.Contains("The server offers these login methods: publickey, password", wrong.Text);
             var right = await new SshTool().ExecuteAsync(new JsonObject { ["host"] = $"bbpw@{server}", ["password"] = "Pw-Test-123", ["command"] = "whoami" }, _ctx, CancellationToken.None);
             Assert.Contains("Connected to", right.Text);
             Assert.Contains("bbpw\n[exit code 0", right.Text);
@@ -238,6 +239,7 @@ public class SshIntegrationTests : IDisposable
             Assert.True(again.IsError);
             Assert.Contains("did not accept the login", again.Text);
             Assert.Contains("still open", again.Text);
+            Assert.DoesNotContain("methods: publickey, password", again.Text); // password logins are off now
             Assert.Contains("bbpw\n[exit code 0", (await new SshTool().ExecuteAsync(new JsonObject { ["host"] = $"bbpw@{server}", ["command"] = "whoami" }, _ctx, CancellationToken.None)).Text);
         }
         finally
