@@ -90,6 +90,50 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task A_click_is_held_back_when_what_the_model_aimed_at_has_gone()
+    {
+        // The model saw a notification in the bottom right corner and aims at its close button; by
+        // the time of the click the notification has closed, and the look finds the close button of
+        // the window under it, far away (a chat closed by mistake in a chat run).
+        var screen = new ScreenRect(0, 0, 384, 192);
+        var platform = new FakePlatform { ScreenBounds = screen, Desktop = new RawImage(384, 192, new byte[384 * 192 * 4]) };
+        var ctx = Ctx(platform);
+        var seen = new RawImage(384, 192, new byte[384 * 192 * 4]);
+        for (var y = 128; y < 192; y++) for (var x = 256; x < 384; x++) seen.Bgra[(y * 384 + x) * 4] = 200;
+        (double X, double Y)? found = (370, 10);
+        ctx.Locate = (_, _, _) => Task.FromResult(found);
+        var click = new MouseClickTool();
+        var args = new JsonObject { ["target"] = "Close button of the notification", ["x"] = 370, ["y"] = 140 };
+
+        ctx.Seen = (screen, seen);
+        var held = await click.ExecuteAsync(args, ctx, CancellationToken.None);
+        Assert.StartsWith("Nothing was clicked", held.Text);
+        Assert.Empty(platform.Actions);
+
+        // Asked again at the same spot after seeing the new screen: it goes ahead.
+        ctx.Seen = (screen, seen);
+        Assert.Equal("Clicked.", (await click.ExecuteAsync(args, ctx, CancellationToken.None)).Text);
+        Assert.Equal("move 370,10", platform.Actions[0]);
+
+        // The look finds the target close to the aim: a correction, clicked even though the screen changed there.
+        platform.Actions.Clear();
+        found = (362, 134);
+        ctx.Seen = (screen, seen);
+        await click.ExecuteAsync(args, ctx, CancellationToken.None);
+        Assert.Equal("move 362,134", platform.Actions[0]);
+
+        // Nothing changed where the model aimed: the look is trusted however far it moves the click.
+        platform.Actions.Clear();
+        found = (370, 10);
+        ctx.Seen = (screen, platform.Desktop!);
+        await click.ExecuteAsync(new JsonObject { ["target"] = "Close button", ["x"] = 100, ["y"] = 140 }, ctx, CancellationToken.None);
+        Assert.Equal("move 370,10", platform.Actions[0]);
+
+        // The model's earlier screen is out of date once an action has run: a second click in the same reply isn't held back.
+        Assert.Null(ctx.Seen);
+    }
+
+    [Fact]
     public async Task A_click_that_changes_nothing_is_reported_as_a_miss()
     {
         var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 384, 192), Desktop = new RawImage(384, 192, new byte[384 * 192 * 4]) };

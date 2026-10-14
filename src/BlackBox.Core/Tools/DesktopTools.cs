@@ -11,6 +11,9 @@ public abstract class DesktopActionTool : Tool
     public sealed override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var (text, check) = await ActAsync(args, ctx, ct).ConfigureAwait(false);
+        // The screen now changes in ways the model hasn't seen; a later click in the same reply
+        // is aimed at what it expects, not at what it saw.
+        ctx.Seen = null;
         if (!ctx.Settings.ScreenshotAfterActions)
             return new ToolResult(text);
 
@@ -91,6 +94,7 @@ public sealed class ScreenshotTool : Tool
     {
         var space = ctx.GetScreenSpace();
         var frame = ctx.Platform.Screen.Capture(space.Screen, includeCursor: true);
+        ctx.LastShot = (space.Screen, frame);
         var jpeg = space.Encode(frame);
         var count = ctx.Screens.Count;
         var which = count > 1 ? $"Screenshot of screen {ctx.CurrentScreen + 1} of {count}" : "Screenshot";
@@ -132,10 +136,18 @@ public sealed class MouseClickTool : DesktopActionTool
         return GetString(args, "target") is { Length: > 0 } t ? $"{kind}{button} {t}" : $"{kind}{button} at {Fmt(args)}";
     }
 
+    /// <summary>How far, as a share of the screen's longer side, the look may find the target from where the model aimed before the click can be held back.</summary>
+    private const double FarShare = 0.08;
+
+    /// <summary>The half-width of the square around the model's aim compared with what it saw, as a share of the screen's longer side.</summary>
+    private const double AroundShare = 0.05;
+
     private protected override async Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var modifiers = Modifiers(args, ctx);
-        var (point, note) = await AimAsync(args, ctx, ct).ConfigureAwait(false);
+        var (aimed, note) = await AimAsync(args, ctx, ct).ConfigureAwait(false);
+        if (aimed is not { } point)
+            return note; // held back: nothing was clicked
         var button = ParseButton(GetString(args, "button"));
         var clicks = Math.Clamp((int)(GetNumber(args, "clicks") ?? 1), 1, 3);
         // The screen just before the click, not before the look: what changed while the model
@@ -156,19 +168,50 @@ public sealed class MouseClickTool : DesktopActionTool
     /// the call's own x/y when there is no target or the look doesn't find it. Deep in a long run
     /// the model's own coordinates drift (a wrong belief about where something is, or the previous
     /// call's point copied), while the same model looking at the screen afresh gets them right.
+    /// No point when the click is held back because what the model aimed at is gone (see <see cref="Gone"/>).
     /// </summary>
-    private static async Task<((int X, int Y) Point, string Note)> AimAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    private static async Task<((int X, int Y)? Point, string Note)> AimAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var space = ctx.GetScreenSpace();
         (int X, int Y)? given = GetNumber(args, "x") is { } x && GetNumber(args, "y") is { } y ? space.ToScreen(x, y) : null;
         if (GetString(args, "target")?.Trim() is not { Length: > 0 } target || ctx.Locate is not { } locate)
             return (given ?? throw new ToolArgumentException("Give target, or x and y."), "");
-        var screen = space.Encode(ctx.Platform.Screen.Capture(space.Screen, includeCursor: false));
-        if (await locate(screen, target, ct).ConfigureAwait(false) is { } p && p.X >= 0 && p.Y >= 0 && p.X <= space.ModelWidth && p.Y <= space.ModelHeight)
-            return (space.ToScreen(p.X, p.Y), "");
+        var now = ctx.Platform.Screen.Capture(space.Screen, includeCursor: false);
+        if (await locate(space.Encode(now), target, ct).ConfigureAwait(false) is { } p && p.X >= 0 && p.Y >= 0 && p.X <= space.ModelWidth && p.Y <= space.ModelHeight)
+        {
+            var found = space.ToScreen(p.X, p.Y);
+            if (given is { } aim && Gone(ctx, space.Screen, now, aim, found))
+            {
+                ctx.HeldBack = aim;
+                return (null, $"Nothing was clicked: the {target} was found far from where you aimed, and the screen there has changed since your " +
+                              "last screenshot, so what you meant may have closed or moved. Look at the screenshot below and click again if it is still what you want.");
+            }
+            ctx.HeldBack = null;
+            return (found, "");
+        }
+        ctx.HeldBack = null;
         return given is { } g
             ? (g, $"BlackBox could not find the {target} on the screen by name, so it clicked at your x, y. ")
             : throw new InvalidOperationException($"BlackBox could not find the {target} on the screen. Name it differently, or give x and y.");
+    }
+
+    /// <summary>
+    /// Whether what the model aimed at has gone since it looked: the fresh look finds the target
+    /// far from where the model aimed, and there the screen is no longer what the model saw. The
+    /// common case is a notification that closed by itself in the seconds before the click: the
+    /// look then finds something else that fits the words, such as the close button of the window
+    /// under it, and clicking that would do harm. A click the model asks for again after seeing the
+    /// new screen goes ahead.
+    /// </summary>
+    private static bool Gone(ToolContext ctx, ScreenRect screen, RawImage now, (int X, int Y) aim, (int X, int Y) found)
+    {
+        if (ctx.Seen is not { } seen || seen.Screen != screen)
+            return false;
+        var side = Math.Max(screen.Width, screen.Height);
+        double Distance((int X, int Y) a, (int X, int Y) b) => Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2));
+        if (Distance(aim, found) < side * FarShare || (ctx.HeldBack is { } held && Distance(held, aim) < side * FarShare / 2))
+            return false;
+        return ClickCheck.ChangedAround(seen.Frame, now, aim.X - screen.X, aim.Y - screen.Y, (int)(side * AroundShare));
     }
 
     internal static MouseButton ParseButton(string? s) => s?.ToLowerInvariant() switch

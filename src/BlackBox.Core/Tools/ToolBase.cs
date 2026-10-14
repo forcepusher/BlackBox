@@ -43,6 +43,20 @@ public sealed class ToolContext
     /// </summary>
     public Func<byte[], string, CancellationToken, Task<(double X, double Y)?>>? Locate { get; set; }
 
+    /// <summary>
+    /// The screen as the model last saw it, which its next click is aimed by: the agent sets it
+    /// before each reply's tool calls, and the first action of the reply clears it, as the
+    /// screen then changes in ways the model hasn't seen yet. A click compares it with the screen
+    /// at the moment of the click (see <see cref="MouseClickTool"/>).
+    /// </summary>
+    public (ScreenRect Screen, RawImage Frame)? Seen { get; set; }
+
+    /// <summary>The latest screenshot taken for the model (screen and frame).</summary>
+    public (ScreenRect Screen, RawImage Frame)? LastShot { get; set; }
+
+    /// <summary>Where the last click that was held back because the screen had changed was aimed (screen pixels).</summary>
+    internal (int X, int Y)? HeldBack { get; set; }
+
     /// <summary>The PC's own browser, run headless, for the web tools to fall back on; null when there is none.</summary>
     public Web.HeadlessBrowser? Browser { get; init; }
 
