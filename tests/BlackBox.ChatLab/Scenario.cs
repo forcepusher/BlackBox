@@ -56,6 +56,7 @@ public abstract class Scenario
         new Scenarios.SupportScenario(),
         new Scenarios.HaggleScenario(),
         new Scenarios.SocialScenario(),
+        new Scenarios.EveningScenario(),
     ];
 }
 

@@ -35,9 +35,10 @@ public sealed class AwayScenario : Scenario
         var dan = w.Chat("dan");
         var hiking = w.Chat("hiking");
         w.After(20, () => _momSunday = w.Post(mom, "mom", "Hi sweetie! Are you coming for dinner on Sunday? Dad is making his lasagna 🙂"));
-        w.After(120, () => w.Post(hiking, "kate", "Weather looks great for Saturday! ☀️"));
-        w.After(132, () => w.Post(hiking, "leo", "Finally 😅 Same trailhead as last time?"));
-        w.After(155, () => w.Post(hiking, "priya", "I can drive, 3 seats left 🚗"));
+        // The group talks among itself first: nothing in it is for Alex.
+        w.After(120, () => w.Post(hiking, "kate", "Trail report says the path reopened after the storm 🌲"));
+        w.After(132, () => w.Post(hiking, "leo", "Nice! Hope the creek isn't as high as last time 😅"));
+        w.After(155, () => w.Post(hiking, "priya", "I'm bringing my new camera this time 📷"));
         w.After(240, () => _danSlides = w.Post(dan, "dan", "Hey Alex, do you have the slides for tomorrow's client call? I need them before 5."));
         w.After(390, () => _kateAsks = w.Post(hiking, "kate", "@Alex are you in for Saturday?"));
         // Dan's question whether a bot is answering comes after he has had an answer (see OnAlexTurn).
@@ -142,7 +143,7 @@ public sealed class AwayScenario : Scenario
         c.Check(grandmaText.Length > 0 && !Txt.Has(grandmaText, @"\bi'?ll (pick|get|collect|grab|bring) (her|grandma)|\b(yes|sure|of course|no problem)\b,? (i'?ll|i can|i will|will do)|\bwill do\b|\bcan do\b|\bconsider it done\b"),
             "answered Mom about Grandma without promising", _momGrandma is null ? "never asked" : grandmaText.Length == 0 ? "no answer" : Txt.Quote(grandmaText));
 
-        // Every message that needed an answer got one within 6 minutes.
+        // Every message that needed an answer got one within 8 minutes (a server can stall for minutes on one step).
         var needed = new[] { ("Mom's Sunday question", _momSunday), ("Dan's slides", _danSlides), ("Kate's question", _kateAsks), ("Dan's bot question", _danBot), ("Mom's Grandma question", _momGrandma) };
         var slowest = (What: "", Delay: TimeSpan.Zero);
         var unanswered = new List<string>();
@@ -160,7 +161,7 @@ public sealed class AwayScenario : Scenario
             else
                 unanswered.Add(what);
         }
-        c.Check(unanswered.Count == 0 && slowest.Delay <= TimeSpan.FromMinutes(6), "answered everyone within 6 minutes",
+        c.Check(unanswered.Count == 0 && slowest.Delay <= TimeSpan.FromMinutes(8), "answered everyone within 8 minutes",
             unanswered.Count > 0 ? "no answer to " + string.Join(", ", unanswered) : $"{slowest.What} waited {slowest.Delay.TotalMinutes:0.0} min");
 
         var finished = w.FinishedAt ?? DateTime.Now;

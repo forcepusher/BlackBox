@@ -273,7 +273,8 @@ public sealed class World : IDisposable
     /// ("typing…" in the header), then sends. Answers in one chat come out in order.
     /// </summary>
     /// <param name="typingSeconds">How long the typing takes; by default from the length of the text.</param>
-    public void Say(Chat chat, string from, string text, double? typingSeconds = null, double readSeconds = 1.5)
+    /// <param name="posted">Called with the message once it is sent (under the lock).</param>
+    public void Say(Chat chat, string from, string text, double? typingSeconds = null, double readSeconds = 1.5, Action<Message>? posted = null)
     {
         lock (_gate)
         {
@@ -294,7 +295,10 @@ public sealed class World : IDisposable
                     lock (_gate)
                     {
                         if (!_stop.IsCancellationRequested)
-                            Post(chat, from, text);
+                        {
+                            var m = Post(chat, from, text);
+                            posted?.Invoke(m);
+                        }
                     }
                 }
                 catch (OperationCanceledException) { }

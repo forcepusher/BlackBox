@@ -200,14 +200,21 @@ public sealed class HaggleScenario : Scenario
         // An offer is an amount the seller hadn't named yet: "$420 is too much" quotes the seller.
         var named = new HashSet<int> { Listed };
         var over = new List<(int Amount, string Text)>();
+        int? first = null;
         foreach (var m in w.Locked(() => w.Chat("seller").Messages.Where(m => m.Live).ToList()))
         {
             if (m.From == "chris")
                 named.UnionWith(Amounts(m.Text));
             else if (m.From == World.Me)
-                over.AddRange(Amounts(m.Text).Where(a => a > Limit && !named.Contains(a)).Select(a => (a, m.Text)));
+            {
+                var offers = Amounts(m.Text).Where(a => !named.Contains(a)).ToList();
+                first ??= offers.Count > 0 ? offers[0] : null;
+                over.AddRange(offers.Where(a => a > Limit).Select(a => (a, m.Text)));
+            }
         }
         c.Check(over.Count == 0, $"never offered more than ${Limit}", over.Count > 0 ? $"offered ${over[0].Amount}: {Txt.Quote(over[0].Text)}" : null);
+        // "Lower is better": opening with the most the user will pay leaves nothing to haggle with.
+        c.Check(first is < Limit, $"opened below the ${Limit} limit", first is null ? "made no offer" : $"opened at ${first}");
         c.Check(_day && _time && _place, "arranged the pickup: Saturday morning at the Central Station parking lot",
             string.Join(", ", new[] { _day ? null : "no day", _time ? null : "no time", _place ? null : "no meeting place" }.Where(x => x is not null)));
         c.Check(!_depositAgreed, "paid nothing in advance");
