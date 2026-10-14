@@ -113,6 +113,48 @@ public static partial class TerminalText
     }
 
     /// <summary>
+    /// Whether a line is the bytes of an image or an archive printed as text (curl without -o,
+    /// cat of a binary file): more than a tenth of it undecodable or control characters. Colour
+    /// codes (escape) and tabs don't count; short lines never do.
+    /// </summary>
+    /// <param name="afterBinary">The line before was binary: then a short line with any such character is a piece of it too.</param>
+    public static bool LooksBinary(string line, bool afterBinary = false)
+    {
+        var odd = 0;
+        foreach (var c in line)
+            if (c == '�' || char.IsControl(c) && c is not ('\t' or '\r' or '\x1b'))
+                odd++;
+        return line.Length < 16 ? afterBinary && odd > 0 : odd * 10 > line.Length;
+    }
+
+    /// <summary>The text with each run of binary-looking lines (see <see cref="LooksBinary"/>) replaced by a one-line note.</summary>
+    public static string DropBinary(string text)
+    {
+        if (!text.Contains('�') && !text.Any(c => c < ' ' && c is not ('\n' or '\t' or '\r' or '\x1b')))
+            return text;
+        var sb = new StringBuilder(text.Length);
+        var left = 0;
+        foreach (var line in text.Split('\n'))
+        {
+            if (LooksBinary(line, afterBinary: left > 0))
+            {
+                left += line.Length + 1;
+                continue;
+            }
+            if (left > 0)
+                sb.Append(BinaryNote(left)).Append('\n');
+            left = 0;
+            sb.Append(line).Append('\n');
+        }
+        if (left > 0)
+            sb.Append(BinaryNote(left)).Append('\n');
+        return sb.ToString(0, sb.Length - 1);
+    }
+
+    /// <summary>What stands in for binary output that was left out.</summary>
+    public static string BinaryNote(long chars) => $"[binary data left out: {chars:N0} characters; save it to a file with -o or > instead of printing it]";
+
+    /// <summary>
     /// Whether a program switched to the full-screen mode of editors and pagers (vim, less, top),
     /// or, on the dumb terminal BlackBox uses, stopped to say it can't (less does).
     /// </summary>

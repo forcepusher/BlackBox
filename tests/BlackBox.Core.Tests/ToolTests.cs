@@ -522,6 +522,17 @@ public class ToolTests
         Assert.DoesNotContain("_x000D_", failed.Text);
         Assert.Contains("no such <thing>", failed.Text);
         Assert.Contains("after", failed.Text);
+
+        // Bytes of an image printed to the console come back as a one-line note, not 30,000 characters of noise.
+        var binary = await new ShellTool().ExecuteAsync(new JsonObject
+        {
+            ["command"] = "'before'; $b = New-Object byte[] 20000; (New-Object Random 3).NextBytes($b); $o = [Console]::OpenStandardOutput(); " +
+                          "$o.Write($b, 0, $b.Length); $o.Flush(); [Console]::Out.WriteLine(); 'after'",
+        }, Ctx(platform), CancellationToken.None);
+        Assert.Contains("before", binary.Text);
+        Assert.Contains("[binary data left out:", binary.Text);
+        Assert.Contains("after", binary.Text);
+        Assert.True(binary.Text.Length < 1_000, binary.Text);
     }
 }
 

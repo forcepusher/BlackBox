@@ -40,12 +40,27 @@ public sealed partial class ShellTool : Tool
         using var process = new Process { StartInfo = psi };
         var output = new StringBuilder();
         var gate = new object();
+        long binary = 0;
         void Append(string? line)
         {
             if (line is null || line == ClixmlMarker) return;
             line = DecodeClixml(line);
             lock (gate)
+            {
+                // An image or an archive printed as text says nothing and would fill the context.
+                if (Ssh.TerminalText.LooksBinary(line, afterBinary: binary > 0))
+                {
+                    binary += line.Length + 1;
+                    return;
+                }
+                FlushBinary();
                 if (output.Length < MaxOutput) output.AppendLine(line);
+            }
+        }
+        void FlushBinary()
+        {
+            if (binary > 0 && output.Length < MaxOutput) output.AppendLine(Ssh.TerminalText.BinaryNote(binary));
+            binary = 0;
         }
         process.OutputDataReceived += (_, e) => Append(e.Data);
         process.ErrorDataReceived += (_, e) => Append(e.Data);
@@ -74,7 +89,14 @@ public sealed partial class ShellTool : Tool
         if (text.Length >= MaxOutput) text += "\n[output truncated]";
         return new ToolResult($"Exit code {process.ExitCode}\n{text}", IsError: process.ExitCode != 0);
 
-        string Snapshot() { lock (gate) return output.ToString(); }
+        string Snapshot()
+        {
+            lock (gate)
+            {
+                FlushBinary();
+                return output.ToString();
+            }
+        }
     }
 
     private const string ClixmlMarker = "#< CLIXML";

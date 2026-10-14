@@ -127,7 +127,7 @@ public sealed partial class SshHost : IDisposable
         try
         {
             var r = await ExecAsync(command.ReplaceLineEndings("\n"), null, wait, ct).ConfigureAwait(false);
-            return new(ShellState.Done, TerminalText.Clean(r.Output + r.Error).TrimEnd('\n'), r.ExitCode, "~", Note: note);
+            return new(ShellState.Done, TerminalText.DropBinary(TerminalText.Clean(r.Output + r.Error).TrimEnd('\n')), r.ExitCode, "~", Note: note);
         }
         catch (Exception e) when (e is Renci.SshNet.Common.SshOperationTimeoutException or OperationCanceledException && !ct.IsCancellationRequested)
         {
@@ -288,7 +288,7 @@ public sealed partial class SshHost : IDisposable
         var text = TerminalText.Clean(raw);
         // If a command turned echo back on, the next command line shows once; it isn't output.
         var lines = text.Split('\n').Where(l => !l.StartsWith("__bb_id=", StringComparison.Ordinal));
-        return string.Join('\n', lines).Trim('\n');
+        return TerminalText.DropBinary(string.Join('\n', lines).Trim('\n'));
     }
 
     private async Task EnsureShellAsync(CancellationToken ct)

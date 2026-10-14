@@ -20,6 +20,27 @@ public class SshTests
     }
 
     [Fact]
+    public void Binary_output_is_left_out_with_a_note()
+    {
+        // An image printed as text (curl without -o): random bytes read as UTF-8.
+        var bytes = new byte[20_000];
+        new Random(3).NextBytes(bytes);
+        var image = System.Text.Encoding.UTF8.GetString(bytes);
+        var text = "<h1>Lab Bakery</h1>\n---\nbody { font-family: serif; }\n" + image + "\nimg/logo.png: 200 150000 bytes";
+        var kept = TerminalText.DropBinary(text);
+        Assert.StartsWith("<h1>Lab Bakery</h1>\n---\nbody { font-family: serif; }\n", kept);
+        Assert.EndsWith("img/logo.png: 200 150000 bytes", kept);
+        Assert.Contains("[binary data left out:", kept);
+        Assert.True(kept.Length < 400, kept);
+        Assert.Equal(1, kept.Split('\n').Count(l => l.StartsWith("[binary data")));
+
+        // Ordinary text stays as it is: colours, tabs, other alphabets, short lines.
+        foreach (var line in new[] { "\x1b[32mPASS\x1b[0m two players\x1b[0m see each other move", "name\tsize\tdate\tpath\towner\tmode", "Привет, это обычный текст на сервере", "ab�cd" })
+            Assert.False(TerminalText.LooksBinary(line), line);
+        Assert.Equal("plain\ntext", TerminalText.DropBinary("plain\ntext"));
+    }
+
+    [Fact]
     public void Progress_redrawn_with_cursor_moves_keeps_its_last_state()
     {
         // docker pull on a terminal: a line per layer, each update goes up to its line, erases it,
