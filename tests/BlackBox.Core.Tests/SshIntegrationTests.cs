@@ -389,6 +389,20 @@ public class SshIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task A_wait_without_output_says_what_is_running()
+    {
+        if (Host is null) return;
+        // As apt behind | tail: nothing to show, so the call says which programs are at work.
+        var r = await Ssh("sleep 40 | cat", wait: 4);
+        Assert.Contains("still running after", r.Text);
+        Assert.Contains("Running now: ", r.Text);
+        Assert.Contains("sleep 40 (", r.Text);
+        Assert.Contains("cat (", r.Text);
+        Assert.DoesNotContain("bash (", r.Text);
+        await Ssh(interrupt: true);
+    }
+
+    [Fact]
     public async Task Firewall_rule_files_are_checked_after_they_are_written()
     {
         if (Host is null) return;

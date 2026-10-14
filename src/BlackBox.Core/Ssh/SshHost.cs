@@ -269,7 +269,11 @@ public sealed partial class SshHost : IDisposable
                 var keep = raw.LastIndexOf('\x1e') is var k and >= 0 && !raw[k..].Contains('\n') ? raw.Length - k : 0;
                 lock (_gate)
                     _raw.Remove(0, Math.Min(_raw.Length, raw.Length - keep));
-                return new(ShellState.Running, Tidy(raw[..(raw.Length - keep)]), Note: Join(notes));
+                var output = Tidy(raw[..(raw.Length - keep)]);
+                // A whole wait without a word (apt behind | tail, a download, a build): say what runs.
+                if (!silent && waitForPrompt && running is not null && output.Trim().Length == 0 && await RunningNowAsync(ct).ConfigureAwait(false) is { } now)
+                    notes.Add(now);
+                return new(ShellState.Running, output, Note: Join(notes));
             }
             var left = until - DateTime.UtcNow;
             await _signal.WaitAsync(left < TimeSpan.FromMilliseconds(250) ? left : TimeSpan.FromMilliseconds(250), ct).ConfigureAwait(false);
@@ -423,6 +427,31 @@ public sealed partial class SshHost : IDisposable
         {
             return true; // as before: the question counts
         }
+    }
+
+    /// <summary>
+    /// "Running now: ..." with the command's programs (not the shells and sudo around them) and how
+    /// long each has run, oldest first, or null if that can't be seen.
+    /// </summary>
+    private async Task<string?> RunningNowAsync(CancellationToken ct)
+    {
+        const string list = "ps -e -o pid=,ppid=,etimes=,args= | awk -v s=\"$s\" '{ p = $1; pp[p] = $2; e[p] = $3; $1 = $2 = $3 = \"\"; sub(/^ +/, \"\"); a[p] = $0 } " +
+                            "END { d[s] = 1; do { n = 0; for (p in pp) if (!(p in d) && (pp[p] in d)) { d[p] = 1; n++ } } while (n); " +
+                            "for (p in d) if (p != s && a[p] !~ /^-?(ba|da|z)?sh$/ && a[p] !~ /^sudo /) print e[p] \"\\t\" substr(a[p], 1, 90) }' | sort -rn | head -6";
+        try
+        {
+            var r = await ExecAsync($"s=$(cat {_dir}/pid); {list}", null, TimeSpan.FromSeconds(10), ct).ConfigureAwait(false);
+            var parts = r.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(l => l.Split('\t', 2)).Where(p => p.Length == 2 && int.TryParse(p[0], out _))
+                .Select(p => $"{p[1].Trim()} ({Duration(int.Parse(p[0]))})").ToList();
+            return parts.Count == 0 ? null : "Running now: " + string.Join(", ", parts) + ".";
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return null;
+        }
+
+        static string Duration(int s) => s < 60 ? $"{s} s" : s < 3600 ? $"{s / 60} min {s % 60} s" : $"{s / 3600} h {s / 60 % 60} min";
     }
 
     // ---- side channels -------------------------------------------------------------------
