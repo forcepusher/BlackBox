@@ -7,8 +7,8 @@ namespace BlackBox.Core.Ssh;
 /// Checks a config file on a server right after BlackBox wrote it, with the program that reads
 /// it, as a careful admin does before a restart: visudo for sudoers, sshd -t (and what sshd will
 /// really use) for sshd, nginx -t, systemd-analyze verify for units, findmnt --verify for fstab,
-/// the rules cron and logrotate apply to their files, netplan generate, and PostgreSQL's view of
-/// pg_hba.conf and of its settings. A broken sudoers or sshd config can lock everyone out, a broken fstab can stop the
+/// the rules cron and logrotate apply to their files, netplan generate, nft -c and
+/// iptables-restore --test for firewall rules, and PostgreSQL's view of pg_hba.conf and of its settings. A broken sudoers or sshd config can lock everyone out, a broken fstab can stop the
 /// next boot; most of the traps here passed a model by unnoticed in the benchmark (a sudoers rule
 /// for a group written without %, an sshd drop-in that sorts after the one that turns passwords on).
 /// </summary>
@@ -29,6 +29,9 @@ public static partial class ConfigChecks
         _ when path.StartsWith("/etc/cron.d/", StringComparison.Ordinal) => "crond",
         _ when path.StartsWith("/etc/logrotate.d/", StringComparison.Ordinal) => "logrotate",
         _ when path.StartsWith("/etc/netplan/", StringComparison.Ordinal) && (path.EndsWith(".yaml") || path.EndsWith(".yml")) => "netplan",
+        "/etc/nftables.conf" or "/etc/sysconfig/nftables.conf" => "nft",
+        _ when path.StartsWith("/etc/nftables.d/", StringComparison.Ordinal) || path.StartsWith("/etc/nftables/", StringComparison.Ordinal) => "nft",
+        "/etc/iptables/rules.v4" or "/etc/iptables/rules.v6" or "/etc/sysconfig/iptables" or "/etc/sysconfig/ip6tables" => "iptables",
         _ when path.EndsWith("/pg_hba.conf", StringComparison.Ordinal) => "pghba",
         _ when path.EndsWith("/postgresql.conf", StringComparison.Ordinal) ||
                path.StartsWith("/etc/postgresql/", StringComparison.Ordinal) && path.Contains("/conf.d/") && path.EndsWith(".conf") => "pgconf",
@@ -90,6 +93,8 @@ public static partial class ConfigChecks
                 case "netplan": if (!calls.Contains("chk_netplan")) calls.Add("chk_netplan"); break;
                 case "pghba": if (!calls.Contains("chk_pghba")) calls.Add("chk_pghba"); break;
                 case "pgconf": if (!calls.Contains("chk_pgconf")) calls.Add("chk_pgconf"); break;
+                case "nft": if (!calls.Contains("chk_nft")) calls.Add("chk_nft"); break;
+                case "iptables": calls.Add($"chk_iptables {q}"); break;
             }
         }
         if (sshd.Count > 0)
@@ -163,6 +168,13 @@ public static partial class ConfigChecks
           command -v logrotate >/dev/null || { echo "NOTE logrotate is not installed here, so nothing reads $f"; return; }
           out=$(logrotate -d "$f" 2>&1 | grep -iE '^error|: error|bad file mode' | head -3)
           [ -n "$out" ] && echo "NOTE logrotate -d $f: $(echo "$out" | tr '\n' ' ')" || echo "OK logrotate -d $f"; }
+        chk_nft() { local out f=/etc/nftables.conf; command -v nft >/dev/null || return
+          [ -f "$f" ] || f=/etc/sysconfig/nftables.conf; [ -f "$f" ] || return
+          out=$(nft -c -f "$f" 2>&1) && echo "OK nft -c -f $f" || echo "ERR nft -c -f $f: $(echo "$out" | grep -v '^\s*\^' | head -4 | tr '\n' ' ')"
+          systemctl is-enabled --quiet nftables 2>/dev/null || echo "NOTE nftables.service isn't enabled, so nothing loads $f at boot"; }
+        chk_iptables() { local f=$1 t=iptables-restore out; [ -f "$f" ] || return
+          case "$f" in *v6|*ip6tables) t=ip6tables-restore;; esac; command -v $t >/dev/null || return
+          out=$($t --test < "$f" 2>&1) && echo "OK $t --test $f" || echo "ERR $t --test $f: $(echo "$out" | head -3 | tr '\n' ' ')"; }
         chk_netplan() { local out; command -v netplan >/dev/null || return
           out=$(netplan generate 2>&1) && echo "OK netplan generate" || echo "ERR netplan generate: $(echo "$out" | head -3 | tr '\n' ' ')"; }
         chk_pgpsql_failed() { case "$1" in
@@ -192,7 +204,7 @@ public static partial class ConfigChecks
     [GeneratedRegex(@"^/etc/systemd/system/[\w@:.-]+\.(service|timer|socket|path|mount)(\.d/[\w.-]+\.conf)?$")]
     private static partial Regex UnitPath();
 
-    [GeneratedRegex(@"/etc/(sudoers(\.d/[\w.~-]+)?|ssh/sshd_config(\.d/[\w.-]+)?|nginx/[\w./-]+|systemd/system/[\w@:.-]+\.(service|timer|socket|path|mount)(\.d/[\w.-]+\.conf)?|fstab|cron\.d/[\w.-]+|logrotate\.d/[\w.-]+|netplan/[\w.-]+\.ya?ml)|/[\w./-]*(pg_hba|postgresql)\.conf|/etc/postgresql/[\w./-]+/conf\.d/[\w.-]+\.conf")]
+    [GeneratedRegex(@"/etc/(sudoers(\.d/[\w.~-]+)?|ssh/sshd_config(\.d/[\w.-]+)?|nginx/[\w./-]+|systemd/system/[\w@:.-]+\.(service|timer|socket|path|mount)(\.d/[\w.-]+\.conf)?|fstab|cron\.d/[\w.-]+|logrotate\.d/[\w.-]+|netplan/[\w.-]+\.ya?ml|nftables\.conf|nftables(\.d)?/[\w.-]+|iptables/rules\.v[46]|sysconfig/(nftables\.conf|ip6?tables))|/[\w./-]*(pg_hba|postgresql)\.conf|/etc/postgresql/[\w./-]+/conf\.d/[\w.-]+\.conf")]
     private static partial Regex ConfigPath();
 
     [GeneratedRegex(@"\btee\b|>|\bsed\s+(-\w*i|--in-place)|\bcp\b|\bmv\b|\binstall\b|\bln\b|\bchmod\b|\bchown\b|\bvisudo\b")]

@@ -51,7 +51,7 @@ public static class SystemPrompt
                           "look it up with web_search and fetch_page (find= gets just the part you need). After an error you don't understand, search for it.");
         sb.AppendLine("- Keep each tool call short: write long files in parts of at most about 100 lines (write_file, then write_file with append=true for each next part).");
         sb.AppendLine("- For work on another computer (a server, a VM), use ssh, copy, and read_file, write_file, edit_file and list_directory with host set; " +
-                      "don't run ssh or scp through run_shell.");
+                      "don't run ssh or scp through run_shell (ssh with new_login is the test of a fresh login).");
         sb.AppendLine("- Don't install software on this PC (pip, npm, winget and the like) unless the task needs it here. To check a service on " +
                       "a server, use a client this PC already has (curl, a TCP probe) or run the check on the server itself, which has the client " +
                       "(psql -h, redis-cli -h); don't write your own client for a protocol.");

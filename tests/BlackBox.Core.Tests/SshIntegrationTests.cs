@@ -389,6 +389,42 @@ public class SshIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task Firewall_rule_files_are_checked_after_they_are_written()
+    {
+        if (Host is null) return;
+        Task<ToolResult> Write(string path, string content) => new WriteFileTool().ExecuteAsync(
+            new JsonObject { ["path"] = path, ["content"] = content, ["host"] = Host }, _ctx, CancellationToken.None);
+        var have = (await Ssh("for c in iptables-restore nft; do sudo sh -c \"command -v $c\" >/dev/null && echo has-$c; done; " +
+                              "[ -e /etc/iptables/rules.v4 ] && echo has-rules; true")).Text;
+        Assert.DoesNotContain("has-rules", have); // the test would overwrite them
+        var nft = false; // set once the server's own nftables.conf is moved aside
+        try
+        {
+            if (have.Contains("has-iptables-restore"))
+            {
+                var bad = await Write("/etc/iptables/rules.v4", "*filter\n:INPUT ACCEPT [0:0]\n-A INPUT -p tcp --dprot 22 -j ACCEPT\nCOMMIT\n");
+                Assert.Contains("Problem: iptables-restore --test /etc/iptables/rules.v4", bad.Text);
+                var good = await Write("/etc/iptables/rules.v4", "*filter\n:INPUT ACCEPT [0:0]\n-A INPUT -p tcp --dport 22 -j ACCEPT\nCOMMIT\n");
+                Assert.Contains("iptables-restore --test /etc/iptables/rules.v4 passed", good.Text);
+            }
+            if (have.Contains("has-nft"))
+            {
+                await Ssh("[ -e /etc/nftables.conf ] && sudo mv /etc/nftables.conf /etc/nftables.conf.bbtest; true");
+                nft = true;
+                // The mistake seen in a run: "ip6 protocol" is not nft syntax (it is "ip6 nexthdr" or "meta l4proto").
+                var bad = await Write("/etc/nftables.conf", "table inet bbtest {\n  chain input {\n    type filter hook input priority 0; policy accept;\n    ip6 protocol icmpv6 accept\n  }\n}\n");
+                Assert.Contains("Problem: nft -c -f /etc/nftables.conf", bad.Text);
+                Assert.Contains("ip6 protocol icmpv6 accept", bad.Text);
+            }
+        }
+        finally
+        {
+            await Ssh("sudo rm -f /etc/iptables/rules.v4; sudo rmdir /etc/iptables 2>/dev/null; " + (nft
+                ? "[ -e /etc/nftables.conf.bbtest ] && sudo mv /etc/nftables.conf.bbtest /etc/nftables.conf || sudo rm -f /etc/nftables.conf; true" : "true"));
+        }
+    }
+
+    [Fact]
     public async Task After_a_reboot_the_next_call_logs_in_again()
     {
         if (Host is null || Environment.GetEnvironmentVariable("BB_SSH_TEST_REBOOT") != "1") return;

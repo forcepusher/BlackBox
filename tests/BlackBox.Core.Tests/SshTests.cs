@@ -274,6 +274,10 @@ public class SshTests
             ConfigChecks.PathsIn("sudo sed -i \"s/^#listen_addresses = 'localhost'/listen_addresses = '*'/\" /etc/postgresql/17/main/postgresql.conf"));
         Assert.Equal(["/etc/postgresql/17/main/conf.d/listen.conf"], ConfigChecks.PathsIn("echo \"listen_addresses = '*'\" | sudo tee /etc/postgresql/17/main/conf.d/listen.conf"));
         Assert.Equal(1, ConfigChecks.Script(["/etc/postgresql/17/main/postgresql.conf", "/etc/postgresql/17/main/conf.d/listen.conf"])!.Split('\n').Count(l => l == "chk_pgconf"));
+        Assert.Equal(["/etc/nftables.conf"], ConfigChecks.PathsIn("sudo tee /etc/nftables.conf > /dev/null << 'EOF'\ntable inet filter {\n}\nEOF"));
+        Assert.Equal(["/etc/iptables/rules.v4"], ConfigChecks.PathsIn("sudo sh -c 'iptables-save > /etc/iptables/rules.v4'"));
+        Assert.Contains("chk_iptables '/etc/iptables/rules.v6'", ConfigChecks.Script(["/etc/iptables/rules.v6"]));
+        Assert.Empty(ConfigChecks.PathsIn("sudo nft -f /etc/nftables.conf && sudo systemctl enable nftables"));
         // Reading isn't writing, and 2>/dev/null writes nothing that matters.
         Assert.Empty(ConfigChecks.PathsIn("sudo cat /etc/sudoers.d/devs 2>/dev/null; grep -n Port /etc/ssh/sshd_config"));
         Assert.Empty(ConfigChecks.PathsIn("sudo tee /etc/motd < banner.txt"));
