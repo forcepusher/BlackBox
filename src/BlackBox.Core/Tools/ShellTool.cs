@@ -11,7 +11,8 @@ public sealed partial class ShellTool : Tool
     public override string Name => "run_shell";
     public override string Description =>
         "Run a shell command and return its output (PowerShell on Windows, sh elsewhere). " +
-        "Use for files, launching apps (e.g. Start-Process notepad), system info, scripts. No interactive commands.";
+        "Use for files, launching apps (e.g. Start-Process notepad), system info, scripts. No interactive commands. " +
+        "Don't install software on this PC with it (pip, npm, winget) unless the task needs it here.";
     public override ToolRisk Risk => ToolRisk.Risky;
     public override JsonObject Parameters => Schema(
         ("command", Str("Command to run"), true),
