@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pigeon</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%233390ec'/%3E%3Cpath fill='white' d='M7 16l17-7-3 15-6-4-3 4v-5l9-8-11 7z'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/lab.css">
+<style>
+  body { background: #fff; overflow: hidden; }
+  .app { display: flex; height: 100vh; }
+
+  .side { width: 380px; flex: none; display: flex; flex-direction: column; border-right: 1px solid #dfe1e5; background: #fff; }
+  .side-top { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+  .icon-btn { border: none; background: none; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #707579; }
+  .icon-btn:hover { background: #f1f1f1; }
+  .search { flex: 1; display: flex; align-items: center; gap: 8px; background: #f1f1f1; border-radius: 22px; padding: 0 14px; height: 42px; color: #888; }
+  .search input { border: none; outline: none; background: none; flex: 1; font-size: 15px; }
+  .folders { display: flex; gap: 4px; padding: 0 12px; border-bottom: 1px solid #eee; }
+  .folders span { padding: 8px 12px 10px; color: #707579; font-weight: 600; font-size: 14px; border-bottom: 3px solid transparent; }
+  .folders span.on { color: #3390ec; border-color: #3390ec; }
+  .list { flex: 1; overflow-y: auto; padding: 6px 8px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 12px; cursor: pointer; }
+  .row:hover { background: #f4f4f5; }
+  .row.on { background: #3390ec; color: #fff; }
+  .row .info { flex: 1; min-width: 0; }
+  .row .top, .row .bottom { display: flex; align-items: center; gap: 6px; }
+  .row .title { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .time { font-size: 13px; color: #707579; }
+  .row .preview { flex: 1; color: #707579; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14.5px; margin-top: 2px; }
+  .row .preview b { color: #1f2328; font-weight: 500; }
+  .row .preview .typing { color: #3390ec; }
+  .row.on .time, .row.on .preview, .row.on .preview b, .row.on .preview .typing { color: #fff; }
+  .badge { min-width: 22px; height: 22px; border-radius: 11px; padding: 0 7px; background: #3390ec; color: #fff; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+  .badge.muted { background: #a8b1b9; }
+  .row.on .badge { background: #fff; color: #3390ec; }
+  .pin { color: #a8b1b9; font-size: 13px; }
+  .row.on .verified path:first-child { fill: #fff; }
+  .row.on .verified path:last-child { fill: #3390ec; }
+
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0;
+    background: #dfe7d4 radial-gradient(circle at 20% 30%, rgba(255,255,255,.35) 0, transparent 40%), radial-gradient(circle at 80% 70%, rgba(255,255,255,.3) 0, transparent 45%); }
+  .head { height: 60px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #fff; border-bottom: 1px solid #dfe1e5; }
+  .head .who { flex: 1; min-width: 0; }
+  .head .name { font-weight: 600; font-size: 16px; }
+  .head .status { font-size: 13.5px; color: #707579; }
+  .head .status.online, .head .status.typing { color: #3390ec; }
+  .placeholder { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .placeholder span { background: rgba(0,0,0,.18); color: #fff; padding: 5px 14px; border-radius: 16px; font-weight: 500; }
+  .pane { flex: 1; min-height: 0; width: 100%; max-width: 860px; margin: 0 auto; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body data-app="pigeon">
+<div class="app">
+  <aside class="side">
+    <div class="side-top">
+      <button class="icon-btn" title="Menu" aria-label="Menu"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg></button>
+      <label class="search"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 9.5 16a6.5 6.5 0 0 0 4.2-1.6l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg><input id="search" placeholder="Search" aria-label="Search chats"></label>
+    </div>
+    <div class="folders"><span class="on">All chats</span><span>Personal</span><span>Groups</span></div>
+    <div class="list" id="list"></div>
+  </aside>
+  <main class="main">
+    <div class="head hidden" id="head"></div>
+    <div class="placeholder" id="placeholder"><span>Select a chat to start messaging</span></div>
+    <div class="pane hidden" id="pane"></div>
+  </main>
+</div>
+<script src="/assets/lab.js"></script>
+<script>
+  const pane = new ChatPane(document.getElementById('pane'), { names: 'group', placeholder: 'Message' });
+  let current = null;
+  let filter = '';
+
+  function preview(chat, state) {
+    if (chat.typing.length) {
+      const who = chat.kind === 'group' ? Lab.person(chat.typing[0]).name.split(' ')[0] + ' is typing…' : 'typing…';
+      return `<span class="typing">${esc(who)}</span>`;
+    }
+    const m = chat.messages[chat.messages.length - 1];
+    if (!m) return '';
+    let prefix = '';
+    if (m.from === state.me) prefix = '<b>You: </b>';
+    else if (chat.kind === 'group' && m.from) prefix = `<b>${esc(Lab.person(m.from).name.split(' ')[0])}: </b>`;
+    return prefix + esc(m.text.replace(/\n/g, ' '));
+  }
+
+  function lastTime(chat) {
+    const m = chat.messages[chat.messages.length - 1];
+    return m ? m.time : '1970-01-01T00:00:00';
+  }
+
+  function renderList(state) {
+    const chats = state.chats
+      .filter(c => !filter || c.title.toLowerCase().includes(filter))
+      .sort((a, b) => (b.pinned - a.pinned) || (lastTime(b) > lastTime(a) ? 1 : -1));
+    document.getElementById('list').innerHTML = chats.map(c => {
+      const verified = c.members.length === 1 && Lab.person(c.members[0]).verified;
+      const pic = c.kind === 'group' ? `<div class="avatar" style="width:54px;height:54px;background:${c.id.length % 2 ? '#7bc862' : '#faa774'};font-size:20px">${esc(c.title.replace(/[^\p{L}\p{N} ]/gu, '').trim().split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase())}</div>`
+        : avatar(c.members[0], 54);
+      const m = c.messages[c.messages.length - 1];
+      const ticks = m && m.from === state.me ? `<span class="time">${m.read ? '✓✓' : '✓'}</span>` : '';
+      return `<div class="row${c.id === current ? ' on' : ''}" data-id="${esc(c.id)}">${pic}
+        <div class="info">
+          <div class="top"><span class="title">${esc(c.title)}${verified ? verifiedBadge : ''}</span>${ticks}<span class="time">${m ? listTime(m.time) : ''}</span></div>
+          <div class="bottom"><span class="preview">${preview(c, state)}</span>${c.unread ? `<span class="badge${c.muted ? ' muted' : ''}">${c.unread}</span>` : c.pinned ? '<span class="pin">📌</span>' : ''}</div>
+        </div></div>`;
+    }).join('');
+    const unread = state.chats.reduce((n, c) => n + (c.muted ? 0 : c.unread), 0);
+    document.title = unread ? `(${unread}) Pigeon` : 'Pigeon';
+  }
+
+  function renderHead(state) {
+    const head = document.getElementById('head');
+    const chat = Lab.chat(current);
+    if (!chat) return;
+    let status;
+    if (chat.kind === 'group') {
+      status = chat.typing.length ? `<span class="status typing">${esc(Lab.person(chat.typing[0]).name.split(' ')[0])} is typing…</span>`
+        : `<span class="status">${chat.members.length + 1} members</span>`;
+    } else {
+      const p = Lab.person(chat.members[0]);
+      status = chat.typing.length ? '<span class="status typing">typing…</span>'
+        : p.verified ? '<span class="status">service notifications</span>'
+        : `<span class="status${p.status === 'online' ? ' online' : ''}">${esc(p.status)}</span>`;
+    }
+    const verified = chat.members.length === 1 && Lab.person(chat.members[0]).verified;
+    const pic = chat.kind === 'group' ? `<div class="avatar" style="width:42px;height:42px;background:${chat.id.length % 2 ? '#7bc862' : '#faa774'}">${esc(chat.title.replace(/[^\p{L}\p{N} ]/gu, '').trim().split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase())}</div>`
+      : avatar(chat.members[0], 42);
+    head.innerHTML = `${pic}<div class="who"><div class="name">${esc(chat.title)}${verified ? verifiedBadge : ''}</div>${status}</div>
+      <button class="icon-btn" title="Search" aria-label="Search in chat"><svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 9.5 16a6.5 6.5 0 0 0 4.2-1.6l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg></button>
+      <button class="icon-btn" title="Call" aria-label="Call"><svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1z"/></svg></button>
+      <button class="icon-btn" title="More" aria-label="More"><svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg></button>`;
+  }
+
+  function openChat(id) {
+    current = id;
+    location.hash = id;
+    document.getElementById('placeholder').classList.add('hidden');
+    document.getElementById('head').classList.remove('hidden');
+    document.getElementById('pane').classList.remove('hidden');
+    pane.setChat(id);
+    Lab.open(id);
+    if (Lab.state) { renderList(Lab.state); renderHead(Lab.state); }
+    pane.focus();
+  }
+
+  document.getElementById('list').addEventListener('click', e => {
+    const row = e.target.closest('.row');
+    if (row) openChat(row.dataset.id);
+  });
+  document.getElementById('search').addEventListener('input', e => {
+    filter = e.target.value.trim().toLowerCase();
+    if (Lab.state) renderList(Lab.state);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && current) {
+      current = null;
+      history.replaceState(null, '', location.pathname);
+      document.getElementById('placeholder').classList.remove('hidden');
+      document.getElementById('head').classList.add('hidden');
+      document.getElementById('pane').classList.add('hidden');
+      pane.setChat(null);
+      renderList(Lab.state);
+    }
+  });
+
+  Lab.onState(state => {
+    renderList(state);
+    if (current) {
+      renderHead(state);
+      pane.render(state);
+      // An open chat is read as messages arrive, as long as the window is in front.
+      const chat = Lab.chat(current);
+      if (chat && chat.unread && document.visibilityState === 'visible') Lab.open(current);
+    }
+  });
+
+  // A reload keeps the open chat (it is in the address).
+  let reopen = decodeURIComponent(location.hash.slice(1));
+  Lab.onState(() => {
+    if (reopen && Lab.chat(reopen)) {
+      const id = reopen;
+      reopen = null;
+      openChat(id);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Trek Domane AL 2 road bike – 56 cm · SwapIt</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='16' fill='%232f9e44'/%3E%3Ctext x='16' y='22' font-size='17' font-family='Arial' font-weight='bold' fill='white' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/lab.css">
+<style>
+  body { background: #fff; }
+  .top { display: flex; align-items: center; gap: 18px; padding: 12px 28px; border-bottom: 1px solid #e9ecef; }
+  .logo { font-size: 26px; font-weight: 800; color: #2f9e44; text-decoration: none; letter-spacing: -.5px; }
+  .search { flex: 1; max-width: 560px; display: flex; align-items: center; gap: 8px; border: 1px solid #ced4da; border-radius: 24px; padding: 0 16px; height: 42px; color: #868e96; }
+  .search input { flex: 1; border: none; outline: none; }
+  .loc { color: #495057; font-size: 14px; }
+  .spacer { flex: 1; }
+  .link { border: none; background: none; color: #343a40; font-weight: 600; display: flex; align-items: center; gap: 6px; position: relative; }
+  .link .count { background: #e03131; color: #fff; border-radius: 9px; font-size: 11px; padding: 1px 6px; }
+  .sell { border: none; background: #2f9e44; color: #fff; font-weight: 700; border-radius: 22px; padding: 9px 20px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 16px 28px 60px; }
+  .crumbs { font-size: 13px; color: #868e96; margin-bottom: 14px; }
+  .crumbs a { color: #2f9e44; text-decoration: none; }
+  .listing { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 36px; }
+  .photo { background: #f1f3f5; border-radius: 12px; height: 440px; display: flex; align-items: center; justify-content: center; }
+  .thumbs { display: flex; gap: 10px; margin-top: 10px; }
+  .thumbs div { width: 86px; height: 64px; border-radius: 8px; background: #f1f3f5; border: 2px solid transparent; display: flex; align-items: center; justify-content: center; }
+  .thumbs div.on { border-color: #2f9e44; }
+  h1 { font-size: 26px; margin: 0 0 6px; line-height: 1.25; }
+  .price { font-size: 30px; font-weight: 800; margin: 6px 0; }
+  .meta { color: #868e96; font-size: 14px; margin-bottom: 18px; }
+  .cta { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+  .cta button { height: 48px; border-radius: 24px; font-weight: 700; font-size: 16px; }
+  .primary { border: none; background: #2f9e44; color: #fff; }
+  .secondary { border: 1px solid #ced4da; background: #fff; color: #343a40; }
+  .seller { border: 1px solid #e9ecef; border-radius: 12px; padding: 14px; display: flex; gap: 12px; align-items: center; margin-bottom: 20px; }
+  .seller b { display: block; font-size: 16px; }
+  .seller span { color: #868e96; font-size: 13px; }
+  .details { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0 18px; }
+  .details td { padding: 8px 0; border-bottom: 1px solid #f1f3f5; }
+  .details td:first-child { color: #868e96; width: 40%; }
+  h2 { font-size: 18px; margin: 22px 0 8px; }
+  .desc { line-height: 1.55; color: #343a40; }
+  .safety { margin-top: 18px; background: #ebfbee; border-radius: 10px; padding: 12px 14px; font-size: 14px; color: #2b8a3e; }
+
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 440px; background: #fff; box-shadow: -6px 0 30px rgba(0,0,0,.18); display: flex; flex-direction: column; z-index: 10; }
+  .d-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid #e9ecef; }
+  .d-head .t { flex: 1; } .d-head b { display: block; } .d-head span { font-size: 13px; color: #868e96; }
+  .d-head span.online, .d-head span.typing { color: #2f9e44; }
+  .d-head button { border: none; background: #f1f3f5; width: 34px; height: 34px; border-radius: 50%; font-size: 18px; }
+  .d-item { display: flex; gap: 10px; align-items: center; padding: 10px 14px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 14px; }
+  .d-item div.p { width: 52px; height: 40px; border-radius: 6px; background: #e9ecef; display: flex; align-items: center; justify-content: center; }
+  .d-pane { flex: 1; min-height: 0; }
+  .d-pane .cp-messages { background: #fff; }
+  .d-pane .cp-bubble { box-shadow: none; background: #f1f3f5; }
+  .d-pane .cp-msg.out .cp-bubble { background: #2f9e44; color: #fff; }
+  .d-pane .cp-msg.out .cp-meta { color: #d3f9d8; }
+  .d-pane .cp-composer { border-top: 1px solid #e9ecef; }
+  .d-pane .cp-input { box-shadow: none; border: 1px solid #ced4da; }
+  .d-pane .cp-send { box-shadow: none; background: #f1f3f5; }
+  .d-pane .cp-send.ready { background: #2f9e44; color: #fff; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body data-app="swapit">
+<header class="top">
+  <a class="logo" href="#">SwapIt</a>
+  <label class="search"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 9.5 16a6.5 6.5 0 0 0 4.2-1.6l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg><input placeholder="Search for anything" aria-label="Search SwapIt"></label>
+  <span class="loc">📍 Riverside</span>
+  <span class="spacer"></span>
+  <button class="link" id="nav-messages">💬 Messages <span class="count hidden" id="msg-count"></span></button>
+  <button class="link">♡ Saved</button>
+  <button class="sell">+ Sell</button>
+  <div class="avatar" style="width:36px;height:36px;background:#5288c1;font-size:14px">AM</div>
+</header>
+
+<div class="wrap">
+  <div class="crumbs"><a href="#">Home</a> › <a href="#">Sports &amp; Outdoors</a> › <a href="#">Bikes</a> › Road bikes</div>
+  <div class="listing">
+    <div>
+      <div class="photo">
+        <svg viewBox="0 0 400 240" width="560" height="336" aria-label="Photo of a grey road bike">
+          <g fill="none" stroke="#343a40" stroke-width="9"><circle cx="95" cy="160" r="62"/><circle cx="305" cy="160" r="62"/></g>
+          <g fill="none" stroke="#868e96" stroke-width="3"><circle cx="95" cy="160" r="50"/><circle cx="305" cy="160" r="50"/></g>
+          <g fill="none" stroke="#495057" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M95 160 L170 165 L250 80 L145 80 Z"/><path d="M170 165 L135 60"/><path d="M250 80 L305 160"/><path d="M250 80 L258 55"/>
+          </g>
+          <path d="M120 55 L160 55" stroke="#212529" stroke-width="10" stroke-linecap="round"/>
+          <path d="M245 52 C 262 46, 280 50, 284 66 C 286 74, 278 80, 270 76" fill="none" stroke="#212529" stroke-width="7" stroke-linecap="round"/>
+          <circle cx="170" cy="165" r="14" fill="#adb5bd"/>
+        </svg>
+      </div>
+      <div class="thumbs"><div class="on">🚲</div><div>🔧</div><div>🛞</div><div>📏</div></div>
+      <h2>Description</h2>
+      <div class="desc">Selling my Trek Domane AL 2 because I upgraded. Size 56 cm, fits riders about 175–183 cm. Shimano Claris 2×8 gearing,
+        new Continental tires last month, serviced in the spring. A couple of small scratches on the top tube, otherwise in great shape.
+        Comes with bottle cage and pedals. Pickup in Riverside, or we can meet somewhere nearby.</div>
+    </div>
+    <aside>
+      <h1>Trek Domane AL 2 road bike – 56 cm</h1>
+      <div class="price">$450</div>
+      <div class="meta">Posted 3 days ago in Riverside · 214 views</div>
+      <div class="cta">
+        <button class="primary" id="message-seller">Message seller</button>
+        <button class="secondary">♡ Save</button>
+      </div>
+      <div class="seller"><div class="avatar" style="width:48px;height:48px;background:#e17076">CP</div>
+        <div><b>Chris P.</b><span>★ 4.8 (23 reviews) · Usually replies within an hour</span><br><span>Member since 2021</span></div></div>
+      <table class="details">
+        <tr><td>Condition</td><td>Used – good</td></tr>
+        <tr><td>Brand</td><td>Trek</td></tr>
+        <tr><td>Frame size</td><td>56 cm</td></tr>
+        <tr><td>Frame</td><td>Aluminium</td></tr>
+        <tr><td>Groupset</td><td>Shimano Claris 2×8</td></tr>
+        <tr><td>Wheels</td><td>700c</td></tr>
+      </table>
+      <div class="safety">🛡️ Stay safe: meet in a public place, check the item before you pay, and never pay a deposit to someone you haven't met.</div>
+    </aside>
+  </div>
+</div>
+
+<section class="drawer hidden" id="drawer" aria-label="Chat with the seller">
+  <div class="d-head"><div class="avatar" style="width:42px;height:42px;background:#e17076">CP</div>
+    <div class="t"><b>Chris P.</b><span id="d-status">online</span></div>
+    <button id="d-close" title="Close" aria-label="Close chat">×</button></div>
+  <div class="d-item"><div class="p">🚲</div><div><b>Trek Domane AL 2 road bike – 56 cm</b><br>$450</div></div>
+  <div class="d-pane" id="d-pane"></div>
+</section>
+
+<script src="/assets/lab.js"></script>
+<script>
+  const pane = new ChatPane(document.getElementById('d-pane'), { placeholder: 'Write a message…' });
+  const CHAT = 'seller';
+  let open = false;
+
+  function openDrawer() {
+    open = true;
+    document.getElementById('drawer').classList.remove('hidden');
+    pane.setChat(CHAT);
+    Lab.open(CHAT);
+    pane.focus();
+  }
+  document.getElementById('message-seller').onclick = openDrawer;
+  document.getElementById('nav-messages').onclick = openDrawer;
+  document.getElementById('d-close').onclick = () => { open = false; document.getElementById('drawer').classList.add('hidden'); };
+
+  Lab.onState(state => {
+    const chat = Lab.chat(CHAT);
+    if (!chat) return;
+    const status = document.getElementById('d-status');
+    status.textContent = chat.typing.length ? 'typing…' : Lab.person('chris').status;
+    status.className = chat.typing.length ? 'typing' : Lab.person('chris').status === 'online' ? 'online' : '';
+    const count = document.getElementById('msg-count');
+    count.textContent = chat.unread;
+    count.classList.toggle('hidden', !chat.unread || open);
+    if (open) {
+      pane.render(state);
+      if (chat.unread) Lab.open(CHAT);
+    }
+  });
+</script>
+</body>
+</html>

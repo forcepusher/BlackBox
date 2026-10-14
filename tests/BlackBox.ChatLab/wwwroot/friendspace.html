@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Friendspace</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233b5bdb'/%3E%3Ctext x='16' y='23' font-size='20' font-family='Arial' font-weight='bold' fill='white' text-anchor='middle'%3Ef%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/lab.css">
+<style>
+  body { background: #eef0f3; }
+  .top { position: sticky; top: 0; z-index: 10; height: 58px; background: #fff; display: flex; align-items: center; gap: 16px; padding: 0 18px; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .logo { font-size: 26px; font-weight: 800; color: #3b5bdb; letter-spacing: -1px; text-decoration: none; }
+  .search { display: flex; align-items: center; gap: 8px; background: #f0f2f5; border-radius: 20px; padding: 0 14px; height: 40px; width: 260px; color: #65676b; }
+  .search input { border: none; outline: none; background: none; flex: 1; }
+  .nav { flex: 1; display: flex; justify-content: center; gap: 6px; }
+  .nav a { width: 110px; height: 52px; display: flex; align-items: center; justify-content: center; color: #65676b; text-decoration: none; border-bottom: 3px solid transparent; font-weight: 600; gap: 6px; }
+  .nav a.on { color: #3b5bdb; border-color: #3b5bdb; }
+  .right { display: flex; align-items: center; gap: 10px; }
+  .round { position: relative; width: 42px; height: 42px; border-radius: 50%; border: none; background: #e4e6eb; display: flex; align-items: center; justify-content: center; color: #1c1e21; }
+  .round .count { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #e41e3f; color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .me { display: flex; align-items: center; gap: 8px; font-weight: 600; padding: 4px 10px 4px 4px; border-radius: 20px; }
+  .me:hover { background: #f0f2f5; }
+
+  .layout { display: grid; grid-template-columns: 260px minmax(0, 640px) 280px; gap: 26px; justify-content: center; padding: 18px; }
+  .left a, .left div.item { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 8px; text-decoration: none; color: #1c1e21; font-weight: 500; cursor: pointer; }
+  .left a:hover, .left div.item:hover { background: #e4e6eb; }
+  .left .ico { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; background: #dfe3ee; }
+  .card { background: #fff; border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.15); margin-bottom: 16px; }
+  .composer { display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
+  .composer .fake { flex: 1; background: #f0f2f5; border-radius: 20px; padding: 10px 16px; color: #65676b; }
+  .post-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px 6px; }
+  .post-head .name { font-weight: 600; }
+  .post-head .when { font-size: 13px; color: #65676b; }
+  .post-text { padding: 4px 16px 12px; font-size: 16px; line-height: 1.4; white-space: pre-wrap; }
+  .picture { height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    background: linear-gradient(135deg, #4c6ef5, #15aabf); color: #fff; font-size: 18px; font-weight: 600; }
+  .picture .emoji { font-size: 110px; line-height: 1; }
+  .stats { display: flex; justify-content: space-between; padding: 10px 16px; color: #65676b; font-size: 14px; }
+  .actions { display: flex; border-top: 1px solid #e4e6eb; border-bottom: 1px solid #e4e6eb; margin: 0 12px; }
+  .actions button { flex: 1; border: none; background: none; padding: 8px; color: #65676b; font-weight: 600; border-radius: 6px; margin: 3px 0; }
+  .actions button:hover { background: #f0f2f5; }
+  .actions button.on { color: #3b5bdb; }
+  .comments { padding: 8px 16px 14px; }
+  .comment { display: flex; gap: 8px; margin-top: 10px; }
+  .comment.reply { margin-left: 44px; }
+  .bubble-wrap { min-width: 0; }
+  .c-bubble { background: #f0f2f5; border-radius: 16px; padding: 7px 12px; display: inline-block; max-width: 100%; }
+  .c-name { font-weight: 600; font-size: 13.5px; }
+  .c-text { font-size: 15px; line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .c-meta { display: flex; gap: 12px; font-size: 12.5px; color: #65676b; padding: 3px 12px 0; align-items: center; }
+  .c-meta button { border: none; background: none; padding: 0; font-weight: 700; color: #65676b; font-size: 12.5px; }
+  .c-meta button:hover { text-decoration: underline; }
+  .c-meta button.on { color: #3b5bdb; }
+  .c-likes { background: #fff; border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.2); padding: 0 6px; font-size: 12px; }
+  .new-dot { width: 8px; height: 8px; border-radius: 50%; background: #3b5bdb; display: inline-block; margin-left: 6px; vertical-align: middle; }
+  .write { display: flex; gap: 8px; margin-top: 10px; align-items: flex-start; }
+  .write.reply { margin-left: 44px; }
+  .write textarea { flex: 1; resize: none; border: none; outline: none; background: #f0f2f5; border-radius: 18px; padding: 9px 14px; min-height: 38px; line-height: 1.35; }
+  .write .hint { font-size: 12px; color: #65676b; padding: 2px 12px; }
+
+  .side-title { font-weight: 600; color: #65676b; margin: 6px 6px 10px; }
+  .contact { display: flex; align-items: center; gap: 10px; padding: 7px 6px; border-radius: 8px; }
+  .contact .dot { width: 10px; height: 10px; border-radius: 50%; background: #31a24c; border: 2px solid #fff; margin-left: -18px; margin-top: 24px; }
+  .bday { display: flex; gap: 10px; align-items: center; padding: 6px; font-size: 14px; }
+
+  .popup { position: absolute; top: 54px; right: 70px; width: 380px; max-height: 520px; overflow-y: auto; background: #fff; border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.2); padding: 10px; z-index: 20; }
+  .popup h3 { margin: 4px 8px 10px; }
+  .notif { display: flex; gap: 10px; padding: 8px; border-radius: 8px; cursor: pointer; align-items: center; }
+  .notif:hover { background: #f0f2f5; }
+  .notif .t { font-size: 14px; }
+  .notif .w { font-size: 12px; color: #3b5bdb; font-weight: 600; }
+
+  .messages-view { display: grid; grid-template-columns: 330px 1fr; height: calc(100vh - 58px); }
+  .m-list { background: #fff; border-right: 1px solid #e4e6eb; overflow-y: auto; padding: 10px 8px; }
+  .m-list h2 { margin: 6px 10px 12px; font-size: 22px; }
+  .m-row { display: flex; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 10px; cursor: pointer; }
+  .m-row:hover { background: #f0f2f5; }
+  .m-row.on { background: #e7ecfd; }
+  .m-row .info { flex: 1; min-width: 0; }
+  .m-row .n { font-weight: 600; }
+  .m-row .p { font-size: 13.5px; color: #65676b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m-row.unread .p { color: #1c1e21; font-weight: 600; }
+  .m-row .u { width: 12px; height: 12px; border-radius: 50%; background: #3b5bdb; }
+  .m-main { display: flex; flex-direction: column; min-width: 0; background: #fff; }
+  .m-head { height: 62px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid #e4e6eb; font-weight: 600; }
+  .m-pane { flex: 1; min-height: 0; }
+  .m-pane .cp-messages { background: #fff; }
+  .m-pane .cp-bubble { box-shadow: none; background: #f0f2f5; }
+  .m-pane .cp-msg.out .cp-bubble { background: #3b5bdb; color: #fff; }
+  .m-pane .cp-msg.out .cp-meta { color: #dbe4ff; }
+  .m-pane .cp-input { background: #f0f2f5; box-shadow: none; }
+  .m-pane .cp-send { box-shadow: none; }
+  .m-pane .cp-send.ready { color: #3b5bdb; }
+  .m-empty { margin: auto; color: #65676b; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body data-app="friendspace">
+<header class="top">
+  <a class="logo" href="#feed">friendspace</a>
+  <label class="search"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 9.5 16a6.5 6.5 0 0 0 4.2-1.6l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg><input placeholder="Search Friendspace" aria-label="Search Friendspace"></label>
+  <nav class="nav">
+    <a href="#feed" id="nav-home" class="on">🏠 Home</a>
+    <a href="#feed">👥 Friends</a>
+    <a href="#feed">📅 Events</a>
+  </nav>
+  <div class="right">
+    <button class="round" id="btn-messages" title="Messages" aria-label="Messages">💬<span class="count hidden" id="msg-count"></span></button>
+    <button class="round" id="btn-notifs" title="Notifications" aria-label="Notifications">🔔<span class="count hidden" id="notif-count"></span></button>
+    <div class="me" id="me"></div>
+  </div>
+</header>
+<div class="popup hidden" id="notifs"></div>
+
+<div class="layout" id="feed-view">
+  <aside class="left">
+    <div class="item" id="left-me"></div>
+    <a href="#feed"><span class="ico">🏠</span>Feed</a>
+    <a href="#messages"><span class="ico">💬</span>Messages</a>
+    <a href="#feed"><span class="ico">👥</span>Friends</a>
+    <a href="#feed"><span class="ico">🏃</span>Groups</a>
+    <a href="#feed"><span class="ico">📅</span>Events</a>
+    <a href="#feed"><span class="ico">🔖</span>Saved</a>
+  </aside>
+  <main id="feed">
+  </main>
+  <aside>
+    <div class="card" style="padding:10px">
+      <div class="side-title">Birthdays</div>
+      <div class="bday">🎁 <span><b>Jamie Chen</b>'s birthday is on Friday.</span></div>
+    </div>
+    <div class="side-title">Contacts</div>
+    <div id="contacts"></div>
+  </aside>
+</div>
+
+<div class="messages-view hidden" id="messages-view">
+  <div class="m-list"><h2>Chats</h2><div id="m-rows"></div></div>
+  <div class="m-main">
+    <div class="m-head" id="m-head"></div>
+    <div class="m-pane" id="m-pane"></div>
+  </div>
+</div>
+
+<script src="/assets/lab.js"></script>
+<script>
+  const POST_OF_ME = id => Lab.state.posts.find(p => p.id === id);
+  const pane = new ChatPane(document.getElementById('m-pane'), { avatars: true, placeholder: 'Aa', emptyText: 'Select a chat' });
+  let replyingTo = null;       // comment id whose thread shows a reply box
+  let currentChat = null;
+  const drafts = {};           // comment drafts by box key
+  let notifsOpen = false;
+
+  function route() {
+    const hash = location.hash.slice(1) || 'feed';
+    const [view, arg] = hash.split('/');
+    const messages = view === 'messages';
+    document.getElementById('feed-view').classList.toggle('hidden', messages);
+    document.getElementById('messages-view').classList.toggle('hidden', !messages);
+    document.getElementById('nav-home').classList.toggle('on', !messages);
+    if (messages) {
+      const chat = arg && Lab.chat(arg) ? arg : currentChat;
+      if (chat) openChat(chat, false);
+      else if (Lab.state) renderMessages(Lab.state);
+    }
+  }
+
+  function openChat(id, push = true) {
+    currentChat = id;
+    if (push) location.hash = 'messages/' + id;
+    pane.setChat(id);
+    Lab.open(id);
+    if (Lab.state) renderMessages(Lab.state);
+    pane.focus();
+  }
+
+  // ---- feed
+
+  function commentHtml(post, c, isReply) {
+    const p = Lab.person(c.author);
+    return `<div class="comment${isReply ? ' reply' : ''}" data-comment="${esc(c.id)}">${avatar(c.author, isReply ? 28 : 34)}
+      <div class="bubble-wrap">
+        <div class="c-bubble"><div class="c-name">${esc(p.name)}</div><div class="c-text">${textHtml(c.text)}</div></div>
+        <div class="c-meta"><button class="c-like${c.liked ? ' on' : ''}" data-post="${esc(post.id)}" data-comment="${esc(c.id)}">Like</button>
+          <button class="c-reply" data-post="${esc(post.id)}" data-comment="${esc(c.id)}" data-thread="${esc(c.replyTo ?? c.id)}">Reply</button>
+          <span>${ago(c.time)}</span>${c.likes ? `<span class="c-likes">👍 ${c.likes}</span>` : ''}${c.unseen ? '<span class="new-dot" title="New"></span>' : ''}</div>
+      </div></div>`;
+  }
+
+  function writeBox(post, key, placeholder, isReply, replyTo) {
+    return `<div class="write${isReply ? ' reply' : ''}">${avatar(Lab.state.me, isReply ? 28 : 34)}
+      <div style="flex:1"><textarea rows="1" data-key="${esc(key)}" data-post="${esc(post.id)}" data-reply-to="${esc(replyTo ?? '')}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}">${esc(drafts[key] ?? '')}</textarea>
+      <div class="hint">Press Enter to post.</div></div></div>`;
+  }
+
+  let feedSignature = '';
+  function renderFeed(state, force = false) {
+    // Only when the posts changed, so a box being typed in is left alone.
+    const sig = JSON.stringify(state.posts) + JSON.stringify(replyingTo);
+    if (sig === feedSignature && !force) return;
+    feedSignature = sig;
+    // Re-rendering would lose the caret: keep the box being typed in.
+    const active = document.activeElement?.matches?.('#feed textarea') ? document.activeElement.dataset.key : null;
+    const caret = active ? document.activeElement.selectionStart : 0;
+    const scrollY = window.scrollY;
+    const posts = [...state.posts].sort((a, b) => a.author === state.me ? -1 : b.author === state.me ? 1 : (a.time < b.time ? 1 : -1));
+    let html = `<div class="card composer">${avatar(state.me, 40)}<div class="fake">What's on your mind, Alex?</div></div>`;
+    for (const post of posts) {
+      const p = Lab.person(post.author);
+      const top = post.comments.filter(c => !c.replyTo);
+      let comments = '';
+      for (const c of top) {
+        comments += commentHtml(post, c, false);
+        for (const r of post.comments.filter(x => x.replyTo === c.id)) comments += commentHtml(post, r, true);
+        if (replyingTo && replyingTo.post === post.id && replyingTo.thread === c.id)
+          comments += writeBox(post, `r:${c.id}`, `Reply to ${Lab.person(replyingTo.author).name}…`, true, replyingTo.comment);
+      }
+      comments += writeBox(post, `c:${post.id}`, 'Write a comment…', false, null);
+      const [emoji, caption] = (post.picture ?? '').split('|');
+      html += `<article class="card" data-post="${esc(post.id)}">
+        <div class="post-head">${avatar(post.author, 40)}<div><div class="name">${esc(p.name)}</div><div class="when">${esc(dayLabel(post.time))} at ${fmtTime(post.time)} · 🌐</div></div></div>
+        <div class="post-text">${esc(post.text)}</div>
+        ${post.picture ? `<div class="picture"><div class="emoji">${esc(emoji)}</div><div>${esc(caption ?? '')}</div></div>` : ''}
+        <div class="stats"><span>👍❤️ ${post.likes}</span><span>${post.comments.length} comments</span></div>
+        <div class="actions"><button class="p-like${post.liked ? ' on' : ''}" data-post="${esc(post.id)}">👍 Like</button><button class="p-comment" data-post="${esc(post.id)}">💬 Comment</button><button>↗ Share</button></div>
+        <div class="comments">${comments}</div>
+      </article>`;
+    }
+    document.getElementById('feed').innerHTML = html;
+    for (const t of document.querySelectorAll('#feed textarea')) grow(t);
+    window.scrollTo(0, scrollY);
+    if (active) {
+      const box = document.querySelector(`#feed textarea[data-key="${CSS.escape(active)}"]`);
+      if (box) { box.focus(); box.setSelectionRange(caret, caret); }
+    }
+  }
+
+  function grow(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 160) + 'px'; }
+
+  document.getElementById('feed').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.classList.contains('c-like')) Lab.like(b.dataset.post, b.dataset.comment);
+    else if (b.classList.contains('p-like')) Lab.like(b.dataset.post, null);
+    else if (b.classList.contains('c-reply')) {
+      const c = POST_OF_ME(b.dataset.post).comments.find(x => x.id === b.dataset.comment);
+      replyingTo = { post: b.dataset.post, comment: c.id, thread: b.dataset.thread, author: c.author };
+      renderFeed(Lab.state);
+      document.querySelector(`#feed textarea[data-key="r:${CSS.escape(b.dataset.thread)}"]`)?.focus();
+    } else if (b.classList.contains('p-comment')) {
+      document.querySelector(`#feed textarea[data-key="c:${CSS.escape(b.dataset.post)}"]`)?.focus();
+    }
+  });
+  document.getElementById('feed').addEventListener('input', e => {
+    if (e.target.matches('textarea')) { drafts[e.target.dataset.key] = e.target.value; grow(e.target); }
+  });
+  document.getElementById('feed').addEventListener('keydown', async e => {
+    const t = e.target;
+    if (!t.matches('textarea') || e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+    e.preventDefault();
+    const text = t.value;
+    if (!text.trim()) return;
+    const r = await Lab.comment(t.dataset.post, t.dataset.replyTo || null, text);
+    if (r.ok) {
+      drafts[t.dataset.key] = '';
+      t.value = '';
+      if (t.dataset.key.startsWith('r:')) replyingTo = null;
+      t.blur();
+    }
+  });
+
+  // ---- notifications
+
+  function notifications(state) {
+    const items = [];
+    for (const post of state.posts.filter(p => p.author === state.me))
+      for (const c of post.comments.filter(c => c.author !== state.me))
+        items.push({ c, post, text: `<b>${esc(Lab.person(c.author).name)}</b> ${c.replyTo ? 'replied to a comment on' : 'commented on'} your post: “${esc(c.text)}”` });
+    for (const chat of state.chats.filter(c => c.unread)) {
+      const m = chat.messages[chat.messages.length - 1];
+      items.push({ chat, c: { time: m.time, unseen: true, author: m.from }, text: `<b>${esc(Lab.person(m.from).name)}</b> sent you a message: “${esc(m.text)}”` });
+    }
+    return items.sort((a, b) => a.c.time < b.c.time ? 1 : -1);
+  }
+
+  function renderNotifs(state) {
+    const items = notifications(state);
+    const unseen = items.filter(i => i.c.unseen).length;
+    const count = document.getElementById('notif-count');
+    count.textContent = unseen;
+    count.classList.toggle('hidden', !unseen);
+    const msgs = state.chats.filter(c => c.unread).length;
+    const mc = document.getElementById('msg-count');
+    mc.textContent = msgs;
+    mc.classList.toggle('hidden', !msgs);
+    document.title = (unseen + msgs) ? `(${unseen + msgs}) Friendspace` : 'Friendspace';
+    const box = document.getElementById('notifs');
+    box.innerHTML = '<h3>Notifications</h3>' + items.map((i, n) => `<div class="notif" data-n="${n}">${avatar(i.c.author, 44)}<div><div class="t">${i.text}</div><div class="w">${ago(i.c.time)}${i.c.unseen ? ' · new' : ''}</div></div></div>`).join('');
+    box.onclick = e => {
+      const n = e.target.closest('.notif');
+      if (!n) return;
+      const item = items[+n.dataset.n];
+      closeNotifs();
+      if (item.chat) { location.hash = 'messages/' + item.chat.id; }
+      else {
+        location.hash = 'feed';
+        setTimeout(() => document.querySelector(`[data-comment="${CSS.escape(item.c.id)}"]`)?.scrollIntoView({ block: 'center' }), 50);
+      }
+    };
+  }
+
+  function closeNotifs() { notifsOpen = false; document.getElementById('notifs').classList.add('hidden'); }
+  document.getElementById('btn-notifs').addEventListener('click', e => {
+    e.stopPropagation();
+    notifsOpen = !notifsOpen;
+    document.getElementById('notifs').classList.toggle('hidden', !notifsOpen);
+    if (notifsOpen) Lab.seen();
+  });
+  document.addEventListener('click', e => { if (notifsOpen && !e.target.closest('#notifs')) closeNotifs(); });
+  document.getElementById('btn-messages').addEventListener('click', () => { location.hash = 'messages' + (currentChat ? '/' + currentChat : ''); });
+
+  // ---- messages
+
+  function renderMessages(state) {
+    const chats = [...state.chats].sort((a, b) => (a.messages.at(-1)?.time ?? '') < (b.messages.at(-1)?.time ?? '') ? 1 : -1);
+    document.getElementById('m-rows').innerHTML = chats.map(c => {
+      const m = c.messages.at(-1);
+      const prefix = m && m.from === state.me ? 'You: ' : '';
+      return `<div class="m-row${c.id === currentChat ? ' on' : ''}${c.unread ? ' unread' : ''}" data-id="${esc(c.id)}">${avatar(c.members[0], 48)}
+        <div class="info"><div class="n">${esc(c.title)}</div><div class="p">${c.typing.length ? 'typing…' : esc(prefix + (m?.text ?? ''))} · ${m ? listTime(m.time) : ''}</div></div>${c.unread ? '<span class="u"></span>' : ''}</div>`;
+    }).join('');
+    const chat = Lab.chat(currentChat);
+    document.getElementById('m-head').innerHTML = chat ? `${avatar(chat.members[0], 40)}<div><div>${esc(chat.title)}</div><div style="font-size:12.5px;color:#65676b;font-weight:400">${chat.typing.length ? 'typing…' : esc(Lab.person(chat.members[0]).status)}</div></div>` : '';
+    pane.render(state);
+    if (chat && chat.unread && !document.getElementById('messages-view').classList.contains('hidden')) Lab.open(currentChat);
+  }
+  document.getElementById('m-rows').addEventListener('click', e => {
+    const row = e.target.closest('.m-row');
+    if (row) openChat(row.dataset.id);
+  });
+
+  // ---- contacts and the header
+
+  function renderSide(state) {
+    document.getElementById('me').innerHTML = `${avatar(state.me, 30)}<span>Alex</span>`;
+    document.getElementById('left-me').innerHTML = `${avatar(state.me, 36)}<span>Alex Morgan</span>`;
+    const ids = Object.keys(state.people).filter(id => id !== state.me && id !== 'runclub');
+    document.getElementById('contacts').innerHTML = ids.map(id => {
+      const p = state.people[id];
+      return `<div class="contact">${avatar(id, 36)}${p.status === 'online' ? '<span class="dot"></span>' : ''}<span>${esc(p.name)}</span></div>`;
+    }).join('');
+  }
+
+  Lab.onState(state => {
+    renderSide(state);
+    renderNotifs(state);
+    if (!document.getElementById('feed-view').classList.contains('hidden')) renderFeed(state);
+    renderMessages(state);
+  });
+  window.addEventListener('hashchange', () => { route(); if (Lab.state && location.hash.slice(1).split('/')[0] !== 'messages') renderFeed(Lab.state, true); });
+  route();
+</script>
+</body>
+</html>
