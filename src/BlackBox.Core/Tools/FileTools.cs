@@ -185,7 +185,9 @@ public sealed class EditFileTool : Tool
         "Also changes Word (.docx) and PowerPoint (.pptx) files in place, keeping their formatting: old_text as read_file shows it, " +
         "new_text may use **bold** and *italic*, and a line break in it starts a new paragraph (\"# \" at its start makes a heading). " +
         "In Excel (.xlsx) give cells as read_file shows them: old_text the cells to change (\"B7 =SUM(B2:B6)\") or empty, new_text the cells to set " +
-        "(\"B7 =SUM(B2:B7)\", \"A8 Total\", \"Budget!C9 12.5\"); without cell addresses, text is replaced in the cells.";
+        "(\"B7 =SUM(B2:B7)\", \"A8 Total\", \"Budget!C9 12.5\"); without cell addresses, text is replaced in the cells. " +
+        "To add a row between others (above a total), start new_text with a line \"insert row 7\" (old_text empty): the rows below move down " +
+        "with every formula pointing at them, and the new row is formatted like the one above; \"delete rows 3-4\" takes rows out.";
     public override ToolRisk Risk => ToolRisk.Risky;
     public override JsonObject Parameters => Schema(
         ("path", Str("File path"), true),

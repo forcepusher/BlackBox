@@ -11,7 +11,10 @@ namespace BlackBox.Core.Documents;
 /// says, so nothing is overwritten from a stale read) or is empty; cells in it but not in new_text
 /// are emptied. Without cell addresses, old_text is text to find in the cells and replace. Values
 /// are typed as in Excel: formulas, numbers, percentages, money and dates keep their meaning, and a
-/// cell's own formatting stays. Excel works the formulas out again when it opens the file.
+/// cell's own formatting stays. Lines "insert row 7" and "delete rows 3-4" in new_text change the
+/// rows first, as Excel does; asked to add a budget line above its total without them, qwen3.8
+/// wrote the new line over the total and the total below it, the new line in the total's bold.
+/// Excel works the formulas out again when it opens the file.
 /// </summary>
 internal static partial class SheetEdit
 {
@@ -21,24 +24,39 @@ internal static partial class SheetEdit
 
     private sealed record CellLine(string? Sheet, string Reference, string? Value);
 
+    /// <summary>Rows inserted (made like the row above them, as Excel's Insert does) or deleted, before cells are set.</summary>
+    private sealed record RowChange(string? Sheet, bool Insert, int From, int Count);
+
     public static string Edit(PartSet parts, string oldText, string newText, bool all)
     {
         var sheets = Sheets(parts);
-        var oldCells = CellLines(oldText);
-        var newCells = CellLines(newText);
-        var cellMode = newCells is not null && (oldText.Trim().Length == 0 || oldCells is not null)
-            && (newCells.Concat(oldCells ?? []).Any(c => c.Value is not null));
-        return cellMode ? SetCells(parts, sheets, oldCells ?? [], newCells!) : ReplaceText(parts, sheets, oldText, newText, all);
+        var old = Lines(oldText);
+        var now = Lines(newText);
+        if (old?.Rows.Count > 0)
+            throw new InvalidOperationException("Rows are inserted or deleted with a line in new_text (\"insert row 7\", \"delete rows 3-4\"), not in old_text.");
+        var cellMode = now is not null && (oldText.Trim().Length == 0 || old is not null)
+            && (now.Value.Rows.Count > 0 || now.Value.Cells.Concat(old?.Cells ?? []).Any(c => c.Value is not null));
+        return cellMode ? SetCells(parts, sheets, old?.Cells ?? [], now!.Value.Cells, now.Value.Rows) : ReplaceText(parts, sheets, oldText, newText, all);
     }
 
     // ---- cells -----------------------------------------------------------------------------------------
 
-    private static string SetCells(PartSet parts, List<(string Name, string Part)> sheets, List<CellLine> oldCells, List<CellLine> newCells)
+    private static string SetCells(PartSet parts, List<(string Name, string Part)> sheets, List<CellLine> oldCells, List<CellLine> newCells, List<RowChange> rows)
     {
         (string Name, string Part) SheetOf(string? name) =>
             name is null ? sheets[0]
             : sheets.FirstOrDefault(s => s.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is { Part: not null } found ? found
             : throw new InvalidOperationException($"There is no sheet \"{name}\"; the sheets are {string.Join(", ", sheets.Select(s => $"\"{s.Name}\""))}.");
+
+        if (rows.Count > 0 && oldCells.Count > 0)
+            throw new InvalidOperationException("When inserting or deleting rows, leave old_text empty and give the cells to set, at their places after the change, in new_text.");
+        var done = new List<string>();
+        foreach (var change in rows)
+        {
+            var sheet = SheetOf(change.Sheet);
+            ChangeRows(parts, sheets, sheet, change.Insert, change.From, change.Count);
+            done.Add($"{(change.Insert ? "inserted" : "deleted")} {(change.Count == 1 ? $"row {change.From}" : $"rows {change.From}-{change.From + change.Count - 1}")} on sheet \"{sheet.Name}\"");
+        }
 
         var styles = parts.Exists("xl/styles.xml") ? parts.Get("xl/styles.xml") : null;
         var shared = parts.Exists("xl/sharedStrings.xml") ? parts.Get("xl/sharedStrings.xml").Root!.Elements(S + "si").Select(si => string.Concat(si.Descendants(S + "t").Select(t => t.Value))).ToList() : [];
@@ -104,24 +122,38 @@ internal static partial class SheetEdit
         }
         if (formats.Count > 0)
             parts.Changed("xl/styles.xml");
-        if (formulas)
+        if (formulas || rows.Count > 0)
             Recalculate(parts);
-        var names = changes.GroupBy(c => c.Sheet.Name).Select(g => $"{string.Join(", ", g.Select(c => c.Cell))} on sheet \"{g.Key}\"");
-        return "Set " + string.Join("; ", names) + (formulas ? ". Excel works the formulas out when it opens the file." : ".");
+        if (changes.Count > 0)
+            done.Add("set " + string.Join("; ", changes.GroupBy(c => c.Sheet.Name).Select(g => $"{string.Join(", ", g.Select(c => c.Cell))} on sheet \"{g.Key}\"")));
+        var said = string.Join(", then ", done);
+        return char.ToUpperInvariant(said[0]) + said[1..] + (formulas || rows.Count > 0 ? ". Excel works the formulas out when it opens the file." : ".");
     }
 
     /// <summary>
-    /// Cell lines as read_file shows them, or null when the text isn't made of them. A line
-    /// # Sheet "Name" sets the sheet of the cells after it.
+    /// Cell lines as read_file shows them and row insertions and deletions ("insert row 7",
+    /// "delete rows 3-4"), or null when the text isn't made of them. A line # Sheet "Name" sets the
+    /// sheet of what follows it.
     /// </summary>
-    private static List<CellLine>? CellLines(string text)
+    private static (List<CellLine> Cells, List<RowChange> Rows)? Lines(string text)
     {
         var cells = new List<CellLine>();
+        var rows = new List<RowChange>();
         string? sheet = null;
         foreach (var raw in text.Replace("\r\n", "\n").Split('\n'))
         {
             var line = raw.Trim();
             if (line.Length == 0) continue;
+            if (RowLine().Match(line) is { Success: true } row)
+            {
+                var from = int.Parse(row.Groups["from"].Value, CultureInfo.InvariantCulture);
+                var to = row.Groups["to"].Success ? int.Parse(row.Groups["to"].Value, CultureInfo.InvariantCulture) : from;
+                if (from < 1 || to < from)
+                    return null;
+                var on = row.Groups["sheet"].Success ? row.Groups["sheet"].Value.Trim().Trim('"', '\'') : sheet;
+                rows.Add(new RowChange(on, row.Groups["verb"].Value.Equals("insert", StringComparison.OrdinalIgnoreCase), from, to - from + 1));
+                continue;
+            }
             if (SheetHeader().Match(line) is { Success: true } header)
             {
                 sheet = header.Groups[1].Value.Trim();
@@ -140,7 +172,7 @@ internal static partial class SheetEdit
                 cells.Add(new CellLine(on, m.Groups["ref"].Value, value));
             }
         }
-        return cells.Count > 0 ? cells : null;
+        return cells.Count > 0 || rows.Count > 0 ? (cells, rows) : null;
     }
 
     /// <summary>What read_file shows of a cell: =formula, or the value.</summary>
@@ -193,9 +225,14 @@ internal static partial class SheetEdit
         var before = rowElement.Elements(S + "c").LastOrDefault(c => Parse((string)c.Attribute("r")!).Column < column);
         if (before is null) rowElement.AddFirst(cell);
         else before.AddAfterSelf(cell);
-        // A new cell takes its row's formatting, as when typing into it.
+        // A new cell takes its row's formatting, as when typing into it; under a list, the
+        // formatting of the cell above, as Excel extends a list's formats to a row added below it.
         if ((string?)rowElement.Attribute("s") is { } rowStyle && (string?)rowElement.Attribute("customFormat") == "1")
             cell.SetAttributeValue("s", rowStyle);
+        else if (data.Elements(S + "row").FirstOrDefault(r => (int?)r.Attribute("r") == row - 1) is { } above
+                 && above.Elements(S + "c").FirstOrDefault(c => (string?)c.Attribute("r") is { } r && Parse(r).Column == column) is { } upper
+                 && (string?)upper.Attribute("s") is { } upperStyle)
+            cell.SetAttributeValue("s", upperStyle);
         return cell;
     }
 
@@ -229,6 +266,175 @@ internal static partial class SheetEdit
             g.Value = Shift(formula, row - masterRow, column - masterColumn);
             g.Attributes().Where(a => a.Name.LocalName is "t" or "ref" or "si").Remove();
         }
+    }
+
+    // ---- inserting and deleting rows -------------------------------------------------------------------
+
+    /// <summary>
+    /// Inserts <paramref name="count"/> rows before row <paramref name="from"/>, or deletes that many
+    /// from it, as Excel does: the rows below move, and every reference to them moves along (in
+    /// formulas on any sheet, defined names, charts, tables, merged cells, conditional formats). A
+    /// range that spans the place grows or shrinks; a reference to a deleted cell becomes #REF!. New
+    /// rows are formatted like the row above them.
+    /// </summary>
+    private static void ChangeRows(PartSet parts, List<(string Name, string Part)> sheets, (string Name, string Part) target, bool insert, int from, int count)
+    {
+        // Shared formulas are written out first: their cells follow the first one's formula by
+        // offset, which no longer holds when only some of them move.
+        foreach (var (_, part) in sheets)
+        {
+            var sheetData = parts.Get(part).Root!.Element(S + "sheetData");
+            if (sheetData is null) continue;
+            var groups = sheetData.Descendants(S + "f").Where(f => (string?)f.Attribute("t") == "shared" && f.Value.Length > 0)
+                .Select(f => (string?)f.Parent!.Attribute("r")).OfType<string>().ToList();
+            foreach (var reference in groups)
+                Unshare(sheetData, reference);
+            if (groups.Count > 0) parts.Changed(part);
+        }
+
+        var xml = parts.Get(target.Part);
+        var data = xml.Root!.Element(S + "sheetData") ?? throw new InvalidOperationException($"Sheet \"{target.Name}\" has no cells part.");
+        var last = from + count - 1;
+        if (insert)
+        {
+            foreach (var row in data.Elements(S + "row").Where(r => (int?)r.Attribute("r") >= from).Reverse().ToList())
+                MoveRow(row, count);
+            var above = data.Elements(S + "row").LastOrDefault(r => (int?)r.Attribute("r") < from);
+            var place = above;
+            for (var i = 0; i < count; i++)
+            {
+                var row = new XElement(S + "row", new XAttribute("r", from + i));
+                if (above is not null)
+                {
+                    foreach (var name in new[] { "s", "customFormat", "ht", "customHeight" })
+                        if (above.Attribute(name) is { } a) row.SetAttributeValue(name, a.Value);
+                    foreach (var c in above.Elements(S + "c").Where(c => c.Attribute("s") is not null))
+                        row.Add(new XElement(S + "c", new XAttribute("r", Regex.Replace((string)c.Attribute("r")!, @"\d+$", (from + i).ToString(CultureInfo.InvariantCulture))), new XAttribute("s", (string)c.Attribute("s")!)));
+                }
+                if (place is null) data.AddFirst(row);
+                else place.AddAfterSelf(row);
+                place = row;
+            }
+        }
+        else
+        {
+            data.Elements(S + "row").Where(r => (int?)r.Attribute("r") is { } n && n >= from && n <= last).Remove();
+            foreach (var row in data.Elements(S + "row").Where(r => (int?)r.Attribute("r") > last).ToList())
+                MoveRow(row, -count);
+        }
+
+        string Move(string formula, bool sameSheet) => MoveReferences(formula, sameSheet, target.Name, insert, from, count);
+
+        // Formulas on every sheet: those on this one without a sheet name, and any naming it.
+        foreach (var (name, part) in sheets)
+        {
+            var sheet = parts.Get(part);
+            var same = part == target.Part;
+            var changed = false;
+            foreach (var f in sheet.Descendants(S + "f").Where(f => f.Value.Length > 0))
+            {
+                var moved = Move(f.Value, same);
+                if (moved != f.Value) { f.Value = moved; changed = true; }
+                if (same && f.Attribute("ref") is { } fRef) fRef.Value = MoveRanges(fRef.Value, Move);
+            }
+            if (same)
+            {
+                // Merged cells, conditional formats, validations, links and the filter, all on this sheet.
+                foreach (var e in sheet.Root!.Descendants().Where(e => e.Name.LocalName is "mergeCell" or "hyperlink" or "autoFilter" or "conditionalFormatting" or "dataValidation" or "selection").ToList())
+                {
+                    var attribute = e.Attribute("ref") ?? e.Attribute("sqref");
+                    if (attribute is null) continue;
+                    var moved = MoveRanges(attribute.Value, Move);
+                    if (moved.Length == 0 && e.Name.LocalName is not "selection") e.Remove();
+                    else attribute.Value = moved.Length == 0 ? "A1" : moved;
+                }
+                foreach (var list in sheet.Root.Elements().Where(e => e.Name.LocalName == "mergeCells").ToList())
+                    if (!list.HasElements) list.Remove();
+                    else list.SetAttributeValue("count", list.Elements().Count());
+                changed = true;
+                Dimension(sheet);
+            }
+            if (changed) parts.Changed(part);
+        }
+
+        // Defined names, charts and tables say the sheet's name in their references.
+        var workbook = parts.Get("xl/workbook.xml");
+        foreach (var definedName in workbook.Root!.Descendants(S + "definedName"))
+            definedName.Value = Move(definedName.Value, false);
+        parts.Changed("xl/workbook.xml");
+        foreach (var chart in parts.Names.Where(n => n.StartsWith("xl/charts/chart", StringComparison.Ordinal) && n.EndsWith(".xml", StringComparison.Ordinal)).ToList())
+        {
+            var changed = false;
+            foreach (var f in parts.Get(chart).Descendants().Where(e => e.Name.LocalName == "f"))
+            {
+                var moved = Move(f.Value, false);
+                if (moved != f.Value) { f.Value = moved; changed = true; }
+            }
+            if (changed) parts.Changed(chart);
+        }
+        foreach (var table in Related(parts, target.Part, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table").ToList())
+        {
+            var root = parts.Get(table).Root!;
+            foreach (var e in root.DescendantsAndSelf().Where(e => e.Attribute("ref") is not null))
+                e.SetAttributeValue("ref", MoveRanges((string)e.Attribute("ref")!, Move));
+            parts.Changed(table);
+        }
+    }
+
+    private static void MoveRow(XElement row, int by)
+    {
+        var number = (int)row.Attribute("r")! + by;
+        row.SetAttributeValue("r", number);
+        foreach (var c in row.Elements(S + "c"))
+            if ((string?)c.Attribute("r") is { } reference)
+                c.SetAttributeValue("r", Regex.Replace(reference, @"\d+$", number.ToString(CultureInfo.InvariantCulture)));
+    }
+
+    /// <summary>A list of ranges ("A1:B2 D5") moved; those that no longer exist are left out.</summary>
+    private static string MoveRanges(string ranges, Func<string, bool, string> move) =>
+        string.Join(' ', ranges.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(r => move(r, true)).Where(r => !r.Contains("#REF!", StringComparison.Ordinal)));
+
+    /// <summary>
+    /// A formula with its references to <paramref name="sheet"/> moved for rows inserted at
+    /// <paramref name="from"/> or deleted from it. References without a sheet name are to the
+    /// formula's own sheet, which <paramref name="sameSheet"/> says it is.
+    /// </summary>
+    internal static string MoveReferences(string formula, bool sameSheet, string sheet, bool insert, int from, int count)
+    {
+        var last = from + count - 1;
+        var parts = formula.Split('"');
+        for (var i = 0; i < parts.Length; i += 2)
+            parts[i] = RangeReference().Replace(parts[i], m =>
+            {
+                var named = m.Groups["sheet"].Success ? m.Groups["sheet"].Value[..^1] : null;
+                var on = named is null ? null : named.StartsWith('\'') ? named[1..^1].Replace("''", "'") : named;
+                if (on is null ? !sameSheet : !on.Equals(sheet, StringComparison.OrdinalIgnoreCase))
+                    return m.Value;
+                var r1 = int.Parse(m.Groups["r1"].Value, CultureInfo.InvariantCulture);
+                int? r2 = m.Groups["r2"].Success ? int.Parse(m.Groups["r2"].Value, CultureInfo.InvariantCulture) : null;
+                if (insert)
+                {
+                    if (r1 >= from) r1 += count;
+                    if (r2 >= from) r2 += count;
+                }
+                else if (r2 is null)
+                {
+                    if (r1 > last) r1 -= count;
+                    else if (r1 >= from) return (named is null ? "" : named + "!") + "#REF!";
+                }
+                else
+                {
+                    // A range loses the deleted rows; one made only of them is gone.
+                    int a = r1, b = r2.Value;
+                    if (a > last) a -= count; else if (a >= from) a = from;
+                    if (b > last) b -= count; else if (b >= from) b = from - 1;
+                    if (b < a) return (named is null ? "" : named + "!") + "#REF!";
+                    (r1, r2) = (a, b);
+                }
+                var text = m.Groups["sheet"].Value + m.Groups["c1"].Value + m.Groups["d1"].Value + r1;
+                return r2 is null ? text : text + ":" + m.Groups["c2"].Value + m.Groups["d2"].Value + r2;
+            });
+        return string.Join('"', parts);
     }
 
     /// <summary>A formula as it reads moved by rows and columns: relative references move, $ ones stay.</summary>
@@ -450,4 +656,13 @@ internal static partial class SheetEdit
 
     [GeneratedRegex(@"(?<![A-Za-z0-9_.])(\$?)([A-Z]{1,3})(\$?)(\d{1,7})(?![A-Za-z0-9_(])")]
     private static partial Regex FormulaReference();
+
+    // A cell or range, with the sheet it is on if named: B7, $B$2:$B$6, Budget!A1, 'My sheet'!C2:C9.
+    // Not the 10 of LOG10( nor a name such as Total2026.
+    [GeneratedRegex(@"(?<![A-Za-z0-9_.$'])(?<sheet>(?:'(?:[^']|'')+'|[A-Za-z_\p{L}][\w.\p{L}]*)!)?(?<c1>\$?[A-Z]{1,3})(?<d1>\$?)(?<r1>\d{1,7})(?::(?<c2>\$?[A-Z]{1,3})(?<d2>\$?)(?<r2>\d{1,7}))?(?![A-Za-z0-9_(!])")]
+    private static partial Regex RangeReference();
+
+    // "insert row 7", "Insert rows 3-4", "delete row 5 on Budget", "delete rows 2 to 3".
+    [GeneratedRegex(@"^(?<verb>insert|delete)\s+rows?\s+(?<from>\d{1,7})(?:\s*(?:-|–|to|through|:)\s*(?<to>\d{1,7}))?(?:\s+(?:on|in)\s+(?:sheet\s+)?(?<sheet>.+))?\.?$", RegexOptions.IgnoreCase)]
+    private static partial Regex RowLine();
 }

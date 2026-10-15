@@ -56,7 +56,12 @@ formatting. A line break in the new text starts a paragraph like the one it is i
 start makes a heading, and `**bold**` applies. In a workbook it sets cells written the way
 `read_file` shows them (`B7 =SUM(B2:B7)`, `Budget!A8 Total`), after checking that the cells being
 replaced still hold what the model read, and keeps each cell's formatting; without cell addresses
-it replaces text in the cells. A PDF can't be changed in place: the model writes a new one. Before,
+it replaces text in the cells. A line `insert row 7` or `delete rows 3-4` changes the rows first, as
+Excel does: the rows below move, references to them in formulas, defined names, charts, tables and
+merged cells move along, a range spanning the place grows or shrinks, and a new row is formatted
+like the one above it. (Asked to add a budget line above the total without it, qwen3.8 wrote the
+line over the total and the total under it, the line in the total's bold.) A PDF can't be changed
+in place: the model writes a new one. Before,
 a budget workbook took qwen3.8 24 minutes through Excel's COM interface from PowerShell, and on a PC
 without Office it couldn't be done at all.
 

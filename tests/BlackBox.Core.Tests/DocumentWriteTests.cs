@@ -367,6 +367,51 @@ public class DocumentWriteTests : IDisposable
     }
 
     [Fact]
+    public async Task Rows_are_inserted_above_a_total_and_deleted_with_formulas_following()
+    {
+        await Write("budget.xlsx", "# Budget\n\n| Item | Cost |\n|---|---|\n| Rent | $1,200 |\n| Food | $850 |\n| **Total** | =SUM(B2:B3) |");
+        var path = Path.Combine(_dir, "budget.xlsx");
+
+        var result = await Edit("budget.xlsx", "", "insert row 4\nA4 Internet | B4 40\nB5 =SUM(B2:B4)");
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains(": Inserted row 4 on sheet \"Budget\", then set A4, B4, B5", result.Text);
+        var text = await Read("budget.xlsx");
+        Assert.Contains("A4 Internet | B4 40", text);
+        Assert.Contains("A5 Total | B5 =SUM(B2:B4)", text);
+
+        // The new row looks like the one above it, the total row stays bold.
+        XNamespace s = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        string? Style(string cell)
+        {
+            using var zip = ZipFile.OpenRead(path);
+            return (string?)XDocument.Load(zip.GetEntry("xl/worksheets/sheet1.xml")!.Open()).Descendants(s + "c").Single(c => (string?)c.Attribute("r") == cell).Attribute("s");
+        }
+        Assert.Equal(Style("B3"), Style("B4"));
+        Assert.Equal(Style("A3"), Style("A4"));
+        Assert.NotEqual(Style("A4"), Style("A5"));
+
+        // Deleting Food: the total's range loses that row and the total moves up.
+        Assert.False((await Edit("budget.xlsx", "", "delete row 3")).IsError);
+        text = await Read("budget.xlsx");
+        Assert.Contains("A3 Internet | B3 40", text);
+        Assert.Contains("A4 Total | B4 =SUM(B2:B3)", text);
+    }
+
+    [Theory]
+    [InlineData("SUM(B2:B6)", true, 7, 1, "SUM(B2:B6)")]          // ends above the new row: Excel leaves it
+    [InlineData("SUM(B2:B7)+B7*2", true, 7, 1, "SUM(B2:B8)+B8*2")] // spans it: grows
+    [InlineData("Budget!$B$2:$B$7", false, 7, 2, "Budget!$B$2:$B$9")]
+    [InlineData("'Other sheet'!B9+B9", true, 7, 1, "'Other sheet'!B9+B10")]
+    [InlineData("SUM(B2:B6)", false, 3, 2, "SUM(B2:B6)")]           // another sheet's own cells
+    [InlineData("SUM(B2:B6)+B5", true, -3, 2, "SUM(B2:B4)+B3")]      // rows 3-4 deleted
+    [InlineData("B3+LOG10(B4)", true, -3, 2, "#REF!+LOG10(#REF!)")]
+    public void References_move_with_inserted_and_deleted_rows(string formula, bool sameSheet, int at, int count, string expected)
+    {
+        var insert = at > 0;
+        Assert.Equal(expected, SheetEdit.MoveReferences(formula, sameSheet, "Budget", insert, Math.Abs(at), count));
+    }
+
+    [Fact]
     public void A_shared_formula_reads_right_from_every_cell_it_moves_to()
     {
         Assert.Equal("SUM(C2:C6)*$A$1+D7", SheetEdit.Shift("SUM(B2:B6)*$A$1+C7", 0, 1));
