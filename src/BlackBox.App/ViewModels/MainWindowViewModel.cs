@@ -47,7 +47,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _platform = platform;
         _chats = new ChatStore(paths.ChatsDir);
         _ssh = new Core.Ssh.SshHosts(paths.KnownHostsFile);
-        _tick = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => _current?.Tick());
+        _tick = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) =>
+        {
+            _current?.Tick();
+            // The pause ends a while after the last key press, with no change to the text.
+            OnPropertyChanged(nameof(TypingPause));
+        });
         // The saved model is in the list before the view binds to it, so the dropdown starts
         // with it selected; a selection the ComboBox once lost is not restored by rebinding.
         if (!string.IsNullOrEmpty(settings.Server.Model))
@@ -62,7 +67,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand), nameof(StopCommand))]
-    [NotifyPropertyChangedFor(nameof(InputHint))]
+    [NotifyPropertyChangedFor(nameof(InputHint), nameof(TypingPause))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -485,7 +490,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>When the user last typed in the box; while they are typing, the agent's mouse and keyboard wait.</summary>
     private DateTime _lastTyped;
 
-    partial void OnInputChanged(string value) => _lastTyped = DateTime.UtcNow;
+    partial void OnInputChanged(string value)
+    {
+        _lastTyped = DateTime.UtcNow;
+        OnPropertyChanged(nameof(TypingPause));
+    }
+
+    /// <summary>The agent's clicks and key presses are on hold because the user is typing to it (see <see cref="UserComposing"/>).</summary>
+    public bool TypingPause => IsBusy && UserComposing();
 
     /// <summary>
     /// The user is writing a message in the box: text in it, typed in the last 15 seconds. The
