@@ -190,14 +190,16 @@
             <DataTemplate DataType="vm:ToolCallItem">
               <Border Classes="card" Margin="0,0,40,0">
                 <StackPanel Spacing="6">
+                  <!-- The summary takes the width that is left, so a long command wraps inside the card
+                       (in a horizontal StackPanel it had all the width it wanted and ran past the
+                       card's edge); past three lines it ends in "…", the whole of it in the tooltip. -->
                   <DockPanel>
-                    <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding StatusText}" VerticalAlignment="Center" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <Border Background="{StaticResource BbSurfaceRaised}" CornerRadius="4" Padding="6,1">
-                        <TextBlock Text="{Binding Name}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Foreground="{StaticResource BbAccent}" />
-                      </Border>
-                      <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding StatusText}" VerticalAlignment="Top" Margin="8,0,0,0" />
+                    <Border DockPanel.Dock="Left" Background="{StaticResource BbSurfaceRaised}" CornerRadius="4" Padding="6,1" VerticalAlignment="Top" Margin="0,0,8,0">
+                      <TextBlock Text="{Binding Name}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Foreground="{StaticResource BbAccent}" />
+                    </Border>
+                    <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" ToolTip.Tip="{Binding Summary}" />
                   </DockPanel>
 
                   <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsAwaitingApproval}">
