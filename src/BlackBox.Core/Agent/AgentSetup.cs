@@ -26,7 +26,7 @@ public static class AgentSetup
             CoordinateGrid = ModelCoordinates.GridFor(backend.Options.Model),
             SeesImages = backend.Vision,
             UserComposing = userComposing,
-            Browser = agent.WebSearch ? HeadlessBrowser.Find(paths.BrowserProfileDir) : null,
+            Browser = HeadlessBrowser.Find(paths.BrowserProfileDir),
             Ssh = ssh,
             Mcp = mcpSetup,
         };
@@ -45,9 +45,9 @@ public static class AgentSetup
 
         // The MCP tools are a snapshot: the tool list stays the same for the whole run, unless the
         // agent sets up a server itself (mcp_servers), whose tools then join it.
-        var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: [new McpServersTool(), .. mcp.Tools], includeWebTools: agent.WebSearch);
+        var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: [new McpServersTool(), .. mcp.Tools]);
         mcpSetup.Registry = registry;
-        var prompt = SystemPrompt.Build(platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, mcp.Connected, agent.WebSearch, paths.ToolsDir, paths.ScratchDir);
+        var prompt = SystemPrompt.Build(platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, mcp.Connected, webSearch: true, paths.ToolsDir, paths.ScratchDir);
         return new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, history, backend.ContextTokens);
     }
 }

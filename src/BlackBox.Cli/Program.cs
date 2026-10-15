@@ -58,8 +58,8 @@ using var stopKey = platform.StopKey.Watch(() =>
 });
 
 var agent = settings.Agent;
-platform.InputOverlay.Duration = TimeSpan.FromSeconds(agent.InputLogSeconds);
-platform.InputOverlay.Enabled = agent.ShowInputs;
+platform.InputOverlay.Duration = TimeSpan.FromSeconds(AgentSettings.InputLogSeconds);
+platform.InputOverlay.Enabled = true;
 if (urlOverride is not null) settings.Server.BaseUrl = urlOverride;
 if (modelOverride is not null) settings.Server.Model = modelOverride;
 using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a model can take a while

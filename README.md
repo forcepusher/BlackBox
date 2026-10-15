@@ -79,7 +79,7 @@ on. Picking another chat or New chat while a task runs stops the task, and keeps
 
 Until a chat is used, it shows what BlackBox can do (apps, files and commands, chatting for you,
 the web, servers, long jobs), that Esc stops it, and what it asks before it acts. It says so when
-the model in use can't see images or web access is off. Notices such as an MCP server that failed
+the model in use can't see images. Notices such as an MCP server that failed
 to start show above it and don't count as using the chat.
 
 ## Connecting to a model
@@ -178,7 +178,7 @@ method there, not a property).
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |
-| `screenshot` | Captures a screen at full resolution, or scaled to fit the chosen size, on the 32px vision grid; `screen=N` looks at another monitor |
+| `screenshot` | Captures a screen at full resolution, on the 32px vision grid; `screen=N` looks at another monitor |
 | `mouse_click` | Clicks a named target where a fresh look at the screen finds it (see below); `modifiers` holds keys through the click, as in Ctrl+click to add to a selection or Shift+click to select a range |
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
@@ -213,11 +213,10 @@ qwen3.8 dragged as many x as y steps and got 346×217 and 385×241 px ovals befo
 out. So the system prompt gives both step sizes, and `mouse_drag` says how far it went in screen
 pixels.
 
-Screenshots go out at full resolution by default. In LM Studio, turn off the model's "Image Input:
-Never exceed 2048 px" option, or it shrinks them back to about 2048×864 (qwen3.8 hit text links
-15/16 at full resolution, 8/16 at 1920×1080). For models that point in pixels, keep that option and the screenshot size in
-step, since a server that resizes the image moves every click. A `settings.json` saved before full
-resolution became the default keeps 1920×1080; choose "Full screen resolution" in Settings.
+Screenshots go out at the screen's full resolution, always. In LM Studio, turn off the model's
+"Image Input: Never exceed 2048 px" option, or it shrinks them back to about 2048×864 (qwen3.8 hit
+text links 15/16 at full resolution, 8/16 at 1920×1080); a server that resizes the image moves
+every click of a model that points in pixels.
 
 Every click is aimed by a fresh look. `mouse_click` names its `target` ("File menu", "Save button
 in the Export dialog"); BlackBox takes a new screenshot and asks the model, in a separate request
@@ -269,8 +268,7 @@ their text. A page comes in parts of 6,000 characters (about 1.5k tokens), so a 
 flood the context, and `find` returns just the matching lines with a little context and the heading
 they sit under. A page that turns away plain requests, or that its scripts build, is loaded in the
 headless browser instead. A PDF comes as its text, page by page, like `read_file` reads one. The last eight pages are kept in memory, so reading on
-doesn't download a page again. The browser's profile is `Data/browser`. Turn web access off in
-Settings → General.
+doesn't download a page again. The browser's profile is `Data/browser`.
 
 ### Servers over SSH
 `ssh` logs in to a server (`user@host`, `user@host:port` or a `Host` from `~/.ssh/config`) with
@@ -376,8 +374,8 @@ any key pressed while it is held. With no run going it is the usual Esc, and the
 presses can't trigger it. BlackBox
 stays on screen while it works but is hidden from the agent's screenshots, and steps behind other
 windows for the moment a click lands on it. Every click and key press the agent makes shows up in a
-log in the bottom-right corner that fades after 15 seconds (adjustable), with a ring where it clicked. The agent
-can't see it and it never takes focus (turn it off in Settings → Advanced).
+log in the bottom-right corner that fades after 15 seconds, with a ring where it clicked. The agent
+can't see it and it never takes focus.
 
 To change or add to a task while it runs, type in the box at the bottom and press Enter. The agent
 reads the message before its next step, and a `wait` it is in ends for it. While you type there,

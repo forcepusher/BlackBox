@@ -269,7 +269,6 @@
                 <StackPanel Spacing="3">
                   <TextBlock Classes="capability" Text="Look things up" />
                   <TextBlock Classes="muted" TextWrapping="Wrap" Text="I search the web and read pages when I'm not sure of something." />
-                  <TextBlock Classes="muted warning" TextWrapping="Wrap" IsVisible="{Binding !WebSearchOn}" Text="Turned off in Settings." />
                 </StackPanel>
               </DockPanel>
             </Border>

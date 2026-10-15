@@ -108,9 +108,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>Whether the model in use takes images; without them the agent has no screen tools, which the intro says.</summary>
     public bool CanSeeScreen => _settings.Server.SupportsVision;
 
-    /// <summary>Whether the agent gets web_search and fetch_page (Settings → General).</summary>
-    public bool WebSearchOn => _settings.Agent.WebSearch;
-
     /// <summary>The intro's line on what BlackBox asks before it acts, after "Ask me first" in Settings.</summary>
     public string ApprovalNote => _settings.Agent.Approval switch
     {
@@ -122,8 +119,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     public void AttachHostWindow(nint handle)
     {
         _platform.HostWindow.Attach(handle, _settings.Agent.HideFromScreenshots);
-        _platform.InputOverlay.Duration = TimeSpan.FromSeconds(_settings.Agent.InputLogSeconds);
-        _platform.InputOverlay.Enabled = _settings.Agent.ShowInputs;
+        _platform.InputOverlay.Duration = TimeSpan.FromSeconds(AgentSettings.InputLogSeconds);
+        _platform.InputOverlay.Enabled = true;
     }
 
     public void OnStartup()
@@ -791,12 +788,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         updated.Server = _settings.Server;
         updated.Window = _settings.Window;
         _settings = updated;
-        OnPropertyChanged(nameof(WebSearchOn));
         OnPropertyChanged(nameof(ApprovalNote));
         SaveSettings();
         _platform.HostWindow.SetHiddenFromCapture(updated.Agent.HideFromScreenshots);
-        _platform.InputOverlay.Duration = TimeSpan.FromSeconds(updated.Agent.InputLogSeconds);
-        _platform.InputOverlay.Enabled = updated.Agent.ShowInputs;
         if (mcpConfigText != McpConfig.Load(_paths.McpConfigFile))
         {
             try
