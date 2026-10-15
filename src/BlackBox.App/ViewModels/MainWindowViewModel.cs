@@ -51,7 +51,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         {
             _current?.Tick();
             // The pause ends a while after the last key press, with no change to the text.
-            OnPropertyChanged(nameof(TypingPause));
+            OnTypingPauseChanged();
         });
         // The saved model is in the list before the view binds to it, so the dropdown starts
         // with it selected; a selection the ComboBox once lost is not restored by rebinding.
@@ -67,7 +67,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand), nameof(StopCommand))]
-    [NotifyPropertyChangedFor(nameof(InputHint), nameof(TypingPause))]
+    [NotifyPropertyChangedFor(nameof(InputHint), nameof(TypingPause), nameof(TypingPauseText))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -490,18 +490,43 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     partial void OnInputChanged(string value)
     {
         _lastTyped = DateTime.UtcNow;
-        OnPropertyChanged(nameof(TypingPause));
+        OnTypingPauseChanged();
     }
+
+    private void OnTypingPauseChanged()
+    {
+        OnPropertyChanged(nameof(TypingPause));
+        OnPropertyChanged(nameof(TypingPauseText));
+    }
+
+    /// <summary>How long after the last key press in the box the agent carries on by itself.</summary>
+    private static readonly TimeSpan TypingQuiet = TimeSpan.FromSeconds(15);
 
     /// <summary>The agent's clicks and key presses are on hold because the user is typing to it (see <see cref="UserComposing"/>).</summary>
     public bool TypingPause => IsBusy && UserComposing();
+
+    /// <summary>
+    /// What the pause line says: that the agent waits, and the three ways it goes on again, with
+    /// the seconds left until it does by itself. Someone who started typing and changed their mind
+    /// had no way to tell how to let it carry on.
+    /// </summary>
+    public string TypingPauseText =>
+        $"Paused while you type: my clicks and key presses wait. I carry on when you send this (Enter), click Resume, or in {Math.Max(1, (int)Math.Ceiling((TypingQuiet - (DateTime.UtcNow - _lastTyped)).TotalSeconds))} s without a key press.";
+
+    /// <summary>Lets the agent carry on at once; what was typed stays in the box, to finish and send later.</summary>
+    [RelayCommand]
+    private void Resume()
+    {
+        _lastTyped = DateTime.MinValue;
+        OnTypingPauseChanged();
+    }
 
     /// <summary>
     /// The user is writing a message in the box: text in it, typed in the last 15 seconds. The
     /// agent's clicks and key presses wait meanwhile, so neither ends up in the other's window.
     /// Read from the agent's thread.
     /// </summary>
-    private bool UserComposing() => Input.Length > 0 && DateTime.UtcNow - _lastTyped < TimeSpan.FromSeconds(15);
+    private bool UserComposing() => Input.Length > 0 && DateTime.UtcNow - _lastTyped < TypingQuiet;
 
     /// <summary>The hint in the empty box: what Enter does now.</summary>
     public string InputHint => IsBusy

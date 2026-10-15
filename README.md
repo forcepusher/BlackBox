@@ -380,9 +380,10 @@ can't see it and it never takes focus.
 To change or add to a task while it runs, type in the box at the bottom and press Enter. The agent
 reads the message before its next step, and a `wait` it is in ends for it. While you type there,
 its clicks and key presses hold off (for up to a minute), so they don't land in your typing, and a
-line above the box says it is paused until you press Enter or stop typing. A message that arrives
-as the run finishes starts the next one, and what the agent hadn't read when you stopped it goes
-back in the box.
+line above the box says it is paused and how it goes on: send the message, click Resume (what you
+typed stays in the box), or stop typing, after which it carries on in 15 seconds, counted down on
+that line. A message that arrives as the run finishes starts the next one, and what the agent
+hadn't read when you stopped it goes back in the box.
 
 ## Build
 Requires the .NET 10 SDK.

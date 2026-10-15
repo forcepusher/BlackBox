@@ -315,9 +315,11 @@
              so the pause doesn't look like a hang and they know their typing is safe. -->
         <DockPanel IsVisible="{Binding TypingPause}" Margin="4,0">
           <PathIcon DockPanel.Dock="Left" Width="12" Height="12" Margin="0,0,8,0" Foreground="{StaticResource BbAccent}"
-                    Data="M3,2 H6 V14 H3 Z M10,2 H13 V14 H10 Z" />
-          <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BbAccent}"
-                     Text="Paused while you type: my clicks and key presses wait until you press Enter or stop typing." />
+                    VerticalAlignment="Center" Data="M3,2 H6 V14 H3 Z M10,2 H13 V14 H10 Z" />
+          <!-- Resume lets the agent go on at once and keeps the draft, for someone who started typing and changed their mind. -->
+          <Button DockPanel.Dock="Right" Classes="ghost" Content="Resume" Command="{Binding ResumeCommand}" Margin="8,0,0,0" Padding="10,2"
+                  VerticalAlignment="Center" ToolTip.Tip="Let me carry on now; what you typed stays in the box." />
+          <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BbAccent}" VerticalAlignment="Center" Text="{Binding TypingPauseText}" />
         </DockPanel>
         <!-- One line of text is exactly as tall as the Send button, and both sit on the same
              bottom edge, so they line up; longer text grows the box upwards with Send staying put. -->
