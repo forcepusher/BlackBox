@@ -97,10 +97,14 @@ it: a server reading a long prompt sends nothing for minutes.
 ### Unstable connections
 VPNs and proxies often cut a connection that has been silent for about a minute, which happens
 while a server processes a long prompt. BlackBox resends the identical request when a connection
-drops, a reply stream stops early, or the server (or a proxy in front of it) answers with a
-server error or "busy" (HTTP 5xx or 429); the server still has the already-processed prompt in
-its cache, so each retry continues where the last one stopped (up to 12 times per step). A tool
-that fails, however it fails, reports the error to the model and the run goes on.
+drops (also while an error answer comes in), a reply stream stops early, or the server (or a
+proxy in front of it) answers with a server error, "busy" or "gave up waiting for the request"
+(HTTP 5xx, 429 or 408); the server still has the already-processed prompt in its cache, so each
+retry continues where the last one stopped (up to 12 times per step). A VPN can also stall an
+upload without breaking it: a request carries every screenshot still in the context, several
+megabytes, and LM Studio waited five minutes for the rest of one before answering 408. So when
+nothing of a request gets through for 30 seconds, it is sent again. A tool that fails, however
+it fails, reports the error to the model and the run goes on.
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |

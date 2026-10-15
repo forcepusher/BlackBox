@@ -256,14 +256,50 @@ public class AgentSessionTests
         var server = new ScriptedServer(Sse.Text("Made it."));
         server.Failures.Enqueue((HttpStatusCode.BadGateway, "upstream connection reset"));
         server.Failures.Enqueue(((HttpStatusCode)429, """{"error":"busy"}"""));
+        // LM Studio's answer to a request whose upload stalled for five minutes.
+        server.Failures.Enqueue((HttpStatusCode.RequestTimeout, ""));
         var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
 
         await session.RunAsync("go", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal(3, server.Requests.Count);
-        Assert.Equal(server.Requests[0].ToJsonString(), server.Requests[2].ToJsonString());
+        Assert.Equal(4, server.Requests.Count);
+        Assert.Equal(server.Requests[0].ToJsonString(), server.Requests[3].ToJsonString());
         Assert.Contains(observer.Notices, n => n.Contains("answered 502"));
+        Assert.Contains(observer.Notices, n => n.Contains("answered 408"));
+    }
+
+    [Fact]
+    public async Task An_upload_that_stops_getting_through_is_cut_and_sent_again()
+    {
+        // Over a VPN a request with screenshots stopped getting through mid-upload, and nothing
+        // happened until LM Studio gave up on it five minutes later.
+        var server = new ScriptedServer(Sse.Text("Made it.")) { StalledUploads = 1 };
+        var client = new OpenAiChatClient(new HttpClient(server), "http://test", null) { UploadStallLimit = TimeSpan.FromMilliseconds(300) };
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(true), ctx, "sys");
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("go", observer, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Single(server.Requests); // the one that got through
+        Assert.Contains(observer.Notices, n => n.Contains("stalled"));
+    }
+
+    [Fact]
+    public async Task An_error_answer_cut_off_while_it_comes_in_is_sent_again_like_a_drop()
+    {
+        // Seen over a VPN: the run ended on "Error while copying content to a stream." instead of reconnecting.
+        var server = new ScriptedServer(Sse.Text("Made it.")) { BrokenErrors = 1 };
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("go", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count);
+        Assert.Equal(server.Requests[0].ToJsonString(), server.Requests[1].ToJsonString());
+        Assert.Contains(observer.Notices, n => n.Contains("Reconnecting"));
     }
 
     [Fact]
