@@ -92,7 +92,10 @@ chat and the server never has to read the whole conversation again because of it
 
 During a run the top bar shows how full the context is ("35k of 100k used"; its tooltip says where
 the reset comes), and a reply that hasn't started yet counts how long BlackBox has been waiting for
-it: a server reading a long prompt sends nothing for minutes.
+it: a server reading a long prompt sends nothing for minutes. Before that, while the request is
+still on its way, it shows how much of it has gone out ("Sending to the server… 1.2 of 3.4 MB"):
+each step sends every screenshot still in the context, and over a VPN at 15 to 30 KB/s that took
+minutes which looked like the model thinking.
 
 Replies are shown with their Markdown formatted: bold, headings, lists, code and tables (lined
 up in a monospace font), as models write them; the thinking above them stays as written.

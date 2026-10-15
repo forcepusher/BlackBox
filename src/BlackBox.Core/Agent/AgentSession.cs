@@ -19,6 +19,12 @@ public interface IAgentObserver
 
     /// <summary>Status the user should see that is not part of the conversation (e.g. reconnecting).</summary>
     void OnNotice(string text);
+
+    /// <summary>
+    /// How much of a step's request has gone out: it carries every screenshot in the context, and
+    /// over a slow VPN sending it took minutes that looked like the model thinking.
+    /// </summary>
+    void OnSending(long sent, long total) { }
     void OnToolFinished(ToolCall call, ToolResult result);
     void OnFinished(AgentStopReason reason, string? detail);
 }
@@ -321,7 +327,7 @@ public sealed partial class AgentSession(
         {
             try
             {
-                return await client.CompleteAsync(request, toolDefs, options, onDelta, ct).ConfigureAwait(false);
+                return await client.CompleteAsync(request, toolDefs, options, onDelta, ct, observer.OnSending).ConfigureAwait(false);
             }
             catch (ConnectionLostException ex) when (++drops <= MaxReconnects)
             {

@@ -285,6 +285,10 @@ public class AgentSessionTests
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
         Assert.Single(server.Requests); // the one that got through
         Assert.Contains(observer.Notices, n => n.Contains("stalled"));
+        // The window shows how much of the request is out; the retry starts again from nothing.
+        Assert.Equal(0, observer.Sending[0].Sent);
+        Assert.Equal(observer.Sending[^1].Total, observer.Sending[^1].Sent);
+        Assert.Contains(observer.Sending.Skip(1), s => s.Sent == 0);
     }
 
     [Fact]

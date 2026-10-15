@@ -124,14 +124,15 @@ public sealed partial class OpenAiChatClient
 
     /// <summary>
     /// Sends the conversation and streams the reply. Returns the fully assembled assistant message,
-    /// including any tool calls.
+    /// including any tool calls. <paramref name="onSending"/> hears how much of the request has gone out.
     /// </summary>
     public async Task<ChatMessage> CompleteAsync(
         IReadOnlyList<ChatMessage> messages,
         IReadOnlyList<ToolDefinition> tools,
         ChatRequestOptions options,
         Action<StreamDelta>? onDelta,
-        CancellationToken ct)
+        CancellationToken ct,
+        Action<long, long>? onSending = null)
     {
         var sendReasoning = options.SendReasoning && !_reasoningRejected;
         var sendExtras = !_extrasRejected;
@@ -141,7 +142,7 @@ public sealed partial class OpenAiChatClient
         using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/chat/completions")
         {
-            Content = new UploadContent(Encoding.UTF8.GetBytes(payload.ToJsonString()), stall, UploadStallLimit),
+            Content = new UploadContent(Encoding.UTF8.GetBytes(payload.ToJsonString()), stall, UploadStallLimit, onSending),
         };
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
         Authorize(req);
@@ -184,7 +185,7 @@ public sealed partial class OpenAiChatClient
                 {
                     _reasoningRejected |= sendReasoning;
                     _extrasRejected |= sendExtras;
-                    return await CompleteAsync(messages, tools, options, onDelta, ct).ConfigureAwait(false);
+                    return await CompleteAsync(messages, tools, options, onDelta, ct, onSending).ConfigureAwait(false);
                 }
                 // A proxy whose link hiccuped, a server that is restarting or busy, or one that gave
                 // up waiting for the rest of the request (408): worth sending again, like a
@@ -477,10 +478,11 @@ public sealed partial class OpenAiChatClient
         private readonly byte[] _body;
         private readonly CancellationTokenSource _stall;
         private readonly TimeSpan _limit;
+        private readonly Action<long, long>? _onSending;
 
-        public UploadContent(byte[] body, CancellationTokenSource stall, TimeSpan limit)
+        public UploadContent(byte[] body, CancellationTokenSource stall, TimeSpan limit, Action<long, long>? onSending)
         {
-            (_body, _stall, _limit) = (body, stall, limit);
+            (_body, _stall, _limit, _onSending) = (body, stall, limit, onSending);
             Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
         }
 
@@ -491,10 +493,12 @@ public sealed partial class OpenAiChatClient
         {
             for (var at = 0; at < _body.Length; at += Piece)
             {
+                _onSending?.Invoke(at, _body.Length);
                 Watch(_limit);
                 await stream.WriteAsync(_body.AsMemory(at, Math.Min(Piece, _body.Length - at)), ct).ConfigureAwait(false);
             }
             Watch(Timeout.InfiniteTimeSpan);
+            _onSending?.Invoke(_body.Length, _body.Length);
         }
 
         private void Watch(TimeSpan limit)

@@ -122,6 +122,10 @@ internal sealed class RecordingObserver : IAgentObserver
     public void OnNotice(string text) { Notices.Add(text); NoticeReceived?.Invoke(text); }
     public void OnToolFinished(ToolCall call, ToolResult result) => Results.Add(result);
 
+    /// <summary>What the request upload reported, in order: (sent, total).</summary>
+    public List<(long Sent, long Total)> Sending { get; } = [];
+    public void OnSending(long sent, long total) => Sending.Add((sent, total));
+
     public void OnFinished(AgentStopReason reason, string? detail)
     {
         StopReason = reason;
