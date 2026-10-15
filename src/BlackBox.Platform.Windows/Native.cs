@@ -271,7 +271,7 @@ internal static partial class Native
 
     public const int WH_KEYBOARD_LL = 13;
     public const uint WM_KEYDOWN = 0x0100, WM_KEYUP = 0x0101, WM_SYSKEYDOWN = 0x0104, WM_SYSKEYUP = 0x0105;
-    public const uint VK_LWIN = 0x5B, VK_RWIN = 0x5C;
+    public const uint VK_ESCAPE = 0x1B;
 
     public delegate nint LowLevelKeyboardProc(int nCode, nint wParam, nint lParam);
 

@@ -8,6 +8,38 @@
         Width="900" Height="760" MinWidth="660" MinHeight="480"
         WindowStartupLocation="CenterScreen">
 
+  <Window.Styles>
+    <!-- The intro in an unused chat: the cards on what BlackBox can do, and Esc drawn as a key. -->
+    <Style Selector="StackPanel.conversation.unused">
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="PathIcon.capability">
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Margin" Value="0,1,10,0" />
+      <Setter Property="Foreground" Value="{StaticResource BbAccent}" />
+    </Style>
+    <Style Selector="TextBlock.capability">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.muted.warning">
+      <Setter Property="Foreground" Value="{StaticResource BbAccent}" />
+    </Style>
+    <Style Selector="Border.key">
+      <Setter Property="Background" Value="{StaticResource BbSurfaceRaised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbMuted}" />
+      <Setter Property="BorderThickness" Value="1,1,1,2" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="7,1" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.key > TextBlock">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </Window.Styles>
+
   <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
 
     <!-- Header -->
@@ -121,19 +153,13 @@
       </Grid>
     </Border>
 
-    <!-- Conversation -->
-    <Panel Grid.Row="3">
-      <StackPanel IsVisible="{Binding HasNoMessages}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8" MaxWidth="460">
-        <Image Source="/Assets/blackbox.png" Width="48" Height="48" Opacity="0.8" RenderOptions.BitmapInterpolationMode="HighQuality" />
-        <TextBlock Text="What should I do on your computer?" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
-        <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
-                   Text="I can look at the screen, use the mouse and keyboard, run commands and work with files. To halt me at any time, press Stop or the Windows key." />
-      </StackPanel>
-
-      <!-- Spacing lives on the ItemsControl as a margin, not as ScrollViewer padding:
-           padding is not part of the scroll extent, so the last lines ended up clipped. -->
-      <ScrollViewer x:Name="ChatScroll" HorizontalScrollBarVisibility="Disabled">
-        <ItemsControl ItemsSource="{Binding Items}" MaxWidth="860" Margin="16,12,16,16">
+    <!-- Conversation. Until the chat is used, the intro sits under whatever notices came up (an MCP
+         server that failed to start), the two in the middle of the window, or read from the top
+         when they don't fit. Spacing lives on the content as a margin, not as ScrollViewer padding:
+         padding is not part of the scroll extent, so the last lines ended up clipped. -->
+    <ScrollViewer x:Name="ChatScroll" Grid.Row="3" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Classes="conversation" Classes.unused="{Binding ShowIntro}" MaxWidth="860" Margin="16,12,16,16" Spacing="10">
+        <ItemsControl ItemsSource="{Binding Items}">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
               <StackPanel Spacing="10" />
@@ -196,8 +222,91 @@
 
           </ItemsControl.DataTemplates>
         </ItemsControl>
-      </ScrollViewer>
-    </Panel>
+
+        <!-- What BlackBox can do and how to stop it, until the chat is used -->
+        <StackPanel IsVisible="{Binding ShowIntro}" MaxWidth="640" Spacing="14">
+          <StackPanel Spacing="6">
+            <Image Source="/Assets/blackbox.png" Width="40" Height="40" Opacity="0.8" RenderOptions.BitmapInterpolationMode="HighQuality" />
+            <TextBlock Text="What should I do on your computer?" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460"
+                       Text="Describe a task in your own words, and I'll work on it until it's done." />
+          </StackPanel>
+
+          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
+            <Border Grid.Row="0" Grid.Column="0" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M13 1.07V9h7c0-4.08-3.05-7.44-7-7.93zM4 15c0 4.42 3.58 8 8 8s8-3.58 8-8v-4H4v4zm7-13.93C7.05 1.56 4 4.92 4 9h7V1.07z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Use any app" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I see the screen and use the mouse and keyboard, in any program." />
+                  <TextBlock Classes="muted warning" TextWrapping="Wrap" IsVisible="{Binding !CanSeeScreen}"
+                             Text="The model in use can't see images: pick one that can at the top." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="0" Grid.Column="1" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Files and commands" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I read, write and edit files anywhere on this PC and run PowerShell commands." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="1" Grid.Column="0" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Chat for you" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I answer people in your chat apps while you're away, and say I'm your assistant if asked." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="1" Grid.Column="1" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Look things up" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I search the web and read pages when I'm not sure of something." />
+                  <TextBlock Classes="muted warning" TextWrapping="Wrap" IsVisible="{Binding !WebSearchOn}" Text="Turned off in Settings." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="2" Grid.Column="0" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M20 13H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1v-6c0-.55-.45-1-1-1zM7 19c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM20 3H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zM7 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Work on servers" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I log in over SSH to set servers up or fix them, and copy files to and from them." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="2" Grid.Column="1" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Long jobs" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I keep going for hours when a job needs it, like making a game and play-testing it." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+          </Grid>
+
+          <Border Classes="card">
+            <StackPanel Spacing="6">
+              <DockPanel>
+                <Border Classes="key" Margin="0,0,8,0">
+                  <TextBlock Text="Esc" />
+                </Border>
+                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Text="stops me at any time, whatever window is in front. So does the Stop button." />
+              </DockPanel>
+              <TextBlock Classes="muted" TextWrapping="Wrap" Text="While I work I use your mouse and keyboard, so leave them to me until I'm done." />
+              <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding ApprovalNote}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
 
     <!-- Input -->
     <Border Grid.Row="4" Padding="16,8,16,14">

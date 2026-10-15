@@ -92,7 +92,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     public bool HasContextUsage => ContextUsage.Length > 0;
 
-    public bool HasNoMessages => Items.Count == 0;
+    /// <summary>
+    /// The intro on what BlackBox can do, shown until the chat is used: a message sent or a saved
+    /// chat opened. Notices don't count (an MCP server that failed to start): they show above it.
+    /// </summary>
+    [ObservableProperty]
+    private bool _showIntro = true;
+
+    /// <summary>Whether the model in use takes images; without them the agent has no screen tools, which the intro says.</summary>
+    public bool CanSeeScreen => _settings.Server.SupportsVision;
+
+    /// <summary>Whether the agent gets web_search and fetch_page (Settings → General).</summary>
+    public bool WebSearchOn => _settings.Agent.WebSearch;
+
+    /// <summary>The intro's line on what BlackBox asks before it acts, after "Ask me first" in Settings.</summary>
+    public string ApprovalNote => _settings.Agent.Approval switch
+    {
+        ApprovalMode.AskAll => "I ask for your OK before every click, key press, command and file change.",
+        ApprovalMode.AskRisky => "I ask for your OK before I run a command or change a file.",
+        _ => "I don't ask before I act. To approve each step first, change \"Ask me first\" in Settings.",
+    };
 
     public void AttachHostWindow(nint handle)
     {
@@ -103,7 +122,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     public void OnStartup()
     {
-        Items.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoMessages));
+        Items.CollectionChanged += (_, _) => ShowIntro = Items.All(i => i is NoticeItem);
         _stopKey = _platform.StopKey.Watch(OnStopKey);
         foreach (var header in _chats.List())
             PastChats.Add(NewRow(header));
@@ -385,6 +404,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             OnContextChanged();
         }
         server.SupportsVision = probe.Vision ?? true;
+        OnPropertyChanged(nameof(CanSeeScreen));
         var status = "Connected" + (probe.Vision == false ? " · no vision" : "");
         if (probe.AutoPicked && server.Model.Length > 0)
             SetStatus(ServerState.Connected, status,
@@ -518,7 +538,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     [RelayCommand(CanExecute = nameof(IsBusy))]
     private void Stop() => _runCts?.Cancel();
 
-    /// <summary>The Windows key, from the hook's thread: stops the run in progress, if any.</summary>
+    /// <summary>Esc, from the hook's thread: stops the run in progress, if any.</summary>
     private bool OnStopKey()
     {
         var cts = _runCts;
@@ -534,7 +554,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         var byKey = _stoppedByKey;
         _stoppedByKey = false;
-        return byKey ? "Stopped with the Windows key." : "Stopped.";
+        return byKey ? "Stopped with Esc." : "Stopped.";
     }
 
     [RelayCommand]
@@ -697,6 +717,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         // The server, key, model and context size live in the top bar, not in the dialog.
         updated.Server = _settings.Server;
         _settings = updated;
+        OnPropertyChanged(nameof(WebSearchOn));
+        OnPropertyChanged(nameof(ApprovalNote));
         SaveSettings();
         _platform.HostWindow.SetHiddenFromCapture(updated.Agent.HideFromScreenshots);
         _platform.InputOverlay.Duration = TimeSpan.FromSeconds(updated.Agent.InputLogSeconds);

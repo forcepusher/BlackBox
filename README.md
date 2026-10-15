@@ -26,6 +26,11 @@ read it and carry on where it stopped (the model gets the conversation back), or
 trash button. Screenshots are not kept in the saved file; the model takes a new one when it carries
 on. Picking another chat or New chat while a task runs stops the task, and keeps it as far as it got.
 
+Until a chat is used, it shows what BlackBox can do (apps, files and commands, chatting for you,
+the web, servers, long jobs), that Esc stops it, and what it asks before it acts. It says so when
+the model in use can't see images or web access is off. Notices such as an MCP server that failed
+to start show above it and don't count as using the chat.
+
 ## Connecting to a model
 Enter the server address in the bar at the top of the main window (LM Studio's default is
 `http://localhost:1234/v1`); the model dropdown fills in from the models the server reports. Any
@@ -276,10 +281,10 @@ server reported when it started, and a server that fails to start is reported in
 others keep working.
 
 Actions run without asking by default (approvals can be switched on in Settings → General).
-Pressing Stop, or the Windows key anywhere, halts the agent. The Windows key works whatever window
-has focus, and the press that stops a run does nothing else: the Start menu stays shut, and a
-shortcut like Win+E types no "e" into the agent's window. With no run going it is the usual
-Windows key, and the agent's own presses (win+r and the like) can't trigger it. BlackBox
+Pressing Stop, or Esc anywhere, halts the agent. Esc works whatever window has focus, and the
+press that stops a run goes no further: the window the agent was working in never sees it, or
+any key pressed while it is held. With no run going it is the usual Esc, and the agent's own Esc
+presses can't trigger it. BlackBox
 stays on screen while it works but is hidden from the agent's screenshots, and steps behind other
 windows for the moment a click lands on it. Every click and key press the agent makes shows up in a
 log in the bottom-right corner that fades after 15 seconds (adjustable), with a ring where it clicked. The agent

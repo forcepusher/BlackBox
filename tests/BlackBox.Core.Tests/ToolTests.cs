@@ -3,6 +3,9 @@ using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
 using Xunit;
+#if WINDOWS
+using Native = BlackBox.Platform.Windows.Native;
+#endif
 
 namespace BlackBox.Core.Tests;
 
@@ -506,79 +509,68 @@ public class ToolTests
     }
 
     [Fact]
-    public async Task Windows_key_stops_a_run_but_Break_and_the_agents_own_presses_do_not()
-    {
-#if !WINDOWS
-        Assert.Skip("Windows only");
-        await Task.CompletedTask;
-#else
-        var pressed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var platform = new BlackBox.Platform.Windows.WindowsPlatform();
-        using var watch = platform.StopKey.Watch(() => pressed.TrySetResult(true));
-
-        platform.Input.PressKeys(["win", "f24"]); // the agent's own press is tagged and ignored (F24 keeps the Start menu shut)
-        UserKeys((Pause, false), (Pause, true)); // Break, the stop key before, now goes through to the focused app
-        await Task.Delay(300, TestContext.Current.CancellationToken);
-        Assert.False(pressed.Task.IsCompleted);
-
-        UserKeys((LWin, false), (LWin, true));
-        Assert.Same(pressed.Task, await Task.WhenAny(pressed.Task, Task.Delay(3000, TestContext.Current.CancellationToken)));
-#endif
-    }
-
-    [Fact]
-    public async Task A_windows_key_press_that_stops_a_run_does_nothing_else()
+    public async Task Esc_stops_a_run_but_other_keys_and_the_agents_own_presses_do_not()
     {
 #if !WINDOWS
         Assert.Skip("Windows only");
         await Task.CompletedTask;
 #else
         var ct = TestContext.Current.CancellationToken;
+        using var past = new KeysPastTheStopKey();
+        var pressed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var platform = new BlackBox.Platform.Windows.WindowsPlatform();
+        using var watch = platform.StopKey.Watch(() => pressed.TrySetResult(true));
+
+        platform.Input.PressKeys(["esc"]); // the agent's own press is tagged and ignored
+        UserKeys((Pause, false), (Pause, true), (LWin, false), (LWin, true)); // Break and the Windows key, the stop keys before
+        await Task.Delay(300, ct);
+        Assert.False(pressed.Task.IsCompleted);
+        Assert.Equal("esc↓ esc↑ pause↓ pause↑ win↓ win↑", past.Take());
+
+        UserKeys((Esc, false), (Esc, true));
+        Assert.Same(pressed.Task, await Task.WhenAny(pressed.Task, Task.Delay(3000, ct)));
+        await Task.Delay(100, ct);
+        Assert.Equal("", past.Take());
+#endif
+    }
+
+    [Fact]
+    public async Task An_esc_press_that_stops_a_run_goes_no_further()
+    {
+#if !WINDOWS
+        Assert.Skip("Windows only");
+        await Task.CompletedTask;
+#else
+        var ct = TestContext.Current.CancellationToken;
+        using var past = new KeysPastTheStopKey();
         var running = 1;
         var platform = new BlackBox.Platform.Windows.WindowsPlatform();
         using var watch = platform.StopKey.Watch(() => Interlocked.Exchange(ref running, 0) == 1);
-        try
-        {
-            // win+f24 during a run stops it, and Windows sees neither key, held and repeating: no
-            // Start menu, no stray key in the agent's window. The agent's own keys still go through.
-            UserKeys((LWin, false));
-            await Task.Delay(50, ct);
-            Assert.Equal(0, Volatile.Read(ref running));
-            UserKeys((F24, false), (LWin, false), (F24, false));
-            await Task.Delay(50, ct);
-            Assert.False(IsDown(LWin) || IsDown(F24));
-            using (platform.Input.HoldKeys(["f23"]))
-            {
-                await Task.Delay(50, ct);
-                Assert.True(IsDown(F23));
-            }
-            UserKeys((F24, true), (LWin, true));
-            await Task.Delay(50, ct);
 
-            // With no run going it is the Windows key again: win+f24 reaches Windows.
-            UserKeys((LWin, false), (F24, false));
-            await Task.Delay(50, ct);
-            Assert.True(IsDown(LWin) && IsDown(F24));
-            UserKeys((F24, true), (LWin, true));
-            await Task.Delay(50, ct);
-            Assert.False(IsDown(LWin) || IsDown(F24));
+        // Esc during a run stops it, and none of it gets past: not its repeats or its key-up, nor a
+        // key pressed while it is held. The agent's own keys still do.
+        UserKeys((Esc, false));
+        await Task.Delay(100, ct);
+        Assert.Equal(0, Volatile.Read(ref running));
+        UserKeys((F24, false), (Esc, false), (F24, false));
+        platform.Input.PressKeys(["f23"]);
+        UserKeys((F24, true), (Esc, true));
+        await Task.Delay(100, ct);
+        Assert.Equal("f23↓ f23↑", past.Take());
 
-            // A stop press whose key-up the hook never sees (focus went to an elevated window, say)
-            // holds the keyboard for a moment only.
-            Interlocked.Exchange(ref running, 1);
-            UserKeys((LWin, false));
-            await Task.Delay(2700, ct);
-            UserKeys((F24, false));
-            await Task.Delay(50, ct);
-            Assert.True(IsDown(F24));
-            UserKeys((F24, true), (LWin, true));
-        }
-        finally
-        {
-            // Whatever failed, nothing is left held down.
-            foreach (var vk in new[] { LWin, F23, F24 }.Where(IsDown))
-                UserKeys((vk, true));
-        }
+        // With no run going it is the usual Esc.
+        UserKeys((Esc, false), (Esc, true));
+        await Task.Delay(100, ct);
+        Assert.Equal("esc↓ esc↑", past.Take());
+
+        // A stop press whose key-up the hook never sees (focus went to an elevated window, say)
+        // holds the keyboard for a moment only; its late key-up still goes no further.
+        Interlocked.Exchange(ref running, 1);
+        UserKeys((Esc, false));
+        await Task.Delay(2700, ct);
+        UserKeys((F24, false), (F24, true), (Esc, true));
+        await Task.Delay(100, ct);
+        Assert.Equal("f24↓ f24↑", past.Take());
 #endif
     }
 
@@ -606,19 +598,76 @@ public class ToolTests
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int vk);
 
-    private const int Pause = 0x13, LWin = 0x5B, F23 = 0x86, F24 = 0x87;
-
-    private static bool IsDown(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
+    private const int Esc = 0x1B, Pause = 0x13, LWin = 0x5B, F23 = 0x86, F24 = 0x87;
 
     /// <summary>Key events like the user's: injected without BlackBox's tag.</summary>
     private static void UserKeys(params (int Vk, bool Up)[] keys)
     {
-        var inputs = keys.Select(k => new BlackBox.Platform.Windows.Native.INPUT
+        var inputs = keys.Select(k => new Native.INPUT
         {
-            type = BlackBox.Platform.Windows.Native.INPUT_KEYBOARD,
-            u = new() { ki = new() { wVk = (ushort)k.Vk, dwFlags = k.Up ? BlackBox.Platform.Windows.Native.KEYEVENTF_KEYUP : 0 } },
+            type = Native.INPUT_KEYBOARD,
+            u = new() { ki = new() { wVk = (ushort)k.Vk, dwFlags = k.Up ? Native.KEYEVENTF_KEYUP : 0 } },
         }).ToArray();
-        BlackBox.Platform.Windows.Native.SendInput((uint)inputs.Length, inputs, System.Runtime.InteropServices.Marshal.SizeOf<BlackBox.Platform.Windows.Native.INPUT>());
+        Native.SendInput((uint)inputs.Length, inputs, System.Runtime.InteropServices.Marshal.SizeOf<Native.INPUT>());
+    }
+
+    /// <summary>
+    /// Records the test's keys that get past the stop key's hook, and keeps them from every window,
+    /// so the tests press nothing on this PC. Create it before the stop key: the newest hook is
+    /// called first, so this one comes after the stop key's.
+    /// </summary>
+    private sealed class KeysPastTheStopKey : IDisposable
+    {
+        private const uint LLKHF_INJECTED = 0x10;
+        private readonly Native.LowLevelKeyboardProc _proc; // kept alive for as long as the hook is installed
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _seen = new();
+        private uint _threadId;
+
+        public KeysPastTheStopKey()
+        {
+            _proc = Callback;
+            using var ready = new ManualResetEventSlim();
+            new Thread(() =>
+            {
+                _threadId = Native.GetCurrentThreadId();
+                var hook = Native.SetWindowsHookEx(Native.WH_KEYBOARD_LL, _proc, Native.GetModuleHandle(null), 0);
+                ready.Set();
+                while (Native.GetMessage(out _, 0, 0, 0) > 0) { }
+                Native.UnhookWindowsHookEx(hook);
+            }) { IsBackground = true }.Start();
+            ready.Wait(TimeSpan.FromSeconds(5));
+        }
+
+        private nint Callback(int code, nint wParam, nint lParam)
+        {
+            if (code >= 0)
+            {
+                var key = System.Runtime.InteropServices.Marshal.PtrToStructure<Native.KBDLLHOOKSTRUCT>(lParam);
+                // Only what the tests press: the keyboard itself stays usable.
+                if ((key.flags & LLKHF_INJECTED) != 0 && Name((int)key.vkCode) is { } name)
+                {
+                    _seen.Enqueue(name + ((uint)wParam is Native.WM_KEYUP or Native.WM_SYSKEYUP ? "↑" : "↓"));
+                    return 1;
+                }
+            }
+            return Native.CallNextHookEx(0, code, wParam, lParam);
+        }
+
+        private static string? Name(int vk) => vk switch
+        {
+            Esc => "esc", Pause => "pause", LWin => "win", F23 => "f23", F24 => "f24", _ => null,
+        };
+
+        /// <summary>What got past since the last call, like "esc↓ esc↑".</summary>
+        public string Take()
+        {
+            var seen = new List<string>();
+            while (_seen.TryDequeue(out var s))
+                seen.Add(s);
+            return string.Join(" ", seen);
+        }
+
+        public void Dispose() => Native.PostThreadMessage(_threadId, Native.WM_QUIT, 0, 0);
     }
 #endif
 

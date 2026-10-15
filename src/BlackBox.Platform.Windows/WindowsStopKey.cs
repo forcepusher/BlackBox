@@ -6,16 +6,16 @@ using static BlackBox.Platform.Windows.Native;
 namespace BlackBox.Platform.Windows;
 
 /// <summary>
-/// The Windows key (left or right) as a system-wide stop, through a low-level keyboard hook on
-/// its own message-loop thread. It sees the key whatever window has focus, which is the point:
-/// while the agent works, focus is wherever it clicked last.
+/// Esc as a system-wide stop, through a low-level keyboard hook on its own message-loop thread.
+/// It sees the key whatever window has focus, which is the point: while the agent works, focus
+/// is wherever it clicked last.
 /// </summary>
 /// <remarks>
 /// The agent's own key presses are tagged (<see cref="WindowsInputController.InputTag"/>) and
-/// ignored, so a model pressing win+r never stops itself. A press that stopped a run is
-/// swallowed whole: its key-down, the repeats while it is held, its key-up (which would open the
-/// Start menu), and the keys pressed while it is held, so win+e doesn't type an "e" into the
-/// window the agent was working in. Otherwise the key goes through as usual.
+/// ignored, so the many Esc presses a model makes never stop it. A press that stopped a run is
+/// swallowed whole, so the window the agent was working in never sees it: its key-down, the
+/// repeats while it is held and its key-up, and also the keys pressed while it is held (mashed in
+/// a hurry, they would land in that window). Otherwise Esc goes through as usual.
 /// </remarks>
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsStopKey : IStopKey
@@ -35,7 +35,7 @@ internal sealed class WindowsStopKey : IStopKey
         private readonly LowLevelKeyboardProc _proc; // kept alive for as long as the hook is installed
         // Used on the hook's thread only.
         private readonly Dictionary<uint, long> _swallowed = []; // keys swallowed until let go, and when each last went down
-        private uint _stopPress; // the Windows key that stopped a run, while it is held; 0 if none
+        private bool _stopHeld; // the Esc press that stopped a run is still held
         private nint _hook;
         private uint _threadId;
 
@@ -77,7 +77,7 @@ internal sealed class WindowsStopKey : IStopKey
         {
             if (message is WM_KEYUP or WM_SYSKEYUP)
             {
-                if (vk == _stopPress) _stopPress = 0;
+                if (vk == VK_ESCAPE) _stopHeld = false;
                 // Never the key-up of a key Windows has down (its key-down got past the hook after
                 // all): that would leave it stuck down.
                 return _swallowed.Remove(vk) && !IsDown(vk);
@@ -95,22 +95,22 @@ internal sealed class WindowsStopKey : IStopKey
                 }
                 _swallowed.Remove(vk); // its key-up went where the hook can't see: a new press
             }
-            if (_stopPress != 0 && !(_swallowed.TryGetValue(_stopPress, out var held) && now - held < HeldGapMs))
-                _stopPress = 0;
-            if (_stopPress == 0 && vk is not (VK_LWIN or VK_RWIN))
+            if (_stopHeld && !(_swallowed.TryGetValue(VK_ESCAPE, out var held) && now - held < HeldGapMs))
+                _stopHeld = false;
+            if (!_stopHeld && vk != VK_ESCAPE)
                 return false;
             // Down in Windows already: the repeat of a key held since before (pressed before the run,
-            // or before the Windows key that stopped it), or a key the agent holds down.
+            // or before the Esc that stopped it), or a key the agent holds down.
             if (IsDown(vk))
                 return false;
-            if (_stopPress == 0)
+            if (!_stopHeld)
             {
                 if (!Stopped())
-                    return false; // no run to stop: the Windows key does its usual job
-                _stopPress = vk;
+                    return false; // no run to stop: Esc does its usual job
+                _stopHeld = true;
             }
-            // else a key pressed while the Windows key that stopped the run is held (win+e): not
-            // meant for the window the agent was in either.
+            // else a key pressed while the Esc that stopped the run is held: not meant for the window
+            // the agent was in either.
             _swallowed[vk] = now;
             return true;
         }
