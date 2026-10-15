@@ -177,8 +177,15 @@ public sealed partial class AgentSession(
         "Make each part much smaller, at most about 40 lines (about 1,500 characters), and add the rest with further " +
         "write_file calls with append set to true. Continue with the task.";
 
-    private const string NudgeText =
-        "Continue with the task. If there is another step, call the tool for it now. If the task is finished, reply with a short summary of what you did.";
+    // Marked as BlackBox's: taken for the user's words, "continue" read as a go-ahead, and the
+    // model asked again for a command the user had just declined twice.
+    internal const string NudgeText =
+        "[BlackBox] Continue with the task. If there is another step, call the tool for it now. If the task is finished, reply with a short summary of what you did.";
+
+    // Not "try another approach": told that after a declined listing command, the model asked for
+    // it twice more in other words and then listed the folder with another tool.
+    internal const string DeclinedText =
+        "The user declined this action. Don't do the same thing another way; ask them what they would like instead, or go on with the parts of the task that don't need it.";
 
     /// <summary>
     /// Whether a reply cut off by the length limit ran out of context, rather than into a
@@ -195,13 +202,14 @@ public sealed partial class AgentSession(
         if (text.Length == 0)
             return true;
         var tail = text.Length > 240 ? text[^240..] : text;
+        // "Let me know how you'd like to proceed." asks the user; it announces no step.
         return tail.EndsWith(':') || AnnouncedAction().IsMatch(tail);
     }
 
     [GeneratedRegex(@"\b((?<!\b(whether|if|once|when)\s+(the\s+)?)task (is|has been) (now )?(complete|completed|done|finished)|i('ve| have) (successfully )?(completed|finished) (the|your|this) task|everything is done|all done)\b", RegexOptions.IgnoreCase)]
     private static partial Regex CompletionClaim();
 
-    [GeneratedRegex(@"(^|[.!?\n]\s*)(let me|let's|i'll|i will|i'm going to|i am going to|next,? i|now i|i need to)\b[^.!?\n]*[.!]?\s*$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(^|[.!?\n]\s*)(let me(?! know)|let's|i'll|i will|i'm going to|i am going to|next,? i|now i|i need to)\b[^.!?\n]*[.!]?\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex AnnouncedAction();
 
     private async Task<ToolResult> RunToolAsync(ToolCall call, IAgentObserver observer, CancellationToken ct)
@@ -234,7 +242,7 @@ public sealed partial class AgentSession(
 
         if (NeedsApproval(tool) && !await observer.RequestApprovalAsync(call, tool, summary, ct).ConfigureAwait(false))
         {
-            var denied = ToolResult.Error("The user declined this action. Ask what they would like instead, or try another approach.");
+            var denied = ToolResult.Error(DeclinedText);
             observer.OnToolFinished(call, denied);
             return denied;
         }
