@@ -48,9 +48,55 @@ public sealed partial class AgentSession(
     /// <summary>Conversation so far (without the system prompt). Can be shared across sessions so settings changes keep the chat.</summary>
     public List<ChatMessage> History { get; } = history ?? [];
 
+    /// <summary>Messages the user sent while the run goes on, waiting for the model's next step.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _incoming = new();
+
+    /// <summary>Cancelled when such a message arrives, so a wait in progress ends early (see <see cref="ToolContext.UserMessage"/>).</summary>
+    private CancellationTokenSource _arrived = new();
+
+    /// <summary>
+    /// A message the user sent while the agent works: it joins the conversation before the model's
+    /// next step, and a wait in progress ends early so the model reads it soon. Until now Enter did
+    /// nothing during a run, even while BlackBox waited for an OK, and the text sat in the box.
+    /// Any thread.
+    /// </summary>
+    public void Steer(string text)
+    {
+        lock (_incoming)
+        {
+            _incoming.Enqueue(text);
+            _arrived.Cancel();
+        }
+    }
+
+    /// <summary>Messages that arrived too late for the run (it ended first); the caller sends them on.</summary>
+    public List<string> TakeUndelivered()
+    {
+        var left = new List<string>();
+        while (_incoming.TryDequeue(out var text))
+            left.Add(text);
+        return left;
+    }
+
+    /// <summary>Adds the user's messages that arrived since the last step, as plain user messages: the history only grows.</summary>
+    private void DeliverIncoming()
+    {
+        lock (_incoming)
+        {
+            if (!_arrived.IsCancellationRequested)
+                return;
+            // A fresh token for the next message; the one a wait may still hold stays cancelled.
+            _arrived = new CancellationTokenSource();
+            toolContext.UserMessage = _arrived.Token;
+            while (_incoming.TryDequeue(out var text))
+                History.Add(new ChatMessage { Role = ChatRole.User, Content = text, FromUser = true });
+        }
+    }
+
     public async Task RunAsync(string userText, IAgentObserver observer, CancellationToken ct)
     {
         History.Add(new ChatMessage { Role = ChatRole.User, Content = userText, FromUser = true });
+        toolContext.UserMessage = _arrived.Token;
         if (toolContext.Locate is null && FreshLook.Enabled)
         {
             var look = new FreshLook(client, requestOptions);
@@ -68,6 +114,7 @@ public sealed partial class AgentSession(
             for (var step = 1; ; step++)
             {
                 ct.ThrowIfCancellationRequested();
+                DeliverIncoming();
                 // The reset first: its handoff note is a reply of its own, and the step's reply
                 // comes after it, in a new step.
                 if (contextTokens > 0 && TokensInUse() > ResetThreshold)
@@ -103,6 +150,9 @@ public sealed partial class AgentSession(
 
                 if (!reply.HasToolCalls)
                 {
+                    // The user wrote while the model answered: it goes on with that.
+                    if (!_incoming.IsEmpty)
+                        continue;
                     // Small models sometimes announce an action ("Let me click Save.") and stop,
                     // or return nothing at all. Push them on a couple of times before giving up.
                     if (nudges < MaxNudges && (cutOff || LooksUnfinished(reply)))

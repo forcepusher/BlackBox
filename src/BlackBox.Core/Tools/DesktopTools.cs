@@ -8,8 +8,16 @@ public abstract class DesktopActionTool : Tool
 {
     public override ToolRisk Risk => ToolRisk.Desktop;
 
+    /// <summary>The longest an action waits for the user to finish typing a message to the agent.</summary>
+    internal static TimeSpan MaxUserPause = TimeSpan.FromSeconds(60);
+
     public sealed override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
+        // The user is typing to the agent in its window: a click or key press now would take the
+        // focus from under their typing, or their keys would land in the agent's window.
+        var paused = System.Diagnostics.Stopwatch.StartNew();
+        while (ctx.UserComposing?.Invoke() == true && paused.Elapsed < MaxUserPause)
+            await Task.Delay(200, ct).ConfigureAwait(false);
         var (text, check) = await ActAsync(args, ctx, ct).ConfigureAwait(false);
         // The screen now changes in ways the model hasn't seen; a later click in the same reply
         // is aimed at what it expects, not at what it saw.
@@ -446,18 +454,28 @@ public sealed class WaitTool : Tool
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var seconds = TimeSpan.FromSeconds(Math.Clamp(GetNumber(args, "seconds") ?? 1, 0.1, MaxSeconds));
+        // A message from the user ends the wait: a ten-minute watch shouldn't keep them waiting.
+        using var wait = CancellationTokenSource.CreateLinkedTokenSource(ct, ctx.UserMessage);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         string waited;
-        if (GetBool(args, "until_change"))
-            waited = await WaitForChangeAsync(ctx, seconds, ct).ConfigureAwait(false) switch
-            {
-                { } after when after == TimeSpan.Zero => "The screen had already changed since your last screenshot, so there was no wait.",
-                { } after => $"The screen changed after {after.TotalSeconds:0.#}s.",
-                null => $"Waited {seconds.TotalSeconds:0.#}s; nothing on the screen changed.",
-            };
-        else
+        try
         {
-            await Task.Delay(seconds, ct).ConfigureAwait(false);
-            waited = $"Waited {seconds.TotalSeconds:0.#}s.";
+            if (GetBool(args, "until_change"))
+                waited = await WaitForChangeAsync(ctx, seconds, wait.Token).ConfigureAwait(false) switch
+                {
+                    { } after when after == TimeSpan.Zero => "The screen had already changed since your last screenshot, so there was no wait.",
+                    { } after => $"The screen changed after {after.TotalSeconds:0.#}s.",
+                    null => $"Waited {seconds.TotalSeconds:0.#}s; nothing on the screen changed.",
+                };
+            else
+            {
+                await Task.Delay(seconds, wait.Token).ConfigureAwait(false);
+                waited = $"Waited {seconds.TotalSeconds:0.#}s.";
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && ctx.UserMessage.IsCancellationRequested)
+        {
+            waited = $"The wait ended after {clock.Elapsed.TotalSeconds:0.#}s: the user sent you a message, which follows.";
         }
         var shot = ScreenshotTool.Take(ctx);
         return shot with { Text = $"{waited}\n{shot.Text}" };

@@ -13,8 +13,9 @@ public static class AgentSetup
 {
     /// <param name="history">The conversation to carry on; a new one when null.</param>
     /// <param name="ssh">The chat's SSH logins, kept by the caller across the chat's runs and disposed with it.</param>
+    /// <param name="userComposing">Whether the user is typing a message to the agent right now (see <see cref="ToolContext.UserComposing"/>).</param>
     public static AgentSession Create(BackendConnection backend, IPlatformServices platform, AgentSettings agent, AppPaths paths,
-        McpHost mcp, SshHosts ssh, List<ChatMessage>? history = null)
+        McpHost mcp, SshHosts ssh, List<ChatMessage>? history = null, Func<bool>? userComposing = null)
     {
         var ctx = new ToolContext
         {
@@ -23,6 +24,7 @@ public static class AgentSetup
             WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             CoordinateGrid = ModelCoordinates.GridFor(backend.Options.Model),
             SeesImages = backend.Vision,
+            UserComposing = userComposing,
             Browser = agent.WebSearch ? HeadlessBrowser.Find(paths.BrowserProfileDir) : null,
             Ssh = ssh,
         };

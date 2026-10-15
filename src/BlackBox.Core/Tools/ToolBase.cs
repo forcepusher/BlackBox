@@ -34,6 +34,15 @@ public sealed class ToolContext
     /// <summary>Whether the model takes images, so read_file can show it a picture.</summary>
     public bool SeesImages { get; init; } = true;
 
+    /// <summary>Cancelled when the user sends a message during the run: a wait ends early so the model reads it soon.</summary>
+    public CancellationToken UserMessage { get; set; }
+
+    /// <summary>
+    /// True while the user is typing a message to the agent in BlackBox's own window: clicks and
+    /// key presses wait, or they would take the focus from under the user's typing.
+    /// </summary>
+    public Func<bool>? UserComposing { get; init; }
+
     /// <summary>
     /// The monitor the agent is looking at (0 = primary): the one the latest screenshot showed.
     /// Screenshot coordinates are relative to it. Set by the screenshot tool.

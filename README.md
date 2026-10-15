@@ -318,6 +318,12 @@ windows for the moment a click lands on it. Every click and key press the agent 
 log in the bottom-right corner that fades after 15 seconds (adjustable), with a ring where it clicked. The agent
 can't see it and it never takes focus (turn it off in Settings → Advanced).
 
+To change or add to a task while it runs, type in the box at the bottom and press Enter. The agent
+reads the message before its next step, and a `wait` it is in ends for it. While you type there,
+its clicks and key presses hold off (for up to a minute), so they don't land in your typing. A
+message that arrives as the run finishes starts the next one, and what the agent hadn't read when
+you stopped it goes back in the box.
+
 ## Build
 Requires the .NET 10 SDK.
 

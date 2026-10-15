@@ -62,6 +62,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand), nameof(StopCommand))]
+    [NotifyPropertyChangedFor(nameof(InputHint))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -453,21 +454,61 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     // ---- commands -------------------------------------------------------------------
 
-    private bool CanSend() => !IsBusy && !string.IsNullOrWhiteSpace(Input);
+    private bool CanSend() => !string.IsNullOrWhiteSpace(Input);
 
-    [RelayCommand(CanExecute = nameof(CanSend))]
+    /// <summary>Messages sent while a run was still starting up (no session yet); handed to it once it has one.</summary>
+    private readonly List<string> _steerPending = [];
+
+    /// <summary>
+    /// Sends what is in the box. With no run going it starts one; during a run it goes to the agent,
+    /// which reads it before its next step (see <see cref="AgentSession.Steer"/>).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanSend), AllowConcurrentExecutions = true)]
     private async Task SendAsync()
     {
         var text = Input.Trim();
         Input = "";
         Items.Add(new UserMessageItem(text));
+        if (IsBusy)
+        {
+            if (_session is { } running) running.Steer(text);
+            else _steerPending.Add(text);
+            SaveChat(SnapshotHistory());
+            return;
+        }
         SaveChat(SnapshotHistory());
+        // What arrived just as a run ended, too late for it, starts the next one.
+        for (string? next = text; next is not null;)
+            next = await RunAsync(next);
+    }
+
+    /// <summary>When the user last typed in the box; while they are typing, the agent's mouse and keyboard wait.</summary>
+    private DateTime _lastTyped;
+
+    partial void OnInputChanged(string value) => _lastTyped = DateTime.UtcNow;
+
+    /// <summary>
+    /// The user is writing a message in the box: text in it, typed in the last 15 seconds. The
+    /// agent's clicks and key presses wait meanwhile, so neither ends up in the other's window.
+    /// Read from the agent's thread.
+    /// </summary>
+    private bool UserComposing() => Input.Length > 0 && DateTime.UtcNow - _lastTyped < TimeSpan.FromSeconds(15);
+
+    /// <summary>The hint in the empty box: what Enter does now.</summary>
+    public string InputHint => IsBusy
+        ? "Tell me something while I work… (Enter to send; I pause while you type)"
+        : "Describe a task… (Enter to send, Shift+Enter for a new line)";
+
+    /// <summary>One run of the agent on <paramref name="text"/>. Returns what the user sent too late for it, to run next, or null.</summary>
+    private async Task<string?> RunAsync(string text)
+    {
         _runDetached = false;
         IsBusy = true;
         _runCts = new CancellationTokenSource();
         var ct = _runCts.Token;
         // This chat's conversation: picking another chat while the run starts up replaces _history.
         var history = _history;
+        List<string> late = [];
 
         try
         {
@@ -478,7 +519,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             if (Core.Llm.ServerAddress.Candidates(server.BaseUrl).Count == 0 || string.IsNullOrWhiteSpace(server.ModelInUse))
             {
                 AddNotice("Enter your model server's address and pick a model at the top first.", isError: true);
-                return;
+                return null;
             }
             // LM Studio loads models on first use; do that now so we know the real context size.
             using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10)))
@@ -498,7 +539,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 await _mcpConnect.WaitAsync(ct);
             }
 
-            var session = _session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, _ssh, history);
+            var session = _session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, _ssh, history, UserComposing);
+            foreach (var pending in _steerPending)
+                session.Steer(pending);
+            _steerPending.Clear();
             _tick.Start();
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
@@ -517,6 +561,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         finally
         {
+            late = [.. _session?.TakeUndelivered() ?? [], .. _steerPending];
+            _steerPending.Clear();
             // After the run's last posted updates (its "Stopped." notice) have reached the chat.
             var chatId = _chatId;
             if (!_runDetached)
@@ -533,6 +579,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 _mcpConnect = ConnectMcpAsync();
             }
         }
+
+        if (late.Count == 0 || _runDetached)
+            return null;
+        if (ct.IsCancellationRequested)
+        {
+            // Stopped: what the agent hadn't read yet comes off the chat and goes back in the box,
+            // to send again or not.
+            foreach (var unread in late)
+                if (Items.LastOrDefault(i => i is UserMessageItem u && u.Text == unread) is { } item)
+                    Items.Remove(item);
+            Input = string.Join("\n\n", late) + (Input.Length > 0 ? "\n\n" + Input : "");
+            return null;
+        }
+        return string.Join("\n\n", late);
     }
 
     [RelayCommand(CanExecute = nameof(IsBusy))]
@@ -594,6 +654,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         // The stopped run keeps its own list until it ends, so it can't write into the next chat.
         _history = [];
+        _steerPending.Clear();
         // Logins belong to the chat: the next one starts logged out (the stopped run's tools fail).
         // Logging out talks to the servers, so it happens off the UI thread.
         var ended = _ssh;
