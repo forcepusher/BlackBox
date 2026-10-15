@@ -173,6 +173,11 @@ public class DocumentWriteTests : IDisposable
         using var zip = ZipFile.OpenRead(Path.Combine(_dir, "deck.pptx"));
         Assert.Contains(zip.Entries, e => e.FullName.StartsWith("ppt/media/image1.png", StringComparison.Ordinal));
         Assert.Contains("slideLayout1.xml", new StreamReader(zip.GetEntry("ppt/slides/_rels/slide1.xml.rels")!.Open()).ReadToEnd());
+
+        // A subheading under the first title makes a title slide too, as qwen3.8 wrote its first one.
+        Assert.False((await Write("sub.pptx", "# Northwind Coffee Roasters\n## Q3 2026 Summary\n\n---\n\n## Highlights\n- Cold brew")).IsError);
+        using var sub = ZipFile.OpenRead(Path.Combine(_dir, "sub.pptx"));
+        Assert.Contains("slideLayout1.xml", new StreamReader(sub.GetEntry("ppt/slides/_rels/slide1.xml.rels")!.Open()).ReadToEnd());
     }
 
     [Fact]

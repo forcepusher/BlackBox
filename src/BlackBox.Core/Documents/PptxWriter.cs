@@ -108,9 +108,9 @@ internal sealed class PptxWriter
     private static IEnumerable<XAttribute> Namespaces() =>
         [new(XNamespace.Xmlns + "a", A), new(XNamespace.Xmlns + "r", R), new(XNamespace.Xmlns + "p", P)];
 
-    /// <summary>A title and at most a few lines of plain text under it.</summary>
+    /// <summary>A title and at most a few lines of plain text or a subheading under it ("# Northwind" then "## Q3 summary").</summary>
     private static bool IsTitleSlide(List<Block> slide) =>
-        slide.FirstOrDefault() is HeadingBlock && slide.Skip(1).All(b => b is ParagraphBlock) && slide.Count <= 3;
+        slide.FirstOrDefault() is HeadingBlock && slide.Skip(1).All(b => b is ParagraphBlock or HeadingBlock) && slide.Count <= 3;
 
     // ---- a slide ---------------------------------------------------------------------------------------
 
@@ -138,7 +138,7 @@ internal sealed class PptxWriter
         {
             if (texts.Count > 0)
                 tree.Add(Placeholder(shapeId++, "Subtitle", new XElement(P + "ph", new XAttribute("type", "subTitle"), new XAttribute("idx", 1)), null,
-                    texts.Select(t => Paragraph(((ParagraphBlock)t).Text, 0, rels, bullet: null, size: null))));
+                    texts.Select(t => Paragraph(t is HeadingBlock h ? h.Text : ((ParagraphBlock)t).Text, 0, rels, bullet: null, size: null))));
         }
         else
         {
