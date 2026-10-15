@@ -121,7 +121,11 @@ retry continues where the last one stopped (up to 12 times per step). A VPN can 
 upload without breaking it: a request carries every screenshot still in the context, several
 megabytes, and LM Studio waited five minutes for the rest of one before answering 408. So when
 nothing of a request gets through for 30 seconds, it is sent again. A tool that fails, however
-it fails, reports the error to the model and the run goes on.
+it fails, reports the error to the model and the run goes on. When the same error comes back a
+second time, the result tells the model to search the web for the error message before trying
+again: it used to work around errors rather than look them up, and once decided Excel's chart
+interface was broken after a PowerShell call failed the same way four times (`ChartObjects` is a
+method there, not a property).
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |

@@ -104,6 +104,8 @@ public sealed partial class AgentSession(
         }
         var nudges = 0;
         var loops = new LoopDetector();
+        // Pointing at web_search only makes sense when the model has it.
+        var errors = tools.Find("web_search") is not null ? new ErrorRepeats() : null;
         var justReset = false;
 
         try
@@ -177,6 +179,8 @@ public sealed partial class AgentSession(
                     var result = await RunToolAsync(call, observer, ct).ConfigureAwait(false);
                     if (loops.Check(call, result) is { } warning)
                         result = result with { Text = result.Text + "\n" + warning };
+                    if (errors?.Check(call, result) is { } lookItUp)
+                        result = result with { Text = result.Text + "\n" + lookItUp };
                     var message = ChatMessage.ToolResult(call.Id, result.Text);
                     History.Add(message);
                     if (result.Image is not null)
