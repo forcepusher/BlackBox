@@ -96,10 +96,16 @@ public static partial class ModelCoordinates
     /// <summary>
     /// 1000 for Qwen3 and later: they were trained to give positions on a 0-1000 grid over the
     /// image. Asked for pixels, qwen3.8 often slips back to that grid for x (measured: 4 of 16
-    /// clicks landed at about 1000/1920 of the intended x). Null (pixels) for every other model.
+    /// clicks landed at about 1000/1920 of the intended x). Gemma 4 points on the same grid, asked
+    /// for pixels or not: on a 1920x1200 screen it put Notepad's Save button at (492, 671) and the
+    /// File name box at (387, 586), where the grid has them at (496, 678) and (385, 600), so every
+    /// click it aimed in pixels landed far up and to the left. Null (pixels) for every other model.
     /// </summary>
-    public static int? GridFor(string? model) => model is not null && QwenThreeOrLater().IsMatch(model) ? 1000 : null;
+    public static int? GridFor(string? model) => model is not null && (QwenThreeOrLater().IsMatch(model) || GemmaFourOrLater().IsMatch(model)) ? 1000 : null;
 
     [System.Text.RegularExpressions.GeneratedRegex(@"qwen([3-9]|\d{2})", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex QwenThreeOrLater();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"gemma[-_ ]?([4-9]|\d{2})", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex GemmaFourOrLater();
 }

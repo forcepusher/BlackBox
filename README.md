@@ -146,7 +146,10 @@ screenshot.
 Coordinates follow what the model was trained on. Qwen3 and later point on a 0-1000 grid over the
 image, so for them x/y are on that grid; asked for pixels, qwen3.8 slipped back to the grid in about
 a third of its clicks and missed by hundreds of pixels (11/16 hits against 16/16 on the grid in
-`ClickAccuracyTests`). Every other model gets screenshot pixels. The grid's steps aren't square
+`ClickAccuracyTests`). Gemma 4 points on the same grid: given pixels, it aimed at Notepad's Save
+As dialog with grid positions (Save at 492, 671 where the grid has it at 496, 678), so its clicks
+landed up and to the left, in the folder list, and it never saved the file. Every other model
+gets screenshot pixels. The grid's steps aren't square
 (on a 1920×1200 screen an x step is 1.92 px and a y step 1.2 px): asked to draw a circle in Paint,
 qwen3.8 dragged as many x as y steps and got 346×217 and 385×241 px ovals before it worked that
 out. So the system prompt gives both step sizes, and `mouse_drag` says how far it went in screen

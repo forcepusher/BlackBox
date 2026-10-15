@@ -115,7 +115,9 @@ public sealed partial class AssistantMessageItem : ChatItemViewModel
     // Streams arrive with blank lines around them (thinking usually ends in "\n\n" until the
     // reply starts, and the reply opens with them), which showed as empty bands mid-stream.
     public string ShownText => Text.Trim();
-    public string ShownReasoning => Reasoning.Trim();
+
+    /// <summary>The thinking as shown; Gemma 4's comes with its channel's name in front ("thought\n…"), which says nothing.</summary>
+    public string ShownReasoning => Reasoning.Trim() is var r && r.StartsWith("thought\n", StringComparison.Ordinal) ? r[8..].TrimStart() : Reasoning.Trim();
     public bool HasText => !string.IsNullOrWhiteSpace(Text);
     public bool HasReasoning => !string.IsNullOrWhiteSpace(Reasoning);
     public string ThinkingLabel => IsStreaming && !HasText ? "Thinking…" : "Thoughts";

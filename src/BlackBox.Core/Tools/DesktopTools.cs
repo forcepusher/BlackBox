@@ -315,21 +315,36 @@ public sealed class ScrollTool : DesktopActionTool
     }
 }
 
-public sealed class TypeTextTool : DesktopActionTool
+public sealed partial class TypeTextTool : DesktopActionTool
 {
     public override string Name => "type_text";
+    // Not "use \n for Enter": read as the two characters, Gemma 4 typed "gemma.txt\n" into a
+    // Save As dialog's file name, backslash and all.
     public override string Description =>
-        "Type text into the focused control, exactly as given. Use \\n for Enter. Click the target field first.";
+        "Type text into the focused control, exactly as given; a line break in the text presses Enter. Click the target field first.";
     public override JsonObject Parameters => Schema(("text", Str("Text to type"), true));
     public override string Describe(JsonObject args) => $"Type \"{(GetString(args, "text") ?? "").Clip(60)}\"";
 
     private protected override Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
-        var text = RequireString(args, "text");
+        var text = EnterForEscapedBreaks(RequireString(args, "text"));
         ctx.Platform.HostWindow.YieldFocus();
         ctx.Platform.Input.TypeText(text);
         return Task.FromResult<Acted>($"Typed {text.Length} characters.");
     }
+
+    /// <summary>
+    /// A "\n" written out as a backslash and an n at the very end of the text means Enter
+    /// ("Hello from Gemma\n"), when nothing else in it is a backslash or a line break: code
+    /// (printf("hi\n");) and paths are typed as written.
+    /// </summary>
+    internal static string EnterForEscapedBreaks(string text) =>
+        EscapedBreaksAtEnd().Match(text) is { Success: true } m && !text.AsSpan(0, m.Index).ContainsAny('\\', '\n')
+            ? text[..m.Index] + new string('\n', m.Length / 2)
+            : text;
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"(\\n)+$")]
+    private static partial System.Text.RegularExpressions.Regex EscapedBreaksAtEnd();
 }
 
 public sealed class PressKeysTool : DesktopActionTool
