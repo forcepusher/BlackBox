@@ -94,6 +94,9 @@ During a run the top bar shows how full the context is ("35k of 100k used"; its 
 the reset comes), and a reply that hasn't started yet counts how long BlackBox has been waiting for
 it: a server reading a long prompt sends nothing for minutes.
 
+Replies are shown with their Markdown formatted: bold, headings, lists, code and tables (lined
+up in a monospace font), as models write them; the thinking above them stays as written.
+
 ### Unstable connections
 VPNs and proxies often cut a connection that has been silent for about a minute, which happens
 while a server processes a long prompt. BlackBox resends the identical request when a connection

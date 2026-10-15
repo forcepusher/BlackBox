@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:BlackBox.App.ViewModels"
+        xmlns:views="using:BlackBox.App.Views"
         x:Class="BlackBox.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="BlackBox"
@@ -181,7 +182,7 @@
                           Padding="10,6">
                   <SelectableTextBlock Classes="muted" Text="{Binding ShownReasoning}" TextWrapping="Wrap" />
                 </Expander>
-                <SelectableTextBlock Text="{Binding ShownText}" TextWrapping="Wrap" IsVisible="{Binding HasText}" LineHeight="21" />
+                <SelectableTextBlock views:MarkdownText.Source="{Binding ShownText}" TextWrapping="Wrap" IsVisible="{Binding HasText}" LineHeight="21" />
                 <TextBlock Classes="muted" Text="{Binding TypingText}" IsVisible="{Binding ShowTypingDots}" />
               </StackPanel>
             </DataTemplate>
