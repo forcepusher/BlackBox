@@ -824,6 +824,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     void IAgentObserver.OnDelta(StreamDelta delta) => _streaming?.Append(delta);
 
+    void IAgentObserver.OnSending(long sent, long total) => _streaming?.Sending(sent, total);
+
     void IAgentObserver.OnAssistantMessage(ChatMessage message)
     {
         // A reply carries the server's own token count, so the top bar is exact after each one.

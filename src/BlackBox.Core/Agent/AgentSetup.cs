@@ -36,7 +36,7 @@ public static class AgentSetup
 
         // The MCP tools are a snapshot: the tool list stays the same for the whole run.
         var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: mcp.Tools, includeWebTools: agent.WebSearch);
-        var prompt = SystemPrompt.Build(platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, mcp.Connected, agent.WebSearch);
+        var prompt = SystemPrompt.Build(platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, mcp.Connected, agent.WebSearch, paths.ToolsDir);
         return new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, history, backend.ContextTokens);
     }
 }

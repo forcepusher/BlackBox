@@ -45,6 +45,17 @@ public sealed class ScreenSpace
         ? $"x/y are on a 0-{g} grid over the screenshot, whatever its size: (0, 0) is its top-left corner and ({g}, {g}) its bottom-right."
         : "x/y are pixels of the screenshot, origin top-left.";
 
+    /// <summary>
+    /// That grid steps aren't square, for the system prompt. Drawing a circle in Paint, qwen3.8
+    /// dragged as many x steps as y steps twice and got 385×241 px ovals before it worked it out.
+    /// </summary>
+    public string? Proportions() => Grid is { } g && Screen.Width != Screen.Height
+        ? FormattableString.Invariant(
+            $"The grid isn't square: on this {Screen.Width}x{Screen.Height} screen one x step is {Screen.Width / (double)g:0.##} px and one y step ") +
+          FormattableString.Invariant(
+            $"{Screen.Height / (double)g:0.##} px, so something as tall as it is wide spans {Screen.Width / (double)Screen.Height:0.##} times as many y steps as x steps.")
+        : null;
+
     public (int X, int Y) ToScreen(double modelX, double modelY)
     {
         var x = Screen.X + (int)Math.Round(Math.Clamp(modelX, 0, ModelWidth) * Screen.Width / ModelWidth);
@@ -85,10 +96,16 @@ public static partial class ModelCoordinates
     /// <summary>
     /// 1000 for Qwen3 and later: they were trained to give positions on a 0-1000 grid over the
     /// image. Asked for pixels, qwen3.8 often slips back to that grid for x (measured: 4 of 16
-    /// clicks landed at about 1000/1920 of the intended x). Null (pixels) for every other model.
+    /// clicks landed at about 1000/1920 of the intended x). Gemma 4 points on the same grid, asked
+    /// for pixels or not: on a 1920x1200 screen it put Notepad's Save button at (492, 671) and the
+    /// File name box at (387, 586), where the grid has them at (496, 678) and (385, 600), so every
+    /// click it aimed in pixels landed far up and to the left. Null (pixels) for every other model.
     /// </summary>
-    public static int? GridFor(string? model) => model is not null && QwenThreeOrLater().IsMatch(model) ? 1000 : null;
+    public static int? GridFor(string? model) => model is not null && (QwenThreeOrLater().IsMatch(model) || GemmaFourOrLater().IsMatch(model)) ? 1000 : null;
 
     [System.Text.RegularExpressions.GeneratedRegex(@"qwen([3-9]|\d{2})", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex QwenThreeOrLater();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"gemma[-_ ]?([4-9]|\d{2})", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex GemmaFourOrLater();
 }

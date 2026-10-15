@@ -75,6 +75,13 @@ public sealed partial class OpenAiChatClient
     private bool _extrasRejected;
 
     /// <summary>
+    /// How long sending a request may go without any of it getting through before the connection
+    /// counts as dropped. A VPN can stall an upload without breaking it: LM Studio then waited
+    /// five minutes for the rest of a request with screenshots and answered 408.
+    /// </summary>
+    internal TimeSpan UploadStallLimit { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Turns "host:port", "http://host:port", ".../v1/", ".../v1/chat/completions" or ".../v1/models"
     /// into "http(s)://host:port/v1". Without a scheme, http is assumed (see <see cref="ServerAddress"/>
     /// for trying both).
@@ -117,21 +124,25 @@ public sealed partial class OpenAiChatClient
 
     /// <summary>
     /// Sends the conversation and streams the reply. Returns the fully assembled assistant message,
-    /// including any tool calls.
+    /// including any tool calls. <paramref name="onSending"/> hears how much of the request has gone out.
     /// </summary>
     public async Task<ChatMessage> CompleteAsync(
         IReadOnlyList<ChatMessage> messages,
         IReadOnlyList<ToolDefinition> tools,
         ChatRequestOptions options,
         Action<StreamDelta>? onDelta,
-        CancellationToken ct)
+        CancellationToken ct,
+        Action<long, long>? onSending = null)
     {
         var sendReasoning = options.SendReasoning && !_reasoningRejected;
         var sendExtras = !_extrasRejected;
         var payload = BuildRequest(messages, tools, options, sendReasoning, sendExtras);
+        // Cancelled when sending stalls. Once the request is out, only Stop ends the wait: a
+        // server reading a long prompt sends nothing for minutes.
+        using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/chat/completions")
         {
-            Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json"),
+            Content = new UploadContent(Encoding.UTF8.GetBytes(payload.ToJsonString()), stall, UploadStallLimit, onSending),
         };
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
         Authorize(req);
@@ -139,7 +150,11 @@ public sealed partial class OpenAiChatClient
         HttpResponseMessage resp;
         try
         {
-            resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, stall.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested && stall.IsCancellationRequested && ex is HttpRequestException or OperationCanceledException)
+        {
+            throw new ConnectionLostException($"Sending the request to {_baseUrl} stalled: nothing got through for {UploadStallLimit.TotalSeconds:0} s.", false, ex);
         }
         catch (HttpRequestException ex)
         {
@@ -155,7 +170,14 @@ public sealed partial class OpenAiChatClient
             if (!resp.IsSuccessStatusCode)
             {
                 var status = (int)resp.StatusCode;
-                var err = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                string err;
+                try { err = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false); }
+                // The link broke while the error came in ("Error while copying content to a
+                // stream."): what it said is lost, so it is a drop like any other.
+                catch (Exception ex) when (!ct.IsCancellationRequested && ex is IOException or HttpRequestException or TaskCanceledException)
+                {
+                    throw new ConnectionLostException($"The connection to {_baseUrl} dropped while it answered {status}: {ex.Message}", false, ex);
+                }
                 if (LooksLikeContextOverflow(err))
                     throw new ContextOverflowException(err.Clip(500));
                 // Strict providers reject fields they do not know. Drop ours and try once more.
@@ -163,11 +185,12 @@ public sealed partial class OpenAiChatClient
                 {
                     _reasoningRejected |= sendReasoning;
                     _extrasRejected |= sendExtras;
-                    return await CompleteAsync(messages, tools, options, onDelta, ct).ConfigureAwait(false);
+                    return await CompleteAsync(messages, tools, options, onDelta, ct, onSending).ConfigureAwait(false);
                 }
-                // A proxy whose link hiccuped, a server that is restarting or busy: worth sending
-                // again, like a dropped connection, rather than ending a long run.
-                if (status is 429 or >= 500)
+                // A proxy whose link hiccuped, a server that is restarting or busy, or one that gave
+                // up waiting for the rest of the request (408): worth sending again, like a
+                // dropped connection, rather than ending a long run.
+                if (status is 408 or 429 or >= 500)
                     throw new ConnectionLostException($"{_baseUrl} answered {status}: {err.Clip(300)}", false);
                 throw new LlmException($"Chat request failed ({status}): {err.Clip(1000)}");
             }
@@ -444,4 +467,50 @@ public sealed partial class OpenAiChatClient
     /// <summary>Gemma 4 marks its thinking as a "thought" channel.</summary>
     [GeneratedRegex(@"<\|channel>thought\s*(.*?)<channel\|>\s*", RegexOptions.Singleline)]
     private static partial Regex GemmaThought();
+
+    /// <summary>
+    /// A request body sent in pieces under a watchdog: when a piece doesn't get through within the
+    /// limit, <c>stall</c> is cancelled, which aborts the request so it can be sent again.
+    /// </summary>
+    private sealed class UploadContent : HttpContent
+    {
+        private const int Piece = 64 * 1024;
+        private readonly byte[] _body;
+        private readonly CancellationTokenSource _stall;
+        private readonly TimeSpan _limit;
+        private readonly Action<long, long>? _onSending;
+
+        public UploadContent(byte[] body, CancellationTokenSource stall, TimeSpan limit, Action<long, long>? onSending)
+        {
+            (_body, _stall, _limit, _onSending) = (body, stall, limit, onSending);
+            Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+        }
+
+        protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context) =>
+            SerializeToStreamAsync(stream, context, CancellationToken.None);
+
+        protected override async Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context, CancellationToken ct)
+        {
+            for (var at = 0; at < _body.Length; at += Piece)
+            {
+                _onSending?.Invoke(at, _body.Length);
+                Watch(_limit);
+                await stream.WriteAsync(_body.AsMemory(at, Math.Min(Piece, _body.Length - at)), ct).ConfigureAwait(false);
+            }
+            Watch(Timeout.InfiniteTimeSpan);
+            _onSending?.Invoke(_body.Length, _body.Length);
+        }
+
+        private void Watch(TimeSpan limit)
+        {
+            try { _stall.CancelAfter(limit); }
+            catch (ObjectDisposedException) { } // the request is already over
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = _body.Length;
+            return true;
+        }
+    }
 }

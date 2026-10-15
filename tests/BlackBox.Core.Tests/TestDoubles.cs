@@ -40,11 +40,24 @@ internal sealed class ScriptedServer(params string[] responses) : HttpMessageHan
     /// <summary>Number of requests to fail with a dropped connection first.</summary>
     public int Drops { get; set; }
 
+    /// <summary>Number of requests answered with an error whose body breaks off, as when the link drops while it comes in.</summary>
+    public int BrokenErrors { get; set; }
+
+    /// <summary>Number of requests whose upload stops getting through, as over a VPN that stalls, until the client gives up on it.</summary>
+    public int StalledUploads { get; set; }
+
     /// <summary>Optional: computes the reply from the request instead of the script.</summary>
     public Func<JsonObject, string>? Responder { get; set; }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
+        if (StalledUploads > 0)
+        {
+            // Before anything reads the body: a body once read is kept in memory and copied from there.
+            StalledUploads--;
+            await request.Content!.CopyToAsync(new StalledStream(), ct);
+            throw new InvalidOperationException("the client never gave up on a stalled upload");
+        }
         Requests.Add(JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!.AsObject());
         if (Failures.TryDequeue(out var failure))
             return new HttpResponseMessage(failure.Status) { Content = new StringContent(failure.Body, Encoding.UTF8, "application/json") };
@@ -53,10 +66,31 @@ internal sealed class ScriptedServer(params string[] responses) : HttpMessageHan
             Drops--;
             throw new HttpRequestException("The connection was closed (simulated drop)");
         }
+        if (BrokenErrors > 0)
+        {
+            BrokenErrors--;
+            return new HttpResponseMessage(HttpStatusCode.BadGateway) { Content = new StreamContent(new BrokenStream()) };
+        }
         if (Responder is not null)
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Responder(Requests[^1]), Encoding.UTF8, "text/event-stream") };
         var body = _next < responses.Length ? responses[_next++] : Sse.Text("(script exhausted)");
         return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "text/event-stream") };
+    }
+
+    /// <summary>A connection that takes nothing: every write waits until it is cancelled.</summary>
+    private sealed class StalledStream : MemoryStream
+    {
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override async Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct) => await Task.Delay(Timeout.Infinite, ct);
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default) => await Task.Delay(Timeout.Infinite, ct);
+    }
+
+    /// <summary>A body whose connection resets as soon as it is read.</summary>
+    private sealed class BrokenStream : MemoryStream
+    {
+        public override int Read(byte[] buffer, int offset, int count) => throw new IOException("An existing connection was forcibly closed by the remote host.");
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) => throw new IOException("An existing connection was forcibly closed by the remote host.");
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) => throw new IOException("An existing connection was forcibly closed by the remote host.");
     }
 }
 
@@ -87,6 +121,10 @@ internal sealed class RecordingObserver : IAgentObserver
     public event Action<string>? NoticeReceived;
     public void OnNotice(string text) { Notices.Add(text); NoticeReceived?.Invoke(text); }
     public void OnToolFinished(ToolCall call, ToolResult result) => Results.Add(result);
+
+    /// <summary>What the request upload reported, in order: (sent, total).</summary>
+    public List<(long Sent, long Total)> Sending { get; } = [];
+    public void OnSending(long sent, long total) => Sending.Add((sent, total));
 
     public void OnFinished(AgentStopReason reason, string? detail)
     {

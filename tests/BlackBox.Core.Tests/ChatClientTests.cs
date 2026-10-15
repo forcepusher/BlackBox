@@ -295,6 +295,8 @@ public class ChatClientTests
     [InlineData("I'll open Notepad now:", true)]
     [InlineData("Done. Notepad is open with your text.", false)]
     [InlineData("Which file do you mean?", false)]
+    [InlineData("You've declined both of my PowerShell commands. Could you tell me how you'd like the listing? Let me know and I'll continue.", false)]
+    [InlineData("Let me know if you need anything else.", false)]
     public void Unfinished_replies_are_detected(string content, bool expected) =>
         Assert.Equal(expected, AgentSession.LooksUnfinished(new ChatMessage { Role = ChatRole.Assistant, Content = content }));
 

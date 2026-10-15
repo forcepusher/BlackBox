@@ -12,6 +12,10 @@ public sealed partial class ShellTool : Tool
     public override string Description =>
         "Run a shell command and return its output (PowerShell on Windows, sh elsewhere). " +
         "Use for files, launching apps (e.g. Start-Process notepad), system info, scripts. No interactive commands. " +
+        // Twice a reminder started as Start-Process powershell -ArgumentList '-Command','...("text")'
+        // died at once: Windows PowerShell drops the quotes inside the arguments.
+        "To start something that keeps running after the command (a second PowerShell), write its commands to a .ps1 file and start that with -File: " +
+        "Windows PowerShell drops the quotes inside -ArgumentList. " +
         "Don't install software on this PC with it (pip, npm, winget) unless the task needs it here.";
     public override ToolRisk Risk => ToolRisk.Risky;
     public override JsonObject Parameters => Schema(

@@ -13,8 +13,15 @@ unpacks its native UI libraries into `Data/runtime` next to itself.
 ```
 BlackBox/
   BlackBox.exe
-  Data/        settings.json, chats/ (see Chat history), runtime/ (unpacked by the single-file exe), browser/ (see Web search)
+  Data/        settings.json, chats/ (see Chat history), runtime/ (unpacked by the single-file exe), browser/ (see Web search),
+               tools/ (portable programs the agent downloaded)
 ```
+
+When nothing on the PC opens a file or does a job the agent needs (a PDF to read, a format to
+convert), it downloads a portable tool into `Data/tools`, where later tasks find it, or installs
+the program, rather than decoding the file by hand: asked to summarize a PDF, qwen3.8 spent eight
+minutes inflating its streams and mapping glyphs in PowerShell. It also accepts the license
+agreements and first-run prompts of the programs it uses (Office asks on its first start).
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
 The agent itself works across the whole PC; relative paths and shell commands start in your home folder.
@@ -92,15 +99,25 @@ chat and the server never has to read the whole conversation again because of it
 
 During a run the top bar shows how full the context is ("35k of 100k used"; its tooltip says where
 the reset comes), and a reply that hasn't started yet counts how long BlackBox has been waiting for
-it: a server reading a long prompt sends nothing for minutes.
+it: a server reading a long prompt sends nothing for minutes. Before that, while the request is
+still on its way, it shows how much of it has gone out ("Sending to the server… 1.2 of 3.4 MB"):
+each step sends every screenshot still in the context, and over a VPN at 15 to 30 KB/s that took
+minutes which looked like the model thinking.
+
+Replies are shown with their Markdown formatted: bold, headings, lists, code and tables (lined
+up in a monospace font), as models write them; the thinking above them stays as written.
 
 ### Unstable connections
 VPNs and proxies often cut a connection that has been silent for about a minute, which happens
 while a server processes a long prompt. BlackBox resends the identical request when a connection
-drops, a reply stream stops early, or the server (or a proxy in front of it) answers with a
-server error or "busy" (HTTP 5xx or 429); the server still has the already-processed prompt in
-its cache, so each retry continues where the last one stopped (up to 12 times per step). A tool
-that fails, however it fails, reports the error to the model and the run goes on.
+drops (also while an error answer comes in), a reply stream stops early, or the server (or a
+proxy in front of it) answers with a server error, "busy" or "gave up waiting for the request"
+(HTTP 5xx, 429 or 408); the server still has the already-processed prompt in its cache, so each
+retry continues where the last one stopped (up to 12 times per step). A VPN can also stall an
+upload without breaking it: a request carries every screenshot still in the context, several
+megabytes, and LM Studio waited five minutes for the rest of one before answering 408. So when
+nothing of a request gets through for 30 seconds, it is sent again. A tool that fails, however
+it fails, reports the error to the model and the run goes on.
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |
@@ -129,7 +146,14 @@ screenshot.
 Coordinates follow what the model was trained on. Qwen3 and later point on a 0-1000 grid over the
 image, so for them x/y are on that grid; asked for pixels, qwen3.8 slipped back to the grid in about
 a third of its clicks and missed by hundreds of pixels (11/16 hits against 16/16 on the grid in
-`ClickAccuracyTests`). Every other model gets screenshot pixels.
+`ClickAccuracyTests`). Gemma 4 points on the same grid: given pixels, it aimed at Notepad's Save
+As dialog with grid positions (Save at 492, 671 where the grid has it at 496, 678), so its clicks
+landed up and to the left, in the folder list, and it never saved the file. Every other model
+gets screenshot pixels. The grid's steps aren't square
+(on a 1920×1200 screen an x step is 1.92 px and a y step 1.2 px): asked to draw a circle in Paint,
+qwen3.8 dragged as many x as y steps and got 346×217 and 385×241 px ovals before it worked that
+out. So the system prompt gives both step sizes, and `mouse_drag` says how far it went in screen
+pixels.
 
 Screenshots go out at full resolution by default. In LM Studio, turn off the model's "Image Input:
 Never exceed 2048 px" option, or it shrinks them back to about 2048×864 (qwen3.8 hit text links

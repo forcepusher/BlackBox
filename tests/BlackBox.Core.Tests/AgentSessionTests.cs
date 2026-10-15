@@ -102,6 +102,26 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task After_a_denial_the_models_question_ends_the_turn_without_a_nudge()
+    {
+        // Seen live: the model asked how to go on, a nudge ("Continue with the task") read as the
+        // user's go-ahead, and it asked for the declined command again.
+        var server = new ScriptedServer(
+            Sse.ToolCall("s1", "run_shell", """{"command":"Get-ChildItem"}"""),
+            Sse.Text("You declined the listing. Could you tell me how you'd like it shown? Let me know and I'll continue."),
+            Sse.ToolCall("s2", "run_shell", """{"command":"dir"}"""));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        observer.Approve = false;
+
+        await session.RunAsync("list the folder", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count);
+        Assert.Equal(1, observer.ApprovalRequests);
+        Assert.Contains("Don't do the same thing another way", session.History[2].Content);
+    }
+
+    [Fact]
     public async Task Cancelling_mid_tool_leaves_a_valid_history()
     {
         var server = new ScriptedServer(Sse.ToolCall("t1", "wait", """{"seconds":10}"""));
@@ -256,14 +276,54 @@ public class AgentSessionTests
         var server = new ScriptedServer(Sse.Text("Made it."));
         server.Failures.Enqueue((HttpStatusCode.BadGateway, "upstream connection reset"));
         server.Failures.Enqueue(((HttpStatusCode)429, """{"error":"busy"}"""));
+        // LM Studio's answer to a request whose upload stalled for five minutes.
+        server.Failures.Enqueue((HttpStatusCode.RequestTimeout, ""));
         var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
 
         await session.RunAsync("go", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal(3, server.Requests.Count);
-        Assert.Equal(server.Requests[0].ToJsonString(), server.Requests[2].ToJsonString());
+        Assert.Equal(4, server.Requests.Count);
+        Assert.Equal(server.Requests[0].ToJsonString(), server.Requests[3].ToJsonString());
         Assert.Contains(observer.Notices, n => n.Contains("answered 502"));
+        Assert.Contains(observer.Notices, n => n.Contains("answered 408"));
+    }
+
+    [Fact]
+    public async Task An_upload_that_stops_getting_through_is_cut_and_sent_again()
+    {
+        // Over a VPN a request with screenshots stopped getting through mid-upload, and nothing
+        // happened until LM Studio gave up on it five minutes later.
+        var server = new ScriptedServer(Sse.Text("Made it.")) { StalledUploads = 1 };
+        var client = new OpenAiChatClient(new HttpClient(server), "http://test", null) { UploadStallLimit = TimeSpan.FromMilliseconds(300) };
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(true), ctx, "sys");
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("go", observer, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Single(server.Requests); // the one that got through
+        Assert.Contains(observer.Notices, n => n.Contains("stalled"));
+        // The window shows how much of the request is out; the retry starts again from nothing.
+        Assert.Equal(0, observer.Sending[0].Sent);
+        Assert.Equal(observer.Sending[^1].Total, observer.Sending[^1].Sent);
+        Assert.Contains(observer.Sending.Skip(1), s => s.Sent == 0);
+    }
+
+    [Fact]
+    public async Task An_error_answer_cut_off_while_it_comes_in_is_sent_again_like_a_drop()
+    {
+        // Seen over a VPN: the run ended on "Error while copying content to a stream." instead of reconnecting.
+        var server = new ScriptedServer(Sse.Text("Made it.")) { BrokenErrors = 1 };
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("go", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count);
+        Assert.Equal(server.Requests[0].ToJsonString(), server.Requests[1].ToJsonString());
+        Assert.Contains(observer.Notices, n => n.Contains("Reconnecting"));
     }
 
     [Fact]
@@ -306,7 +366,7 @@ public class AgentSessionTests
         Assert.Equal(2, server.Requests.Count); // no handoff request in between
         Assert.Contains(observer.Notices, n => n.Contains("length limit"));
         Assert.Contains(session.History, m => m.Reasoning == "Long thoughts"); // kept, and the model asked to go on
-        Assert.StartsWith("Continue with the task", LastText(server.Requests[1]));
+        Assert.StartsWith("[BlackBox] Continue with the task", LastText(server.Requests[1]));
     }
 
     [Fact]
@@ -352,6 +412,18 @@ public class AgentSessionTests
         var prompt = SystemPrompt.Build("Test OS", null, "C:\\", "");
         Assert.Contains(DateTime.Now.ToString("d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture), prompt);
         Assert.DoesNotMatch(@"\d{1,2}:\d{2}", prompt);
+    }
+
+    [Fact]
+    public void What_nothing_on_the_PC_opens_gets_a_tool_in_BlackBoxs_own_folder()
+    {
+        // The user's rule, after a PDF was decoded by hand in PowerShell: fetch a portable tool or install the program.
+        var prompt = SystemPrompt.Build("Test OS", null, "C:\\", "", webSearch: true, toolsDirectory: @"D:\BlackBox\Data\tools");
+        Assert.Contains(@"download a portable tool for it into D:\BlackBox\Data\tools (an official build; look it up with web_search), or install the program", prompt);
+        Assert.Contains("Accept license agreements", prompt);
+        // A reminder whose process died on a quoting error was reported as set.
+        Assert.Contains("check that it is running before you say it's set up", prompt);
+        Assert.DoesNotContain("web_search", SystemPrompt.Build("Test OS", null, "C:\\", "", toolsDirectory: @"D:\BlackBox\Data\tools"));
     }
 
     [Fact]

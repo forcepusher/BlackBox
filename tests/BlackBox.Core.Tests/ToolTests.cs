@@ -34,7 +34,11 @@ public class ToolTests
         Assert.Equal(1000, ModelCoordinates.GridFor("qwen3.8-27b@q6_k_xl"));
         Assert.Equal(1000, ModelCoordinates.GridFor("Qwen/Qwen3-VL-8B-Instruct"));
         Assert.Null(ModelCoordinates.GridFor("qwen2.5-vl-7b"));
-        Assert.Null(ModelCoordinates.GridFor("gemma-4-31b-it"));
+        // Gemma 4 points on the same grid (its Save As clicks matched it to within 15 steps).
+        Assert.Equal(1000, ModelCoordinates.GridFor("gemma-4-31b-it"));
+        Assert.Equal(1000, ModelCoordinates.GridFor("google/gemma-4-12b-it-qat"));
+        Assert.Null(ModelCoordinates.GridFor("gemma-3-27b-it"));
+        Assert.Null(ModelCoordinates.GridFor("llava-1.6-mistral-7b"));
 
         // The grid spans the whole screen whatever the image size: 500,500 is the middle of a 2560x1080 screen.
         var space = new ScreenSpace(new ScreenRect(0, 0, 2560, 1080), (1920, 1080), grid: 1000);
@@ -53,7 +57,21 @@ public class ToolTests
         var prompt = BlackBox.Core.Agent.SystemPrompt.Build("Test OS", ctx.ScreenSpaces(), "C:\\", "");
         Assert.Contains("0-1000 grid", prompt);
         Assert.DoesNotContain("1920x800", prompt);
+        // Grid steps aren't square: a circle drawn with as many x as y steps came out an oval.
+        Assert.Contains("one x step is 2.56 px and one y step 1.08 px, so something as tall as it is wide spans 2.37 times as many y steps as x steps", prompt);
+        var drag = await new MouseDragTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 100, ["to_x"] = 200, ["to_y"] = 200 }, ctx, CancellationToken.None);
+        Assert.Equal("Dragged 256 x 108 px on screen.", drag.Text);
     }
+
+    [Theory]
+    [InlineData(@"Hello from Gemma\n", "Hello from Gemma\n")]
+    [InlineData(@"gemma.txt\n", "gemma.txt\n")]
+    [InlineData(@"two lines\n\n", "two lines\n\n")]
+    [InlineData(@"printf(""hi\n"");", @"printf(""hi\n"");")]
+    [InlineData(@"C:\Repos\work\n", @"C:\Repos\work\n")]
+    [InlineData("first line\nsecond\\n", "first line\nsecond\\n")]
+    public void A_line_break_written_out_at_the_end_presses_Enter(string sent, string typed) =>
+        Assert.Equal(typed, TypeTextTool.EnterForEscapedBreaks(sent));
 
     [Fact]
     public async Task A_click_goes_where_a_fresh_look_finds_the_target()

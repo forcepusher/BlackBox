@@ -81,13 +81,33 @@ public sealed partial class AssistantMessageItem : ChatItemViewModel
 
     private readonly DateTime _started = DateTime.UtcNow;
 
+    /// <summary>How much of the step's request has gone out to the server; set from the agent's thread.</summary>
+    private long _sent, _total;
+
+    /// <summary>The request on its way out: <paramref name="sent"/> of <paramref name="total"/> bytes; shown by the next <see cref="Tick"/>.</summary>
+    public void Sending(long sent, long total)
+    {
+        Interlocked.Exchange(ref _total, total);
+        Interlocked.Exchange(ref _sent, sent);
+    }
+
     /// <summary>
     /// Under a reply in progress: "…", or while nothing has come yet, for how long. A server
-    /// reading a long prompt sends nothing for minutes; the count shows BlackBox is waiting, not stuck.
+    /// reading a long prompt sends nothing for minutes; the count shows BlackBox is waiting, not
+    /// stuck. Before that the request has to get there, which over a slow link takes minutes too.
     /// </summary>
-    public string TypingText => !HasText && !HasReasoning && DateTime.UtcNow - _started is { TotalSeconds: >= 3 } waited
-        ? $"Waiting for the model… {waited:m\\:ss}"
-        : "…";
+    public string TypingText
+    {
+        get
+        {
+            if (HasText || HasReasoning || DateTime.UtcNow - _started is not { TotalSeconds: >= 3 } waited)
+                return "…";
+            var (sent, total) = (Interlocked.Read(ref _sent), Interlocked.Read(ref _total));
+            return total > 0 && sent < total
+                ? $"Sending to the server… {sent / 1048576.0:0.0} of {total / 1048576.0:0.0} MB, {waited:m\\:ss}"
+                : $"Waiting for the model… {waited:m\\:ss}";
+        }
+    }
 
     /// <summary>Called every second while a run is on, for <see cref="TypingText"/>.</summary>
     public void Tick() => OnPropertyChanged(nameof(TypingText));
@@ -95,7 +115,9 @@ public sealed partial class AssistantMessageItem : ChatItemViewModel
     // Streams arrive with blank lines around them (thinking usually ends in "\n\n" until the
     // reply starts, and the reply opens with them), which showed as empty bands mid-stream.
     public string ShownText => Text.Trim();
-    public string ShownReasoning => Reasoning.Trim();
+
+    /// <summary>The thinking as shown; Gemma 4's comes with its channel's name in front ("thought\n…"), which says nothing.</summary>
+    public string ShownReasoning => Reasoning.Trim() is var r && r.StartsWith("thought\n", StringComparison.Ordinal) ? r[8..].TrimStart() : Reasoning.Trim();
     public bool HasText => !string.IsNullOrWhiteSpace(Text);
     public bool HasReasoning => !string.IsNullOrWhiteSpace(Reasoning);
     public string ThinkingLabel => IsStreaming && !HasText ? "Thinking…" : "Thoughts";

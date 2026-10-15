@@ -47,7 +47,9 @@ internal sealed class WindowsHostWindow : IHostWindow
             return;
         if (NextWindowBelow(_hwnd) is var next and not 0)
         {
-            SetForegroundWindow(next);
+            // A window with a modal dialog open (Save As, a message box) is disabled, and keys sent
+            // to it are lost; they belong to the dialog, as when Alt+Tab goes back to it.
+            SetForegroundWindow(GetLastActivePopup(next) is var popup and not 0 ? popup : next);
             Thread.Sleep(60);
         }
     }
