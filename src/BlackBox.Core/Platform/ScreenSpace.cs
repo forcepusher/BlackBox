@@ -45,6 +45,17 @@ public sealed class ScreenSpace
         ? $"x/y are on a 0-{g} grid over the screenshot, whatever its size: (0, 0) is its top-left corner and ({g}, {g}) its bottom-right."
         : "x/y are pixels of the screenshot, origin top-left.";
 
+    /// <summary>
+    /// That grid steps aren't square, for the system prompt. Drawing a circle in Paint, qwen3.8
+    /// dragged as many x steps as y steps twice and got 385×241 px ovals before it worked it out.
+    /// </summary>
+    public string? Proportions() => Grid is { } g && Screen.Width != Screen.Height
+        ? FormattableString.Invariant(
+            $"The grid isn't square: on this {Screen.Width}x{Screen.Height} screen one x step is {Screen.Width / (double)g:0.##} px and one y step ") +
+          FormattableString.Invariant(
+            $"{Screen.Height / (double)g:0.##} px, so something as tall as it is wide spans {Screen.Width / (double)Screen.Height:0.##} times as many y steps as x steps.")
+        : null;
+
     public (int X, int Y) ToScreen(double modelX, double modelY)
     {
         var x = Screen.X + (int)Math.Round(Math.Clamp(modelX, 0, ModelWidth) * Screen.Width / ModelWidth);

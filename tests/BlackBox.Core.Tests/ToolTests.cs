@@ -53,6 +53,10 @@ public class ToolTests
         var prompt = BlackBox.Core.Agent.SystemPrompt.Build("Test OS", ctx.ScreenSpaces(), "C:\\", "");
         Assert.Contains("0-1000 grid", prompt);
         Assert.DoesNotContain("1920x800", prompt);
+        // Grid steps aren't square: a circle drawn with as many x as y steps came out an oval.
+        Assert.Contains("one x step is 2.56 px and one y step 1.08 px, so something as tall as it is wide spans 2.37 times as many y steps as x steps", prompt);
+        var drag = await new MouseDragTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 100, ["to_x"] = 200, ["to_y"] = 200 }, ctx, CancellationToken.None);
+        Assert.Equal("Dragged 256 x 108 px on screen.", drag.Text);
     }
 
     [Fact]

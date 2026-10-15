@@ -274,7 +274,9 @@ public sealed class MouseDragTool : DesktopActionTool
         {
             input.MouseUp(MouseButton.Left);
         }
-        return "Dragged.";
+        // In screen pixels, as apps measure what was drawn or selected: on the 0-1000 grid equal
+        // x and y steps are not equal distances.
+        return $"Dragged {Math.Abs(x2 - x1)} x {Math.Abs(y2 - y1)} px on screen.";
     }
 }
 

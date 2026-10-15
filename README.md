@@ -133,7 +133,11 @@ screenshot.
 Coordinates follow what the model was trained on. Qwen3 and later point on a 0-1000 grid over the
 image, so for them x/y are on that grid; asked for pixels, qwen3.8 slipped back to the grid in about
 a third of its clicks and missed by hundreds of pixels (11/16 hits against 16/16 on the grid in
-`ClickAccuracyTests`). Every other model gets screenshot pixels.
+`ClickAccuracyTests`). Every other model gets screenshot pixels. The grid's steps aren't square
+(on a 1920×1200 screen an x step is 1.92 px and a y step 1.2 px): asked to draw a circle in Paint,
+qwen3.8 dragged as many x as y steps and got 346×217 and 385×241 px ovals before it worked that
+out. So the system prompt gives both step sizes, and `mouse_drag` says how far it went in screen
+pixels.
 
 Screenshots go out at full resolution by default. In LM Studio, turn off the model's "Image Input:
 Never exceed 2048 px" option, or it shrinks them back to about 2048×864 (qwen3.8 hit text links

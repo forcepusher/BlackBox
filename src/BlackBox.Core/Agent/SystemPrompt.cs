@@ -33,7 +33,7 @@ public static class SystemPrompt
         else if (screen is { Grid: null })
             sb.AppendLine($"- Screenshots are {screen.ImageWidth}x{screen.ImageHeight} pixels.");
         if (screen is not null)
-            sb.AppendLine("- Coordinates: " + screen.Describe());
+            sb.AppendLine("- Coordinates: " + screen.Describe() + (screen.Proportions() is { } p ? " " + p : ""));
         sb.AppendLine();
         sb.AppendLine("How to work:");
         if (screen is not null)
