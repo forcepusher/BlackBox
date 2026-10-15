@@ -17,11 +17,15 @@ BlackBox/
                tools/ (portable programs the agent downloaded)
 ```
 
-When nothing on the PC opens a file or does a job the agent needs (a PDF to read, a format to
-convert), it downloads a portable tool into `Data/tools`, where later tasks find it, or installs
-the program, rather than decoding the file by hand: asked to summarize a PDF, qwen3.8 spent eight
-minutes inflating its streams and mapping glyphs in PowerShell. It also accepts the license
-agreements and first-run prompts of the programs it uses (Office asks on its first start).
+`read_file` reads more than text: PDFs (their text layer, page by page), Word, Excel and PowerPoint
+files (Excel cell by cell with its formulas, Word with headings, lists, bold and tables) and
+pictures, which the model sees like a screenshot. Before, asked to summarize a PDF, qwen3.8 spent
+eight minutes inflating its streams and mapping glyphs in PowerShell, and a question about a chart
+picture took six minutes of finding a program to show it. When nothing on the PC opens a file or
+does a job the agent needs (another format, a conversion, an archive), it downloads a portable tool
+into `Data/tools`, where later tasks find it, or installs the program, rather than decoding the
+file by hand. It also accepts the license agreements and first-run prompts of the programs it uses
+(Office asks on its first start).
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
 The agent itself works across the whole PC; relative paths and shell commands start in your home folder.
@@ -126,7 +130,7 @@ it fails, reports the error to the model and the run goes on.
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
-| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
+| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures to the model; `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
 | `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |
@@ -210,7 +214,7 @@ writes it as text: `#` headings, `-` lists, fenced code blocks, `| a | b |` tabl
 their text. A page comes in parts of 6,000 characters (about 1.5k tokens), so a long page can't
 flood the context, and `find` returns just the matching lines with a little context and the heading
 they sit under. A page that turns away plain requests, or that its scripts build, is loaded in the
-headless browser instead. PDFs aren't read. The last eight pages are kept in memory, so reading on
+headless browser instead. A PDF comes as its text, page by page, like `read_file` reads one. The last eight pages are kept in memory, so reading on
 doesn't download a page again. The browser's profile is `Data/browser`. Turn web access off in
 Settings → General.
 

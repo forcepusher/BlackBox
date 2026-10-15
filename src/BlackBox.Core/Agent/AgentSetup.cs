@@ -22,6 +22,7 @@ public static class AgentSetup
             Settings = agent,
             WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             CoordinateGrid = ModelCoordinates.GridFor(backend.Options.Model),
+            SeesImages = backend.Vision,
             Browser = agent.WebSearch ? HeadlessBrowser.Find(paths.BrowserProfileDir) : null,
             Ssh = ssh,
         };

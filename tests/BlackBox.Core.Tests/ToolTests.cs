@@ -438,9 +438,10 @@ public class ToolTests
         var past = await tool.ExecuteAsync(new JsonObject { ["path"] = log, ["offset"] = 200_000 }, Ctx(new FakePlatform(), dir), CancellationToken.None);
         Assert.Equal("The file has only 100000 lines.", past.Text);
 
-        var png = Path.Combine(dir, "picture.png");
-        File.WriteAllBytes(png, TestPng);
-        var binary = await tool.ExecuteAsync(new JsonObject { ["path"] = png }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+        // A picture is shown to the model (see ReadFileTests); other binaries are turned down.
+        var data = Path.Combine(dir, "picture.bin");
+        File.WriteAllBytes(data, TestPng);
+        var binary = await tool.ExecuteAsync(new JsonObject { ["path"] = data }, Ctx(new FakePlatform(), dir), CancellationToken.None);
         Assert.True(binary.IsError);
         Assert.Contains("not a text file", binary.Text);
 

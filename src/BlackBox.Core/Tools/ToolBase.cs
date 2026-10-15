@@ -15,7 +15,8 @@ public enum ToolRisk
     Risky,
 }
 
-public sealed record ToolResult(string Text, byte[]? Image = null, string ImageMime = "image/jpeg", bool IsError = false)
+/// <param name="ImageCaption">What the image is, said where it reaches the model; null for a screenshot after an action.</param>
+public sealed record ToolResult(string Text, byte[]? Image = null, string ImageMime = "image/jpeg", bool IsError = false, string? ImageCaption = null)
 {
     public static ToolResult Error(string text) => new(text, IsError: true);
 }
@@ -29,6 +30,9 @@ public sealed class ToolContext
 
     /// <summary>The relative grid the model gives x/y on (see <see cref="ScreenSpace"/>), or null for screenshot pixels. Set from the model, see <see cref="ModelCoordinates"/>.</summary>
     public int? CoordinateGrid { get; init; }
+
+    /// <summary>Whether the model takes images, so read_file can show it a picture.</summary>
+    public bool SeesImages { get; init; } = true;
 
     /// <summary>
     /// The monitor the agent is looking at (0 = primary): the one the latest screenshot showed.

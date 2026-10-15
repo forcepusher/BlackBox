@@ -56,7 +56,7 @@ public static class SystemPrompt
         // The user's rule: what can't be opened gets the right tool, not a hand-made decoder (a PDF
         // took eight minutes of inflating streams and mapping glyphs in PowerShell).
         if (toolsDirectory is not null)
-            sb.AppendLine($"- When nothing on this PC can open a file or do a job you need (read a PDF, convert a format, unpack an archive), don't decode it " +
+            sb.AppendLine($"- When nothing on this PC can open a file or do a job you need (a format read_file doesn't read, a conversion, an archive), don't decode it " +
                           $"or rebuild it by hand: download a portable tool for it into {toolsDirectory}" +
                           (webSearch ? " (an official build; look it up with web_search)" : "") +
                           ", or install the program that does it. Check that folder first for tools fetched for earlier tasks.");

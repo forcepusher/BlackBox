@@ -37,7 +37,10 @@ public sealed class ReadFileTool : Tool
     private const int MaxChars = 60_000;
 
     public override string Name => "read_file";
-    public override string Description => "Read a text file. Relative paths are resolved against the working directory. Returns numbered lines.";
+    public override string Description =>
+        "Read a file. Text files come back as numbered lines; PDF, Word (.docx), Excel (.xlsx) and PowerPoint (.pptx) files as their text " +
+        "(Excel cell by cell, with formulas); a picture (PNG, JPEG, GIF, BMP, WebP) is shown to you as an image. " +
+        "Relative paths are resolved against the working directory.";
     public override ToolRisk Risk => ToolRisk.ReadOnly;
     public override JsonObject Parameters => Schema(
         ("path", Str("File path"), true),
@@ -56,24 +59,44 @@ public sealed class ReadFileTool : Tool
         var path = ctx.ResolvePath(RequireString(args, "path"));
         if (!File.Exists(path))
             return ToolResult.Error($"File not found: {path}");
-        if (IsBinary(path))
-            return ToolResult.Error($"{path} is not a text file ({new FileInfo(path).Length:N0} bytes); read_file reads text only.");
-
         var offset = Math.Max(1, (int)(GetNumber(args, "offset") ?? 1));
         var limit = Math.Clamp((int)(GetNumber(args, "limit") ?? 400), 1, 5000);
 
+        if (Picture.Handles(path))
+        {
+            // A photo or chart asked about took six minutes and a stuck "you'll need a new app"
+            // box when the model had to find a program to show it on screen.
+            if (!ctx.SeesImages)
+                return ToolResult.Error($"{path} is a picture, and the model in use can't see images.");
+            return Picture.Read(path);
+        }
+        if (DocumentText.Handles(path))
+        {
+            string text;
+            try { text = DocumentText.Read(path); }
+            catch (InvalidDataException ex) { return ToolResult.Error(ex.Message); }
+            using var lines = new StringReader(text);
+            return await NumberedAsync(lines, offset, limit, ct).ConfigureAwait(false);
+        }
+        if (IsBinary(path))
+            return ToolResult.Error($"{path} is not a text file ({new FileInfo(path).Length:N0} bytes); read_file reads text, PDF and Office documents, and pictures.");
+
         // Line by line, so a log of gigabytes doesn't have to fit in memory to read a part of it.
+        using var reader = new StreamReader(path, detectEncodingFromByteOrderMarks: true);
+        return await NumberedAsync(reader, offset, limit, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Lines <paramref name="offset"/> on, numbered, up to <paramref name="limit"/> of them and <see cref="MaxChars"/> in all.</summary>
+    private static async Task<ToolResult> NumberedAsync(TextReader reader, int offset, int limit, CancellationToken ct)
+    {
         var sb = new StringBuilder();
         int total = 0, last = 0;
-        using (var reader = new StreamReader(path, detectEncodingFromByteOrderMarks: true))
+        while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
         {
-            while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
+            if (++total >= offset && total < offset + limit && sb.Length < MaxChars)
             {
-                if (++total >= offset && total < offset + limit && sb.Length < MaxChars)
-                {
-                    sb.Append(total).Append('\t').AppendLine(line);
-                    last = total;
-                }
+                sb.Append(total).Append('\t').AppendLine(line);
+                last = total;
             }
         }
         if (total == 0)
