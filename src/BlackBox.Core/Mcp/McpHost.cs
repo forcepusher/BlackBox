@@ -234,7 +234,8 @@ public sealed class McpHost : IAsyncDisposable
             _state = McpServerState.Failed;
             string[] lines;
             lock (stderr) lines = stderr.ToArray();
-            _error = lines.Length > 0 ? error + " It said: " + string.Join(" / ", lines) : error;
+            // The SDK's own message may already end in what the server printed ("Server's stderr tail").
+            _error = lines.Length > 0 && !lines.All(error.Contains) ? error + " It said: " + string.Join(" / ", lines) : error;
         }
 
         public void NameTools(HashSet<string> taken)
