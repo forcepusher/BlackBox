@@ -30,8 +30,9 @@ public sealed record ModelInfo(string Id)
 
 /// <summary>
 /// The model to use when none was picked by hand, or the picked one isn't on the server: the
-/// strongest one the server offers. Sizes and quantizations come from the server where it says
-/// (LM Studio does, see <see cref="ServerProbe"/>), else from the names, which usually carry them
+/// strongest one the server offers, by its score on an agent benchmark (<see cref="AgentBenchmark"/>)
+/// where known, else by size. Sizes and quantizations come from the server where it says (LM Studio
+/// does, see <see cref="ServerProbe"/>), else from the names, which usually carry them
 /// ("qwen3.8-27b@q6_k_xl").
 /// </summary>
 public static partial class ModelChoice
@@ -47,20 +48,31 @@ public static partial class ModelChoice
 
     /// <summary>
     /// The strongest model that can chat. One that takes images comes first (without them the agent
-    /// can't see the screen); then the most parameters, a mixture of experts counted as the dense
-    /// model it is about as strong as (<see cref="DenseEquivalent"/>); then the most bits per
-    /// weight; then one already loaded, which answers without loading; then the server's own order.
-    /// A size or quantization nothing tells counts below every known one, and a file far too small
-    /// for its size and quantization (<see cref="LooksIncomplete"/>) comes last.
+    /// can't see the screen; where the server doesn't say, the benchmark table may). Then the best
+    /// score on <see cref="AgentBenchmark"/>, and a model without one after every model with one;
+    /// then the most parameters, a mixture of experts counted as the dense model it is about as
+    /// strong as (<see cref="DenseEquivalent"/>); then, between equal scores and sizes, a later
+    /// version scored as the one it follows; then the most bits per weight; then one already
+    /// loaded, which answers without loading; then the server's own order. A size or quantization
+    /// nothing tells counts below every known one, and a file far too small for its size and
+    /// quantization (<see cref="LooksIncomplete"/>) comes last.
     /// </summary>
     public static ModelInfo? Strongest(IEnumerable<ModelInfo> offered) =>
         offered.Where(m => m.Chat)
-            .OrderBy(LooksIncomplete)
-            .ThenBy(m => m.Vision == false)
-            .ThenByDescending(m => DenseEquivalent(m) ?? -1)
-            .ThenByDescending(m => m.Bits ?? -1)
-            .ThenByDescending(m => m.Loaded)
+            .Select(m => (Model: m, Rating: AgentBenchmark.Rate(m)))
+            .OrderBy(x => LooksIncomplete(x.Model))
+            .ThenBy(x => SeesImages(x.Model, x.Rating) == false)
+            .ThenByDescending(x => x.Rating?.Score ?? -1)
+            .ThenByDescending(x => DenseEquivalent(x.Model) ?? -1)
+            .ThenByDescending(x => x.Rating is { Exact: false })
+            .ThenByDescending(x => x.Model.Bits ?? -1)
+            .ThenByDescending(x => x.Model.Loaded)
+            .Select(x => x.Model)
             .FirstOrDefault();
+
+    /// <summary>Whether the model takes images: what the server says, else what the benchmark table says of it; null when neither says.</summary>
+    private static bool? SeesImages(ModelInfo m, BenchmarkRating? rating) =>
+        m.Vision ?? (rating is { Exact: true } own ? own.Basis.Vision : null);
 
     /// <summary>
     /// Billions of parameters of a dense model as strong as this one. A mixture of experts is about
@@ -77,7 +89,10 @@ public static partial class ModelChoice
     internal static bool LooksIncomplete(ModelInfo m) =>
         m.SizeBytes is { } size && m.Params is { } total && m.Bits is { } bits && size < total * 1e9 * bits / 8 / 2;
 
-    /// <summary>"31B, 5-bit", "30B-A3B, 4-bit", "27B"; null when nothing is known.</summary>
+    /// <summary>
+    /// "27B, 6-bit, 79.8% on Terminal-Bench 2.1", "27B, 5-bit, scored as Qwen3.5 9B: 29.2% on
+    /// Terminal-Bench 2.1", "30B-A3B, 4-bit", "27B"; null when nothing is known.
+    /// </summary>
     public static string? Describe(ModelInfo m)
     {
         var parts = new List<string>();
@@ -85,6 +100,11 @@ public static partial class ModelChoice
             parts.Add(m.ActiveParams is { } active ? $"{Count(total)}-A{Count(active)}" : Count(total));
         if (m.Bits is { } bits)
             parts.Add(bits.ToString("0.#", CultureInfo.InvariantCulture) + "-bit");
+        if (AgentBenchmark.Rate(m) is { } rating)
+        {
+            var score = rating.Score.ToString("0.0", CultureInfo.InvariantCulture) + "% on " + AgentBenchmark.Name;
+            parts.Add(rating.Exact ? score : $"scored as {rating.Basis.Model}: {score}");
+        }
         return parts.Count > 0 ? string.Join(", ", parts) : null;
 
         static string Count(double billions) => billions >= 1

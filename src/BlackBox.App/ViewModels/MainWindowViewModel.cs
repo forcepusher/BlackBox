@@ -320,15 +320,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
     }
 
-    /// <summary>Size and quantization of the model BlackBox picked ("31B, 5-bit"), if the server or its name tells them.</summary>
-    private string? _autoModelSize;
+    /// <summary>Size, quantization and benchmark score of the model BlackBox picked ("27B, 6-bit, 79.8% on Terminal-Bench 2.1"), as far as known.</summary>
+    private string? _autoModelDetails;
 
-    private string AutoModelSize => _autoModelSize is { } size ? $" ({size})" : "";
+    private string AutoModelDetails => _autoModelDetails is { } details ? $" ({details})" : "";
 
     /// <summary>Why the model shown is the one, when BlackBox picked it.</summary>
     public string? ModelToolTip => string.IsNullOrEmpty(_settings.Server.Model) && _settings.Server.AutoModel is not null
-        ? $"Picked by BlackBox as the strongest model the server offers{AutoModelSize}: the most parameters, then the most bits per weight. " +
-          "Pick one yourself to keep using it."
+        ? $"Picked by BlackBox as the strongest model the server offers{AutoModelDetails}: the best score on an agent benchmark, " +
+          "else the most parameters, then the most bits per weight. Pick one yourself to keep using it."
         : null;
 
     private async Task CheckAfterTypingAsync()
@@ -380,7 +380,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         if (probe.Reachable)
         {
             server.AutoModel = probe.AutoPicked ? probe.Model : null;
-            _autoModelSize = probe.ModelSize;
+            _autoModelDetails = probe.ModelDetails;
         }
         SetModels(probe.Models);
         OnPropertyChanged(nameof(ModelToolTip));
@@ -409,7 +409,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var status = "Connected" + (probe.Vision == false ? " · no vision" : "");
         if (probe.AutoPicked && server.Model.Length > 0)
             SetStatus(ServerState.Connected, status,
-                $"The server doesn't offer \"{server.Model}\" right now, so BlackBox uses {probe.Model}{AutoModelSize}, the strongest model it offers, " +
+                $"The server doesn't offer \"{server.Model}\" right now, so BlackBox uses {probe.Model}{AutoModelDetails}, the strongest model it offers, " +
                 "and goes back to yours as soon as the server lists it again. To stop waiting for it, pick another model at the top.",
                 "Your model isn't on the server");
         else

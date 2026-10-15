@@ -80,10 +80,10 @@ using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a mo
     {
         // As in the app: the strongest model the server offers, until the picked one is back.
         settings.Server.AutoModel = probe.Model;
-        var size = probe.ModelSize is { } s ? $" ({s})" : "";
+        var details = probe.ModelDetails is { } known ? $" ({known})" : "";
         Console.WriteLine(settings.Server.Model.Length == 0
-            ? $"[server] no model picked: using {probe.Model}{size}, the strongest the server offers"
-            : $"[server] the server doesn't offer {settings.Server.Model}: using {probe.Model}{size}, the strongest it offers");
+            ? $"[server] no model picked: using {probe.Model}{details}, the strongest the server offers"
+            : $"[server] the server doesn't offer {settings.Server.Model}: using {probe.Model}{details}, the strongest it offers");
     }
     settings.Server.SupportsVision = probe.Vision ?? true;
     if (await ServerProbe.EnsureLoadedAsync(probeHttp, settings.Server, () => Console.WriteLine("[server] loading the model…"), cts.Token) is { } c)
