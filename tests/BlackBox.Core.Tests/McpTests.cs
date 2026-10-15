@@ -286,6 +286,56 @@ public class McpTests
     }
 
     [Fact]
+    public async Task The_agent_sets_up_a_server_itself_and_uses_its_tools_in_the_same_run()
+    {
+        var servers = new InProcessServer();
+        await using var _ = servers;
+        await using var host = new McpHost
+        {
+            TransportFactory = c => c.Name == "broken" ? throw new InvalidOperationException("no such program") : servers.Start(c.Name),
+        };
+        var file = Path.Combine(Directory.CreateTempSubdirectory("bb-mcp-").FullName, "mcp.json");
+        McpConfig.Save(file, """{ "mcpServers": { "other": { "command": "x", "disabled": true } } }""");
+        var model = new ScriptedServer(
+            Sse.ToolCall("c1", "mcp_servers", """{"action": "add", "name": "broken", "command": "nothing.exe"}"""),
+            Sse.ToolCall("c2", "mcp_servers", """{"action": "add", "name": "test", "command": "C:\\tools\\uv\\uvx.exe", "args": ["test-mcp"], "env": {"TOKEN": "t"}}"""),
+            Sse.ToolCall("c3", "test__add", """{"a": 2, "b": 3}"""),
+            Sse.ToolCall("c4", "mcp_servers", """{"action": "list"}"""),
+            Sse.Text("Done."));
+        var setup = new McpSetup(host, file);
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(), Mcp = setup };
+        var registry = ToolRegistry.CreateDefault(includeScreenTools: false, extra: [new McpServersTool()]);
+        setup.Registry = registry;
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(model), "http://test", null), new ChatRequestOptions(), registry, ctx, "sys");
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("Set up the test server and add 2 and 3", observer, CancellationToken.None);
+
+        // A server that doesn't start isn't kept, and says why.
+        Assert.True(observer.Results[0].IsError);
+        Assert.Contains("no such program", observer.Results[0].Text);
+        // One that starts is kept in the file the user edits in Settings, and its tools are there from the next request on.
+        Assert.Contains("test__add", observer.Results[1].Text);
+        Assert.DoesNotContain(model.Requests[1]["tools"]!.AsArray(), t => t!["function"]!["name"]!.GetValue<string>() == "test__add");
+        Assert.Contains(model.Requests[2]["tools"]!.AsArray(), t => t!["function"]!["name"]!.GetValue<string>() == "test__add");
+        Assert.Equal("5", observer.Results[2].Text);
+        Assert.Contains("test: connected, 6 tools", observer.Results[3].Text);
+        var saved = McpConfig.Parse(File.ReadAllText(file)).Servers;
+        Assert.Equal(["other", "test"], saved.Select(s => s.Name));
+        Assert.Equal(@"C:\tools\uv\uvx.exe", saved[1].Command);
+        Assert.Equal(["test-mcp"], saved[1].Args);
+        Assert.Equal("t", saved[1].Env["TOKEN"]);
+        Assert.True(saved[0].Disabled);
+
+        // Removing it stops it and forgets it.
+        var removed = await new McpServersTool().ExecuteAsync(new JsonObject { ["action"] = "remove", ["name"] = "test" }, ctx, CancellationToken.None);
+        Assert.False(removed.IsError, removed.Text);
+        Assert.Equal(["other"], McpConfig.Parse(File.ReadAllText(file)).Servers.Select(s => s.Name));
+        Assert.Null(registry.Find("test__add"));
+        Assert.Empty(host.Tools);
+    }
+
+    [Fact]
     public async Task Approval_follows_the_servers_read_only_annotation()
     {
         var (host, servers) = await ConnectAsync("test");

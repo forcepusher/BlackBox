@@ -58,6 +58,8 @@ public static class SystemPrompt
         sb.AppendLine("- Make Word, Excel, PowerPoint and PDF files with write_file (Markdown becomes the real document) and change them with edit_file, " +
                       "which keeps their formatting; neither needs Office. Use the Office program only when the user wants to see it done there, " +
                       "or for what these can't do (a chart, a page layout, a PDF that looks exactly like a Word document).");
+        sb.AppendLine("- A program that has an MCP server (Blender, a database, a browser…) is far better driven through it than through its window: " +
+                      "set up what it needs, add the server with mcp_servers and use its tools; " + (webSearch ? "look up how the server is set up with web_search." : "its README says how it is set up."));
         // The user's rule: what can't be opened gets the right tool, not a hand-made decoder (a PDF
         // took eight minutes of inflating streams and mapping glyphs in PowerShell).
         if (toolsDirectory is not null)

@@ -76,6 +76,9 @@ public sealed class ToolContext
     /// <summary>The servers this chat is logged in to over SSH (the ssh tool, and the file tools with host); null when SSH is off.</summary>
     public Ssh.SshHosts? Ssh { get; init; }
 
+    /// <summary>The app's MCP servers, for the agent to set one up itself (mcp_servers); null when it can't.</summary>
+    public Mcp.McpSetup? Mcp { get; init; }
+
     /// <summary>All monitors in physical pixels, the primary first.</summary>
     public IReadOnlyList<ScreenRect> Screens => Platform.Screen.GetScreens();
 

@@ -189,7 +189,8 @@ method there, not a property).
 | `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |
 | `web_search` | Searches the web: titles, links and snippets (see below) |
 | `fetch_page` | Reads a web page as plain text; `find` returns only the passages that mention some words, `start` reads on in a long page |
-| `<server>__<tool>` | Any tool of the MCP servers you add in Settings → Advanced (see below) |
+| `mcp_servers` | Adds, removes and lists MCP servers: a server the agent adds starts at once, its tools join the run, and it is kept in `Data/mcp.json` for later tasks (see below) |
+| `<server>__<tool>` | Any tool of the MCP servers you or the agent added (see below) |
 
 Models often fumble tool-call syntax, so BlackBox repairs calls on the fly: Qwen XML, Gemma 4 and
 JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…) and misnamed
@@ -360,6 +361,13 @@ commands. Text results go back to the model as they are; an image result is show
 screenshot. Comments and trailing commas in the file are fine. The settings dialog shows what each
 server reported when it started, and a server that fails to start is reported in the chat; the
 others keep working.
+
+The agent sets servers up itself too, with its `mcp_servers` tool: when a program it is asked to
+use has an MCP server (Blender, a database, a browser), it installs what the server needs, adds it
+(`add` with a name and a command or url, as in the file), and its tools join the run at once and
+stay for later tasks; the entry lands in `Data/mcp.json`, where Settings shows it. A server that
+doesn't start isn't kept, and the agent is told why. `remove` and `list` do what they say. Adding
+tools mid-run changes the tool list, so the server works through the whole prompt once more.
 
 Actions run without asking by default (approvals can be switched on in Settings → General).
 Pressing Stop, or Esc anywhere, halts the agent. Esc works whatever window has focus, and the

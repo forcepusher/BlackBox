@@ -17,6 +17,7 @@ public static class AgentSetup
     public static AgentSession Create(BackendConnection backend, IPlatformServices platform, AgentSettings agent, AppPaths paths,
         McpHost mcp, SshHosts ssh, List<ChatMessage>? history = null, Func<bool>? userComposing = null)
     {
+        var mcpSetup = new McpSetup(mcp, paths.McpConfigFile);
         var ctx = new ToolContext
         {
             Platform = platform,
@@ -27,6 +28,7 @@ public static class AgentSetup
             UserComposing = userComposing,
             Browser = agent.WebSearch ? HeadlessBrowser.Find(paths.BrowserProfileDir) : null,
             Ssh = ssh,
+            Mcp = mcpSetup,
         };
 
         // A model that can't see gets no screen tools, nor does an OS without desktop control.
@@ -41,8 +43,10 @@ public static class AgentSetup
         try { Directory.CreateDirectory(paths.ScratchDir); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
 
-        // The MCP tools are a snapshot: the tool list stays the same for the whole run.
-        var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: mcp.Tools, includeWebTools: agent.WebSearch);
+        // The MCP tools are a snapshot: the tool list stays the same for the whole run, unless the
+        // agent sets up a server itself (mcp_servers), whose tools then join it.
+        var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: [new McpServersTool(), .. mcp.Tools], includeWebTools: agent.WebSearch);
+        mcpSetup.Registry = registry;
         var prompt = SystemPrompt.Build(platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, mcp.Connected, agent.WebSearch, paths.ToolsDir, paths.ScratchDir);
         return new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, history, backend.ContextTokens);
     }

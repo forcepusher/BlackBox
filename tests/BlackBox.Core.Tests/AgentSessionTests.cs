@@ -513,6 +513,7 @@ public class AgentSessionTests
         // A reminder whose process died on a quoting error was reported as set.
         Assert.Contains("check that it is running before you say it's set up", prompt);
         Assert.Contains("Make Word, Excel, PowerPoint and PDF files with write_file", prompt);
+        Assert.Contains("add the server with mcp_servers and use its tools", prompt);
         // Helper files go to BlackBox's own folder, not the user's (a reminder script landed in the home folder).
         Assert.Contains(@"go in D:\BlackBox\Data\scratch, not in the user's folders",
             SystemPrompt.Build("Test OS", null, "C:\\", "", toolsDirectory: @"D:\BlackBox\Data\tools", scratchDirectory: @"D:\BlackBox\Data\scratch"));
