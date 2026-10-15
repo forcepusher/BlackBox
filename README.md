@@ -276,8 +276,10 @@ server reported when it started, and a server that fails to start is reported in
 others keep working.
 
 Actions run without asking by default (approvals can be switched on in Settings → General).
-Pressing Stop, or the Break (Pause) key anywhere, halts the agent. The Break key works whatever
-window has focus; the agent's own key presses can't trigger it. BlackBox
+Pressing Stop, or the Windows key anywhere, halts the agent. The Windows key works whatever window
+has focus, and the press that stops a run does nothing else: the Start menu stays shut, and a
+shortcut like Win+E types no "e" into the agent's window. With no run going it is the usual
+Windows key, and the agent's own presses (win+r and the like) can't trigger it. BlackBox
 stays on screen while it works but is hidden from the agent's screenshots, and steps behind other
 windows for the moment a click lands on it. Every click and key press the agent makes shows up in a
 log in the bottom-right corner that fades after 15 seconds (adjustable), with a ring where it clicked. The agent

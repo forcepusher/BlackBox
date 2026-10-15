@@ -506,7 +506,7 @@ public class ToolTests
     }
 
     [Fact]
-    public async Task Break_key_stops_a_run_but_the_agents_own_presses_do_not()
+    public async Task Windows_key_stops_a_run_but_Break_and_the_agents_own_presses_do_not()
     {
 #if !WINDOWS
         Assert.Skip("Windows only");
@@ -516,18 +516,69 @@ public class ToolTests
         var platform = new BlackBox.Platform.Windows.WindowsPlatform();
         using var watch = platform.StopKey.Watch(() => pressed.TrySetResult(true));
 
-        platform.Input.PressKeys(["pause"]); // the agent's own press is tagged and ignored
+        platform.Input.PressKeys(["win", "f24"]); // the agent's own press is tagged and ignored (F24 keeps the Start menu shut)
+        UserKeys((Pause, false), (Pause, true)); // Break, the stop key before, now goes through to the focused app
         await Task.Delay(300, TestContext.Current.CancellationToken);
         Assert.False(pressed.Task.IsCompleted);
 
-        // A press like the user's: injected without the tag.
-        BlackBox.Platform.Windows.Native.INPUT[] inputs =
-        [
-            new() { type = BlackBox.Platform.Windows.Native.INPUT_KEYBOARD, u = new() { ki = new() { wVk = 0x13 } } },
-            new() { type = BlackBox.Platform.Windows.Native.INPUT_KEYBOARD, u = new() { ki = new() { wVk = 0x13, dwFlags = BlackBox.Platform.Windows.Native.KEYEVENTF_KEYUP } } },
-        ];
-        BlackBox.Platform.Windows.Native.SendInput(2, inputs, System.Runtime.InteropServices.Marshal.SizeOf<BlackBox.Platform.Windows.Native.INPUT>());
+        UserKeys((LWin, false), (LWin, true));
         Assert.Same(pressed.Task, await Task.WhenAny(pressed.Task, Task.Delay(3000, TestContext.Current.CancellationToken)));
+#endif
+    }
+
+    [Fact]
+    public async Task A_windows_key_press_that_stops_a_run_does_nothing_else()
+    {
+#if !WINDOWS
+        Assert.Skip("Windows only");
+        await Task.CompletedTask;
+#else
+        var ct = TestContext.Current.CancellationToken;
+        var running = 1;
+        var platform = new BlackBox.Platform.Windows.WindowsPlatform();
+        using var watch = platform.StopKey.Watch(() => Interlocked.Exchange(ref running, 0) == 1);
+        try
+        {
+            // win+f24 during a run stops it, and Windows sees neither key, held and repeating: no
+            // Start menu, no stray key in the agent's window. The agent's own keys still go through.
+            UserKeys((LWin, false));
+            await Task.Delay(50, ct);
+            Assert.Equal(0, Volatile.Read(ref running));
+            UserKeys((F24, false), (LWin, false), (F24, false));
+            await Task.Delay(50, ct);
+            Assert.False(IsDown(LWin) || IsDown(F24));
+            using (platform.Input.HoldKeys(["f23"]))
+            {
+                await Task.Delay(50, ct);
+                Assert.True(IsDown(F23));
+            }
+            UserKeys((F24, true), (LWin, true));
+            await Task.Delay(50, ct);
+
+            // With no run going it is the Windows key again: win+f24 reaches Windows.
+            UserKeys((LWin, false), (F24, false));
+            await Task.Delay(50, ct);
+            Assert.True(IsDown(LWin) && IsDown(F24));
+            UserKeys((F24, true), (LWin, true));
+            await Task.Delay(50, ct);
+            Assert.False(IsDown(LWin) || IsDown(F24));
+
+            // A stop press whose key-up the hook never sees (focus went to an elevated window, say)
+            // holds the keyboard for a moment only.
+            Interlocked.Exchange(ref running, 1);
+            UserKeys((LWin, false));
+            await Task.Delay(2700, ct);
+            UserKeys((F24, false));
+            await Task.Delay(50, ct);
+            Assert.True(IsDown(F24));
+            UserKeys((F24, true), (LWin, true));
+        }
+        finally
+        {
+            // Whatever failed, nothing is left held down.
+            foreach (var vk in new[] { LWin, F23, F24 }.Where(IsDown))
+                UserKeys((vk, true));
+        }
 #endif
     }
 
@@ -554,6 +605,21 @@ public class ToolTests
 #if WINDOWS
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int vk);
+
+    private const int Pause = 0x13, LWin = 0x5B, F23 = 0x86, F24 = 0x87;
+
+    private static bool IsDown(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
+
+    /// <summary>Key events like the user's: injected without BlackBox's tag.</summary>
+    private static void UserKeys(params (int Vk, bool Up)[] keys)
+    {
+        var inputs = keys.Select(k => new BlackBox.Platform.Windows.Native.INPUT
+        {
+            type = BlackBox.Platform.Windows.Native.INPUT_KEYBOARD,
+            u = new() { ki = new() { wVk = (ushort)k.Vk, dwFlags = k.Up ? BlackBox.Platform.Windows.Native.KEYEVENTF_KEYUP : 0 } },
+        }).ToArray();
+        BlackBox.Platform.Windows.Native.SendInput((uint)inputs.Length, inputs, System.Runtime.InteropServices.Marshal.SizeOf<BlackBox.Platform.Windows.Native.INPUT>());
+    }
 #endif
 
     [Fact]

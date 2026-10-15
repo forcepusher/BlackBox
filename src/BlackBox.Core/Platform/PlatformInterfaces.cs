@@ -116,14 +116,14 @@ public sealed class NoInputOverlay : IInputOverlay
 }
 
 /// <summary>
-/// A system-wide stop key (Break, i.e. Pause or Ctrl+Pause) that works whatever window has focus.
+/// A system-wide stop key (the Windows key) that works whatever window has focus.
 /// </summary>
 public interface IStopKey
 {
     /// <summary>
-    /// Calls <paramref name="onPressed"/> (on any thread) when the key is pressed. It returns true
-    /// if it stopped something, in which case the press is swallowed; otherwise the key goes
-    /// through to the focused app as usual.
+    /// Calls <paramref name="onPressed"/> (on any thread) when the user presses the key. It returns
+    /// true if it stopped something, in which case the press is swallowed, with any keys pressed
+    /// along with it; otherwise the key goes through to the focused app as usual.
     /// </summary>
     IDisposable Watch(Func<bool> onPressed);
 }

@@ -189,7 +189,7 @@ public static class ContextSizes
 
 public sealed class AgentSettings
 {
-    /// <summary>Everything runs without asking by default; Stop and the Break key stay available.</summary>
+    /// <summary>Everything runs without asking by default; Stop and the Windows key stay available.</summary>
     public ApprovalMode Approval { get; set; } = ApprovalMode.Never;
 
     /// <summary>

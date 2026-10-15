@@ -518,7 +518,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     [RelayCommand(CanExecute = nameof(IsBusy))]
     private void Stop() => _runCts?.Cancel();
 
-    /// <summary>The Break key, from the hook's thread: stops the run in progress, if any.</summary>
+    /// <summary>The Windows key, from the hook's thread: stops the run in progress, if any.</summary>
     private bool OnStopKey()
     {
         var cts = _runCts;
@@ -534,7 +534,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         var byKey = _stoppedByKey;
         _stoppedByKey = false;
-        return byKey ? "Stopped with the Break key." : "Stopped.";
+        return byKey ? "Stopped with the Windows key." : "Stopped.";
     }
 
     [RelayCommand]
