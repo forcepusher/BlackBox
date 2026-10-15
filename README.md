@@ -17,22 +17,53 @@ BlackBox/
                tools/ (portable programs the agent downloaded), scratch/ (helper files it made for a task)
 ```
 
-`read_file` reads more than text: PDFs (their text layer, page by page), Word, Excel and PowerPoint
-files (Excel cell by cell with its formulas, Word with headings, lists, bold and tables) and
-pictures, which the model sees like a screenshot. Before, asked to summarize a PDF, qwen3.8 spent
-eight minutes inflating its streams and mapping glyphs in PowerShell, and a question about a chart
-picture took six minutes of finding a program to show it. When nothing on the PC opens a file or
-does a job the agent needs (another format, a conversion, an archive), it downloads a portable tool
-into `Data/tools`, where later tasks find it, or installs the program, rather than decoding the
-file by hand. It also accepts the license agreements and first-run prompts of the programs it uses
-(Office asks on its first start).
-
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
 The agent itself works across the whole PC; relative paths and shell commands start in your home folder.
 Files it makes only to get a task done (a script, the script a reminder runs) go in `Data/scratch`
 rather than among yours: a reminder used to leave its script in the home folder. `settings.json`
 also keeps the main window's size and place, and it opens there again unless that place is no
 longer on a screen.
+
+## Documents
+`read_file` reads more than text: PDFs (their text layer, page by page), Word, Excel and PowerPoint
+files (Excel cell by cell with its formulas, Word with headings, lists, bold and tables) and
+pictures, which the model sees like a screenshot. Before, asked to summarize a PDF, qwen3.8 spent
+eight minutes inflating its streams and mapping glyphs in PowerShell, and a question about a chart
+picture took six minutes of finding a program to show it.
+
+`write_file` makes Word, Excel, PowerPoint and PDF files from Markdown without Office, so they open
+in Word, Excel, PowerPoint, Google Drive and any PDF reader:
+
+- `.docx`: headings become Word's Heading styles (the navigation pane and a table of contents use
+  them), lists real bulleted and numbered lists, and tables, pictures
+  (`![caption](C:\path\chart.png)`), links, code and quotes come out as such; `\newpage` starts a page.
+- `.xlsx`: each heading starts a sheet named after it, and tables fill it with their header row bold
+  and frozen. A cell starting with `=` is a formula, and numbers, `12%`, `$1,200` and `2026-10-16`
+  become values shown that way; a formula under amounts of money shows money. Excel works the
+  formulas out on opening.
+- `.pptx`: a line of `---` starts the next slide, and a slide's first heading is its title; pictures
+  and tables go beside or under the text, and a first slide with only a title and a line under it
+  is a title slide.
+- `.pdf`: wrapped text, tables whose header row repeats on each page, and page numbers. Plain ASCII
+  uses the reader's own Helvetica, a few KB; anything else embeds a system font with only the
+  letters used.
+
+An existing document isn't overwritten, since that would lose its formatting; `append` adds to one
+made in the same task. `edit_file` changes Word and PowerPoint files in place: the text is matched
+across Word's runs and paragraphs (copied from `read_file` with its `# ` and `**` marks or without),
+curly quotes match straight ones, and only what differs is replaced, so the rest keeps its
+formatting. A line break in the new text starts a paragraph like the one it is in, `# ` at its
+start makes a heading, and `**bold**` applies. In a workbook it sets cells written the way
+`read_file` shows them (`B7 =SUM(B2:B7)`, `Budget!A8 Total`), after checking that the cells being
+replaced still hold what the model read, and keeps each cell's formatting; without cell addresses
+it replaces text in the cells. A PDF can't be changed in place: the model writes a new one. Before,
+a budget workbook took qwen3.8 24 minutes through Excel's COM interface from PowerShell, and on a PC
+without Office it couldn't be done at all.
+
+When nothing on the PC opens a file or does a job the agent needs (another format, a conversion, an
+archive), it downloads a portable tool into `Data/tools`, where later tasks find it, or installs the
+program, rather than decoding the file by hand. It also accepts the license agreements and
+first-run prompts of the programs it uses (Office asks on its first start).
 
 ## Chat history
 Every chat is saved on its own in `Data/chats/` from its first message on, after every step, and
@@ -147,7 +178,7 @@ method there, not a property).
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
-| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures to the model; `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
+| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures to the model; `write_file` makes them from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
 | `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |

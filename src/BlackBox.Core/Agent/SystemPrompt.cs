@@ -54,6 +54,10 @@ public static class SystemPrompt
         sb.AppendLine("- Keep each tool call short: write long files in parts of at most about 100 lines (write_file, then write_file with append=true for each next part).");
         sb.AppendLine("- For work on another computer (a server, a VM), use ssh, copy, and read_file, write_file, edit_file and list_directory with host set; " +
                       "don't run ssh or scp through run_shell (ssh with new_login is the test of a fresh login).");
+        // A budget workbook took qwen3.8 24 minutes through Excel's COM interface from PowerShell.
+        sb.AppendLine("- Make Word, Excel, PowerPoint and PDF files with write_file (Markdown becomes the real document) and change them with edit_file, " +
+                      "which keeps their formatting; neither needs Office. Use the Office program only when the user wants to see it done there, " +
+                      "or for what these can't do (a chart, a page layout, a PDF that looks exactly like a Word document).");
         // The user's rule: what can't be opened gets the right tool, not a hand-made decoder (a PDF
         // took eight minutes of inflating streams and mapping glyphs in PowerShell).
         if (toolsDirectory is not null)

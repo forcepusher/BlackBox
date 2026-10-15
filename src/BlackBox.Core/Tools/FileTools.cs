@@ -125,7 +125,12 @@ public sealed class WriteFileTool : Tool
     public override string Name => "write_file";
     public override string Description =>
         "Create or overwrite a text file with the given content, or add to its end with append=true. Creates parent folders. " +
-        "Write long files in parts of at most about 100 lines: the first call creates the file, each next part is appended.";
+        "Write long files in parts of at most about 100 lines: the first call creates the file, each next part is appended. " +
+        "A path ending in .docx, .xlsx, .pptx or .pdf makes a real Word, Excel, PowerPoint or PDF document from Markdown content: " +
+        "headings, paragraphs, lists, tables, **bold**, *italic*, links, pictures as ![caption](C:\\path\\picture.png), a line \\newpage for a new page. " +
+        "In .xlsx each heading starts a sheet named after it and tables fill it; a cell starting with = is a formula, and numbers, 12%, $1,200 and " +
+        "2026-10-16 become values. In .pptx a line --- starts the next slide, and a slide's first heading is its title. " +
+        "To change an existing document, use edit_file, which keeps its formatting.";
     public override ToolRisk Risk => ToolRisk.Risky;
     public override JsonObject Parameters => Schema(
         ("path", Str("File path"), true),
@@ -140,10 +145,23 @@ public sealed class WriteFileTool : Tool
         if (RemoteHost.Of(args) is { } remote)
         {
             var (file, text, add) = (RequireString(args, "path"), RequireString(args, "content"), GetBool(args, "append"));
+            if (Documents.DocumentFiles.WriteKind(file) is not null)
+                return ToolResult.Error("Documents are made on this PC: write it here without host, then copy it to the server with the copy tool.");
             return await RemoteHost.RunAsync(remote, ctx, h => RemoteFiles.WriteAsync(h, file, text, add, ct), ct).ConfigureAwait(false);
         }
         var path = ctx.ResolvePath(RequireString(args, "path"));
         var content = RequireString(args, "content");
+        if (Documents.DocumentFiles.WriteKind(path) is not null)
+        {
+            try
+            {
+                return new ToolResult(Documents.DocumentFiles.Write(path, content, GetBool(args, "append"), ctx.ResolvePath));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ToolResult.Error(ex.Message);
+            }
+        }
         var existed = File.Exists(path);
         if (GetBool(args, "append"))
         {
@@ -162,7 +180,12 @@ public sealed class WriteFileTool : Tool
 public sealed class EditFileTool : Tool
 {
     public override string Name => "edit_file";
-    public override string Description => "Replace an exact, unique snippet of text in a file with new text, or every occurrence of it with replace_all.";
+    public override string Description =>
+        "Replace an exact, unique snippet of text in a file with new text, or every occurrence of it with replace_all. " +
+        "Also changes Word (.docx) and PowerPoint (.pptx) files in place, keeping their formatting: old_text as read_file shows it, " +
+        "new_text may use **bold** and *italic*, and a line break in it starts a new paragraph (\"# \" at its start makes a heading). " +
+        "In Excel (.xlsx) give cells as read_file shows them: old_text the cells to change (\"B7 =SUM(B2:B6)\") or empty, new_text the cells to set " +
+        "(\"B7 =SUM(B2:B7)\", \"A8 Total\", \"Budget!C9 12.5\"); without cell addresses, text is replaced in the cells.";
     public override ToolRisk Risk => ToolRisk.Risky;
     public override JsonObject Parameters => Schema(
         ("path", Str("File path"), true),
@@ -186,6 +209,17 @@ public sealed class EditFileTool : Tool
             return ToolResult.Error($"File not found: {path}");
         var oldText = RequireString(args, "old_text");
         var newText = RequireString(args, "new_text");
+        if (Documents.DocumentFiles.EditKind(path) is not null)
+        {
+            try
+            {
+                return new ToolResult(Documents.DocumentFiles.Edit(path, oldText, newText, GetBool(args, "replace_all")));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ToolResult.Error(ex.Message);
+            }
+        }
         if (oldText.Length == 0)
             return ToolResult.Error("old_text must not be empty.");
 
