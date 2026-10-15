@@ -13,8 +13,15 @@ unpacks its native UI libraries into `Data/runtime` next to itself.
 ```
 BlackBox/
   BlackBox.exe
-  Data/        settings.json, chats/ (see Chat history), runtime/ (unpacked by the single-file exe), browser/ (see Web search)
+  Data/        settings.json, chats/ (see Chat history), runtime/ (unpacked by the single-file exe), browser/ (see Web search),
+               tools/ (portable programs the agent downloaded)
 ```
+
+When nothing on the PC opens a file or does a job the agent needs (a PDF to read, a format to
+convert), it downloads a portable tool into `Data/tools`, where later tasks find it, or installs
+the program, rather than decoding the file by hand: asked to summarize a PDF, qwen3.8 spent eight
+minutes inflating its streams and mapping glyphs in PowerShell. It also accepts the license
+agreements and first-run prompts of the programs it uses (Office asks on its first start).
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
 The agent itself works across the whole PC; relative paths and shell commands start in your home folder.

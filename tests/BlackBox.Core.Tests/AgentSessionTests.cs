@@ -415,6 +415,16 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public void What_nothing_on_the_PC_opens_gets_a_tool_in_BlackBoxs_own_folder()
+    {
+        // The user's rule, after a PDF was decoded by hand in PowerShell: fetch a portable tool or install the program.
+        var prompt = SystemPrompt.Build("Test OS", null, "C:\\", "", webSearch: true, toolsDirectory: @"D:\BlackBox\Data\tools");
+        Assert.Contains(@"download a portable tool for it into D:\BlackBox\Data\tools (an official build; look it up with web_search), or install the program", prompt);
+        Assert.Contains("Accept license agreements", prompt);
+        Assert.DoesNotContain("web_search", SystemPrompt.Build("Test OS", null, "C:\\", "", toolsDirectory: @"D:\BlackBox\Data\tools"));
+    }
+
+    [Fact]
     public async Task A_tool_call_lost_to_a_drop_makes_the_model_write_in_parts()
     {
         // LM Studio sends a call's name first and its arguments only when the call is complete;

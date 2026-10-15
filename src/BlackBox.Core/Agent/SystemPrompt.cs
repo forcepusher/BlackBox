@@ -10,8 +10,9 @@ public static class SystemPrompt
     /// <param name="screens">One per monitor, the primary first; null when the model can't see images.</param>
     /// <param name="mcpServers">Connected MCP servers whose tools are in the tool list.</param>
     /// <param name="webSearch">Whether web_search and fetch_page are in the tool list.</param>
+    /// <param name="toolsDirectory">Where portable programs the agent downloads go (BlackBox's Data/tools), or null to leave it out.</param>
     public static string Build(string platformName, IReadOnlyList<ScreenSpace>? screens, string workingDirectory, string customInstructions,
-        IReadOnlyList<McpServerStatus>? mcpServers = null, bool webSearch = false)
+        IReadOnlyList<McpServerStatus>? mcpServers = null, bool webSearch = false, string? toolsDirectory = null)
     {
         var screen = screens is { Count: > 0 } ? screens[0] : null;
         var sb = new StringBuilder();
@@ -52,9 +53,16 @@ public static class SystemPrompt
         sb.AppendLine("- Keep each tool call short: write long files in parts of at most about 100 lines (write_file, then write_file with append=true for each next part).");
         sb.AppendLine("- For work on another computer (a server, a VM), use ssh, copy, and read_file, write_file, edit_file and list_directory with host set; " +
                       "don't run ssh or scp through run_shell (ssh with new_login is the test of a fresh login).");
-        sb.AppendLine("- Don't install software on this PC (pip, npm, winget and the like) unless the task needs it here. To check a service on " +
-                      "a server, use a client this PC already has (curl, a TCP probe) or run the check on the server itself, which has the client " +
-                      "(psql -h, redis-cli -h); don't write your own client for a protocol.");
+        // The user's rule: what can't be opened gets the right tool, not a hand-made decoder (a PDF
+        // took eight minutes of inflating streams and mapping glyphs in PowerShell).
+        if (toolsDirectory is not null)
+            sb.AppendLine($"- When nothing on this PC can open a file or do a job you need (read a PDF, convert a format, unpack an archive), don't decode it " +
+                          $"or rebuild it by hand: download a portable tool for it into {toolsDirectory}" +
+                          (webSearch ? " (an official build; look it up with web_search)" : "") +
+                          ", or install the program that does it. Check that folder first for tools fetched for earlier tasks.");
+        sb.AppendLine("- To check a service on a server, use a client this PC already has (curl, a TCP probe) or run the check on the server itself, " +
+                      "which has the client (psql -h, redis-cli -h); don't install a client here or write your own for a protocol.");
+        sb.AppendLine("- Accept license agreements, terms and first-run prompts of the programs you use for the task: the user has allowed it.");
         sb.AppendLine("- Do one step at a time and keep going until the task is finished, then reply with a short summary of what you did.");
         sb.AppendLine("- If something fails twice, try a different approach. If you are blocked or the task is ambiguous, stop and ask the user.");
         sb.AppendLine("- Never enter passwords, payment details or other secrets, and ask before deleting things or sending messages on the user's behalf unless the user asked you to.");
