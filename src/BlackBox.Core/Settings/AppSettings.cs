@@ -224,10 +224,24 @@ public sealed class AgentSettings
     public string CustomInstructions { get; set; } = "";
 }
 
+/// <summary>Where the main window was, so it opens there again: position in screen pixels, size in the UI's own units.</summary>
+public sealed class WindowPlacement
+{
+    public int X { get; set; }
+    public int Y { get; set; }
+    public double Width { get; set; }
+    public double Height { get; set; }
+    public bool Maximized { get; set; }
+}
+
 public sealed class AppSettings
 {
     public ServerSettings Server { get; set; } = new();
     public AgentSettings Agent { get; set; } = new();
+
+    /// <summary>The main window's last size and place; null until it was first closed.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WindowPlacement? Window { get; set; }
 
     public AppSettings Clone() =>
         JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(this, SettingsStore.JsonOptions), SettingsStore.JsonOptions)!;

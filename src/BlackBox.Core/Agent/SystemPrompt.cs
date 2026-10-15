@@ -11,8 +11,9 @@ public static class SystemPrompt
     /// <param name="mcpServers">Connected MCP servers whose tools are in the tool list.</param>
     /// <param name="webSearch">Whether web_search and fetch_page are in the tool list.</param>
     /// <param name="toolsDirectory">Where portable programs the agent downloads go (BlackBox's Data/tools), or null to leave it out.</param>
+    /// <param name="scratchDirectory">Where helper files the agent makes go (BlackBox's Data/scratch), or null to leave it out.</param>
     public static string Build(string platformName, IReadOnlyList<ScreenSpace>? screens, string workingDirectory, string customInstructions,
-        IReadOnlyList<McpServerStatus>? mcpServers = null, bool webSearch = false, string? toolsDirectory = null)
+        IReadOnlyList<McpServerStatus>? mcpServers = null, bool webSearch = false, string? toolsDirectory = null, string? scratchDirectory = null)
     {
         var screen = screens is { Count: > 0 } ? screens[0] : null;
         var sb = new StringBuilder();
@@ -60,6 +61,10 @@ public static class SystemPrompt
                           $"or rebuild it by hand: download a portable tool for it into {toolsDirectory}" +
                           (webSearch ? " (an official build; look it up with web_search)" : "") +
                           ", or install the program that does it. Check that folder first for tools fetched for earlier tasks.");
+        // A reminder's script landed in the user's home folder.
+        if (scratchDirectory is not null)
+            sb.AppendLine($"- Files you make only to get the task done (scripts, helper files, a reminder's script) go in {scratchDirectory}, not in the user's folders, " +
+                          "unless the user asked for them there.");
         sb.AppendLine("- To check a service on a server, use a client this PC already has (curl, a TCP probe) or run the check on the server itself, " +
                       "which has the client (psql -h, redis-cli -h); don't install a client here or write your own for a protocol.");
         sb.AppendLine("- Accept license agreements, terms and first-run prompts of the programs you use for the task: the user has allowed it.");

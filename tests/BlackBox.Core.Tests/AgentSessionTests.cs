@@ -512,6 +512,9 @@ public class AgentSessionTests
         Assert.Contains("Accept license agreements", prompt);
         // A reminder whose process died on a quoting error was reported as set.
         Assert.Contains("check that it is running before you say it's set up", prompt);
+        // Helper files go to BlackBox's own folder, not the user's (a reminder script landed in the home folder).
+        Assert.Contains(@"go in D:\BlackBox\Data\scratch, not in the user's folders",
+            SystemPrompt.Build("Test OS", null, "C:\\", "", toolsDirectory: @"D:\BlackBox\Data\tools", scratchDirectory: @"D:\BlackBox\Data\scratch"));
         Assert.DoesNotContain("web_search", SystemPrompt.Build("Test OS", null, "C:\\", "", toolsDirectory: @"D:\BlackBox\Data\tools"));
     }
 

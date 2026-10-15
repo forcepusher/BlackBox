@@ -75,6 +75,58 @@ public partial class MainWindow : Window
         InputBox.Focus();
     }
 
+    // ---- size and place, kept between runs -----------------------------------------------------
+
+    /// <summary>The last size and place while the window was neither maximized nor minimized.</summary>
+    private (PixelPoint Position, double Width, double Height)? _normal;
+
+    /// <summary>
+    /// Puts the window where it was when last closed (it used to open in the middle at its default
+    /// size every time), unless that place is no longer on any screen: a monitor unplugged since.
+    /// Called before the window is first shown.
+    /// </summary>
+    public void Restore(Core.Settings.WindowPlacement? placement)
+    {
+        // Read once the move or resize is through: a window being minimized moves off screen
+        // before it reports being minimized.
+        PositionChanged += (_, _) => Dispatcher.UIThread.Post(Remember);
+        SizeChanged += (_, _) => Dispatcher.UIThread.Post(Remember);
+        if (placement is null || placement.Width < MinWidth || placement.Height < MinHeight)
+            return;
+        // Some of the title bar must be on a screen, or the window can't even be dragged back.
+        var titleBar = new PixelRect(placement.X + 40, placement.Y + 4, 160, 24);
+        if (!Screens.All.Any(s => s.WorkingArea.Intersects(titleBar)))
+            return;
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Position = new PixelPoint(placement.X, placement.Y);
+        Width = placement.Width;
+        Height = placement.Height;
+        _normal = (Position, Width, Height);
+        if (placement.Maximized)
+            WindowState = WindowState.Maximized;
+    }
+
+    private void Remember()
+    {
+        if (WindowState == WindowState.Normal && IsVisible)
+            _normal = (Position, ClientSize.Width, ClientSize.Height);
+    }
+
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        base.OnClosing(e);
+        Remember();
+        if (!e.Cancel && _normal is { } normal)
+            Vm.SavePlacement(new Core.Settings.WindowPlacement
+            {
+                X = normal.Position.X,
+                Y = normal.Position.Y,
+                Width = normal.Width,
+                Height = normal.Height,
+                Maximized = WindowState == WindowState.Maximized,
+            });
+    }
+
     private void OnInputKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter || e.KeyModifiers.HasFlag(KeyModifiers.Shift))

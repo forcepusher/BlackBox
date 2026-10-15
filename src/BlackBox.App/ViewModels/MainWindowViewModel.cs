@@ -777,6 +777,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         // The server, key, model and context size live in the top bar, not in the dialog.
         updated.Server = _settings.Server;
+        updated.Window = _settings.Window;
         _settings = updated;
         OnPropertyChanged(nameof(WebSearchOn));
         OnPropertyChanged(nameof(ApprovalNote));
@@ -798,6 +799,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             }
         }
         await CheckServerAsync();
+    }
+
+    /// <summary>Keeps the window's size and place for the next start (see <see cref="Views.MainWindow.Restore"/>).</summary>
+    public void SavePlacement(WindowPlacement placement)
+    {
+        _settings.Window = placement;
+        SaveSettings();
     }
 
     private bool _saveFailed;

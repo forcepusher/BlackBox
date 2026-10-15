@@ -14,7 +14,7 @@ unpacks its native UI libraries into `Data/runtime` next to itself.
 BlackBox/
   BlackBox.exe
   Data/        settings.json, chats/ (see Chat history), runtime/ (unpacked by the single-file exe), browser/ (see Web search),
-               tools/ (portable programs the agent downloaded)
+               tools/ (portable programs the agent downloaded), scratch/ (helper files it made for a task)
 ```
 
 `read_file` reads more than text: PDFs (their text layer, page by page), Word, Excel and PowerPoint
@@ -29,6 +29,10 @@ file by hand. It also accepts the license agreements and first-run prompts of th
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
 The agent itself works across the whole PC; relative paths and shell commands start in your home folder.
+Files it makes only to get a task done (a script, the script a reminder runs) go in `Data/scratch`
+rather than among yours: a reminder used to leave its script in the home folder. `settings.json`
+also keeps the main window's size and place, and it opens there again unless that place is no
+longer on a screen.
 
 ## Chat history
 Every chat is saved on its own in `Data/chats/` from its first message on, after every step, and
