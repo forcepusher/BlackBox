@@ -421,6 +421,8 @@ public class AgentSessionTests
         var prompt = SystemPrompt.Build("Test OS", null, "C:\\", "", webSearch: true, toolsDirectory: @"D:\BlackBox\Data\tools");
         Assert.Contains(@"download a portable tool for it into D:\BlackBox\Data\tools (an official build; look it up with web_search), or install the program", prompt);
         Assert.Contains("Accept license agreements", prompt);
+        // A reminder whose process died on a quoting error was reported as set.
+        Assert.Contains("check that it is running before you say it's set up", prompt);
         Assert.DoesNotContain("web_search", SystemPrompt.Build("Test OS", null, "C:\\", "", toolsDirectory: @"D:\BlackBox\Data\tools"));
     }
 
