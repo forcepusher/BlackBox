@@ -58,7 +58,9 @@ public partial class MainWindow : Window
 
     private void PinToBottom()
     {
-        if (!_stickToBottom || _pinning || Math.Abs(ChatScroll.Offset.Y - MaxOffset) < 0.5)
+        // The intro of an unused chat is read from the top.
+        if (!_stickToBottom || _pinning || DataContext is MainWindowViewModel { ShowIntro: true }
+            || Math.Abs(ChatScroll.Offset.Y - MaxOffset) < 0.5)
             return;
         _pinning = true;
         try { ChatScroll.Offset = new Vector(ChatScroll.Offset.X, MaxOffset); }
@@ -88,6 +90,12 @@ public partial class MainWindow : Window
         base.OnDataContextChanged(e);
         if (DataContext is not MainWindowViewModel vm)
             return;
+        // Once the chat is used it follows its end, however far the intro was scrolled.
+        vm.PropertyChanged += (_, change) =>
+        {
+            if (change.PropertyName == nameof(MainWindowViewModel.ShowIntro) && !vm.ShowIntro)
+                _stickToBottom = true;
+        };
         // Stay visible while the agent works, but invisible to its screenshots. Applied before the
         // window is first shown: changing capture exclusion on an already-painted window left
         // parts of it unpainted (the window behind showed through).
