@@ -113,8 +113,9 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   lacks the agent downloads and installs itself, as with any program.
 
 `read_file` gives the model a look at media as well as pictures: a video as eight frames with their
-times, a sound as its waveform and spectrogram with its length, loudness, clipping and silences in
-words, a 3D model (GLB, glTF, OBJ, PLY, STL) from four sides, an animated GIF or WebP as frames.
+times (and how loud its sound is, in words), a sound as its waveform and spectrogram with its
+length, loudness, clipping and silences in words, a 3D model (GLB, glTF, OBJ, PLY, STL) from four
+sides, an animated GIF or WebP as frames.
 Video and sound are decoded by Windows' own Media Foundation (MP4/H.264, MOV, MP3, AAC, FLAC, WAV
 play on every Windows 10 and 11), else by ffmpeg when one is on the PATH, in `Data/tools` or in
 ComfyUI's folder; 3D models are drawn by BlackBox itself.
@@ -127,6 +128,29 @@ their sound and a position to drag, a sound plays over its waveform, a 3D model 
 mouse (the wheel comes closer, a double click resets it), and any other file gets a card. Each has
 Open (its own program) and Show in folder. A saved chat shows them again when it is opened, as
 long as the files are still there.
+
+### How it does
+qwen3.8 27B (q6_k_xl, on the LM Studio server) with the ComfyUI on an RTX 5070 Ti (16 GB), each
+task one plain message and nothing more, ComfyUI stopped before the first
+(`./scripts/comfy-test.ps1` runs them):
+
+| Request | What the agent used | What it made | Time | Tool calls (errors) |
+| --- | --- | --- | --- | --- |
+| A lighthouse on a cliff at sunset as an oil painting, saved in Pictures | found ComfyUI and started it; Z-Image-Turbo | a 1024×1024 picture in Pictures | 1:52 | 3 (0) |
+| A short video, about 3 s, of a cat playing with yarn | LTX 2.3 text to video | 1280×704, 2.9 s, with sound | 9:29 (6:30 of it loading the model the first time) | 4 (0) |
+| 10 s of heavy rain on a tin roof with distant thunder, saved in Music | Stable Audio | a 10.1 s MP3 in Music | 1:21 | 4 (1) |
+| A 30 s upbeat synthwave instrumental | ACE-Step 1.5 XL Turbo | a 30.0 s MP3 | 2:05 | 8 (2) |
+| A calm female voice saying a sentence | VoxCPM2, in a workflow of its own (no template has it) | a 4.7 s MP3 | 5:35 | 20 (4) |
+| A wooden treasure chest 3D model for a game | a Z-Image-Turbo picture, then Trellis2 | a textured GLB (496k triangles) | 16:22 | 9 (0) |
+| A red dragon on a mossy rock, then a 3 s video of it breathing a puff of fire, with a fitting sound | a Z-Image-Turbo picture, then LTX 2.3 image to video (its sound too) | 1024×1024, 2.9 s, with sound | 11:06 | 11 (3) |
+
+The agent looked at every result before it answered, and redid the dragon's video twice because the
+first flame looked like a tongue. The errors cost seconds each: inputs the editor adds that the check
+took for mistakes (fixed), a node id guessed before the template was shown, ComfyUI not answering for
+a while during the speech task, and a retry that left out the length and size of the first run (a
+rerun of a template without changes the last one made is now stopped once, saying which). Three of
+the results went to `Data/scratch`; the prompt has since been told that what the user asked for
+never goes there.
 
 ## Chat history
 Every chat is saved on its own in `Data/chats/` from its first message on, after every step, and
@@ -460,6 +484,7 @@ dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   #
 ./scripts/sysadmin-vm.ps1         # once: the portable Debian lab VM (QEMU in .dev/sysadmin-lab, nothing installed)
 ./scripts/sysadmin-test.ps1       # sysadmin tickets on that VM over SSH, checked over SSH and from this PC
 ./scripts/chat-test.ps1           # BlackBox chats with scripted people for you in local look-alike chat apps (drives your mouse and keyboard)
+./scripts/comfy-test.ps1          # BlackBox makes a picture, a video, sounds, music, speech and a 3D model with this PC's ComfyUI
 ```
 
 ### Sysadmin benchmark

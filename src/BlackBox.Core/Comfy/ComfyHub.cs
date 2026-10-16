@@ -218,9 +218,9 @@ public sealed class ComfyHub(string stateDirectory)
     }
 
     /// <summary>Installed model files by folder (checkpoints, loras, diffusion_models…), as the server sees them.</summary>
-    public async Task<Dictionary<string, HashSet<string>>> ModelsAsync(ComfyApi api, CancellationToken ct)
+    public async Task<Dictionary<string, HashSet<string>>> ModelsAsync(ComfyApi api, CancellationToken ct, bool fresh = false)
     {
-        if (_models is not null && _modelStamp.Generation == Generation && DateTime.UtcNow - _modelStamp.At < LibraryLife)
+        if (!fresh && _models is not null && _modelStamp.Generation == Generation && DateTime.UtcNow - _modelStamp.At < LibraryLife)
             return _models;
         var models = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         if (await api.GetJsonAsync("models", ct).ConfigureAwait(false) is JsonArray folders)

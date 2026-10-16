@@ -135,6 +135,28 @@ public sealed class ComfyWorkflow
         return problems;
     }
 
+    /// <summary>Changes as <see cref="Set"/> takes them, each under its "node id.input" key (the nested form flattened).</summary>
+    public static Dictionary<string, JsonNode?> Changes(JsonObject changes)
+    {
+        var flat = new Dictionary<string, JsonNode?>(StringComparer.Ordinal);
+        foreach (var (key, value) in changes)
+        {
+            if (value is JsonObject nested && !key.Contains('.'))
+                foreach (var (input, v) in nested)
+                    flat[key + "." + input] = v?.DeepClone();
+            else
+                flat[key] = value?.DeepClone();
+        }
+        return flat;
+    }
+
+    /// <summary>The value an input ("node id.input") has, or null when the node or input isn't there.</summary>
+    public JsonNode? ValueOf(string key)
+    {
+        var dot = key.IndexOf('.');
+        return dot > 0 ? Nodes[key[..dot]]?["inputs"]?[key[(dot + 1)..]] : null;
+    }
+
     private static bool IsDynamicInput(ComfyNodeDef def, string input)
     {
         var dot = input.IndexOf('.');

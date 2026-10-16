@@ -136,6 +136,14 @@ public static class MediaPreview
         if (decoder?.Probe(path) is not { } info)
             return ($"video, {size} (nothing on this PC can decode it to look at it; ffmpeg in Data/tools would)", null, "");
         var line = info.Describe() + ", " + size;
+        // A sound track can be there and be silent; qwen3.8 ran ffmpeg's volumedetect to find out.
+        if (info.HasAudio && decoder.OpenAudio(path) is { } sound)
+            using (sound)
+            {
+                var (mono, rate) = ReadMono(sound, TimeSpan.FromMinutes(10));
+                if (mono.Length > 0)
+                    line += ", its sound " + SoundStats.Of(mono, rate).Describe();
+            }
         if (!makeTile || !info.HasVideo)
             return (line, null, "");
         using var reader = decoder.OpenVideo(path, 512);

@@ -530,6 +530,53 @@ public class ComfyToolTests : IDisposable
     }
 
     [Fact]
+    public async Task A_file_a_node_names_in_its_text_is_a_result_too()
+    {
+        // Trellis2's mesh export gives its .glb's path as text rather than listing the file.
+        Directory.CreateDirectory(Path.Combine(_server.OutputDir, "3D"));
+        File.WriteAllText(Path.Combine(_server.OutputDir, "3D", "chest_00001_.obj"), "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+        _server.History = _ => JsonNode.Parse("""
+            {"status": {"status_str": "success", "completed": true, "messages": []},
+             "outputs": {"5": {"text": ["3D/chest_00001_.obj"]}}}
+            """)!.AsObject();
+        var result = await Call("""{"action": "run", "name": "Mine/fox"}""");
+        Assert.False(result.IsError, result.Text);
+        Assert.EndsWith(Path.Combine("3D", "chest_00001_.obj"), Assert.Single(result.Files!));
+        Assert.Contains("3D model: 1 triangles", result.Text);
+    }
+
+    [Fact]
+    public async Task A_change_to_a_node_the_template_hasnt_got_comes_back_with_the_inputs_it_has()
+    {
+        var result = await Call("""{"action": "run", "name": "Mine/fox", "set": {"66.text": "a red fox"}}""");
+        Assert.True(result.IsError);
+        Assert.Contains("there is no node \"66\"", result.Text);
+        Assert.Contains("usually changes: 6.text (Positive), 7.text (text)", result.Text);
+        Assert.Empty(_server.Prompts);
+    }
+
+    [Fact]
+    public async Task A_rerun_of_a_template_without_changes_the_last_run_made_is_stopped_once()
+    {
+        var tool = new ComfyTool();
+        Task<ToolResult> Run(string json) => tool.ExecuteAsync(JsonNode.Parse(json)!.AsObject(), _ctx, CancellationToken.None);
+        var first = await Run("""{"action": "run", "name": "Mine/fox", "set": {"6.text": "a fox", "5": {"width": 768, "height": 768}, "3.seed": 1}}""");
+        Assert.False(first.IsError, first.Text);
+
+        // A new seed, and the size forgotten.
+        var second = await Run("""{"action": "run", "name": "Mine/fox", "set": {"6.text": "a fox", "3.seed": 2}}""");
+        Assert.True(second.IsError);
+        Assert.Contains("also set 5.width (768), 5.height (768)", second.Text);
+        Assert.Contains("the template's values: 512, 512", second.Text);
+        Assert.Single(_server.Prompts);
+
+        // Asked for again as it is, it runs with the template's values.
+        var third = await Run("""{"action": "run", "name": "Mine/fox", "set": {"6.text": "a fox", "3.seed": 2}}""");
+        Assert.False(third.IsError, third.Text);
+        Assert.Equal(512, (int?)_server.Prompts[1]["prompt"]!["5"]!["inputs"]!["width"]);
+    }
+
+    [Fact]
     public async Task Templates_are_listed_with_the_users_notes_and_shown_as_a_workflow_saved_to_edit()
     {
         var list = await Call("""{"action": "templates", "search": "fox"}""");

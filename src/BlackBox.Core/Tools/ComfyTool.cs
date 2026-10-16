@@ -39,7 +39,7 @@ public sealed class ComfyTool : Tool
         ("workflow", new JsonObject { ["description"] = "A workflow in API format to run (a JSON object or its text)" }, false),
         ("workflow_file", Str("A .json workflow file to run (API format, or as ComfyUI's editor saves it)"), false),
         ("set", new JsonObject { ["type"] = "object", ["description"] = "Changes before the run: {\"node id.input\": value}, e.g. {\"6.text\": \"a cat\", \"129:98.length\": 49}" }, false),
-        ("save_to", Str("A folder to copy the files the run makes into (they also stay in ComfyUI's output folder)"), false),
+        ("save_to", Str("A folder the user named to copy the files the run makes into; without it they stay in ComfyUI's output folder"), false),
         ("wait_minutes", Num("How long to wait for the job (default 30); it keeps running after that, and action=status with its prompt_id waits again"), false),
         ("prompt_id", Str("A job's id, from an earlier run that was still going (status)"), false),
         ("folder", Str("ComfyUI's folder, if it isn't found by itself or another one should be used"), false));
@@ -187,7 +187,8 @@ public sealed class ComfyTool : Tool
     private static async Task<ToolResult> ModelsAsync(JsonObject args, ComfyHub hub, ComfyApi api, CancellationToken ct)
     {
         var words = ComfyNodeLibrary.Words(GetString(args, "search") ?? "");
-        var models = await hub.ModelsAsync(api, ct).ConfigureAwait(false);
+        // Asked for on purpose, often right after a download: never from the cache.
+        var models = await hub.ModelsAsync(api, ct, fresh: true).ConfigureAwait(false);
         var sb = new StringBuilder();
         var dirs = await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false);
         var shown = 0;
@@ -317,18 +318,55 @@ public sealed class ComfyTool : Tool
 
     // ---- run --------------------------------------------------------------------------------
 
-    private static async Task<ToolResult> RunAsync(JsonObject args, ComfyHub hub, ComfyApi api, ToolContext ctx, CancellationToken ct)
+    // What the last run of each template in this task set, and the reminders already given.
+    private readonly Dictionary<string, Dictionary<string, JsonNode?>> _lastRuns = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _reminded = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// What the last run of the same template set and this one doesn't. Each run starts from the
+    /// template again; qwen3.8 retried an LTX video with a new prompt and seed but without the
+    /// picture, length and size it had set the first time. Said once: run again as it is, the
+    /// template's values stand.
+    /// </summary>
+    private string? Forgotten(string template, ComfyWorkflow workflow, JsonObject? set)
+    {
+        lock (_lastRuns)
+        {
+            if (!_lastRuns.TryGetValue(template, out var last))
+                return null;
+            var now = set is null ? [] : ComfyWorkflow.Changes(set);
+            var missing = last.Where(kv => !now.ContainsKey(kv.Key)).ToList();
+            if (missing.Count == 0 || !_reminded.Add(template + "\n" + string.Join("\n", missing.Select(kv => kv.Key).Order(StringComparer.Ordinal))))
+                return null;
+            static string Show(JsonNode? value) => value switch
+            {
+                null => "nothing",
+                JsonValue v when v.TryGetValue<string>(out var s) => s.ReplaceLineEndings(" ").Clip(60),
+                JsonArray { Count: 2 } link when link[0] is JsonValue => $"a link from node {link[0]}",
+                _ => value.ToJsonString(ComfyWorkflow.Compact).Clip(60),
+            };
+            return $"Nothing was run: your last run of {template} also set {string.Join(", ", missing.Select(kv => $"{kv.Key} ({Show(kv.Value)})"))}, " +
+                   $"and this one doesn't. Each run starts from the template again, so {(missing.Count == 1 ? "it" : "they")} would have the template's " +
+                   $"{(missing.Count == 1 ? "value" : "values")}: {string.Join(", ", missing.Select(kv => Show(workflow.ValueOf(kv.Key))))}. " +
+                   "Put the ones you still want in set, or run this again as it is to use the template's values.";
+        }
+    }
+
+    private async Task<ToolResult> RunAsync(JsonObject args, ComfyHub hub, ComfyApi api, ToolContext ctx, CancellationToken ct)
     {
         var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
         ComfyWorkflow workflow;
         string what;
+        string? templateName = null;
         if (GetString(args, "name") is { Length: > 0 } name && args["workflow"] is null && GetString(args, "workflow_file") is null)
         {
             var all = await hub.TemplatesAsync(api, ct).ConfigureAwait(false);
             var template = ComfyTemplates.Resolve(all, name, out var nearest)
                            ?? throw new ComfyWorkflowException($"There is no template \"{name}\"" + (nearest.Count > 0 ? $"; did you mean {string.Join(", ", nearest)}?" : "; list them with action=templates and search."));
             (_, workflow) = await LoadTemplateAsync(hub, api, template, ct).ConfigureAwait(false);
-            what = template.Name;
+            what = templateName = template.Name;
+            if (Forgotten(template.Name, workflow, args["set"] as JsonObject) is { } forgotten)
+                return ToolResult.Error(forgotten);
         }
         else if (GetString(args, "workflow_file") is { Length: > 0 } file)
         {
@@ -348,7 +386,12 @@ public sealed class ComfyTool : Tool
             throw new ToolArgumentException("action=run needs name (a template), workflow_file or workflow.");
 
         if (args["set"] is JsonObject changes && changes.Count > 0 && workflow.Set(changes, library) is { Count: > 0 } setProblems)
-            return ToolResult.Error("Nothing was run; these changes don't fit the workflow:\n- " + string.Join("\n- ", setProblems));
+        {
+            // Node ids guessed before the template was looked at ("6.text" for its prompt): its usual inputs say which they are.
+            var usual = setProblems.Any(p => p.Contains("there is no node", StringComparison.Ordinal)) ? workflow.UsualChanges(library) : [];
+            return ToolResult.Error("Nothing was run; these changes don't fit the workflow:\n- " + string.Join("\n- ", setProblems) +
+                                    (usual.Count > 0 ? $"\nInputs a run of {what} usually changes: {string.Join(", ", usual.Take(30))}." : ""));
+        }
 
         // Files of the user's own: uploaded into ComfyUI's input folder, and named as it knows them.
         var uploaded = new HashSet<string>();
@@ -363,9 +406,10 @@ public sealed class ComfyTool : Tool
 
         var warnings = new List<string>();
         var problems = workflow.Validate(library, uploaded, warnings);
-        if (problems.Any(p => p.Contains("has no node type", StringComparison.Ordinal)))
+        if (problems.Any(p => p.Contains("has no node type", StringComparison.Ordinal) || p.Contains("isn't installed", StringComparison.Ordinal)
+                              || p.Contains("isn't in ComfyUI's input folder", StringComparison.Ordinal)))
         {
-            // Custom nodes installed since the list was fetched count too.
+            // Custom nodes and models installed since the list was fetched count too.
             library = await hub.LibraryAsync(api, ct, fresh: true).ConfigureAwait(false);
             warnings.Clear();
             problems = workflow.Validate(library, uploaded, warnings);
@@ -378,12 +422,31 @@ public sealed class ComfyTool : Tool
         var (promptId, refused) = await ComfyRunner.QueueAsync(api, workflow, clientId, ct).ConfigureAwait(false);
         if (promptId is null)
             return ToolResult.Error($"ComfyUI refused {what}; nothing was run:\n- " + string.Join("\n- ", refused));
+        if (templateName is not null)
+            lock (_lastRuns) _lastRuns[templateName] = args["set"] is JsonObject done ? ComfyWorkflow.Changes(done) : [];
         // Its models are let go once the task is over, so the GPU is free for whatever comes next.
         ctx.AfterRun(nameof(ComfyTool), () => api.FreeAsync(CancellationToken.None));
         hub.RememberJob(promptId, clientId, workflow.All().ToDictionary(n => n.Id, n => ComfyWorkflow.TitleOf(n.Node) ?? ComfyWorkflow.ClassOf(n.Node)));
         var result = await WaitForAsync(args, hub, api, promptId, ctx, ct).ConfigureAwait(false);
         var notes = refused.Select(r => "Left out: " + r).Concat(warnings.Select(w => "Note: " + w)).ToList();
         return notes.Count > 0 ? result with { Text = string.Join("\n", notes) + "\n" + result.Text } : result;
+    }
+
+    /// <summary>Files named in the text a job's nodes showed: full paths, or paths in ComfyUI's output folder, that exist.</summary>
+    internal static List<string> TextFiles(IEnumerable<string> texts, IReadOnlyDictionary<string, string> dirs)
+    {
+        var found = new List<string>();
+        foreach (var text in texts)
+        {
+            found.AddRange(FileMentions.Find(text));
+            var t = text.Trim();
+            if (t.Length is > 0 and < 300 && !t.Contains('\n') && MediaPreview.KindOf(t) != "other" && !Path.IsPathRooted(t) && dirs.TryGetValue("output", out var output))
+            {
+                var candidate = Path.GetFullPath(Path.Combine(output, t));
+                if (File.Exists(candidate)) found.Add(candidate);
+            }
+        }
+        return found.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <summary>A workflow from JSON the model gave: the API format as it is, the editor's format turned into it.</summary>
@@ -405,6 +468,11 @@ public sealed class ComfyTool : Tool
 
         var dirs = await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) ?? [];
         var files = await ComfyRunner.LocateAsync(api, job.Files, dirs, Path.Combine(ctx.ScratchDirectory ?? Path.GetTempPath(), "comfyui", "outputs"), ct).ConfigureAwait(false);
+        // Some nodes say where they saved a file instead of listing it (Trellis2's mesh export
+        // gives its .glb's path as text): those files are results too.
+        foreach (var path in TextFiles(job.Texts, dirs))
+            if (!files.Any(f => string.Equals(f.LocalPath, path, StringComparison.OrdinalIgnoreCase)))
+                files.Add(new ComfyOutput("", Path.GetFileName(path), "", "output", path));
         // Previews ComfyUI only keeps in its temp folder are shown, but only saved files are results.
         var saved = files.Where(f => f.Type == "output").ToList();
         var shown = saved.Count > 0 ? saved : files;

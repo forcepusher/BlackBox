@@ -65,6 +65,7 @@ public static class SystemPrompt
                       "Start from the template closest to the request (action=templates with a few words), run it with your changes in set, " +
                       "and look at what it made before you answer; for what no template does, build the workflow from node and model names you looked up " +
                       "(action=nodes, action=models), never from memory. A model, custom node pack or program it lacks you can download and install yourself. " +
+                      "Its files stay in ComfyUI's output folder, where the user finds them; copy them elsewhere (save_to) only when the user names a place. " +
                       "Give the full paths of the files you made in your answer.");
         // The user's rule: what can't be opened gets the right tool, not a hand-made decoder (a PDF
         // took eight minutes of inflating streams and mapping glyphs in PowerShell).
@@ -74,9 +75,10 @@ public static class SystemPrompt
                           (webSearch ? " (an official build; look it up with web_search)" : "") +
                           ", or install the program that does it. Check that folder first for tools fetched for earlier tasks.");
         // A reminder's script landed in the user's home folder.
+        // A 3D model and a song qwen3.8 made for the user ended up there, out of the user's sight.
         if (scratchDirectory is not null)
             sb.AppendLine($"- Files you make only to get the task done (scripts, helper files, a reminder's script) go in {scratchDirectory}, not in the user's folders, " +
-                          "unless the user asked for them there.");
+                          "unless the user asked for them there. What the user asked for (a picture, a video, a document) never goes there.");
         sb.AppendLine("- To check a service on a server, use a client this PC already has (curl, a TCP probe) or run the check on the server itself, " +
                       "which has the client (psql -h, redis-cli -h); don't install a client here or write your own for a protocol.");
         sb.AppendLine("- Accept license agreements, terms and first-run prompts of the programs you use for the task: the user has allowed it.");
