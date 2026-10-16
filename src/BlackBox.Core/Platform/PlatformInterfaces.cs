@@ -14,6 +14,15 @@ public sealed class RawImage(int width, int height, byte[] bgra)
     public int Height { get; } = height;
     public byte[] Bgra { get; } = bgra;
     public int Stride => Width * 4;
+
+    /// <summary>A copy of a rectangle of this image, in its own pixels.</summary>
+    public RawImage Crop(int x, int y, int width, int height)
+    {
+        var bgra = new byte[width * height * 4];
+        for (var row = 0; row < height; row++)
+            Buffer.BlockCopy(Bgra, (y + row) * Stride + x * 4, bgra, row * width * 4, width * 4);
+        return new(width, height, bgra);
+    }
 }
 
 public enum MouseButton { Left, Right, Middle }

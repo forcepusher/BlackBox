@@ -96,14 +96,15 @@ public class ToolTests
         var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotResolution = ScreenshotResolution.R1280x720, ScreenshotAfterActions = false });
         string? looked = null;
         (double X, double Y)? found = (300, 120);
-        ctx.Locate = (_, target, _) => { looked = target; return Task.FromResult(found); };
+        ctx.Locate = (_, _, target, _) => { looked = target; return Task.FromResult(found); };
         var click = new MouseClickTool();
 
-        // Found: the model's own x/y are ignored.
+        // Found: the model's own x/y are ignored, and it is told where the click went instead.
         var result = await click.ExecuteAsync(new JsonObject { ["target"] = "Save button", ["x"] = 10, ["y"] = 20 }, ctx, CancellationToken.None);
         Assert.Equal("Save button", looked);
         Assert.Equal("move 600,245", platform.Actions[0]);
-        Assert.Equal("Clicked.", result.Text);
+        Assert.StartsWith("Clicked.\nA fresh look found the Save button at (300, 120), not where you aimed (10, 20), and the click went there.", result.Text);
+        Assert.Contains("click again with target left out", result.Text);
 
         // Not found (or off the screen): the model's x/y, and it is told.
         found = null;
@@ -126,6 +127,116 @@ public class ToolTests
         Assert.Null(BlackBox.Core.Agent.FreshLook.Parse("none"));
     }
 
+    /// <summary>
+    /// A look that finds the target at a screen point when the picture it is shown covers it, and
+    /// answers in that picture's coordinates, as the model does; it says none otherwise.
+    /// </summary>
+    private static Func<byte[], ScreenSpace, string, CancellationToken, Task<(double X, double Y)?>> LookFinds(Func<(int X, int Y)?> at, List<(ScreenSpace Space, byte[] Image)>? shown = null) =>
+        (image, space, _, _) =>
+        {
+            shown?.Add((space, image));
+            var s = space.Screen;
+            return Task.FromResult<(double X, double Y)?>(at() is { } p && s.Contains(p.X, p.Y)
+                ? ((p.X - s.X) * (double)space.ModelWidth / s.Width, (p.Y - s.Y) * (double)space.ModelHeight / s.Height)
+                : null);
+        };
+
+    [Fact]
+    public async Task A_click_the_look_moved_away_from_the_aim_says_where_it_went()
+    {
+        // Blender's sidebar tabs on the 0-1000 grid of a 2560x1080 screen: the model aimed at the
+        // "MCP for Blender" tab, the look found the Animation tab above it (76 px higher).
+        var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1080) };
+        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false }, WorkingDirectory = Path.GetTempPath(), CoordinateGrid = 1000 };
+        (int X, int Y)? found = (2084, 254);
+        ctx.Locate = LookFinds(() => found);
+        var click = new MouseClickTool();
+        var args = new JsonObject { ["target"] = "MCP for Blender tab in sidebar", ["x"] = 811, ["y"] = 305 };
+
+        var result = await click.ExecuteAsync(args, ctx, CancellationToken.None);
+        Assert.Equal("move 2084,254", platform.Actions[0]);
+        Assert.Equal("Clicked.\nA fresh look found the MCP for Blender tab in sidebar at (814, 235), not where you aimed (811, 305), and the click went there. " +
+                     "If the mouse pointer in the screenshot is not on what you meant, click again with target left out and x, y on it: a look would find the same thing again.",
+            result.Text);
+
+        // A small correction (a few pixels within the same button) is just a click.
+        found = (2079, 335);
+        Assert.Equal("Clicked.", (await click.ExecuteAsync(args, ctx, CancellationToken.None)).Text);
+
+        // A click that changed nothing gets the miss note, which already says to aim without the look.
+        var still = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1080), Desktop = new RawImage(2560, 1080, new byte[2560 * 1080 * 4]) };
+        ctx = new ToolContext { Platform = still, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(), CoordinateGrid = 1000 };
+        found = (2084, 254);
+        ctx.Locate = LookFinds(() => found);
+        var missed = await click.ExecuteAsync(args, ctx, CancellationToken.None);
+        Assert.Contains("Nothing on screen changed after this click", missed.Text);
+        Assert.DoesNotContain("A fresh look found", missed.Text);
+    }
+
+    [Fact]
+    public async Task A_look_is_shown_the_quarter_of_the_screen_around_the_aim_first()
+    {
+        // Reading a whole 2560x1080 screenshot took a 27B model 9 s; a quarter of it 3 s.
+        var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1080) };
+        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false }, WorkingDirectory = Path.GetTempPath(), CoordinateGrid = 1000 };
+        var shown = new List<(ScreenSpace Space, byte[] Image)>();
+        (int X, int Y)? target = (2084, 254);
+        ctx.Locate = LookFinds(() => target, shown);
+        var click = new MouseClickTool();
+
+        await click.ExecuteAsync(new JsonObject { ["target"] = "MCP for Blender tab", ["x"] = 811, ["y"] = 305 }, ctx, CancellationToken.None);
+        var (part, image) = Assert.Single(shown);
+        Assert.Equal(new ScreenRect(1280, 59, 1280, 540), part.Screen); // centred on the aim, (2076, 329), kept inside the screen
+        using (var codec = SkiaSharp.SKCodec.Create(new MemoryStream(image)))
+            Assert.Equal((1280, 544), (codec.Info.Width, codec.Info.Height));
+        Assert.Equal("move 2084,254", platform.Actions[0]);
+
+        // Not around the aim (the model's x, y were far off): the whole screen is looked at next.
+        shown.Clear();
+        platform.Actions.Clear();
+        target = (100, 30);
+        await click.ExecuteAsync(new JsonObject { ["target"] = "File menu", ["x"] = 811, ["y"] = 305 }, ctx, CancellationToken.None);
+        Assert.Equal([new ScreenRect(1280, 59, 1280, 540), new ScreenRect(0, 0, 2560, 1080)], shown.Select(s => s.Space.Screen));
+        Assert.Equal("move 100,30", platform.Actions[0]);
+
+        // A scaled-down screen keeps its scale in the part: 2560x1440 in a 1280x720 box shows a 1280x720 part as 640x352.
+        var scaled = new ScreenSpace(new ScreenRect(0, 0, 2560, 1440), (1280, 720));
+        var quarter = scaled.Part(scaled.Around(2500, 30));
+        Assert.Equal(new ScreenRect(1280, 0, 1280, 720), quarter.Screen);
+        Assert.Equal((640, 352), (quarter.ImageWidth, quarter.ImageHeight));
+        Assert.Equal((1920, 360), quarter.ToScreen(320, 176));
+
+        // The part's pixels are cut out of the screen's capture.
+        var frame = new RawImage(4, 3, Enumerable.Range(0, 48).Select(i => (byte)i).ToArray());
+        Assert.Equal([20, 21, 22, 23, 24, 25, 26, 27, 36, 37, 38, 39, 40, 41, 42, 43], frame.Crop(1, 1, 2, 2).Bgra);
+    }
+
+    [Fact]
+    public async Task A_look_skips_the_thinking_of_Qwen_models()
+    {
+        // In LM Studio no switch turned qwen3.8's thinking off, but a reply begun with an empty
+        // think block skips it: a look took 3 s instead of 15, and found 19 of 19 Unity targets.
+        var server = new ScriptedServer(Sse.Text("(412, 87)"), Sse.Text("(1, 2)"), Sse.Text("(3, 4)"), Sse.Text("(5, 6)"));
+        var client = new BlackBox.Core.Llm.OpenAiChatClient(new HttpClient(server), "http://test", null);
+        var look = new BlackBox.Core.Agent.FreshLook(client, new BlackBox.Core.Llm.ChatRequestOptions { Model = "qwen3.8-27b@q6_k_xl" });
+        Assert.Equal((412, 87), await look.LocateAsync([1, 2, 3], "x/y are pixels of the screenshot, origin top-left.", "Save button", CancellationToken.None));
+        var last = server.Requests[0]["messages"]!.AsArray()[^1]!;
+        Assert.Equal("assistant", (string?)last["role"]);
+        Assert.Equal("<think>\n\n</think>\n\n", (string?)last["content"]);
+
+        // Other models' replies are theirs to begin.
+        var gemma = new BlackBox.Core.Agent.FreshLook(client, new BlackBox.Core.Llm.ChatRequestOptions { Model = "gemma-4-31b-it" });
+        Assert.Equal((1, 2), await gemma.LocateAsync([1, 2, 3], "", "Save button", CancellationToken.None));
+        Assert.Equal("user", (string?)server.Requests[1]["messages"]!.AsArray()[^1]!["role"]);
+
+        // A server that takes no begun reply says so with an error: the look is asked again without one, and so are the next.
+        server.Failures.Enqueue((System.Net.HttpStatusCode.BadRequest, """{"error":"The last message must be from the user"}"""));
+        Assert.Equal((3, 4), await look.LocateAsync([1, 2, 3], "", "Save button", CancellationToken.None));
+        Assert.Equal(["assistant", "user"], server.Requests.Skip(2).Select(r => (string?)r["messages"]!.AsArray()[^1]!["role"]));
+        Assert.Equal((5, 6), await look.LocateAsync([1, 2, 3], "", "Save button", CancellationToken.None));
+        Assert.Equal("user", (string?)server.Requests[^1]["messages"]!.AsArray()[^1]!["role"]);
+    }
+
     [Fact]
     public async Task A_click_is_held_back_when_what_the_model_aimed_at_has_gone()
     {
@@ -138,7 +249,7 @@ public class ToolTests
         var seen = new RawImage(384, 192, new byte[384 * 192 * 4]);
         for (var y = 128; y < 192; y++) for (var x = 256; x < 384; x++) seen.Bgra[(y * 384 + x) * 4] = 200;
         (double X, double Y)? found = (370, 10);
-        ctx.Locate = (_, _, _) => Task.FromResult(found);
+        ctx.Locate = (_, _, _, _) => Task.FromResult(found);
         var click = new MouseClickTool();
         var args = new JsonObject { ["target"] = "Close button of the notification", ["x"] = 370, ["y"] = 140 };
 
@@ -149,7 +260,7 @@ public class ToolTests
 
         // Asked again at the same spot after seeing the new screen: it goes ahead.
         ctx.Seen = (screen, seen);
-        Assert.Equal("Clicked.", (await click.ExecuteAsync(args, ctx, CancellationToken.None)).Text);
+        Assert.StartsWith("Clicked.\nA fresh look found the Close button of the notification at (370, 10)", (await click.ExecuteAsync(args, ctx, CancellationToken.None)).Text);
         Assert.Equal("move 370,10", platform.Actions[0]);
 
         // The look finds the target close to the aim: a correction, clicked even though the screen changed there.
@@ -193,7 +304,7 @@ public class ToolTests
 
         // What changes while the model looks for the target (a dialog closing elsewhere) is no reaction to the click.
         platform.OnClick = null;
-        ctx.Locate = (_, _, _) =>
+        ctx.Locate = (_, _, _, _) =>
         {
             for (var y = 120; y < 160; y++) for (var x = 300; x < 340; x++) platform.Desktop!.Bgra[(y * 384 + x) * 4] ^= 255;
             return Task.FromResult<(double X, double Y)?>((100, 50));

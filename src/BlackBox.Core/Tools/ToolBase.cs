@@ -52,11 +52,12 @@ public sealed class ToolContext
     public int CurrentScreen { get; set; }
 
     /// <summary>
-    /// Finds a named thing on a screenshot (JPEG) in a fresh conversation with the model; returns its
-    /// centre in the model's coordinates, or null. Set by the agent session; mouse_click aims with it
+    /// Finds a named thing on a screenshot (JPEG) of the given space (the whole screen, or the part
+    /// around a click) in a fresh conversation with the model; returns its centre in the model's
+    /// coordinates for that space, or null. Set by the agent session; mouse_click aims with it
     /// (see <see cref="Agent.FreshLook"/>).
     /// </summary>
-    public Func<byte[], string, CancellationToken, Task<(double X, double Y)?>>? Locate { get; set; }
+    public Func<byte[], ScreenSpace, string, CancellationToken, Task<(double X, double Y)?>>? Locate { get; set; }
 
     /// <summary>
     /// The screen as the model last saw it, which its next click is aimed by: the agent sets it

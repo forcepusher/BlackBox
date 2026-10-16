@@ -384,6 +384,14 @@ triggers the same reset and a retry. A reply cut off by a reply-length limit set
 The system prompt holds the date but not the time, so it stays the same for every message of a
 chat and the server never has to read the whole conversation again because of it.
 
+Most of a step's wait is the server reading the new screenshot: a 2560×1080 one is 2,720 tokens.
+With qwen3.8 on an RTX 5070 Ti, which reads about 500 tokens a second, a step read for 9-13 s whether
+the conversation held 13k or 68k tokens, while reading all of a 33k-token one again took 85 s.
+Within a run that only happens when the tool list changes (the agent adding an MCP server). While
+a hybrid model like qwen3.8 reads a screenshot, LM Studio's log shows "find_slot: non-consecutive
+token position N after N for sequence 0 with 512 new tokens" about once a second: all of a
+picture's tokens share one position, and the line is harmless.
+
 During a run the top bar shows how full the context is ("35k of 100k used"; its tooltip says where
 the reset comes), and a reply that hasn't started yet counts how long BlackBox has been waiting for
 it: a server reading a long prompt sends nothing for minutes. Before that, while the request is
@@ -466,7 +474,21 @@ call's coordinates after writing the right ones, while the same model looking at
 gets them right. In `ClickAccuracyTests` (qwen3.8, 79 trials in 16 scenes) first clicks hit 69 times
 against 57 with the model's own coordinates, and 19 of 19 menus, tabs and buttons on a real Unity
 screenshot (`ClickScenes/unity-editor.png`) against 10; with the first screenshot shifted 30 px, as
-a misjudged screen would be, 30 of 31 against 0. The look costs about 15 s per click on that server.
+a misjudged screen would be, 30 of 31 against 0.
+
+The look is shown the quarter of the screen around where the model aimed (half as wide and half as
+high, at the same scale), and the whole screen only when the target isn't there: on a 2560×1080
+screen that is 680 image tokens instead of 2,720. Qwen 3 and later answer it without thinking:
+BlackBox begins their reply with an empty think block, as their chat template does when thinking is
+off (in LM Studio, `enable_thinking`, `reasoning_effort` and `/no_think` changed nothing for
+qwen3.8; a server that refuses a begun reply is asked again the usual way, and from then on). With
+qwen3.8 on an RTX 5070 Ti, which reads about 500 tokens a second, a look at the whole screen took
+15-17 s (9 s reading it, the rest thinking); the look at the quarter around the aim takes about 3 s,
+and both found 19 of 19 targets on the Unity screenshot. On eight of the harder scenes of
+`ClickAccuracyTests` (tiny, dense, edges, similar, links, hidden, ultrawide and Unity; 40 trials on
+the same layouts) clicks hit 37 times with the new look in 17 minutes, and 31 times with the old one
+in 37 minutes. On the dense table the old look thought so long that two of three trials ran out of
+their five minutes, and on the 5120×1440 screen (7,200 image tokens) it missed all three buttons.
 
 After each click BlackBox also compares the screen just before it (after the look, so what changed
 while the model looked doesn't count) with the screen after it. When nothing changed near
@@ -477,6 +499,12 @@ table, half-covered buttons, an ultrawide screen) 4 of 9 misses were fixed withi
 with the note, 0 of 8 without it, and 4 of 10 when every click used the model's own coordinates.
 Before the fresh look, a red ring drawn at the click added nothing to the note, nor did a prompt
 rule about aiming carefully or temperature 0.2 instead of 0.6.
+
+A look can also find the wrong thing, and then the screen does change. In Blender it took the
+Animation tab for the "MCP for Blender" tab under it. The model saw the Animation panel open and
+named the tab again twice, aiming lower each time, and both times the look moved the click back up.
+So when the look moves a click more than 2% of the screen away from the model's aim, the result
+says where the click went, and that with `target` left out the click goes to the model's x/y.
 
 A notification that closes by itself in the seconds before the click is the opposite case: the
 look then finds something else that fits the words. In a chat run the model aimed at a desktop
