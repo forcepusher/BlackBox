@@ -438,9 +438,10 @@ public class ToolTests
         var past = await tool.ExecuteAsync(new JsonObject { ["path"] = log, ["offset"] = 200_000 }, Ctx(new FakePlatform(), dir), CancellationToken.None);
         Assert.Equal("The file has only 100000 lines.", past.Text);
 
-        var png = Path.Combine(dir, "picture.png");
-        File.WriteAllBytes(png, TestPng);
-        var binary = await tool.ExecuteAsync(new JsonObject { ["path"] = png }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+        // A picture is shown to the model (see ReadFileTests); other binaries are turned down.
+        var data = Path.Combine(dir, "picture.bin");
+        File.WriteAllBytes(data, TestPng);
+        var binary = await tool.ExecuteAsync(new JsonObject { ["path"] = data }, Ctx(new FakePlatform(), dir), CancellationToken.None);
         Assert.True(binary.IsError);
         Assert.Contains("not a text file", binary.Text);
 
@@ -478,7 +479,8 @@ public class ToolTests
               "backend": "Remote",
               "local": { "modelPath": "Models/x.gguf", "gpuLayers": 99 },
               "remote": { "baseUrl": "http://host:1234/v1", "model": "qwen", "sendExtras": false, "maxPromptTokens": 65536 },
-              "agent": { "enableThinking": false, "temperature": 0.3, "maxSteps": 12, "customInstructions": "be brief", "keepScreenshots": 5, "workingDirectory": "D:\\x", "screenshotMaxPixels": 2000000 }
+              "agent": { "enableThinking": false, "temperature": 0.3, "maxSteps": 12, "customInstructions": "be brief", "keepScreenshots": 5, "workingDirectory": "D:\\x", "screenshotMaxPixels": 2000000,
+                         "screenshotResolution": "R1280x720", "showInputs": false, "inputLogSeconds": 3, "webSearch": false }
             }
             """);
 
@@ -487,9 +489,11 @@ public class ToolTests
         Assert.Equal("http://host:1234/v1", settings.Server.BaseUrl);
         Assert.Equal("qwen", settings.Server.Model);
         Assert.Equal("be brief", settings.Agent.CustomInstructions);
-        Assert.Equal(ScreenshotResolution.R1920x1080, settings.Agent.ScreenshotResolution); // nearest to the old 2 MP budget
+        // Screenshot size, web access and the click log are no longer settings: always native, on, and shown.
+        Assert.Equal(ScreenshotResolution.Native, settings.Agent.ScreenshotResolution);
         var saved = File.ReadAllText(paths.SettingsFile);
-        foreach (var gone in new[] { "backend", "local", "remote", "gpuLayers", "sendExtras", "enableThinking", "temperature", "keepScreenshots", "contextSize", "workingDirectory", "screenshotMaxPixels", "maxSteps", "maxPromptTokens" })
+        foreach (var gone in new[] { "backend", "local", "remote", "gpuLayers", "sendExtras", "enableThinking", "temperature", "keepScreenshots", "contextSize", "workingDirectory", "screenshotMaxPixels", "maxSteps", "maxPromptTokens",
+                                     "screenshotResolution", "showInputs", "inputLogSeconds", "webSearch" })
             Assert.DoesNotContain(gone, saved);
     }
 

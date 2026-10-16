@@ -45,6 +45,23 @@ public sealed class ToolRegistry
 
     public IReadOnlyCollection<Tool> All => _tools.Values;
 
+    /// <summary>
+    /// Tools of an MCP server the agent set up during the run, offered from its next request on.
+    /// The tool list changes then, so the server works through the whole prompt once again.
+    /// </summary>
+    public void Add(IEnumerable<Tool> tools)
+    {
+        foreach (var t in tools)
+            _tools[t.Name] = t;
+    }
+
+    /// <summary>The tools of an MCP server that was removed.</summary>
+    public void RemoveServer(string serverName)
+    {
+        foreach (var name in _tools.Values.OfType<Mcp.McpTool>().Where(t => t.ServerName.Equals(serverName, StringComparison.OrdinalIgnoreCase)).Select(t => t.Name).ToList())
+            _tools.Remove(name);
+    }
+
     public Tool? Find(string name) => _tools.GetValueOrDefault(name);
 
     /// <summary>

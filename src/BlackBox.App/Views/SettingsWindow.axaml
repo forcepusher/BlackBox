@@ -47,11 +47,6 @@
               </StackPanel>
             </Grid>
 
-            <TextBlock Classes="h2" Text="Web" />
-            <CheckBox Content="Let the agent search the web and read pages" IsChecked="{Binding Agent.WebSearch}" />
-            <TextBlock Classes="muted" TextWrapping="Wrap" Margin="28,0,0,8"
-                       Text="So it can look up what it doesn't know, like the exact names in an API it writes code for. Searches go to DuckDuckGo, or to Bing through Edge or Chrome running hidden when DuckDuckGo is busy. No account or key needed." />
-
             <TextBlock Classes="h2" Text="Things BlackBox should always know" />
             <TextBox Text="{Binding Agent.CustomInstructions}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100"
                      Watermark="For example: my documents are in D:\Docs. Use Firefox for browsing. Answer in German." />
@@ -64,26 +59,11 @@
         <ScrollViewer>
           <StackPanel Spacing="4" Margin="0,0,12,16">
             <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="How the model behaves (temperature, reply length, thinking) is configured on the server, in LM Studio per model. These settings control BlackBox itself." />
-            <Grid Classes="form" ColumnDefinitions="190,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" Margin="0,8,0,0">
-              <TextBlock Classes="label" Grid.Row="0" Text="Screenshot resolution" />
-              <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding ResolutionOptions}" SelectedIndex="{Binding ResolutionIndex}" HorizontalAlignment="Stretch" />
-              <TextBlock Grid.Row="1" Grid.Column="1" Classes="muted" TextWrapping="Wrap"
-                         Text="The largest size screenshots are sent at; your screen is scaled down to fit. Higher is sharper for small text but slower and uses more context." />
-              <CheckBox Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Content="Show the agent's clicks and key presses on screen" IsChecked="{Binding Agent.ShowInputs}" />
-              <TextBlock Grid.Row="3" Grid.Column="1" Classes="muted" TextWrapping="Wrap" Margin="28,0,0,0"
-                         Text="A short log in the bottom-right corner, and a ring where it clicks. The agent can't see it in its screenshots." />
-              <TextBlock Classes="label" Grid.Row="4" Text="Keep each input shown for" />
-              <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                <NumericUpDown Value="{Binding InputLogSeconds}" Minimum="1" Maximum="300" Increment="1" FormatString="0" Width="130"
-                               IsEnabled="{Binding Agent.ShowInputs}" />
-                <TextBlock Text="seconds" VerticalAlignment="Center" />
-              </StackPanel>
-            </Grid>
+                       Text="How the model behaves (temperature, reply length, thinking) is configured on the server, in LM Studio per model." />
 
             <TextBlock Classes="h2" Text="MCP servers" />
             <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="Extra tools for the agent from MCP servers. Paste the mcpServers block from a server's README; it is the same format Claude Desktop, LM Studio and Cursor use. Servers with a command are started with BlackBox, servers with a url are connected to. Their tools are offered to the model next to BlackBox's own, named server__tool, and run like any other tool." />
+                       Text="Extra tools for the agent from MCP servers. Paste the mcpServers block from a server's README; it is the same format Claude Desktop, LM Studio and Cursor use. Servers with a command are started with BlackBox, servers with a url are connected to. Their tools are offered to the model next to BlackBox's own, named server__tool, and run like any other tool. The agent adds a server here itself when a task needs one." />
             <TextBox Text="{Binding McpConfigText}" Watermark="{Binding McpExample}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
                      FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12" MinHeight="200" Margin="0,8,0,0"
                      ScrollViewer.HorizontalScrollBarVisibility="Auto" />

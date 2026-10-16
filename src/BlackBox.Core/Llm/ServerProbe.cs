@@ -12,9 +12,9 @@ namespace BlackBox.Core.Llm;
 /// <param name="BaseUrl">The complete address that answered ("host:1234" typed, "http://host:1234/v1" found).</param>
 /// <param name="Model">The model to use: the configured one while the server offers it, else the strongest it offers (see <see cref="ModelChoice"/>); null when there is none.</param>
 /// <param name="AutoPicked">True when <paramref name="Model"/> was chosen here, because none was configured or the server doesn't offer it.</param>
-/// <param name="ModelSize">For a model chosen here, its size and quantization ("31B, 5-bit") if known.</param>
+/// <param name="ModelDetails">For a model chosen here, its size, quantization and benchmark score ("27B, 6-bit, 79.8% on Terminal-Bench 2.1") as far as known.</param>
 public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, int? LoadedContext, bool? Vision, string Message, bool? Loaded = null, string? BaseUrl = null,
-    string? Model = null, bool AutoPicked = false, string? ModelSize = null);
+    string? Model = null, bool AutoPicked = false, string? ModelDetails = null);
 
 /// <summary>What the server says about the model in use; nulls where it doesn't say.</summary>
 public readonly record struct ModelFacts(int? Context, bool? Loaded, bool? Vision);

@@ -63,12 +63,19 @@ public class ModelChoiceTests
             .Where(m => keep?.Invoke(m["key"]!.GetValue<string>()) ?? true).ToList();
         if (reversed)
             models.Reverse();
-        return new()
-        {
-            ["/v1/models"] = Ids(models.Select(m => m["key"]!.GetValue<string>())),
-            ["/api/v1/models"] = new JsonObject { ["models"] = new JsonArray(models.Select(m => (JsonNode?)m).ToArray()) }.ToJsonString(),
-        };
+        return LmStudio(models);
     }
+
+    /// <summary>An LM Studio offering these models, in this order.</summary>
+    private static Dictionary<string, string> LmStudio(IReadOnlyList<JsonObject> models) => new()
+    {
+        ["/v1/models"] = Ids(models.Select(m => m["key"]!.GetValue<string>())),
+        ["/api/v1/models"] = new JsonObject { ["models"] = new JsonArray(models.Select(m => m.DeepClone()).ToArray()) }.ToJsonString(),
+    };
+
+    /// <summary>One of the user's models as LM Studio describes it.</summary>
+    private static JsonObject UsersModel(string key) =>
+        UsersLmStudio.Select(m => JsonNode.Parse(m)!.AsObject()).Single(m => m["key"]!.GetValue<string>() == key);
 
     /// <summary>An OpenAI-style /v1/models list.</summary>
     private static string Ids(IEnumerable<string> ids) =>
@@ -81,23 +88,49 @@ public class ModelChoiceTests
     public async Task With_no_model_picked_the_strongest_one_on_the_users_LM_Studio_is_used()
     {
         var probe = await Probe(LmStudio());
-        Assert.Equal("gemma-4-31b-it", probe.Model); // 31B beats 27B, and its 5 bits beat the QAT build's 4
+        // Not Gemma 4 31B, though larger: it solves 43.4% of Terminal-Bench 2.1 to Qwen3.8 27B's 79.8%.
+        Assert.Equal("qwen3.8-27b@q6_k_xl", probe.Model);
         Assert.True(probe.AutoPicked);
-        Assert.Equal("31B, 5-bit", probe.ModelSize);
+        Assert.Equal("27B, 6-bit, 79.8% on Terminal-Bench 2.1", probe.ModelDetails);
         Assert.Equal(11, probe.Models.Count);
         Assert.DoesNotContain("text-embedding-nomic-embed-text-v1.5", probe.Models);
     }
 
     [Fact]
+    public async Task The_users_models_rank_by_their_agent_benchmark_score_then_by_size_and_bits()
+    {
+        var server = new ServerSettings { BaseUrl = "http://host:1234/v1" };
+        var ids = UsersLmStudio.Select(m => JsonNode.Parse(m)!["key"]!.GetValue<string>()).ToList();
+        var left = (await ServerProbe.CatalogAsync(new HttpClient(new Routes(LmStudio())), server, ids, CancellationToken.None)).ToList();
+        var order = new List<string>();
+        while (ModelChoice.Strongest(left) is { } next)
+        {
+            order.Add(next.Id);
+            left.Remove(next);
+        }
+        Assert.Equal(
+        [
+            "qwen3.8-27b@q6_k_xl", "qwen3.8-27b@q4_k_s",                  // 79.8%
+            "qwen3.6-27b-mtp@q6_k_xl", "qwen3.6-27b-mtp@q4_k_xl",         // 60.7%, as Qwen3.6 27B
+            "gemma-4-31b-it", "gemma-4-31b-it-qat",                       // 43.4%
+            "gemma-4-12b-it-qat",                                         // 27.3%
+            // Not scored: a fine-tune of Qwen3.5 27B under its own name.
+            "xortron.criminalcomputing.2026.27b.next@q6_k", "xortron.criminalcomputing.2026.27b.next@q5_k_m",
+            "xortron.criminalcomputing.2026.27b.instruct.next-i1",
+            "qwen3.8-27b@q4_0",                                           // an incomplete file
+        ], order);
+    }
+
+    [Fact]
     public async Task A_picked_model_is_used_while_the_server_offers_it_and_stood_in_for_while_it_does_not()
     {
-        var offered = await Probe(LmStudio(), picked: "qwen3.8-27b@q4_k_s");
-        Assert.Equal("qwen3.8-27b@q4_k_s", offered.Model);
+        var offered = await Probe(LmStudio(), picked: "gemma-4-31b-it");
+        Assert.Equal("gemma-4-31b-it", offered.Model);
         Assert.False(offered.AutoPicked);
-        Assert.Null(offered.ModelSize);
+        Assert.Null(offered.ModelDetails);
 
         var missing = await Probe(LmStudio(keep: id => id != "qwen3.8-27b@q4_k_s"), picked: "qwen3.8-27b@q4_k_s");
-        Assert.Equal("gemma-4-31b-it", missing.Model);
+        Assert.Equal("qwen3.8-27b@q6_k_xl", missing.Model);
         Assert.True(missing.AutoPicked);
         Assert.DoesNotContain("qwen3.8-27b@q4_k_s", missing.Models);
     }
@@ -105,13 +138,72 @@ public class ModelChoiceTests
     [Fact]
     public async Task Among_equally_strong_models_the_loaded_one_wins_then_the_first_listed()
     {
-        // Without the 31B models three 27B 6-bit builds tie; the loaded one needs no loading,
-        // even when listed after the others.
-        var probe = await Probe(LmStudio(keep: id => !id.StartsWith("gemma-4-31b"), reversed: true));
-        Assert.Equal("qwen3.8-27b@q6_k_xl", probe.Model);
+        // A second 6-bit build of the loaded model, listed first: the loaded one needs no loading.
+        var loaded = UsersModel("qwen3.8-27b@q6_k_xl");
+        var other = loaded.DeepClone().AsObject();
+        other["key"] = "qwen3.8-27b@q6_k";
+        other["loaded_instances"] = new JsonArray();
+        Assert.Equal("qwen3.8-27b@q6_k_xl", (await Probe(LmStudio([other, loaded]))).Model);
 
-        var none = await Probe(LmStudio(keep: id => id is "qwen3.6-27b-mtp@q6_k_xl" or "xortron.criminalcomputing.2026.27b.next@q6_k"));
-        Assert.Equal("qwen3.6-27b-mtp@q6_k_xl", none.Model);
+        loaded["loaded_instances"] = new JsonArray();
+        Assert.Equal("qwen3.8-27b@q6_k", (await Probe(LmStudio([other, loaded]))).Model);
+    }
+
+    [Theory]
+    [InlineData("qwen3.8-27b@q6_k_xl", 79.8, "Qwen3.8 27B")]
+    [InlineData("Qwen/Qwen3.6-27B-MTP-GGUF", 60.7, "Qwen3.6 27B")]
+    [InlineData("qwen3.6-35b-a3b", 44.9, "Qwen3.6 35B A3B")]
+    [InlineData("gemma-4-26b-a4b-it", 39.0, "Gemma 4 26B A4B")]
+    [InlineData("google/gemma-4-31b-it-qat", 43.4, "Gemma 4 31B")]
+    [InlineData("openai/gpt-oss-120b", 26.2, "gpt-oss-120b")]
+    [InlineData("mistral-small-4", 21.0, "Mistral Small 4")]
+    [InlineData("kimi-k2.6", 65.9, "Kimi K2.6")]
+    public void Listed_models_are_found_by_their_names(string id, double score, string listed)
+    {
+        var rating = AgentBenchmark.Rate(ModelChoice.FromName(id));
+        Assert.NotNull(rating);
+        Assert.True(rating.Exact);
+        Assert.Equal(score, rating.Score);
+        Assert.Equal(listed, rating.Basis.Model);
+    }
+
+    [Theory]
+    [InlineData("qwen3.9-27b", "Qwen3.8 27B")]      // a later version, as strong as the one it follows at least
+    [InlineData("qwen3.5-27b", "Qwen3.5 9B")]       // a larger size, as strong as the smaller one at least
+    [InlineData("kimi-k2.7", "Kimi K2.6")]
+    [InlineData("gemma3:27b", null)]                // Gemma 3 27B solves 4.5%: not listed
+    [InlineData("Qwen3-VL-32B-Instruct", null)]     // earlier than every listed Qwen
+    [InlineData("gpt-oss-20b", null)]               // smaller than the listed one
+    [InlineData("gemma-4-e4b-it", null)]            // no size to go by
+    [InlineData("mistral-small-3.2-24b-instruct-2506", null)]
+    [InlineData("deepseek-r1-distill-qwen-32b", null)]
+    [InlineData("medgemma-27b-it", null)]
+    [InlineData("xortron.criminalcomputing.2026.27b.next@q6_k", null)]
+    public void Other_models_are_scored_as_the_listed_one_they_follow_or_not_at_all(string id, string? listed)
+    {
+        var rating = AgentBenchmark.Rate(ModelChoice.FromName(id));
+        Assert.Equal(listed, rating?.Basis.Model);
+        Assert.True(rating is null or { Exact: false });
+    }
+
+    [Fact]
+    public void A_scored_model_comes_before_any_unscored_one_and_a_later_version_before_the_one_it_follows()
+    {
+        // Llama 3.3 70B solves 4.9% of the tasks; models under a fifth aren't listed.
+        Assert.Equal("qwen3.5-9b", ModelChoice.Strongest([ModelChoice.FromName("llama-3.3-70b-instruct"), ModelChoice.FromName("qwen3.5-9b")])!.Id);
+        Assert.Equal("qwen3.9-27b", ModelChoice.Strongest([ModelChoice.FromName("qwen3.8-27b"), ModelChoice.FromName("qwen3.9-27b")])!.Id);
+        Assert.Equal("qwen3.5-27b", ModelChoice.Strongest([ModelChoice.FromName("qwen3.5-9b"), ModelChoice.FromName("qwen3.5-27b")])!.Id);
+        Assert.Equal("27B, 5-bit, scored as Qwen3.5 9B: 29.2% on Terminal-Bench 2.1", ModelChoice.Describe(ModelChoice.FromName("qwen3.5-27b@q5_k_m")));
+    }
+
+    [Fact]
+    public void The_table_tells_which_models_take_no_images_where_the_server_does_not()
+    {
+        // From the names alone every model is taken to see; MiniMax-M2.7 scores more but can't.
+        Assert.Equal("gemma-4-12b-it", ModelChoice.Strongest([ModelChoice.FromName("minimax-m2.7"), ModelChoice.FromName("gemma-4-12b-it")])!.Id);
+        Assert.Equal("minimax-m3", ModelChoice.Strongest([ModelChoice.FromName("minimax-m2.7"), ModelChoice.FromName("minimax-m3")])!.Id);
+        // What the server says goes first.
+        Assert.Equal("minimax-m2.7", ModelChoice.Strongest([ModelChoice.FromName("minimax-m2.7") with { Vision = true }, ModelChoice.FromName("gemma-4-12b-it")])!.Id);
     }
 
     [Fact]
@@ -133,8 +225,8 @@ public class ModelChoiceTests
             ["/api/v0/models"] = UsersLmStudioV0,
         };
         var probe = await Probe(routes);
-        Assert.Equal("gemma-4-31b-it", probe.Model); // 31B from the name, 5 bits from "Q5_K_XL"
-        Assert.Equal("31B, 5-bit", probe.ModelSize);
+        Assert.Equal("qwen3.8-27b@q6_k_xl", probe.Model); // 27B from the name, 6 bits from "Q6_K_XL"
+        Assert.Equal("27B, 6-bit, 79.8% on Terminal-Bench 2.1", probe.ModelDetails);
         Assert.Equal(11, probe.Models.Count);
     }
 
@@ -143,7 +235,7 @@ public class ModelChoiceTests
     {
         var probe = await Probe(new() { ["/v1/models"] = Ids(["text-embedding-3-small", "llama-3.1-8b-instruct", "Llama-3.3-70B-Instruct-AWQ", "Llama-3.3-70B-Instruct-FP8", "gpt-4o"]) });
         Assert.Equal("Llama-3.3-70B-Instruct-FP8", probe.Model);
-        Assert.Equal("70B, 8-bit", probe.ModelSize);
+        Assert.Equal("70B, 8-bit", probe.ModelDetails);
 
         // Nothing tells the sizes: the first model that can chat, in the server's order.
         var hosted = await Probe(new() { ["/v1/models"] = Ids(["whisper-1", "gpt-4o-mini", "gpt-4o"]) });
@@ -170,7 +262,8 @@ public class ModelChoiceTests
     [Fact]
     public void A_mixture_of_experts_counts_as_the_dense_model_it_is_about_as_strong_as()
     {
-        Assert.Equal("qwen3.5-27b", ModelChoice.Strongest([ModelChoice.FromName("qwen3.5-35b-a3b"), ModelChoice.FromName("qwen3.5-27b")])!.Id);
+        // Neither is scored: Qwen3 is older than every listed Qwen.
+        Assert.Equal("qwen3-14b", ModelChoice.Strongest([ModelChoice.FromName("qwen3-30b-a3b"), ModelChoice.FromName("qwen3-14b")])!.Id);
         Assert.Equal("Qwen3-235B-A22B", ModelChoice.Strongest([ModelChoice.FromName("llama-3.3-70b"), ModelChoice.FromName("Qwen3-235B-A22B")])!.Id);
         Assert.Equal("30B-A3B, 4-bit", ModelChoice.Describe(ModelChoice.FromName("qwen3-30b-a3b@q4_k_m")));
     }
@@ -240,15 +333,17 @@ public class ModelChoiceTests
         var ids = await new OpenAiChatClient(http, found.BaseUrl, null).ListModelsAsync(CancellationToken.None);
         var catalog = await ServerProbe.CatalogAsync(http, found, ids, CancellationToken.None);
         foreach (var m in catalog)
-            TestContext.Current.SendDiagnosticMessage($"{m.Id}: chat={m.Chat} vision={m.Vision} size={ModelChoice.Describe(m)} loaded={m.Loaded} incomplete={ModelChoice.LooksIncomplete(m)}");
-        TestContext.Current.SendDiagnosticMessage($"picked {probe.Model} ({probe.ModelSize})");
+            TestContext.Current.SendDiagnosticMessage($"{m.Id}: chat={m.Chat} vision={m.Vision} {ModelChoice.Describe(m)} loaded={m.Loaded} incomplete={ModelChoice.LooksIncomplete(m)}");
+        TestContext.Current.SendDiagnosticMessage($"picked {probe.Model} ({probe.ModelDetails})");
 
         var chosen = catalog.Single(m => m.Id == probe.Model);
+        var chosenScore = AgentBenchmark.Rate(chosen)?.Score ?? -1;
         foreach (var other in catalog.Where(m => m.Chat && !ModelChoice.LooksIncomplete(m) && m.Vision != false))
         {
-            Assert.True((ModelChoice.DenseEquivalent(other) ?? -1) <= (ModelChoice.DenseEquivalent(chosen) ?? -1), $"{other.Id} is larger than {chosen.Id}");
-            if (ModelChoice.DenseEquivalent(other) == ModelChoice.DenseEquivalent(chosen))
-                Assert.True((other.Bits ?? -1) <= (chosen.Bits ?? -1), $"{other.Id} has more bits than {chosen.Id}");
+            var score = AgentBenchmark.Rate(other)?.Score ?? -1;
+            Assert.True(score <= chosenScore, $"{other.Id} scores higher than {chosen.Id}");
+            if (score == chosenScore)
+                Assert.True((ModelChoice.DenseEquivalent(other) ?? -1) <= (ModelChoice.DenseEquivalent(chosen) ?? -1), $"{other.Id} is larger than {chosen.Id}");
         }
     }
 }

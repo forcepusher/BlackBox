@@ -62,6 +62,42 @@ public sealed class McpConfig
 
     public static void Save(string path, string text) => Settings.AtomicFile.Write(path, text);
 
+    /// <summary>The file's text with this server in it, in place of one of the same name; the rest stays, its comments aside.</summary>
+    public static string WithServer(string json, string name, JsonObject entry)
+    {
+        var (root, servers) = ServerMap(json);
+        var existing = servers.Select(kv => kv.Key).FirstOrDefault(k => k.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null) servers.Remove(existing);
+        servers[name] = entry;
+        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n";
+    }
+
+    /// <summary>The file's text without the server of that name; null when it has none.</summary>
+    public static string? WithoutServer(string json, string name)
+    {
+        var (root, servers) = ServerMap(json);
+        var existing = servers.Select(kv => kv.Key).FirstOrDefault(k => k.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (existing is null) return null;
+        servers.Remove(existing);
+        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n";
+    }
+
+    /// <summary>The parsed file and its map of servers, made when it has none.</summary>
+    private static (JsonObject Root, JsonObject Servers) ServerMap(string json)
+    {
+        Parse(json); // says what is wrong with a file that can't be changed
+        var root = string.IsNullOrWhiteSpace(json) ? new JsonObject()
+            : JsonNode.Parse(json, documentOptions: new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip }) as JsonObject ?? new JsonObject();
+        if ((root["mcpServers"] ?? root["servers"]) is JsonObject map)
+            return (root, map);
+        // Just the inner map, pasted on its own.
+        if (root.Count > 0 && root.All(kv => kv.Value is JsonObject v && (v["command"] is not null || v["url"] is not null)))
+            return (root, root);
+        var servers = new JsonObject();
+        root["mcpServers"] = servers;
+        return (root, servers);
+    }
+
     /// <summary>Parses the file text; a readable <see cref="McpConfigException"/> says what is wrong with it.</summary>
     public static McpConfig Parse(string json)
     {

@@ -14,17 +14,61 @@ unpacks its native UI libraries into `Data/runtime` next to itself.
 BlackBox/
   BlackBox.exe
   Data/        settings.json, chats/ (see Chat history), runtime/ (unpacked by the single-file exe), browser/ (see Web search),
-               tools/ (portable programs the agent downloaded)
+               tools/ (portable programs the agent downloaded), scratch/ (helper files it made for a task)
 ```
-
-When nothing on the PC opens a file or does a job the agent needs (a PDF to read, a format to
-convert), it downloads a portable tool into `Data/tools`, where later tasks find it, or installs
-the program, rather than decoding the file by hand: asked to summarize a PDF, qwen3.8 spent eight
-minutes inflating its streams and mapping glyphs in PowerShell. It also accepts the license
-agreements and first-run prompts of the programs it uses (Office asks on its first start).
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
 The agent itself works across the whole PC; relative paths and shell commands start in your home folder.
+Files it makes only to get a task done (a script, the script a reminder runs) go in `Data/scratch`
+rather than among yours: a reminder used to leave its script in the home folder. `settings.json`
+also keeps the main window's size and place, and it opens there again unless that place is no
+longer on a screen.
+
+## Documents
+`read_file` reads more than text: PDFs (their text layer, page by page), Word, Excel and PowerPoint
+files (Excel cell by cell with its formulas, Word with headings, lists, bold and tables) and
+pictures, which the model sees like a screenshot. Before, asked to summarize a PDF, qwen3.8 spent
+eight minutes inflating its streams and mapping glyphs in PowerShell, and a question about a chart
+picture took six minutes of finding a program to show it.
+
+`write_file` makes Word, Excel, PowerPoint and PDF files from Markdown without Office, so they open
+in Word, Excel, PowerPoint, Google Drive and any PDF reader:
+
+- `.docx`: headings become Word's Heading styles (the navigation pane and a table of contents use
+  them), lists real bulleted and numbered lists, and tables, pictures
+  (`![caption](C:\path\chart.png)`), links, code and quotes come out as such; `\newpage` starts a page.
+- `.xlsx`: each heading starts a sheet named after it, and tables fill it with their header row bold
+  and frozen. A cell starting with `=` is a formula, and numbers, `12%`, `$1,200` and `2026-10-16`
+  become values shown that way; a formula under amounts of money shows money. Excel works the
+  formulas out on opening.
+- `.pptx`: a line of `---` starts the next slide, and a slide's first heading is its title; pictures
+  and tables go beside or under the text, and a first slide with only a title and a line under it
+  is a title slide.
+- `.pdf`: wrapped text, tables whose header row repeats on each page, and page numbers. Plain ASCII
+  uses the reader's own Helvetica, a few KB; anything else embeds a system font with only the
+  letters used.
+
+An existing document isn't overwritten, since that would lose its formatting; `append` adds to one
+made in the same task. `edit_file` changes Word and PowerPoint files in place: the text is matched
+across Word's runs and paragraphs (copied from `read_file` with its `# ` and `**` marks or without),
+curly quotes match straight ones, and only what differs is replaced, so the rest keeps its
+formatting. A line break in the new text starts a paragraph like the one it is in, `# ` at its
+start makes a heading, and `**bold**` applies. In a workbook it sets cells written the way
+`read_file` shows them (`B7 =SUM(B2:B7)`, `Budget!A8 Total`), after checking that the cells being
+replaced still hold what the model read, and keeps each cell's formatting; without cell addresses
+it replaces text in the cells. A line `insert row 7` or `delete rows 3-4` changes the rows first, as
+Excel does: the rows below move, references to them in formulas, defined names, charts, tables and
+merged cells move along, a range spanning the place grows or shrinks, and a new row is formatted
+like the one above it. (Asked to add a budget line above the total without it, qwen3.8 wrote the
+line over the total and the total under it, the line in the total's bold.) A PDF can't be changed
+in place: the model writes a new one. Before,
+a budget workbook took qwen3.8 24 minutes through Excel's COM interface from PowerShell, and on a PC
+without Office it couldn't be done at all.
+
+When nothing on the PC opens a file or does a job the agent needs (another format, a conversion, an
+archive), it downloads a portable tool into `Data/tools`, where later tasks find it, or installs the
+program, rather than decoding the file by hand. It also accepts the license agreements and
+first-run prompts of the programs it uses (Office asks on its first start).
 
 ## Chat history
 Every chat is saved on its own in `Data/chats/` from its first message on, after every step, and
@@ -33,10 +77,11 @@ read it and carry on where it stopped (the model gets the conversation back), or
 trash button. Screenshots are not kept in the saved file; the model takes a new one when it carries
 on. Picking another chat or New chat while a task runs stops the task, and keeps it as far as it got.
 
-Until a chat is used, it shows what BlackBox can do (apps, files and commands, chatting for you,
-the web, servers, long jobs), that Esc stops it, and what it asks before it acts. It says so when
-the model in use can't see images or web access is off. Notices such as an MCP server that failed
-to start show above it and don't count as using the chat.
+Until a chat is used, it shows what BlackBox can do (apps, files and commands, documents, getting
+the programs and MCP servers a job needs, chatting for you, the web, servers, long jobs), that Esc
+stops it, how to change a task while it runs, and what it asks before it acts. It says so when the
+model in use can't see images. Notices such as an MCP server that failed to start show above it and
+don't count as using the chat.
 
 ## Connecting to a model
 Enter the server address in the bar at the top of the main window (LM Studio's default is
@@ -48,14 +93,23 @@ shows it). For screen control the
 model must accept images (for example Qwen3.5+ VL models or Gemma 4 with their vision projector);
 LM Studio reports this and BlackBox follows it; models on other servers are assumed to see images.
 
-Until you pick a model, BlackBox uses the strongest one the server offers: one that takes images
-first, then the most parameters, then the most bits per weight (Q6 before Q4), and between equals
-one the server has loaded already. That choice isn't saved, so a stronger model added later takes
-over. LM Studio reports each model's size, quantization and image support; for other servers they
-are read from the names (`qwen3.8-27b@q6_k_xl`, `Llama-3.3-70B-Instruct-AWQ`), and a mixture of
-experts such as `30b-a3b` counts as the dense model it is about as strong as (the geometric mean of
-30B and 3B, about 9.5B). Embedding models are left out, and so is a file far too small for its size
-and quantization, such as a broken download. A model you pick yourself is kept, also while the
+Until you pick a model, BlackBox uses the strongest one the server offers. One that takes images
+comes first. Then it goes by Terminal-Bench 2.1, a benchmark of agent tasks done in a terminal,
+with the scores Artificial Analysis measured running every model the same way: BlackBox has those
+of the open models that solve at least a fifth of it (Qwen3.8 27B 79.8%, Qwen3.6 27B 60.7%, Gemma 4
+31B 43.4%, Gemma 4 12B 27.3%, gpt-oss-120b, Mistral Small 4, Kimi K2.6 and others; the table is in
+`src/BlackBox.Core/Llm/AgentBenchmark.cs`). Size alone had picked Gemma 4 31B over Qwen3.8 27B. A
+later version or a larger size of a listed model counts as at least as strong as it (a Qwen3.9 27B
+as Qwen3.8 27B, a Qwen3.5 27B as Qwen3.5 9B), and quantized builds as the model they are built from.
+Models without a score come after those, ranked by size: the most parameters, then the most bits
+per weight (Q6 before Q4), and between equals one the server has loaded already. That choice isn't
+saved, so a stronger model added later takes over. LM Studio reports each model's size,
+quantization and image support; for other servers they are read from the names
+(`qwen3.8-27b@q6_k_xl`, `Llama-3.3-70B-Instruct-AWQ`), the table says which listed models take no
+images, and a mixture of experts such as `30b-a3b` counts as the dense model it is about as strong
+as (the geometric mean of 30B and 3B, about 9.5B). Embedding models are left out, and so is a file
+far too small for its size and quantization, such as a broken download. The model's tooltip says
+why it was picked. A model you pick yourself is kept, also while the
 server doesn't offer it: the strongest one stands in, a banner says so, and BlackBox goes back to
 yours as soon as the server lists it again. It checks when it connects, on ↻ and before each task.
 The command-line runner picks the same way for the saved model or `--model`.
@@ -117,22 +171,27 @@ retry continues where the last one stopped (up to 12 times per step). A VPN can 
 upload without breaking it: a request carries every screenshot still in the context, several
 megabytes, and LM Studio waited five minutes for the rest of one before answering 408. So when
 nothing of a request gets through for 30 seconds, it is sent again. A tool that fails, however
-it fails, reports the error to the model and the run goes on.
+it fails, reports the error to the model and the run goes on. When the same error comes back a
+second time, the result tells the model to search the web for the error message before trying
+again: it used to work around errors rather than look them up, and once decided Excel's chart
+interface was broken after a PowerShell call failed the same way four times (`ChartObjects` is a
+method there, not a property).
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |
-| `screenshot` | Captures a screen at full resolution, or scaled to fit the chosen size, on the 32px vision grid; `screen=N` looks at another monitor |
+| `screenshot` | Captures a screen at full resolution, on the 32px vision grid; `screen=N` looks at another monitor |
 | `mouse_click` | Clicks a named target where a fresh look at the screen finds it (see below); `modifiers` holds keys through the click, as in Ctrl+click to add to a selection or Shift+click to select a range |
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
-| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
+| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures to the model; `write_file` makes them from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
 | `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |
 | `web_search` | Searches the web: titles, links and snippets (see below) |
 | `fetch_page` | Reads a web page as plain text; `find` returns only the passages that mention some words, `start` reads on in a long page |
-| `<server>__<tool>` | Any tool of the MCP servers you add in Settings → Advanced (see below) |
+| `mcp_servers` | Adds, removes and lists MCP servers: a server the agent adds starts at once, its tools join the run, and it is kept in `Data/mcp.json` for later tasks (see below) |
+| `<server>__<tool>` | Any tool of the MCP servers you or the agent added (see below) |
 
 Models often fumble tool-call syntax, so BlackBox repairs calls on the fly: Qwen XML, Gemma 4 and
 JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…) and misnamed
@@ -155,11 +214,10 @@ qwen3.8 dragged as many x as y steps and got 346×217 and 385×241 px ovals befo
 out. So the system prompt gives both step sizes, and `mouse_drag` says how far it went in screen
 pixels.
 
-Screenshots go out at full resolution by default. In LM Studio, turn off the model's "Image Input:
-Never exceed 2048 px" option, or it shrinks them back to about 2048×864 (qwen3.8 hit text links
-15/16 at full resolution, 8/16 at 1920×1080). For models that point in pixels, keep that option and the screenshot size in
-step, since a server that resizes the image moves every click. A `settings.json` saved before full
-resolution became the default keeps 1920×1080; choose "Full screen resolution" in Settings.
+Screenshots go out at the screen's full resolution, always. In LM Studio, turn off the model's
+"Image Input: Never exceed 2048 px" option, or it shrinks them back to about 2048×864 (qwen3.8 hit
+text links 15/16 at full resolution, 8/16 at 1920×1080); a server that resizes the image moves
+every click of a model that points in pixels.
 
 Every click is aimed by a fresh look. `mouse_click` names its `target` ("File menu", "Save button
 in the Export dialog"); BlackBox takes a new screenshot and asks the model, in a separate request
@@ -210,9 +268,8 @@ writes it as text: `#` headings, `-` lists, fenced code blocks, `| a | b |` tabl
 their text. A page comes in parts of 6,000 characters (about 1.5k tokens), so a long page can't
 flood the context, and `find` returns just the matching lines with a little context and the heading
 they sit under. A page that turns away plain requests, or that its scripts build, is loaded in the
-headless browser instead. PDFs aren't read. The last eight pages are kept in memory, so reading on
-doesn't download a page again. The browser's profile is `Data/browser`. Turn web access off in
-Settings → General.
+headless browser instead. A PDF comes as its text, page by page, like `read_file` reads one. The last eight pages are kept in memory, so reading on
+doesn't download a page again. The browser's profile is `Data/browser`.
 
 ### Servers over SSH
 `ssh` logs in to a server (`user@host`, `user@host:port` or a `Host` from `~/.ssh/config`) with
@@ -304,6 +361,13 @@ screenshot. Comments and trailing commas in the file are fine. The settings dial
 server reported when it started, and a server that fails to start is reported in the chat; the
 others keep working.
 
+The agent sets servers up itself too, with its `mcp_servers` tool: when a program it is asked to
+use has an MCP server (Blender, a database, a browser), it installs what the server needs, adds it
+(`add` with a name and a command or url, as in the file), and its tools join the run at once and
+stay for later tasks; the entry lands in `Data/mcp.json`, where Settings shows it. A server that
+doesn't start isn't kept, and the agent is told why. `remove` and `list` do what they say. Adding
+tools mid-run changes the tool list, so the server works through the whole prompt once more.
+
 Actions run without asking by default (approvals can be switched on in Settings → General).
 Pressing Stop, or Esc anywhere, halts the agent. Esc works whatever window has focus, and the
 press that stops a run goes no further: the window the agent was working in never sees it, or
@@ -311,8 +375,16 @@ any key pressed while it is held. With no run going it is the usual Esc, and the
 presses can't trigger it. BlackBox
 stays on screen while it works but is hidden from the agent's screenshots, and steps behind other
 windows for the moment a click lands on it. Every click and key press the agent makes shows up in a
-log in the bottom-right corner that fades after 15 seconds (adjustable), with a ring where it clicked. The agent
-can't see it and it never takes focus (turn it off in Settings → Advanced).
+log in the bottom-right corner that fades after 15 seconds, with a ring where it clicked. The agent
+can't see it and it never takes focus.
+
+To change or add to a task while it runs, type in the box at the bottom and press Enter. The agent
+reads the message before its next step, and a `wait` it is in ends for it. While you type there,
+its clicks and key presses hold off (for up to a minute), so they don't land in your typing, and a
+line above the box says it is paused and how it goes on: send the message, click Resume (what you
+typed stays in the box), or stop typing, after which it carries on in 15 seconds, counted down on
+that line. A message that arrives as the run finishes starts the next one, and what the agent
+hadn't read when you stopped it goes back in the box.
 
 ## Build
 Requires the .NET 10 SDK.

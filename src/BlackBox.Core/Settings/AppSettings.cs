@@ -26,11 +26,6 @@ public static class ScreenshotResolutionExtensions
         ScreenshotResolution.R2560x1440 => (2560, 1440),
         _ => null,
     };
-
-    /// <summary>Nearest option for an old pixel-count setting.</summary>
-    internal static ScreenshotResolution FromPixelBudget(long pixels) =>
-        Enum.GetValues<ScreenshotResolution>().Where(r => r.Box() is not null)
-            .MinBy(r => Math.Abs((long)r.Box()!.Value.Width * r.Box()!.Value.Height - pixels));
 }
 
 public enum ApprovalMode
@@ -194,10 +189,12 @@ public sealed class AgentSettings
 
     /// <summary>
     /// Largest size a screenshot is sent at; the screen is scaled down to fit, keeping its shape.
-    /// Full resolution by default: with qwen3.8 on LM Studio (its "never exceed 2048 px" image
-    /// option off) it hit text links 15/16 against 8/16 at 1920x1080, and buttons on a 5120x1440
-    /// screen 7/16 against 4/16 (ClickAccuracyTests, two rounds).
+    /// Always the full resolution, not a setting any more (the user: nobody switches it from
+    /// native): with qwen3.8 on LM Studio (its "never exceed 2048 px" image option off) it hit text
+    /// links 15/16 against 8/16 at 1920x1080, and buttons on a 5120x1440 screen 7/16 against 4/16
+    /// (ClickAccuracyTests, two rounds). Tests and the click benchmark try the others.
     /// </summary>
+    [JsonIgnore]
     public ScreenshotResolution ScreenshotResolution { get; set; } = ScreenshotResolution.Native;
 
     /// <summary>Attach a fresh screenshot after mouse/keyboard actions. Internal (tests turn it off).</summary>
@@ -210,24 +207,33 @@ public sealed class AgentSettings
     /// </summary>
     public bool HideFromScreenshots { get; set; } = true;
 
-    /// <summary>Show the inputs the agent makes in a fading log in the screen corner, and a ring where it clicks.</summary>
-    public bool ShowInputs { get; set; } = true;
-
-    public const int DefaultInputLogSeconds = 15;
-
-    /// <summary>How long each line of the on-screen input log stays before it has faded out.</summary>
-    public int InputLogSeconds { get; set; } = DefaultInputLogSeconds;
-
-    /// <summary>Give the agent web_search and fetch_page, so it can look up what it doesn't know.</summary>
-    public bool WebSearch { get; set; } = true;
+    /// <summary>
+    /// How long each line of the log of the agent's inputs in the screen corner stays before it has
+    /// faded out. The log, and the ring where it clicks, are always shown: no longer settings.
+    /// </summary>
+    public const int InputLogSeconds = 15;
 
     public string CustomInstructions { get; set; } = "";
+}
+
+/// <summary>Where the main window was, so it opens there again: position in screen pixels, size in the UI's own units.</summary>
+public sealed class WindowPlacement
+{
+    public int X { get; set; }
+    public int Y { get; set; }
+    public double Width { get; set; }
+    public double Height { get; set; }
+    public bool Maximized { get; set; }
 }
 
 public sealed class AppSettings
 {
     public ServerSettings Server { get; set; } = new();
     public AgentSettings Agent { get; set; } = new();
+
+    /// <summary>The main window's last size and place; null until it was first closed.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WindowPlacement? Window { get; set; }
 
     public AppSettings Clone() =>
         JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(this, SettingsStore.JsonOptions), SettingsStore.JsonOptions)!;
@@ -286,13 +292,6 @@ public sealed class SettingsStore(AppPaths paths)
         if (root["server"] is null && root["remote"] is JsonObject remote)
             root["server"] = remote.DeepClone();
         root.Remove("remote");
-        // Screenshot size used to be a raw pixel count.
-        if (root["agent"] is JsonObject agent && agent["screenshotMaxPixels"] is JsonValue px
-            && px.TryGetValue<long>(out var pixels))
-        {
-            agent["screenshotResolution"] = ScreenshotResolutionExtensions.FromPixelBudget(pixels).ToString();
-            agent.Remove("screenshotMaxPixels");
-        }
         root.Remove("local");
         root.Remove("backend");
         return root.ToJsonString();

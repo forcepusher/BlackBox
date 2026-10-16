@@ -67,10 +67,49 @@ public sealed class McpHost : IAsyncDisposable
         }
     }
 
-    private async Task ConnectOneAsync(Connection c, CancellationToken ct)
+    /// <summary>
+    /// Starts one more server (in place of one of the same name) while the others keep running,
+    /// for the agent setting one up itself (see <see cref="McpServersTool"/>). A server that fails
+    /// is not kept. Returns its status and its tools, named as the model will call them.
+    /// </summary>
+    /// <param name="timeout">How long it may take to start: a first start may download it.</param>
+    public async Task<(McpServerStatus Status, IReadOnlyList<McpTool> Tools)> AddAsync(McpServerConfig config, TimeSpan timeout, CancellationToken ct)
+    {
+        await RemoveAsync(config.Name).ConfigureAwait(false);
+        var connection = new Connection(config);
+        await ConnectOneAsync(connection, ct, timeout).ConfigureAwait(false);
+        lock (_gate)
+        {
+            if (connection.Status.State == McpServerState.Connected)
+            {
+                connection.NameTools(new HashSet<string>(_connections.SelectMany(c => c.Tools).Select(t => t.Name), StringComparer.OrdinalIgnoreCase));
+                _connections = [.. _connections, connection];
+            }
+        }
+        if (connection.Status.State != McpServerState.Connected)
+            await connection.DisposeAsync().ConfigureAwait(false);
+        return (connection.Status, connection.Tools.ToList());
+    }
+
+    /// <summary>Stops the server of that name, if one runs; true when there was one.</summary>
+    public async Task<bool> RemoveAsync(string name)
+    {
+        Connection? old;
+        lock (_gate)
+        {
+            old = _connections.FirstOrDefault(c => c.Config.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (old is not null)
+                _connections = _connections.Where(c => c != old).ToList();
+        }
+        if (old is null) return false;
+        await old.DisposeAsync().ConfigureAwait(false);
+        return true;
+    }
+
+    private async Task ConnectOneAsync(Connection c, CancellationToken ct, TimeSpan? limit = null)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(ConnectTimeout);
+        timeout.CancelAfter(limit ?? ConnectTimeout);
         var stderr = new Queue<string>();
         try
         {
@@ -90,7 +129,7 @@ public sealed class McpHost : IAsyncDisposable
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            c.Failed($"It did not answer within {ConnectTimeout.TotalSeconds:0} seconds.", stderr);
+            c.Failed($"It did not answer within {(limit ?? ConnectTimeout).TotalSeconds:0} seconds.", stderr);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -195,7 +234,8 @@ public sealed class McpHost : IAsyncDisposable
             _state = McpServerState.Failed;
             string[] lines;
             lock (stderr) lines = stderr.ToArray();
-            _error = lines.Length > 0 ? error + " It said: " + string.Join(" / ", lines) : error;
+            // The SDK's own message may already end in what the server printed ("Server's stderr tail").
+            _error = lines.Length > 0 && !lines.All(error.Contains) ? error + " It said: " + string.Join(" / ", lines) : error;
         }
 
         public void NameTools(HashSet<string> taken)

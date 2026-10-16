@@ -12,6 +12,7 @@ namespace BlackBox.Core.Settings;
 ///   Data/runtime/  (native libraries unpacked by the single-file build)
 ///   Data/known_hosts (host keys of the servers the agent logged in to over SSH)
 ///   Data/tools/    (portable programs the agent downloaded for its tasks)
+///   Data/scratch/  (helper files the agent made for its tasks: scripts and the like)
 /// </code>
 /// </summary>
 public sealed class AppPaths(string root)
@@ -37,6 +38,9 @@ public sealed class AppPaths(string root)
 
     /// <summary>Portable programs the agent downloads to open what nothing on the PC opens (a PDF reader's text extractor, say), kept for later tasks.</summary>
     public string ToolsDir => Path.Combine(DataDir, "tools");
+
+    /// <summary>Helper files the agent makes only to get a task done (scripts, a reminder's script), instead of the user's folders.</summary>
+    public string ScratchDir => Path.Combine(DataDir, "scratch");
 
     public void EnsureCreated() => Directory.CreateDirectory(DataDir);
 

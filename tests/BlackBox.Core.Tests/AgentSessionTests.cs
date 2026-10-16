@@ -327,6 +327,95 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_message_sent_during_a_run_reaches_the_model_before_its_next_step()
+    {
+        AgentSession? session = null;
+        var replies = new Queue<string>([Sse.ToolCall("w1", "wait", """{"seconds":0}"""), Sse.Text("Made it say hello world.")]);
+        var server = new ScriptedServer
+        {
+            Responder = _ =>
+            {
+                // The user writes while the model is busy with its first step.
+                if (replies.Count == 2) session!.Steer("Actually make it say hello world");
+                return replies.Dequeue();
+            },
+        };
+        var (s, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        session = s;
+
+        await session.RunAsync("Write hello into the file", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count);
+        Assert.Equal("Actually make it say hello world", LastText(server.Requests[1]));
+        Assert.Contains(session.History, m => m.FromUser && m.Content == "Actually make it say hello world");
+        Assert.Empty(session.TakeUndelivered());
+    }
+
+    [Fact]
+    public async Task A_message_sent_while_the_model_writes_its_answer_keeps_the_run_going()
+    {
+        AgentSession? session = null;
+        var replies = new Queue<string>([Sse.Text("Done: the file says hello."), Sse.Text("Changed it to hello world.")]);
+        var server = new ScriptedServer
+        {
+            Responder = _ =>
+            {
+                if (replies.Count == 2) session!.Steer("Make it hello world instead");
+                return replies.Dequeue();
+            },
+        };
+        var (s, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        session = s;
+
+        await session.RunAsync("Write hello into the file", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count);
+        Assert.Equal("Make it hello world instead", LastText(server.Requests[1]));
+    }
+
+    [Fact]
+    public async Task A_message_ends_a_long_wait_and_one_sent_after_the_run_is_handed_back()
+    {
+        AgentSession? session = null;
+        var server = new ScriptedServer(Sse.ToolCall("w1", "wait", """{"seconds":120}"""), Sse.Text("Okay, stopping the watch."));
+        var (s, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        session = s;
+        _ = Task.Delay(500).ContinueWith(_ => session.Steer("You can stop watching now"));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        await session.RunAsync("Watch the chat for two minutes", observer, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(20), $"the wait went on for {clock.Elapsed}");
+        Assert.Contains("the user sent you a message", observer.Results[0].Text);
+        Assert.Equal("You can stop watching now", LastText(server.Requests[1]));
+
+        // Too late for this run: the app sends it on as the next one.
+        session.Steer("And thanks");
+        Assert.Equal(["And thanks"], session.TakeUndelivered());
+    }
+
+    [Fact]
+    public async Task Clicks_and_keys_wait_while_the_user_types_to_the_agent()
+    {
+        var typing = System.Diagnostics.Stopwatch.StartNew();
+        var platform = new FakePlatform();
+        var ctx = new ToolContext
+        {
+            Platform = platform,
+            Settings = new AgentSettings { ScreenshotAfterActions = false },
+            WorkingDirectory = Path.GetTempPath(),
+            UserComposing = () => typing.Elapsed < TimeSpan.FromMilliseconds(700),
+        };
+
+        await new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = "enter" }, ctx, CancellationToken.None);
+
+        Assert.True(typing.Elapsed >= TimeSpan.FromMilliseconds(700), $"pressed after {typing.ElapsedMilliseconds} ms of typing");
+        Assert.NotEmpty(platform.Actions);
+    }
+
+    [Fact]
     public async Task A_tool_that_fails_in_an_unexpected_way_reports_it_and_the_run_goes_on()
     {
         var server = new ScriptedServer(Sse.ToolCall("b1", "broken", "{}"), Sse.Text("I'll try something else."));
@@ -423,6 +512,11 @@ public class AgentSessionTests
         Assert.Contains("Accept license agreements", prompt);
         // A reminder whose process died on a quoting error was reported as set.
         Assert.Contains("check that it is running before you say it's set up", prompt);
+        Assert.Contains("Make Word, Excel, PowerPoint and PDF files with write_file", prompt);
+        Assert.Contains("add the server with mcp_servers and use its tools", prompt);
+        // Helper files go to BlackBox's own folder, not the user's (a reminder script landed in the home folder).
+        Assert.Contains(@"go in D:\BlackBox\Data\scratch, not in the user's folders",
+            SystemPrompt.Build("Test OS", null, "C:\\", "", toolsDirectory: @"D:\BlackBox\Data\tools", scratchDirectory: @"D:\BlackBox\Data\scratch"));
         Assert.DoesNotContain("web_search", SystemPrompt.Build("Test OS", null, "C:\\", "", toolsDirectory: @"D:\BlackBox\Data\tools"));
     }
 

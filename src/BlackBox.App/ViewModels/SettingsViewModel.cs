@@ -19,29 +19,6 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         "Never ask",
     ];
 
-    /// <summary>Labels for <see cref="ScreenshotResolution"/>, in enum order.</summary>
-    public string[] ResolutionOptions { get; } =
-    [
-        "1280 × 720",
-        "1600 × 900",
-        "1920 × 1080",
-        "2560 × 1440",
-        "Full screen resolution (default)",
-    ];
-
-    public int ResolutionIndex
-    {
-        get => (int)Agent.ScreenshotResolution;
-        set => Agent.ScreenshotResolution = (ScreenshotResolution)Math.Clamp(value, 0, ResolutionOptions.Length - 1);
-    }
-
-    /// <summary>NumericUpDown works in decimals.</summary>
-    public decimal? InputLogSeconds
-    {
-        get => Agent.InputLogSeconds;
-        set => Agent.InputLogSeconds = (int)Math.Clamp(value ?? AgentSettings.DefaultInputLogSeconds, 1, 300);
-    }
-
     public int ApprovalIndex
     {
         get => (int)Agent.Approval;

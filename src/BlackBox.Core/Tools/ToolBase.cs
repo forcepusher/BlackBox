@@ -15,7 +15,8 @@ public enum ToolRisk
     Risky,
 }
 
-public sealed record ToolResult(string Text, byte[]? Image = null, string ImageMime = "image/jpeg", bool IsError = false)
+/// <param name="ImageCaption">What the image is, said where it reaches the model; null for a screenshot after an action.</param>
+public sealed record ToolResult(string Text, byte[]? Image = null, string ImageMime = "image/jpeg", bool IsError = false, string? ImageCaption = null)
 {
     public static ToolResult Error(string text) => new(text, IsError: true);
 }
@@ -29,6 +30,18 @@ public sealed class ToolContext
 
     /// <summary>The relative grid the model gives x/y on (see <see cref="ScreenSpace"/>), or null for screenshot pixels. Set from the model, see <see cref="ModelCoordinates"/>.</summary>
     public int? CoordinateGrid { get; init; }
+
+    /// <summary>Whether the model takes images, so read_file can show it a picture.</summary>
+    public bool SeesImages { get; init; } = true;
+
+    /// <summary>Cancelled when the user sends a message during the run: a wait ends early so the model reads it soon.</summary>
+    public CancellationToken UserMessage { get; set; }
+
+    /// <summary>
+    /// True while the user is typing a message to the agent in BlackBox's own window: clicks and
+    /// key presses wait, or they would take the focus from under the user's typing.
+    /// </summary>
+    public Func<bool>? UserComposing { get; init; }
 
     /// <summary>
     /// The monitor the agent is looking at (0 = primary): the one the latest screenshot showed.
@@ -62,6 +75,9 @@ public sealed class ToolContext
 
     /// <summary>The servers this chat is logged in to over SSH (the ssh tool, and the file tools with host); null when SSH is off.</summary>
     public Ssh.SshHosts? Ssh { get; init; }
+
+    /// <summary>The app's MCP servers, for the agent to set one up itself (mcp_servers); null when it can't.</summary>
+    public Mcp.McpSetup? Mcp { get; init; }
 
     /// <summary>All monitors in physical pixels, the primary first.</summary>
     public IReadOnlyList<ScreenRect> Screens => Platform.Screen.GetScreens();

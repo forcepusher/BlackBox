@@ -47,7 +47,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _platform = platform;
         _chats = new ChatStore(paths.ChatsDir);
         _ssh = new Core.Ssh.SshHosts(paths.KnownHostsFile);
-        _tick = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => _current?.Tick());
+        _tick = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) =>
+        {
+            _current?.Tick();
+            // The pause ends a while after the last key press, with no change to the text.
+            OnTypingPauseChanged();
+        });
         // The saved model is in the list before the view binds to it, so the dropdown starts
         // with it selected; a selection the ComboBox once lost is not restored by rebinding.
         if (!string.IsNullOrEmpty(settings.Server.Model))
@@ -62,6 +67,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendCommand), nameof(StopCommand))]
+    [NotifyPropertyChangedFor(nameof(InputHint), nameof(TypingPause), nameof(TypingPauseText))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -102,9 +108,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>Whether the model in use takes images; without them the agent has no screen tools, which the intro says.</summary>
     public bool CanSeeScreen => _settings.Server.SupportsVision;
 
-    /// <summary>Whether the agent gets web_search and fetch_page (Settings → General).</summary>
-    public bool WebSearchOn => _settings.Agent.WebSearch;
-
     /// <summary>The intro's line on what BlackBox asks before it acts, after "Ask me first" in Settings.</summary>
     public string ApprovalNote => _settings.Agent.Approval switch
     {
@@ -116,8 +119,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     public void AttachHostWindow(nint handle)
     {
         _platform.HostWindow.Attach(handle, _settings.Agent.HideFromScreenshots);
-        _platform.InputOverlay.Duration = TimeSpan.FromSeconds(_settings.Agent.InputLogSeconds);
-        _platform.InputOverlay.Enabled = _settings.Agent.ShowInputs;
+        _platform.InputOverlay.Duration = TimeSpan.FromSeconds(AgentSettings.InputLogSeconds);
+        _platform.InputOverlay.Enabled = true;
     }
 
     public void OnStartup()
@@ -319,15 +322,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
     }
 
-    /// <summary>Size and quantization of the model BlackBox picked ("31B, 5-bit"), if the server or its name tells them.</summary>
-    private string? _autoModelSize;
+    /// <summary>Size, quantization and benchmark score of the model BlackBox picked ("27B, 6-bit, 79.8% on Terminal-Bench 2.1"), as far as known.</summary>
+    private string? _autoModelDetails;
 
-    private string AutoModelSize => _autoModelSize is { } size ? $" ({size})" : "";
+    private string AutoModelDetails => _autoModelDetails is { } details ? $" ({details})" : "";
 
     /// <summary>Why the model shown is the one, when BlackBox picked it.</summary>
     public string? ModelToolTip => string.IsNullOrEmpty(_settings.Server.Model) && _settings.Server.AutoModel is not null
-        ? $"Picked by BlackBox as the strongest model the server offers{AutoModelSize}: the most parameters, then the most bits per weight. " +
-          "Pick one yourself to keep using it."
+        ? $"Picked by BlackBox as the strongest model the server offers{AutoModelDetails}: the best score on an agent benchmark, " +
+          "else the most parameters, then the most bits per weight. Pick one yourself to keep using it."
         : null;
 
     private async Task CheckAfterTypingAsync()
@@ -379,7 +382,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         if (probe.Reachable)
         {
             server.AutoModel = probe.AutoPicked ? probe.Model : null;
-            _autoModelSize = probe.ModelSize;
+            _autoModelDetails = probe.ModelDetails;
         }
         SetModels(probe.Models);
         OnPropertyChanged(nameof(ModelToolTip));
@@ -408,7 +411,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var status = "Connected" + (probe.Vision == false ? " · no vision" : "");
         if (probe.AutoPicked && server.Model.Length > 0)
             SetStatus(ServerState.Connected, status,
-                $"The server doesn't offer \"{server.Model}\" right now, so BlackBox uses {probe.Model}{AutoModelSize}, the strongest model it offers, " +
+                $"The server doesn't offer \"{server.Model}\" right now, so BlackBox uses {probe.Model}{AutoModelDetails}, the strongest model it offers, " +
                 "and goes back to yours as soon as the server lists it again. To stop waiting for it, pick another model at the top.",
                 "Your model isn't on the server");
         else
@@ -453,21 +456,93 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     // ---- commands -------------------------------------------------------------------
 
-    private bool CanSend() => !IsBusy && !string.IsNullOrWhiteSpace(Input);
+    private bool CanSend() => !string.IsNullOrWhiteSpace(Input);
 
-    [RelayCommand(CanExecute = nameof(CanSend))]
+    /// <summary>Messages sent while a run was still starting up (no session yet); handed to it once it has one.</summary>
+    private readonly List<string> _steerPending = [];
+
+    /// <summary>
+    /// Sends what is in the box. With no run going it starts one; during a run it goes to the agent,
+    /// which reads it before its next step (see <see cref="AgentSession.Steer"/>).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanSend), AllowConcurrentExecutions = true)]
     private async Task SendAsync()
     {
         var text = Input.Trim();
         Input = "";
         Items.Add(new UserMessageItem(text));
+        if (IsBusy)
+        {
+            if (_session is { } running) running.Steer(text);
+            else _steerPending.Add(text);
+            SaveChat(SnapshotHistory());
+            return;
+        }
         SaveChat(SnapshotHistory());
+        // What arrived just as a run ended, too late for it, starts the next one.
+        for (string? next = text; next is not null;)
+            next = await RunAsync(next);
+    }
+
+    /// <summary>When the user last typed in the box; while they are typing, the agent's mouse and keyboard wait.</summary>
+    private DateTime _lastTyped;
+
+    partial void OnInputChanged(string value)
+    {
+        _lastTyped = DateTime.UtcNow;
+        OnTypingPauseChanged();
+    }
+
+    private void OnTypingPauseChanged()
+    {
+        OnPropertyChanged(nameof(TypingPause));
+        OnPropertyChanged(nameof(TypingPauseText));
+    }
+
+    /// <summary>How long after the last key press in the box the agent carries on by itself.</summary>
+    private static readonly TimeSpan TypingQuiet = TimeSpan.FromSeconds(15);
+
+    /// <summary>The agent's clicks and key presses are on hold because the user is typing to it (see <see cref="UserComposing"/>).</summary>
+    public bool TypingPause => IsBusy && UserComposing();
+
+    /// <summary>
+    /// What the pause line says: that the agent waits, and the three ways it goes on again, with
+    /// the seconds left until it does by itself. Someone who started typing and changed their mind
+    /// had no way to tell how to let it carry on.
+    /// </summary>
+    public string TypingPauseText =>
+        $"Paused while you type: my clicks and key presses wait. I carry on when you send this (Enter), click Resume, or in {Math.Max(1, (int)Math.Ceiling((TypingQuiet - (DateTime.UtcNow - _lastTyped)).TotalSeconds))} s without a key press.";
+
+    /// <summary>Lets the agent carry on at once; what was typed stays in the box, to finish and send later.</summary>
+    [RelayCommand]
+    private void Resume()
+    {
+        _lastTyped = DateTime.MinValue;
+        OnTypingPauseChanged();
+    }
+
+    /// <summary>
+    /// The user is writing a message in the box: text in it, typed in the last 15 seconds. The
+    /// agent's clicks and key presses wait meanwhile, so neither ends up in the other's window.
+    /// Read from the agent's thread.
+    /// </summary>
+    private bool UserComposing() => Input.Length > 0 && DateTime.UtcNow - _lastTyped < TypingQuiet;
+
+    /// <summary>The hint in the empty box: what Enter does now.</summary>
+    public string InputHint => IsBusy
+        ? "Tell me something while I work… (Enter to send; I pause while you type)"
+        : "Describe a task… (Enter to send, Shift+Enter for a new line)";
+
+    /// <summary>One run of the agent on <paramref name="text"/>. Returns what the user sent too late for it, to run next, or null.</summary>
+    private async Task<string?> RunAsync(string text)
+    {
         _runDetached = false;
         IsBusy = true;
         _runCts = new CancellationTokenSource();
         var ct = _runCts.Token;
         // This chat's conversation: picking another chat while the run starts up replaces _history.
         var history = _history;
+        List<string> late = [];
 
         try
         {
@@ -478,7 +553,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             if (Core.Llm.ServerAddress.Candidates(server.BaseUrl).Count == 0 || string.IsNullOrWhiteSpace(server.ModelInUse))
             {
                 AddNotice("Enter your model server's address and pick a model at the top first.", isError: true);
-                return;
+                return null;
             }
             // LM Studio loads models on first use; do that now so we know the real context size.
             using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10)))
@@ -498,7 +573,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 await _mcpConnect.WaitAsync(ct);
             }
 
-            var session = _session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, _ssh, history);
+            var session = _session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, _ssh, history, UserComposing);
+            foreach (var pending in _steerPending)
+                session.Steer(pending);
+            _steerPending.Clear();
             _tick.Start();
             await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
@@ -517,6 +595,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         finally
         {
+            late = [.. _session?.TakeUndelivered() ?? [], .. _steerPending];
+            _steerPending.Clear();
             // After the run's last posted updates (its "Stopped." notice) have reached the chat.
             var chatId = _chatId;
             if (!_runDetached)
@@ -533,6 +613,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 _mcpConnect = ConnectMcpAsync();
             }
         }
+
+        if (late.Count == 0 || _runDetached)
+            return null;
+        if (ct.IsCancellationRequested)
+        {
+            // Stopped: what the agent hadn't read yet comes off the chat and goes back in the box,
+            // to send again or not.
+            foreach (var unread in late)
+                if (Items.LastOrDefault(i => i is UserMessageItem u && u.Text == unread) is { } item)
+                    Items.Remove(item);
+            Input = string.Join("\n\n", late) + (Input.Length > 0 ? "\n\n" + Input : "");
+            return null;
+        }
+        return string.Join("\n\n", late);
     }
 
     [RelayCommand(CanExecute = nameof(IsBusy))]
@@ -594,6 +688,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         // The stopped run keeps its own list until it ends, so it can't write into the next chat.
         _history = [];
+        _steerPending.Clear();
         // Logins belong to the chat: the next one starts logged out (the stopped run's tools fail).
         // Logging out talks to the servers, so it happens off the UI thread.
         var ended = _ssh;
@@ -716,13 +811,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         // The server, key, model and context size live in the top bar, not in the dialog.
         updated.Server = _settings.Server;
+        updated.Window = _settings.Window;
         _settings = updated;
-        OnPropertyChanged(nameof(WebSearchOn));
         OnPropertyChanged(nameof(ApprovalNote));
         SaveSettings();
         _platform.HostWindow.SetHiddenFromCapture(updated.Agent.HideFromScreenshots);
-        _platform.InputOverlay.Duration = TimeSpan.FromSeconds(updated.Agent.InputLogSeconds);
-        _platform.InputOverlay.Enabled = updated.Agent.ShowInputs;
         if (mcpConfigText != McpConfig.Load(_paths.McpConfigFile))
         {
             try
@@ -737,6 +830,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             }
         }
         await CheckServerAsync();
+    }
+
+    /// <summary>Keeps the window's size and place for the next start (see <see cref="Views.MainWindow.Restore"/>).</summary>
+    public void SavePlacement(WindowPlacement placement)
+    {
+        _settings.Window = placement;
+        SaveSettings();
     }
 
     private bool _saveFailed;

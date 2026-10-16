@@ -37,7 +37,10 @@ public sealed class ReadFileTool : Tool
     private const int MaxChars = 60_000;
 
     public override string Name => "read_file";
-    public override string Description => "Read a text file. Relative paths are resolved against the working directory. Returns numbered lines.";
+    public override string Description =>
+        "Read a file. Text files come back as numbered lines; PDF, Word (.docx), Excel (.xlsx) and PowerPoint (.pptx) files as their text " +
+        "(Excel cell by cell, with formulas); a picture (PNG, JPEG, GIF, BMP, WebP) is shown to you as an image. " +
+        "Relative paths are resolved against the working directory.";
     public override ToolRisk Risk => ToolRisk.ReadOnly;
     public override JsonObject Parameters => Schema(
         ("path", Str("File path"), true),
@@ -56,24 +59,44 @@ public sealed class ReadFileTool : Tool
         var path = ctx.ResolvePath(RequireString(args, "path"));
         if (!File.Exists(path))
             return ToolResult.Error($"File not found: {path}");
-        if (IsBinary(path))
-            return ToolResult.Error($"{path} is not a text file ({new FileInfo(path).Length:N0} bytes); read_file reads text only.");
-
         var offset = Math.Max(1, (int)(GetNumber(args, "offset") ?? 1));
         var limit = Math.Clamp((int)(GetNumber(args, "limit") ?? 400), 1, 5000);
 
+        if (Picture.Handles(path))
+        {
+            // A photo or chart asked about took six minutes and a stuck "you'll need a new app"
+            // box when the model had to find a program to show it on screen.
+            if (!ctx.SeesImages)
+                return ToolResult.Error($"{path} is a picture, and the model in use can't see images.");
+            return Picture.Read(path);
+        }
+        if (DocumentText.Handles(path))
+        {
+            string text;
+            try { text = DocumentText.Read(path); }
+            catch (InvalidDataException ex) { return ToolResult.Error(ex.Message); }
+            using var lines = new StringReader(text);
+            return await NumberedAsync(lines, offset, limit, ct).ConfigureAwait(false);
+        }
+        if (IsBinary(path))
+            return ToolResult.Error($"{path} is not a text file ({new FileInfo(path).Length:N0} bytes); read_file reads text, PDF and Office documents, and pictures.");
+
         // Line by line, so a log of gigabytes doesn't have to fit in memory to read a part of it.
+        using var reader = new StreamReader(path, detectEncodingFromByteOrderMarks: true);
+        return await NumberedAsync(reader, offset, limit, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Lines <paramref name="offset"/> on, numbered, up to <paramref name="limit"/> of them and <see cref="MaxChars"/> in all.</summary>
+    private static async Task<ToolResult> NumberedAsync(TextReader reader, int offset, int limit, CancellationToken ct)
+    {
         var sb = new StringBuilder();
         int total = 0, last = 0;
-        using (var reader = new StreamReader(path, detectEncodingFromByteOrderMarks: true))
+        while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
         {
-            while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
+            if (++total >= offset && total < offset + limit && sb.Length < MaxChars)
             {
-                if (++total >= offset && total < offset + limit && sb.Length < MaxChars)
-                {
-                    sb.Append(total).Append('\t').AppendLine(line);
-                    last = total;
-                }
+                sb.Append(total).Append('\t').AppendLine(line);
+                last = total;
             }
         }
         if (total == 0)
@@ -102,7 +125,12 @@ public sealed class WriteFileTool : Tool
     public override string Name => "write_file";
     public override string Description =>
         "Create or overwrite a text file with the given content, or add to its end with append=true. Creates parent folders. " +
-        "Write long files in parts of at most about 100 lines: the first call creates the file, each next part is appended.";
+        "Write long files in parts of at most about 100 lines: the first call creates the file, each next part is appended. " +
+        "A path ending in .docx, .xlsx, .pptx or .pdf makes a real Word, Excel, PowerPoint or PDF document from Markdown content: " +
+        "headings, paragraphs, lists, tables, **bold**, *italic*, links, pictures as ![caption](C:\\path\\picture.png), a line \\newpage for a new page. " +
+        "In .xlsx each heading starts a sheet named after it and tables fill it; a cell starting with = is a formula, and numbers, 12%, $1,200 and " +
+        "2026-10-16 become values. In .pptx a line --- starts the next slide, and a slide's first heading is its title. " +
+        "To change an existing document, use edit_file, which keeps its formatting.";
     public override ToolRisk Risk => ToolRisk.Risky;
     public override JsonObject Parameters => Schema(
         ("path", Str("File path"), true),
@@ -117,10 +145,23 @@ public sealed class WriteFileTool : Tool
         if (RemoteHost.Of(args) is { } remote)
         {
             var (file, text, add) = (RequireString(args, "path"), RequireString(args, "content"), GetBool(args, "append"));
+            if (Documents.DocumentFiles.WriteKind(file) is not null)
+                return ToolResult.Error("Documents are made on this PC: write it here without host, then copy it to the server with the copy tool.");
             return await RemoteHost.RunAsync(remote, ctx, h => RemoteFiles.WriteAsync(h, file, text, add, ct), ct).ConfigureAwait(false);
         }
         var path = ctx.ResolvePath(RequireString(args, "path"));
         var content = RequireString(args, "content");
+        if (Documents.DocumentFiles.WriteKind(path) is not null)
+        {
+            try
+            {
+                return new ToolResult(Documents.DocumentFiles.Write(path, content, GetBool(args, "append"), ctx.ResolvePath));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ToolResult.Error(ex.Message);
+            }
+        }
         var existed = File.Exists(path);
         if (GetBool(args, "append"))
         {
@@ -139,7 +180,14 @@ public sealed class WriteFileTool : Tool
 public sealed class EditFileTool : Tool
 {
     public override string Name => "edit_file";
-    public override string Description => "Replace an exact, unique snippet of text in a file with new text, or every occurrence of it with replace_all.";
+    public override string Description =>
+        "Replace an exact, unique snippet of text in a file with new text, or every occurrence of it with replace_all. " +
+        "Also changes Word (.docx) and PowerPoint (.pptx) files in place, keeping their formatting: old_text as read_file shows it, " +
+        "new_text may use **bold** and *italic*, and a line break in it starts a new paragraph (\"# \" at its start makes a heading). " +
+        "In Excel (.xlsx) give cells as read_file shows them: old_text the cells to change (\"B7 =SUM(B2:B6)\") or empty, new_text the cells to set " +
+        "(\"B7 =SUM(B2:B7)\", \"A8 Total\", \"Budget!C9 12.5\"); without cell addresses, text is replaced in the cells. " +
+        "To add a row between others (above a total), start new_text with a line \"insert row 7\" (old_text empty): the rows below move down " +
+        "with every formula pointing at them, and the new row is formatted like the one above; \"delete rows 3-4\" takes rows out.";
     public override ToolRisk Risk => ToolRisk.Risky;
     public override JsonObject Parameters => Schema(
         ("path", Str("File path"), true),
@@ -163,6 +211,17 @@ public sealed class EditFileTool : Tool
             return ToolResult.Error($"File not found: {path}");
         var oldText = RequireString(args, "old_text");
         var newText = RequireString(args, "new_text");
+        if (Documents.DocumentFiles.EditKind(path) is not null)
+        {
+            try
+            {
+                return new ToolResult(Documents.DocumentFiles.Edit(path, oldText, newText, GetBool(args, "replace_all")));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ToolResult.Error(ex.Message);
+            }
+        }
         if (oldText.Length == 0)
             return ToolResult.Error("old_text must not be empty.");
 

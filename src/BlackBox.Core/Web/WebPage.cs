@@ -140,7 +140,16 @@ public static class WebPage
             }
 
             if (mediaType is "application/pdf" || body.AsSpan().StartsWith("%PDF"u8))
-                throw new WebPageException("This is a PDF, which fetch_page can't read. Try another result, or download it with run_shell.");
+            {
+                try
+                {
+                    return (new(finalUri.ToString(), Uri.UnescapeDataString(finalUri.Segments[^1]), Tools.DocumentText.Pdf(new MemoryStream(body))), false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    throw new WebPageException($"This PDF could not be read ({ex.Message}). Try another result, or download it with run_shell and look at it on screen.");
+                }
+            }
 
             if (mediaType.Length > 0 && !mediaType.Contains("html") && !mediaType.Contains("xml"))
             {
