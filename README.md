@@ -261,7 +261,7 @@ what it asks before it acts, then that Ctrl+V pastes a screenshot, a picture or 
 message and that files can be dropped on the window or picked with the paperclip (the empty box
 says so too), then what BlackBox can do (apps, files and commands, documents, getting the programs
 and MCP servers a job needs, chatting for you, the web, servers, long jobs, pictures, video and
-sound). It says so when the model in use can't see images. Notices such as an MCP server that
+sound, and games in any game engine). It says so when the model in use can't see images. Notices such as an MCP server that
 failed to start show above it and don't count as using the chat.
 
 ## Connecting to a model
