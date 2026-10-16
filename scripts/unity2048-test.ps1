@@ -28,6 +28,11 @@ if ($other) {
   $b = $other.WorkingArea
   [Harness.Win]::MoveWindow([Harness.Win]::GetConsoleWindow(), $b.X, $b.Y, $b.Width, $b.Height, $true) | Out-Null
 }
+# The portable SDK in .dev\dotnet when none is installed.
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path "$repo\.dev\dotnet\dotnet.exe")) {
+  $env:DOTNET_ROOT = "$repo\.dev\dotnet"
+  $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
+}
 $cli = Join-Path $repo "src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe"
 dotnet build (Join-Path $repo "src\BlackBox.Cli") -v q | Out-Null
 # Earlier Unity runs move to .dev\unity2048-archive first, so the agent can't reuse their code.

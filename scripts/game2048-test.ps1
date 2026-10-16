@@ -15,6 +15,11 @@
 #>
 param([string]$Root = "", [string]$Url = "", [string]$Model = "", [double]$Hours = 4)
 $repo = Split-Path $PSScriptRoot
+# The portable SDK in .dev\dotnet when none is installed.
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path "$repo\.dev\dotnet\dotnet.exe")) {
+  $env:DOTNET_ROOT = "$repo\.dev\dotnet"
+  $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
+}
 $cli = Join-Path $repo "src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe"
 dotnet build (Join-Path $repo "src\BlackBox.Cli") -v q | Out-Null
 $out = Join-Path $repo (".dev\game2048\" + (Get-Date -Format "yyyyMMdd-HHmmss"))

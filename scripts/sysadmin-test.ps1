@@ -66,6 +66,11 @@ if ($Tasks.Count -gt 0) {
 }
 if (-not (Test-Path $LabBase)) { throw "No lab VM; build it first with ./scripts/sysadmin-vm.ps1" }
 
+# The portable SDK in .dev\dotnet when none is installed.
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path "$LabRepo\.dev\dotnet\dotnet.exe")) {
+  $env:DOTNET_ROOT = "$LabRepo\.dev\dotnet"
+  $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
+}
 if ($Cli) {
   $cli = $Cli
 } else {

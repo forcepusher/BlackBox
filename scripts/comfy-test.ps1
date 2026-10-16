@@ -16,6 +16,11 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
+# The portable SDK in .dev\dotnet when none is installed.
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path "$repo\.dev\dotnet\dotnet.exe")) {
+    $env:DOTNET_ROOT = "$repo\.dev\dotnet"
+    $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
+}
 $cli = Join-Path $repo 'src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe'
 dotnet build (Join-Path $repo 'src\BlackBox.Cli\BlackBox.Cli.csproj') -v q -nologo | Out-Null
 if (-not (Test-Path $cli)) { throw "The CLI didn't build: $cli" }

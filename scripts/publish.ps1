@@ -20,9 +20,29 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Right-click > Run with PowerShell closes its window the moment the script stops. Started that way
+# (from Explorer, for this script), an error waits for Enter so it can be read.
+$self = Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction SilentlyContinue
+$fromExplorer = $self -and $self.CommandLine -match [regex]::Escape($PSCommandPath) -and
+    (Get-Process -Id $self.ParentProcessId -ErrorAction SilentlyContinue).ProcessName -eq "explorer"
+trap {
+    if ($fromExplorer) {
+        Write-Host ($_ | Out-String) -ForegroundColor Red
+        Read-Host "Press Enter to close" | Out-Null
+    }
+    break
+}
+
 $root = Split-Path $PSScriptRoot
 $project = Join-Path $root "src/BlackBox.App/BlackBox.App.csproj"
 $publishRoot = Join-Path $root "publish"
+
+# The portable SDK in .dev\dotnet when none is installed.
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path "$root\.dev\dotnet\dotnet.exe")) {
+    $env:DOTNET_ROOT = "$root\.dev\dotnet"
+    $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
+}
 
 function Publish([string]$out, [string[]]$extra) {
     & dotnet publish $project -c Release -r $Runtime --self-contained -p:DebugType=none -o $out @extra
