@@ -153,6 +153,12 @@ public interface IPlatformServices
 
     /// <summary>Start info for running one command string in the platform shell (no redirection set).</summary>
     ProcessStartInfo CreateShellStartInfo(string command);
+
+    /// <summary>The OS's own video and sound decoders; null where there are none (ffmpeg stands in).</summary>
+    Media.IMediaDecoder? Media => null;
+
+    /// <summary>A way to play sound through the speakers, for the chat's players; null where there is none.</summary>
+    Media.IAudioOutput? CreateAudioOutput() => null;
 }
 
 /// <summary>Fallback for operating systems without an implementation yet.</summary>

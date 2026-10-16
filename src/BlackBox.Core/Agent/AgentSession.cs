@@ -17,6 +17,9 @@ public interface IAgentObserver
     Task<bool> RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct);
     void OnToolStarted(ToolCall call, string summary);
 
+    /// <summary>How a long call is getting on ("KSampler, step 3 of 20 · 1:12"), for its card while it runs.</summary>
+    void OnToolProgress(ToolCall call, string text) { }
+
     /// <summary>Status the user should see that is not part of the conversation (e.g. reconnecting).</summary>
     void OnNotice(string text);
 
@@ -207,6 +210,10 @@ public sealed partial class AgentSession(
         finally
         {
             RepairDanglingToolCalls();
+            // What tools left to do once the task is over (ComfyUI letting go of its models), a
+            // few seconds at most: a server that went away must not hold up the end of the run.
+            try { await toolContext.FinishRunAsync().WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
+            catch (TimeoutException) { }
         }
     }
 
@@ -304,6 +311,7 @@ public sealed partial class AgentSession(
 
         observer.OnToolStarted(call, summary);
         ToolResult result;
+        toolContext.Progress = text => observer.OnToolProgress(call, text);
         try
         {
             result = await tool.ExecuteAsync(args, toolContext, ct).ConfigureAwait(false);
@@ -317,6 +325,10 @@ public sealed partial class AgentSession(
             // Whatever goes wrong in one tool (a timeout, a file in use, a bug) is the model's to
             // work around; only Stop ends the run.
             result = ToolResult.Error(ex.Message);
+        }
+        finally
+        {
+            toolContext.Progress = null;
         }
         observer.OnToolFinished(call, result);
         return result;

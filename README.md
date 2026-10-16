@@ -14,7 +14,8 @@ unpacks its native UI libraries into `Data/runtime` next to itself.
 BlackBox/
   BlackBox.exe
   Data/        settings.json, chats/ (see Chat history), runtime/ (unpacked by the single-file exe), browser/ (see Web search),
-               tools/ (portable programs the agent downloaded), scratch/ (helper files it made for a task)
+               tools/ (portable programs the agent downloaded), scratch/ (helper files it made for a task),
+               comfyui/ (ComfyUI's address and folder, the log of a server BlackBox started, see Pictures, video and sound)
 ```
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
@@ -70,6 +71,110 @@ archive), it downloads a portable tool into `Data/tools`, where later tasks find
 program, rather than decoding the file by hand. It also accepts the license agreements and
 first-run prompts of the programs it uses (Office asks on its first start).
 
+## Pictures, video and sound
+The `comfyui` tool makes pictures, videos, sound effects, music, speech and 3D models with
+[ComfyUI](https://github.com/comfyanonymous/ComfyUI) on this PC, building each workflow for the
+request. Asked earlier, qwen3.8 drove ComfyUI's HTTP API well but wrote node, input and model names
+from memory, and those were often wrong, so the model doesn't work from memory here:
+
+- **Templates first.** `action=templates` searches the user's saved workflows (described by the
+  README notes kept beside them), ComfyUI's own templates (without the ones built on paid API nodes)
+  and the examples custom node packs bring, and marks the ones whose models and nodes are
+  installed. With `name` it shows one as an API-format workflow, one node per line, with the
+  template's own notes, the inputs a run usually changes and the models it needs (with download
+  links for missing ones), and saves it in `Data/scratch/comfyui/` to edit. Templates are kept in the
+  editor's format, with subgraphs, bypassed nodes, reroutes and promoted widgets: ComfyUI's own page,
+  loaded in the PC's Edge or Chrome run headless, turns them into the format `/prompt` runs,
+  exactly as its Run button does, so no copy of that conversion has to keep up with ComfyUI's
+  releases. The browser stays up a few minutes between uses and never outlives BlackBox (it runs
+  in a job object that Windows ends with BlackBox).
+- **Names looked up, not remembered.** `action=nodes` searches the server's node types or shows
+  some in full (inputs, types, ranges, choices, outputs); `action=models` lists the installed model
+  files with their sizes.
+- **Checked before it runs.** Every workflow is checked against the server's node types first, and
+  every wrong name comes back at once with the closest real one: "no node type SaveImag; did you
+  mean SaveImage?", "no input sampler; did you mean sampler_name?", a model file that isn't
+  installed with the closest installed ones, links to missing nodes or outputs, type mismatches,
+  values out of range. ComfyUI itself stops at the first unknown node and quietly ignores inputs it
+  doesn't know.
+- **Run, wait, look.** `action=run` runs a template, a file or a workflow, with changes in `set`
+  (`{"6.text": "a red fox in snow", "3.seed": 7}`); a full local path where LoadImage, LoadAudio or
+  LoadVideo name a file is uploaded. It waits for the job while its card shows where it is
+  ("SamplerCustomAdvanced, step 2 of 3 · 8:21"); Stop and Esc cancel it in ComfyUI too, and a
+  message from the user ends the wait while the job goes on (`action=status` with its id picks it
+  up again). The files come back with their paths, `save_to` copies them where the task wants them,
+  and the model gets a look at them (below) to check its work.
+- **ComfyUI itself.** When it isn't running, BlackBox starts the one used last, or finds one
+  (the ComfyUI Desktop app, then every drive and the user's folders a few levels deep; the one
+  used most recently wins) and starts it hidden, its output in `Data/comfyui/server.log`. Once the
+  task is over it is closed, after the jobs still in its queue (the CLI waits for them before it
+  exits); a ComfyUI the user started keeps running, and only lets go of the models the task's jobs
+  loaded, so the GPU is free. BlackBox tells its own from the user's by the process it started,
+  kept in `Data/comfyui/state.json`. `action=restart` stops it and starts it again with the
+  arguments it ran with (custom nodes load only at start; the user's own stays theirs and keeps
+  running), `stop` and `free` do what they say. Models, custom node packs and programs a job
+  lacks the agent downloads and installs itself, as with any program.
+
+`read_file` gives the model a look at media as well as pictures: a video as eight frames with their
+times (and how loud its sound is, in words), a sound as its waveform and spectrogram with its
+length, loudness, clipping and silences in words, a 3D model (GLB, glTF, OBJ, PLY, STL) from four
+sides, an animated GIF or WebP as frames.
+Video and sound are decoded by Windows' own Media Foundation (MP4/H.264, MOV, MP3, AAC, FLAC, WAV
+play on every Windows 10 and 11), else by ffmpeg when one is on the PATH, in `Data/tools` or in
+ComfyUI's folder; 3D models are drawn by BlackBox itself.
+
+### Previews
+Files the agent makes or shows appear in the chat: under the tool call that made them, and under
+a reply that names them by their full path (whatever made them: ComfyUI, a script, Blender, a
+download). Pictures are shown at the chat's width, animations play, videos play in place with
+their sound and a position to drag, a sound plays over its waveform, a 3D model turns with the
+mouse (the wheel comes closer, a double click resets it), and any other file gets a card. Each has
+Open (its own program) and Show in folder. A saved chat shows them again when it is opened, as
+long as the files are still there.
+
+### How it does
+qwen3.8 27B (q6_k_xl, on the LM Studio server) with the ComfyUI on an RTX 5070 Ti (16 GB), each
+task one plain message and nothing more, ComfyUI stopped before the first
+(`./scripts/comfy-test.ps1` runs the first seven):
+
+| Request | What the agent used | What it made | Time | Tool calls (errors) |
+| --- | --- | --- | --- | --- |
+| A lighthouse on a cliff at sunset as an oil painting, saved in Pictures | found ComfyUI and started it; Z-Image-Turbo | a 1024×1024 picture in Pictures | 1:52 | 3 (0) |
+| A short video, about 3 s, of a cat playing with yarn | LTX 2.3 text to video | 1280×704, 2.9 s, with sound | 9:29 (6:30 of it loading the model the first time) | 4 (0) |
+| 10 s of heavy rain on a tin roof with distant thunder, saved in Music | Stable Audio | a 10.1 s MP3 in Music | 1:21 | 4 (1) |
+| A 30 s upbeat synthwave instrumental | ACE-Step 1.5 XL Turbo | a 30.0 s MP3 | 2:05 | 8 (2) |
+| A calm female voice saying a sentence | VoxCPM2, in a workflow of its own (no template has it) | a 4.7 s MP3 | 5:35 | 20 (4) |
+| A wooden treasure chest 3D model for a game | a Z-Image-Turbo picture, then Trellis2 | a textured GLB (496k triangles) | 16:22 | 9 (0) |
+| A red dragon on a mossy rock, then a 3 s video of it breathing a puff of fire, with a fitting sound | a Z-Image-Turbo picture, then LTX 2.3 image to video (its sound too) | 1024×1024, 2.9 s, with sound | 11:06 | 11 (3) |
+| The lighthouse four times bigger with the 4x-UltraSharp model (not installed), next to the original | found the model with web_search and downloaded it from Hugging Face; a workflow of its own | a 4096×4096 PNG next to the original | 5:21 | 14 (0) |
+| The cat video at twice its frame rate with RIFE, keeping its sound (no RIFE node installed) | installed the ComfyUI-Frame-Interpolation pack (git clone; its Python packages were there), restarted ComfyUI, and patched the pack's loader for the checkpoint it downloads | 1280×704, 145 frames at 50 fps, with sound | 6:46 | 35 (5) |
+
+The agent looked at every result before it answered, and redid the dragon's video twice because the
+first flame looked like a tongue. The errors cost seconds each: inputs the editor adds that the check
+took for mistakes, and a list of decimal choices that turned down a plain 1 (both fixed), a node id
+guessed before the template was shown (the error now lists the template's usual inputs), ComfyUI not
+answering for a while during the speech task, git's progress on stderr, a checkpoint the RIFE pack
+couldn't load, and a retry that left out the length and size of the first run (a rerun of a template
+without changes the last one made now comes with a note saying which). Three of the results went to
+`Data/scratch`; the prompt has since been told that what the user asked for never goes there.
+
+### And comfyui-mcp?
+[comfyui-mcp](https://github.com/artokun/comfyui-mcp) isn't needed, and the agent does better
+without it. The lighthouse request again, on BlackBox as it was before the comfyui tool, ComfyUI
+stopped first each time:
+
+| | Time | Model calls | Tool calls (errors) | Prompt by the end | The picture's model |
+| --- | --- | --- | --- | --- | --- |
+| The comfyui tool | 1:52 | 4 | 3 (0) | 11k tokens | Z-Image-Turbo |
+| No tool: ComfyUI's HTTP API from the shell | 14:00 | 19 | 26 (3) | 31k tokens | SD 1.5 |
+| comfyui-mcp, which the agent set up itself (with npx, in 43 seconds) | 19:41 | 41 | 45 (0) | 78k tokens, the chat summed up twice to fit | Pony Diffusion V6 XL, six tries |
+
+comfyui-mcp's 41 tools add 56k tokens to every request (the server took two minutes to read the
+first one after it was added), and the agent drove it through its picture tool with an older
+checkpoint, which needed six tries for one lighthouse. Without a tool the agent spent six and a
+half minutes getting ComfyUI to stay up and wrote an SD 1.5 workflow from memory. It still sets
+comfyui-mcp up by itself when the user asks for it.
+
 ## Chat history
 Every chat is saved on its own in `Data/chats/` from its first message on, after every step, and
 named after that message. **History** next to **New chat** lists them, the latest first: pick one to
@@ -78,7 +183,8 @@ trash button. Screenshots are not kept in the saved file; the model takes a new 
 on. Picking another chat or New chat while a task runs stops the task, and keeps it as far as it got.
 
 Until a chat is used, it shows what BlackBox can do (apps, files and commands, documents, getting
-the programs and MCP servers a job needs, chatting for you, the web, servers, long jobs), that Esc
+the programs and MCP servers a job needs, chatting for you, the web, servers, long jobs, pictures,
+video and sound), that Esc
 stops it, how to change a task while it runs, and what it asks before it acts. It says so when the
 model in use can't see images. Notices such as an MCP server that failed to start show above it and
 don't count as using the chat.
@@ -184,7 +290,8 @@ method there, not a property).
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
-| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures to the model; `write_file` makes them from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
+| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures, videos, sounds and 3D models to the model; `write_file` makes documents from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
+| `comfyui` | Pictures, video, sound, music, speech and 3D models with ComfyUI on this PC: templates, node and model look-ups, checked runs that hand back the files (see Pictures, video and sound) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
 | `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |
@@ -400,6 +507,7 @@ dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   #
 ./scripts/sysadmin-vm.ps1         # once: the portable Debian lab VM (QEMU in .dev/sysadmin-lab, nothing installed)
 ./scripts/sysadmin-test.ps1       # sysadmin tickets on that VM over SSH, checked over SSH and from this PC
 ./scripts/chat-test.ps1           # BlackBox chats with scripted people for you in local look-alike chat apps (drives your mouse and keyboard)
+./scripts/comfy-test.ps1          # BlackBox makes a picture, a video, sounds, music, speech and a 3D model with this PC's ComfyUI
 ```
 
 ### Sysadmin benchmark

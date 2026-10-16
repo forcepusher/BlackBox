@@ -19,7 +19,10 @@ public sealed class HeadlessBrowser(string executable, string profileDirectory)
 
     /// <summary>The browser found on this PC, or null when there is none.</summary>
     public static HeadlessBrowser? Find(string profileDirectory) =>
-        Candidates().FirstOrDefault(File.Exists) is { } exe ? new HeadlessBrowser(exe, profileDirectory) : null;
+        FindExecutable() is { } exe ? new HeadlessBrowser(exe, profileDirectory) : null;
+
+    /// <summary>The Chromium browser's program on this PC (Edge first), or null when there is none.</summary>
+    internal static string? FindExecutable() => Candidates().FirstOrDefault(File.Exists);
 
     private static IEnumerable<string> Candidates()
     {

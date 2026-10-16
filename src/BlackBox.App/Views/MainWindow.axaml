@@ -39,7 +39,132 @@
       <Setter Property="FontSize" Value="12" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
+    <!-- Previews of files under a tool call or a reply. -->
+    <Style Selector="Border.preview">
+      <Setter Property="Background" Value="{StaticResource BbSurfaceRaised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="8" />
+      <Setter Property="MaxWidth" Value="498" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Button.picture">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.picture /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.bigPlay">
+      <Setter Property="Width" Value="56" />
+      <Setter Property="Height" Value="56" />
+      <Setter Property="CornerRadius" Value="28" />
+      <Setter Property="Background" Value="#B0000000" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.roundPlay">
+      <Setter Property="Width" Value="36" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="CornerRadius" Value="18" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="{StaticResource BbAccent}" />
+      <Setter Property="Foreground" Value="#111214" />
+    </Style>
   </Window.Styles>
+
+  <!-- How each kind of file is previewed: under the tool call that made or showed it, and under a
+       reply that names it by its path. -->
+  <Window.DataTemplates>
+    <DataTemplate DataType="vm:ImagePreview">
+      <Border Classes="preview">
+        <StackPanel Spacing="8">
+          <Button Classes="picture" Command="{Binding OpenCommand}" ToolTip.Tip="Open it" HorizontalAlignment="Left">
+            <Image Source="{Binding Image}" MaxWidth="480" MaxHeight="480" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+          </Button>
+          <views:PreviewFooter />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:AnimationPreview">
+      <Border Classes="preview">
+        <StackPanel Spacing="8">
+          <Button Classes="picture" Command="{Binding OpenCommand}" ToolTip.Tip="Open it" HorizontalAlignment="Left">
+            <Image Source="{Binding Image}" MaxWidth="480" MaxHeight="480" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+          </Button>
+          <views:PreviewFooter />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:VideoPreview">
+      <Border Classes="preview">
+        <StackPanel Spacing="6">
+          <Panel HorizontalAlignment="Left" MaxWidth="480">
+            <Button Classes="picture" Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause video">
+              <Image Source="{Binding Frame}" MaxWidth="480" MaxHeight="480" MinHeight="120" MinWidth="200" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+            </Button>
+            <Button Classes="bigPlay" Command="{Binding PlayCommand}" IsVisible="{Binding !IsPlaying}" ToolTip.Tip="Play" AutomationProperties.Name="Play video">
+              <PathIcon Data="M8 5v14l11-7z" Width="24" Height="24" Foreground="White" />
+            </Button>
+          </Panel>
+          <DockPanel>
+            <Button DockPanel.Dock="Left" Classes="ghost" Padding="8,4" Command="{Binding PlayCommand}" VerticalAlignment="Center" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause">
+              <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" />
+            </Button>
+            <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
+            <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" Margin="8,-8,0,-8" VerticalAlignment="Center" />
+          </DockPanel>
+          <views:PreviewFooter />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:AudioPreview">
+      <Border Classes="preview" Width="498">
+        <StackPanel Spacing="6">
+          <DockPanel>
+            <Button DockPanel.Dock="Left" Classes="roundPlay" Command="{Binding PlayCommand}" VerticalAlignment="Center" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause sound">
+              <PathIcon Data="{Binding PlayIcon}" Width="14" Height="14" Foreground="#111214" />
+            </Button>
+            <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
+            <Panel Height="56" Margin="10,0,0,0">
+              <Image Source="{Binding Waveform}" Stretch="Fill" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+              <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" VerticalAlignment="Center" Opacity="0.85" />
+            </Panel>
+          </DockPanel>
+          <views:PreviewFooter />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:ModelPreview">
+      <Border Classes="preview">
+        <StackPanel Spacing="6">
+          <views:ModelViewer Mesh="{Binding Mesh}" Width="480" Height="360" HorizontalAlignment="Left" ToolTip.Tip="Drag to turn it, scroll to come closer, double-click to see it as at first" />
+          <views:PreviewFooter />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:FileCardPreview">
+      <Border Classes="preview" Width="498">
+        <DockPanel>
+          <PathIcon DockPanel.Dock="Left" Width="22" Height="22" Margin="2,0,10,0" Foreground="{StaticResource BbAccent}" VerticalAlignment="Center"
+                    Data="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+          <views:PreviewFooter />
+        </DockPanel>
+      </Border>
+    </DataTemplate>
+  </Window.DataTemplates>
 
   <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
 
@@ -184,6 +309,13 @@
                 </Expander>
                 <SelectableTextBlock views:MarkdownText.Source="{Binding ShownText}" TextWrapping="Wrap" IsVisible="{Binding HasText}" LineHeight="21" />
                 <TextBlock Classes="muted" Text="{Binding TypingText}" IsVisible="{Binding ShowTypingDots}" />
+                <ItemsControl ItemsSource="{Binding Previews}" IsVisible="{Binding HasPreviews}" Margin="0,4,0,0">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="8" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                </ItemsControl>
               </StackPanel>
             </DataTemplate>
 
@@ -210,6 +342,14 @@
                   <Image Source="{Binding Screenshot}" IsVisible="{Binding HasScreenshot}" MaxWidth="480"
                          HorizontalAlignment="Left" Stretch="Uniform" />
 
+                  <ItemsControl ItemsSource="{Binding Previews}" IsVisible="{Binding HasPreviews}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Spacing="8" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                  </ItemsControl>
+
                   <Expander IsVisible="{Binding HasResult}" Header="Output" Padding="8,4" HorizontalAlignment="Stretch">
                     <SelectableTextBlock Text="{Binding ResultText}" TextWrapping="Wrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" />
                   </Expander>
@@ -235,7 +375,7 @@
                        Text="Describe a task in your own words, and I'll work on it until it's done." />
           </StackPanel>
 
-          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
+          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
             <Border Grid.Row="0" Grid.Column="0" Classes="card">
               <DockPanel>
                 <PathIcon Classes="capability" Data="M13 1.07V9h7c0-4.08-3.05-7.44-7-7.93zM4 15c0 4.42 3.58 8 8 8s8-3.58 8-8v-4H4v4zm7-13.93C7.05 1.56 4 4.92 4 9h7V1.07z" />
@@ -307,6 +447,15 @@
                 <StackPanel Spacing="3">
                   <TextBlock Classes="capability" Text="Long jobs" />
                   <TextBlock Classes="muted" TextWrapping="Wrap" Text="I keep going for hours when a job needs it, like making a game and play-testing it." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Pictures, video and sound" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I make pictures, videos, music, speech and 3D models with ComfyUI, and you can look at them, play them and turn them around right here." />
                 </StackPanel>
               </DockPanel>
             </Border>

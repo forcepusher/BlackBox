@@ -21,6 +21,9 @@ public sealed class ChatEntry
     public string? Summary { get; set; }
     public string? State { get; set; }
 
+    /// <summary>The files a tool call made or showed, previewed under it.</summary>
+    public List<string>? Files { get; set; }
+
     public bool IsError { get; set; }
 }
 

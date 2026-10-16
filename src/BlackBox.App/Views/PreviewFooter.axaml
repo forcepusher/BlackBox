@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:BlackBox.App.ViewModels"
+             x:Class="BlackBox.App.Views.PreviewFooter"
+             x:DataType="vm:FilePreview">
+  <!-- Under every preview: the file's name and what it is, and buttons to open it or find it. -->
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="10,0,0,0">
+      <Button Classes="ghost" Padding="10,3" Content="Open" Command="{Binding OpenCommand}" ToolTip.Tip="Open it in its own program" />
+      <Button Classes="ghost" Padding="10,3" Content="Show in folder" Command="{Binding ShowInFolderCommand}" ToolTip.Tip="{Binding Path}" />
+    </StackPanel>
+    <StackPanel Spacing="1" VerticalAlignment="Center">
+      <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Path}" />
+      <TextBlock Classes="muted" Text="{Binding Details}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Details}" />
+    </StackPanel>
+  </DockPanel>
+</UserControl>

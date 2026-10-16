@@ -18,6 +18,7 @@ public static class AgentSetup
         McpHost mcp, SshHosts ssh, List<ChatMessage>? history = null, Func<bool>? userComposing = null)
     {
         var mcpSetup = new McpSetup(mcp, paths.McpConfigFile);
+        var comfy = Comfy.ComfyHub.For(paths.ComfyDir);
         var ctx = new ToolContext
         {
             Platform = platform,
@@ -29,6 +30,9 @@ public static class AgentSetup
             Browser = HeadlessBrowser.Find(paths.BrowserProfileDir),
             Ssh = ssh,
             Mcp = mcpSetup,
+            Comfy = comfy,
+            Media = Media.MediaDecoders.Create(platform, paths, comfy),
+            ScratchDirectory = paths.ScratchDir,
         };
 
         // A model that can't see gets no screen tools, nor does an OS without desktop control.

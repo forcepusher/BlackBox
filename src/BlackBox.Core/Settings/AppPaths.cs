@@ -42,6 +42,9 @@ public sealed class AppPaths(string root)
     /// <summary>Helper files the agent makes only to get a task done (scripts, a reminder's script), instead of the user's folders.</summary>
     public string ScratchDir => Path.Combine(DataDir, "scratch");
 
+    /// <summary>ComfyUI's address and folder as last used, the log of a server BlackBox started, and the browser profile its page is loaded in (see <see cref="Comfy.ComfyHub"/>).</summary>
+    public string ComfyDir => Path.Combine(DataDir, "comfyui");
+
     public void EnsureCreated() => Directory.CreateDirectory(DataDir);
 
     /// <summary>

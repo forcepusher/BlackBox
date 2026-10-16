@@ -60,6 +60,13 @@ public static class SystemPrompt
                       "or for what these can't do (a chart, a page layout, a PDF that looks exactly like a Word document).");
         sb.AppendLine("- A program that has an MCP server (Blender, a database, a browser…) is far better driven through it than through its window: " +
                       "set up what it needs, add the server with mcp_servers and use its tools; " + (webSearch ? "look up how the server is set up with web_search." : "its README says how it is set up."));
+        // qwen3.8 drove ComfyUI's HTTP API well but wrote wrong node, input and model names from memory.
+        sb.AppendLine("- To make pictures, video, sound, music, speech or 3D models, use the comfyui tool (ComfyUI on this PC; it needs no MCP server). " +
+                      "Start from the template closest to the request (action=templates with a few words), run it with your changes in set, " +
+                      "and look at what it made before you answer; for what no template does, build the workflow from node and model names you looked up " +
+                      "(action=nodes, action=models), never from memory. A model, custom node pack or program it lacks you can download and install yourself. " +
+                      "Its files stay in ComfyUI's output folder, where the user finds them; copy them elsewhere (save_to) only when the user names a place. " +
+                      "Give the full paths of the files you made in your answer.");
         // The user's rule: what can't be opened gets the right tool, not a hand-made decoder (a PDF
         // took eight minutes of inflating streams and mapping glyphs in PowerShell).
         if (toolsDirectory is not null)
@@ -68,9 +75,10 @@ public static class SystemPrompt
                           (webSearch ? " (an official build; look it up with web_search)" : "") +
                           ", or install the program that does it. Check that folder first for tools fetched for earlier tasks.");
         // A reminder's script landed in the user's home folder.
+        // A 3D model and a song qwen3.8 made for the user ended up there, out of the user's sight.
         if (scratchDirectory is not null)
             sb.AppendLine($"- Files you make only to get the task done (scripts, helper files, a reminder's script) go in {scratchDirectory}, not in the user's folders, " +
-                          "unless the user asked for them there.");
+                          "unless the user asked for them there. What the user asked for (a picture, a video, a document) never goes there.");
         sb.AppendLine("- To check a service on a server, use a client this PC already has (curl, a TCP probe) or run the check on the server itself, " +
                       "which has the client (psql -h, redis-cli -h); don't install a client here or write your own for a protocol.");
         sb.AppendLine("- Accept license agreements, terms and first-run prompts of the programs you use for the task: the user has allowed it.");
