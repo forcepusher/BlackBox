@@ -258,6 +258,15 @@ read it and carry on where it stopped (the model gets the conversation back), or
 trash button. Screenshots are not kept in the saved file; the model takes a new one when it carries
 on. Picking another chat or New chat while a task runs stops the task, and keeps it as far as it got.
 
+Every line of the chat shows when it happened, so where a task's time went can be read off it: a
+message the time it was sent, each step of the model when it was asked and how long it took
+("14:05:09 · model 41 s"; its tooltip splits that into sending the request, waiting for the first
+words, and writing), each tool call when it began to run and how long it ran ("Done in 1.2 s"; a
+wait for your OK doesn't count), and a notice when it came up. A step that only called tools keeps
+its line too. A call that runs past a few seconds counts its time like the wait for the model does,
+and the line a task ended with says under it how long the whole task took ("Worked for 25 min 13 s").
+The times are saved with the chat; a chat saved before they were kept shows none.
+
 ## Files in a message
 Drop files or folders anywhere on the window, paste them with Ctrl+V (a screenshot, a picture
 copied in a browser, files copied in Explorer), or pick them with the paperclip next to the box.

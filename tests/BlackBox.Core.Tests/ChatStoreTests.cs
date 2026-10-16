@@ -50,6 +50,36 @@ public class ChatStoreTests : IDisposable
     }
 
     [Fact]
+    public void Times_read_back_and_a_chat_saved_before_them_has_none()
+    {
+        var store = new ChatStore(_dir);
+        var at = new DateTime(2026, 10, 16, 20, 46, 34, DateTimeKind.Utc);
+        store.Save(new SavedChat
+        {
+            Id = "timed",
+            Title = "Open Notepad",
+            Entries =
+            [
+                new ChatEntry { Kind = ChatEntryKind.User, Text = "Open Notepad", At = at },
+                new ChatEntry
+                {
+                    Kind = ChatEntryKind.Assistant, Text = "Done.", At = at.AddSeconds(1), Sent = at.AddSeconds(3), FirstWords = at.AddSeconds(20),
+                    Ended = at.AddSeconds(42), RunTook = TimeSpan.FromSeconds(43.5),
+                },
+            ],
+        });
+        File.WriteAllText(Path.Combine(_dir, "old.json"), """{"id":"old","title":"Old","entries":[{"kind":"User","text":"Hi"}]}""");
+
+        var reply = store.Load("timed")!.Entries[1];
+        Assert.Equal(at, store.Load("timed")!.Entries[0].At);
+        Assert.Equal((at.AddSeconds(1), at.AddSeconds(3), at.AddSeconds(20), at.AddSeconds(42)), (reply.At, reply.Sent, reply.FirstWords, reply.Ended));
+        Assert.Equal(TimeSpan.FromSeconds(43.5), reply.RunTook);
+        var old = Assert.Single(store.Load("old")!.Entries);
+        Assert.Null(old.At);
+        Assert.Null(old.RunTook);
+    }
+
+    [Fact]
     public void The_list_has_the_latest_chat_first_and_skips_broken_files()
     {
         var store = new ChatStore(_dir);

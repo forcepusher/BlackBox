@@ -36,7 +36,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private IDisposable? _stopKey;
     private volatile bool _stoppedByKey;
 
-    /// <summary>Ticks once a second during a run, for the reply in progress to count the wait.</summary>
+    /// <summary>Ticks once a second during a run, for the reply in progress to count the wait, and a tool call that runs long its time.</summary>
     private readonly DispatcherTimer _tick;
 
     /// <summary>Decoders and speakers for the previews of files in the chat.</summary>
@@ -54,6 +54,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _tick = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) =>
         {
             _current?.Tick();
+            foreach (var tool in Items.OfType<ToolCallItem>())
+                tool.Tick();
             // The pause ends a while after the last key press, with no change to the text.
             OnTypingPauseChanged();
         });
@@ -697,9 +699,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         ? "Tell me something while I work… (Enter to send; I pause while you type)"
         : "Describe a task, paste a screenshot or drop files… (Enter to send, Shift+Enter for a new line)";
 
+    /// <summary>When the run in progress started: from the message that started it, for how long the run took.</summary>
+    private DateTime _runStarted;
+
     /// <summary>One run of the agent on <paramref name="input"/>. Returns what the user sent too late for it, to run next, or null.</summary>
     private async Task<UserInput?> RunAsync(UserInput input)
     {
+        _runStarted = DateTime.UtcNow;
         _runDetached = false;
         IsBusy = true;
         HideContinue();
@@ -942,7 +948,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             Title = _chatTitle,
             Updated = DateTime.UtcNow,
             // A reply bubble with nothing in it yet (a step just started) is left out.
-            Entries = Items.Where(i => i is not AssistantMessageItem { HasText: false, HasReasoning: false }).Select(ToEntry).ToList(),
+            Entries = Items.Where(i => i is not AssistantMessageItem { IsStreaming: true, HasText: false, HasReasoning: false }).Select(ToEntry).ToList(),
             History = history,
         };
         try { _chats.Save(chat); }
@@ -967,34 +973,48 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         MarkCurrentChat();
     }
 
-    private static ChatEntry ToEntry(ChatItemViewModel item) => item switch
+    private static ChatEntry ToEntry(ChatItemViewModel item)
     {
-        UserMessageItem u => new ChatEntry { Kind = ChatEntryKind.User, Text = u.Text, Files = u.HasAttachments ? u.Files : null },
-        AssistantMessageItem a => new ChatEntry { Kind = ChatEntryKind.Assistant, Text = a.Text, Reasoning = a.Reasoning },
-        ToolCallItem t => new ChatEntry
+        var entry = item switch
         {
-            Kind = ChatEntryKind.Tool, CallId = t.CallId, Name = t.Name, Summary = t.Summary, State = t.State.ToString(), Text = t.ResultText,
-            Files = t.HasPreviews ? t.Previews.Select(p => p.Path).ToList() : null,
-        },
-        NoticeItem n => new ChatEntry { Kind = ChatEntryKind.Notice, Text = n.Text, IsError = n.IsError, Stopped = n.Stopped, Unsent = n.Unsent },
-        _ => throw new ArgumentOutOfRangeException(nameof(item)),
-    };
+            UserMessageItem u => new ChatEntry { Kind = ChatEntryKind.User, Text = u.Text, Files = u.HasAttachments ? u.Files : null },
+            AssistantMessageItem a => new ChatEntry
+            {
+                Kind = ChatEntryKind.Assistant, Text = a.Text, Reasoning = a.Reasoning, Ended = a.Ended, Sent = a.SentAt, FirstWords = a.FirstWords,
+            },
+            ToolCallItem t => new ChatEntry
+            {
+                Kind = ChatEntryKind.Tool, CallId = t.CallId, Name = t.Name, Summary = t.Summary, State = t.State.ToString(), Text = t.ResultText,
+                Files = t.HasPreviews ? t.Previews.Select(p => p.Path).ToList() : null, Ended = t.Ended,
+            },
+            NoticeItem n => new ChatEntry { Kind = ChatEntryKind.Notice, Text = n.Text, IsError = n.IsError, Stopped = n.Stopped, Unsent = n.Unsent },
+            _ => throw new ArgumentOutOfRangeException(nameof(item)),
+        };
+        (entry.At, entry.RunTook) = (item.At, item.RunTook);
+        return entry;
+    }
 
     private ChatItemViewModel FromEntry(ChatEntry e)
     {
         ChatItemViewModel item = e.Kind switch
         {
             ChatEntryKind.User => new UserMessageItem(e.Text ?? "", e.Files),
-            ChatEntryKind.Assistant => new AssistantMessageItem { Text = e.Text ?? "", Reasoning = e.Reasoning ?? "", IsStreaming = false },
+            ChatEntryKind.Assistant => new AssistantMessageItem
+            {
+                Text = e.Text ?? "", Reasoning = e.Reasoning ?? "", IsStreaming = false, Ended = e.Ended, SentAt = e.Sent, FirstWords = e.FirstWords,
+            },
             ChatEntryKind.Tool => new ToolCallItem(e.CallId ?? "", e.Name ?? "", e.Summary ?? "")
             {
                 ResultText = e.Text ?? "",
                 // A call that was still running or waiting when the chat was saved never finished.
                 State = Enum.TryParse<ToolItemState>(e.State, out var state) && state is not (ToolItemState.Running or ToolItemState.AwaitingApproval)
                     ? state : ToolItemState.Stopped,
+                Ended = e.Ended,
             },
             _ => NoticeFrom(e),
         };
+        // Lines saved before the chat kept times show none.
+        (item.At, item.RunTook) = (e.At, e.RunTook);
         // The files come back with the chat, as long as they are still there.
         if (e.Kind == ChatEntryKind.Tool && e.Files is { Count: > 0 } files)
             item.AddPreviews(files.Where(File.Exists), _previews);
@@ -1123,19 +1143,30 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>The reply bubble the agent streams into; only touched on the agent's thread.</summary>
     private AssistantMessageItem? _streaming;
 
+    /// <summary>
+    /// Hands an update from the agent's thread to the window with the time it happened: the window
+    /// can get to it a moment later, and the chat shows how long things took.
+    /// </summary>
+    private static void PostTimed(Action<DateTime> update)
+    {
+        var at = DateTime.UtcNow;
+        Dispatcher.UIThread.Post(() => update(at));
+    }
+
     void IAgentObserver.OnStepStarted(int step)
     {
         // The agent waits for this call, so its conversation holds still while it is copied and measured.
         var history = _runDetached ? null : SnapshotHistory();
         var usage = MeasureContext();
-        var bubble = _streaming = new AssistantMessageItem();
+        var at = DateTime.UtcNow;
+        var bubble = _streaming = new AssistantMessageItem { At = at };
         Dispatcher.UIThread.Post(() =>
         {
             if (_runDetached) return;
             // Saved at every step, so a crash or power cut loses at most the step in progress.
             SaveChat(history);
             TrimChat();
-            FinishCurrent(); // a bubble nothing streamed into (a request that failed) leaves no "…" behind
+            FinishCurrent(at); // a bubble nothing streamed into (a request that failed) leaves no "…" behind
             _current = bubble;
             Items.Add(bubble);
             ShowContextUsage(usage);
@@ -1150,10 +1181,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         // A reply carries the server's own token count, so the top bar is exact after each one.
         var usage = MeasureContext();
-        Dispatcher.UIThread.Post(() =>
+        PostTimed(at =>
         {
             if (_runDetached) return;
-            FinishCurrent(message);
+            FinishCurrent(at, message);
             ShowContextUsage(usage);
         });
     }
@@ -1170,12 +1201,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                           $"At {usage.Reset:N0} the model writes a handoff note and BlackBox starts a fresh context with it.";
     }
 
-    /// <summary>Ends the streaming bubble; an empty one (a discarded reply) leaves no trace.</summary>
-    private void FinishCurrent(ChatMessage? message = null)
+    /// <summary>
+    /// Ends the streaming bubble, whose step ended <paramref name="at"/>. An empty one (a discarded
+    /// reply) leaves no trace; one that only called tools keeps its line with the step's time.
+    /// </summary>
+    private void FinishCurrent(DateTime at, ChatMessage? message = null)
     {
         if (_current is null) return;
-        _current.Finish(message);
-        if (!_current.HasText && !_current.HasReasoning)
+        _current.Finish(at, message);
+        if (!_current.HasText && !_current.HasReasoning && message is not { HasToolCalls: true })
             Items.Remove(_current);
         else if (message is not null && _current.HasText)
             // The files the reply names (what the agent made) are shown under it, to look at, play or open.
@@ -1193,16 +1227,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         });
     }
 
-    void IAgentObserver.OnNotice(string text) => Dispatcher.UIThread.Post(() =>
+    void IAgentObserver.OnNotice(string text) => PostTimed(at =>
     {
-        if (!_runDetached) AddNotice(text, isError: false);
+        if (!_runDetached) Items.Add(new NoticeItem(text, isError: false) { At = at });
     });
 
-    void IAgentObserver.OnToolStarted(ToolCall call, string summary) => Dispatcher.UIThread.Post(() =>
+    void IAgentObserver.OnToolStarted(ToolCall call, string summary) => PostTimed(at =>
     {
         if (_runDetached) return;
         var item = FindOrAddTool(call, summary);
         item.Summary = summary;
+        // Its time counts from here: a wait for the user's OK before it is not the call's.
+        item.At = at;
         item.State = ToolItemState.Running;
     });
 
@@ -1213,7 +1249,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             item.Progress = text;
     });
 
-    void IAgentObserver.OnToolFinished(ToolCall call, ToolResult result) => Dispatcher.UIThread.Post(() =>
+    void IAgentObserver.OnToolFinished(ToolCall call, ToolResult result) => PostTimed(at =>
     {
         if (_runDetached) return;
         var item = FindOrAddTool(call, call.Name);
@@ -1231,29 +1267,46 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         if (item.State == ToolItemState.AwaitingApproval)
             item.State = ToolItemState.Stopped; // the run was stopped while the call waited for an OK; Deny would have said Declined
-        else if (item.State is not (ToolItemState.Denied or ToolItemState.Stopped))
-            item.State = result.IsError ? ToolItemState.Error : ToolItemState.Done;
-    });
-
-    void IAgentObserver.OnFinished(AgentStopReason reason, string? detail) => Dispatcher.UIThread.Post(() =>
-    {
-        var stopped = StoppedText();
-        if (_runDetached) return;
-        FinishCurrent();
-        // A call cut short by the stop says so; it used to read "Declined", as if the user had said no to it.
-        foreach (var t in Items.OfType<ToolCallItem>().Where(t => t.State is ToolItemState.Running or ToolItemState.AwaitingApproval))
-            t.State = ToolItemState.Stopped;
-
-        switch (reason)
+        else
         {
-            case AgentStopReason.Cancelled:
-                AddStopNotice(stopped, isError: false);
-                break;
-            case AgentStopReason.Error:
-                AddStopNotice(detail ?? "Something went wrong.", isError: true);
-                break;
+            item.Ended = at;
+            if (item.State is not (ToolItemState.Denied or ToolItemState.Stopped))
+                item.State = result.IsError ? ToolItemState.Error : ToolItemState.Done;
         }
     });
+
+    void IAgentObserver.OnFinished(AgentStopReason reason, string? detail)
+    {
+        // Read here: by the time the window gets to this, a run of what came too late for this one may have started.
+        var started = _runStarted;
+        PostTimed(at =>
+        {
+            var stopped = StoppedText();
+            if (_runDetached) return;
+            FinishCurrent(at);
+            // A call cut short by the stop says so; it used to read "Declined", as if the user had said no to it.
+            foreach (var t in Items.OfType<ToolCallItem>().Where(t => t.State is ToolItemState.Running or ToolItemState.AwaitingApproval))
+            {
+                if (t.State == ToolItemState.Running) t.Ended = at;
+                t.State = ToolItemState.Stopped;
+            }
+
+            switch (reason)
+            {
+                case AgentStopReason.Cancelled:
+                    AddStopNotice(stopped, isError: false);
+                    break;
+                case AgentStopReason.Error:
+                    AddStopNotice(detail ?? "Something went wrong.", isError: true);
+                    break;
+            }
+
+            // How long the run took, under the line it ended with: its last reply, or the notice it
+            // stopped with. A message of the user's that came too late for it is the next run's.
+            if (Items.LastOrDefault(i => i is not UserMessageItem && i.At >= started) is { } end)
+                end.RunTook = at - started;
+        });
+    }
 
     private ToolCallItem FindOrAddTool(ToolCall call, string summary)
     {
