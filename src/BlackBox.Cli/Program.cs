@@ -196,7 +196,21 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
     {
         ToolCalls++;
         _toolStart = DateTime.Now;
+        _lastProgress = DateTime.MinValue;
         Console.WriteLine($"[tool] {Now} {summary}");
+    }
+
+    private DateTime _lastProgress;
+    private string? _progressStage;
+
+    /// <summary>A long call's progress, every 15 seconds or when it moves on to another stage.</summary>
+    public void OnToolProgress(ToolCall call, string text)
+    {
+        var stage = text.Split(" · ")[0].Split(", step")[0];
+        if (DateTime.Now - _lastProgress < TimeSpan.FromSeconds(15) && stage == _progressStage)
+            return;
+        (_lastProgress, _progressStage) = (DateTime.Now, stage);
+        Console.WriteLine($"[progress] {Now} {text}");
     }
 
     public void OnToolFinished(ToolCall call, ToolResult result)
@@ -207,6 +221,8 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
         Console.ForegroundColor = result.IsError ? ConsoleColor.Red : ConsoleColor.DarkCyan;
         Console.WriteLine($"[result] {Now} after {(DateTime.Now - _toolStart).TotalSeconds:0.0}s: {text.TrimEnd()}");
         Console.ResetColor();
+        if (result.Files is { Count: > 0 } files)
+            Console.WriteLine($"[files] {string.Join(" | ", files)}");
         if (result.Image is not null && shotsDir is not null)
         {
             Directory.CreateDirectory(shotsDir);

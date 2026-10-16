@@ -7,7 +7,28 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BlackBox.App.ViewModels;
 
-public abstract class ChatItemViewModel : ObservableObject;
+public abstract class ChatItemViewModel : ObservableObject
+{
+    /// <summary>Files shown under the item: what a tool made or showed, or what a reply names by its path.</summary>
+    public System.Collections.ObjectModel.ObservableCollection<FilePreview> Previews { get; } = [];
+
+    public bool HasPreviews => Previews.Count > 0;
+
+    public void AddPreviews(IEnumerable<string> paths, PreviewServices services)
+    {
+        foreach (var path in paths)
+            if (!Previews.Any(p => string.Equals(p.Path, path, StringComparison.OrdinalIgnoreCase)))
+                Previews.Add(FilePreview.For(path, services));
+        OnPropertyChanged(nameof(HasPreviews));
+    }
+
+    /// <summary>Stops players and lets go of decoded frames, when the item leaves the chat.</summary>
+    public void DisposePreviews()
+    {
+        foreach (var p in Previews)
+            p.Dispose();
+    }
+}
 
 public sealed class UserMessageItem(string text) : ChatItemViewModel
 {
@@ -155,10 +176,15 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
     public bool HasResult => ResultText.Length > 0;
     public bool HasScreenshot => Screenshot is not null;
 
+    /// <summary>How a long call is getting on ("KSampler, step 3 of 20 · 1:12"), while it runs.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private string _progress = "";
+
     public string StatusText => State switch
     {
         ToolItemState.AwaitingApproval => "Waiting for your OK",
-        ToolItemState.Running => "Running…",
+        ToolItemState.Running => Progress.Length > 0 ? Progress : "Running…",
         ToolItemState.Done => "Done",
         ToolItemState.Error => "Failed",
         ToolItemState.Denied => "Declined",

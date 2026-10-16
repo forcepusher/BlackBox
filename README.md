@@ -14,7 +14,8 @@ unpacks its native UI libraries into `Data/runtime` next to itself.
 BlackBox/
   BlackBox.exe
   Data/        settings.json, chats/ (see Chat history), runtime/ (unpacked by the single-file exe), browser/ (see Web search),
-               tools/ (portable programs the agent downloaded), scratch/ (helper files it made for a task)
+               tools/ (portable programs the agent downloaded), scratch/ (helper files it made for a task),
+               comfyui/ (ComfyUI's address and folder, the log of a server BlackBox started, see Pictures, video and sound)
 ```
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
@@ -70,6 +71,63 @@ archive), it downloads a portable tool into `Data/tools`, where later tasks find
 program, rather than decoding the file by hand. It also accepts the license agreements and
 first-run prompts of the programs it uses (Office asks on its first start).
 
+## Pictures, video and sound
+The `comfyui` tool makes pictures, videos, sound effects, music, speech and 3D models with
+[ComfyUI](https://github.com/comfyanonymous/ComfyUI) on this PC, building each workflow for the
+request. Asked earlier, qwen3.8 drove ComfyUI's HTTP API well but wrote node, input and model names
+from memory, and those were often wrong, so the model doesn't work from memory here:
+
+- **Templates first.** `action=templates` searches the user's saved workflows (described by the
+  README notes kept beside them), ComfyUI's own templates (without the ones built on paid API nodes)
+  and the examples custom node packs bring, and marks the ones whose models and nodes are
+  installed. With `name` it shows one as an API-format workflow, one node per line, with the
+  template's own notes, the inputs a run usually changes and the models it needs (with download
+  links for missing ones), and saves it in `Data/scratch/comfyui/` to edit. Templates are kept in the
+  editor's format, with subgraphs, bypassed nodes, reroutes and promoted widgets: ComfyUI's own page,
+  loaded in the PC's Edge or Chrome run headless, turns them into the format `/prompt` runs,
+  exactly as its Run button does, so no copy of that conversion has to keep up with ComfyUI's
+  releases. The browser stays up a few minutes between uses and never outlives BlackBox (it runs
+  in a job object that Windows ends with BlackBox).
+- **Names looked up, not remembered.** `action=nodes` searches the server's node types or shows
+  some in full (inputs, types, ranges, choices, outputs); `action=models` lists the installed model
+  files with their sizes.
+- **Checked before it runs.** Every workflow is checked against the server's node types first, and
+  every wrong name comes back at once with the closest real one: "no node type SaveImag; did you
+  mean SaveImage?", "no input sampler; did you mean sampler_name?", a model file that isn't
+  installed with the closest installed ones, links to missing nodes or outputs, type mismatches,
+  values out of range. ComfyUI itself stops at the first unknown node and quietly ignores inputs it
+  doesn't know.
+- **Run, wait, look.** `action=run` runs a template, a file or a workflow, with changes in `set`
+  (`{"6.text": "a red fox in snow", "3.seed": 7}`); a full local path where LoadImage, LoadAudio or
+  LoadVideo name a file is uploaded. It waits for the job while its card shows where it is
+  ("SamplerCustomAdvanced, step 2 of 3 · 8:21"); Stop and Esc cancel it in ComfyUI too, and a
+  message from the user ends the wait while the job goes on (`action=status` with its id picks it
+  up again). The files come back with their paths, `save_to` copies them where the task wants them,
+  and the model gets a look at them (below) to check its work.
+- **ComfyUI itself.** When it isn't running, BlackBox starts the one used last, or finds one
+  (the ComfyUI Desktop app, then every drive and the user's folders a few levels deep; the one
+  used most recently wins) and starts it hidden, its output in `Data/comfyui/server.log`. It keeps
+  running after the task, but its models are unloaded once the task is over, so the GPU is free.
+  `action=restart` stops it and starts it again with the arguments it ran with (custom nodes load
+  only at start), `stop` and `free` do what they say. Models, custom node packs and programs a job
+  lacks the agent downloads and installs itself, as with any program.
+
+`read_file` gives the model a look at media as well as pictures: a video as eight frames with their
+times, a sound as its waveform and spectrogram with its length, loudness, clipping and silences in
+words, a 3D model (GLB, glTF, OBJ, PLY, STL) from four sides, an animated GIF or WebP as frames.
+Video and sound are decoded by Windows' own Media Foundation (MP4/H.264, MOV, MP3, AAC, FLAC, WAV
+play on every Windows 10 and 11), else by ffmpeg when one is on the PATH, in `Data/tools` or in
+ComfyUI's folder; 3D models are drawn by BlackBox itself.
+
+### Previews
+Files the agent makes or shows appear in the chat: under the tool call that made them, and under
+a reply that names them by their full path (whatever made them: ComfyUI, a script, Blender, a
+download). Pictures are shown at the chat's width, animations play, videos play in place with
+their sound and a position to drag, a sound plays over its waveform, a 3D model turns with the
+mouse (the wheel comes closer, a double click resets it), and any other file gets a card. Each has
+Open (its own program) and Show in folder. A saved chat shows them again when it is opened, as
+long as the files are still there.
+
 ## Chat history
 Every chat is saved on its own in `Data/chats/` from its first message on, after every step, and
 named after that message. **History** next to **New chat** lists them, the latest first: pick one to
@@ -78,7 +136,8 @@ trash button. Screenshots are not kept in the saved file; the model takes a new 
 on. Picking another chat or New chat while a task runs stops the task, and keeps it as far as it got.
 
 Until a chat is used, it shows what BlackBox can do (apps, files and commands, documents, getting
-the programs and MCP servers a job needs, chatting for you, the web, servers, long jobs), that Esc
+the programs and MCP servers a job needs, chatting for you, the web, servers, long jobs, pictures,
+video and sound), that Esc
 stops it, how to change a task while it runs, and what it asks before it acts. It says so when the
 model in use can't see images. Notices such as an MCP server that failed to start show above it and
 don't count as using the chat.
@@ -184,7 +243,8 @@ method there, not a property).
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
-| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures to the model; `write_file` makes them from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
+| `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures, videos, sounds and 3D models to the model; `write_file` makes documents from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
+| `comfyui` | Pictures, video, sound, music, speech and 3D models with ComfyUI on this PC: templates, node and model look-ups, checked runs that hand back the files (see Pictures, video and sound) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
 | `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |

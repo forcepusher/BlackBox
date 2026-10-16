@@ -39,8 +39,9 @@ public sealed class ReadFileTool : Tool
     public override string Name => "read_file";
     public override string Description =>
         "Read a file. Text files come back as numbered lines; PDF, Word (.docx), Excel (.xlsx) and PowerPoint (.pptx) files as their text " +
-        "(Excel cell by cell, with formulas); a picture (PNG, JPEG, GIF, BMP, WebP) is shown to you as an image. " +
-        "Relative paths are resolved against the working directory.";
+        "(Excel cell by cell, with formulas); a picture (PNG, JPEG, GIF, BMP, WebP) is shown to you as an image; a video (MP4, WebM, MOV…) " +
+        "as frames with their times, a sound (WAV, MP3, FLAC, OGG…) as its waveform and spectrogram with its loudness and silences, " +
+        "a 3D model (GLB, glTF, OBJ, PLY, STL) from four sides. Relative paths are resolved against the working directory.";
     public override ToolRisk Risk => ToolRisk.ReadOnly;
     public override JsonObject Parameters => Schema(
         ("path", Str("File path"), true),
@@ -62,13 +63,22 @@ public sealed class ReadFileTool : Tool
         var offset = Math.Max(1, (int)(GetNumber(args, "offset") ?? 1));
         var limit = Math.Clamp((int)(GetNumber(args, "limit") ?? 400), 1, 5000);
 
+        var kind = Media.MediaPreview.KindOf(path);
+        if (kind is "video" or "audio" or "3d" || kind == "animation" && Animated(path))
+        {
+            // A video as frames, a sound as its waveform, a model from four sides: the model sees
+            // only still pictures, and a sound not at all.
+            var look = Media.MediaPreview.ForFiles([path], ctx.Media, ctx.SeesImages);
+            var text = string.Join("\n", look.Lines) + (look.Image is not null ? "\n" + look.Caption : "");
+            return new ToolResult(text, look.Image, ImageCaption: look.Image is null ? null : $"A look at {Path.GetFileName(path)}:", Files: [path]);
+        }
         if (Picture.Handles(path))
         {
             // A photo or chart asked about took six minutes and a stuck "you'll need a new app"
             // box when the model had to find a program to show it on screen.
             if (!ctx.SeesImages)
                 return ToolResult.Error($"{path} is a picture, and the model in use can't see images.");
-            return Picture.Read(path);
+            return Picture.Read(path) with { Files = [path] };
         }
         if (DocumentText.Handles(path))
         {
@@ -106,6 +116,20 @@ public sealed class ReadFileTool : Tool
         if (offset > 1 || last < total)
             sb.AppendLine($"[showing lines {offset}-{last} of {total}; use offset to read more]");
         return new ToolResult(sb.ToString());
+    }
+
+    /// <summary>A GIF or WebP with more than one frame.</summary>
+    private static bool Animated(string path)
+    {
+        try
+        {
+            using var codec = SkiaSharp.SKCodec.Create(path);
+            return codec?.FrameCount > 1;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>A zero byte near the start, outside UTF-16 text: an image, an exe, an archive.</summary>
@@ -155,7 +179,8 @@ public sealed class WriteFileTool : Tool
         {
             try
             {
-                return new ToolResult(Documents.DocumentFiles.Write(path, content, GetBool(args, "append"), ctx.ResolvePath));
+                // A document made for the user gets a card in the chat, to open or find.
+                return new ToolResult(Documents.DocumentFiles.Write(path, content, GetBool(args, "append"), ctx.ResolvePath), Files: [path]);
             }
             catch (InvalidOperationException ex)
             {

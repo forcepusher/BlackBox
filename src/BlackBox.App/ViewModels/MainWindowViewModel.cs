@@ -39,12 +39,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>Ticks once a second during a run, for the reply in progress to count the wait.</summary>
     private readonly DispatcherTimer _tick;
 
+    /// <summary>Decoders and speakers for the previews of files in the chat.</summary>
+    private readonly PreviewServices _previews;
+
     public MainWindowViewModel(AppPaths paths, SettingsStore store, AppSettings settings, IPlatformServices platform)
     {
         _paths = paths;
         _store = store;
         _settings = settings;
         _platform = platform;
+        _previews = new PreviewServices(Core.Media.MediaDecoders.Create(platform, paths, Core.Comfy.ComfyHub.For(paths.ComfyDir)), platform.CreateAudioOutput);
         _chats = new ChatStore(paths.ChatsDir);
         _ssh = new Core.Ssh.SshHosts(paths.KnownHostsFile);
         _tick = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) =>
@@ -694,6 +698,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var ended = _ssh;
         _ = Task.Run(ended.Dispose);
         _ssh = new Core.Ssh.SshHosts(_paths.KnownHostsFile);
+        foreach (var item in Items)
+            item.DisposePreviews();
         Items.Clear();
         _current = null;
         _chatId = null;
@@ -784,24 +790,37 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         UserMessageItem u => new ChatEntry { Kind = ChatEntryKind.User, Text = u.Text },
         AssistantMessageItem a => new ChatEntry { Kind = ChatEntryKind.Assistant, Text = a.Text, Reasoning = a.Reasoning },
-        ToolCallItem t => new ChatEntry { Kind = ChatEntryKind.Tool, CallId = t.CallId, Name = t.Name, Summary = t.Summary, State = t.State.ToString(), Text = t.ResultText },
+        ToolCallItem t => new ChatEntry
+        {
+            Kind = ChatEntryKind.Tool, CallId = t.CallId, Name = t.Name, Summary = t.Summary, State = t.State.ToString(), Text = t.ResultText,
+            Files = t.HasPreviews ? t.Previews.Select(p => p.Path).ToList() : null,
+        },
         NoticeItem n => new ChatEntry { Kind = ChatEntryKind.Notice, Text = n.Text, IsError = n.IsError },
         _ => throw new ArgumentOutOfRangeException(nameof(item)),
     };
 
-    private static ChatItemViewModel FromEntry(ChatEntry e) => e.Kind switch
+    private ChatItemViewModel FromEntry(ChatEntry e)
     {
-        ChatEntryKind.User => new UserMessageItem(e.Text ?? ""),
-        ChatEntryKind.Assistant => new AssistantMessageItem { Text = e.Text ?? "", Reasoning = e.Reasoning ?? "", IsStreaming = false },
-        ChatEntryKind.Tool => new ToolCallItem(e.CallId ?? "", e.Name ?? "", e.Summary ?? "")
+        ChatItemViewModel item = e.Kind switch
         {
-            ResultText = e.Text ?? "",
-            // A call that was still running or waiting when the chat was saved never finished.
-            State = Enum.TryParse<ToolItemState>(e.State, out var state) && state is not (ToolItemState.Running or ToolItemState.AwaitingApproval)
-                ? state : ToolItemState.Denied,
-        },
-        _ => new NoticeItem(e.Text ?? "", e.IsError),
-    };
+            ChatEntryKind.User => new UserMessageItem(e.Text ?? ""),
+            ChatEntryKind.Assistant => new AssistantMessageItem { Text = e.Text ?? "", Reasoning = e.Reasoning ?? "", IsStreaming = false },
+            ChatEntryKind.Tool => new ToolCallItem(e.CallId ?? "", e.Name ?? "", e.Summary ?? "")
+            {
+                ResultText = e.Text ?? "",
+                // A call that was still running or waiting when the chat was saved never finished.
+                State = Enum.TryParse<ToolItemState>(e.State, out var state) && state is not (ToolItemState.Running or ToolItemState.AwaitingApproval)
+                    ? state : ToolItemState.Denied,
+            },
+            _ => new NoticeItem(e.Text ?? "", e.IsError),
+        };
+        // The files come back with the chat, as long as they are still there.
+        if (e.Kind == ChatEntryKind.Tool && e.Files is { Count: > 0 } files)
+            item.AddPreviews(files.Where(File.Exists), _previews);
+        else if (item is AssistantMessageItem { HasText: true } reply)
+            item.AddPreviews(Core.Media.FileMentions.Find(reply.Text), _previews);
+        return item;
+    }
 
     // ---- settings -------------------------------------------------------------------
 
@@ -889,7 +908,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private void TrimChat()
     {
         while (Items.Count > MaxChatItems)
+        {
+            Items[0].DisposePreviews();
             Items.RemoveAt(0);
+        }
         foreach (var old in Items.OfType<ToolCallItem>().Where(t => t.HasScreenshot).SkipLast(MaxThumbnails).ToList())
         {
             old.Screenshot?.Dispose();
@@ -957,6 +979,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _current.Finish(message);
         if (!_current.HasText && !_current.HasReasoning)
             Items.Remove(_current);
+        else if (message is not null && _current.HasText)
+            // The files the reply names (what the agent made) are shown under it, to look at, play or open.
+            _current.AddPreviews(Core.Media.FileMentions.Find(_current.Text), _previews);
         _current = null;
     }
 
@@ -983,12 +1008,24 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         item.State = ToolItemState.Running;
     });
 
+    void IAgentObserver.OnToolProgress(ToolCall call, string text) => Dispatcher.UIThread.Post(() =>
+    {
+        if (_runDetached) return;
+        if (Items.OfType<ToolCallItem>().LastOrDefault(t => t.CallId == call.Id) is { State: ToolItemState.Running } item)
+            item.Progress = text;
+    });
+
     void IAgentObserver.OnToolFinished(ToolCall call, ToolResult result) => Dispatcher.UIThread.Post(() =>
     {
         if (_runDetached) return;
         var item = FindOrAddTool(call, call.Name);
         item.ResultText = result.Text.Length > 3000 ? result.Text[..3000] + "\n…" : result.Text.TrimEnd();
-        if (result.Image is not null)
+        item.Progress = "";
+        // Files the call made or showed get a preview (a player, a model to turn), which says more
+        // than the picture made for the model; anything else keeps its screenshot.
+        if (result.Files is { Count: > 0 } files)
+            item.AddPreviews(files.Where(File.Exists), _previews);
+        else if (result.Image is not null)
         {
             using var ms = new MemoryStream(result.Image);
             item.Screenshot = Bitmap.DecodeToWidth(ms, 480);

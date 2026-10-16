@@ -16,7 +16,9 @@ public enum ToolRisk
 }
 
 /// <param name="ImageCaption">What the image is, said where it reaches the model; null for a screenshot after an action.</param>
-public sealed record ToolResult(string Text, byte[]? Image = null, string ImageMime = "image/jpeg", bool IsError = false, string? ImageCaption = null)
+/// <param name="Files">Files the call made or showed (a picture, a video, a sound, a 3D model…), previewed for the user in the chat.</param>
+public sealed record ToolResult(string Text, byte[]? Image = null, string ImageMime = "image/jpeg", bool IsError = false, string? ImageCaption = null,
+    IReadOnlyList<string>? Files = null)
 {
     public static ToolResult Error(string text) => new(text, IsError: true);
 }
@@ -78,6 +80,46 @@ public sealed class ToolContext
 
     /// <summary>The app's MCP servers, for the agent to set one up itself (mcp_servers); null when it can't.</summary>
     public Mcp.McpSetup? Mcp { get; init; }
+
+    /// <summary>The ComfyUI server the comfyui tool works with; null when it isn't offered.</summary>
+    public Comfy.ComfyHub? Comfy { get; init; }
+
+    /// <summary>Reads video and sound, so the model can look at them (frames, waveforms); null when nothing can.</summary>
+    public Media.IMediaDecoder? Media { get; init; }
+
+    /// <summary>Where helper files for a task go (BlackBox's Data/scratch); null to use the system's temp folder.</summary>
+    public string? ScratchDirectory { get; init; }
+
+    /// <summary>
+    /// Tells the user how a long call is getting on ("KSampler, step 3 of 20 · 1:12"), shown on its
+    /// card while it runs. Set by the agent session for each call; null when nobody listens.
+    /// </summary>
+    public Action<string>? Progress { get; set; }
+
+    private readonly Dictionary<string, Func<Task>> _afterRun = new();
+
+    /// <summary>Something to do once the task is over (each <paramref name="key"/> once): ComfyUI lets go of its models then.</summary>
+    public void AfterRun(string key, Func<Task> action)
+    {
+        lock (_afterRun)
+            _afterRun[key] = action;
+    }
+
+    /// <summary>Does what <see cref="AfterRun"/> asked for; a failure there is nobody's business but its own.</summary>
+    public async Task FinishRunAsync()
+    {
+        List<Func<Task>> actions;
+        lock (_afterRun)
+        {
+            actions = _afterRun.Values.ToList();
+            _afterRun.Clear();
+        }
+        foreach (var action in actions)
+        {
+            try { await action().ConfigureAwait(false); }
+            catch (Exception) { /* a server that went away meanwhile */ }
+        }
+    }
 
     /// <summary>All monitors in physical pixels, the primary first.</summary>
     public IReadOnlyList<ScreenRect> Screens => Platform.Screen.GetScreens();
