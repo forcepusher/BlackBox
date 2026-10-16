@@ -156,7 +156,7 @@ long as the files are still there.
 ### How it does
 qwen3.8 27B (q6_k_xl, on the LM Studio server) with the ComfyUI on an RTX 5070 Ti (16 GB), each
 task one plain message and nothing more, ComfyUI stopped before the first
-(`./scripts/comfy-test.ps1` runs the first seven):
+(`./scripts/comfy-test.ps1` runs the first seven, and the two tasks of the next section):
 
 | Request | What the agent used | What it made | Time | Tool calls (errors) |
 | --- | --- | --- | --- | --- |
@@ -188,6 +188,12 @@ plain message:
 | --- | --- | --- | --- | --- |
 | In the app: a beach photo pasted into the box, "Turn this photo into a watercolor painting." | installed ComfyUI (the NVIDIA build, started with `--cpu`), `blackbox/image_to_image`, downloaded the SD 1.5 checkpoint the template links to | a watercolor of the same beach, rocks, runner and reflections, 704×440 | 12:10 after the archive was in place (below), 4:45 of it generating | 15 (4) |
 | "Make a picture of a cozy wooden cabin in a snowy forest at dusk with the DreamShaper 8 model." | `find_models` found DreamShaper 8 on Civitai; downloaded it (2.0 GB in 1:39, SHA-256 checked); `blackbox/text_to_image` | a 768×512 picture | 10:57, 7:25 of it generating | 7 (0) |
+| The watercolor again, from the command line (`--attach`), in a Data folder of its own with no ComfyUI | installed ComfyUI (2 GB from GitHub, unpacked and started in 3:38), downloaded SD 1.5 (2:25, named and checked), `blackbox/image_to_image` | a watercolor that keeps the photo's layout (0.88, see below) | 12:55 | 8 (2) |
+
+The last row is `./scripts/comfy-test.ps1 -Root <a fresh folder> -Tasks img2img`; its check shrinks
+the photo and the result to 32×32 in grey and needs their correlation to be at least 0.4 (a picture
+made from words alone scores about 0: unrelated photos scored -0.16 to -0.03). Its two errors were
+the first calls, before ComfyUI was there. `named` is the DreamShaper row.
 
 Each step of SD 1.5 took 12 to 19 s on the CPU. In the first run GitHub served the 2 GB archive
 at 100 to 200 KB/s for that hour (8 MB/s an hour before; Hugging Face gave 12 MB/s meanwhile), so

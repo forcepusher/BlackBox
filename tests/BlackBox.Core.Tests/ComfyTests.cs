@@ -59,7 +59,7 @@ internal sealed class FakeComfyServer : IDisposable
       "LoadImage": {"input": {"required": {"image": [["example.png"], {"image_upload": true}]}}, "output": ["IMAGE", "MASK"], "output_name": ["IMAGE", "MASK"],
         "name": "LoadImage", "display_name": "Load Image", "category": "image", "python_module": "nodes", "output_node": false},
       "ImageScaleToTotalPixels": {"input": {"required": {"image": ["IMAGE", {}], "upscale_method": [["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], {}],
-        "megapixels": ["FLOAT", {"default": 1.0, "min": 0.01, "max": 16.0}]}}, "output": ["IMAGE"], "output_name": ["IMAGE"],
+        "megapixels": ["FLOAT", {"default": 1.0, "min": 0.01, "max": 16.0}], "resolution_steps": ["INT", {"advanced": true, "default": 1, "min": 1, "max": 256}]}}, "output": ["IMAGE"], "output_name": ["IMAGE"],
         "name": "ImageScaleToTotalPixels", "display_name": "Scale Image to Total Pixels", "category": "image/upscaling", "python_module": "comfy_extras.nodes_upscale_model", "output_node": false},
       "VAEEncode": {"input": {"required": {"pixels": ["IMAGE", {}], "vae": ["VAE", {}]}}, "output": ["LATENT"], "output_name": ["LATENT"],
         "name": "VAEEncode", "display_name": "VAE Encode", "category": "latent", "python_module": "nodes", "output_node": false},
@@ -363,6 +363,21 @@ public class ComfyWorkflowTests
         Assert.Empty(Load(wf.Replace("SCALE", "1")).Validate(Library));
         Assert.Empty(Load(wf.Replace("SCALE", "0.50")).Validate(Library));
         Assert.Contains("isn't one of its choices", Assert.Single(Load(wf.Replace("SCALE", "3")).Validate(Library)));
+    }
+
+    [Fact]
+    public void Inputs_the_editor_hides_get_their_defaults_and_others_stay_missing()
+    {
+        // ImageScaleToTotalPixels got resolution_steps in a later ComfyUI; a workflow written before is still run.
+        var wf = Load("""
+            {"1": {"class_type": "LoadImage", "inputs": {"image": "example.png"}},
+             "2": {"class_type": "ImageScaleToTotalPixels", "inputs": {"image": ["1", 0], "upscale_method": "lanczos"}},
+             "3": {"class_type": "SaveImage", "inputs": {"images": ["2", 0], "filename_prefix": "x"}}}
+            """);
+        Assert.Equal(2, wf.Validate(Library).Count(p => p.Contains("is missing")));
+        Assert.Equal(["2.resolution_steps = 1"], wf.FillAdvancedDefaults(Library));
+        // megapixels is in sight in the editor: leaving it out is the workflow's to fix.
+        Assert.Contains("required input \"megapixels\" is missing", Assert.Single(wf.Validate(Library)));
     }
 
     [Fact]

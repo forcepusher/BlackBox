@@ -84,8 +84,8 @@ foreach ($name in $Tasks) {
     if (-not $p.WaitForExit($MinutesPerTask * 60 * 1000)) { Stop-Process -Id $p.Id -Force }
     $secs = [int]((Get-Date) - $start).TotalSeconds
     $text = Get-Content $log -Raw -Encoding UTF8
-    $files = @([regex]::Matches($text, '(?m)^\[files\] .*$') | ForEach-Object { $_.Value.Substring(8) -split ' \| ' } |
-        Where-Object { (Test-Path $_) -and (Get-Item $_).LastWriteTime -ge $start.AddSeconds(-5) } | Select-Object -Unique)
+    $files = @([regex]::Matches($text, '(?m)^\[files\] .*$') | ForEach-Object { $_.Value.Substring(8).TrimEnd() -split ' \| ' } |
+        Where-Object { (Test-Path -LiteralPath $_) -and (Get-Item -LiteralPath $_).LastWriteTime -ge $start.AddSeconds(-5) } | Select-Object -Unique)
     # The comfyui tool's line about each file: "C:\...\x.mp4: video 640x640, 81 frames at 16 fps (5.1 s), no sound, 1.4 MB".
     $checks = @()
     $match = $files | Where-Object { $kinds[[IO.Path]::GetExtension($_).ToLowerInvariant()] -eq $t.Kind }
@@ -124,7 +124,7 @@ foreach ($name in $Tasks) {
 }
 
 $md = @('| Task | Passed | Time | Model calls | Tool errors | Checks | File |', '| --- | --- | --- | --- | --- | --- | --- |')
-$md += $rows | ForEach-Object { "| $($_.Task) | $($_.Passed) | $([int]($_.Seconds / 60)):$('{0:00}' -f ($_.Seconds % 60)) | $($_.ModelCalls) | $($_.ToolErrors) | $($_.Checks) | $($_.File) |" }
+$md += $rows | ForEach-Object { "| $($_.Task) | $($_.Passed) | $([math]::Floor($_.Seconds / 60)):$('{0:00}' -f ($_.Seconds % 60)) | $($_.ModelCalls) | $($_.ToolErrors) | $($_.Checks) | $($_.File) |" }
 Set-Content -Encoding utf8 (Join-Path $out 'results.md') $md
 $md | ForEach-Object { Write-Host $_ }
 Write-Host "Logs: $out"
