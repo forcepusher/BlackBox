@@ -236,18 +236,11 @@ public sealed class AppSettings
     public WindowPlacement? Window { get; set; }
 
     public AppSettings Clone() =>
-        JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(this, SettingsStore.JsonOptions), SettingsStore.JsonOptions)!;
+        JsonSerializer.Deserialize(JsonSerializer.Serialize(this, SettingsJson.Default.AppSettings), SettingsJson.Default.AppSettings)!;
 }
 
 public sealed class SettingsStore(AppPaths paths)
 {
-    internal static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() },
-    };
-
     public AppSettings Load()
     {
         try
@@ -256,10 +249,10 @@ public sealed class SettingsStore(AppPaths paths)
                 return new AppSettings();
 
             var text = File.ReadAllText(paths.SettingsFile);
-            var settings = JsonSerializer.Deserialize<AppSettings>(Migrate(text), JsonOptions) ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize(Migrate(text), SettingsJson.Default.AppSettings) ?? new AppSettings();
             // Rewrite the file if it still has keys from older versions, so it only ever holds
             // settings that exist. A folder that can't be written to (a read-only stick) can wait.
-            if (JsonSerializer.Serialize(settings, JsonOptions) != text)
+            if (JsonSerializer.Serialize(settings, SettingsJson.Default.AppSettings) != text)
                 TryWrite(() => Save(settings));
             return settings;
         }
@@ -297,5 +290,10 @@ public sealed class SettingsStore(AppPaths paths)
         return root.ToJsonString();
     }
 
-    public void Save(AppSettings settings) => AtomicFile.Write(paths.SettingsFile, JsonSerializer.Serialize(settings, JsonOptions));
+    public void Save(AppSettings settings) => AtomicFile.Write(paths.SettingsFile, JsonSerializer.Serialize(settings, SettingsJson.Default.AppSettings));
 }
+
+/// <summary>settings.json's format, generated at build time so trimmed builds can read and write it without reflection.</summary>
+[JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, UseStringEnumConverter = true)]
+[JsonSerializable(typeof(AppSettings))]
+internal sealed partial class SettingsJson : JsonSerializerContext;

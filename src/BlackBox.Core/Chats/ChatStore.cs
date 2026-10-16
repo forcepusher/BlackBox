@@ -58,14 +58,6 @@ public sealed class ChatHeader
 /// <summary>Every chat is its own file, Data/chats/&lt;id&gt;.json, written whenever the chat changes.</summary>
 public sealed class ChatStore(string dir)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
-        IgnoreReadOnlyProperties = true,
-        Converters = { new JsonStringEnumConverter() },
-    };
-
     public string Folder { get; } = dir;
 
     public static string NewId() => DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..6];
@@ -125,7 +117,7 @@ public sealed class ChatStore(string dir)
     {
         try
         {
-            var chat = JsonSerializer.Deserialize<SavedChat>(File.ReadAllText(PathOf(id)), JsonOptions);
+            var chat = JsonSerializer.Deserialize(File.ReadAllText(PathOf(id)), ChatJson.Default.SavedChat);
             if (chat is not null) chat.Id = id;
             return chat;
         }
@@ -136,7 +128,7 @@ public sealed class ChatStore(string dir)
     }
 
     /// <summary>Writes the chat; through a temporary file, so a crash mid-write leaves the previous version.</summary>
-    public void Save(SavedChat chat) => AtomicFile.Write(PathOf(chat.Id), JsonSerializer.Serialize(chat, JsonOptions));
+    public void Save(SavedChat chat) => AtomicFile.Write(PathOf(chat.Id), JsonSerializer.Serialize(chat, ChatJson.Default.SavedChat));
 
     public void Delete(string id)
     {
@@ -170,3 +162,8 @@ public sealed class ChatStore(string dir)
         return copy;
     }
 }
+
+/// <summary>The saved chats' format, generated at build time so trimmed builds can read and write it without reflection.</summary>
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault, IgnoreReadOnlyProperties = true, UseStringEnumConverter = true)]
+[JsonSerializable(typeof(SavedChat))]
+internal sealed partial class ChatJson : JsonSerializerContext;

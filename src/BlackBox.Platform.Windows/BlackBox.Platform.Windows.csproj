@@ -6,6 +6,8 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>BlackBox.Platform.Windows</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- The published exe is trimmed: flag code that needs reflection while it is written. -->
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
   </PropertyGroup>
 
   <ItemGroup>

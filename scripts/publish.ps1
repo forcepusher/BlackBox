@@ -3,8 +3,10 @@
   Builds the portable BlackBox: no installer, nothing written outside its own folder.
 
 .DESCRIPTION
-  Default: one BlackBox.exe. The native UI libraries (Skia, HarfBuzz, ANGLE) are embedded and
-  unpacked into Data/runtime next to the exe on first run. Copy just the exe anywhere and run it.
+  Default: one BlackBox.exe, trimmed to the parts of .NET and the libraries BlackBox uses and
+  compressed (about 26 MB instead of 102). The native UI libraries (Skia, HarfBuzz, ANGLE) are
+  embedded and unpacked into Data/runtime next to the exe on first run. Copy just the exe anywhere
+  and run it.
 
   -Folder: the classic self-contained folder (exe + DLLs), handy for debugging.
 
@@ -35,10 +37,15 @@ if ($Folder) {
     return
 }
 
+# Trimming needs code that works without reflection: JSON goes through source-generated contexts
+# (SettingsJson, ChatJson); the build lists anything that doesn't as IL2026 warnings.
+$singleFile = @("-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=false",
+    "-p:PublishTrimmed=true", "-p:TrimMode=full", "-p:EnableCompressionInSingleFile=true")
+
 # 1) Single-file publish to a staging folder to collect the native libraries it leaves beside the exe.
 $stage = Join-Path ([IO.Path]::GetTempPath()) "blackbox-publish-$([guid]::NewGuid().ToString('N'))"
 try {
-    Publish (Join-Path $stage "first") @("-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=false")
+    Publish (Join-Path $stage "first") $singleFile
     $payloadDir = Join-Path $stage "payload"
     New-Item -ItemType Directory -Force $payloadDir | Out-Null
     Get-ChildItem (Join-Path $stage "first") -File | Where-Object { $_.Extension -in ".dll", ".so", ".dylib" } |
@@ -49,7 +56,7 @@ try {
 
     # 2) Publish again with that payload embedded, and keep only the exe.
     $second = Join-Path $stage "second"
-    Publish $second @("-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=false", "-p:RuntimePayload=$zip")
+    Publish $second ($singleFile + "-p:RuntimePayload=$zip")
     New-Item -ItemType Directory -Force $publishRoot | Out-Null
     $exe = Join-Path $publishRoot "BlackBox.exe"
     Copy-Item (Join-Path $second "BlackBox.exe") $exe -Force

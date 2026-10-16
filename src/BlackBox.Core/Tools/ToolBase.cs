@@ -171,7 +171,7 @@ public abstract class Tool
         foreach (var (name, prop, req) in props)
         {
             properties[name] = prop;
-            if (req) required.Add(name);
+            if (req) required.Add((JsonNode)name);
         }
         return new JsonObject { ["type"] = "object", ["properties"] = properties, ["required"] = required };
     }
