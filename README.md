@@ -107,11 +107,16 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   message from the user ends the wait while the job goes on (`action=status` with its id picks it
   up again). The files come back with their paths, `save_to` copies them where the task wants them,
   and the model gets a look at them (below) to check its work.
-- **ComfyUI itself.** When it isn't running, BlackBox starts the one used last, or finds one
-  (the ComfyUI Desktop app, then `Data/tools`, every drive and the user's folders a few levels deep;
-  the one used most recently wins) and starts it hidden, its output in `Data/comfyui/server.log`,
-  without the browser page the portable build opens at every start. A PC without one gets it
-  with `action=install`: the portable build that suits the graphics card Windows lists (NVIDIA's, the
+- **ComfyUI itself.** The user's own ComfyUI comes first, whatever kind it is. One that runs (at
+  the address used last, or on ComfyUI's usual ports: the portable build's 8188, the Desktop app's
+  8000) is used as it runs, and the first answer says which one it is. Otherwise BlackBox starts the
+  one used last, or finds one: the ComfyUI Desktop app, `Data/tools`, the folders Stability Matrix
+  and Pinokio install it in, then every drive and the user's folders a few levels deep, a portable
+  build's ComfyUI folder one level deeper still; portable builds, installs with a venv and plain git
+  clones all count, and the one used most recently wins. It starts it hidden (on the CPU when its
+  PyTorch is built for a graphics card the PC hasn't got), its output in `Data/comfyui/server.log`,
+  without the browser page the portable build opens at every start. Only a PC without one gets one
+  with `action=install` (which says so and downloads nothing when there is one): the portable build that suits the graphics card Windows lists (NVIDIA's, the
   CUDA 12.6 one for a GTX 10 series or older, AMD's for a Radeon RX 6000 or newer on Windows 11,
   Intel's for an Arc), else NVIDIA's run on the CPU (`--cpu`, as ComfyUI's README says; started
   without it, its CUDA PyTorch crashed on the laptop's Iris Xe). It goes into `Data/tools`: the
@@ -189,6 +194,15 @@ plain message:
 | In the app: a beach photo pasted into the box, "Turn this photo into a watercolor painting." | installed ComfyUI (the NVIDIA build, started with `--cpu`), `blackbox/image_to_image`, downloaded the SD 1.5 checkpoint the template links to | a watercolor of the same beach, rocks, runner and reflections, 704×440 | 12:10 after the archive was in place (below), 4:45 of it generating | 15 (4) |
 | "Make a picture of a cozy wooden cabin in a snowy forest at dusk with the DreamShaper 8 model." | `find_models` found DreamShaper 8 on Civitai; downloaded it (2.0 GB in 1:39, SHA-256 checked); `blackbox/text_to_image` | a 768×512 picture | 10:57, 7:25 of it generating | 7 (0) |
 | The watercolor again, from the command line (`--attach`), in a Data folder of its own with no ComfyUI | installed ComfyUI (2 GB from GitHub, unpacked and started in 3:38), downloaded SD 1.5 (2:25, named and checked), `blackbox/image_to_image` | a watercolor that keeps the photo's layout (0.88, see below) | 12:55 | 8 (2) |
+
+With the user's own portable ComfyUI on the same laptop instead, in a fresh Data folder each time:
+running already (as they start it, with their SD 1.5 checkpoint), "Make a picture of a red fox
+sitting in fresh snow, as a watercolor." used it as it ran ("Using the ComfyUI that already runs
+at http://127.0.0.1:8188/ (from …); it keeps running after this task."), installed nothing and
+left it running (4:35, 4 tool calls, 1 error: a node id guessed before the template was looked
+at); not running and in Downloads, "Make a picture of a lighthouse on a cliff at sunset, as an oil
+painting." found it, started it hidden with `--cpu` and without the browser, used it and closed it
+after (5:00, 3 tool calls, no errors).
 
 The last row is `./scripts/comfy-test.ps1 -Root <a fresh folder> -Tasks img2img`; its check shrinks
 the photo and the result to 32×32 in grey and needs their correlation to be at least 0.4 (a picture

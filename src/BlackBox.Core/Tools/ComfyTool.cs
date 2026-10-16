@@ -19,8 +19,9 @@ public sealed class ComfyTool : Tool
     public override string Name => "comfyui";
 
     public override string Description =>
-        "Make pictures, video, sound, music, speech and 3D models with ComfyUI on this PC; it is found and started for you, " +
-        "and action=install installs it when the PC has none (the portable build that suits its graphics card, or its CPU). " +
+        "Make pictures, video, sound, music, speech and 3D models with ComfyUI on this PC. The user's own is found and used " +
+        "(one already running, a portable build, the Desktop app, an install of their own), started for you if needed; " +
+        "only when the PC has none, action=install installs one (the portable build that suits its graphics card, or its CPU). " +
         "A workflow is JSON in ComfyUI's API format: {\"node id\": {\"class_type\": \"…\", \"inputs\": {\"name\": a value, or [\"other node id\", output index]}}}. " +
         "Never write node, input or model names from memory: start from a template (action=templates with search finds them; with name it shows one " +
         "as a workflow, saved to a file you can edit), or look names up (action=nodes with search or names, action=models). " +
@@ -136,7 +137,7 @@ public sealed class ComfyTool : Tool
 
     private static async Task<ToolResult> InstallAsync(JsonObject args, ComfyHub hub, ToolContext ctx, CancellationToken ct)
     {
-        var (_, said) = await hub.InstallAsync(GetString(args, "folder"), ctx.Progress, ct).ConfigureAwait(false);
+        var said = await hub.InstallAsync(GetString(args, "folder"), ctx.Progress, ct).ConfigureAwait(false);
         var notes = new List<string> { said };
         // Started at once, so a problem shows now rather than at the first job.
         var api = await hub.ConnectAsync(null, notes, ctx.Progress, ct).ConfigureAwait(false);

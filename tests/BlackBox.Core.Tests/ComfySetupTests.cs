@@ -203,6 +203,61 @@ public class ComfyHardwareTests
     }
 }
 
+public class ComfyFindTests : IDisposable
+{
+    private readonly string _root = Directory.CreateTempSubdirectory("bb-find-").FullName;
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
+    }
+
+    /// <summary>A ComfyUI folder (main.py, nodes.py, comfy\) at <paramref name="code"/>, and the Python beside it, if any.</summary>
+    private string Code(string code, string? python = null)
+    {
+        var dir = Path.Combine(_root, code);
+        Directory.CreateDirectory(Path.Combine(dir, "comfy"));
+        File.WriteAllText(Path.Combine(dir, "main.py"), "");
+        File.WriteAllText(Path.Combine(dir, "nodes.py"), "");
+        if (python is not null)
+        {
+            var exe = Path.Combine(_root, python);
+            Directory.CreateDirectory(Path.GetDirectoryName(exe)!);
+            File.WriteAllText(exe, "");
+        }
+        return dir;
+    }
+
+    [Fact]
+    public void Portable_builds_installs_with_a_venv_and_launchers_installs_are_found()
+    {
+        // A portable folder on the last level looked at: its ComfyUI folder is one deeper.
+        var portable = Code(@"AI\Tools\ComfyUI_windows_portable\ComfyUI", @"AI\Tools\ComfyUI_windows_portable\python_embeded\python.exe");
+        var venv = Code(@"Projects\ComfyUI", @"Projects\ComfyUI\venv\Scripts\python.exe");
+        // Pinokio keeps it in api\comfy.git\app with an env, Stability Matrix in Packages\ComfyUI with a venv.
+        var pinokio = Code(@"pinokio\api\comfy.git\app", @"pinokio\api\comfy.git\app\env\Scripts\python.exe");
+        var plain = Code(@"src\ComfyUI");
+
+        var found = ComfyInstall.Find(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken,
+            firstLookIn: [Path.Combine(_root, "pinokio", "api")], scan: [_root]);
+
+        Assert.Contains(found, f => f.CodeDir == portable && f.Kind == ComfyInstallKind.Portable && f.Program.EndsWith(@"python_embeded\python.exe"));
+        Assert.Contains(found, f => f.CodeDir == venv && f.Kind == ComfyInstallKind.Venv && f.Program.EndsWith(@"venv\Scripts\python.exe"));
+        Assert.Contains(found, f => f.CodeDir == pinokio && f.Kind == ComfyInstallKind.Venv && f.Program.EndsWith(@"env\Scripts\python.exe"));
+        Assert.Contains(found, f => f.CodeDir == plain && f.Kind == ComfyInstallKind.SystemPython);
+        Assert.Equal(4, found.Count);
+    }
+
+    [Fact]
+    public void A_folder_named_by_the_user_is_any_of_its_levels()
+    {
+        var code = Code(@"ComfyUI_windows_portable\ComfyUI", @"ComfyUI_windows_portable\python_embeded\python.exe");
+        Assert.Equal(code, ComfyInstall.FromFolder(Path.Combine(_root, "ComfyUI_windows_portable"))!.CodeDir);
+        Assert.Equal(code, ComfyInstall.FromFolder(code)!.CodeDir);
+        Assert.Null(ComfyInstall.FromFolder(_root));
+    }
+}
+
 public class ComfyModelNameTests
 {
     [Theory]
@@ -540,6 +595,16 @@ public class ComfyModelToolTests : IDisposable
         Assert.Equal("uploaded.png", (string?)prompt["4"]!["inputs"]!["image"]);
         Assert.Equal(0.55, (double?)prompt["7"]!["inputs"]!["denoise"]);
         Assert.Equal("v1-5-pruned-emaonly-fp16.safetensors", (string?)prompt["1"]!["inputs"]!["ckpt_name"]);
+    }
+
+    [Fact]
+    public async Task A_comfyui_that_runs_already_is_used_as_it_is_and_none_is_installed_beside_it()
+    {
+        var install = await Call(new ComfyTool(), """{"action": "install"}""");
+        Assert.False(install.IsError, install.Text);
+        Assert.Contains($"A ComfyUI runs already, at {_comfy.Url}; nothing was downloaded", install.Text);
+        Assert.Contains($"Using the ComfyUI that already runs at {_comfy.Url} (from {_comfy.CodeDir}); it keeps running after this task.", install.Text);
+        Assert.False(Directory.Exists(Path.Combine(_home, "Data", "tools", "ComfyUI_windows_portable")));
     }
 
     [Fact]
