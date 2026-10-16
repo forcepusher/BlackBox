@@ -124,7 +124,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         ApprovalMode.AskAll => "I ask for your OK before every click, key press, command and file change.",
         ApprovalMode.AskRisky => "I ask for your OK before I run a command or change a file.",
-        _ => "I don't ask before I act. To approve each step first, change \"Ask me first\" in Settings.",
+        _ => "I don't ask before I act. \"Ask me first\" in Settings changes that.",
     };
 
     public void AttachHostWindow(nint handle)

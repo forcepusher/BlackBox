@@ -495,7 +495,10 @@
           </ItemsControl.DataTemplates>
         </ItemsControl>
 
-        <!-- What BlackBox can do and how to stop it, until the chat is used -->
+        <!-- What BlackBox can do and how to stop it, until the chat is used. Short enough to take in
+             at a glance: down to the window's MinWidth every sentence of the two notes keeps to one
+             line and every card's text to two. The details show where they come up instead: the
+             pause line while the user types, Continue after a stop, the paperclip's tooltip. -->
         <StackPanel IsVisible="{Binding ShowIntro}" MaxWidth="640" Spacing="14">
           <StackPanel Spacing="6">
             <Image Source="/Assets/blackbox.png" Width="40" Height="40" Opacity="0.8" RenderOptions.BitmapInterpolationMode="HighQuality" />
@@ -511,9 +514,9 @@
                 <Border Classes="key" Margin="0,0,8,0">
                   <TextBlock Text="Pause/Break" />
                 </Border>
-                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Text="stops me at any time, whatever window is in front. So does the Stop button. Continue then carries on where I stopped." />
+                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Text="stops me at any time, in any window." />
               </DockPanel>
-              <TextBlock Classes="muted" TextWrapping="Wrap" Text="While I work I use your mouse and keyboard, so leave them to me. To change or add to the task meanwhile, write it here and press Enter: I read it at my next step. My clicks and key presses pause while you type; click Resume, or stop typing for 15 seconds, to let me carry on without sending." />
+              <TextBlock Classes="muted" TextWrapping="Wrap" Text="While I work I use your mouse and keyboard. You can still write to me: I pause while you type." />
               <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding ApprovalNote}" />
             </StackPanel>
           </Border>
@@ -530,7 +533,7 @@
                 </Border>
               </StackPanel>
               <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
-                         Text="in the box below pastes a screenshot, a copied picture or files from Explorer into your message. You can also drag files and pictures onto this window, or pick them with the paperclip. I see the pictures and work with the files." />
+                         Text="pastes a screenshot or files into your message; you can also drop them here." />
             </DockPanel>
           </Border>
 
@@ -542,7 +545,7 @@
                   <TextBlock Classes="capability" Text="Use any app" />
                   <TextBlock Classes="muted" TextWrapping="Wrap" Text="I see the screen and use the mouse and keyboard, in any program." />
                   <TextBlock Classes="muted warning" TextWrapping="Wrap" IsVisible="{Binding !CanSeeScreen}"
-                             Text="The model in use can't see images: pick one that can at the top." />
+                             Text="This model can't see images: pick another." />
                 </StackPanel>
               </DockPanel>
             </Border>
@@ -560,7 +563,7 @@
                 <PathIcon Classes="capability" Data="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
                 <StackPanel Spacing="3">
                   <TextBlock Classes="capability" Text="Documents" />
-                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I write and edit Word, Excel, PowerPoint and PDF files, no Office needed, and read pictures." />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I write and edit Word, Excel, PowerPoint and PDF files, no Office needed." />
                 </StackPanel>
               </DockPanel>
             </Border>
@@ -569,7 +572,7 @@
                 <PathIcon Classes="capability" Data="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z" />
                 <StackPanel Spacing="3">
                   <TextBlock Classes="capability" Text="Get what a job needs" />
-                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I download the programs a job needs and connect their MCP servers myself, like Blender's for 3D modelling." />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I download the programs a job needs and connect their MCP servers, like Blender's." />
                 </StackPanel>
               </DockPanel>
             </Border>
@@ -578,7 +581,7 @@
                 <PathIcon Classes="capability" Data="M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z" />
                 <StackPanel Spacing="3">
                   <TextBlock Classes="capability" Text="Chat for you" />
-                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I answer people in your chat apps while you're away, and say I'm your assistant if asked." />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I reply in your chat apps while you're away, and say I'm your assistant if asked." />
                 </StackPanel>
               </DockPanel>
             </Border>
