@@ -205,7 +205,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             if (value == server.AutoContext) return;
             // The slider starts where Auto left it (on a stop), unless a size was picked by hand before.
             if (!value && server.ManualContextSize <= 0)
-                server.ManualContextSize = ContextStops[ContextSizes.IndexOf(ContextStops, server.DetectedContextSize)];
+                server.ManualContextSize = ContextStops[ContextSizes.IndexOf(ContextStops, server.ContextSize)];
             server.AutoContext = value;
             SaveSettings();
             OnPropertyChanged();
@@ -284,6 +284,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         {
             var server = _settings.Server;
             var reported = server.ContextReported ? $"The server runs this model with {server.DetectedContextSize:N0} tokens." : null;
+            if (server.AutoContext && server.ContextHosted && server.ContextSize < server.DetectedContextSize)
+                return $"The service takes up to {server.DetectedContextSize:N0} tokens for this model. BlackBox uses {server.ContextSize:N0} of them, "
+                       + "because every step sends the whole conversation, screenshots and all, again. Untick Auto to use more.";
             if (server.AutoContext)
                 return reported is not null ? $"{reported} BlackBox uses all of it. Untick Auto to use less."
                     : _modelNotLoaded ? "The model isn't loaded on the server yet, so its context size isn't known. Your first message loads it, and the size shows here."
@@ -366,7 +369,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var server = _settings.Server;
         if (string.IsNullOrWhiteSpace(server.BaseUrl))
         {
-            SetStatus(ServerState.Unknown, "Not set up", "Enter the address of your model server (for example LM Studio at http://localhost:1234/v1) at the top.");
+            SetStatus(ServerState.Unknown, "Not set up", "Enter the address of your model server (for example LM Studio at http://localhost:1234/v1) at the top, " +
+                                                         "or use Kilo's free online models, which need no account.");
             return;
         }
 
@@ -395,23 +399,27 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         SetModels(probe.Models);
         OnPropertyChanged(nameof(ModelToolTip));
+        var kilo = KiloGateway.Is(server.BaseUrl);
         if (!probe.Reachable)
         {
-            SetStatus(ServerState.Failed, "Offline", $"{probe.Message} Check the address at the top and that the server is running.");
+            SetStatus(ServerState.Failed, "Offline", $"{probe.Message} Check the address at the top and that the server is running" +
+                                                     (kilo ? "." : ", or use Kilo's free online models, which need no account."));
             return;
         }
         if (probe.Model is null)
         {
-            SetStatus(ServerState.Failed, "No models", string.IsNullOrEmpty(server.Model)
-                ? "The server is running but offers no models. Load or download one in LM Studio."
-                : $"The server doesn't offer \"{server.Model}\" anymore, nor any other model to chat with. Load or download one in LM Studio.");
+            SetStatus(ServerState.Failed, "No models", kilo
+                ? "Kilo offers no free model to chat with right now. Try again later, or enter your own server's address at the top."
+                : string.IsNullOrEmpty(server.Model)
+                    ? "The server is running but offers no models. Load or download one in LM Studio."
+                    : $"The server doesn't offer \"{server.Model}\" anymore, nor any other model to chat with. Load or download one in LM Studio.");
             return;
         }
 
         if (!quiet || server.ModelInUse != before)
         {
             // Trust what the server reports; neither the context size (it shows by the slider) nor image support is saved.
-            server.SetDetectedContext(probe.LoadedContext);
+            server.SetDetectedContext(probe.LoadedContext, probe.ContextHosted);
             _modelNotLoaded = probe.Loaded == false;
             OnContextChanged();
         }
@@ -461,6 +469,39 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         ShowSetupBanner = setup is not null;
         SetupText = setup ?? "";
         SetupTitle = title;
+        OffersKilo = setup is not null && state is ServerState.Failed or ServerState.Unknown && !KiloGateway.Is(_settings.Server.BaseUrl);
+    }
+
+    /// <summary>The setup banner's button for Kilo's free models, while BlackBox has no server that answers.</summary>
+    [ObservableProperty]
+    private bool _offersKilo;
+
+    /// <summary>
+    /// Switches to Kilo's free models (see <see cref="KiloGateway"/>): its address, its best free
+    /// model and no key, since a key meant for another server is none of Kilo's business. The
+    /// context goes back to Auto, which on Kilo is 100k of the model's million.
+    /// </summary>
+    [RelayCommand]
+    private void UseKilo()
+    {
+        var server = _settings.Server;
+        server.BaseUrl = KiloGateway.Address;
+        server.ApiKey = "";
+        server.Model = KiloGateway.Model;
+        server.AutoModel = null;
+        server.AutoContext = true;
+        SaveSettings();
+        // In the list before the dropdown is told, as at startup: a selection the ComboBox can't find it doesn't take.
+        _refreshingModels = true;
+        if (!Models.Contains(KiloGateway.Model))
+            Models.Insert(0, KiloGateway.Model);
+        _refreshingModels = false;
+        OnPropertyChanged(nameof(ServerAddress));
+        OnPropertyChanged(nameof(ApiKey));
+        OnPropertyChanged(nameof(SelectedModel));
+        OnPropertyChanged(nameof(AutoContext));
+        OnContextChanged();
+        _ = CheckServerAsync();
     }
 
     // ---- files going with the next message ------------------------------------------
@@ -682,11 +723,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             // LM Studio loads models on first use; do that now so we know the real context size.
             using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10)))
             {
-                var context = await ServerProbe.EnsureLoadedAsync(probeHttp, server,
+                var facts = await ServerProbe.EnsureLoadedAsync(probeHttp, server,
                     () => Dispatcher.UIThread.Post(() => AddNotice("Loading the model on the server…", isError: false)), ct);
-                if (context is not null)
+                if (facts.Context is { } context)
                 {
-                    server.SetDetectedContext(context);
+                    server.SetDetectedContext(context, facts.Hosted);
                     _modelNotLoaded = false;
                     OnContextChanged();
                 }

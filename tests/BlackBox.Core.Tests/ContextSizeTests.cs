@@ -37,6 +37,29 @@ public class ContextSizeTests
     }
 
     [Fact]
+    public void Of_a_hosted_services_maximum_auto_uses_100k_and_a_manual_size_can_go_beyond()
+    {
+        // Kilo lists 1M for its free Nemotron: at that size a request would grow far past the 20 MB it takes.
+        var server = new ServerSettings();
+        server.SetDetectedContext(1_000_000, hosted: true);
+        Assert.Equal(ServerSettings.HostedContextSize, server.ContextSize);
+        Assert.True(server.ContextReported);
+        Assert.Equal(1_000_000, server.DetectedContextSize); // where the slider ends
+
+        server.SetDetectedContext(65536, hosted: true); // a smaller maximum is used whole
+        Assert.Equal(65536, server.ContextSize);
+
+        server.SetDetectedContext(1_000_000, hosted: true);
+        server.AutoContext = false;
+        server.ManualContextSize = 512 * 1024;
+        Assert.Equal(512 * 1024, server.ContextSize);
+
+        server.AutoContext = true;
+        server.SetDetectedContext(1_000_000); // a server of one's own that runs the model with 1M
+        Assert.Equal(1_000_000, server.ContextSize);
+    }
+
+    [Fact]
     public void Unticking_auto_without_ever_picking_a_size_keeps_the_detected_one()
     {
         var server = new ServerSettings { AutoContext = false };

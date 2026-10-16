@@ -20,7 +20,7 @@ public class ServerIntegrationTests
         Assert.SkipWhen(Url is null || Model is null, "Set BB_SERVER_URL and BB_SERVER_MODEL to run.");
         var server = new ServerSettings { BaseUrl = Url!, Model = Model! };
         var http = LlmHttp.Create(TimeSpan.FromMinutes(20));
-        var context = await ServerProbe.EnsureLoadedAsync(http, server, null, CancellationToken.None);
+        var context = (await ServerProbe.EnsureLoadedAsync(http, server, null, CancellationToken.None)).Context;
         Assert.NotNull(context);
         return (server, http, context!.Value);
     }

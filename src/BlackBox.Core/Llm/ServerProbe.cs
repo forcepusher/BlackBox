@@ -13,11 +13,16 @@ namespace BlackBox.Core.Llm;
 /// <param name="Model">The model to use: the configured one while the server offers it, else the strongest it offers (see <see cref="ModelChoice"/>); null when there is none.</param>
 /// <param name="AutoPicked">True when <paramref name="Model"/> was chosen here, because none was configured or the server doesn't offer it.</param>
 /// <param name="ModelDetails">For a model chosen here, its size, quantization and benchmark score ("27B, 6-bit, 79.8% on Terminal-Bench 2.1") as far as known.</param>
+/// <param name="ContextHosted"><paramref name="LoadedContext"/> is the most a hosted service takes for the model, not a size a server runs it with (see <see cref="ModelFacts.Hosted"/>).</param>
 public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, int? LoadedContext, bool? Vision, string Message, bool? Loaded = null, string? BaseUrl = null,
-    string? Model = null, bool AutoPicked = false, string? ModelDetails = null);
+    string? Model = null, bool AutoPicked = false, string? ModelDetails = null, bool ContextHosted = false);
 
 /// <summary>What the server says about the model in use; nulls where it doesn't say.</summary>
-public readonly record struct ModelFacts(int? Context, bool? Loaded, bool? Vision);
+/// <param name="Hosted">
+/// The context is the most a hosted service takes for the model, from an OpenRouter-style list
+/// (context_length: 1M for Kilo's free Nemotron), not the size a server of one's own runs it with.
+/// </param>
+public readonly record struct ModelFacts(int? Context, bool? Loaded, bool? Vision, bool Hosted = false);
 
 /// <summary>
 /// Checks the configured server: is it up, which models does it offer, which of them to use, and
@@ -31,10 +36,12 @@ public readonly record struct ModelFacts(int? Context, bool? Loaded, bool? Visio
 /// <item>Ollama: <c>GET /api/ps</c> → <c>context_length</c> of the running model, else <c>POST /api/show</c> →
 /// <c>num_ctx</c> in <c>parameters</c>, else <c>model_info.*.context_length</c></item>
 /// <item>vLLM: <c>GET /v1/models</c> → <c>max_model_len</c></item>
-/// <item>OpenRouter and similar: <c>GET /v1/models</c> → <c>context_length</c></item>
+/// <item>OpenRouter, Kilo and similar: <c>GET /v1/models</c> → <c>context_length</c>, the model's
+/// maximum there, of which BlackBox uses <see cref="ServerSettings.HostedContextSize"/> on Auto</item>
 /// </list>
 /// The first that answers wins. Anything else gets <see cref="ServerSettings.FallbackContextSize"/>;
 /// if that is too big, the server's "too long" error names the real size and the agent adjusts.
+/// OpenRouter-style lists also say which models take images, call tools and cost nothing.
 /// </remarks>
 public static class ServerProbe
 {
@@ -59,24 +66,24 @@ public static class ServerProbe
             if (attempts[i].Result.Models is not { } models)
                 continue;
             var found = new ServerSettings { BaseUrl = candidates[i], ApiKey = server.ApiKey };
-            var catalog = await CatalogAsync(http, found, models, ct).ConfigureAwait(false);
+            var catalog = Usable(await CatalogAsync(http, found, models, ct).ConfigureAwait(false), server.ApiKey);
             found.Model = ModelChoice.Choose(server.Model, catalog) ?? "";
             var auto = found.Model.Length > 0 && found.Model != server.Model;
-            var facts = await TryContextAsync(http, found, ct).ConfigureAwait(false);
+            var facts = await TryContextAsync(http, found, ct, models).ConfigureAwait(false);
             return new ProbeResult(true, catalog.Where(m => m.Chat).Select(m => m.Id).ToList(), facts.Context, facts.Vision,
                 models.Count == 0 ? "Connected, but the server lists no models." : "Connected.", facts.Loaded, candidates[i],
-                found.Model.Length > 0 ? found.Model : null, auto, auto ? ModelChoice.Describe(catalog.First(m => m.Id == found.Model)) : null);
+                found.Model.Length > 0 ? found.Model : null, auto, auto ? ModelChoice.Describe(catalog.First(m => m.Id == found.Model)) : null, facts.Hosted);
         }
         // The plain-http error reads better than a failed TLS handshake.
         var http0 = Math.Max(0, candidates.ToList().FindIndex(c => c.StartsWith("http://", StringComparison.OrdinalIgnoreCase)));
         return new ProbeResult(false, [], null, null, "Can't reach the server: " + attempts[http0].Result.Error);
     }
 
-    private static async Task<(IReadOnlyList<string>? Models, string? Error)> ListModelsAsync(HttpClient http, string baseUrl, string apiKey, CancellationToken ct)
+    private static async Task<(IReadOnlyList<JsonObject>? Models, string? Error)> ListModelsAsync(HttpClient http, string baseUrl, string apiKey, CancellationToken ct)
     {
         try
         {
-            return (await new OpenAiChatClient(http, baseUrl, apiKey).ListModelsAsync(ct).ConfigureAwait(false), null);
+            return (await new OpenAiChatClient(http, baseUrl, apiKey).ListModelEntriesAsync(ct).ConfigureAwait(false), null);
         }
         // Anything from a web page where the model list should be to a timeout: not this address.
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
@@ -86,12 +93,26 @@ public static class ServerProbe
     }
 
     /// <summary>
+    /// The models that answer with this key. Without one, a service that sells most of its models
+    /// and gives some away (Kilo: 18 free of 398 on 2026-10-16) answers only for the free ones, so
+    /// the others are neither listed nor picked.
+    /// </summary>
+    private static IReadOnlyList<ModelInfo> Usable(IReadOnlyList<ModelInfo> catalog, string apiKey) =>
+        string.IsNullOrWhiteSpace(apiKey) && catalog.Any(m => m.Free == true) ? catalog.Where(m => m.Free == true).ToList() : catalog;
+
+    /// <inheritdoc cref="CatalogAsync(HttpClient, ServerSettings, IReadOnlyList{JsonObject}, CancellationToken)"/>
+    internal static Task<IReadOnlyList<ModelInfo>> CatalogAsync(HttpClient http, ServerSettings server, IReadOnlyList<string> ids, CancellationToken ct) =>
+        CatalogAsync(http, server, ids.Select(id => new JsonObject { ["id"] = id }).ToList(), ct);
+
+    /// <summary>
     /// What is known about each listed model, in the server's order. LM Studio describes them all
     /// in its REST API (/api/v1, or /api/v0 in older versions): type, size, quantization, image
-    /// support, whether loaded. For other servers the names tell what they can.
+    /// support, whether loaded. OpenRouter-style lists say what each takes, gives, costs and whether
+    /// it calls tools (see <see cref="FromListEntry"/>). Otherwise the names tell what they can.
     /// </summary>
-    internal static async Task<IReadOnlyList<ModelInfo>> CatalogAsync(HttpClient http, ServerSettings server, IReadOnlyList<string> ids, CancellationToken ct)
+    internal static async Task<IReadOnlyList<ModelInfo>> CatalogAsync(HttpClient http, ServerSettings server, IReadOnlyList<JsonObject> listed, CancellationToken ct)
     {
+        var ids = listed.Select(m => Str(m["id"])!).ToList();
         var root = OpenAiChatClient.NormalizeBaseUrl(server.BaseUrl)[..^"/v1".Length];
         var described = new Dictionary<string, ModelInfo>();
         if (await GetJsonAsync(http, server, $"{root}/api/v1/models", ct).ConfigureAwait(false) is { } v1 && v1["models"] is JsonArray models)
@@ -106,7 +127,36 @@ public static class ServerProbe
                 if (Str(m["id"]) is { } id)
                     described[id] = FromLmStudioV0(id, m);
         }
-        return ids.Select(id => described.GetValueOrDefault(id) ?? ModelChoice.FromName(id)).ToList();
+        return listed.Select((m, i) => described.GetValueOrDefault(ids[i]) ?? FromListEntry(ModelChoice.FromName(ids[i]), m)).ToList();
+    }
+
+    /// <summary>
+    /// What an OpenRouter-style list (OpenRouter, Kilo) says of a model, over what its name tells:
+    /// what it takes (architecture.input_modalities), whether it writes text at all
+    /// (output_modalities: a music model writes audio), whether it calls tools
+    /// (supported_parameters) and whether it is free (pricing). A list of ids alone says none of it.
+    /// </summary>
+    internal static ModelInfo FromListEntry(ModelInfo name, JsonObject entry)
+    {
+        var architecture = entry["architecture"] as JsonObject;
+        var inputs = Strings(architecture?["input_modalities"]);
+        var outputs = Strings(architecture?["output_modalities"]);
+        var parameters = Strings(entry["supported_parameters"]);
+        var pricing = entry["pricing"] as JsonObject;
+        return name with
+        {
+            Chat = name.Chat && (outputs is null || outputs.Contains("text")),
+            Vision = inputs is null ? name.Vision : inputs.Contains("image"),
+            Tools = parameters is null ? name.Tools : parameters.Contains("tools"),
+            Free = pricing is null ? name.Free : Price(pricing["prompt"]) is { } input && Price(pricing["completion"]) is { } output ? input == 0 && output == 0 : null,
+        };
+
+        static List<string>? Strings(JsonNode? node) => node is JsonArray a ? a.Select(Str).OfType<string>().ToList() : null;
+
+        // Prices come as text ("0", "0.0000003" per token) or as numbers.
+        static decimal? Price(JsonNode? node) => node is JsonValue v
+            && (v.TryGetValue<decimal>(out var n) || v.TryGetValue<string>(out var s) && decimal.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out n))
+            ? n : null;
     }
 
     /// <summary>
@@ -146,14 +196,14 @@ public static class ServerProbe
     }
 
     /// <summary>
-    /// Makes sure the model is loaded (LM Studio loads models on first use) and returns the
-    /// context length it runs with, if the server reports one.
+    /// Makes sure the model is loaded (LM Studio loads models on first use) and returns what the
+    /// server then says of it: the context length it runs with, if it reports one.
     /// </summary>
-    public static async Task<int?> EnsureLoadedAsync(HttpClient http, ServerSettings server, Action? onLoading, CancellationToken ct)
+    public static async Task<ModelFacts> EnsureLoadedAsync(HttpClient http, ServerSettings server, Action? onLoading, CancellationToken ct)
     {
         var facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
         if (facts.Loaded != false)
-            return facts.Context;
+            return facts;
 
         onLoading?.Invoke();
         try
@@ -164,13 +214,14 @@ public static class ServerProbe
         }
         catch (LlmException)
         {
-            return null; // the real request will report the problem
+            return default; // the real request will report the problem
         }
-        return (await TryContextAsync(http, server, ct).ConfigureAwait(false)).Context;
+        return await TryContextAsync(http, server, ct).ConfigureAwait(false);
     }
 
     /// <summary>Context length, load state and image support of the model in use.</summary>
-    public static async Task<ModelFacts> TryContextAsync(HttpClient http, ServerSettings server, CancellationToken ct)
+    /// <param name="listed">The server's model list, when the caller has it already (Kilo's is half a megabyte).</param>
+    public static async Task<ModelFacts> TryContextAsync(HttpClient http, ServerSettings server, CancellationToken ct, IReadOnlyList<JsonObject>? listed = null)
     {
         var model = server.ModelInUse;
         if (string.IsNullOrWhiteSpace(model))
@@ -199,13 +250,17 @@ public static class ServerProbe
             return new ModelFacts(ollama, null, null);
 
         // vLLM / OpenRouter style metadata on the model list
-        if (await GetJsonAsync(http, server, $"{v1}/models", ct).ConfigureAwait(false) is { } list && list["data"] is JsonArray data)
-        {
-            var entry = data.FirstOrDefault(m => m?["id"] is JsonValue id && id.TryGetValue<string>(out var s) && s == model);
-            if ((Int(entry?["max_model_len"]) ?? Int(entry?["context_length"])) is { } len)
-                return new ModelFacts(len, null, null);
-        }
-        return default;
+        listed ??= await GetJsonAsync(http, server, $"{v1}/models", ct).ConfigureAwait(false) is { } list && list["data"] is JsonArray data
+            ? data.OfType<JsonObject>().ToList()
+            : null;
+        if (listed?.FirstOrDefault(m => Str(m["id"]) == model) is not { } entry)
+            return default;
+        var sees = FromListEntry(new ModelInfo(model), entry).Vision;
+        // vLLM's max_model_len is what it serves the model with; context_length is the most a
+        // hosted service takes for it.
+        if (Int(entry["max_model_len"]) is { } served)
+            return new ModelFacts(served, null, sees);
+        return Int(entry["context_length"]) is { } most ? new ModelFacts(most, null, sees, Hosted: true) : new ModelFacts(null, null, sees);
     }
 
     private static async Task<int?> OllamaContextAsync(HttpClient http, ServerSettings server, string root, CancellationToken ct)

@@ -445,8 +445,19 @@ public sealed partial class AgentSession(
             }
             catch (ContextOverflowException ex) when (attempt < 2)
             {
+                if (ex is RequestTooLargeException tooLarge)
+                {
+                    // Too many bytes, not tokens: the screenshots in it. A context a quarter smaller
+                    // resets before a request gets that large again.
+                    var smaller = Math.Max(16_384, TokensInUse() * 3 / 4);
+                    if (contextTokens == 0 || smaller < contextTokens)
+                    {
+                        observer.OnNotice($"The request, {tooLarge.Bytes / 1e6:0.#} MB with its screenshots, was more than the server takes; working with {smaller / 1000}k tokens of context from now on.");
+                        contextTokens = smaller;
+                    }
+                }
                 // The context size was assumed or wrong; most servers name the real one.
-                if (ex.ContextLimit is { } limit && (contextTokens == 0 || limit < contextTokens))
+                else if (ex.ContextLimit is { } limit && (contextTokens == 0 || limit < contextTokens))
                 {
                     observer.OnNotice($"The server's context is {limit / 1000}k tokens, not {contextTokens / 1000}k; working with that from now on.");
                     contextTokens = limit;
@@ -470,11 +481,21 @@ public sealed partial class AgentSession(
         IAgentObserver observer, Action<StreamDelta>? onDelta, CancellationToken ct)
     {
         var drops = 0;
+        var held = 0;
         while (true)
         {
             try
             {
                 return await client.CompleteAsync(request, toolDefs, options, onDelta, ct, observer.OnSending).ConfigureAwait(false);
+            }
+            catch (RateLimitedException ex)
+            {
+                // Not a broken link: the server holds requests back for a while (Kilo's free models
+                // take 200 an hour), so the same request goes again after the wait it names, or a
+                // growing one. As many times as it takes: Stop ends the wait.
+                var wait = RateLimitWait(ex.RetryAfter, ++held);
+                observer.OnNotice($"{ex.Message} Trying again in {Describe(wait)} (Stop ends the wait)…");
+                await Task.Delay(wait, ct).ConfigureAwait(false);
             }
             catch (ConnectionLostException ex) when (++drops <= MaxReconnects)
             {
@@ -505,6 +526,20 @@ public sealed partial class AgentSession(
             }
         }
     }
+
+    /// <summary>
+    /// The waits after a 429 that names none: a server that was only busy answers after the first,
+    /// an hourly allowance used up gets asked every five minutes.
+    /// </summary>
+    internal static readonly TimeSpan[] RateLimitWaits =
+        [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(5)];
+
+    /// <summary>How long to wait after the <paramref name="attempt"/>th 429 in a row: what the server says, within a second and an hour, else <see cref="RateLimitWaits"/>.</summary>
+    internal static TimeSpan RateLimitWait(TimeSpan? said, int attempt) => said is { } s
+        ? TimeSpan.FromTicks(Math.Clamp(s.Ticks, TimeSpan.TicksPerSecond, TimeSpan.TicksPerHour))
+        : RateLimitWaits[Math.Clamp(attempt, 1, RateLimitWaits.Length) - 1];
+
+    private static string Describe(TimeSpan wait) => wait.TotalSeconds < 90 ? $"{Math.Ceiling(wait.TotalSeconds):0} s" : $"{Math.Ceiling(wait.TotalMinutes):0} min";
 
     /// <summary>Rough token count of the conversation (about 3.5 characters per token; a screenshot one per 32x32 pixels).</summary>
     internal int EstimateTokens() =>

@@ -29,6 +29,20 @@ public class ToolTests
     }
 
     [Fact]
+    public void A_point_given_as_fractions_of_the_screenshot_lands_where_it_means()
+    {
+        // Kilo's free Nemotron answered (0.8711, 0.8833) for a button at (1110, 635) on a 1280x720
+        // screenshot, though asked for pixels; and fractions on the grid too.
+        var pixels = new ScreenSpace(new ScreenRect(0, 0, 1280, 720), null);
+        Assert.Equal((1115, 636), pixels.ToScreen(0.8711, 0.8833));
+        var grid = new ScreenSpace(new ScreenRect(0, 0, 2560, 1080), null, grid: 1000);
+        Assert.Equal((1456, 199), grid.ToScreen(0.5688, 0.1843));
+        // Whole numbers are points as they are, however near the corner.
+        Assert.Equal((1, 1), pixels.ToScreen(1, 1));
+        Assert.Equal((0, 0), pixels.ToScreen(0, 0));
+    }
+
+    [Fact]
     public async Task Qwen3_models_point_on_a_0_to_1000_grid()
     {
         Assert.Equal(1000, ModelCoordinates.GridFor("qwen3.8-27b@q6_k_xl"));
@@ -39,6 +53,8 @@ public class ToolTests
         Assert.Equal(1000, ModelCoordinates.GridFor("google/gemma-4-12b-it-qat"));
         Assert.Null(ModelCoordinates.GridFor("gemma-3-27b-it"));
         Assert.Null(ModelCoordinates.GridFor("llava-1.6-mistral-7b"));
+        // So does Nemotron: Kilo's free Super VL hit 12 of 16 targets on the grid, 0 of 4 asked for pixels.
+        Assert.Equal(1000, ModelCoordinates.GridFor("nvidia/nemotron-3.5-super-vl:free"));
 
         // The grid spans the whole screen whatever the image size: 500,500 is the middle of a 2560x1080 screen.
         var space = new ScreenSpace(new ScreenRect(0, 0, 2560, 1080), (1920, 1080), grid: 1000);

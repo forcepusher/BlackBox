@@ -297,6 +297,44 @@ public class ModelChoiceTests
     [InlineData("bge-reranker-v2-m3")]
     public void Models_that_cannot_chat_are_told_by_their_names(string id) => Assert.False(ModelChoice.FromName(id).Chat);
 
+    /// <summary>Kilo's model list on 2026-10-16, a few of its 398 models, trimmed to the fields BlackBox reads.</summary>
+    private const string KiloModels = """
+        {"data":[
+        {"id":"kilo-auto/free","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["max_tokens","tools"],"pricing":{"prompt":"0","completion":"0"},"context_length":256000},
+        {"id":"anthropic/claude-opus-5.5","architecture":{"input_modalities":["text","image"],"output_modalities":["text"]},"supported_parameters":["tools","tool_choice"],"pricing":{"prompt":"0.000004","completion":"0.00002"},"context_length":1000000},
+        {"id":"nvidia/nemotron-3.5-super-vl:free","architecture":{"input_modalities":["text","image","video"],"output_modalities":["text"]},"supported_parameters":["max_tokens","tool_choice","tools"],"pricing":{"prompt":"0","completion":"0","discount":0},"context_length":1000000},
+        {"id":"nvidia/nemotron-3.5-content-safety:free","architecture":{"input_modalities":["text","image"],"output_modalities":["text"]},"supported_parameters":["max_tokens"],"pricing":{"prompt":"0","completion":"0"},"context_length":128000},
+        {"id":"google/lyria-3-pro-preview","architecture":{"input_modalities":["text","image"],"output_modalities":["text","audio"]},"supported_parameters":["max_tokens"],"pricing":{"prompt":"0","completion":"0"},"context_length":1048576},
+        {"id":"google/lyria-3-clip-preview","architecture":{"input_modalities":["text","image"],"output_modalities":["audio"]},"supported_parameters":["max_tokens"],"pricing":{"prompt":"0","completion":"0"},"context_length":1048576},
+        {"id":"nvidia/nemotron-3-ultra-550b-a55b:free","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["tools"],"pricing":{"prompt":"0","completion":"0"},"context_length":1000000}
+        ]}
+        """;
+
+    private static Task<ProbeResult> ProbeKilo(string picked, string key = "") =>
+        ServerProbe.CheckAsync(new HttpClient(new Routes(new() { ["/api/v1/models"] = KiloModels })),
+            new ServerSettings { BaseUrl = KiloGateway.Address, Model = picked, ApiKey = key }, CancellationToken.None);
+
+    [Fact]
+    public async Task Without_a_key_Kilo_offers_only_its_free_models_and_says_what_each_takes()
+    {
+        var probe = await ProbeKilo(KiloGateway.Model);
+        Assert.Equal(KiloGateway.Model, probe.Model);
+        Assert.False(probe.AutoPicked);
+        Assert.DoesNotContain("anthropic/claude-opus-5.5", probe.Models); // Kilo answers it only with a key
+        Assert.DoesNotContain("google/lyria-3-clip-preview", probe.Models); // writes no text
+        Assert.Contains("nvidia/nemotron-3-ultra-550b-a55b:free", probe.Models);
+        Assert.True(probe.Vision);
+        Assert.Equal(1_000_000, probe.LoadedContext);
+        Assert.True(probe.ContextHosted); // the most Kilo takes for it, not a size to work at
+
+        // With nothing picked: the free model that sees and calls tools, not the music or safety one, nor the larger blind one.
+        Assert.Equal(KiloGateway.Model, (await ProbeKilo("")).Model);
+        Assert.False((await ProbeKilo("nvidia/nemotron-3-ultra-550b-a55b:free")).Vision);
+
+        // With a key, everything it sells.
+        Assert.Contains("anthropic/claude-opus-5.5", (await ProbeKilo("", "sk-test")).Models);
+    }
+
     [Fact]
     public void The_model_BlackBox_picked_is_used_but_not_saved()
     {
