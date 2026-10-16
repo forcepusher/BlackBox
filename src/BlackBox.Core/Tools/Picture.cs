@@ -3,8 +3,8 @@ using SkiaSharp;
 namespace BlackBox.Core.Tools;
 
 /// <summary>
-/// A picture file for read_file, shown to the model like a screenshot: scaled to fit a few
-/// megapixels, on white where it is transparent, as JPEG.
+/// A picture file shown to the model like a screenshot (by read_file, or attached to a message):
+/// scaled to fit a few megapixels, on white where it is transparent, as JPEG.
 /// </summary>
 internal static class Picture
 {
@@ -18,11 +18,15 @@ internal static class Picture
 
     public static bool Handles(string path) => Types.Contains(Path.GetExtension(path).ToLowerInvariant());
 
-    public static ToolResult Read(string path)
+    /// <summary>A picture as the model sees it: its own size, the size it is shown at, and the JPEG.</summary>
+    public sealed record Shown(int Width, int Height, int ShownWidth, int ShownHeight, byte[] Jpeg);
+
+    /// <summary>The picture scaled for the model; null when the file isn't a picture this can read.</summary>
+    public static Shown? Load(string path)
     {
         using var original = SKBitmap.Decode(path);
         if (original is null)
-            return ToolResult.Error($"{path} could not be read as a picture (damaged, or not what its name says).");
+            return null;
         var scale = Math.Min(1.0, Math.Min((double)MaxSide / Math.Max(original.Width, original.Height),
                                            Math.Sqrt((double)MaxPixels / ((long)original.Width * original.Height))));
         var width = Snap(original.Width * scale);
@@ -34,9 +38,15 @@ internal static class Picture
             surface.Canvas.DrawBitmap(original, new SKRect(0, 0, width, height), paint);
         using var image = surface.Snapshot();
         using var jpeg = image.Encode(SKEncodedImageFormat.Jpeg, 85);
+        return new Shown(original.Width, original.Height, width, height, jpeg.ToArray());
+    }
 
-        var size = width == original.Width && height == original.Height ? "" : $", shown at {width}x{height}";
-        return new ToolResult($"{path}: a {original.Width}x{original.Height} picture{size}.", jpeg.ToArray(),
+    public static ToolResult Read(string path)
+    {
+        if (Load(path) is not { } picture)
+            return ToolResult.Error($"{path} could not be read as a picture (damaged, or not what its name says).");
+        var size = picture.ShownWidth == picture.Width && picture.ShownHeight == picture.Height ? "" : $", shown at {picture.ShownWidth}x{picture.ShownHeight}";
+        return new ToolResult($"{path}: a {picture.Width}x{picture.Height} picture{size}.", picture.Jpeg,
             ImageCaption: $"The picture {Path.GetFileName(path)}:");
     }
 

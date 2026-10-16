@@ -15,7 +15,8 @@ BlackBox/
   BlackBox.exe
   Data/        settings.json, chats/ (see Chat history), runtime/ (unpacked by the single-file exe), browser/ (see Web search),
                tools/ (portable programs the agent downloaded), scratch/ (helper files it made for a task),
-               comfyui/ (ComfyUI's address and folder, the log of a server BlackBox started, see Pictures, video and sound)
+               comfyui/ (ComfyUI's address and folder, the log of a server BlackBox started, see Pictures, video and sound),
+               pasted/ (pictures pasted into the chat, see Files in a message)
 ```
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
@@ -182,9 +183,22 @@ read it and carry on where it stopped (the model gets the conversation back), or
 trash button. Screenshots are not kept in the saved file; the model takes a new one when it carries
 on. Picking another chat or New chat while a task runs stops the task, and keeps it as far as it got.
 
+## Files in a message
+Drop files or folders anywhere on the window, paste them with Ctrl+V (a screenshot, a picture
+copied in a browser, files copied in Explorer), or pick them with the paperclip next to the box.
+They wait under the box, × takes one off, and they go with the next message; a message can be
+files alone. The agent gets each one's full path, to work on it with its tools (a picture to start
+a ComfyUI job from, a document to read, a folder to go through), and sees the pictures among them
+as `read_file` shows a picture; a model that can't see images gets the paths. A pasted picture is
+saved as a PNG in `Data/pasted` first and deleted with its chat; dropped files stay where they
+are. Text on the clipboard is pasted as text, also when a picture comes with it (cells copied from
+Excel bring one). The message's bubble shows its pictures and the names of its other files, and a
+click opens one. A saved chat keeps the paths, not the pictures: carrying on, the model looks at a
+picture again with `read_file`. The command-line runner takes files with `--attach`.
+
 Until a chat is used, it shows what BlackBox can do (apps, files and commands, documents, getting
 the programs and MCP servers a job needs, chatting for you, the web, servers, long jobs, pictures,
-video and sound), that Esc
+video and sound), that files can be dropped or pasted, that Esc
 stops it, how to change a task while it runs, and what it asks before it acts. It says so when the
 model in use can't see images. Notices such as an MCP server that failed to start show above it and
 don't count as using the chat.
@@ -502,6 +516,7 @@ dotnet test                       # unit tests
 ./scripts/publish.ps1             # single-file publish/BlackBox.exe
 ./scripts/publish.ps1 -Folder     # classic self-contained folder in publish/BlackBox-win-x64
 dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   # headless run
+dotnet run --project src/BlackBox.Cli -- --yes --attach photo.jpg "make it a watercolor"   # with a file, as if dropped on the window
 ./scripts/agent-tasks.ps1         # real desktop task suite (drives your mouse and keyboard)
 ./scripts/game2048-test.ps1       # long run: BlackBox writes, play-tests and fixes its own 2048
 ./scripts/sysadmin-vm.ps1         # once: the portable Debian lab VM (QEMU in .dev/sysadmin-lab, nothing installed)

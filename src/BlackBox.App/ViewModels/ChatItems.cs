@@ -23,16 +23,30 @@ public abstract class ChatItemViewModel : ObservableObject
     }
 
     /// <summary>Stops players and lets go of decoded frames, when the item leaves the chat.</summary>
-    public void DisposePreviews()
+    public virtual void DisposePreviews()
     {
         foreach (var p in Previews)
             p.Dispose();
     }
 }
 
-public sealed class UserMessageItem(string text) : ChatItemViewModel
+/// <summary>A message the user sent: what they typed, and the files that came with it (dropped, pasted or picked).</summary>
+public sealed class UserMessageItem(string text, IReadOnlyList<string>? files = null) : ChatItemViewModel
 {
     public string Text { get; } = text;
+    public bool HasText => Text.Length > 0;
+
+    public IReadOnlyList<AttachmentItem> Attachments { get; } = (files ?? []).Select(f => new AttachmentItem(f)).ToList();
+    public bool HasAttachments => Attachments.Count > 0;
+
+    public List<string> Files => Attachments.Select(a => a.Path).ToList();
+
+    public override void DisposePreviews()
+    {
+        base.DisposePreviews();
+        foreach (var a in Attachments)
+            a.Dispose();
+    }
 }
 
 public sealed partial class AssistantMessageItem : ChatItemViewModel

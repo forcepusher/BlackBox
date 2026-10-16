@@ -61,6 +61,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         // with it selected; a selection the ComboBox once lost is not restored by rebinding.
         if (!string.IsNullOrEmpty(settings.Server.Model))
             Models.Add(settings.Server.Model);
+        Attachments.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasAttachments));
+            SendCommand.NotifyCanExecuteChanged();
+        };
     }
 
     public ObservableCollection<ChatItemViewModel> Items { get; } = [];
@@ -458,33 +463,99 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         SetupTitle = title;
     }
 
-    // ---- commands -------------------------------------------------------------------
+    // ---- files going with the next message ------------------------------------------
 
-    private bool CanSend() => !string.IsNullOrWhiteSpace(Input);
+    /// <summary>Files for the next message: dropped on the window, pasted or picked with the paperclip. Shown under the box until it is sent.</summary>
+    public ObservableCollection<AttachmentItem> Attachments { get; } = [];
 
-    /// <summary>Messages sent while a run was still starting up (no session yet); handed to it once it has one.</summary>
-    private readonly List<string> _steerPending = [];
+    public bool HasAttachments => Attachments.Count > 0;
+
+    /// <summary>Files are being dragged over the window: it shows where they will go.</summary>
+    [ObservableProperty]
+    private bool _isDropping;
+
+    /// <summary>Adds files (or folders) to the next message; one that is there already isn't added twice.</summary>
+    public void Attach(IEnumerable<string> paths)
+    {
+        foreach (var path in paths)
+        {
+            string full;
+            try { full = Path.GetFullPath(path); }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { continue; }
+            if (!Attachments.Any(a => string.Equals(a.Path, full, StringComparison.OrdinalIgnoreCase)))
+                Attachments.Add(new AttachmentItem(full, RemoveAttachment));
+        }
+    }
+
+    private void RemoveAttachment(AttachmentItem item)
+    {
+        Attachments.Remove(item);
+        item.Dispose();
+    }
+
+    private void ClearAttachments()
+    {
+        foreach (var item in Attachments)
+            item.Dispose();
+        Attachments.Clear();
+    }
 
     /// <summary>
-    /// Sends what is in the box. With no run going it starts one; during a run it goes to the agent,
-    /// which reads it before its next step (see <see cref="AgentSession.Steer"/>).
+    /// A picture from the clipboard or dragged in without a file (a screenshot, a picture copied in
+    /// a browser): saved as a PNG in Data/pasted, since the agent works on files, and attached like a
+    /// dropped one.
+    /// </summary>
+    public void AttachPicture(Avalonia.Media.Imaging.Bitmap picture) => SavePasted(path => picture.Save(path));
+
+    /// <inheritdoc cref="AttachPicture(Avalonia.Media.Imaging.Bitmap)"/>
+    public void AttachPicture(byte[] png) => SavePasted(path => File.WriteAllBytes(path, png));
+
+    private void SavePasted(Action<string> write)
+    {
+        try
+        {
+            Directory.CreateDirectory(_paths.PastedDir);
+            var stamp = DateTime.Now.ToString("yyyy-MM-dd HH-mm-ss", System.Globalization.CultureInfo.InvariantCulture);
+            var path = Path.Combine(_paths.PastedDir, $"Pasted {stamp}.png");
+            for (var n = 2; File.Exists(path); n++)
+                path = Path.Combine(_paths.PastedDir, $"Pasted {stamp} ({n}).png");
+            write(path);
+            Attach([path]);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AddNotice($"The pasted picture could not be saved: {ex.Message}", isError: true);
+        }
+    }
+
+    // ---- commands -------------------------------------------------------------------
+
+    private bool CanSend() => !string.IsNullOrWhiteSpace(Input) || Attachments.Count > 0;
+
+    /// <summary>Messages sent while a run was still starting up (no session yet); handed to it once it has one.</summary>
+    private readonly List<UserInput> _steerPending = [];
+
+    /// <summary>
+    /// Sends what is in the box, with the files under it. With no run going it starts one; during a
+    /// run it goes to the agent, which reads it before its next step (see <see cref="AgentSession.Steer(UserInput)"/>).
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanSend), AllowConcurrentExecutions = true)]
     private async Task SendAsync()
     {
-        var text = Input.Trim();
+        var input = new UserInput(Input.Trim(), Attachments.Select(a => a.Path).ToList());
         Input = "";
-        Items.Add(new UserMessageItem(text));
+        ClearAttachments();
+        Items.Add(new UserMessageItem(input.Text, input.Files));
         if (IsBusy)
         {
-            if (_session is { } running) running.Steer(text);
-            else _steerPending.Add(text);
+            if (_session is { } running) running.Steer(input);
+            else _steerPending.Add(input);
             SaveChat(SnapshotHistory());
             return;
         }
         SaveChat(SnapshotHistory());
         // What arrived just as a run ended, too late for it, starts the next one.
-        for (string? next = text; next is not null;)
+        for (UserInput? next = input; next is not null;)
             next = await RunAsync(next);
     }
 
@@ -537,8 +608,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         ? "Tell me something while I work… (Enter to send; I pause while you type)"
         : "Describe a task… (Enter to send, Shift+Enter for a new line)";
 
-    /// <summary>One run of the agent on <paramref name="text"/>. Returns what the user sent too late for it, to run next, or null.</summary>
-    private async Task<string?> RunAsync(string text)
+    /// <summary>One run of the agent on <paramref name="input"/>. Returns what the user sent too late for it, to run next, or null.</summary>
+    private async Task<UserInput?> RunAsync(UserInput input)
     {
         _runDetached = false;
         IsBusy = true;
@@ -546,7 +617,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var ct = _runCts.Token;
         // This chat's conversation: picking another chat while the run starts up replaces _history.
         var history = _history;
-        List<string> late = [];
+        List<UserInput> late = [];
 
         try
         {
@@ -582,7 +653,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 session.Steer(pending);
             _steerPending.Clear();
             _tick.Start();
-            await Task.Run(() => session.RunAsync(text, this, ct), CancellationToken.None);
+            await Task.Run(() => session.RunAsync(input, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
             _settings.Server.LearnContextLimit(session.ContextTokens);
             OnContextChanged();
@@ -623,14 +694,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         if (ct.IsCancellationRequested)
         {
             // Stopped: what the agent hadn't read yet comes off the chat and goes back in the box,
-            // to send again or not.
+            // with its files under it, to send again or not.
             foreach (var unread in late)
-                if (Items.LastOrDefault(i => i is UserMessageItem u && u.Text == unread) is { } item)
+                if (Items.LastOrDefault(i => i is UserMessageItem u && u.Text == unread.Text && u.Files.SequenceEqual(unread.Files)) is { } item)
+                {
                     Items.Remove(item);
-            Input = string.Join("\n\n", late) + (Input.Length > 0 ? "\n\n" + Input : "");
+                    item.DisposePreviews();
+                }
+            Input = string.Join("\n\n", late.Select(l => l.Text).Append(Input).Where(t => t.Length > 0));
+            Attach(late.SelectMany(l => l.Files));
             return null;
         }
-        return string.Join("\n\n", late);
+        return UserInput.Join(late);
     }
 
     [RelayCommand(CanExecute = nameof(IsBusy))]
@@ -728,11 +803,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     private void DeleteChat(PastChat row)
     {
+        // The pictures pasted into it go with it; files dropped on the window were the user's own and stay.
+        var pasted = (_chats.Load(row.Id)?.Entries ?? []).Where(e => e.Kind == ChatEntryKind.User).SelectMany(e => e.Files ?? [])
+            .Where(f => string.Equals(Path.GetDirectoryName(f), _paths.PastedDir, StringComparison.OrdinalIgnoreCase)).ToList();
         if (row.Id == _chatId)
             LeaveChat(save: false);
         _chats.Delete(row.Id);
         PastChats.Remove(row);
         OnPropertyChanged(nameof(HasPastChats));
+        foreach (var file in pasted.Where(f => !Attachments.Any(a => string.Equals(a.Path, f, StringComparison.OrdinalIgnoreCase))))
+        {
+            try { File.Delete(file); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
     }
 
     private void MarkCurrentChat()
@@ -754,7 +837,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         if (history is null || Items.OfType<UserMessageItem>().FirstOrDefault() is not { } first)
             return;
         _chatId ??= ChatStore.NewId();
-        _chatTitle ??= ChatStore.TitleFrom(first.Text);
+        // A message that is only a file is named after it.
+        _chatTitle ??= ChatStore.TitleFrom(first.HasText ? first.Text : string.Join(", ", first.Attachments.Select(a => a.FileName)));
         var chat = new SavedChat
         {
             Id = _chatId,
@@ -788,7 +872,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     private static ChatEntry ToEntry(ChatItemViewModel item) => item switch
     {
-        UserMessageItem u => new ChatEntry { Kind = ChatEntryKind.User, Text = u.Text },
+        UserMessageItem u => new ChatEntry { Kind = ChatEntryKind.User, Text = u.Text, Files = u.HasAttachments ? u.Files : null },
         AssistantMessageItem a => new ChatEntry { Kind = ChatEntryKind.Assistant, Text = a.Text, Reasoning = a.Reasoning },
         ToolCallItem t => new ChatEntry
         {
@@ -803,7 +887,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         ChatItemViewModel item = e.Kind switch
         {
-            ChatEntryKind.User => new UserMessageItem(e.Text ?? ""),
+            ChatEntryKind.User => new UserMessageItem(e.Text ?? "", e.Files),
             ChatEntryKind.Assistant => new AssistantMessageItem { Text = e.Text ?? "", Reasoning = e.Reasoning ?? "", IsStreaming = false },
             ChatEntryKind.Tool => new ToolCallItem(e.CallId ?? "", e.Name ?? "", e.Summary ?? "")
             {

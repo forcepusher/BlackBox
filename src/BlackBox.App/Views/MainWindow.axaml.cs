@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using BlackBox.App.ViewModels;
 
@@ -18,6 +20,14 @@ public partial class MainWindow : Window
 
         // Enter sends, Shift+Enter inserts a newline. Tunnel so we see the key before the TextBox.
         InputBox.AddHandler(KeyDownEvent, OnInputKeyDown, RoutingStrategies.Tunnel);
+
+        // Files and pictures go with a message: dropped anywhere on the window, or pasted into the box.
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragEnterEvent, OnDragOver);
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
+        AddHandler(DragDrop.DropEvent, OnDrop);
+        InputBox.AddHandler(TextBox.PastingFromClipboardEvent, OnPasting);
 
         // The context size box takes what was typed when focus leaves it: Enter does that, Escape
         // puts the size back first. Afterwards it shows the size in use in the usual form ("65536"
@@ -125,6 +135,104 @@ public partial class MainWindow : Window
                 Height = normal.Height,
                 Maximized = WindowState == WindowState.Maximized,
             });
+    }
+
+    // ---- files going with a message: dropped, pasted or picked ------------------------------------
+
+    private static bool CarriesFiles(IDataTransfer data) => data.Contains(DataFormat.File) || data.Contains(DataFormat.Bitmap);
+
+    private void OnDragOver(object? sender, DragEventArgs e)
+    {
+        var data = e.DataTransfer;
+        // Files and pictures are attached; text (a link dragged from a browser) goes into the box.
+        e.DragEffects = CarriesFiles(data) || data.Contains(DataFormat.Text) ? DragDropEffects.Copy : DragDropEffects.None;
+        Vm.IsDropping = CarriesFiles(data);
+        e.Handled = true;
+    }
+
+    private void OnDragLeave(object? sender, DragEventArgs e)
+    {
+        // Moving from one part of the window to another leaves that part, not the window.
+        var at = e.GetPosition(this);
+        if (at.X > 1 && at.Y > 1 && at.X < Bounds.Width - 1 && at.Y < Bounds.Height - 1)
+            return;
+        Vm.IsDropping = false;
+    }
+
+    private void OnDrop(object? sender, DragEventArgs e)
+    {
+        Vm.IsDropping = false;
+        var data = e.DataTransfer;
+        if (data.TryGetFiles() is { Length: > 0 } files)
+            Vm.Attach(files.Select(f => f.TryGetLocalPath()).OfType<string>());
+        else if (data.TryGetBitmap() is { } bitmap)
+            using (bitmap)
+                Vm.AttachPicture(bitmap);
+        else if (data.TryGetText() is { Length: > 0 } text)
+            InsertText(text);
+        e.Handled = true;
+        Activate();
+        InputBox.Focus();
+    }
+
+    /// <summary>Puts text where the caret is in the box, over what is selected there.</summary>
+    private void InsertText(string text)
+    {
+        var current = InputBox.Text ?? "";
+        var start = Math.Min(InputBox.SelectionStart, InputBox.SelectionEnd);
+        var end = Math.Max(InputBox.SelectionStart, InputBox.SelectionEnd);
+        start = Math.Clamp(start, 0, current.Length);
+        end = Math.Clamp(end, start, current.Length);
+        InputBox.Text = current[..start] + text + current[end..];
+        InputBox.CaretIndex = start + text.Length;
+    }
+
+    /// <summary>Set while the box pastes text itself: <see cref="OnPasting"/> let it.</summary>
+    private bool _pastingText;
+
+    /// <summary>
+    /// Ctrl+V (or the box's own Paste) in the message box. Files copied in Explorer are attached; text
+    /// is pasted as usual, also when a picture comes with it (cells copied from Excel bring one);
+    /// a picture alone (a screenshot, a picture copied in a browser) is saved and attached.
+    /// </summary>
+    private async void OnPasting(object? sender, RoutedEventArgs e)
+    {
+        if (_pastingText || Clipboard is not { } clipboard)
+            return;
+        e.Handled = true;
+        try
+        {
+            if (await clipboard.TryGetFilesAsync() is { Length: > 0 } files)
+            {
+                Vm.Attach(files.Select(f => f.TryGetLocalPath()).OfType<string>());
+                return;
+            }
+            var formats = await clipboard.GetDataFormatsAsync();
+            if (!formats.Contains(DataFormat.Text) && await clipboard.TryGetBitmapAsync() is { } bitmap)
+            {
+                using (bitmap)
+                    Vm.AttachPicture(bitmap);
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Another program holds the clipboard, or its picture can't be read: paste text, if any.
+        }
+        _pastingText = true;
+        try { InputBox.Paste(); }
+        finally { _pastingText = false; }
+    }
+
+    private async void OnAttachClick(object? sender, RoutedEventArgs e)
+    {
+        var picked = await StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+        {
+            Title = "Attach files to your message",
+            AllowMultiple = true,
+        });
+        Vm.Attach(picked.Select(f => f.TryGetLocalPath()).OfType<string>());
+        InputBox.Focus();
     }
 
     private void OnInputKeyDown(object? sender, KeyEventArgs e)

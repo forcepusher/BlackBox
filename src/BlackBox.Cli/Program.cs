@@ -5,13 +5,14 @@ using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
 
-// Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] "task"
+// Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] [--attach FILE]... "task"
 //   --root        portable folder (default: BLACKBOX_HOME, else .dev/ when run from the repository, else the exe folder);
 //                 its Data/mcp.json lists the MCP servers to start, as in the app
 //   --url/--model override the server address and model saved in Data/settings.json; with no model, or one the
 //                 server doesn't offer, the strongest model it offers is used
 //   --yes         approve risky tools without asking
 //   --save-shots  write every screenshot the model sees to DIR
+//   --attach      send a file with the task, as one dropped on the app's window (once per file)
 
 // UTF-8 also when redirected to a log file, so scripts can show the log as it is written.
 Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -31,10 +32,18 @@ var shotsDir = Take("--save-shots");
 var urlOverride = Take("--url");
 var modelOverride = Take("--model");
 var autoYes = Flag("--yes");
+var attached = new List<string>();
+while (Take("--attach") is { } file)
+    attached.Add(Path.GetFullPath(file));
 var task = string.Join(' ', argsList);
 if (string.IsNullOrWhiteSpace(task))
 {
-    Console.Error.WriteLine("Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] \"task\"");
+    Console.Error.WriteLine("Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] [--attach FILE]... \"task\"");
+    return 2;
+}
+if (attached.FirstOrDefault(f => !File.Exists(f) && !Directory.Exists(f)) is { } missing)
+{
+    Console.Error.WriteLine($"[attach] there is no {missing}");
     return 2;
 }
 
@@ -119,7 +128,9 @@ var session = AgentSetup.Create(BackendConnection.Create(http, settings.Server),
 var observer = new ConsoleObserver(autoYes, shotsDir);
 
 var t0 = DateTime.UtcNow;
-await session.RunAsync(task, observer, cts.Token);
+if (attached.Count > 0)
+    Console.WriteLine($"[attach] {string.Join(" | ", attached)}");
+await session.RunAsync(new UserInput(task, attached), observer, cts.Token);
 Console.WriteLine($"\n[done] {observer.Reason} in {(DateTime.UtcNow - t0).TotalSeconds:0}s, {observer.Steps} model calls, {observer.ToolCalls} tool calls, {observer.ToolErrors} tool errors");
 if (observer.Detail is { } d) Console.WriteLine("[done] " + d);
 // A ComfyUI the task started is closed after its jobs, which may still be running.

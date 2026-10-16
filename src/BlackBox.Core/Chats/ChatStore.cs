@@ -21,7 +21,7 @@ public sealed class ChatEntry
     public string? Summary { get; set; }
     public string? State { get; set; }
 
-    /// <summary>The files a tool call made or showed, previewed under it.</summary>
+    /// <summary>The files a tool call made or showed, previewed under it; for a message of the user's, the files that came with it.</summary>
     public List<string>? Files { get; set; }
 
     public bool IsError { get; set; }
@@ -143,6 +143,7 @@ public sealed class ChatStore(string dir)
     /// <summary>
     /// A copy of the model's conversation fit for saving: screenshots replaced by a note, and tool
     /// calls a stop left unanswered given placeholder results, so carrying on is a valid request.
+    /// The pictures a user's message came with are left out too: their paths are in its text.
     /// </summary>
     public static List<ChatMessage> ForSaving(IEnumerable<ChatMessage> history)
     {
@@ -151,7 +152,9 @@ public sealed class ChatStore(string dir)
             Role = m.Role,
             Content = m.Parts is null
                 ? m.Content
-                : string.Join("\n", m.Parts.Where(p => !p.IsImage).Select(p => p.Text)) + (m.Parts.Any(p => p.IsImage) ? "\n(Screenshot not kept in the saved chat.)" : ""),
+                : m.FromUser
+                    ? m.Parts[0].Text + "\n(The pictures aren't kept in the saved chat: read_file shows them again.)"
+                    : string.Join("\n", m.Parts.Where(p => !p.IsImage).Select(p => p.Text)) + (m.Parts.Any(p => p.IsImage) ? "\n(Screenshot not kept in the saved chat.)" : ""),
             Reasoning = m.Reasoning,
             ToolCalls = m.ToolCalls?.Select(c => new ToolCall { Id = c.Id, Name = c.Name, Arguments = c.Arguments }).ToList(),
             ToolCallId = m.ToolCallId,
