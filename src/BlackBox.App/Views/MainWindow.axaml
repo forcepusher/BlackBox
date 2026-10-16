@@ -581,8 +581,10 @@
              bottom edge, so they line up; longer text grows the box upwards with Send staying put. -->
         <Border Classes="card composer" Padding="6">
           <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
-            <!-- The files going with the message (dropped, pasted or picked); × takes one off. -->
-            <ItemsControl Grid.Row="0" Grid.ColumnSpan="3" ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}" Margin="4,8,4,4">
+            <!-- The files going with the message (dropped, pasted or picked); × takes one off. Each
+                 item keeps room above and to its right for the × that sits over its corner: the
+                 list clips what goes past its edges, and the ×'s top was cut off. -->
+            <ItemsControl Grid.Row="0" Grid.ColumnSpan="3" ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}" Margin="4,2,4,6">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                   <WrapPanel />
@@ -590,7 +592,7 @@
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:AttachmentItem">
-                  <Panel Margin="0,0,12,6" ToolTip.Tip="{Binding Tip}">
+                  <Panel Margin="0,8,12,0" ToolTip.Tip="{Binding Tip}">
                     <Border Classes="attachment" IsVisible="{Binding !ShowsName}">
                       <Image Source="{Binding Thumbnail}" Height="64" MaxWidth="160" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
                     </Border>
