@@ -617,24 +617,22 @@ public class ComfyToolTests : IDisposable
     }
 
     [Fact]
-    public async Task A_rerun_of_a_template_without_changes_the_last_run_made_is_stopped_once()
+    public async Task A_rerun_of_a_template_without_changes_the_last_run_made_runs_with_a_note()
     {
         var tool = new ComfyTool();
         Task<ToolResult> Run(string json) => tool.ExecuteAsync(JsonNode.Parse(json)!.AsObject(), _ctx, CancellationToken.None);
         var first = await Run("""{"action": "run", "name": "Mine/fox", "set": {"6.text": "a fox", "5": {"width": 768, "height": 768}, "3.seed": 1}}""");
         Assert.False(first.IsError, first.Text);
 
-        // A new seed, and the size forgotten.
+        // A new seed, and the size forgotten: it runs as asked (a guideline, not a refusal), and says so.
         var second = await Run("""{"action": "run", "name": "Mine/fox", "set": {"6.text": "a fox", "3.seed": 2}}""");
-        Assert.True(second.IsError);
+        Assert.False(second.IsError, second.Text);
         Assert.Contains("also set 5.width (768), 5.height (768)", second.Text);
-        Assert.Contains("the template's values: 512, 512", second.Text);
-        Assert.Single(_server.Prompts);
-
-        // Asked for again as it is, it runs with the template's values.
-        var third = await Run("""{"action": "run", "name": "Mine/fox", "set": {"6.text": "a fox", "3.seed": 2}}""");
-        Assert.False(third.IsError, third.Text);
+        Assert.Contains("they have the template's values (512, 512)", second.Text);
         Assert.Equal(512, (int?)_server.Prompts[1]["prompt"]!["5"]!["inputs"]!["width"]);
+
+        var third = await Run("""{"action": "run", "name": "Mine/fox", "set": {"6.text": "a fox", "3.seed": 3}}""");
+        Assert.DoesNotContain("also set", third.Text);
     }
 
     [Fact]

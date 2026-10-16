@@ -155,7 +155,7 @@ took for mistakes, and a list of decimal choices that turned down a plain 1 (bot
 guessed before the template was shown (the error now lists the template's usual inputs), ComfyUI not
 answering for a while during the speech task, git's progress on stderr, a checkpoint the RIFE pack
 couldn't load, and a retry that left out the length and size of the first run (a rerun of a template
-without changes the last one made is now stopped once, saying which). Three of the results went to
+without changes the last one made now comes with a note saying which). Three of the results went to
 `Data/scratch`; the prompt has since been told that what the user asked for never goes there.
 
 ### And comfyui-mcp?

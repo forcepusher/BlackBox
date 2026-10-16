@@ -338,10 +338,10 @@ public sealed class ComfyTool : Tool
     private readonly HashSet<string> _reminded = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// What the last run of the same template set and this one doesn't. Each run starts from the
-    /// template again; qwen3.8 retried an LTX video with a new prompt and seed but without the
-    /// picture, length and size it had set the first time. Said once: run again as it is, the
-    /// template's values stand.
+    /// A note on what the last run of the same template set and this one doesn't: each run starts
+    /// from the template again, and qwen3.8 retried an LTX video with a new prompt and seed but
+    /// without the picture, length and size it had set the first time. Said once; a note, never a
+    /// refusal (the user's rule: the model is steered by guidelines, not hard limits).
     /// </summary>
     private string? Forgotten(string template, ComfyWorkflow workflow, JsonObject? set)
     {
@@ -360,10 +360,11 @@ public sealed class ComfyTool : Tool
                 JsonArray { Count: 2 } link when link[0] is JsonValue => $"a link from node {link[0]}",
                 _ => value.ToJsonString(ComfyWorkflow.Compact).Clip(60),
             };
-            return $"Nothing was run: your last run of {template} also set {string.Join(", ", missing.Select(kv => $"{kv.Key} ({Show(kv.Value)})"))}, " +
-                   $"and this one doesn't. Each run starts from the template again, so {(missing.Count == 1 ? "it" : "they")} would have the template's " +
-                   $"{(missing.Count == 1 ? "value" : "values")}: {string.Join(", ", missing.Select(kv => Show(workflow.ValueOf(kv.Key))))}. " +
-                   "Put the ones you still want in set, or run this again as it is to use the template's values.";
+            var one = missing.Count == 1;
+            return $"your last run of {template} also set {string.Join(", ", missing.Select(kv => $"{kv.Key} ({Show(kv.Value)})"))}; " +
+                   $"this one doesn't, so {(one ? "it has the template's value" : "they have the template's values")} " +
+                   $"({string.Join(", ", missing.Select(kv => Show(workflow.ValueOf(kv.Key))))}): each run starts from the template. " +
+                   "Set them again when you mean to keep them.";
         }
     }
 
@@ -372,7 +373,7 @@ public sealed class ComfyTool : Tool
         var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
         ComfyWorkflow workflow;
         string what;
-        string? templateName = null;
+        string? templateName = null, forgotten = null;
         if (GetString(args, "name") is { Length: > 0 } name && args["workflow"] is null && GetString(args, "workflow_file") is null)
         {
             var all = await hub.TemplatesAsync(api, ct).ConfigureAwait(false);
@@ -380,8 +381,7 @@ public sealed class ComfyTool : Tool
                            ?? throw new ComfyWorkflowException($"There is no template \"{name}\"" + (nearest.Count > 0 ? $"; did you mean {string.Join(", ", nearest)}?" : "; list them with action=templates and search."));
             (_, workflow) = await LoadTemplateAsync(hub, api, template, ct).ConfigureAwait(false);
             what = templateName = template.Name;
-            if (Forgotten(template.Name, workflow, args["set"] as JsonObject) is { } forgotten)
-                return ToolResult.Error(forgotten);
+            forgotten = Forgotten(template.Name, workflow, args["set"] as JsonObject);
         }
         else if (GetString(args, "workflow_file") is { Length: > 0 } file)
         {
@@ -399,13 +399,15 @@ public sealed class ComfyTool : Tool
         }
         else
             throw new ToolArgumentException("action=run needs name (a template), workflow_file or workflow.");
+        // The note on changes left out comes with whatever this call ends in.
+        ToolResult Fail(string text) => ToolResult.Error(forgotten is null ? text : text + "\nNote: " + forgotten);
 
         if (args["set"] is JsonObject changes && changes.Count > 0 && workflow.Set(changes, library) is { Count: > 0 } setProblems)
         {
             // Node ids guessed before the template was looked at ("6.text" for its prompt): its usual inputs say which they are.
             var usual = setProblems.Any(p => p.Contains("there is no node", StringComparison.Ordinal)) ? workflow.UsualChanges(library) : [];
-            return ToolResult.Error("Nothing was run; these changes don't fit the workflow:\n- " + string.Join("\n- ", setProblems) +
-                                    (usual.Count > 0 ? $"\nInputs a run of {what} usually changes: {string.Join(", ", usual.Take(30))}." : ""));
+            return Fail("Nothing was run; these changes don't fit the workflow:\n- " + string.Join("\n- ", setProblems) +
+                        (usual.Count > 0 ? $"\nInputs a run of {what} usually changes: {string.Join(", ", usual.Take(30))}." : ""));
         }
 
         // Files of the user's own: uploaded into ComfyUI's input folder, and named as it knows them.
@@ -413,7 +415,7 @@ public sealed class ComfyTool : Tool
         foreach (var (id, input, path) in workflow.LocalFiles(library, ctx.ResolvePath))
         {
             if (!File.Exists(path))
-                return ToolResult.Error($"Nothing was run: node {id} input \"{input}\" names {path}, which doesn't exist.");
+                return Fail($"Nothing was run: node {id} input \"{input}\" names {path}, which doesn't exist.");
             ctx.Progress?.Invoke($"Uploading {Path.GetFileName(path)}…");
             ((JsonObject)workflow.Nodes[id]!["inputs"]!)[input] = await api.UploadAsync(path, ct).ConfigureAwait(false);
             uploaded.Add(id + "." + input);
@@ -430,19 +432,20 @@ public sealed class ComfyTool : Tool
             problems = workflow.Validate(library, uploaded, warnings);
         }
         if (problems.Count > 0)
-            return ToolResult.Error($"Nothing was run; fix these in {what} and run it again:\n- " + string.Join("\n- ", problems.Take(40)) +
-                                    (problems.Count > 40 ? $"\n- … and {problems.Count - 40} more" : ""));
+            return Fail($"Nothing was run; fix these in {what} and run it again:\n- " + string.Join("\n- ", problems.Take(40)) +
+                        (problems.Count > 40 ? $"\n- … and {problems.Count - 40} more" : ""));
 
         var clientId = "blackbox-" + Guid.NewGuid().ToString("N")[..12];
         var (promptId, refused) = await ComfyRunner.QueueAsync(api, workflow, clientId, ct).ConfigureAwait(false);
         if (promptId is null)
-            return ToolResult.Error($"ComfyUI refused {what}; nothing was run:\n- " + string.Join("\n- ", refused));
+            return Fail($"ComfyUI refused {what}; nothing was run:\n- " + string.Join("\n- ", refused));
         if (templateName is not null)
             lock (_lastRuns) _lastRuns[templateName] = args["set"] is JsonObject done ? ComfyWorkflow.Changes(done) : [];
         _ranJobs = true;
         hub.RememberJob(promptId, clientId, workflow.All().ToDictionary(n => n.Id, n => ComfyWorkflow.TitleOf(n.Node) ?? ComfyWorkflow.ClassOf(n.Node)));
         var result = await WaitForAsync(args, hub, api, promptId, ctx, ct).ConfigureAwait(false);
-        var notes = refused.Select(r => "Left out: " + r).Concat(warnings.Select(w => "Note: " + w)).ToList();
+        var notes = refused.Select(r => "Left out: " + r).Concat(warnings.Select(w => "Note: " + w))
+            .Concat(forgotten is null ? [] : ["Note: " + forgotten]).ToList();
         return notes.Count > 0 ? result with { Text = string.Join("\n", notes) + "\n" + result.Text } : result;
     }
 
