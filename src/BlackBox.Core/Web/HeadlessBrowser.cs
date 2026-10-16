@@ -90,7 +90,7 @@ public sealed class HeadlessBrowser(string executable, string profileDirectory)
             using var process = new Process { StartInfo = psi };
             process.Start();
             var stdout = process.StandardOutput.ReadToEndAsync(ct);
-            _ = process.StandardError.ReadToEndAsync(ct); // drained so the browser never blocks on a full pipe
+            var stderr = process.StandardError.ReadToEndAsync(ct); // drained so the browser never blocks on a full pipe
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(30));
             try
@@ -103,11 +103,24 @@ public sealed class HeadlessBrowser(string executable, string profileDirectory)
                 ct.ThrowIfCancellationRequested();
                 throw new WebPageException($"The browser did not finish loading {url.Host} in 30 seconds.");
             }
-            return await stdout.ConfigureAwait(false);
+            var html = await stdout.ConfigureAwait(false);
+            // Nothing back: where Edge's (or Chrome's) HeadlessModeEnabled policy is off, it quits with
+            // 0 and only a line on its error output says why. --dump-dom works headless only.
+            if (html.Length == 0 && await SaidAsync(stderr).ConfigureAwait(false) is { } said &&
+                said.Contains("Headless mode is disallowed", StringComparison.OrdinalIgnoreCase))
+                throw new WebPageException("The browser won't run headless on this PC (its HeadlessModeEnabled policy is off), so pages that need one can't be loaded here.");
+            return html;
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>What the browser wrote to its error output, if it has finished writing within a moment (a helper it started may hold the pipe).</summary>
+    private static async Task<string?> SaidAsync(Task<string> errorOutput)
+    {
+        try { return await errorOutput.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false); }
+        catch (Exception ex) when (ex is TimeoutException or OperationCanceledException or IOException) { return null; }
     }
 }

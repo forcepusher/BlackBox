@@ -138,6 +138,102 @@ public class ComfyFrontendTests
         }
     }
 
+    [Fact]
+    public async Task Where_headless_mode_is_refused_a_hidden_window_does_the_work_and_no_window_shows()
+    {
+        var browser = HeadlessBrowser.FindExecutable()!;
+        if (browser is null || !OperatingSystem.IsWindows())
+            Assert.Skip("No Edge or Chrome on this PC, or not Windows.");
+        var ct = TestContext.Current.CancellationToken;
+        using var site = new FileServer();
+        site.Page("/", Page);
+        var root = Directory.CreateTempSubdirectory("bb-frontend-").FullName;
+        var ports = new List<int>();
+        try
+        {
+            // As on a PC whose HeadlessModeEnabled policy is off, once that has been found out.
+            var frontend = new ComfyFrontend(root) { HeadlessRefused = true };
+            var output = await frontend.ConvertAsync(site.Url, 1, Workflow, ct);
+            Assert.Equal(3, (int)output["1"]!["inputs"]!["nodes"]!);
+            var profile = Assert.Single(Directory.GetDirectories(root));
+            ports.Add(PortOf(profile));
+
+            var browsers = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(browser))
+                .Where(p => Platform.ProcessCommandLine.Of(p.Id) is { } line && line.Contains(profile, StringComparison.OrdinalIgnoreCase) && !line.Contains("--type="))
+                .ToList();
+            var main = Assert.Single(browsers);
+            Assert.DoesNotContain("--headless", Platform.ProcessCommandLine.Of(main.Id));
+            Assert.Equal(0, VisibleWindows(main.Id));
+            await frontend.DisposeAsync();
+            Assert.False(await AnswersAsync(ports[0]));
+        }
+        finally
+        {
+            await CleanUpAsync(root, ports);
+        }
+    }
+
+    [Fact]
+    public async Task A_browser_that_refuses_headless_mode_is_remembered_and_its_words_reported()
+    {
+        if (!OperatingSystem.IsWindows())
+            Assert.Skip("Windows only.");
+        var ct = TestContext.Current.CancellationToken;
+        var root = Directory.CreateTempSubdirectory("bb-frontend-").FullName;
+        var log = Path.Combine(root + "-launches.txt");
+        // Refuses headless as Edge does under that policy, and fails otherwise too, so no window opens.
+        var launcher = root + "-refuses.cmd";
+        await File.WriteAllTextAsync(launcher, $$"""
+            @echo off
+            echo %*>>"{{log}}"
+            echo %* | find "--headless" >nul && (echo Headless mode is disallowed by the system admin. 1>&2 & exit /b 0)
+            exit /b 3
+            """, ct);
+        try
+        {
+            var frontend = new ComfyFrontend(root) { BrowsersForTests = [launcher] };
+            var refused = await Assert.ThrowsAsync<ComfyApiException>(() => frontend.ConvertAsync(new Uri("http://127.0.0.1:9/"), 1, Workflow, ct));
+            Assert.Contains("won't run headless on this PC", refused.Message);
+            Assert.Contains("Headless mode is disallowed by the system admin.", refused.Message);
+            Assert.Contains("in a hidden window: The browser closed at once (exit code 3).", refused.Message);
+            Assert.True(frontend.HeadlessRefused);
+
+            // The next start goes straight to a window.
+            await Assert.ThrowsAsync<ComfyApiException>(() => frontend.ConvertAsync(new Uri("http://127.0.0.1:9/"), 1, Workflow, ct));
+            var starts = await File.ReadAllLinesAsync(log, ct);
+            Assert.Equal([true, false, false], starts.Select(s => s.Contains("--headless")));
+        }
+        finally
+        {
+            File.Delete(launcher);
+            File.Delete(log);
+            await CleanUpAsync(root, []);
+        }
+    }
+
+    private static int VisibleWindows(int pid)
+    {
+        var count = 0;
+        EnumWindows((window, _) =>
+        {
+            GetWindowThreadProcessId(window, out var owner);
+            if (owner == pid && IsWindowVisible(window)) count++;
+            return true;
+        }, 0);
+        return count;
+    }
+
+    private delegate bool EnumWindowsProc(nint window, nint parameter);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc callback, nint parameter);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(nint window);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(nint window, out int processId);
+
     [Theory]
     [InlineData(@"""C:\Edge\msedge.exe"" --headless=new ""--user-data-dir=C:\Data\comfy ui\browser"" about:blank", @"C:\Data\comfy ui\browser")]
     [InlineData(@"msedge.exe --user-data-dir=""C:\Data\comfy ui\browser"" about:blank", @"C:\Data\comfy ui\browser")]

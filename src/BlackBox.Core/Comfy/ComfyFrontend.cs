@@ -15,8 +15,7 @@ namespace BlackBox.Core.Comfy;
 /// </summary>
 /// <remarks>
 /// Every start of the browser gets a profile folder of its own under <c>profileRoot</c>, and the
-/// browsers earlier starts left running are closed first. With one profile for every start, a
-/// browser left running on it made each later one quit at once.
+/// browsers earlier starts left running are closed first, so none stands in a later start's way.
 /// </remarks>
 public sealed partial class ComfyFrontend(string profileRoot) : IAsyncDisposable
 {
@@ -73,20 +72,26 @@ public sealed partial class ComfyFrontend(string profileRoot) : IAsyncDisposable
         var browsers = BrowsersForTests ?? Web.HeadlessBrowser.FindExecutables();
         if (browsers.Count == 0)
             throw new ComfyApiException("Turning a saved workflow into one ComfyUI can run needs Edge or Chrome, and neither is on this PC.");
-        // Edge first; Chrome when Edge can't be started and the PC has it too.
+        // Edge first, Chrome when Edge can't be started and the PC has it too; each headless first,
+        // then as a normal browser with its window hidden.
         var failures = new List<string>();
         foreach (var exe in browsers)
         {
-            try
+            foreach (var headless in HeadlessRefused ? [false] : new[] { true, false })
             {
-                await LaunchAsync(exe, ct).ConfigureAwait(false);
+                try
+                {
+                    await LaunchAsync(exe, headless, ct).ConfigureAwait(false);
+                    break;
+                }
+                catch (ComfyApiException ex)
+                {
+                    failures.Add($"{Path.GetFileNameWithoutExtension(exe)} {(headless ? "headless" : "in a hidden window")}: {ex.Message}");
+                    await CloseBrowserAsync().ConfigureAwait(false);
+                }
+            }
+            if (_socket is not null)
                 break;
-            }
-            catch (ComfyApiException ex)
-            {
-                failures.Add(browsers.Count > 1 ? $"{Path.GetFileNameWithoutExtension(exe)}: {ex.Message}" : ex.Message);
-                await CloseBrowserAsync().ConfigureAwait(false);
-            }
         }
         if (_socket is null)
             throw new ComfyApiException(string.Join(" ", failures));
@@ -108,28 +113,46 @@ public sealed partial class ComfyFrontend(string profileRoot) : IAsyncDisposable
     }
 
     /// <summary>
-    /// Starts <paramref name="exe"/> headless in a profile folder of its own and connects to its page.
+    /// The browser won't run headless on this PC: it quit saying "Headless mode is disallowed by the
+    /// system admin." (Edge's and Chrome's HeadlessModeEnabled policy turned off). Later starts go
+    /// straight to a hidden window.
+    /// </summary>
+    internal bool HeadlessRefused { get; set; }
+
+    /// <summary>
+    /// Starts <paramref name="exe"/> in a profile folder of its own, headless or as a normal browser
+    /// whose window is hidden from the start (no window shows, nor a taskbar button, and the page's
+    /// scripts run at full speed), and connects to its page.
     /// </summary>
     /// <remarks>
-    /// Started by a BlackBox run as administrator, Edge and Chrome start a copy of themselves that
-    /// isn't, and quit with 0: every start ended in "The browser closed at once (exit code 0)", and the
-    /// copy stayed behind with the profile. --do-not-de-elevate keeps the browser as it was started;
-    /// a browser that hands over to a copy anyway (after an update, say) is found all the same, by
-    /// the debugging port the copy writes into the profile.
+    /// Edge and Chrome can quit with 0 at once without anything wrong with them: with headless mode
+    /// turned off by policy (then a hidden window does), and started by a program run as
+    /// administrator, when they start an un-elevated copy of themselves (--do-not-de-elevate keeps
+    /// them as they are). A browser that hands over to a copy of itself (after an update, say) is
+    /// found all the same, by the debugging port the copy writes into the profile.
     /// </remarks>
-    private async Task LaunchAsync(string exe, CancellationToken ct)
+    private async Task LaunchAsync(string exe, bool headless, CancellationToken ct)
     {
         var profile = _profile = Path.Combine(profileRoot, $"{Environment.ProcessId}-{Interlocked.Increment(ref _launches)}");
         Directory.CreateDirectory(profile);
         // Its output goes to pipes of its own (drained), so it doesn't hold on to BlackBox's console,
         // and it lives no longer than BlackBox.
-        var psi = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (var arg in new[]
-                 {
-                     "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-extensions",
+        var psi = new ProcessStartInfo(exe)
+        {
+            UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            WindowStyle = headless ? ProcessWindowStyle.Normal : ProcessWindowStyle.Hidden,
+        };
+        IEnumerable<string> arguments = headless
+            ? ["--headless=new"]
+            // Hidden windows are throttled like background tabs unless told otherwise; off the screen, should one show.
+            : ["--window-position=-32000,-32000", "--window-size=1280,800", "--disable-backgrounding-occluded-windows",
+               "--disable-renderer-backgrounding", "--disable-background-timer-throttling"];
+        foreach (var arg in arguments.Concat(
+                 [
+                     "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-extensions",
                      "--disable-sync", "--mute-audio", "--do-not-de-elevate", "--remote-debugging-port=0", "--remote-allow-origins=*",
                      $"--user-data-dir={profile}", "about:blank",
-                 })
+                 ]))
             psi.ArgumentList.Add(arg);
         Process browser;
         try
@@ -157,6 +180,11 @@ public sealed partial class ComfyFrontend(string profileRoot) : IAsyncDisposable
                     throw new ComfyApiException($"The browser closed at once (exit code {browser.ExitCode}).{Tail(said)}");
                 // Quitting with 0 that soon, it handed over to a copy of itself: that one opens the port.
                 quitAt = waited.Elapsed;
+            }
+            if (quitAt is not null && headless && Tail(said).Contains("Headless mode is disallowed", StringComparison.OrdinalIgnoreCase))
+            {
+                HeadlessRefused = true;
+                throw new ComfyApiException($"The browser won't run headless on this PC (its HeadlessModeEnabled policy is off).{Tail(said)}");
             }
             if (quitAt is { } at && waited.Elapsed - at > TimeSpan.FromSeconds(10))
                 throw new ComfyApiException($"The browser closed at once (exit code 0), and no copy of it opened its debugging port.{Tail(said)}");
