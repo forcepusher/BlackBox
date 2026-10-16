@@ -44,6 +44,22 @@ public abstract class DesktopActionTool : Tool
 
     private protected abstract Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct);
 
+    /// <summary>
+    /// The wait <see cref="ExecuteAsync"/> makes before an action, made again inside one that takes
+    /// a while (a click whose target is still being looked for, a series of presses, long text):
+    /// typing to the agent that starts meanwhile must hold the rest too. Returns whether it waited:
+    /// the keyboard is then in BlackBox's window, and keys meant for another need it given back.
+    /// </summary>
+    private protected static async Task<bool> WaitWhileUserTypesAsync(ToolContext ctx, CancellationToken ct)
+    {
+        if (ctx.UserComposing?.Invoke() != true)
+            return false;
+        var paused = System.Diagnostics.Stopwatch.StartNew();
+        while (ctx.UserComposing() && paused.Elapsed < MaxUserPause)
+            await Task.Delay(200, ct).ConfigureAwait(false);
+        return true;
+    }
+
     protected static (int X, int Y) Point(JsonObject args, ToolContext ctx, string xKey = "x", string yKey = "y") =>
         ctx.GetScreenSpace().ToScreen(RequireNumber(args, xKey), RequireNumber(args, yKey));
 
@@ -156,6 +172,10 @@ public sealed class MouseClickTool : DesktopActionTool
         var (aimed, note) = await AimAsync(args, ctx, ct).ConfigureAwait(false);
         if (aimed is not { } point)
             return note; // held back: nothing was clicked
+        // The look is a request to the model, seconds long: typing to the agent that started
+        // meanwhile holds the click too. It went ahead mid-word, and the rest of the message
+        // landed in the window it clicked.
+        await WaitWhileUserTypesAsync(ctx, ct).ConfigureAwait(false);
         var button = ParseButton(GetString(args, "button"));
         var clicks = Math.Clamp((int)(GetNumber(args, "clicks") ?? 1), 1, 3);
         // The screen just before the click, not before the look: what changed while the model
@@ -333,12 +353,22 @@ public sealed partial class TypeTextTool : DesktopActionTool
     public override JsonObject Parameters => Schema(("text", Str("Text to type"), true));
     public override string Describe(JsonObject args) => $"Type \"{(GetString(args, "text") ?? "").Clip(60)}\"";
 
-    private protected override Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    /// <summary>How much is typed at a time (about 0.2 s) before checking that the user hasn't started typing to the agent.</summary>
+    internal const int Chunk = 200;
+
+    private protected override async Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var text = EnterForEscapedBreaks(RequireString(args, "text"));
         ctx.Platform.HostWindow.YieldFocus();
-        ctx.Platform.Input.TypeText(text);
-        return Task.FromResult<Acted>($"Typed {text.Length} characters.");
+        // Long text takes seconds: typing to the agent that starts meanwhile holds the rest, which
+        // then goes back to the window it was meant for, not into the user's message.
+        for (var at = 0; at < text.Length; at += Chunk)
+        {
+            if (at > 0 && await WaitWhileUserTypesAsync(ctx, ct).ConfigureAwait(false))
+                ctx.Platform.HostWindow.YieldFocus();
+            ctx.Platform.Input.TypeText(text.Substring(at, Math.Min(Chunk, text.Length - at)));
+        }
+        return $"Typed {text.Length} characters.";
     }
 
     /// <summary>
@@ -417,6 +447,10 @@ public sealed class PressKeysTool : DesktopActionTool
         var total = repeat * presses.Count;
         for (var i = 0; i < total; i++)
         {
+            // A series takes a while: typing to the agent that starts meanwhile holds the rest, which
+            // then goes back to the window it was meant for. It went into the user's message.
+            if (i > 0 && await WaitWhileUserTypesAsync(ctx, ct).ConfigureAwait(false))
+                ctx.Platform.HostWindow.YieldFocus();
             var press = presses[i % presses.Count];
             if (hold > TimeSpan.Zero)
             {
