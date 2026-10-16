@@ -84,7 +84,7 @@ public sealed partial class AgentSession(
         return left;
     }
 
-    /// <summary>Adds the user's messages that arrived since the last step, as plain user messages: the history only grows.</summary>
+    /// <summary>Adds the user's messages that arrived since the last step, as user messages: the history only grows.</summary>
     private void DeliverIncoming()
     {
         lock (_incoming)
@@ -95,15 +95,73 @@ public sealed partial class AgentSession(
             _arrived = new CancellationTokenSource();
             toolContext.UserMessage = _arrived.Token;
             while (_incoming.TryDequeue(out var input))
-                History.Add(input.ToMessage(toolContext.SeesImages));
+            {
+                History.Add(Interjection(input.ToMessage(toolContext.SeesImages)));
+                _interrupted = true;
+            }
         }
     }
+
+    /// <summary>What the user asked for in this run, quoted to the model when a message of theirs comes in on top of it.</summary>
+    private string? _request;
+
+    /// <summary>A message came in during the run since the model was last reminded of the request it came in on.</summary>
+    private bool _interrupted;
+
+    /// <summary>
+    /// A message that came in while the model works, marked as one: answered or acted on, and then
+    /// the request goes on. Unmarked, a question read as the new task: asked mid-task why something
+    /// had failed, while it was trying Pony Diffusion for a picture, the model answered the question
+    /// and ended there, the picture forgotten.
+    /// </summary>
+    private ChatMessage Interjection(ChatMessage message)
+    {
+        var request = _request is { } r ? $"\"{r}\"" : "the task above";
+        var note = $"[Sent while you were working on {request}. Answer it or do what it asks, then carry on with {(_request is null ? "the task" : "that")} unless it changes or cancels it.]\n";
+        if (message.Parts is { Count: > 0 } parts)
+            parts[0] = ContentPart.FromText(note + parts[0].Text);
+        else
+            message.Content = note + message.Content;
+        return message;
+    }
+
+    /// <summary>What the model is told when it would end a run a message of the user's came in on.</summary>
+    private string ResumeText() =>
+        $"[BlackBox] Before you finish: the user's message came in while you were working on {(_request is { } r ? $"\"{r}\"" : "the task before it")}. " +
+        "If that isn't done and the user didn't change or cancel it, carry on with it now. If it is done or no longer wanted, reply without tools.";
+
+    /// <summary>
+    /// The request a run works on, in the user's words (its first lines): the message that started
+    /// it, or for one that only says to go on ("Continue."), the last message before it that asked
+    /// for something. Null for a message of files alone.
+    /// </summary>
+    private string? RequestOf(UserInput input)
+    {
+        var text = input.Text.Trim();
+        if (GoOn().IsMatch(text))
+            text = History.LastOrDefault(m => m.FromUser && !GoOn().IsMatch(TypedText(m))) is { } earlier ? TypedText(earlier) : "";
+        text = text.ReplaceLineEndings(" ").Trim();
+        return text.Length == 0 ? null : text.Length <= 200 ? text : text[..197].TrimEnd() + "…";
+    }
+
+    /// <summary>What the user typed in a message of theirs, without the list of files that came with it.</summary>
+    private static string TypedText(ChatMessage m)
+    {
+        var text = (m.Parts is { Count: > 0 } parts ? parts[0].Text : m.Content) ?? "";
+        var files = text.IndexOf("[The user attached ", StringComparison.Ordinal);
+        return (files < 0 ? text : text[..files]).Trim();
+    }
+
+    [GeneratedRegex(@"^(continue|go on|carry on|keep going)[.!]?$", RegexOptions.IgnoreCase)]
+    private static partial Regex GoOn();
 
     public Task RunAsync(string userText, IAgentObserver observer, CancellationToken ct) => RunAsync(new UserInput(userText), observer, ct);
 
     /// <summary>Runs the task the user sent: the model works on it, with its tools, until it is done or stopped.</summary>
     public async Task RunAsync(UserInput input, IAgentObserver observer, CancellationToken ct)
     {
+        _request = RequestOf(input);
+        _interrupted = false;
         History.Add(input.ToMessage(toolContext.SeesImages));
         toolContext.UserMessage = _arrived.Token;
         if (toolContext.Locate is null && FreshLook.Enabled)
@@ -170,6 +228,14 @@ public sealed partial class AgentSession(
                     {
                         nudges++;
                         History.Add(ChatMessage.User(NudgeText));
+                        continue;
+                    }
+                    // A message came in on top of the request: with it answered, the request may
+                    // still be waiting. Once per such message, the model is asked.
+                    if (_interrupted)
+                    {
+                        _interrupted = false;
+                        History.Add(ChatMessage.User(ResumeText()));
                         continue;
                     }
                     observer.OnFinished(AgentStopReason.Completed, null);

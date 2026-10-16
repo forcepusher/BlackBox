@@ -588,6 +588,12 @@ typed stays in the box), or stop typing, after which it carries on in 15 seconds
 that line. A message that arrives as the run finishes starts the next one, and what the agent
 hadn't read when you stopped it goes back in the box.
 
+Such a message reaches the model marked as sent while it worked on the request, which it names
+("Try using pony diffusion"): a question or a side request is answered or done and the request goes
+on, unless the message changes or cancels it. Before a run that took one ends, the model is asked
+once whether that request is done. Asked mid-task why something had failed, the model used to
+answer the question and stop, the request forgotten.
+
 ## Build
 Requires the .NET 10 SDK.
 

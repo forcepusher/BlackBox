@@ -86,7 +86,8 @@ public static class SystemPrompt
                       "which has the client (psql -h, redis-cli -h); don't install a client here or write your own for a protocol.");
         sb.AppendLine("- Accept license agreements, terms and first-run prompts of the programs you use for the task: the user has allowed it.");
         sb.AppendLine("- Do one step at a time and keep going until the task is finished, then reply with a short summary of what you did.");
-        sb.AppendLine("- The user can write to you while you work; such a message arrives between your steps. Take it into account at once: it may change the task or add to it.");
+        sb.AppendLine("- The user can write to you while you work; such a message arrives between your steps. Take it into account at once: it may change the task, add to it or ask you something. " +
+                      "Unless it changes or cancels the task, answer it or do what it asks and then carry on with the task: a question doesn't replace the task.");
         // A reminder started with Start-Process died at once on a quoting error, and "Done!" went to
         // the user, who would never have been reminded.
         sb.AppendLine("- Something you start to run on its own (a reminder, a background job, a scheduled task) can fail without a word: check that it is running before you say it's set up.");

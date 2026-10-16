@@ -326,17 +326,21 @@ public class AgentSessionTests
         Assert.Contains(observer.Notices, n => n.Contains("Reconnecting"));
     }
 
+    /// <summary>The note a message sent during the run comes with, naming the request it came in on.</summary>
+    private static string SentDuring(string request) =>
+        $"[Sent while you were working on \"{request}\". Answer it or do what it asks, then carry on with that unless it changes or cancels it.]\n";
+
     [Fact]
     public async Task A_message_sent_during_a_run_reaches_the_model_before_its_next_step()
     {
         AgentSession? session = null;
-        var replies = new Queue<string>([Sse.ToolCall("w1", "wait", """{"seconds":0}"""), Sse.Text("Made it say hello world.")]);
+        var replies = new Queue<string>([Sse.ToolCall("w1", "wait", """{"seconds":0}"""), Sse.Text("Made it say hello world."), Sse.Text("That was all.")]);
         var server = new ScriptedServer
         {
             Responder = _ =>
             {
                 // The user writes while the model is busy with its first step.
-                if (replies.Count == 2) session!.Steer("Actually make it say hello world");
+                if (replies.Count == 3) session!.Steer("Actually make it say hello world");
                 return replies.Dequeue();
             },
         };
@@ -346,9 +350,9 @@ public class AgentSessionTests
         await session.RunAsync("Write hello into the file", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal(2, server.Requests.Count);
-        Assert.Equal("Actually make it say hello world", LastText(server.Requests[1]));
-        Assert.Contains(session.History, m => m.FromUser && m.Content == "Actually make it say hello world");
+        Assert.Equal(3, server.Requests.Count);
+        Assert.Equal(SentDuring("Write hello into the file") + "Actually make it say hello world", LastText(server.Requests[1]));
+        Assert.Contains(session.History, m => m.FromUser && m.Content!.EndsWith("\nActually make it say hello world"));
         Assert.Empty(session.TakeUndelivered());
     }
 
@@ -356,12 +360,12 @@ public class AgentSessionTests
     public async Task A_message_sent_while_the_model_writes_its_answer_keeps_the_run_going()
     {
         AgentSession? session = null;
-        var replies = new Queue<string>([Sse.Text("Done: the file says hello."), Sse.Text("Changed it to hello world.")]);
+        var replies = new Queue<string>([Sse.Text("Done: the file says hello."), Sse.Text("Changed it to hello world."), Sse.Text("That was all.")]);
         var server = new ScriptedServer
         {
             Responder = _ =>
             {
-                if (replies.Count == 2) session!.Steer("Make it hello world instead");
+                if (replies.Count == 3) session!.Steer("Make it hello world instead");
                 return replies.Dequeue();
             },
         };
@@ -371,15 +375,73 @@ public class AgentSessionTests
         await session.RunAsync("Write hello into the file", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal(2, server.Requests.Count);
-        Assert.Equal("Make it hello world instead", LastText(server.Requests[1]));
+        Assert.Equal(3, server.Requests.Count);
+        Assert.Equal(SentDuring("Write hello into the file") + "Make it hello world instead", LastText(server.Requests[1]));
+    }
+
+    [Fact]
+    public async Task A_question_sent_during_a_task_is_answered_and_the_task_goes_on()
+    {
+        // As in a run of the user's: asked mid-task why something had failed, while it was trying
+        // Pony Diffusion for a picture, the model answered the question and ended the run there.
+        AgentSession? session = null;
+        var replies = new Queue<string>([
+            Sse.ToolCall("m1", "wait", """{"seconds":0}"""),
+            Sse.Text("Edge quit because another Edge held its profile."),
+            Sse.ToolCall("m2", "wait", """{"seconds":0}"""),
+            Sse.Text("Made the picture with Pony Diffusion."),
+        ]);
+        var server = new ScriptedServer
+        {
+            Responder = _ =>
+            {
+                if (replies.Count == 4) session!.Steer("Can you analyze what caused the problem starting up Edge?");
+                return replies.Dequeue();
+            },
+        };
+        var (s, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        session = s;
+
+        await session.RunAsync("Try using pony diffusion", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(4, server.Requests.Count);
+        // The question names the task it came in on...
+        Assert.Equal(SentDuring("Try using pony diffusion") + "Can you analyze what caused the problem starting up Edge?", LastText(server.Requests[1]));
+        // ...and with it answered, the model is asked about the task before the run can end.
+        var reminder = LastText(server.Requests[2]);
+        Assert.StartsWith("[BlackBox] Before you finish: the user's message came in while you were working on \"Try using pony diffusion\".", reminder);
+        // Once: the run then ends with the picture.
+        Assert.Equal("Made the picture with Pony Diffusion.", session.History[^1].Content);
+    }
+
+    [Fact]
+    public async Task A_run_that_only_says_continue_is_named_by_the_request_before_it()
+    {
+        AgentSession? session = null;
+        var replies = new Queue<string>([Sse.Text("Started the poster."), Sse.ToolCall("w1", "wait", """{"seconds":0}"""), Sse.Text("Made it blue."), Sse.Text("The poster is done.")]);
+        var server = new ScriptedServer
+        {
+            Responder = _ =>
+            {
+                if (replies.Count == 3) session!.Steer("Make it blue");
+                return replies.Dequeue();
+            },
+        };
+        var (s, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        session = s;
+
+        await session.RunAsync("Make a poster for the bake sale", observer, CancellationToken.None);
+        await session.RunAsync("Continue.", observer, CancellationToken.None);
+
+        Assert.Equal(SentDuring("Make a poster for the bake sale") + "Make it blue", LastText(server.Requests[2]));
     }
 
     [Fact]
     public async Task A_message_ends_a_long_wait_and_one_sent_after_the_run_is_handed_back()
     {
         AgentSession? session = null;
-        var server = new ScriptedServer(Sse.ToolCall("w1", "wait", """{"seconds":120}"""), Sse.Text("Okay, stopping the watch."));
+        var server = new ScriptedServer(Sse.ToolCall("w1", "wait", """{"seconds":120}"""), Sse.Text("Okay, stopping the watch."), Sse.Text("Nothing else to do."));
         var (s, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
         session = s;
         _ = Task.Delay(500).ContinueWith(_ => session.Steer("You can stop watching now"));
@@ -389,7 +451,7 @@ public class AgentSessionTests
 
         Assert.True(clock.Elapsed < TimeSpan.FromSeconds(20), $"the wait went on for {clock.Elapsed}");
         Assert.Contains("the user sent you a message", observer.Results[0].Text);
-        Assert.Equal("You can stop watching now", LastText(server.Requests[1]));
+        Assert.Equal(SentDuring("Watch the chat for two minutes") + "You can stop watching now", LastText(server.Requests[1]));
 
         // Too late for this run: the app sends it on as the next one.
         session.Steer("And thanks");
@@ -461,12 +523,12 @@ public class AgentSessionTests
     {
         var (dir, picture, _) = Dropped();
         AgentSession? session = null;
-        var replies = new Queue<string>([Sse.ToolCall("w1", "wait", """{"seconds":0}"""), Sse.Text("Using that one.")]);
+        var replies = new Queue<string>([Sse.ToolCall("w1", "wait", """{"seconds":0}"""), Sse.Text("Using that one."), Sse.Text("That was all.")]);
         var server = new ScriptedServer
         {
             Responder = _ =>
             {
-                if (replies.Count == 2) session!.Steer(new UserInput("Use this picture instead", [picture]));
+                if (replies.Count == 3) session!.Steer(new UserInput("Use this picture instead", [picture]));
                 return replies.Dequeue();
             },
         };
@@ -477,7 +539,7 @@ public class AgentSessionTests
 
         // After the wait's screenshot comes the message, with its picture.
         var parts = Parts(server.Requests[1]);
-        Assert.StartsWith("Use this picture instead\n\n[The user attached this file:]", parts[0]["text"]!.GetValue<string>());
+        Assert.StartsWith(SentDuring("Make a poster") + "Use this picture instead\n\n[The user attached this file:]", parts[0]["text"]!.GetValue<string>());
         Assert.Single(parts, p => p["type"]!.GetValue<string>() == "image_url");
         Assert.Empty(session.TakeUndelivered());
     }
