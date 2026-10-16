@@ -322,9 +322,8 @@ Thinking models get their earlier reasoning sent back each step (`reasoning_cont
 A new BlackBox's address is Kilo's AI gateway (`https://ai-gateway.kilo.ai/api/v1`), whose free
 models answer without an account or a key, and with no model picked it uses
 `nvidia/nemotron-3.5-super-vl:free` there. When another server doesn't answer, the banner under the
-top bar has a **Use Kilo's free models** button to go back to it (the command-line runner has
-`--kilo`); any key in the box is cleared, since one meant for another server is no business of
-Kilo's. Settings saved before keep their address. Without a key BlackBox lists only Kilo's free models (18
+top bar has a **Use Kilo's free models** button to go back to it; any key in the box is cleared,
+since one meant for another server is no business of Kilo's. Settings saved before keep their address. Without a key BlackBox lists only Kilo's free models (18
 of its 398 on 2026-10-16), as only those answer; five of them took screenshots and called tools.
 On BlackBox's click benchmark (fake screens, below) Nemotron 3.5 Super VL hit 12 of 16 targets in
 two runs on the 0-1000 grid it points on, every miss within 16 px of a small link or button;

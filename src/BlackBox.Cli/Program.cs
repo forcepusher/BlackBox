@@ -5,10 +5,9 @@ using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
 
-// Usage: blackbox-cli [--root DIR] [--kilo] [--url URL] [--model ID] [--yes] [--save-shots DIR] [--attach FILE]... "task"
+// Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] [--attach FILE]... "task"
 //   --root        portable folder (default: BLACKBOX_HOME, else .dev/ when run from the repository, else the exe folder);
 //                 its Data/mcp.json lists the MCP servers to start, as in the app
-//   --kilo        use Kilo's free models (no account or key), where a new BlackBox starts, whatever server is saved
 //   --url/--model override the server address and model saved in Data/settings.json; with no model, or one the
 //                 server doesn't offer, the strongest model it offers is used
 //   --yes         approve risky tools without asking
@@ -30,7 +29,6 @@ bool Flag(string flag) => argsList.Remove(flag);
 
 var root = Take("--root") ?? AppPaths.FindRoot(useRepositoryDevFolder: true);
 var shotsDir = Take("--save-shots");
-var kilo = Flag("--kilo");
 var urlOverride = Take("--url");
 var modelOverride = Take("--model");
 var autoYes = Flag("--yes");
@@ -40,7 +38,7 @@ while (Take("--attach") is { } file)
 var task = string.Join(' ', argsList);
 if (string.IsNullOrWhiteSpace(task))
 {
-    Console.Error.WriteLine("Usage: blackbox-cli [--root DIR] [--kilo] [--url URL] [--model ID] [--yes] [--save-shots DIR] [--attach FILE]... \"task\"");
+    Console.Error.WriteLine("Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] [--attach FILE]... \"task\"");
     return 2;
 }
 if (attached.FirstOrDefault(f => !File.Exists(f) && !Directory.Exists(f)) is { } missing)
@@ -71,15 +69,6 @@ using var stopKey = platform.StopKey.Watch(() =>
 var agent = settings.Agent;
 platform.InputOverlay.Duration = TimeSpan.FromSeconds(AgentSettings.InputLogSeconds);
 platform.InputOverlay.Enabled = true;
-if (kilo)
-{
-    // Not saved, and no key: one meant for the saved server is none of Kilo's business. With no
-    // model picked, Kilo's tested one is used.
-    settings.Server.BaseUrl = KiloGateway.Address;
-    settings.Server.ApiKey = "";
-    settings.Server.Model = "";
-    settings.Server.AutoContext = true;
-}
 if (urlOverride is not null) settings.Server.BaseUrl = urlOverride;
 if (modelOverride is not null) settings.Server.Model = modelOverride;
 using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a model can take a while
