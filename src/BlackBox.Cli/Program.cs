@@ -61,7 +61,7 @@ Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 using var stopKey = platform.StopKey.Watch(() =>
 {
     if (cts.IsCancellationRequested) return false;
-    Console.WriteLine($"\n[stop] {DateTime.Now:HH:mm:ss} Esc pressed");
+    Console.WriteLine($"\n[stop] {DateTime.Now:HH:mm:ss} Pause/Break pressed");
     cts.Cancel();
     return true;
 });

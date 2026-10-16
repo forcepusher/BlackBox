@@ -103,7 +103,7 @@ from memory, and those were often wrong, so the model doesn't work from memory h
 - **Run, wait, look.** `action=run` runs a template, a file or a workflow, with changes in `set`
   (`{"6.text": "a red fox in snow", "3.seed": 7}`); a full local path where LoadImage, LoadAudio or
   LoadVideo name a file is uploaded. It waits for the job while its card shows where it is
-  ("SamplerCustomAdvanced, step 2 of 3 · 8:21"); Stop and Esc cancel it in ComfyUI too, and a
+  ("SamplerCustomAdvanced, step 2 of 3 · 8:21"); Stop and Pause/Break cancel it in ComfyUI too, and a
   message from the user ends the wait while the job goes on (`action=status` with its id picks it
   up again). The files come back with their paths, `save_to` copies them where the task wants them,
   and the model gets a look at them (below) to check its work.
@@ -256,7 +256,7 @@ Excel bring one). The message's bubble shows its pictures and the names of its o
 click opens one. A saved chat keeps the paths, not the pictures: carrying on, the model looks at a
 picture again with `read_file`. The command-line runner takes files with `--attach`.
 
-Until a chat is used, it shows first that Esc stops it, how to change a task while it runs and
+Until a chat is used, it shows first that Pause/Break stops it, how to change a task while it runs and
 what it asks before it acts, then that Ctrl+V pastes a screenshot, a picture or files into a
 message and that files can be dropped on the window or picked with the paperclip (the empty box
 says so too), then what BlackBox can do (apps, files and commands, documents, getting the programs
@@ -551,10 +551,15 @@ doesn't start isn't kept, and the agent is told why. `remove` and `list` do what
 tools mid-run changes the tool list, so the server works through the whole prompt once more.
 
 Actions run without asking by default (approvals can be switched on in Settings → General).
-Pressing Stop, or Esc anywhere, halts the agent. Esc works whatever window has focus, and the
-press that stops a run goes no further: the window the agent was working in never sees it, or
-any key pressed while it is held. With no run going it is the usual Esc, and the agent's own Esc
-presses can't trigger it. BlackBox
+Pressing Stop, or Pause/Break anywhere, halts the agent: Pause, or Ctrl+Pause, which Windows
+calls Break (laptops without the key often have one of them on an Fn combination). It works
+whatever window has focus, and the press that stops a run goes no further: the window the agent
+was working in never sees it, or any key pressed while it is held. With no run going it is the
+usual Pause/Break, and the agent's own presses can't trigger it. Esc is left alone, so it does its
+usual job in the windows you work in while the agent runs. After a stop, or an error that ended a
+run, the line saying so in the chat has a Continue button: the task carries on where it stopped,
+as if "Continue." had been sent (a stop before the model had the message runs that message again).
+A chat that ended stopped shows it again when opened from History. BlackBox
 stays on screen while it works but is hidden from the agent's screenshots, and steps behind other
 windows for the moment a click lands on it. Every click and key press the agent makes shows up in a
 log in the bottom-right corner that fades after 15 seconds, with a ring where it clicked. The agent

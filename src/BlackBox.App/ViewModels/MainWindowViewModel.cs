@@ -545,6 +545,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var input = new UserInput(Input.Trim(), Attachments.Select(a => a.Path).ToList());
         Input = "";
         ClearAttachments();
+        await SendAsync(input);
+    }
+
+    private async Task SendAsync(UserInput input)
+    {
         Items.Add(new UserMessageItem(input.Text, input.Files));
         if (IsBusy)
         {
@@ -557,6 +562,47 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         // What arrived just as a run ended, too late for it, starts the next one.
         for (UserInput? next = input; next is not null;)
             next = await RunAsync(next);
+    }
+
+    /// <summary>What Continue sends after a stop: the model reads the conversation up to the stop, and carries on from there.</summary>
+    private const string ContinueText = "Continue.";
+
+    /// <summary>
+    /// The Continue button on the notice a stopped run leaves: the task goes on where it stopped, as if
+    /// "Continue." had been typed. After a stop there was no way back to the task but writing that by
+    /// hand. What is in the box stays there.
+    /// </summary>
+    private void CarryOn()
+    {
+        if (IsBusy)
+            return;
+        _ = SendAsync(new UserInput(ContinueText));
+    }
+
+    /// <summary>
+    /// The notice a run leaves when it ends before the task is done, with Continue on it. Ended
+    /// before the model had the message at all (stopped while the model loaded, no model picked, a
+    /// server that didn't answer), Continue runs that message again instead: "Continue." alone
+    /// would reach the model without the task.
+    /// </summary>
+    private void AddStopNotice(string text, bool isError, UserInput? unsent = null) =>
+        Items.Add(unsent is null
+            ? new NoticeItem(text, isError, CarryOn)
+            : new NoticeItem(text, isError, () => _ = RunAgainAsync(unsent), unsent: true));
+
+    private async Task RunAgainAsync(UserInput input)
+    {
+        if (IsBusy)
+            return;
+        for (UserInput? next = input; next is not null;)
+            next = await RunAsync(next);
+    }
+
+    /// <summary>Takes Continue off every notice: the chat has gone on.</summary>
+    private void HideContinue()
+    {
+        foreach (var notice in Items.OfType<NoticeItem>())
+            notice.CanContinue = false;
     }
 
     /// <summary>When the user last typed in the box; while they are typing, the agent's mouse and keyboard wait.</summary>
@@ -613,11 +659,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         _runDetached = false;
         IsBusy = true;
+        HideContinue();
         _runCts = new CancellationTokenSource();
         var ct = _runCts.Token;
         // This chat's conversation: picking another chat while the run starts up replaces _history.
         var history = _history;
         List<UserInput> late = [];
+        // Whether the model has the message: from the moment the session starts, it is in the conversation.
+        var delivered = false;
 
         try
         {
@@ -627,7 +676,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 await ProbeServerAsync(quiet: true, ct);
             if (Core.Llm.ServerAddress.Candidates(server.BaseUrl).Count == 0 || string.IsNullOrWhiteSpace(server.ModelInUse))
             {
-                AddNotice("Enter your model server's address and pick a model at the top first.", isError: true);
+                AddStopNotice("Enter your model server's address and pick a model at the top first, then press Continue.", isError: true, input);
                 return null;
             }
             // LM Studio loads models on first use; do that now so we know the real context size.
@@ -653,6 +702,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 session.Steer(pending);
             _steerPending.Clear();
             _tick.Start();
+            delivered = true;
             await Task.Run(() => session.RunAsync(input, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
             _settings.Server.LearnContextLimit(session.ContextTokens);
@@ -661,12 +711,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         catch (OperationCanceledException)
         {
             var stopped = StoppedText();
-            if (!_runDetached) AddNotice(stopped, isError: false);
+            if (!_runDetached) AddStopNotice(stopped, isError: false, delivered ? null : input);
         }
         catch (Exception ex)
         {
-            // The run itself never throws; this is the preparation (an address that isn't one, say).
-            if (!_runDetached) AddNotice(ex.Message, isError: true);
+            // The run itself never throws; this is the preparation (an address that isn't one, a
+            // server that doesn't answer), so Continue tries the message again.
+            if (!_runDetached) AddStopNotice(ex.Message, isError: true, delivered ? null : input);
         }
         finally
         {
@@ -711,7 +762,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     [RelayCommand(CanExecute = nameof(IsBusy))]
     private void Stop() => _runCts?.Cancel();
 
-    /// <summary>Esc, from the hook's thread: stops the run in progress, if any.</summary>
+    /// <summary>Pause/Break, from the hook's thread: stops the run in progress, if any.</summary>
     private bool OnStopKey()
     {
         var cts = _runCts;
@@ -727,7 +778,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         var byKey = _stoppedByKey;
         _stoppedByKey = false;
-        return byKey ? "Stopped with Esc." : "Stopped.";
+        return byKey ? "Stopped with Pause/Break." : "Stopped.";
     }
 
     [RelayCommand]
@@ -798,6 +849,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _history = chat.History;
         foreach (var entry in chat.Entries)
             Items.Add(FromEntry(entry));
+        // A chat that ended stopped can be carried on from where it stopped; an earlier stop it went on from can't.
+        foreach (var notice in Items.OfType<NoticeItem>())
+            notice.CanContinue = notice.Stopped && ReferenceEquals(notice, Items[^1]);
         MarkCurrentChat();
     }
 
@@ -879,7 +933,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             Kind = ChatEntryKind.Tool, CallId = t.CallId, Name = t.Name, Summary = t.Summary, State = t.State.ToString(), Text = t.ResultText,
             Files = t.HasPreviews ? t.Previews.Select(p => p.Path).ToList() : null,
         },
-        NoticeItem n => new ChatEntry { Kind = ChatEntryKind.Notice, Text = n.Text, IsError = n.IsError },
+        NoticeItem n => new ChatEntry { Kind = ChatEntryKind.Notice, Text = n.Text, IsError = n.IsError, Stopped = n.Stopped, Unsent = n.Unsent },
         _ => throw new ArgumentOutOfRangeException(nameof(item)),
     };
 
@@ -894,9 +948,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 ResultText = e.Text ?? "",
                 // A call that was still running or waiting when the chat was saved never finished.
                 State = Enum.TryParse<ToolItemState>(e.State, out var state) && state is not (ToolItemState.Running or ToolItemState.AwaitingApproval)
-                    ? state : ToolItemState.Denied,
+                    ? state : ToolItemState.Stopped,
             },
-            _ => new NoticeItem(e.Text ?? "", e.IsError),
+            _ => NoticeFrom(e),
         };
         // The files come back with the chat, as long as they are still there.
         if (e.Kind == ChatEntryKind.Tool && e.Files is { Count: > 0 } files)
@@ -904,6 +958,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         else if (item is AssistantMessageItem { HasText: true } reply)
             item.AddPreviews(Core.Media.FileMentions.Find(reply.Text), _previews);
         return item;
+    }
+
+    /// <summary>
+    /// A saved notice. One a stopped run left gets its Continue back; if the model never had the
+    /// message before it, that is the message the chat shows last so far, which Continue sends again.
+    /// </summary>
+    private NoticeItem NoticeFrom(ChatEntry e)
+    {
+        if (!e.Stopped)
+            return new NoticeItem(e.Text ?? "", e.IsError);
+        if (e.Unsent && Items.OfType<UserMessageItem>().LastOrDefault() is { } message)
+        {
+            var again = new UserInput(message.Text, message.Files);
+            return new NoticeItem(e.Text ?? "", e.IsError, () => _ = RunAgainAsync(again), unsent: true);
+        }
+        return new NoticeItem(e.Text ?? "", e.IsError, CarryOn);
     }
 
     // ---- settings -------------------------------------------------------------------
@@ -1114,7 +1184,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             using var ms = new MemoryStream(result.Image);
             item.Screenshot = Bitmap.DecodeToWidth(ms, 480);
         }
-        if (item.State != ToolItemState.Denied)
+        if (item.State == ToolItemState.AwaitingApproval)
+            item.State = ToolItemState.Stopped; // the run was stopped while the call waited for an OK; Deny would have said Declined
+        else if (item.State is not (ToolItemState.Denied or ToolItemState.Stopped))
             item.State = result.IsError ? ToolItemState.Error : ToolItemState.Done;
     });
 
@@ -1123,16 +1195,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var stopped = StoppedText();
         if (_runDetached) return;
         FinishCurrent();
+        // A call cut short by the stop says so; it used to read "Declined", as if the user had said no to it.
         foreach (var t in Items.OfType<ToolCallItem>().Where(t => t.State is ToolItemState.Running or ToolItemState.AwaitingApproval))
-            t.State = ToolItemState.Denied;
+            t.State = ToolItemState.Stopped;
 
         switch (reason)
         {
             case AgentStopReason.Cancelled:
-                AddNotice(stopped, isError: false);
+                AddStopNotice(stopped, isError: false);
                 break;
             case AgentStopReason.Error:
-                AddNotice(detail ?? "Something went wrong.", isError: true);
+                AddStopNotice(detail ?? "Something went wrong.", isError: true);
                 break;
         }
     });

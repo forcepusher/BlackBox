@@ -116,7 +116,7 @@ public sealed class NoInputOverlay : IInputOverlay
 }
 
 /// <summary>
-/// A system-wide stop key (Esc) that works whatever window has focus.
+/// A system-wide stop key (Pause/Break) that works whatever window has focus.
 /// </summary>
 public interface IStopKey
 {

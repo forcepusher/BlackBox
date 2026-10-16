@@ -25,6 +25,12 @@ public sealed class ChatEntry
     public List<string>? Files { get; set; }
 
     public bool IsError { get; set; }
+
+    /// <summary>For a notice: a run ended here before its task was done (stopped, or an error), so the chat offers to carry on.</summary>
+    public bool Stopped { get; set; }
+
+    /// <summary>For such a notice: the run ended before the model had the user's message, so carrying on sends it again.</summary>
+    public bool Unsent { get; set; }
 }
 
 /// <summary>

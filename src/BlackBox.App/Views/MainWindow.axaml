@@ -10,7 +10,7 @@
         WindowStartupLocation="CenterScreen">
 
   <Window.Styles>
-    <!-- The intro in an unused chat: the cards on what BlackBox can do, and Esc drawn as a key. -->
+    <!-- The intro in an unused chat: the cards on what BlackBox can do, and Pause/Break drawn as a key. -->
     <Style Selector="StackPanel.conversation.unused">
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
@@ -429,7 +429,13 @@
 
             <DataTemplate DataType="vm:NoticeItem">
               <Border Padding="10,6" CornerRadius="6" Background="{StaticResource BbSurface}" HorizontalAlignment="Center">
-                <SelectableTextBlock Classes="muted" Classes.error="{Binding IsError}" Text="{Binding Text}" TextWrapping="Wrap" />
+                <!-- After a stop (Pause/Break, Stop, an error), Continue carries on with the task where it stopped. -->
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Classes="primary" Content="Continue" Padding="12,3" Margin="12,-2,0,-2" VerticalAlignment="Center"
+                          IsVisible="{Binding CanContinue}" Command="{Binding ContinueCommand}"
+                          ToolTip.Tip="Carry on with the task where I stopped" />
+                  <SelectableTextBlock Classes="muted" Classes.error="{Binding IsError}" Text="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </DockPanel>
               </Border>
             </DataTemplate>
 
@@ -450,9 +456,9 @@
             <StackPanel Spacing="6">
               <DockPanel>
                 <Border Classes="key" Margin="0,0,8,0">
-                  <TextBlock Text="Esc" />
+                  <TextBlock Text="Pause/Break" />
                 </Border>
-                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Text="stops me at any time, whatever window is in front. So does the Stop button." />
+                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Text="stops me at any time, whatever window is in front. So does the Stop button. Continue then carries on where I stopped." />
               </DockPanel>
               <TextBlock Classes="muted" TextWrapping="Wrap" Text="While I work I use your mouse and keyboard, so leave them to me. To change or add to the task meanwhile, write it here and press Enter: I read it at my next step. My clicks and key presses pause while you type; click Resume, or stop typing for 15 seconds, to let me carry on without sending." />
               <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding ApprovalNote}" />

@@ -531,7 +531,7 @@ public class ToolTests
     }
 
     [Fact]
-    public async Task Esc_stops_a_run_but_other_keys_and_the_agents_own_presses_do_not()
+    public async Task Pause_or_Break_stops_a_run_but_Esc_other_keys_and_the_agents_own_presses_do_not()
     {
 #if !WINDOWS
         Assert.Skip("Windows only");
@@ -539,25 +539,29 @@ public class ToolTests
 #else
         var ct = TestContext.Current.CancellationToken;
         using var past = new KeysPastTheStopKey();
-        var pressed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stops = 0;
         var platform = new BlackBox.Platform.Windows.WindowsPlatform();
-        using var watch = platform.StopKey.Watch(() => pressed.TrySetResult(true));
+        // A run is going the whole time: every press of the stop key stops one.
+        using var watch = platform.StopKey.Watch(() => { Interlocked.Increment(ref stops); return true; });
 
-        platform.Input.PressKeys(["esc"]); // the agent's own press is tagged and ignored
-        UserKeys((Pause, false), (Pause, true), (LWin, false), (LWin, true)); // Break and the Windows key, the stop keys before
+        platform.Input.PressKeys(["pause"]); // the agent's own press is tagged and ignored
+        UserKeys((Esc, false), (Esc, true), (LWin, false), (LWin, true)); // Esc and the Windows key, the stop keys before, are the user's again
         await Task.Delay(300, ct);
-        Assert.False(pressed.Task.IsCompleted);
-        Assert.Equal("esc↓ esc↑ pause↓ pause↑ win↓ win↑", past.Take());
+        Assert.Equal(0, Volatile.Read(ref stops));
+        Assert.Equal("pause↓ pause↑ esc↓ esc↑ win↓ win↑", past.Take());
 
-        UserKeys((Esc, false), (Esc, true));
-        Assert.Same(pressed.Task, await Task.WhenAny(pressed.Task, Task.Delay(3000, ct)));
+        // Pause, and Break (what Windows reports for Ctrl+Pause): each stops the run, and goes no further.
+        UserKeys((Pause, false), (Pause, true));
+        await Until(() => Volatile.Read(ref stops) == 1, ct);
+        UserKeys((Break, false), (Break, true));
+        await Until(() => Volatile.Read(ref stops) == 2, ct);
         await Task.Delay(100, ct);
         Assert.Equal("", past.Take());
 #endif
     }
 
     [Fact]
-    public async Task An_esc_press_that_stops_a_run_goes_no_further()
+    public async Task A_pause_press_that_stops_a_run_goes_no_further()
     {
 #if !WINDOWS
         Assert.Skip("Windows only");
@@ -569,28 +573,28 @@ public class ToolTests
         var platform = new BlackBox.Platform.Windows.WindowsPlatform();
         using var watch = platform.StopKey.Watch(() => Interlocked.Exchange(ref running, 0) == 1);
 
-        // Esc during a run stops it, and none of it gets past: not its repeats or its key-up, nor a
+        // Pause during a run stops it, and none of it gets past: not its repeats or its key-up, nor a
         // key pressed while it is held. The agent's own keys still do.
-        UserKeys((Esc, false));
+        UserKeys((Pause, false));
         await Task.Delay(100, ct);
         Assert.Equal(0, Volatile.Read(ref running));
-        UserKeys((F24, false), (Esc, false), (F24, false));
+        UserKeys((F24, false), (Pause, false), (F24, false));
         platform.Input.PressKeys(["f23"]);
-        UserKeys((F24, true), (Esc, true));
+        UserKeys((F24, true), (Pause, true));
         await Task.Delay(100, ct);
         Assert.Equal("f23↓ f23↑", past.Take());
 
-        // With no run going it is the usual Esc.
-        UserKeys((Esc, false), (Esc, true));
+        // With no run going it is the usual Pause.
+        UserKeys((Pause, false), (Pause, true));
         await Task.Delay(100, ct);
-        Assert.Equal("esc↓ esc↑", past.Take());
+        Assert.Equal("pause↓ pause↑", past.Take());
 
         // A stop press whose key-up the hook never sees (focus went to an elevated window, say)
         // holds the keyboard for a moment only; its late key-up still goes no further.
         Interlocked.Exchange(ref running, 1);
-        UserKeys((Esc, false));
+        UserKeys((Pause, false));
         await Task.Delay(2700, ct);
-        UserKeys((F24, false), (F24, true), (Esc, true));
+        UserKeys((F24, false), (F24, true), (Pause, true));
         await Task.Delay(100, ct);
         Assert.Equal("f24↓ f24↑", past.Take());
 #endif
@@ -620,7 +624,15 @@ public class ToolTests
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int vk);
 
-    private const int Esc = 0x1B, Pause = 0x13, LWin = 0x5B, F23 = 0x86, F24 = 0x87;
+    private const int Break = 0x03, Esc = 0x1B, Pause = 0x13, LWin = 0x5B, F23 = 0x86, F24 = 0x87;
+
+    /// <summary>Waits up to 3 s for <paramref name="done"/>, and fails if it never is.</summary>
+    private static async Task Until(Func<bool> done, CancellationToken ct)
+    {
+        for (var waited = 0; !done() && waited < 3000; waited += 20)
+            await Task.Delay(20, ct);
+        Assert.True(done());
+    }
 
     /// <summary>Key events like the user's: injected without BlackBox's tag.</summary>
     private static void UserKeys(params (int Vk, bool Up)[] keys)
@@ -677,7 +689,8 @@ public class ToolTests
 
         private static string? Name(int vk) => vk switch
         {
-            Esc => "esc", Pause => "pause", LWin => "win", F23 => "f23", F24 => "f24", _ => null,
+            // Break too: one that reached a console would be Ctrl+Break, which ends what runs in it.
+            Break => "break", Esc => "esc", Pause => "pause", LWin => "win", F23 => "f23", F24 => "f24", _ => null,
         };
 
         /// <summary>What got past since the last call, like "esc↓ esc↑".</summary>

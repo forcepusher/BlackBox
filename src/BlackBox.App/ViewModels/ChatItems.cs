@@ -161,7 +161,8 @@ public sealed partial class AssistantMessageItem : ChatItemViewModel
     public bool ShowTypingDots => IsStreaming && (HasText || !HasReasoning);
 }
 
-public enum ToolItemState { AwaitingApproval, Running, Done, Error, Denied }
+/// <summary>Stopped: the run ended (Pause/Break, Stop, an error) while the call was running or waiting for an OK.</summary>
+public enum ToolItemState { AwaitingApproval, Running, Done, Error, Denied, Stopped }
 
 public sealed partial class ToolCallItem(string callId, string name, string summary) : ChatItemViewModel
 {
@@ -202,6 +203,7 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
         ToolItemState.Done => "Done",
         ToolItemState.Error => "Failed",
         ToolItemState.Denied => "Declined",
+        ToolItemState.Stopped => "Stopped",
         _ => "",
     };
 
@@ -228,8 +230,24 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
     }
 }
 
-public sealed class NoticeItem(string text, bool isError) : ChatItemViewModel
+/// <param name="carryOn">For the notice a stopped run leaves ("Stopped with Pause/Break."): carries on with the task. Null for any other notice.</param>
+/// <param name="unsent">The run stopped before the model had the user's message: carrying on sends that message again.</param>
+public sealed partial class NoticeItem(string text, bool isError, Action? carryOn = null, bool unsent = false) : ChatItemViewModel
 {
     public string Text { get; } = text;
     public bool IsError { get; } = isError;
+
+    /// <summary>A run ended here before the task was done (stopped, or an error it couldn't get past).</summary>
+    public bool Stopped { get; } = carryOn is not null;
+
+    /// <summary>The run stopped before the model had the user's message: Continue sends that message again.</summary>
+    public bool Unsent { get; } = unsent;
+
+    /// <summary>Its Continue button shows: until the chat goes on, by Continue or a message of the user's.</summary>
+    [ObservableProperty]
+    private bool _canContinue = carryOn is not null;
+
+    /// <summary>The run it starts takes the button off (and every other one); with a run still going it does nothing.</summary>
+    [RelayCommand]
+    private void Continue() => carryOn?.Invoke();
 }
