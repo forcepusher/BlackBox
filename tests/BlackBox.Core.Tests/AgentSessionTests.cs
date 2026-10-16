@@ -633,6 +633,90 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_click_waits_for_typing_that_started_while_its_target_was_looked_for()
+    {
+        // The look is a request to the model, seconds long: the user isn't typing when the click
+        // starts, and is by the time it is aimed.
+        System.Diagnostics.Stopwatch? typing = null;
+        TimeSpan? clicked = null;
+        var platform = new FakePlatform();
+        platform.OnClick = _ => clicked = typing?.Elapsed;
+        var ctx = new ToolContext
+        {
+            Platform = platform,
+            Settings = new AgentSettings { ScreenshotAfterActions = false },
+            WorkingDirectory = Path.GetTempPath(),
+            UserComposing = () =>
+            {
+                if (typing is not null)
+                    return typing.Elapsed < TimeSpan.FromMilliseconds(700);
+                typing = System.Diagnostics.Stopwatch.StartNew();
+                return false;
+            },
+        };
+
+        await new MouseClickTool().ExecuteAsync(new JsonObject { ["target"] = "OK button", ["x"] = 50, ["y"] = 50 }, ctx, CancellationToken.None);
+
+        Assert.NotNull(clicked);
+        Assert.True(clicked >= TimeSpan.FromMilliseconds(700), $"clicked {clicked?.TotalMilliseconds} ms into the typing");
+    }
+
+    [Fact]
+    public async Task Typing_that_starts_during_a_series_of_presses_holds_the_rest_and_gives_the_keyboard_back()
+    {
+        var platform = new FakePlatform();
+        platform.HostWindow = new FocusLog(platform.Actions);
+        var ctx = TypingStartsAfter(platform, "keys", done: 2);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        await new PressKeysTool().ExecuteAsync(new JsonObject { ["sequence"] = new JsonArray("a", "b", "c", "d"), ["gap_ms"] = 0 }, ctx, CancellationToken.None);
+
+        // The user clicked into BlackBox's box to type, so the rest goes back to the window it was for once they are done.
+        Assert.Equal(["yield", "keys a", "keys b", "yield", "keys c", "keys d"], platform.Actions);
+        Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(500), $"over after {clock.ElapsedMilliseconds} ms");
+    }
+
+    [Fact]
+    public async Task Typing_that_starts_while_long_text_is_typed_holds_the_rest_and_gives_the_keyboard_back()
+    {
+        var platform = new FakePlatform();
+        platform.HostWindow = new FocusLog(platform.Actions);
+        var ctx = TypingStartsAfter(platform, "type", done: 1);
+        string first = new('x', TypeTextTool.Chunk), second = new('y', TypeTextTool.Chunk);
+
+        await new TypeTextTool().ExecuteAsync(new JsonObject { ["text"] = first + second + "z" }, ctx, CancellationToken.None);
+
+        Assert.Equal(["yield", "type " + first, "yield", "type " + second, "type z"], platform.Actions);
+    }
+
+    /// <summary>A context in which the user types to the agent for half a second once <paramref name="done"/> actions of a kind ("keys", "type") are done.</summary>
+    private static ToolContext TypingStartsAfter(FakePlatform platform, string kind, int done)
+    {
+        System.Diagnostics.Stopwatch? typing = null;
+        return new ToolContext
+        {
+            Platform = platform,
+            Settings = new AgentSettings { ScreenshotAfterActions = false },
+            WorkingDirectory = Path.GetTempPath(),
+            UserComposing = () =>
+            {
+                if (typing is null && platform.Actions.Count(a => a.StartsWith(kind + " ")) == done)
+                    typing = System.Diagnostics.Stopwatch.StartNew();
+                return typing is { } t && t.Elapsed < TimeSpan.FromMilliseconds(500);
+            },
+        };
+    }
+
+    /// <summary>BlackBox's window, noting among the actions each time it hands the keyboard to the window under it.</summary>
+    private sealed class FocusLog(List<string> actions) : IHostWindow
+    {
+        public void Attach(nint handle, bool hideFromCapture) { }
+        public void SetHiddenFromCapture(bool hide) { }
+        public IDisposable StepAside(params (int X, int Y)[] points) => NoHostWindow.Instance.StepAside(points);
+        public void YieldFocus() => actions.Add("yield");
+    }
+
+    [Fact]
     public async Task A_tool_that_fails_in_an_unexpected_way_reports_it_and_the_run_goes_on()
     {
         var server = new ScriptedServer(Sse.ToolCall("b1", "broken", "{}"), Sse.Text("I'll try something else."));
