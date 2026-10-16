@@ -77,10 +77,11 @@ read it and carry on where it stopped (the model gets the conversation back), or
 trash button. Screenshots are not kept in the saved file; the model takes a new one when it carries
 on. Picking another chat or New chat while a task runs stops the task, and keeps it as far as it got.
 
-Until a chat is used, it shows what BlackBox can do (apps, files and commands, chatting for you,
-the web, servers, long jobs), that Esc stops it, and what it asks before it acts. It says so when
-the model in use can't see images. Notices such as an MCP server that failed
-to start show above it and don't count as using the chat.
+Until a chat is used, it shows what BlackBox can do (apps, files and commands, documents, getting
+the programs and MCP servers a job needs, chatting for you, the web, servers, long jobs), that Esc
+stops it, how to change a task while it runs, and what it asks before it acts. It says so when the
+model in use can't see images. Notices such as an MCP server that failed to start show above it and
+don't count as using the chat.
 
 ## Connecting to a model
 Enter the server address in the bar at the top of the main window (LM Studio's default is
