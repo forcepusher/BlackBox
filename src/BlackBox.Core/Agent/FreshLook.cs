@@ -39,8 +39,8 @@ internal sealed partial class FreshLook(OpenAiChatClient client, ChatRequestOpti
     internal const string NoThinking = "<think>\n\n</think>\n\n";
 
     /// <summary>
-    /// Set once the server refused a reply begun for the model. LM Studio continues such a reply;
-    /// none of its switches for thinking (chat_template_kwargs, reasoning_effort, /no_think) did a thing.
+    /// Set once the server refused a reply begun for the model. LM Studio continues such a reply,
+    /// while the usual switches (enable_thinking, reasoning_effort, /no_think) changed nothing for qwen3.8.
     /// </summary>
     private bool _prefillRejected;
 

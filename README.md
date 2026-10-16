@@ -471,11 +471,15 @@ The look is shown the quarter of the screen around where the model aimed (half a
 high, at the same scale), and the whole screen only when the target isn't there: on a 2560×1080
 screen that is 680 image tokens instead of 2,720. Qwen 3 and later answer it without thinking:
 BlackBox begins their reply with an empty think block, as their chat template does when thinking is
-off (LM Studio ignores `enable_thinking`, `reasoning_effort` and `/no_think`; a server that refuses
-a begun reply is asked again the usual way, and from then on). With qwen3.8 on an RTX 5070 Ti, which
-reads about 500 tokens a second, a look at the whole screen took 15-17 s (9 s reading it, the rest
-thinking); the look at the quarter around the aim takes about 3 s, and both found 19 of 19 targets
-on the Unity screenshot.
+off (in LM Studio, `enable_thinking`, `reasoning_effort` and `/no_think` changed nothing for
+qwen3.8; a server that refuses a begun reply is asked again the usual way, and from then on). With
+qwen3.8 on an RTX 5070 Ti, which reads about 500 tokens a second, a look at the whole screen took
+15-17 s (9 s reading it, the rest thinking); the look at the quarter around the aim takes about 3 s,
+and both found 19 of 19 targets on the Unity screenshot. On eight of the harder scenes of
+`ClickAccuracyTests` (tiny, dense, edges, similar, links, hidden, ultrawide and Unity; 40 trials on
+the same layouts) clicks hit 37 times with the new look in 17 minutes, and 31 times with the old one
+in 37 minutes. On the dense table the old look thought so long that two of three trials ran out of
+their five minutes, and on the 5120×1440 screen (7,200 image tokens) it missed all three buttons.
 
 After each click BlackBox also compares the screen just before it (after the look, so what changed
 while the model looked doesn't count) with the screen after it. When nothing changed near
