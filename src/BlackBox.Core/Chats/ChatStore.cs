@@ -8,7 +8,7 @@ namespace BlackBox.Core.Chats;
 
 public enum ChatEntryKind { User, Assistant, Tool, Notice }
 
-/// <summary>One line of the chat as the window shows it: a message, a tool call or a notice.</summary>
+/// <summary>One line of the chat as the window shows it: a message, a tool call or a notice, with when it happened.</summary>
 public sealed class ChatEntry
 {
     public ChatEntryKind Kind { get; set; }
@@ -31,6 +31,21 @@ public sealed class ChatEntry
 
     /// <summary>For such a notice: the run ended before the model had the user's message, so carrying on sends it again.</summary>
     public bool Unsent { get; set; }
+
+    /// <summary>When it happened: a message sent, a step or a tool call begun, a notice shown. Chats saved before the chat kept times have none.</summary>
+    public DateTime? At { get; set; }
+
+    /// <summary>For a reply or a tool call: when it ended, so the chat shows how long it took.</summary>
+    public DateTime? Ended { get; set; }
+
+    /// <summary>For a reply: when its request had all gone out to the server, and when the model's first words came.</summary>
+    public DateTime? Sent { get; set; }
+
+    /// <inheritdoc cref="Sent"/>
+    public DateTime? FirstWords { get; set; }
+
+    /// <summary>On the line a run ended with: how long the run took, from the message that started it.</summary>
+    public TimeSpan? RunTook { get; set; }
 }
 
 /// <summary>

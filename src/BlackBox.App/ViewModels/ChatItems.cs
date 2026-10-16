@@ -1,14 +1,39 @@
 using System.Text;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using BlackBox.Core.Chats;
 using BlackBox.Core.Llm;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace BlackBox.App.ViewModels;
 
-public abstract class ChatItemViewModel : ObservableObject
+public abstract partial class ChatItemViewModel : ObservableObject
 {
+    /// <summary>
+    /// When it happened: a message sent, a step or a tool call begun, a notice shown. Shown with it,
+    /// so how long things took can be read off the chat. Null in chats saved before times were kept.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTime), nameof(TimeText), nameof(TimeTip))]
+    private DateTime? _at = DateTime.UtcNow;
+
+    public bool HasTime => At is not null;
+
+    /// <summary>The time of day it happened ("14:05:09").</summary>
+    public virtual string TimeText => At is { } at ? ChatTimes.Clock(at) : "";
+
+    /// <summary>The date and time in full, for a chat from another day.</summary>
+    public virtual string? TimeTip => At is { } at ? ChatTimes.Full(at) : null;
+
+    /// <summary>On the line a run ended with: how long the whole run took, from the message that started it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRunTook), nameof(RunTookText))]
+    private TimeSpan? _runTook;
+
+    public bool HasRunTook => RunTook is not null;
+    public string RunTookText => RunTook is { } took ? $"Worked for {ChatTimes.Duration(took)}" : "";
+
     /// <summary>Files shown under the item: what a tool made or showed, or what a reply names by its path.</summary>
     public System.Collections.ObjectModel.ObservableCollection<FilePreview> Previews { get; } = [];
 
@@ -64,6 +89,7 @@ public sealed partial class AssistantMessageItem : ChatItemViewModel
     {
         lock (_gate)
         {
+            _firstWords ??= DateTime.UtcNow;
             (delta.Channel == StreamChannel.Reasoning ? _newReasoning : _newText).Append(delta.Text);
             if (_flushQueued) return;
             _flushQueued = true;
@@ -88,10 +114,10 @@ public sealed partial class AssistantMessageItem : ChatItemViewModel
     }
 
     /// <summary>
-    /// Ends the stream: the finished message replaces what streamed. Without one (a reply thrown
-    /// away, or the run ended), what streamed stays as it is.
+    /// Ends the stream, which ended <paramref name="at"/>: the finished message replaces what
+    /// streamed. Without one (a reply thrown away, or the run ended), what streamed stays as it is.
     /// </summary>
-    public void Finish(ChatMessage? message = null)
+    public void Finish(DateTime at, ChatMessage? message = null)
     {
         Flush();
         if (message is not null)
@@ -99,6 +125,7 @@ public sealed partial class AssistantMessageItem : ChatItemViewModel
             Text = (message.Content ?? "").Trim();
             Reasoning = (message.Reasoning ?? Reasoning).Trim();
         }
+        Ended = at;
         IsStreaming = false;
     }
 
@@ -114,8 +141,6 @@ public sealed partial class AssistantMessageItem : ChatItemViewModel
     [NotifyPropertyChangedFor(nameof(ThinkingLabel), nameof(ShowTypingDots))]
     private bool _isStreaming = true;
 
-    private readonly DateTime _started = DateTime.UtcNow;
-
     /// <summary>How much of the step's request has gone out to the server; set from the agent's thread.</summary>
     private long _sent, _total;
 
@@ -124,6 +149,8 @@ public sealed partial class AssistantMessageItem : ChatItemViewModel
     {
         Interlocked.Exchange(ref _total, total);
         Interlocked.Exchange(ref _sent, sent);
+        if (total > 0 && sent >= total)
+            SentAt = DateTime.UtcNow; // sent again (a dropped connection, a server that said to wait): the last time counts
     }
 
     /// <summary>
@@ -135,7 +162,7 @@ public sealed partial class AssistantMessageItem : ChatItemViewModel
     {
         get
         {
-            if (HasText || HasReasoning || DateTime.UtcNow - _started is not { TotalSeconds: >= 3 } waited)
+            if (HasText || HasReasoning || DateTime.UtcNow - (At ?? DateTime.UtcNow) is not { TotalSeconds: >= 3 } waited)
                 return "…";
             var (sent, total) = (Interlocked.Read(ref _sent), Interlocked.Read(ref _total));
             return total > 0 && sent < total
@@ -159,6 +186,69 @@ public sealed partial class AssistantMessageItem : ChatItemViewModel
 
     /// <summary>The "…" under a reply in progress; while the Thoughts header already says "Thinking…" it would only be a stray line.</summary>
     public bool ShowTypingDots => IsStreaming && (HasText || !HasReasoning);
+
+    // ---- how long the step took ----------------------------------------------------------
+    // At is when the step asked the model; the rest is set from the agent's thread as it goes.
+
+    private DateTime? _sentAt, _firstWords;
+
+    /// <summary>When the step's request had all gone out to the server.</summary>
+    public DateTime? SentAt
+    {
+        get { lock (_gate) return _sentAt; }
+        set { lock (_gate) _sentAt = value; }
+    }
+
+    /// <summary>When the model's first words came, thoughts or reply.</summary>
+    public DateTime? FirstWords
+    {
+        get { lock (_gate) return _firstWords; }
+        set { lock (_gate) _firstWords = value; }
+    }
+
+    /// <summary>When the reply was complete, or the run stopped it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TimeText), nameof(TimeTip))]
+    private DateTime? _ended;
+
+    /// <summary>
+    /// Over the reply: when the model was asked and, once it is done, how long it took ("14:05:09 ·
+    /// model 41 s"). Named as the model's, since a step that only called tools shows this line right
+    /// over the tool call's card, which has a time of its own.
+    /// </summary>
+    public override string TimeText => At is not { } at ? ""
+        : Ended is { } ended ? $"{ChatTimes.Clock(at)} · model {ChatTimes.Duration(ended - at)}"
+        : ChatTimes.Clock(at);
+
+    /// <summary>
+    /// Where the step's time went: sending the request (over a slow link, minutes), the server
+    /// reading it until the first words (longer as the conversation grows), and the writing.
+    /// </summary>
+    public override string? TimeTip
+    {
+        get
+        {
+            if (At is not { } at)
+                return null;
+            var asked = $"Asked the model on {ChatTimes.Full(at)}.";
+            if (Ended is not { } ended)
+                return asked;
+            var lines = new List<string> { asked };
+            var from = at;
+            if (SentAt is { } sent && sent <= ended && sent - at >= TimeSpan.FromSeconds(1))
+            {
+                lines.Add($"Sending the request: {ChatTimes.Duration(sent - at)}");
+                from = sent;
+            }
+            if (FirstWords is { } first && first >= from && first <= ended)
+            {
+                lines.Add($"{(from == at ? "Until the first words" : "Reading it, until the first words")}: {ChatTimes.Duration(first - from)}");
+                lines.Add($"{(HasReasoning ? "Thinking and writing" : "Writing the reply")}: {ChatTimes.Duration(ended - first)}");
+            }
+            lines.Add($"In all: {ChatTimes.Duration(ended - at)}");
+            return string.Join("\n", lines);
+        }
+    }
 }
 
 /// <summary>Stopped: the run ended (Pause/Break, Stop, an error) while the call was running or waiting for an OK.</summary>
@@ -199,16 +289,34 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
     [NotifyPropertyChangedFor(nameof(StatusText))]
     private string _progress = "";
 
+    /// <summary>When the call ended, or the run stopped it. <see cref="ChatItemViewModel.At"/> is when it began to run (after an OK, if it waited for one).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private DateTime? _ended;
+
+    private TimeSpan? Took => At is { } at && Ended is { } ended ? ended - at : null;
+
+    /// <summary>What became of the call and how long it took ("Done in 1.2 s"); while it runs, for how long so far.</summary>
     public string StatusText => State switch
     {
         ToolItemState.AwaitingApproval => "Waiting for your OK",
-        ToolItemState.Running => Progress.Length > 0 ? Progress : "Running…",
-        ToolItemState.Done => "Done",
-        ToolItemState.Error => "Failed",
+        ToolItemState.Running => Progress.Length > 0 ? Progress : RunningText,
+        ToolItemState.Done => Took is { } took ? $"Done in {ChatTimes.Duration(took)}" : "Done",
+        ToolItemState.Error => Took is { } took ? $"Failed after {ChatTimes.Duration(took)}" : "Failed",
         ToolItemState.Denied => "Declined",
-        ToolItemState.Stopped => "Stopped",
+        ToolItemState.Stopped => Took is { } took ? $"Stopped after {ChatTimes.Duration(took)}" : "Stopped",
         _ => "",
     };
+
+    /// <summary>"Running…", and after a few seconds for how long ("Running… 0:12"), as the wait for the model counts: a long command doesn't look stuck.</summary>
+    private string RunningText => At is { } at && DateTime.UtcNow - at is { TotalSeconds: >= 3 } running ? $"Running… {ChatTimes.Stopwatch(running)}" : "Running…";
+
+    /// <summary>Called every second while a run is on, for the count in <see cref="StatusText"/>.</summary>
+    public void Tick()
+    {
+        if (State == ToolItemState.Running && Progress.Length == 0)
+            OnPropertyChanged(nameof(StatusText));
+    }
 
     public Task<bool> WaitForApprovalAsync(CancellationToken ct)
     {

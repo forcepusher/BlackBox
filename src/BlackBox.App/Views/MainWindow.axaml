@@ -352,53 +352,69 @@
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
 
+          <!-- Every line as its kind shows it (the templates below), each with the time it happened;
+               the line a run ended with says under it how long the run took. -->
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ChatItemViewModel">
+              <StackPanel Spacing="6">
+                <ContentControl Content="{Binding}" />
+                <TextBlock Classes="muted" Text="{Binding RunTookText}" IsVisible="{Binding HasRunTook}" HorizontalAlignment="Center" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+
           <ItemsControl.DataTemplates>
 
             <DataTemplate DataType="vm:UserMessageItem">
-              <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="12,8"
-                      HorizontalAlignment="Right" MaxWidth="640" Margin="60,0,0,0">
-                <StackPanel Spacing="6">
-                  <!-- The files that came with it: a picture as itself, anything else by its name; a click opens it. -->
-                  <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}" Margin="0,4,0,0">
-                    <ItemsControl.ItemsPanel>
-                      <ItemsPanelTemplate>
-                        <WrapPanel HorizontalAlignment="Right" />
-                      </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="vm:AttachmentItem">
-                        <Button Classes="picture" Command="{Binding OpenCommand}" ToolTip.Tip="{Binding Tip}" Margin="0,0,0,6"
-                                AutomationProperties.Name="{Binding FileName}">
-                          <Button.ContextMenu>
-                            <ContextMenu>
-                              <MenuItem Header="Copy" Click="OnCopyPicture" />
-                            </ContextMenu>
-                          </Button.ContextMenu>
-                          <Panel Margin="6,0,0,0">
-                            <Border Classes="attachment" IsVisible="{Binding !ShowsName}">
-                              <Image Source="{Binding Thumbnail}" MaxHeight="180" MaxWidth="300" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
-                            </Border>
-                            <Border Classes="attachment file" IsVisible="{Binding ShowsName}">
-                              <StackPanel Orientation="Horizontal" Spacing="8">
-                                <PathIcon Data="{Binding Icon}" />
-                                <StackPanel Spacing="1">
-                                  <TextBlock Text="{Binding FileName}" MaxWidth="260" TextTrimming="CharacterEllipsis" />
-                                  <TextBlock Classes="muted" Text="{Binding Details}" />
+              <StackPanel HorizontalAlignment="Right" MaxWidth="640" Margin="60,0,0,0" Spacing="3">
+                <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Right" />
+                <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="12,8" HorizontalAlignment="Right">
+                  <StackPanel Spacing="6">
+                    <!-- The files that came with it: a picture as itself, anything else by its name; a click opens it. -->
+                    <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}" Margin="0,4,0,0">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel HorizontalAlignment="Right" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:AttachmentItem">
+                          <Button Classes="picture" Command="{Binding OpenCommand}" ToolTip.Tip="{Binding Tip}" Margin="0,0,0,6"
+                                  AutomationProperties.Name="{Binding FileName}">
+                            <Button.ContextMenu>
+                              <ContextMenu>
+                                <MenuItem Header="Copy" Click="OnCopyPicture" />
+                              </ContextMenu>
+                            </Button.ContextMenu>
+                            <Panel Margin="6,0,0,0">
+                              <Border Classes="attachment" IsVisible="{Binding !ShowsName}">
+                                <Image Source="{Binding Thumbnail}" MaxHeight="180" MaxWidth="300" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+                              </Border>
+                              <Border Classes="attachment file" IsVisible="{Binding ShowsName}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                  <PathIcon Data="{Binding Icon}" />
+                                  <StackPanel Spacing="1">
+                                    <TextBlock Text="{Binding FileName}" MaxWidth="260" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Classes="muted" Text="{Binding Details}" />
+                                  </StackPanel>
                                 </StackPanel>
-                              </StackPanel>
-                            </Border>
-                          </Panel>
-                        </Button>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                  <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" />
-                </StackPanel>
-              </Border>
+                              </Border>
+                            </Panel>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
             </DataTemplate>
 
+            <!-- Over each step: when the model was asked and how long it took, the breakdown in the
+                 tooltip. A step that only called tools shows this line alone. -->
             <DataTemplate DataType="vm:AssistantMessageItem">
               <StackPanel Spacing="6" Margin="0,0,40,0">
+                <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Left" />
                 <Expander IsVisible="{Binding HasReasoning}" Header="{Binding ThinkingLabel}" HorizontalAlignment="Stretch" IsExpanded="True"
                           Padding="10,6">
                   <SelectableTextBlock Classes="muted" Text="{Binding ShownReasoning}" TextWrapping="Wrap" />
@@ -420,9 +436,12 @@
                 <StackPanel Spacing="6">
                   <!-- The summary takes the width that is left, so a long command wraps inside the card
                        (in a horizontal StackPanel it had all the width it wanted and ran past the
-                       card's edge); past three lines it ends in "…", the whole of it in the tooltip. -->
+                       card's edge); past three lines it ends in "…", the whole of it in the tooltip.
+                       On the right: when the call began to run, and how it ended in how long. -->
                   <DockPanel>
-                    <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding StatusText}" VerticalAlignment="Top" Margin="8,0,0,0" />
+                    <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding StatusText}" VerticalAlignment="Top" Margin="4,0,0,0" />
+                    <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText, StringFormat='{}{0} ·'}" IsVisible="{Binding HasTime}"
+                               ToolTip.Tip="{Binding TimeTip}" VerticalAlignment="Top" Margin="8,0,0,0" />
                     <Border DockPanel.Dock="Left" Background="{StaticResource BbSurfaceRaised}" CornerRadius="4" Padding="6,1" VerticalAlignment="Top" Margin="0,0,8,0">
                       <TextBlock Text="{Binding Name}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Foreground="{StaticResource BbAccent}" />
                     </Border>
@@ -466,6 +485,8 @@
                   <Button DockPanel.Dock="Right" Classes="primary" Content="Continue" Padding="12,3" Margin="12,-2,0,-2" VerticalAlignment="Center"
                           IsVisible="{Binding CanContinue}" Command="{Binding ContinueCommand}"
                           ToolTip.Tip="Carry on with the task where I stopped" />
+                  <TextBlock DockPanel.Dock="Left" Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}"
+                             VerticalAlignment="Center" Margin="0,0,8,0" />
                   <SelectableTextBlock Classes="muted" Classes.error="{Binding IsError}" Text="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </DockPanel>
               </Border>
