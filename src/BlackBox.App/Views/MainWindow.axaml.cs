@@ -224,6 +224,81 @@ public partial class MainWindow : Window
         finally { _pastingText = false; }
     }
 
+    // ---- right-click → Copy on a picture in the chat ------------------------------------------------
+
+    /// <summary>The picture last put on the clipboard: programs read it from BlackBox when they paste, so it stays until the next copy.</summary>
+    private Avalonia.Media.Imaging.Bitmap? _copied;
+
+    /// <summary>
+    /// Copy, in the right-click menu of a picture in the chat: the picture at its full size, for
+    /// programs that take a picture (Paint, Word, a chat app's message box), together with its file,
+    /// for those that take files (Explorer, an e-mail). A video gives the frame on screen with its
+    /// file, an attached file that isn't a picture the file alone, and a screenshot the picture alone.
+    /// </summary>
+    private async void OnCopyPicture(object? sender, RoutedEventArgs e)
+    {
+        if (Clipboard is not { } clipboard || (sender as StyledElement)?.DataContext is not { } source)
+            return;
+        var (path, shown, data) = source switch
+        {
+            ImagePreview p => (p.Path, p.Image, null),
+            AnimationPreview p => (p.Path, p.Image, null),
+            VideoPreview p => (p.Path, p.Frame, null),
+            AttachmentItem a => (a.Path, a.Thumbnail, (byte[]?)null),
+            ToolCallItem t => ((string?)null, t.Screenshot, t.ScreenshotData),
+            _ => (null, null, null),
+        };
+        try
+        {
+            // What the chat shows is cut down to its width; the copy is the whole picture.
+            var picture = source is VideoPreview ? null : await Task.Run(() => FullSize(path, data));
+            picture ??= Duplicate(shown);
+            var item = new DataTransferItem();
+            if (picture is not null)
+                item.SetBitmap(picture);
+            if (path is not null &&
+                (File.Exists(path) ? await StorageProvider.TryGetFileFromPathAsync(path) as IStorageItem
+                    : Directory.Exists(path) ? await StorageProvider.TryGetFolderFromPathAsync(path) : null) is { } file)
+                item.SetFile(file);
+            if (picture is null && path is null)
+                return;
+            var transfer = new DataTransfer();
+            transfer.Add(item);
+            await clipboard.SetDataAsync(transfer);
+            (_copied, picture) = (picture, _copied);
+            picture?.Dispose();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Another program holds the clipboard; the next try will do.
+        }
+    }
+
+    /// <summary>The picture in <paramref name="data"/> or the file at <paramref name="path"/>, decoded whole; null if neither is a picture.</summary>
+    private static Avalonia.Media.Imaging.Bitmap? FullSize(string? path, byte[]? data)
+    {
+        try
+        {
+            if (data is not null)
+                return new Avalonia.Media.Imaging.Bitmap(new MemoryStream(data));
+            if (path is not null && File.Exists(path) && Core.Media.MediaPreview.KindOf(path) is "image" or "animation")
+                return new Avalonia.Media.Imaging.Bitmap(path);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException) { }
+        return null;
+    }
+
+    /// <summary>A copy of a picture the chat shows, which the chat may let go of (a video's frame changes as it plays).</summary>
+    private static Avalonia.Media.Imaging.Bitmap? Duplicate(Avalonia.Media.Imaging.Bitmap? shown)
+    {
+        if (shown is null)
+            return null;
+        using var png = new MemoryStream();
+        shown.Save(png);
+        png.Position = 0;
+        return new Avalonia.Media.Imaging.Bitmap(png);
+    }
+
     private async void OnAttachClick(object? sender, RoutedEventArgs e)
     {
         var picked = await StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions

@@ -166,6 +166,11 @@ mouse (the wheel comes closer, a double click resets it), and any other file get
 Open (its own program) and Show in folder. A saved chat shows them again when it is opened, as
 long as the files are still there.
 
+Right-click → Copy on any picture in the chat (a preview, a picture in your message or under the
+box, a tool's screenshot) puts it on the clipboard at its full size, not the chat's, together with
+its file: Paint, Word or a chat app's box paste the picture, Explorer and mail paste the file. A
+video gives the frame on screen with its file; a screenshot, which has no file, the picture alone.
+
 ### How it does
 qwen3.8 27B (q6_k_xl, on the LM Studio server) with the ComfyUI on an RTX 5070 Ti (16 GB), each
 task one plain message and nothing more, ComfyUI stopped before the first

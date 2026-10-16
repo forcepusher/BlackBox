@@ -1070,6 +1070,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         {
             old.Screenshot?.Dispose();
             old.Screenshot = null;
+            old.ScreenshotData = null;
         }
     }
 
@@ -1183,6 +1184,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         {
             using var ms = new MemoryStream(result.Image);
             item.Screenshot = Bitmap.DecodeToWidth(ms, 480);
+            item.ScreenshotData = result.Image;
         }
         if (item.State == ToolItemState.AwaitingApproval)
             item.State = ToolItemState.Stopped; // the run was stopped while the call waited for an OK; Deny would have said Declined
