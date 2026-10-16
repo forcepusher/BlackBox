@@ -60,7 +60,7 @@ public sealed partial class McpTool : Tools.Tool
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         // JsonElement values: the SDK sends them as they are, whatever JSON the model wrote.
-        var arguments = args.ToDictionary(kv => kv.Key, kv => (object?)JsonSerializer.SerializeToElement(kv.Value));
+        var arguments = args.ToDictionary(kv => kv.Key, kv => (object?)JsonElement.Parse(kv.Value?.ToJsonString() ?? "null"));
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(CallTimeout);
         try

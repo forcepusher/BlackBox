@@ -603,7 +603,7 @@ Requires the .NET 10 SDK.
 ```powershell
 dotnet build                      # debug build; keeps its Data/ in .dev/
 dotnet test                       # unit tests
-./scripts/publish.ps1             # single-file publish/BlackBox.exe
+./scripts/publish.ps1             # single-file publish/BlackBox.exe, trimmed and compressed (about 26 MB)
 ./scripts/publish.ps1 -Folder     # classic self-contained folder in publish/BlackBox-win-x64
 dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   # headless run
 dotnet run --project src/BlackBox.Cli -- --yes --attach photo.jpg "make it a watercolor"   # with a file, as if dropped on the window

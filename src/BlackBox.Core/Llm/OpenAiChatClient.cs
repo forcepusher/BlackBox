@@ -339,7 +339,7 @@ public sealed partial class OpenAiChatClient
     {
         var msgs = new JsonArray();
         foreach (var m in messages)
-            msgs.Add(SerializeMessage(m, sendReasoning));
+            msgs.Add((JsonNode)SerializeMessage(m, sendReasoning));
 
         var req = new JsonObject
         {
@@ -354,7 +354,7 @@ public sealed partial class OpenAiChatClient
             var arr = new JsonArray();
             foreach (var tool in tools)
             {
-                arr.Add(new JsonObject
+                arr.Add((JsonNode)new JsonObject
                 {
                     ["type"] = "function",
                     ["function"] = new JsonObject
@@ -391,7 +391,7 @@ public sealed partial class OpenAiChatClient
             {
                 if (part.IsImage)
                 {
-                    parts.Add(new JsonObject
+                    parts.Add((JsonNode)new JsonObject
                     {
                         ["type"] = "image_url",
                         ["image_url"] = new JsonObject
@@ -402,7 +402,7 @@ public sealed partial class OpenAiChatClient
                 }
                 else
                 {
-                    parts.Add(new JsonObject { ["type"] = "text", ["text"] = part.Text ?? "" });
+                    parts.Add((JsonNode)new JsonObject { ["type"] = "text", ["text"] = part.Text ?? "" });
                 }
             }
             obj["content"] = parts;
@@ -417,7 +417,7 @@ public sealed partial class OpenAiChatClient
             var calls = new JsonArray();
             foreach (var c in m.ToolCalls!)
             {
-                calls.Add(new JsonObject
+                calls.Add((JsonNode)new JsonObject
                 {
                     ["id"] = c.Id,
                     ["type"] = "function",

@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <RootNamespace>BlackBox.Core</RootNamespace>
+    <!-- The published exe is trimmed: flag code that needs reflection while it is written. -->
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
   </PropertyGroup>
 
   <ItemGroup>

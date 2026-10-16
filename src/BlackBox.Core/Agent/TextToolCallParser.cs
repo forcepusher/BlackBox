@@ -40,7 +40,7 @@ public static partial class TextToolCallParser
             {
                 // Gemma quotes strings with <|"|> and leaves keys bare; turn that into JSON and let
                 // the argument repair handle the unquoted keys.
-                var json = GemmaString().Replace(m.Groups["args"].Value, s => JsonSerializer.Serialize(s.Groups[1].Value));
+                var json = GemmaString().Replace(m.Groups["args"].Value, s => JsonValue.Create(s.Groups[1].Value)!.ToJsonString());
                 try { Add(m.Groups["name"].Value, ToolCallRepair.ParseArguments(json).ToJsonString()); }
                 catch (ToolArgumentException) { }
             }
