@@ -25,12 +25,30 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         set => Agent.Approval = (ApprovalMode)Math.Clamp(value, 0, ApprovalModes.Length - 1);
     }
 
-    // ---- MCP servers (Advanced) -------------------------------------------------------
+    // ---- MCP servers -------------------------------------------------------------------
 
     /// <summary>The text of Data/mcp.json as the user edits it; saved as typed.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(McpError), nameof(HasMcpError))]
     private string _mcpConfigText = mcpConfigText;
+
+    /// <summary>The file's text as the box was last filled from it; Save writes the box only if the user changed it from this.</summary>
+    public string McpConfigBase { get; private set; } = mcpConfigText;
+
+    /// <summary>
+    /// The file and the servers as they are now, while the dialog is open: a box the user hasn't
+    /// touched shows a server the agent just added; one they are editing keeps their edit, and
+    /// Save merges the two.
+    /// </summary>
+    public void ShowCurrentMcp(string fileText, IReadOnlyList<McpServerStatus> statuses)
+    {
+        if (fileText != McpConfigBase && McpConfigText == McpConfigBase)
+        {
+            McpConfigBase = fileText;
+            McpConfigText = fileText;
+        }
+        McpStatusText = Summarize(statuses);
+    }
 
     /// <summary>What is wrong with the text, checked as the user types; Save is refused while it is set.</summary>
     public string McpError
@@ -45,9 +63,13 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
     public bool HasMcpError => McpError.Length > 0;
 
     /// <summary>How each configured server is doing right now, one line each.</summary>
-    public string McpStatusText { get; } = string.Join("\n", mcpStatuses.Select(s => s.Summary));
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMcpStatus))]
+    private string _mcpStatusText = Summarize(mcpStatuses);
 
     public bool HasMcpStatus => McpStatusText.Length > 0;
+
+    private static string Summarize(IReadOnlyList<McpServerStatus> statuses) => string.Join("\n", statuses.Select(s => s.Summary));
 
     public string McpExample { get; } =
         "{\n  \"mcpServers\": {\n    \"filesystem\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"C:\\\\Users\\\\me\\\\Documents\"]\n    },\n" +

@@ -17,7 +17,7 @@ public sealed class McpSetup(McpHost host, string configFile)
 }
 
 /// <summary>
-/// The agent adds, removes and lists its own MCP servers, as the user does in Settings → Advanced.
+/// The agent adds, removes and lists its own MCP servers: the ones the user sees and edits in Settings.
 /// A program with an MCP server (Blender, a database, a browser) is far better driven through it
 /// than through its window; before, the agent could only write Data/mcp.json and the servers in it
 /// started with the app, so a server it set up was there in the next run at the earliest. Now a
@@ -31,11 +31,12 @@ public sealed class McpServersTool : Tool
     public override string Name => "mcp_servers";
 
     public override string Description =>
-        "Add, remove or list your MCP servers, as the user does in Settings. A program that has an MCP server (Blender, a database, a browser…) " +
-        "is far better driven through it than through its window. action=add starts the server, keeps it for later tasks and gives you its " +
-        "tools at once (named name__tool): give name and either command with args (a program to start; best its full path, e.g. " +
-        "C:\\...\\uvx.exe with args [\"some-mcp-server\"]; env and cwd if it needs them) or url (a server to connect to). A server that " +
-        "fails to start isn't kept: the result says why. action=remove stops one and forgets it; action=list shows them all.";
+        "Add, remove or list your MCP servers, the ones in the user's Settings. A program that has an MCP server (Blender, a database, a browser…) " +
+        "is far better driven through it than through its window, and this is the way to use one: action=add starts the server, saves it in " +
+        "the user's Settings for later tasks and gives you its tools at once (named name__tool). Give name and either command with args " +
+        "(a program to start; best its full path, e.g. C:\\...\\uvx.exe with args [\"some-mcp-server\"]; env and cwd if it needs them) or " +
+        "url (a server to connect to). A server that fails to start isn't kept: the result says why. action=remove stops one and takes " +
+        "it out of Settings; action=list shows them all.";
 
     public override ToolRisk Risk => ToolRisk.Risky;
 
@@ -114,16 +115,16 @@ public sealed class McpServersTool : Tool
         }
         catch (Exception ex) when (ex is McpConfigException or IOException or UnauthorizedAccessException)
         {
-            return new ToolResult(Started(name, status, tools) + $"\nIt could not be kept for later tasks ({ex.Message}); it runs until BlackBox closes.");
+            return new ToolResult(Started(name, status, tools, saved: false) + $"\nIt could not be saved in Settings ({ex.Message}), so it runs only until BlackBox closes.");
         }
         mcp.Registry?.RemoveServer(name);
         mcp.Registry?.Add(tools);
-        return new ToolResult(Started(name, status, tools));
+        return new ToolResult(Started(name, status, tools, saved: true));
     }
 
-    private static string Started(string name, McpServerStatus status, IReadOnlyList<McpTool> tools)
+    private static string Started(string name, McpServerStatus status, IReadOnlyList<McpTool> tools, bool saved)
     {
-        var sb = new StringBuilder($"The MCP server \"{name}\" runs and is kept for later tasks. ");
+        var sb = new StringBuilder($"The MCP server \"{name}\" runs" + (saved ? " and is saved in the user's Settings for later tasks. " : ". "));
         sb.Append(tools.Count == 0 ? "It offers no tools." : $"Its {tools.Count} tool(s) are yours now: ");
         sb.AppendLine(string.Join(", ", tools.Select(t => t.Name)));
         foreach (var t in tools.Take(40))

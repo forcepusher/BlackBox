@@ -27,7 +27,7 @@ public sealed class RawImage(int width, int height, byte[] bgra)
 
 public enum MouseButton { Left, Right, Middle }
 
-/// <summary>Screen capture in physical pixels.</summary>
+/// <summary>Screen capture in physical pixels, without BlackBox's own windows where the OS allows.</summary>
 public interface IScreenCapture
 {
     /// <summary>All monitors in physical pixels, the primary first, in a stable order.</summary>
@@ -66,16 +66,13 @@ public interface IInputController
 
 /// <summary>
 /// BlackBox's own window. It stays on screen while the agent works, so it is kept out of the
-/// agent's way: invisible to screenshots, and pushed behind other windows for the moment an
-/// action lands on it.
+/// agent's way: left out of its screenshots by <see cref="IScreenCapture"/> where the OS allows,
+/// and pushed behind other windows for the moment an action lands on it.
 /// </summary>
 public interface IHostWindow
 {
-    /// <summary>Registers the native window handle and, if asked, hides it from screen capture where the OS allows.</summary>
-    void Attach(nint handle, bool hideFromCapture);
-
-    /// <summary>Turns capture hiding on or off after <see cref="Attach"/>.</summary>
-    void SetHiddenFromCapture(bool hide);
+    /// <summary>Registers the native window handle.</summary>
+    void Attach(nint handle);
 
     /// <summary>If any of the points lie on the window, sends it behind other windows until the result is disposed.</summary>
     IDisposable StepAside(params (int X, int Y)[] points);
@@ -87,8 +84,7 @@ public interface IHostWindow
 public sealed class NoHostWindow : IHostWindow
 {
     public static readonly NoHostWindow Instance = new();
-    public void Attach(nint handle, bool hideFromCapture) { }
-    public void SetHiddenFromCapture(bool hide) { }
+    public void Attach(nint handle) { }
     public IDisposable StepAside(params (int X, int Y)[] points) => Nothing.Instance;
     public void YieldFocus() { }
 

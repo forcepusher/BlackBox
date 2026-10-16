@@ -96,6 +96,31 @@ public class McpTests
         Assert.False(File.Exists(path + ".tmp"));
     }
 
+    [Fact]
+    public void Saving_the_settings_keeps_what_the_agent_changed_while_they_were_open()
+    {
+        const string opened = """{ "mcpServers": { "files": { "command": "npx", "args": ["fs"] }, "old": { "command": "x" } } }""";
+        // Meanwhile the agent added blender and removed old.
+        var current = McpConfig.WithoutServer(McpConfig.WithServer(opened, "blender", new JsonObject { ["command"] = "uvx", ["args"] = new JsonArray("mcp-for-blender") }), "old")!;
+
+        // The user changed another server: both changes stay.
+        const string mine = """{ "mcpServers": { "files": { "command": "npx", "args": ["fs", "C:\\Docs"] }, "old": { "command": "x" } } }""";
+        var merged = McpConfig.Parse(McpConfig.Merge(opened, current, mine)).Servers;
+        Assert.Equal(["files", "blender"], merged.Select(s => s.Name));
+        Assert.Equal(["fs", "C:\\Docs"], merged[0].Args);
+        Assert.Equal(["mcp-for-blender"], merged[1].Args);
+
+        // Both changed the same server: the user's edit wins.
+        const string mineToo = """{ "mcpServers": { "files": { "command": "npx", "args": ["fs"] }, "old": { "command": "y" } } }""";
+        var both = McpConfig.Parse(McpConfig.Merge(opened, current, mineToo)).Servers;
+        Assert.Equal(["files", "old", "blender"], both.Select(s => s.Name));
+        Assert.Equal("y", both[1].Command);
+
+        // Nothing changed underneath: the user's text as typed, comments and all.
+        const string typed = "{ // mine\n  \"mcpServers\": {}\n}";
+        Assert.Equal(typed, McpConfig.Merge(opened, opened, typed));
+    }
+
     // ---- how a tool looks to the model ----------------------------------------------
 
     [Fact]

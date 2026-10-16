@@ -338,9 +338,7 @@ public partial class MainWindow : Window
             if (change.PropertyName == nameof(MainWindowViewModel.ShowIntro) && !vm.ShowIntro)
                 _stickToBottom = true;
         };
-        // Stay visible while the agent works, but invisible to its screenshots. Applied before the
-        // window is first shown: changing capture exclusion on an already-painted window left
-        // parts of it unpainted (the window behind showed through).
+        // Stay visible while the agent works, but out of its way when it clicks or types here.
         if (TryGetPlatformHandle()?.Handle is { } handle)
             vm.AttachHostWindow(handle);
     }
@@ -362,7 +360,13 @@ public partial class MainWindow : Window
     {
         var settingsVm = Vm.CreateSettingsViewModel();
         var window = new SettingsWindow { DataContext = settingsVm };
-        if (await window.ShowDialog<bool>(this))
-            await Vm.ApplySettingsAsync(settingsVm.Settings, settingsVm.McpConfigText);
+        // An MCP server the agent adds while the dialog is open shows up in it, and so does how each one is doing.
+        var refresh = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => Vm.RefreshMcp(settingsVm));
+        refresh.Start();
+        bool saved;
+        try { saved = await window.ShowDialog<bool>(this); }
+        finally { refresh.Stop(); }
+        if (saved)
+            await Vm.ApplySettingsAsync(settingsVm);
     }
 }

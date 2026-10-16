@@ -606,7 +606,7 @@ The SSH client is built in (SSH.NET), so no
 
 ### MCP servers
 BlackBox is an MCP client: any [Model Context Protocol](https://modelcontextprotocol.io) server adds its
-tools to the list above. Paste the `mcpServers` block from the server's README into Settings → Advanced;
+tools to the list above. Paste the `mcpServers` block from the server's README into Settings;
 it is the same format Claude Desktop, LM Studio and Cursor use, and it is kept in `Data/mcp.json`:
 
 ```json
@@ -625,18 +625,21 @@ it. The model sees each tool as `server__tool` (`filesystem__read_file`), so nam
 BlackBox's own tools; a call to the bare name still works when only one server has it. Tools a
 server marks read-only are treated like screenshots in the approval settings, all others like shell
 commands. Text results go back to the model as they are; an image result is shown to it like a
-screenshot. Comments and trailing commas in the file are fine. The settings dialog shows what each
-server reported when it started, and a server that fails to start is reported in the chat; the
-others keep working.
+screenshot. Comments and trailing commas in the file are fine. The settings dialog shows how each
+server is doing, and a server that fails to start is reported in the chat; the others keep working.
 
 The agent sets servers up itself too, with its `mcp_servers` tool: when a program it is asked to
 use has an MCP server (Blender, a database, a browser), it installs what the server needs, adds it
 (`add` with a name and a command or url, as in the file), and its tools join the run at once and
-stay for later tasks; the entry lands in `Data/mcp.json`, where Settings shows it. A server that
-doesn't start isn't kept, and the agent is told why. `remove` and `list` do what they say. Adding
-tools mid-run changes the tool list, so the server works through the whole prompt once more.
+stay for later tasks; the entry lands in `Data/mcp.json`, where Settings shows it. Its prompt says
+to always go through `mcp_servers` rather than run a server or call its tools from a script, so
+every server it uses ends up there. A settings dialog left open shows a server the agent adds within
+a second, and Save keeps it: the list is written only when you changed it, and then merged with
+what the agent changed meanwhile, your edit winning where you both changed the same server. A server
+that doesn't start isn't kept, and the agent is told why. `remove` and `list` do what they say.
+Adding tools mid-run changes the tool list, so the server works through the whole prompt once more.
 
-Actions run without asking by default (approvals can be switched on in Settings → General).
+Actions run without asking by default (approvals can be switched on in Settings).
 Pressing Stop, or Pause/Break anywhere, halts the agent: Pause, or Ctrl+Pause, which Windows
 calls Break (laptops without the key often have one of them on an Fn combination). It works
 whatever window has focus, and the press that stops a run goes no further: the window the agent
@@ -646,8 +649,10 @@ usual job in the windows you work in while the agent runs. After a stop, or an e
 run, the line saying so in the chat has a Continue button: the task carries on where it stopped,
 as if "Continue." had been sent (a stop before the model had the message runs that message again).
 A chat that ended stopped shows it again when opened from History. BlackBox
-stays on screen while it works but is hidden from the agent's screenshots, and steps behind other
-windows for the moment a click lands on it. Every click and key press the agent makes shows up in a
+stays on screen while it works but is left out of the agent's screenshots, and steps behind other
+windows for the moment a click lands on it. It is left out only for the instant each screenshot is
+taken, so screen recorders and screen sharing show it the rest of the time (before, an option hid
+it from them for good). Every click and key press the agent makes shows up in a
 log in the bottom-right corner that fades after 15 seconds, with a ring where it clicked. The agent
 can't see it and it never takes focus.
 

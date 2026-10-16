@@ -7,7 +7,7 @@ namespace BlackBox.Platform.Windows;
 /// <summary>
 /// Keeps BlackBox's window visible to the user but out of the agent's way:
 /// <list type="bullet">
-/// <item>WDA_EXCLUDEFROMCAPTURE (Windows 10 2004+) makes screenshots show what is behind it.</item>
+/// <item>Screenshots show what is behind it (see <see cref="WindowsScreenCapture"/>).</item>
 /// <item>When a click or drag lands on it, it is pushed to the bottom of the z-order for that action.</item>
 /// <item>Before keystrokes, focus moves from it to the window underneath.</item>
 /// </list>
@@ -17,17 +17,7 @@ internal sealed class WindowsHostWindow : IHostWindow
 {
     private nint _hwnd;
 
-    public void Attach(nint handle, bool hideFromCapture)
-    {
-        _hwnd = handle;
-        SetHiddenFromCapture(hideFromCapture);
-    }
-
-    public void SetHiddenFromCapture(bool hide)
-    {
-        if (_hwnd == 0) return;
-        SetWindowDisplayAffinity(_hwnd, hide ? WDA_EXCLUDEFROMCAPTURE : 0);
-    }
+    public void Attach(nint handle) => _hwnd = handle;
 
     public IDisposable StepAside(params (int X, int Y)[] points)
     {

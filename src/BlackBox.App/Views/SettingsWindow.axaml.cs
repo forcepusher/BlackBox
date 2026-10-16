@@ -13,7 +13,8 @@ public partial class SettingsWindow : Window
         // A broken MCP server list is not saved: the error is shown under the box instead.
         if (DataContext is SettingsViewModel { HasMcpError: true })
         {
-            Tabs.SelectedIndex = 1;
+            McpBox.BringIntoView();
+            McpBox.Focus();
             return;
         }
         Close(true);

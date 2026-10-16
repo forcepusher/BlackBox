@@ -710,8 +710,7 @@ public class AgentSessionTests
     /// <summary>BlackBox's window, noting among the actions each time it hands the keyboard to the window under it.</summary>
     private sealed class FocusLog(List<string> actions) : IHostWindow
     {
-        public void Attach(nint handle, bool hideFromCapture) { }
-        public void SetHiddenFromCapture(bool hide) { }
+        public void Attach(nint handle) { }
         public IDisposable StepAside(params (int X, int Y)[] points) => NoHostWindow.Instance.StepAside(points);
         public void YieldFocus() => actions.Add("yield");
     }
@@ -815,6 +814,8 @@ public class AgentSessionTests
         Assert.Contains("check that it is running before you say it's set up", prompt);
         Assert.Contains("Make Word, Excel, PowerPoint and PDF files with write_file", prompt);
         Assert.Contains("add the server with mcp_servers and use its tools", prompt);
+        // A server it uses goes into Settings, not run once from a script and forgotten.
+        Assert.Contains("Always go through mcp_servers, which saves the server in the user's Settings", prompt);
         // Helper files go to BlackBox's own folder, not the user's (a reminder script landed in the home folder).
         Assert.Contains(@"go in D:\BlackBox\Data\scratch, not in the user's folders",
             SystemPrompt.Build("Test OS", null, "C:\\", "", toolsDirectory: @"D:\BlackBox\Data\tools", scratchDirectory: @"D:\BlackBox\Data\scratch"));
