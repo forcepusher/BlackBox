@@ -49,6 +49,9 @@ public static partial class ComfyTemplates
         }
         catch (ComfyApiException) { }
 
+        // BlackBox's own: the classic checkpoint workflows, which run on a PC without a graphics card.
+        list.AddRange(ComfyBuiltins.Templates);
+
         // ComfyUI's own templates, without the ones built on paid API nodes.
         try
         {
@@ -124,7 +127,7 @@ public static partial class ComfyTemplates
     {
         var words = ComfyNodeLibrary.Words(query);
         if (words.Count == 0)
-            return all.Where(t => t.Kind == "saved").Take(max).ToList();
+            return all.Where(t => t.Kind is "saved" or "blackbox").Take(max).ToList();
         return all
             .Select(t => (Template: t, Score: Score(t, words)))
             .Where(x => x.Score > 0)
@@ -283,7 +286,11 @@ public static partial class ComfyTemplates
             foreach (var (_, node) in api.All())
                 foreach (var (_, value) in node["inputs"] as JsonObject ?? [])
                     if (value is JsonValue v && v.TryGetValue<string>(out var s) && ModelFile().IsMatch(s) && !needs.ContainsKey(Path.GetFileName(s)))
-                        needs[Path.GetFileName(s)] = new ComfyModelNeed(s, null, null, allFiles.Contains(Path.GetFileName(s)));
+                    {
+                        // A well-known file comes with its link even where the workflow gives none.
+                        var known = ComfyBuiltins.Known.TryGetValue(Path.GetFileName(s), out var k) ? k : default;
+                        needs[Path.GetFileName(s)] = new ComfyModelNeed(s, known.Folder, known.Url, allFiles.Contains(Path.GetFileName(s)));
+                    }
         return needs.Values.ToList();
 
         bool IsInstalled(string file, string? folder) =>

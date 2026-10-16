@@ -13,6 +13,7 @@ namespace BlackBox.Core.Settings;
 ///   Data/known_hosts (host keys of the servers the agent logged in to over SSH)
 ///   Data/tools/    (portable programs the agent downloaded for its tasks)
 ///   Data/scratch/  (helper files the agent made for its tasks: scripts and the like)
+///   Data/pasted/   (pictures pasted into the chat from the clipboard)
 /// </code>
 /// </summary>
 public sealed class AppPaths(string root)
@@ -41,6 +42,12 @@ public sealed class AppPaths(string root)
 
     /// <summary>Helper files the agent makes only to get a task done (scripts, a reminder's script), instead of the user's folders.</summary>
     public string ScratchDir => Path.Combine(DataDir, "scratch");
+
+    /// <summary>
+    /// Pictures pasted into the chat (a screenshot from the clipboard), saved as files so the agent
+    /// can work on them like any other; files dropped on the window stay where they are.
+    /// </summary>
+    public string PastedDir => Path.Combine(DataDir, "pasted");
 
     /// <summary>ComfyUI's address and folder as last used, the log of a server BlackBox started, and the browser profile its page is loaded in (see <see cref="Comfy.ComfyHub"/>).</summary>
     public string ComfyDir => Path.Combine(DataDir, "comfyui");

@@ -19,21 +19,25 @@ public sealed class ComfyTool : Tool
     public override string Name => "comfyui";
 
     public override string Description =>
-        "Make pictures, video, sound, music, speech and 3D models with ComfyUI on this PC; it is found and started for you. " +
+        "Make pictures, video, sound, music, speech and 3D models with ComfyUI on this PC. The user's own is found and used " +
+        "(one already running, a portable build, the Desktop app, an install of their own), started for you if needed; " +
+        "only when the PC has none, action=install installs one (the portable build that suits its graphics card, or its CPU). " +
         "A workflow is JSON in ComfyUI's API format: {\"node id\": {\"class_type\": \"…\", \"inputs\": {\"name\": a value, or [\"other node id\", output index]}}}. " +
         "Never write node, input or model names from memory: start from a template (action=templates with search finds them; with name it shows one " +
         "as a workflow, saved to a file you can edit), or look names up (action=nodes with search or names, action=models). " +
         "action=run runs a workflow (template, workflow_file, or workflow itself), changed by set {\"node id.input\": value}, e.g. " +
         "{\"6.text\": \"a red fox in snow\", \"3.seed\": 42}; it is checked first, then it waits until the job is done and gives you the files " +
         "with a look at them. For an input picture, sound or video, put its full local path where LoadImage/LoadAudio/LoadVideo name a file: it is uploaded. " +
-        "Change the seed for a different result. action=status shows the server, GPU and queue (with prompt_id: waits for that job); " +
+        "Change the seed for a different result. A model a workflow lacks: action=download with its url (a template lists the links of its models); " +
+        "action=find_models searches Civitai and Hugging Face for others (a style, a checkpoint the user named, a LoRA, an upscaler) with their sizes and links. " +
+        "action=status shows the server, GPU and queue (with prompt_id: waits for that job); " +
         "action=free unloads its models to free the GPU; action=restart restarts it (after installing custom nodes into its custom_nodes folder); action=stop stops it.";
 
     public override ToolRisk Risk => ToolRisk.Risky;
 
     public override JsonObject Parameters => Schema(
-        ("action", Str("What to do", "templates", "nodes", "models", "run", "status", "free", "restart", "stop"), true),
-        ("search", Str("Words to look for: in templates (\"video from image\"), node types (\"wan video\") or model files (\"lora\")"), false),
+        ("action", Str("What to do", "templates", "nodes", "models", "run", "status", "install", "find_models", "download", "free", "restart", "stop"), true),
+        ("search", Str("Words to look for: in templates (\"video from image\"), node types (\"wan video\"), installed model files (\"lora\"), or models online (find_models: \"watercolor\", \"DreamShaper\")"), false),
         ("name", Str("A template's name as action=templates lists it: to see it (templates) or run it (run)"), false),
         ("names", StrArray("Node types to show in full: inputs, their types and choices, outputs (nodes)"), false),
         ("workflow", new JsonObject { ["description"] = "A workflow in API format to run (a JSON object or its text)" }, false),
@@ -42,7 +46,11 @@ public sealed class ComfyTool : Tool
         ("save_to", Str("A folder the user named to copy the files the run makes into; without it they stay in ComfyUI's output folder"), false),
         ("wait_minutes", Num("How long to wait for the job (default 30); it keeps running after that, and action=status with its prompt_id waits again"), false),
         ("prompt_id", Str("A job's id, from an earlier run that was still going (status)"), false),
-        ("folder", Str("ComfyUI's folder, if it isn't found by itself or another one should be used"), false));
+        ("kind", Str("find_models: the kind of model (checkpoint, lora, vae, upscaler, controlnet, embedding); any kind without it"), false),
+        ("base", Str("find_models: the model it should be made for, e.g. \"SD 1.5\", \"SDXL\", \"Flux\""), false),
+        ("url", Str("download: the model file's link, as find_models or a template gives it (a Civitai or Hugging Face page works too)"), false),
+        ("model_folder", Str("download: the models folder it goes in (checkpoints, loras, vae, upscale_models, controlnet, embeddings, diffusion_models, text_encoders…); find_models gives it"), false),
+        ("folder", Str("ComfyUI's folder, if it isn't found by itself or another one should be used (install: where to install it, else BlackBox's Data\\tools)"), false));
 
     public override string Describe(JsonObject args)
     {
@@ -55,6 +63,9 @@ public sealed class ComfyTool : Tool
             "run" => "ComfyUI run " + (GetString(args, "name") ?? GetString(args, "workflow_file") ?? "a workflow") +
                      (args["set"] is JsonObject set && set.Count > 0 ? " with " + set.ToJsonString(ComfyWorkflow.Compact).Clip(160) : ""),
             "status" => GetString(args, "prompt_id") is { } id ? $"ComfyUI job {id}" : "ComfyUI status",
+            "install" => "Install ComfyUI" + (GetString(args, "folder") is { } f ? $" in {f}" : ""),
+            "find_models" => $"Models online: {GetString(args, "search")}" + (GetString(args, "kind") is { } k ? $" ({k})" : ""),
+            "download" => $"Download {GetString(args, "url")}" + (GetString(args, "model_folder") is { } m ? $" into {m}" : ""),
             _ => "ComfyUI " + action,
         };
     }
@@ -88,6 +99,12 @@ public sealed class ComfyTool : Tool
                     return new ToolResult(await hub.RestartAsync(start: false, ctx.Progress, ct).ConfigureAwait(false));
                 case "restart":
                     return new ToolResult(await hub.RestartAsync(start: true, ctx.Progress, ct).ConfigureAwait(false));
+                case "install":
+                    return await InstallAsync(args, hub, ctx, ct).ConfigureAwait(false);
+                case "find_models" or "find_model" or "search_models":
+                    return await FindModelsAsync(args, hub, ct).ConfigureAwait(false);
+                case "download" or "download_model":
+                    return await DownloadAsync(args, hub, ctx, ct).ConfigureAwait(false);
             }
             var api = await hub.ConnectAsync(GetString(args, "folder"), notes, ctx.Progress, ct).ConfigureAwait(false);
             var result = action switch
@@ -98,7 +115,7 @@ public sealed class ComfyTool : Tool
                 "models" => await ModelsAsync(args, hub, api, ct).ConfigureAwait(false),
                 "templates" => await TemplatesAsync(args, hub, api, ctx, ct).ConfigureAwait(false),
                 "run" => await RunAsync(args, hub, api, ctx, ct).ConfigureAwait(false),
-                _ => throw new ToolArgumentException("action must be templates, nodes, models, run, status, free, restart or stop."),
+                _ => throw new ToolArgumentException("action must be templates, nodes, models, run, status, install, find_models, download, free, restart or stop."),
             };
             return notes.Count == 0 ? result : result with { Text = string.Join("\n", notes) + "\n" + result.Text };
         }
@@ -110,7 +127,109 @@ public sealed class ComfyTool : Tool
         {
             return ToolResult.Error(ex.Message);
         }
+        catch (Web.DownloadException ex)
+        {
+            return ToolResult.Error(ex.Message);
+        }
     }
+
+    // ---- install, find_models, download ------------------------------------------------------
+
+    private static async Task<ToolResult> InstallAsync(JsonObject args, ComfyHub hub, ToolContext ctx, CancellationToken ct)
+    {
+        var said = await hub.InstallAsync(GetString(args, "folder"), ctx.Progress, ct).ConfigureAwait(false);
+        var notes = new List<string> { said };
+        // Started at once, so a problem shows now rather than at the first job.
+        var api = await hub.ConnectAsync(null, notes, ctx.Progress, ct).ConfigureAwait(false);
+        var models = await hub.ModelsAsync(api, ct, fresh: true).ConfigureAwait(false);
+        var count = models.Where(kv => kv.Key is not ("custom_nodes" or "configs")).Sum(kv => kv.Value.Count);
+        var (device, cpu) = ComfyHardware.Device(await api.TrySystemStatsAsync(ct).ConfigureAwait(false));
+        if (!notes.Any(n => n.Contains(device, StringComparison.Ordinal)))
+            notes.Add($"It runs on {device}." + (cpu ? " " + ComfyHardware.CpuAdvice : ""));
+        notes.Add((count == 0 ? "It has no models yet. " : $"It has {count} model files. ") +
+                  "action=templates with a few words finds a workflow and says which models it needs, with their links for action=download; " +
+                  "action=find_models looks for other models online.");
+        return new ToolResult(string.Join("\n", notes));
+    }
+
+    /// <summary>The models find_models showed in this task, by link, so download knows their name, folder and checksum.</summary>
+    private readonly Dictionary<string, OnlineModel> _found = new(StringComparer.Ordinal);
+
+    private async Task<ToolResult> FindModelsAsync(JsonObject args, ComfyHub hub, CancellationToken ct)
+    {
+        var search = GetString(args, "search")?.Trim() is { Length: > 0 } s ? s : throw new ToolArgumentException("Give search: words for the model you want (\"watercolor\", \"DreamShaper\", \"4x upscaler\").");
+        var problems = new List<string>();
+        var found = await ComfyModelSearch.SearchAsync(search, GetString(args, "kind"), GetString(args, "base"), 10, problems, ct).ConfigureAwait(false);
+        lock (_found)
+            foreach (var m in found)
+                _found[m.Url] = m;
+        var sb = new StringBuilder();
+        var (device, cpu) = await DeviceAsync(hub, ct).ConfigureAwait(false);
+        sb.AppendLine(found.Count == 0 ? $"No model for \"{search}\" was found on Civitai or Hugging Face{(GetString(args, "kind") is { } k ? $" as a {k}" : "")}. Try other or fewer words."
+            : $"Models for \"{search}\", the most downloaded first on each site. ComfyUI {device}." + (cpu ? " " + ComfyHardware.CpuAdvice : ""));
+        var n = 0;
+        foreach (var m in found)
+        {
+            sb.Append(++n).Append(". ").Append(m.Title).Append(": ").Append(m.Kind)
+                .Append(m.Base is { Length: > 0 } b ? $" for {b}" : "")
+                .Append(m.Size is { } size ? $", {Size(size)}" : "")
+                .Append(m.Downloads > 0 ? $", {m.Downloads:N0} downloads" : "")
+                .Append(m.Note is { } note ? $", {note}" : "")
+                .Append($" ({m.Source}, {m.Page})").AppendLine();
+            sb.Append("   ").Append(m.File).Append(": url=").Append(m.Url).Append(" model_folder=").AppendLine(m.Folder);
+        }
+        foreach (var p in problems)
+            sb.AppendLine(p);
+        if (found.Count > 0)
+            sb.Append("Download one with action=download url=… model_folder=…; prefer .safetensors files. A model's page says what it is good at and the trigger words of a LoRA.");
+        return new ToolResult(sb.ToString().TrimEnd());
+    }
+
+    /// <summary>What ComfyUI runs on, said for model choices: "runs on …" when it runs, "would run on …" when it isn't installed yet.</summary>
+    private static async Task<(string Text, bool Cpu)> DeviceAsync(ComfyHub hub, CancellationToken ct)
+    {
+        if (await new ComfyApi(hub.Address).TrySystemStatsAsync(ct).ConfigureAwait(false) is { } stats)
+        {
+            var (text, cpu) = ComfyHardware.Device(stats);
+            return ("runs on " + text, cpu);
+        }
+        var build = ComfyHardware.Pick(ComfyHardware.Cards(), ComfyInstaller.Arm64);
+        var ram = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1073741824.0;
+        var installed = hub.SavedInstall is not null ? "isn't running; it runs" : "isn't installed yet (action=install); it would run";
+        return ($"{installed} on {build.Device}, with {ram:0} GB of RAM", build.Cpu);
+    }
+
+    private async Task<ToolResult> DownloadAsync(JsonObject args, ComfyHub hub, ToolContext ctx, CancellationToken ct)
+    {
+        var given = RequireString(args, "url").Trim();
+        if (!Uri.TryCreate(given, UriKind.Absolute, out var link) || link.Scheme is not ("http" or "https"))
+            throw new ToolArgumentException("url must be the model file's web link (https://…), as find_models or a template gives it.");
+        OnlineModel? known;
+        lock (_found)
+            known = _found.GetValueOrDefault(given);
+        known ??= await ComfyModelSearch.ResolveAsync(link, ct).ConfigureAwait(false);
+        var url = known is not null ? new Uri(known.Url) : link;
+        var name = known?.File is { Length: > 0 } file ? Path.GetFileName(file) : (await Web.Downloader.ProbeAsync(url, ct).ConfigureAwait(false)).Name;
+        var folder = ComfyModelFolders.Normalize(GetString(args, "model_folder") ?? known?.Folder ?? ComfyModelSearch.FolderFor(known?.File ?? name, null));
+        var dir = await hub.ModelsFolderAsync(folder, ct).ConfigureAwait(false)
+                  ?? throw new ComfyApiException("ComfyUI isn't installed yet, so there is no models folder to download into: install it first with action=install.");
+        var target = Path.Combine(dir, name);
+        if (File.Exists(target) && (known?.Size is not { } expected || Math.Abs(new FileInfo(target).Length - expected) < 2048))
+            return new ToolResult($"{name} is there already, in {dir}. {ComfyModelFolders.Use(folder, name)}");
+
+        var started = DateTime.UtcNow;
+        await Web.Downloader.DownloadAsync(url, target, known?.Sha256, ctx.Progress, ct).ConfigureAwait(false);
+        var took = DateTime.UtcNow - started;
+        // The new file is a choice in its loader node from now on.
+        var api = new ComfyApi(hub.Address);
+        if (await api.TrySystemStatsAsync(ct).ConfigureAwait(false) is not null)
+            await hub.ModelsAsync(api, ct, fresh: true).ConfigureAwait(false);
+        var checkedNote = known?.Sha256 is { Length: > 0 } ? ", its SHA-256 checked" : "";
+        return new ToolResult($"Downloaded {name} ({Size(new FileInfo(target).Length)} in {ComfyRunner.Clock(took)}{checkedNote}) into {dir}. {ComfyModelFolders.Use(folder, name)}");
+    }
+
+    private static string Size(long bytes) =>
+        bytes >= 1L << 30 ? $"{bytes / 1073741824.0:0.0} GB" : bytes >= 1L << 20 ? $"{bytes / 1048576.0:0} MB" : $"{Math.Max(1, bytes / 1024)} KB";
 
     // ---- status, free -------------------------------------------------------------------
 
@@ -124,8 +243,11 @@ public sealed class ComfyTool : Tool
         var system = stats?["system"];
         sb.AppendLine($"ComfyUI {(string?)system?["comfyui_version"]} runs at {api.BaseUrl}" +
                       (hub.SavedInstall is { } install ? $", from {install.Root}" : "") + ".");
-        foreach (var device in (stats?["devices"] as JsonArray ?? []).OfType<JsonObject>())
-            sb.AppendLine($"GPU: {(string?)device["name"]}, {Gb((long?)device["vram_free"])} of {Gb((long?)device["vram_total"])} free.");
+        if (ComfyHardware.Device(stats) is { Cpu: true } onCpu)
+            sb.AppendLine($"It runs on {onCpu.Text}. {ComfyHardware.CpuAdvice}");
+        else
+            foreach (var device in (stats?["devices"] as JsonArray ?? []).OfType<JsonObject>())
+                sb.AppendLine($"GPU: {(string?)device["name"]}, {Gb((long?)device["vram_free"])} of {Gb((long?)device["vram_total"])} free.");
         sb.AppendLine($"RAM: {Gb((long?)system?["ram_free"])} of {Gb((long?)system?["ram_total"])} free.");
         if (await api.GetJsonAsync("queue", ct).ConfigureAwait(false) is JsonObject q)
             sb.AppendLine($"Queue: {(q["queue_running"] as JsonArray)?.Count ?? 0} running, {(q["queue_pending"] as JsonArray)?.Count ?? 0} waiting.");
@@ -261,7 +383,7 @@ public sealed class ComfyTool : Tool
             sb.AppendLine($"Template {template.Name}" + (template.Title != Path.GetFileName(template.Name) ? $" \"{template.Title}\"" : "") +
                           (template.Description.Length > 0 ? ": " + template.Description.Clip(400) : "."));
             AppendReadiness(sb, editor, workflow, library, models);
-            if (ComfyTemplates.Notes(editor, 1500) is { Length: > 0 } notes)
+            if ((ComfyBuiltins.For(template)?.Notes ?? ComfyTemplates.Notes(editor, 1500)) is { Length: > 0 } notes)
                 sb.AppendLine("Its notes:").AppendLine(notes);
             sb.AppendLine($"As an API-format workflow ({workflow.Nodes.Count} nodes), also saved to {file}:");
             sb.AppendLine(workflow.Listing());
@@ -278,19 +400,25 @@ public sealed class ComfyTool : Tool
         if (found.Count == 0)
             return new ToolResult($"No template matches \"{search}\" among {all.Count}. Try other words, or build the workflow from node types (action=nodes).");
         var lines = new StringBuilder();
-        lines.AppendLine(search.Length == 0 ? "The user's saved workflows:" : $"Templates matching \"{search}\", best first (of {all.Count}; [ready] means its models and nodes are installed):");
+        // On the CPU most templates are out of reach: said before the list, so the choice is made with it.
+        var (device, cpu) = ComfyHardware.Device(await api.TrySystemStatsAsync(ct).ConfigureAwait(false));
+        if (cpu)
+            lines.AppendLine($"ComfyUI runs on {device}. {ComfyHardware.CpuAdvice}");
+        lines.AppendLine(search.Length == 0 ? "The user's saved workflows, and BlackBox's own:" : $"Templates matching \"{search}\", best first (of {all.Count}; [ready] means its models and nodes are installed):");
         foreach (var t in found)
         {
             var ready = "";
             try
             {
-                var editor = await api.GetJsonAsync(t.FetchPath, ct).ConfigureAwait(false);
+                var builtin = ComfyBuiltins.For(t);
+                var editor = builtin is null ? await api.GetJsonAsync(t.FetchPath, ct).ConfigureAwait(false) : null;
                 var missingNodes = ComfyWorkflow.IsEditorFormat(editor) ? ComfyTemplates.MissingNodeTypes(editor, library) : [];
-                var missingModels = ComfyTemplates.Models(editor, null, models).Where(m => !m.Installed).ToList();
+                var missingModels = ComfyTemplates.Models(editor, builtin is null ? null : ComfyWorkflow.FromApi(ComfyWorkflow.ParseText(builtin.Workflow)), models)
+                    .Where(m => !m.Installed).ToList();
                 ready = missingNodes.Count == 0 && missingModels.Count == 0 ? " [ready]"
                     : " [needs " + string.Join(", ", missingModels.Select(m => m.File).Concat(missingNodes.Select(n => "node " + n)).Take(4)) + "]";
             }
-            catch (Exception ex) when (ex is ComfyApiException or System.Text.Json.JsonException) { }
+            catch (Exception ex) when (ex is ComfyApiException or ComfyWorkflowException or System.Text.Json.JsonException) { }
             lines.Append("- ").Append(t.Name).Append(t.Title != Path.GetFileName(t.Name) ? $" \"{t.Title}\"" : "")
                 .Append(t.Description.Length > 0 ? ": " + t.Description.Clip(240) : "").AppendLine(ready);
         }
@@ -304,16 +432,22 @@ public sealed class ComfyTool : Tool
         var missing = needs.Where(m => !m.Installed).ToList();
         if (needs.Count > 0)
             sb.AppendLine(missing.Count == 0 ? $"Models: all {needs.Count} installed." :
-                "Models not installed: " + string.Join("; ", missing.Select(m => m.File + (m.Folder is not null ? $" (goes in models/{m.Folder})" : "") + (m.Url is not null ? $", from {m.Url}" : ""))) + ".");
+                "Models not installed: " + string.Join("; ", missing.Select(m => m.File + (m.Folder is not null ? $" (goes in models/{m.Folder})" : "") +
+                                                                                  (m.Url is not null ? $", download it with action=download url={m.Url}" : ""))) + ".");
+        // A checkpoint of the user's own may do as well as the one the template names.
+        if (missing.Any(m => m.Folder == "checkpoints") && models.TryGetValue("checkpoints", out var checkpoints) && checkpoints.Count > 0)
+            sb.AppendLine("Installed checkpoints that could take its place: " + string.Join(", ", checkpoints.Order().Take(12)) + ".");
         var missingNodes = editor is not null && ComfyWorkflow.IsEditorFormat(editor) ? ComfyTemplates.MissingNodeTypes(editor, library)
             : workflow.All().Select(n => ComfyWorkflow.ClassOf(n.Node)).Where(c => library.Find(c) is null).Distinct().ToList();
         if (missingNodes.Count > 0)
             sb.AppendLine($"Node types not installed (a custom node pack is missing): {string.Join(", ", missingNodes)}.");
     }
 
-    /// <summary>A template as the editor saved it and as a workflow to run.</summary>
+    /// <summary>A template as the editor saved it and as a workflow to run; one of BlackBox's own is a workflow only.</summary>
     private static async Task<(JsonNode? Editor, ComfyWorkflow Workflow)> LoadTemplateAsync(ComfyHub hub, ComfyApi api, ComfyTemplate template, CancellationToken ct)
     {
+        if (ComfyBuiltins.For(template) is { } builtin)
+            return (null, ComfyWorkflow.FromApi(ComfyWorkflow.ParseText(builtin.Workflow)));
         var json = await api.GetJsonAsync(template.FetchPath, ct).ConfigureAwait(false);
         return ComfyWorkflow.IsEditorFormat(json)
             ? (json, ComfyWorkflow.FromApi(await hub.Frontend.ConvertAsync(api.BaseUrl, hub.Generation, json!, ct).ConfigureAwait(false)))
@@ -422,6 +556,8 @@ public sealed class ComfyTool : Tool
         }
 
         var warnings = new List<string>();
+        // As the editor sends a workflow: the inputs it keeps out of sight have their defaults.
+        workflow.FillAdvancedDefaults(library);
         var problems = workflow.Validate(library, uploaded, warnings);
         if (problems.Any(p => p.Contains("has no node type", StringComparison.Ordinal) || p.Contains("isn't installed", StringComparison.Ordinal)
                               || p.Contains("isn't in ComfyUI's input folder", StringComparison.Ordinal)))
@@ -429,6 +565,7 @@ public sealed class ComfyTool : Tool
             // Custom nodes and models installed since the list was fetched count too.
             library = await hub.LibraryAsync(api, ct, fresh: true).ConfigureAwait(false);
             warnings.Clear();
+            workflow.FillAdvancedDefaults(library);
             problems = workflow.Validate(library, uploaded, warnings);
         }
         if (problems.Count > 0)

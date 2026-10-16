@@ -42,6 +42,11 @@ public sealed class ComfyHub(string stateDirectory)
 
     public string LogFile => Path.Combine(stateDirectory, "server.log");
 
+    /// <summary>BlackBox's Data/tools, beside Data/comfyui: where it installs ComfyUI, and looks for it first.</summary>
+    public string ToolsDirectory { get; init; } = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(stateDirectory))!, "tools");
+
+    private IReadOnlyList<ComfyInstall> FindInstalls(CancellationToken ct) => ComfyInstall.Find(TimeSpan.FromSeconds(20), ct, [ToolsDirectory]);
+
     private string StateFile => Path.Combine(stateDirectory, "state.json");
 
     /// <summary>The server's address: http://127.0.0.1:8188 unless the saved state says otherwise.</summary>
@@ -116,19 +121,37 @@ public sealed class ComfyHub(string stateDirectory)
             if (await api.TrySystemStatsAsync(ct).ConfigureAwait(false) is not null)
             {
                 // Running already (started by the user, or earlier); learn where it lives, for its files.
-                if (SavedInstall is null && await FoldersAsync(api, ct).ConfigureAwait(false) is { } dirs && dirs.TryGetValue("code", out var code))
+                var code = await CodeFolderAsync(api, ct).ConfigureAwait(false);
+                if (SavedInstall is null && code is not null)
                     SaveState(address, ComfyInstall.FromFolder(code));
+                Announce(api, code, notes);
                 return api;
             }
+
+            // One the user runs on ComfyUI's usual ports (the portable build's 8188, the Desktop
+            // app's 8000), elsewhere than the address used last, is used as it runs.
+            if (folder is not { Length: > 0 } && api.IsLocal)
+                foreach (var port in new[] { ComfyProcess.DefaultPort, ComfyProcess.DesktopPort }.Where(p => p != address.Port))
+                {
+                    var other = new ComfyApi(new Uri($"http://127.0.0.1:{port}/"));
+                    if (await other.TrySystemStatsAsync(ct).ConfigureAwait(false) is null)
+                        continue;
+                    var code = await CodeFolderAsync(other, ct).ConfigureAwait(false);
+                    SaveState(other.BaseUrl, code is null ? null : ComfyInstall.FromFolder(code));
+                    Announce(other, code, notes);
+                    return other;
+                }
 
             install ??= SavedInstall;
             if (install is null)
             {
                 progress?.Invoke("Looking for ComfyUI on this PC…");
-                var found = ComfyInstall.Find(TimeSpan.FromSeconds(20), ct);
+                var found = FindInstalls(ct);
                 install = found.FirstOrDefault()
-                          ?? throw new ComfyApiException("ComfyUI isn't running and isn't installed in any usual place on this PC (looked on every drive, a few folders deep). " +
-                                                         "If it is somewhere else, give its folder in folder=. To install it, the portable Windows build is at https://github.com/comfyanonymous/ComfyUI/releases.");
+                          ?? throw new ComfyApiException("ComfyUI isn't running (at ports 8188 and 8000) and isn't installed in any usual place on this PC (looked for the Desktop app, " +
+                                                         "in BlackBox's Data\\tools, Stability Matrix's and Pinokio's folders, and on every drive a few folders deep). " +
+                                                         "If it is somewhere else, give its folder in folder=. Otherwise install it with action=install: " +
+                                                         "the portable build that suits this PC's graphics card (or its CPU) goes into BlackBox's Data\\tools, about 2 GB to download.");
                 if (found.Count > 1)
                     notes.Add($"Found ComfyUI in {found.Count} places ({string.Join("; ", found.Select(f => f.Root))}); using the one used most recently. Give another one's folder in folder= to use it instead.");
                 if (install.Kind == ComfyInstallKind.Desktop && address.Port == ComfyProcess.DefaultPort)
@@ -141,7 +164,10 @@ public sealed class ComfyHub(string stateDirectory)
                 Generation++;
                 SaveState(address, install);
                 RememberServer(api, ours: true);
-                notes.Add($"Started ComfyUI from {install.Root} at {address} (hidden; its log is {log}). It is closed when this task is over.");
+                _announced = $"{api.BaseUrl}|{Generation}";
+                var (device, cpu) = ComfyHardware.Device(await api.TrySystemStatsAsync(ct).ConfigureAwait(false));
+                notes.Add($"Started ComfyUI from {install.Root} at {address} (hidden; its log is {log}), on {device}. It is closed when this task is over." +
+                          (cpu ? " " + ComfyHardware.CpuAdvice : ""));
                 return api;
             }
             SaveState(address, install);
@@ -151,6 +177,88 @@ public sealed class ComfyHub(string stateDirectory)
         {
             _gate.Release();
         }
+    }
+
+    /// <summary>The server and run it was last said to be used in, so it is said once.</summary>
+    private string? _announced;
+
+    /// <summary>
+    /// Says, once, which ComfyUI is used when it ran already: the user's own (portable, the Desktop
+    /// app, an install of their own) is used as it is and keeps running after the task.
+    /// </summary>
+    private void Announce(ComfyApi api, string? code, List<string> notes)
+    {
+        var key = $"{api.BaseUrl}|{Generation}";
+        if (_announced == key)
+            return;
+        _announced = key;
+        var where = code is not null ? $" (from {code})" : "";
+        notes.Add(OwnsForTests?.Invoke(api) ?? IsOurs(api)
+            ? $"Using the ComfyUI BlackBox started at {api.BaseUrl}{where}; it is closed when this task is over."
+            : $"Using the ComfyUI that already runs at {api.BaseUrl}{where}; it keeps running after this task.");
+    }
+
+    /// <summary>Where a running server's ComfyUI folder is (main.py, models\…), as it says; null when it doesn't.</summary>
+    private static async Task<string?> CodeFolderAsync(ComfyApi api, CancellationToken ct) =>
+        await FoldersAsync(api, ct).ConfigureAwait(false) is { } dirs && dirs.TryGetValue("code", out var code) ? code : null;
+
+    /// <summary>
+    /// Installs ComfyUI's portable build that suits this PC (see <see cref="ComfyHardware.Pick"/>)
+    /// into <paramref name="folder"/>, BlackBox's Data/tools unless told otherwise, and makes it the
+    /// one to use. Without a folder, a ComfyUI that already runs or is on the PC is kept instead:
+    /// the answer says where it is.
+    /// </summary>
+    public async Task<string> InstallAsync(string? folder, Action<string>? progress, CancellationToken ct)
+    {
+        if (!ComfyInstaller.Supported)
+            throw new ComfyApiException("BlackBox installs ComfyUI's portable build on 64-bit Windows only. Elsewhere install it as its README says " +
+                                        "(https://github.com/Comfy-Org/ComfyUI), then give its folder in folder=.");
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (folder is not { Length: > 0 })
+            {
+                // A ComfyUI the user has (running, or found on the PC) is used rather than a second one.
+                ComfyApi? running = null;
+                foreach (var url in new[] { Address, new Uri($"http://127.0.0.1:{ComfyProcess.DefaultPort}/"), new Uri($"http://127.0.0.1:{ComfyProcess.DesktopPort}/") }.Distinct())
+                    if (running is null && await new ComfyApi(url).TrySystemStatsAsync(ct).ConfigureAwait(false) is not null)
+                        running = new ComfyApi(url);
+                var code = running is null ? null : await CodeFolderAsync(running, ct).ConfigureAwait(false);
+                var existing = SavedInstall ?? (code is not null ? ComfyInstall.FromFolder(code) : null) ?? (running is null ? FindInstalls(ct).FirstOrDefault() : null);
+                if (running is not null && existing is null)
+                    return $"A ComfyUI runs already, at {running.BaseUrl}; nothing was downloaded, it is used as it is.";
+                if (existing is not null)
+                    return $"ComfyUI is installed already, in {existing.Root}{(running is not null ? $", and runs at {running.BaseUrl}" : "")}; nothing was downloaded. " +
+                           "To install another one anyway, give the folder for it in folder=.";
+            }
+            var build = ComfyHardware.Pick(ComfyHardware.Cards(), ComfyInstaller.Arm64);
+            var install = await ComfyInstaller.InstallAsync(folder is { Length: > 0 } ? Path.GetFullPath(folder) : ToolsDirectory, build, progress, ct).ConfigureAwait(false);
+            SaveState(Address, install);
+            return $"Installed ComfyUI's portable build ({build.Asset}) in {install.Root}, to run on {build.Device}.";
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Where a models folder (checkpoints, loras…) is: as the running server says, since it may keep
+    /// models elsewhere (extra_model_paths.yaml), else in the installation used last or found on
+    /// the PC. Null when there is no ComfyUI.
+    /// </summary>
+    public async Task<string?> ModelsFolderAsync(string folder, CancellationToken ct)
+    {
+        var api = new ComfyApi(Address);
+        if (await api.TrySystemStatsAsync(ct).ConfigureAwait(false) is not null && await FoldersAsync(api, ct).ConfigureAwait(false) is { } dirs)
+        {
+            if (dirs.TryGetValue("models:" + folder, out var dir))
+                return dir;
+            if (dirs.TryGetValue("code", out var code))
+                return Path.Combine(code, "models", folder);
+        }
+        var install = SavedInstall ?? FindInstalls(ct).FirstOrDefault();
+        return install is null ? null : Path.Combine(install.CodeDir, "models", folder);
     }
 
     /// <summary>
@@ -175,8 +283,8 @@ public sealed class ComfyHub(string stateDirectory)
             RememberServer(api, ours: false);
             if (!start)
                 return stopped ? "ComfyUI is stopped." : "ComfyUI wasn't running.";
-            install ??= ComfyInstall.Find(TimeSpan.FromSeconds(20), ct).FirstOrDefault()
-                        ?? throw new ComfyApiException("ComfyUI's folder isn't known, so it can't be started again; give it in folder=.");
+            install ??= FindInstalls(ct).FirstOrDefault()
+                        ?? throw new ComfyApiException("ComfyUI's folder isn't known, so it can't be started again; give it in folder=, or install it with action=install.");
             // The same Python and arguments as before (the user's own flags stay); the script's
             // path is made absolute, since it was relative to where the server was started.
             List<string>? args = null;
@@ -187,6 +295,7 @@ public sealed class ComfyHub(string stateDirectory)
                     args[0] = new[] { install.Root, install.CodeDir }.Select(d => Path.GetFullPath(Path.Combine(d, args[0]))).FirstOrDefault(File.Exists) ?? Path.Combine(install.CodeDir, "main.py");
                 if (install.Kind == ComfyInstallKind.Portable)
                     args.Insert(0, "-s");
+                ComfyProcess.Quietly(args);
             }
             if (program is not null && install.Kind != ComfyInstallKind.Desktop && File.Exists(program) && Path.GetFileName(program).StartsWith("python", StringComparison.OrdinalIgnoreCase))
                 install = install with { Program = program };

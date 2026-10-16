@@ -64,30 +64,45 @@ public sealed record ComfyInstall(string Root, string CodeDir, string Program, C
     }
 
     /// <summary>
-    /// Looks for ComfyUI on this PC: the Desktop app, then every fixed drive and the user's own
-    /// folders, a few levels deep (C:\ComfyUI_windows_portable, D:\AI\ComfyUI, …). Gives up
-    /// after <paramref name="budget"/>; the one used most recently comes first.
+    /// Looks for ComfyUI on this PC: the Desktop app, then <paramref name="firstLookIn"/> (BlackBox's
+    /// Data/tools, where it installs one), the folders launchers keep it in (Stability Matrix,
+    /// Pinokio), every fixed drive and the user's own folders, a few levels deep
+    /// (C:\ComfyUI_windows_portable, D:\AI\ComfyUI, …): portable builds, and installs of
+    /// one's own with a venv or the system's Python. Gives up after <paramref name="budget"/>; the
+    /// one used most recently comes first.
     /// </summary>
-    public static IReadOnlyList<ComfyInstall> Find(TimeSpan budget, CancellationToken ct)
+    public static IReadOnlyList<ComfyInstall> Find(TimeSpan budget, CancellationToken ct, IEnumerable<string>? firstLookIn = null, IEnumerable<string>? scan = null)
     {
         var found = new List<ComfyInstall>();
-        if (Desktop() is { } desktop)
+        if (scan is null && Desktop() is { } desktop)
             found.Add(desktop);
 
         var giveUp = DateTime.UtcNow + budget;
-        var roots = new List<string>();
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        foreach (var special in new[] { "Desktop", "Downloads", "Documents" })
-            roots.Add(Path.Combine(home, special));
-        roots.Add(home);
-        try
+        var roots = new List<string>(firstLookIn ?? []);
+        if (scan is not null)
+            roots.AddRange(scan);
+        else
         {
-            roots.AddRange(DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady).Select(d => d.RootDirectory.FullName));
+            roots.AddRange(LauncherFolders());
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            foreach (var special in new[] { "Desktop", "Downloads", "Documents" })
+                roots.Add(Path.Combine(home, special));
+            roots.Add(home);
+            try
+            {
+                roots.AddRange(DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady).Select(d => d.RootDirectory.FullName));
+            }
+            catch (IOException) { }
         }
-        catch (IOException) { }
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var queue = new Queue<(string Dir, int Depth)>(roots.Where(Directory.Exists).Select(r => (r, 0)));
+        void Add(string code)
+        {
+            var install = ForCodeDir(code);
+            if (!found.Any(f => f.CodeDir.Equals(install.CodeDir, StringComparison.OrdinalIgnoreCase)))
+                found.Add(install);
+        }
         while (queue.Count > 0 && DateTime.UtcNow < giveUp)
         {
             ct.ThrowIfCancellationRequested();
@@ -96,13 +111,17 @@ public sealed record ComfyInstall(string Root, string CodeDir, string Program, C
                 continue;
             if (IsCodeDir(dir))
             {
-                var install = ForCodeDir(dir);
-                if (!found.Any(f => f.CodeDir.Equals(install.CodeDir, StringComparison.OrdinalIgnoreCase)))
-                    found.Add(install);
+                Add(dir);
                 continue;
             }
             if (depth >= 3)
+            {
+                // A portable folder on the last level looked at (D:\AI\Tools\ComfyUI_windows_portable):
+                // its ComfyUI folder is one deeper, and was missed.
+                if (IsCodeDir(Path.Combine(dir, "ComfyUI")))
+                    Add(Path.Combine(dir, "ComfyUI"));
                 continue;
+            }
             IEnumerable<string> children;
             try
             {
@@ -125,6 +144,31 @@ public sealed record ComfyInstall(string Root, string CodeDir, string Program, C
                 or "models" or "output" or "input" or "custom_nodes" or "python_embeded" or "venv" or "__pycache__";
     }
 
+    /// <summary>
+    /// Where launchers put the ComfyUI they install, deeper than a drive is looked through or inside
+    /// AppData, which isn't: Stability Matrix's Packages folder, Pinokio's api folder.
+    /// </summary>
+    private static IEnumerable<string> LauncherFolders()
+    {
+        yield return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "StabilityMatrix", "Packages");
+        yield return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "pinokio", "api");
+        string[] drives;
+        try
+        {
+            drives = DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady).Select(d => d.RootDirectory.FullName).ToArray();
+        }
+        catch (IOException)
+        {
+            drives = [];
+        }
+        foreach (var drive in drives)
+        {
+            yield return Path.Combine(drive, "pinokio", "api");
+            // Stability Matrix's portable mode keeps its data beside it.
+            yield return Path.Combine(drive, "StabilityMatrix", "Data", "Packages");
+        }
+    }
+
     /// <summary>The ComfyUI Desktop app, if it is installed: its data folder is in its config.json.</summary>
     private static ComfyInstall? Desktop()
     {
@@ -132,7 +176,9 @@ public sealed record ComfyInstall(string Root, string CodeDir, string Program, C
             return null;
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var exe = new[] { @"Programs\ComfyUI\ComfyUI.exe", @"Programs\@comfyorgcomfyui-electron\ComfyUI.exe" }
-            .Select(p => Path.Combine(local, p)).FirstOrDefault(File.Exists);
+            .Select(p => Path.Combine(local, p))
+            .Append(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ComfyUI", "ComfyUI.exe"))
+            .FirstOrDefault(File.Exists);
         if (exe is null)
             return null;
         var config = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ComfyUI", "config.json");
@@ -223,13 +269,20 @@ public static partial class ComfyProcess
         }
     }
 
-    /// <summary>How the official launchers start it (run_nvidia_gpu.bat), on the given port.</summary>
+    /// <summary>
+    /// How the official launchers start it (run_nvidia_gpu.bat, or run_cpu.bat on a PC without a
+    /// graphics card its PyTorch can use), on the given port, without opening the browser:
+    /// --windows-standalone-build opens ComfyUI's page in it at every start, and a server BlackBox
+    /// runs hidden popped up an Edge window on the laptop each time.
+    /// </summary>
     public static List<string> DefaultArguments(ComfyInstall install, int port)
     {
         var args = new List<string>();
         if (install.Kind == ComfyInstallKind.Portable)
             args.Add("-s");
         args.Add(Path.Combine(install.CodeDir, "main.py"));
+        if (ComfyHardware.NeedsCpu(install))
+            args.Add("--cpu");
         if (install.Kind == ComfyInstallKind.Portable)
             args.Add("--windows-standalone-build");
         if (port != DefaultPort)
@@ -237,6 +290,14 @@ public static partial class ComfyProcess
             args.Add("--port");
             args.Add(port.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
+        return Quietly(args);
+    }
+
+    /// <summary>The arguments with the browser kept closed (a restart reuses the ones a server ran with, which may open it).</summary>
+    public static List<string> Quietly(List<string> args)
+    {
+        if (!args.Contains("--disable-auto-launch"))
+            args.Add("--disable-auto-launch");
         return args;
     }
 

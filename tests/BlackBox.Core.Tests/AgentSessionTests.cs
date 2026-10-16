@@ -393,7 +393,109 @@ public class AgentSessionTests
 
         // Too late for this run: the app sends it on as the next one.
         session.Steer("And thanks");
-        Assert.Equal(["And thanks"], session.TakeUndelivered());
+        Assert.Equal(["And thanks"], session.TakeUndelivered().Select(u => u.Text));
+    }
+
+    /// <summary>A small PNG and a text file in a new folder, as the user would drop them on the window.</summary>
+    private static (string Dir, string Picture, string Text) Dropped()
+    {
+        var dir = Directory.CreateTempSubdirectory("bb-drop-").FullName;
+        var picture = Path.Combine(dir, "cat photo.png");
+        using (var bitmap = new SkiaSharp.SKBitmap(96, 64))
+        {
+            bitmap.Erase(SkiaSharp.SKColors.OrangeRed);
+            using var data = bitmap.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+            File.WriteAllBytes(picture, data.ToArray());
+        }
+        var text = Path.Combine(dir, "notes.txt");
+        File.WriteAllText(text, "hello");
+        return (dir, picture, text);
+    }
+
+    private static List<JsonObject> Parts(JsonObject request) =>
+        request["messages"]!.AsArray()[^1]!["content"] is JsonArray parts ? parts.Select(p => p!.AsObject()).ToList() : [];
+
+    [Fact]
+    public async Task Files_sent_with_a_message_reach_the_model_by_path_and_its_pictures_are_shown()
+    {
+        var (dir, picture, text) = Dropped();
+        var server = new ScriptedServer(Sse.Text("It is an orange-red rectangle."));
+        var (session, observer) = CreateSession(server, dir, new FakePlatform());
+
+        await session.RunAsync(new UserInput("What is in these?", [picture, text, dir]), observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        var parts = Parts(server.Requests[0]);
+        var list = parts[0]["text"]!.GetValue<string>();
+        Assert.StartsWith("What is in these?\n\n[The user attached these files:]", list);
+        Assert.Contains($"- {picture} (a 96x64 picture, shown below)", list);
+        Assert.Contains($"- {text} (a .txt file, 5 bytes)", list);
+        Assert.Contains($"- {dir} (a folder)", list);
+        // The picture comes labelled with its path, so the model knows which file it is.
+        Assert.Equal(picture + ":", parts[1]["text"]!.GetValue<string>());
+        Assert.Equal("image_url", parts[2]["type"]!.GetValue<string>());
+        Assert.Equal(3, parts.Count);
+        Assert.True(session.History[0].FromUser);
+    }
+
+    [Fact]
+    public async Task A_model_that_cannot_see_gets_only_the_paths_of_attached_pictures()
+    {
+        var (dir, picture, _) = Dropped();
+        var server = new ScriptedServer(Sse.Text("ok"));
+        var settings = new AgentSettings { ScreenshotAfterActions = false };
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = settings, WorkingDirectory = dir, SeesImages = false };
+        var client = new OpenAiChatClient(new HttpClient(server), "http://test", null);
+        var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(includeScreenTools: false), ctx, "system prompt");
+
+        await session.RunAsync(new UserInput("", [picture]), new RecordingObserver(), CancellationToken.None);
+
+        var text = LastText(server.Requests[0]);
+        Assert.StartsWith($"[The user attached this file:]\n- {picture} (picture 96x64, ", text);
+        Assert.EndsWith(" bytes)", text);
+        Assert.Equal(0, Images(server.Requests[0]));
+    }
+
+    [Fact]
+    public async Task A_picture_sent_during_a_run_reaches_the_model_with_the_message()
+    {
+        var (dir, picture, _) = Dropped();
+        AgentSession? session = null;
+        var replies = new Queue<string>([Sse.ToolCall("w1", "wait", """{"seconds":0}"""), Sse.Text("Using that one.")]);
+        var server = new ScriptedServer
+        {
+            Responder = _ =>
+            {
+                if (replies.Count == 2) session!.Steer(new UserInput("Use this picture instead", [picture]));
+                return replies.Dequeue();
+            },
+        };
+        var (s, observer) = CreateSession(server, dir, new FakePlatform());
+        session = s;
+
+        await session.RunAsync("Make a poster", observer, CancellationToken.None);
+
+        // After the wait's screenshot comes the message, with its picture.
+        var parts = Parts(server.Requests[1]);
+        Assert.StartsWith("Use this picture instead\n\n[The user attached this file:]", parts[0]["text"]!.GetValue<string>());
+        Assert.Single(parts, p => p["type"]!.GetValue<string>() == "image_url");
+        Assert.Empty(session.TakeUndelivered());
+    }
+
+    [Fact]
+    public void A_saved_chat_keeps_the_paths_of_attached_pictures_but_not_the_pictures()
+    {
+        var (_, picture, _) = Dropped();
+        var message = new UserInput("Brighter, please", [picture]).ToMessage(seesImages: true);
+        Assert.NotNull(message.Parts);
+
+        var saved = Chats.ChatStore.ForSaving([message]).Single();
+
+        Assert.Null(saved.Parts);
+        Assert.True(saved.FromUser);
+        Assert.Contains(picture, saved.Content);
+        Assert.Contains("read_file shows them again", saved.Content);
+        Assert.DoesNotContain("Screenshot", saved.Content);
     }
 
     [Fact]

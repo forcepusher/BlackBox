@@ -254,6 +254,29 @@ public sealed class ComfyWorkflow
         return problems;
     }
 
+    /// <summary>
+    /// Sets the required inputs the editor keeps out of sight ("advanced", with a default) that the
+    /// workflow leaves out, to their defaults, as the editor does when it sends a workflow; returns
+    /// what was set ("5.resolution_steps = 1"). New ComfyUI versions add such inputs to old nodes:
+    /// ImageScaleToTotalPixels got resolution_steps, and a workflow written before was refused for it.
+    /// </summary>
+    public List<string> FillAdvancedDefaults(ComfyNodeLibrary library)
+    {
+        var filled = new List<string>();
+        foreach (var (id, node) in All())
+        {
+            if (library.Find(ClassOf(node)) is not { } def || node["inputs"] is not JsonObject inputs)
+                continue;
+            foreach (var input in def.Inputs.Where(i => i.Required && i.IsWidget && !inputs.ContainsKey(i.Name) &&
+                                                        i.Extra["advanced"] is JsonValue a && a.TryGetValue<bool>(out var advanced) && advanced && i.Extra["default"] is not null))
+            {
+                inputs[input.Name] = input.Extra["default"]!.DeepClone();
+                filled.Add($"{id}.{input.Name} = {input.Extra["default"]!.ToJsonString()}");
+            }
+        }
+        return filled;
+    }
+
     /// <summary>Inputs the editor adds to the workflow it sends, which no node declares.</summary>
     private static readonly HashSet<string> EditorInputs = ["audioUI", "videoUI", "image", "upload", "previewMode", "preview_text", "preview_markdown", "camera_info"];
 

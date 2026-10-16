@@ -15,7 +15,8 @@ BlackBox/
   BlackBox.exe
   Data/        settings.json, chats/ (see Chat history), runtime/ (unpacked by the single-file exe), browser/ (see Web search),
                tools/ (portable programs the agent downloaded), scratch/ (helper files it made for a task),
-               comfyui/ (ComfyUI's address and folder, the log of a server BlackBox started, see Pictures, video and sound)
+               comfyui/ (ComfyUI's address and folder, the log of a server BlackBox started, see Pictures, video and sound),
+               pasted/ (pictures pasted into the chat, see Files in a message)
 ```
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
@@ -78,9 +79,11 @@ request. Asked earlier, qwen3.8 drove ComfyUI's HTTP API well but wrote node, in
 from memory, and those were often wrong, so the model doesn't work from memory here:
 
 - **Templates first.** `action=templates` searches the user's saved workflows (described by the
-  README notes kept beside them), ComfyUI's own templates (without the ones built on paid API nodes)
-  and the examples custom node packs bring, and marks the ones whose models and nodes are
-  installed. With `name` it shows one as an API-format workflow, one node per line, with the
+  README notes kept beside them), BlackBox's own (`blackbox/text_to_image` and
+  `blackbox/image_to_image`, the classic workflows for any SD 1.5, SD 2 or SDXL checkpoint, which
+  ComfyUI's templates no longer have and which a PC without a graphics card can run), ComfyUI's own
+  templates (without the ones built on paid API nodes) and the examples custom node packs bring,
+  and marks the ones whose models and nodes are installed. With `name` it shows one as an API-format workflow, one node per line, with the
   template's own notes, the inputs a run usually changes and the models it needs (with download
   links for missing ones), and saves it in `Data/scratch/comfyui/` to edit. Templates are kept in the
   editor's format, with subgraphs, bypassed nodes, reroutes and promoted widgets: ComfyUI's own page,
@@ -104,16 +107,39 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   message from the user ends the wait while the job goes on (`action=status` with its id picks it
   up again). The files come back with their paths, `save_to` copies them where the task wants them,
   and the model gets a look at them (below) to check its work.
-- **ComfyUI itself.** When it isn't running, BlackBox starts the one used last, or finds one
-  (the ComfyUI Desktop app, then every drive and the user's folders a few levels deep; the one
-  used most recently wins) and starts it hidden, its output in `Data/comfyui/server.log`. Once the
+- **ComfyUI itself.** The user's own ComfyUI comes first, whatever kind it is. One that runs (at
+  the address used last, or on ComfyUI's usual ports: the portable build's 8188, the Desktop app's
+  8000) is used as it runs, and the first answer says which one it is. Otherwise BlackBox starts the
+  one used last, or finds one: the ComfyUI Desktop app, `Data/tools`, the folders Stability Matrix
+  and Pinokio install it in, then every drive and the user's folders a few levels deep, a portable
+  build's ComfyUI folder one level deeper still; portable builds, installs with a venv and plain git
+  clones all count, and the one used most recently wins. It starts it hidden (on the CPU when its
+  PyTorch is built for a graphics card the PC hasn't got), its output in `Data/comfyui/server.log`,
+  without the browser page the portable build opens at every start. Only a PC without one gets one
+  with `action=install` (which says so and downloads nothing when there is one): the portable build that suits the graphics card Windows lists (NVIDIA's, the
+  CUDA 12.6 one for a GTX 10 series or older, AMD's for a Radeon RX 6000 or newer on Windows 11,
+  Intel's for an Arc), else NVIDIA's run on the CPU (`--cpu`, as ComfyUI's README says; started
+  without it, its CUDA PyTorch crashed on the laptop's Iris Xe). It goes into `Data/tools`: the
+  latest release from GitHub (about 2 GB, checked against the SHA-256 GitHub gives, taken up again
+  where it stopped after a cut), unpacked by the PC's 7-Zip or 7-Zip's own 7zr.exe fetched into
+  `Data/tools` (Windows 10's tar can't unpack its LZMA2). On the CPU, the tool says so with every
+  start, template list and model search: SD 1.5 checkpoints at about 512 pixels, since anything much
+  bigger takes very long or doesn't fit in memory. Once the
   task is over it is closed, after the jobs still in its queue (the CLI waits for them before it
   exits); a ComfyUI the user started keeps running, and only lets go of the models the task's jobs
   loaded, so the GPU is free. BlackBox tells its own from the user's by the process it started,
   kept in `Data/comfyui/state.json`. `action=restart` stops it and starts it again with the
   arguments it ran with (custom nodes load only at start; the user's own stays theirs and keeps
-  running), `stop` and `free` do what they say. Models, custom node packs and programs a job
-  lacks the agent downloads and installs itself, as with any program.
+  running), `stop` and `free` do what they say. Custom node packs and programs a job lacks the
+  agent installs itself, as with any program.
+- **Models.** `action=download` with a link puts a model in the ComfyUI folder for its kind
+  (checkpoints, loras, upscale_models…) as the running server reports them, with its progress on
+  the card, picked up again after a cut and checked against the SHA-256 its source gives; a template
+  that lacks a model gives its link, and a page's link works too (a Civitai model page, a Hugging
+  Face file page). `action=find_models` searches Civitai and Hugging Face through their APIs for a
+  style, a model the user named, a LoRA or an upscaler (`kind`, `base`), and lists each file with
+  its kind, base model, size, downloads and link, the most downloaded first, without NSFW models
+  and gated ones.
 
 `read_file` gives the model a look at media as well as pictures: a video as eight frames with their
 times (and how loud its sound is, in words), a sound as its waveform and spectrogram with its
@@ -135,7 +161,7 @@ long as the files are still there.
 ### How it does
 qwen3.8 27B (q6_k_xl, on the LM Studio server) with the ComfyUI on an RTX 5070 Ti (16 GB), each
 task one plain message and nothing more, ComfyUI stopped before the first
-(`./scripts/comfy-test.ps1` runs the first seven):
+(`./scripts/comfy-test.ps1` runs the first seven, and the two tasks of the next section):
 
 | Request | What the agent used | What it made | Time | Tool calls (errors) |
 | --- | --- | --- | --- | --- |
@@ -157,6 +183,41 @@ answering for a while during the speech task, git's progress on stderr, a checkp
 couldn't load, and a retry that left out the length and size of the first run (a rerun of a template
 without changes the last one made now comes with a note saying which). Three of the results went to
 `Data/scratch`; the prompt has since been told that what the user asked for never goes there.
+
+### On a PC without a graphics card
+A laptop with Intel Iris Xe graphics (none ComfyUI can use), a 14-core i7-1280P and 16 GB of RAM,
+with no ComfyUI and no models on it at first, and the same qwen3.8 over a VPN, each request one
+plain message:
+
+| Request | What the agent did | What it made | Time | Tool calls (errors) |
+| --- | --- | --- | --- | --- |
+| In the app: a beach photo pasted into the box, "Turn this photo into a watercolor painting." | installed ComfyUI (the NVIDIA build, started with `--cpu`), `blackbox/image_to_image`, downloaded the SD 1.5 checkpoint the template links to | a watercolor of the same beach, rocks, runner and reflections, 704×440 | 12:10 after the archive was in place (below), 4:45 of it generating | 15 (4) |
+| "Make a picture of a cozy wooden cabin in a snowy forest at dusk with the DreamShaper 8 model." | `find_models` found DreamShaper 8 on Civitai; downloaded it (2.0 GB in 1:39, SHA-256 checked); `blackbox/text_to_image` | a 768×512 picture | 10:57, 7:25 of it generating | 7 (0) |
+| The watercolor again, from the command line (`--attach`), in a Data folder of its own with no ComfyUI | installed ComfyUI (2 GB from GitHub, unpacked and started in 3:38), downloaded SD 1.5 (2:25, named and checked), `blackbox/image_to_image` | a watercolor that keeps the photo's layout (0.88, see below) | 12:55 | 8 (2) |
+
+With the user's own portable ComfyUI on the same laptop instead, in a fresh Data folder each time:
+running already (as they start it, with their SD 1.5 checkpoint), "Make a picture of a red fox
+sitting in fresh snow, as a watercolor." used it as it ran ("Using the ComfyUI that already runs
+at http://127.0.0.1:8188/ (from …); it keeps running after this task."), installed nothing and
+left it running (4:35, 4 tool calls, 1 error: a node id guessed before the template was looked
+at); not running and in Downloads, "Make a picture of a lighthouse on a cliff at sunset, as an oil
+painting." found it, started it hidden with `--cpu` and without the browser, used it and closed it
+after (5:00, 3 tool calls, no errors).
+
+The last row is `./scripts/comfy-test.ps1 -Root <a fresh folder> -Tasks img2img`; its check shrinks
+the photo and the result to 32×32 in grey and needs their correlation to be at least 0.4 (a picture
+made from words alone scores about 0: unrelated photos scored -0.16 to -0.03). Its two errors were
+the first calls, before ComfyUI was there. `named` is the DreamShaper row.
+
+Each step of SD 1.5 took 12 to 19 s on the CPU. In the first run GitHub served the 2 GB archive
+at 100 to 200 KB/s for that hour (8 MB/s an hour before; Hugging Face gave 12 MB/s meanwhile), so
+it was stopped and the same archive, downloaded earlier, put in place of the partial one; told to
+go on, the agent installed again, the download was found complete (GitHub answered the range past
+the end with 416), and it was checked and unpacked in a minute and a half. Two of its errors were
+before ComfyUI was there; the other two are fixed: Hugging Face's file came named by its hash (the
+name it sends is in a header .NET refuses), which the agent renamed itself, and ComfyUI 0.41
+wanted an input ImageScaleToTotalPixels didn't have before, which the run now fills in as the
+editor does.
 
 ### And comfyui-mcp?
 [comfyui-mcp](https://github.com/artokun/comfyui-mcp) isn't needed, and the agent does better
@@ -182,12 +243,26 @@ read it and carry on where it stopped (the model gets the conversation back), or
 trash button. Screenshots are not kept in the saved file; the model takes a new one when it carries
 on. Picking another chat or New chat while a task runs stops the task, and keeps it as far as it got.
 
-Until a chat is used, it shows what BlackBox can do (apps, files and commands, documents, getting
-the programs and MCP servers a job needs, chatting for you, the web, servers, long jobs, pictures,
-video and sound), that Esc
-stops it, how to change a task while it runs, and what it asks before it acts. It says so when the
-model in use can't see images. Notices such as an MCP server that failed to start show above it and
-don't count as using the chat.
+## Files in a message
+Drop files or folders anywhere on the window, paste them with Ctrl+V (a screenshot, a picture
+copied in a browser, files copied in Explorer), or pick them with the paperclip next to the box.
+They wait under the box, × takes one off, and they go with the next message; a message can be
+files alone. The agent gets each one's full path, to work on it with its tools (a picture to start
+a ComfyUI job from, a document to read, a folder to go through), and sees the pictures among them
+as `read_file` shows a picture; a model that can't see images gets the paths. A pasted picture is
+saved as a PNG in `Data/pasted` first and deleted with its chat; dropped files stay where they
+are. Text on the clipboard is pasted as text, also when a picture comes with it (cells copied from
+Excel bring one). The message's bubble shows its pictures and the names of its other files, and a
+click opens one. A saved chat keeps the paths, not the pictures: carrying on, the model looks at a
+picture again with `read_file`. The command-line runner takes files with `--attach`.
+
+Until a chat is used, it shows first that Esc stops it, how to change a task while it runs and
+what it asks before it acts, then that Ctrl+V pastes a screenshot, a picture or files into a
+message and that files can be dropped on the window or picked with the paperclip (the empty box
+says so too), then what BlackBox can do (apps, files and commands, documents, getting the programs
+and MCP servers a job needs, chatting for you, the web, servers, long jobs, pictures, video and
+sound). It says so when the model in use can't see images. Notices such as an MCP server that
+failed to start show above it and don't count as using the chat.
 
 ## Connecting to a model
 Enter the server address in the bar at the top of the main window (LM Studio's default is
@@ -291,7 +366,7 @@ method there, not a property).
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures, videos, sounds and 3D models to the model; `write_file` makes documents from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
-| `comfyui` | Pictures, video, sound, music, speech and 3D models with ComfyUI on this PC: templates, node and model look-ups, checked runs that hand back the files (see Pictures, video and sound) |
+| `comfyui` | Pictures, video, sound, music, speech and 3D models with ComfyUI on this PC, which it installs when there is none: templates, node and model look-ups, models found online and downloaded, checked runs that hand back the files (see Pictures, video and sound) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
 | `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |
@@ -502,6 +577,7 @@ dotnet test                       # unit tests
 ./scripts/publish.ps1             # single-file publish/BlackBox.exe
 ./scripts/publish.ps1 -Folder     # classic self-contained folder in publish/BlackBox-win-x64
 dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   # headless run
+dotnet run --project src/BlackBox.Cli -- --yes --attach photo.jpg "make it a watercolor"   # with a file, as if dropped on the window
 ./scripts/agent-tasks.ps1         # real desktop task suite (drives your mouse and keyboard)
 ./scripts/game2048-test.ps1       # long run: BlackBox writes, play-tests and fixes its own 2048
 ./scripts/sysadmin-vm.ps1         # once: the portable Debian lab VM (QEMU in .dev/sysadmin-lab, nothing installed)

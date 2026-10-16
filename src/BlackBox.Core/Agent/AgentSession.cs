@@ -52,10 +52,13 @@ public sealed partial class AgentSession(
     public List<ChatMessage> History { get; } = history ?? [];
 
     /// <summary>Messages the user sent while the run goes on, waiting for the model's next step.</summary>
-    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _incoming = new();
+    private readonly System.Collections.Concurrent.ConcurrentQueue<UserInput> _incoming = new();
 
     /// <summary>Cancelled when such a message arrives, so a wait in progress ends early (see <see cref="ToolContext.UserMessage"/>).</summary>
     private CancellationTokenSource _arrived = new();
+
+    /// <inheritdoc cref="Steer(UserInput)"/>
+    public void Steer(string text) => Steer(new UserInput(text));
 
     /// <summary>
     /// A message the user sent while the agent works: it joins the conversation before the model's
@@ -63,21 +66,21 @@ public sealed partial class AgentSession(
     /// nothing during a run, even while BlackBox waited for an OK, and the text sat in the box.
     /// Any thread.
     /// </summary>
-    public void Steer(string text)
+    public void Steer(UserInput input)
     {
         lock (_incoming)
         {
-            _incoming.Enqueue(text);
+            _incoming.Enqueue(input);
             _arrived.Cancel();
         }
     }
 
     /// <summary>Messages that arrived too late for the run (it ended first); the caller sends them on.</summary>
-    public List<string> TakeUndelivered()
+    public List<UserInput> TakeUndelivered()
     {
-        var left = new List<string>();
-        while (_incoming.TryDequeue(out var text))
-            left.Add(text);
+        var left = new List<UserInput>();
+        while (_incoming.TryDequeue(out var input))
+            left.Add(input);
         return left;
     }
 
@@ -91,14 +94,17 @@ public sealed partial class AgentSession(
             // A fresh token for the next message; the one a wait may still hold stays cancelled.
             _arrived = new CancellationTokenSource();
             toolContext.UserMessage = _arrived.Token;
-            while (_incoming.TryDequeue(out var text))
-                History.Add(new ChatMessage { Role = ChatRole.User, Content = text, FromUser = true });
+            while (_incoming.TryDequeue(out var input))
+                History.Add(input.ToMessage(toolContext.SeesImages));
         }
     }
 
-    public async Task RunAsync(string userText, IAgentObserver observer, CancellationToken ct)
+    public Task RunAsync(string userText, IAgentObserver observer, CancellationToken ct) => RunAsync(new UserInput(userText), observer, ct);
+
+    /// <summary>Runs the task the user sent: the model works on it, with its tools, until it is done or stopped.</summary>
+    public async Task RunAsync(UserInput input, IAgentObserver observer, CancellationToken ct)
     {
-        History.Add(new ChatMessage { Role = ChatRole.User, Content = userText, FromUser = true });
+        History.Add(input.ToMessage(toolContext.SeesImages));
         toolContext.UserMessage = _arrived.Token;
         if (toolContext.Locate is null && FreshLook.Enabled)
         {

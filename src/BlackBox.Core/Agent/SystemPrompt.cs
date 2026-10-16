@@ -61,10 +61,13 @@ public static class SystemPrompt
         sb.AppendLine("- A program that has an MCP server (Blender, a database, a browser…) is far better driven through it than through its window: " +
                       "set up what it needs, add the server with mcp_servers and use its tools; " + (webSearch ? "look up how the server is set up with web_search." : "its README says how it is set up."));
         // qwen3.8 drove ComfyUI's HTTP API well but wrote wrong node, input and model names from memory.
-        sb.AppendLine("- To make pictures, video, sound, music, speech or 3D models, use the comfyui tool (ComfyUI on this PC; it needs no MCP server). " +
+        sb.AppendLine("- To make pictures, video, sound, music, speech or 3D models, use the comfyui tool (ComfyUI on this PC; it needs no MCP server; " +
+                      "when the PC has none, action=install sets it up). " +
                       "Start from the template closest to the request (action=templates with a few words), run it with your changes in set, " +
                       "and look at what it made before you answer; for what no template does, build the workflow from node and model names you looked up " +
-                      "(action=nodes, action=models), never from memory. A model, custom node pack or program it lacks you can download and install yourself. " +
+                      "(action=nodes, action=models), never from memory. A picture the user gave you goes into LoadImage by its full path. " +
+                      "A model it lacks: action=download with the link the template gives, or action=find_models to look for one online " +
+                      "(a style, or a checkpoint or LoRA the user named); a custom node pack or program it lacks you can install yourself. " +
                       "Its files stay in ComfyUI's output folder, where the user finds them; copy them elsewhere (save_to) only when the user names a place. " +
                       "Give the full paths of the files you made in your answer.");
         // The user's rule: what can't be opened gets the right tool, not a hand-made decoder (a PDF
