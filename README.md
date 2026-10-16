@@ -375,6 +375,14 @@ triggers the same reset and a retry. A reply cut off by a reply-length limit set
 The system prompt holds the date but not the time, so it stays the same for every message of a
 chat and the server never has to read the whole conversation again because of it.
 
+Most of a step's wait is the server reading the new screenshot: a 2560×1080 one is 2,720 tokens.
+With qwen3.8 on an RTX 5070 Ti, which reads about 500 tokens a second, a step read for 9-13 s whether
+the conversation held 13k or 68k tokens, while reading all of a 33k-token one again took 85 s.
+Within a run that only happens when the tool list changes (the agent adding an MCP server). While
+a hybrid model like qwen3.8 reads a screenshot, LM Studio's log shows "find_slot: non-consecutive
+token position N after N for sequence 0 with 512 new tokens" about once a second: all of a
+picture's tokens share one position, and the line is harmless.
+
 During a run the top bar shows how full the context is ("35k of 100k used"; its tooltip says where
 the reset comes), and a reply that hasn't started yet counts how long BlackBox has been waiting for
 it: a server reading a long prompt sends nothing for minutes. Before that, while the request is
