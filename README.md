@@ -280,13 +280,14 @@ Excel bring one). The message's bubble shows its pictures and the names of its o
 click opens one. A saved chat keeps the paths, not the pictures: carrying on, the model looks at a
 picture again with `read_file`. The command-line runner takes files with `--attach`.
 
-Until a chat is used, it shows first that Pause/Break stops it, that it uses the mouse and keyboard
-but can still be written to (it pauses while you type) and what it asks before it acts, then that
-Ctrl+V pastes a screenshot or files into a message and that files can be dropped on the window (the
-empty box says so too), then what BlackBox can do (apps, files and commands, documents, getting the
-programs and MCP servers a job needs, chatting for you, the web, servers, long jobs, pictures, video
-and sound, and games in any game engine). It says so when the model in use can't see images. Notices
-such as an MCP server that failed to start show above it and don't count as using the chat.
+Until a chat is used, it shows first that Pause/Break stops it and that Enter sends it corrections
+and hints while it works, that it uses the mouse and keyboard but pauses while you type and what it
+asks before it acts, then that Ctrl+V pastes a screenshot or files into a message and that files can
+be dropped on the window (the empty box says so too), then what BlackBox can do (apps, files and
+commands, documents, getting the programs and MCP servers a job needs, chatting for you, the web,
+servers, long jobs, pictures, video and sound, and games in any game engine). It says so when the
+model in use can't see images. Notices such as an MCP server that failed to start show above it and
+don't count as using the chat.
 
 ## Connecting to a model
 BlackBox starts on Kilo's free models, which need no account or key (see below). For a server of
