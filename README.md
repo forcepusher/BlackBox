@@ -181,18 +181,23 @@ without changes the last one made now comes with a note saying which). Three of 
 
 ### On a PC without a graphics card
 A laptop with Intel Iris Xe graphics (none ComfyUI can use), a 14-core i7-1280P and 16 GB of RAM,
-with no ComfyUI and no models on it, and the same qwen3.8 over a VPN. In the app, a beach photo
-pasted into the box and "Turn this photo into a watercolor painting.": the agent installed ComfyUI
-(`action=install`, the NVIDIA build started with `--cpu`), took the CPU advice it was given, picked
-`blackbox/image_to_image`, downloaded the SD 1.5 checkpoint the template links to, ran it on the
-photo at denoise 0.6, looked at the result and answered with its path: a watercolor of the same
-beach, rocks, runner and reflections (704×440, 20 steps in 4:45 at about 13 s a step). GitHub
-served the 2 GB archive at 100 to 200 KB/s that hour (8 MB/s an hour before, and Hugging Face at
-12 MB/s meanwhile), so the run was stopped and the same archive, downloaded earlier, put in place
-of the partial one; told to go on, the agent installed again and the download was found complete
-(GitHub answered the range past the end with 416), checked and unpacked in a minute and a half.
-Hugging Face's file came named by its hash (the name it sends is in a header .NET refuses); the
-agent renamed it itself, and the download now takes the name from the header or the link.
+with no ComfyUI and no models on it at first, and the same qwen3.8 over a VPN, each request one
+plain message:
+
+| Request | What the agent did | What it made | Time | Tool calls (errors) |
+| --- | --- | --- | --- | --- |
+| In the app: a beach photo pasted into the box, "Turn this photo into a watercolor painting." | installed ComfyUI (the NVIDIA build, started with `--cpu`), `blackbox/image_to_image`, downloaded the SD 1.5 checkpoint the template links to | a watercolor of the same beach, rocks, runner and reflections, 704×440 | 12:10 after the archive was in place (below), 4:45 of it generating | 15 (4) |
+| "Make a picture of a cozy wooden cabin in a snowy forest at dusk with the DreamShaper 8 model." | `find_models` found DreamShaper 8 on Civitai; downloaded it (2.0 GB in 1:39, SHA-256 checked); `blackbox/text_to_image` | a 768×512 picture | 10:57, 7:25 of it generating | 7 (0) |
+
+Each step of SD 1.5 took 12 to 19 s on the CPU. In the first run GitHub served the 2 GB archive
+at 100 to 200 KB/s for that hour (8 MB/s an hour before; Hugging Face gave 12 MB/s meanwhile), so
+it was stopped and the same archive, downloaded earlier, put in place of the partial one; told to
+go on, the agent installed again, the download was found complete (GitHub answered the range past
+the end with 416), and it was checked and unpacked in a minute and a half. Two of its errors were
+before ComfyUI was there; the other two are fixed: Hugging Face's file came named by its hash (the
+name it sends is in a header .NET refuses), which the agent renamed itself, and ComfyUI 0.41
+wanted an input ImageScaleToTotalPixels didn't have before, which the run now fills in as the
+editor does.
 
 ### And comfyui-mcp?
 [comfyui-mcp](https://github.com/artokun/comfyui-mcp) isn't needed, and the agent does better
@@ -231,12 +236,13 @@ Excel bring one). The message's bubble shows its pictures and the names of its o
 click opens one. A saved chat keeps the paths, not the pictures: carrying on, the model looks at a
 picture again with `read_file`. The command-line runner takes files with `--attach`.
 
-Until a chat is used, it shows what BlackBox can do (apps, files and commands, documents, getting
-the programs and MCP servers a job needs, chatting for you, the web, servers, long jobs, pictures,
-video and sound), that files can be dropped or pasted, that Esc
-stops it, how to change a task while it runs, and what it asks before it acts. It says so when the
-model in use can't see images. Notices such as an MCP server that failed to start show above it and
-don't count as using the chat.
+Until a chat is used, it shows first that Esc stops it, how to change a task while it runs and
+what it asks before it acts, then that Ctrl+V pastes a screenshot, a picture or files into a
+message and that files can be dropped on the window or picked with the paperclip (the empty box
+says so too), then what BlackBox can do (apps, files and commands, documents, getting the programs
+and MCP servers a job needs, chatting for you, the web, servers, long jobs, pictures, video and
+sound). It says so when the model in use can't see images. Notices such as an MCP server that
+failed to start show above it and don't count as using the chat.
 
 ## Connecting to a model
 Enter the server address in the bar at the top of the main window (LM Studio's default is

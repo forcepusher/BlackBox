@@ -603,10 +603,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// </summary>
     private bool UserComposing() => Input.Length > 0 && DateTime.UtcNow - _lastTyped < TypingQuiet;
 
-    /// <summary>The hint in the empty box: what Enter does now.</summary>
+    /// <summary>The hint in the empty box: what Enter does now, and that pictures and files can go in too.</summary>
     public string InputHint => IsBusy
         ? "Tell me something while I work… (Enter to send; I pause while you type)"
-        : "Describe a task… (Enter to send, Shift+Enter for a new line)";
+        : "Describe a task, paste a screenshot or drop files… (Enter to send, Shift+Enter for a new line)";
 
     /// <summary>One run of the agent on <paramref name="input"/>. Returns what the user sent too late for it, to run next, or null.</summary>
     private async Task<UserInput?> RunAsync(UserInput input)

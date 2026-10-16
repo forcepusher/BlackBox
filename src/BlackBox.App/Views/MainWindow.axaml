@@ -442,8 +442,38 @@
             <Image Source="/Assets/blackbox.png" Width="40" Height="40" Opacity="0.8" RenderOptions.BitmapInterpolationMode="HighQuality" />
             <TextBlock Text="What should I do on your computer?" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
             <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460"
-                       Text="Describe a task in your own words, and I'll work on it until it's done. Drop files here or paste a screenshot to give them to me." />
+                       Text="Describe a task in your own words, and I'll work on it until it's done." />
           </StackPanel>
+
+          <!-- How to stop it comes first: it is what someone needs once BlackBox has the mouse. -->
+          <Border Classes="card">
+            <StackPanel Spacing="6">
+              <DockPanel>
+                <Border Classes="key" Margin="0,0,8,0">
+                  <TextBlock Text="Esc" />
+                </Border>
+                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Text="stops me at any time, whatever window is in front. So does the Stop button." />
+              </DockPanel>
+              <TextBlock Classes="muted" TextWrapping="Wrap" Text="While I work I use your mouse and keyboard, so leave them to me. To change or add to the task meanwhile, write it here and press Enter: I read it at my next step. My clicks and key presses pause while you type; click Resume, or stop typing for 15 seconds, to let me carry on without sending." />
+              <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding ApprovalNote}" />
+            </StackPanel>
+          </Border>
+
+          <!-- Files and pictures go with a message: said where it is seen, as it isn't obvious in a chat box. -->
+          <Border Classes="card">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" Margin="0,0,8,0" VerticalAlignment="Top">
+                <Border Classes="key">
+                  <TextBlock Text="Ctrl" />
+                </Border>
+                <Border Classes="key">
+                  <TextBlock Text="V" />
+                </Border>
+              </StackPanel>
+              <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
+                         Text="in the box below pastes a screenshot, a copied picture or files from Explorer into your message. You can also drag files and pictures onto this window, or pick them with the paperclip. I see the pictures and work with the files." />
+            </DockPanel>
+          </Border>
 
           <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
             <Border Grid.Row="0" Grid.Column="0" Classes="card">
@@ -525,24 +555,11 @@
                 <PathIcon Classes="capability" Data="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
                 <StackPanel Spacing="3">
                   <TextBlock Classes="capability" Text="Pictures, video and sound" />
-                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I make pictures, videos, music, speech and 3D models with ComfyUI, and you can look at them, play them and turn them around right here." />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I make pictures, videos, music, speech and 3D models with ComfyUI, which I install with the models a job needs, also on a PC without a graphics card. You can look at them, play them and turn them around right here." />
                 </StackPanel>
               </DockPanel>
             </Border>
           </Grid>
-
-          <Border Classes="card">
-            <StackPanel Spacing="6">
-              <DockPanel>
-                <Border Classes="key" Margin="0,0,8,0">
-                  <TextBlock Text="Esc" />
-                </Border>
-                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Text="stops me at any time, whatever window is in front. So does the Stop button." />
-              </DockPanel>
-              <TextBlock Classes="muted" TextWrapping="Wrap" Text="While I work I use your mouse and keyboard, so leave them to me. To change or add to the task meanwhile, write it here and press Enter: I read it at my next step. My clicks and key presses pause while you type; click Resume, or stop typing for 15 seconds, to let me carry on without sending." />
-              <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding ApprovalNote}" />
-            </StackPanel>
-          </Border>
         </StackPanel>
       </StackPanel>
     </ScrollViewer>
