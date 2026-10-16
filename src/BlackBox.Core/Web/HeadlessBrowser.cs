@@ -22,7 +22,10 @@ public sealed class HeadlessBrowser(string executable, string profileDirectory)
         FindExecutable() is { } exe ? new HeadlessBrowser(exe, profileDirectory) : null;
 
     /// <summary>The Chromium browser's program on this PC (Edge first), or null when there is none.</summary>
-    internal static string? FindExecutable() => Candidates().FirstOrDefault(File.Exists);
+    internal static string? FindExecutable() => FindExecutables().FirstOrDefault();
+
+    /// <summary>Every Chromium browser on this PC, Edge first.</summary>
+    internal static IReadOnlyList<string> FindExecutables() => Candidates().Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
     private static IEnumerable<string> Candidates()
     {
@@ -70,10 +73,12 @@ public sealed class HeadlessBrowser(string executable, string profileDirectory)
                 CreateNoWindow = true,
                 StandardOutputEncoding = Encoding.UTF8,
             };
+            // --do-not-de-elevate: started by a BlackBox run as administrator, the browser would start
+            // a copy of itself that isn't and quit at once, leaving no page here to read.
             foreach (var arg in new[]
                      {
                          "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-                         "--disable-extensions", "--disable-sync", "--mute-audio", "--hide-scrollbars",
+                         "--disable-extensions", "--disable-sync", "--mute-audio", "--hide-scrollbars", "--do-not-de-elevate",
                          $"--user-data-dir={profileDirectory}", $"--user-agent={UserAgent}", "--lang=en-US",
                      })
                 psi.ArgumentList.Add(arg);

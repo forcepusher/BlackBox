@@ -90,7 +90,15 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   loaded in the PC's Edge or Chrome run headless, turns them into the format `/prompt` runs,
   exactly as its Run button does, so no copy of that conversion has to keep up with ComfyUI's
   releases. The browser stays up a few minutes between uses and never outlives BlackBox (it runs
-  in a job object that Windows ends with BlackBox).
+  in a job object that Windows ends with BlackBox). Each start gets a profile folder of its own in
+  `Data/comfyui/browser/`, and browsers earlier starts left running there are ended first, found by
+  their command line. Started by a program run as administrator, Edge and Chrome start an
+  un-elevated copy of themselves and quit with 0 (Chromium's auto de-elevation), which made every
+  conversion fail with "The browser closed at once (exit code 0)" and left the copy behind:
+  `--do-not-de-elevate` stops that, and a browser that hands over to a copy anyway is still found
+  by the debugging port the copy opens. When the
+  page can't be had at all, the error tells the model to write the workflow in the API format and
+  run it with `workflow=`, instead of building its own HTTP client.
 - **Names looked up, not remembered.** `action=nodes` searches the server's node types or shows
   some in full (inputs, types, ranges, choices, outputs); `action=models` lists the installed model
   files with their sizes.
@@ -451,7 +459,9 @@ their text. A page comes in parts of 6,000 characters (about 1.5k tokens), so a 
 flood the context, and `find` returns just the matching lines with a little context and the heading
 they sit under. A page that turns away plain requests, or that its scripts build, is loaded in the
 headless browser instead. A PDF comes as its text, page by page, like `read_file` reads one. The last eight pages are kept in memory, so reading on
-doesn't download a page again. The browser's profile is `Data/browser`.
+doesn't download a page again. The browser's profile is `Data/browser`; like ComfyUI's, it is
+started with `--do-not-de-elevate`, or under a BlackBox run as administrator it would quit at once
+and leave no page to read.
 
 ### Servers over SSH
 `ssh` logs in to a server (`user@host`, `user@host:port` or a `Host` from `~/.ssh/config`) with

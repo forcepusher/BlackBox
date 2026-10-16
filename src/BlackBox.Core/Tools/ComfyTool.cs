@@ -450,8 +450,27 @@ public sealed class ComfyTool : Tool
             return (null, ComfyWorkflow.FromApi(ComfyWorkflow.ParseText(builtin.Workflow)));
         var json = await api.GetJsonAsync(template.FetchPath, ct).ConfigureAwait(false);
         return ComfyWorkflow.IsEditorFormat(json)
-            ? (json, ComfyWorkflow.FromApi(await hub.Frontend.ConvertAsync(api.BaseUrl, hub.Generation, json!, ct).ConfigureAwait(false)))
+            ? (json, ComfyWorkflow.FromApi(await ToApiAsync(hub, api, json!, ct).ConfigureAwait(false)))
             : (null, ComfyWorkflow.FromApi(json));
+    }
+
+    /// <summary>
+    /// A workflow in the editor's format turned into the API format by ComfyUI's page. When the page
+    /// can't be had, the model learns how to go on without it: told only that the browser closed, it
+    /// wrote and debugged its own HTTP client in PowerShell, which took most of a run.
+    /// </summary>
+    private static async Task<JsonObject> ToApiAsync(ComfyHub hub, ComfyApi api, JsonNode editor, CancellationToken ct)
+    {
+        try
+        {
+            return await hub.Frontend.ConvertAsync(api.BaseUrl, hub.Generation, editor, ct).ConfigureAwait(false);
+        }
+        catch (ComfyApiException ex)
+        {
+            throw new ComfyApiException(ex.Message + " This workflow is in the editor's format, which ComfyUI's page turns into the API format to run it. " +
+                "Without the page, write the workflow in the API format yourself (node id -> class_type and inputs; a link is [\"node id\", output index]) " +
+                "and give it to action=run in workflow=: this tool uploads the input files, runs it and brings back the results as usual.");
+        }
     }
 
     /// <summary>Keeps a workflow where the model can edit it and run it again: Data/scratch/comfyui/&lt;name&gt;.json.</summary>
@@ -606,7 +625,7 @@ public sealed class ComfyTool : Tool
     /// <summary>A workflow from JSON the model gave: the API format as it is, the editor's format turned into it.</summary>
     private static async Task<ComfyWorkflow> FromJsonAsync(ComfyHub hub, ComfyApi api, JsonNode json, CancellationToken ct) =>
         ComfyWorkflow.IsEditorFormat(json)
-            ? ComfyWorkflow.FromApi(await hub.Frontend.ConvertAsync(api.BaseUrl, hub.Generation, json, ct).ConfigureAwait(false))
+            ? ComfyWorkflow.FromApi(await ToApiAsync(hub, api, json, ct).ConfigureAwait(false))
             : ComfyWorkflow.FromApi(json);
 
     private static async Task<ToolResult> WaitForAsync(JsonObject args, ComfyHub hub, ComfyApi api, string promptId, ToolContext ctx, CancellationToken ct)

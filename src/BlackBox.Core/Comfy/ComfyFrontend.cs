@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace BlackBox.Core.Comfy;
 
@@ -12,17 +13,30 @@ namespace BlackBox.Core.Comfy;
 /// kept in the editor's format, and their features change with every release of the page, so no
 /// copy of its conversion could keep up. The browser stays up for a few minutes between uses.
 /// </summary>
-public sealed class ComfyFrontend(string profileDirectory) : IAsyncDisposable
+/// <remarks>
+/// Every start of the browser gets a profile folder of its own under <c>profileRoot</c>, and the
+/// browsers earlier starts left running are closed first. With one profile for every start, a
+/// browser left running on it made each later one quit at once.
+/// </remarks>
+public sealed partial class ComfyFrontend(string profileRoot) : IAsyncDisposable
 {
     private static readonly TimeSpan IdleTime = TimeSpan.FromMinutes(3);
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private Process? _browser;
     private ClientWebSocket? _socket;
+    private ActivePort? _port; // where the browser in use listens, to close it whoever started it
+    private string? _profile;
+    private bool _handedOver; // the browser started has handed over to a copy of itself, which is the one in use
     private Uri? _page;
     private int _generation = -1;
     private int _nextId;
+    private int _launches;
+    private int _exitHooked;
     private Timer? _idle;
+
+    /// <summary>The browsers to try, best first, instead of the ones on the PC.</summary>
+    internal IReadOnlyList<string>? BrowsersForTests { get; set; }
 
     /// <summary>
     /// The API-format workflow for <paramref name="editorWorkflow"/>, as the page at
@@ -35,7 +49,7 @@ public sealed class ComfyFrontend(string profileDirectory) : IAsyncDisposable
         try
         {
             _idle?.Dispose();
-            if (_socket is not { State: WebSocketState.Open } || _browser is not { HasExited: false } || _page != server || _generation != generation)
+            if (_socket is not { State: WebSocketState.Open } || _browser is null || (_browser.HasExited && !_handedOver) || _page != server || _generation != generation)
                 await OpenAsync(server, generation, ct).ConfigureAwait(false);
             var script = "(async () => { const wf = " + JsonValue.Create(editorWorkflow.ToJsonString()).ToJsonString() + ";" +
                          " await window.app.loadGraphData(JSON.parse(wf), true, false, null, { showMissingNodesDialog: false, showMissingModelsDialog: false });" +
@@ -55,50 +69,27 @@ public sealed class ComfyFrontend(string profileDirectory) : IAsyncDisposable
     private async Task OpenAsync(Uri server, int generation, CancellationToken ct)
     {
         await CloseBrowserAsync().ConfigureAwait(false);
-        var exe = Web.HeadlessBrowser.FindExecutable()
-                  ?? throw new ComfyApiException("Turning a saved workflow into one ComfyUI can run needs Edge or Chrome, and neither is on this PC.");
-        Directory.CreateDirectory(profileDirectory);
-        var portFile = Path.Combine(profileDirectory, "DevToolsActivePort");
-        try { File.Delete(portFile); }
-        catch (IOException) { }
-        // Its output goes to pipes of its own (drained), so it doesn't hold on to BlackBox's console,
-        // and it lives no longer than BlackBox.
-        var psi = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (var arg in new[]
-                 {
-                     "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-extensions",
-                     "--disable-sync", "--mute-audio", "--remote-debugging-port=0", "--remote-allow-origins=*", $"--user-data-dir={profileDirectory}", "about:blank",
-                 })
-            psi.ArgumentList.Add(arg);
-        _browser = Process.Start(psi) ?? throw new ComfyApiException("The browser did not start.");
-        Platform.ChildProcesses.Tie(_browser);
-        _ = _browser.StandardOutput.ReadToEndAsync(CancellationToken.None);
-        _ = _browser.StandardError.ReadToEndAsync(CancellationToken.None);
-
-        int port = 0;
-        var waited = Stopwatch.StartNew();
-        while (port == 0)
+        await CloseLeftoversAsync(ct).ConfigureAwait(false);
+        var browsers = BrowsersForTests ?? Web.HeadlessBrowser.FindExecutables();
+        if (browsers.Count == 0)
+            throw new ComfyApiException("Turning a saved workflow into one ComfyUI can run needs Edge or Chrome, and neither is on this PC.");
+        // Edge first; Chrome when Edge can't be started and the PC has it too.
+        var failures = new List<string>();
+        foreach (var exe in browsers)
         {
-            ct.ThrowIfCancellationRequested();
-            if (_browser.HasExited)
-                throw new ComfyApiException($"The browser closed at once (exit code {_browser.ExitCode}).");
-            if (waited.Elapsed > TimeSpan.FromSeconds(30))
-                throw new ComfyApiException("The browser did not open its debugging port within 30 seconds.");
             try
             {
-                var lines = await File.ReadAllLinesAsync(portFile, ct).ConfigureAwait(false);
-                if (lines.Length > 0 && int.TryParse(lines[0], out var p)) port = p;
+                await LaunchAsync(exe, ct).ConfigureAwait(false);
+                break;
             }
-            catch (IOException) { }
-            if (port == 0) await Task.Delay(50, ct).ConfigureAwait(false);
+            catch (ComfyApiException ex)
+            {
+                failures.Add(browsers.Count > 1 ? $"{Path.GetFileNameWithoutExtension(exe)}: {ex.Message}" : ex.Message);
+                await CloseBrowserAsync().ConfigureAwait(false);
+            }
         }
-
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-        var targets = JsonNode.Parse(await http.GetStringAsync($"http://127.0.0.1:{port}/json/list", ct).ConfigureAwait(false)) as JsonArray;
-        var socketUrl = (string?)targets?.FirstOrDefault(t => (string?)t?["type"] == "page")?["webSocketDebuggerUrl"]
-                        ?? throw new ComfyApiException("The browser offered no page to work in.");
-        _socket = new ClientWebSocket();
-        await _socket.ConnectAsync(new Uri(socketUrl), ct).ConfigureAwait(false);
+        if (_socket is null)
+            throw new ComfyApiException(string.Join(" ", failures));
 
         await CallAsync("Page.navigate", new JsonObject { ["url"] = server.ToString() }, TimeSpan.FromSeconds(30), ct).ConfigureAwait(false);
         var ready = Stopwatch.StartNew();
@@ -114,6 +105,120 @@ public sealed class ComfyFrontend(string profileDirectory) : IAsyncDisposable
         }
         _page = server;
         _generation = generation;
+    }
+
+    /// <summary>
+    /// Starts <paramref name="exe"/> headless in a profile folder of its own and connects to its page.
+    /// </summary>
+    /// <remarks>
+    /// Started by a BlackBox run as administrator, Edge and Chrome start a copy of themselves that
+    /// isn't, and quit with 0: every start ended in "The browser closed at once (exit code 0)", and the
+    /// copy stayed behind with the profile. --do-not-de-elevate keeps the browser as it was started;
+    /// a browser that hands over to a copy anyway (after an update, say) is found all the same, by
+    /// the debugging port the copy writes into the profile.
+    /// </remarks>
+    private async Task LaunchAsync(string exe, CancellationToken ct)
+    {
+        var profile = _profile = Path.Combine(profileRoot, $"{Environment.ProcessId}-{Interlocked.Increment(ref _launches)}");
+        Directory.CreateDirectory(profile);
+        // Its output goes to pipes of its own (drained), so it doesn't hold on to BlackBox's console,
+        // and it lives no longer than BlackBox.
+        var psi = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var arg in new[]
+                 {
+                     "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-extensions",
+                     "--disable-sync", "--mute-audio", "--do-not-de-elevate", "--remote-debugging-port=0", "--remote-allow-origins=*",
+                     $"--user-data-dir={profile}", "about:blank",
+                 })
+            psi.ArgumentList.Add(arg);
+        Process browser;
+        try
+        {
+            browser = _browser = Process.Start(psi) ?? throw new ComfyApiException("The browser did not start.");
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            throw new ComfyApiException($"The browser could not be started: {ex.Message}");
+        }
+        Platform.ChildProcesses.Tie(browser);
+        var said = new StringBuilder();
+        _ = KeepTailAsync(browser.StandardError, said);
+        _ = browser.StandardOutput.ReadToEndAsync(CancellationToken.None);
+
+        var waited = Stopwatch.StartNew();
+        TimeSpan? quitAt = null;
+        ActivePort? port;
+        while ((port = ActivePort.Read(profile)) is null)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (quitAt is null && browser.HasExited)
+            {
+                if (browser.ExitCode != 0)
+                    throw new ComfyApiException($"The browser closed at once (exit code {browser.ExitCode}).{Tail(said)}");
+                // Quitting with 0 that soon, it handed over to a copy of itself: that one opens the port.
+                quitAt = waited.Elapsed;
+            }
+            if (quitAt is { } at && waited.Elapsed - at > TimeSpan.FromSeconds(10))
+                throw new ComfyApiException($"The browser closed at once (exit code 0), and no copy of it opened its debugging port.{Tail(said)}");
+            if (waited.Elapsed > TimeSpan.FromSeconds(30))
+                throw new ComfyApiException($"The browser did not open its debugging port within 30 seconds.{Tail(said)}");
+            await Task.Delay(50, ct).ConfigureAwait(false);
+        }
+        _port = port;
+        _handedOver = browser.HasExited;
+        // A copy isn't in BlackBox's job object, so it doesn't end with BlackBox by itself.
+        if (_handedOver && Interlocked.Exchange(ref _exitHooked, 1) == 0)
+            AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+            {
+                if (_handedOver && _port is { } open)
+                    open.CloseBrowserAsync().Wait(TimeSpan.FromSeconds(3));
+            };
+
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var targets = JsonNode.Parse(await http.GetStringAsync($"http://127.0.0.1:{port.Port}/json/list", ct).ConfigureAwait(false)) as JsonArray;
+            var socketUrl = (string?)targets?.FirstOrDefault(t => (string?)t?["type"] == "page")?["webSocketDebuggerUrl"]
+                            ?? throw new ComfyApiException("The browser offered no page to work in.");
+            var socket = new ClientWebSocket();
+            try
+            {
+                await socket.ConnectAsync(new Uri(socketUrl), ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
+            _socket = socket;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or WebSocketException or System.Text.Json.JsonException || (ex is TaskCanceledException && !ct.IsCancellationRequested))
+        {
+            throw new ComfyApiException($"The browser's debugging port did not answer: {ex.Message}");
+        }
+    }
+
+    /// <summary>The last lines the browser wrote to its error output, to go with a failure.</summary>
+    private static string Tail(StringBuilder said)
+    {
+        string text;
+        lock (said) text = said.ToString();
+        var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return lines.Length == 0 ? "" : " It said: " + string.Join(" / ", lines.TakeLast(3)).Clip(400);
+    }
+
+    private static async Task KeepTailAsync(StreamReader output, StringBuilder said)
+    {
+        try
+        {
+            while (await output.ReadLineAsync().ConfigureAwait(false) is { } line)
+                lock (said)
+                {
+                    said.AppendLine(line);
+                    if (said.Length > 8192) said.Remove(0, said.Length - 4096);
+                }
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException) { }
     }
 
     private async Task<JsonNode?> EvaluateAsync(string expression, TimeSpan timeout, CancellationToken ct)
@@ -185,25 +290,220 @@ public sealed class ComfyFrontend(string profileDirectory) : IAsyncDisposable
         }
     }
 
-    private Task CloseBrowserAsync()
+    private async Task CloseBrowserAsync()
     {
         try { _socket?.Dispose(); }
         catch (ObjectDisposedException) { }
         _socket = null;
         _page = null;
+        // BlackBox's own child is ended with what it started (its crash reporter would hold on to the
+        // profile for seconds after it); a copy it handed over to isn't BlackBox's child, and is asked
+        // to close over its port.
         if (_browser is { } browser)
         {
-            try { if (!browser.HasExited) browser.Kill(entireProcessTree: true); }
-            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+            try
+            {
+                if (!browser.HasExited)
+                {
+                    browser.Kill(entireProcessTree: true);
+                    using var wait = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await browser.WaitForExitAsync(wait.Token).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or OperationCanceledException) { }
             browser.Dispose();
         }
+        if (_handedOver && _port is { } port)
+            await port.CloseBrowserAsync().ConfigureAwait(false);
         _browser = null;
-        return Task.CompletedTask;
+        _port = null;
+        _handedOver = false;
+        if (_profile is { } profile)
+            await DeleteAsync([profile]).ConfigureAwait(false);
+        _profile = null;
+    }
+
+    /// <summary>
+    /// Closes the browsers earlier starts left running, and deletes their profile folders: a copy a
+    /// browser handed over to, or one a BlackBox that ended without closing it left behind. The
+    /// folders of another BlackBox running now are left alone.
+    /// </summary>
+    private async Task CloseLeftoversAsync(CancellationToken ct)
+    {
+        if (!Directory.Exists(profileRoot))
+            return;
+        var closing = new List<Task>();
+        var doomed = new List<string>();
+        // Found by their command line: some left no port to close them by (the BlackBox before
+        // deleted the file as it started the next browser on the shared profile).
+        foreach (var stray in StrayBrowsers())
+            closing.Add(EndAsync(stray));
+        // Before every start had a folder of its own, they all used this one.
+        if (ActivePort.Read(profileRoot) is { } shared)
+            closing.Add(shared.CloseBrowserAsync());
+        foreach (var entry in Directory.EnumerateFileSystemEntries(profileRoot))
+        {
+            if (LaunchFolder().Match(Path.GetFileName(entry)) is { Success: true } m)
+            {
+                if (OtherBlackBox(int.Parse(m.Groups[1].Value)))
+                    continue;
+                if (ActivePort.Read(entry) is { } left)
+                    closing.Add(left.CloseBrowserAsync());
+            }
+            doomed.Add(entry);
+        }
+        await Task.WhenAll(closing).WaitAsync(ct).ConfigureAwait(false);
+        await DeleteAsync(doomed).ConfigureAwait(false);
+    }
+
+    /// <summary>A start's profile folder: the BlackBox process's id and the start's number.</summary>
+    [GeneratedRegex(@"^(\d+)-\d+$")]
+    private static partial Regex LaunchFolder();
+
+    /// <summary>
+    /// Edge and Chrome browsers (not their helper processes) whose profile is the folder every start
+    /// used to share, or a start's folder that isn't another BlackBox's running now.
+    /// </summary>
+    private List<Process> StrayBrowsers()
+    {
+        var strays = new List<Process>();
+        string root;
+        try { root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(profileRoot)); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return strays; }
+        foreach (var process in new[] { "msedge", "chrome" }.SelectMany(Process.GetProcessesByName))
+        {
+            var stray = false;
+            try
+            {
+                if (Platform.ProcessCommandLine.Of(process.Id) is { } line && !line.Contains("--type=", StringComparison.Ordinal) &&
+                    Platform.ProcessCommandLine.Switch(line, "--user-data-dir") is { Length: > 0 } dir)
+                {
+                    var profile = Path.TrimEndingDirectorySeparator(Path.GetFullPath(dir));
+                    stray = string.Equals(profile, root, StringComparison.OrdinalIgnoreCase) ||
+                            (string.Equals(Path.GetDirectoryName(profile), root, StringComparison.OrdinalIgnoreCase) &&
+                             LaunchFolder().Match(Path.GetFileName(profile)) is { Success: true } m && !OtherBlackBox(int.Parse(m.Groups[1].Value)));
+                }
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or InvalidOperationException) { }
+            if (stray) strays.Add(process);
+            else process.Dispose();
+        }
+        return strays;
+    }
+
+    /// <summary>Ends a stray browser with what it started, and waits a few seconds for it to go.</summary>
+    private static async Task EndAsync(Process browser)
+    {
+        using (browser)
+        {
+            try
+            {
+                browser.Kill(entireProcessTree: true);
+                using var wait = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await browser.WaitForExitAsync(wait.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or OperationCanceledException) { }
+        }
+    }
+
+    /// <summary>Whether <paramref name="pid"/> is another BlackBox (app or command line) running now.</summary>
+    private static bool OtherBlackBox(int pid)
+    {
+        if (pid == Environment.ProcessId)
+            return false;
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return process.ProcessName.StartsWith("BlackBox", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            return false; // not running any more
+        }
+    }
+
+    /// <summary>
+    /// Deletes profile folders (and the files of the old shared one). A browser that has just closed
+    /// lets go of its files over a second or two; what is still in use after that is left for the next start.
+    /// </summary>
+    private static async Task DeleteAsync(List<string> paths)
+    {
+        var waited = Stopwatch.StartNew();
+        while (paths.RemoveAll(TryDelete) >= 0 && paths.Count > 0 && waited.Elapsed < TimeSpan.FromSeconds(3))
+            await Task.Delay(200).ConfigureAwait(false);
+    }
+
+    private static bool TryDelete(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+            else File.Delete(path);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
         _idle?.Dispose();
         await CloseBrowserAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// What a browser started with --remote-debugging-port=0 writes into its profile's
+    /// DevToolsActivePort: its port, and the path of its own target, which tells it apart from
+    /// anything else that may listen on that port later.
+    /// </summary>
+    private sealed record ActivePort(int Port, string BrowserPath)
+    {
+        public static ActivePort? Read(string profile)
+        {
+            try
+            {
+                using var stream = new FileStream(Path.Combine(profile, "DevToolsActivePort"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                var lines = new StreamReader(stream).ReadToEnd().Split('\n', StringSplitOptions.TrimEntries);
+                // Both lines: a file read while it is written may hold part of the port only.
+                return lines.Length >= 2 && int.TryParse(lines[0], out var port) && port > 0 && lines[1].StartsWith("/devtools/browser/", StringComparison.Ordinal)
+                    ? new ActivePort(port, lines[1])
+                    : null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>Asks the browser to close (Browser.close) and waits a few seconds for its port to go quiet. Nothing happens when it is gone already.</summary>
+        public async Task CloseBrowserAsync()
+        {
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(1) };
+                var url = (string?)JsonNode.Parse(await http.GetStringAsync($"http://127.0.0.1:{Port}/json/version").ConfigureAwait(false))?["webSocketDebuggerUrl"];
+                if (url is null || !url.EndsWith(BrowserPath, StringComparison.Ordinal))
+                    return; // something else listens there now
+                using (var socket = new ClientWebSocket())
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3)))
+                {
+                    await socket.ConnectAsync(new Uri(url), cts.Token).ConfigureAwait(false);
+                    var close = new JsonObject { ["id"] = 1, ["method"] = "Browser.close" };
+                    await socket.SendAsync(Encoding.UTF8.GetBytes(close.ToJsonString()), WebSocketMessageType.Text, true, cts.Token).ConfigureAwait(false);
+                }
+                for (var i = 0; i < 40; i++)
+                {
+                    await Task.Delay(100).ConfigureAwait(false);
+                    await http.GetStringAsync($"http://127.0.0.1:{Port}/json/version").ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException or WebSocketException
+                                           or System.Text.Json.JsonException or UriFormatException or InvalidOperationException)
+            {
+                // Gone, or never there.
+            }
+        }
     }
 }
