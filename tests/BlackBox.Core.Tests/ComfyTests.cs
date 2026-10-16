@@ -27,6 +27,9 @@ internal sealed class FakeComfyServer : IDisposable
 
     /// <summary>Whether the queue says a job is running.</summary>
     public bool QueueBusy { get; set; }
+
+    /// <summary>Whether it says it runs on the CPU, as on a PC without a graphics card ComfyUI can use.</summary>
+    public bool OnCpu { get; set; }
     public List<string> Checkpoints { get; } = ["v1-5-pruned-emaonly-fp16.safetensors", "sdxl.safetensors"];
 
     /// <summary>What a finished job's history says; the default saves one picture.</summary>
@@ -55,6 +58,11 @@ internal sealed class FakeComfyServer : IDisposable
         "name": "SaveImage", "display_name": "Save Image", "category": "image", "python_module": "nodes", "output_node": true},
       "LoadImage": {"input": {"required": {"image": [["example.png"], {"image_upload": true}]}}, "output": ["IMAGE", "MASK"], "output_name": ["IMAGE", "MASK"],
         "name": "LoadImage", "display_name": "Load Image", "category": "image", "python_module": "nodes", "output_node": false},
+      "ImageScaleToTotalPixels": {"input": {"required": {"image": ["IMAGE", {}], "upscale_method": [["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], {}],
+        "megapixels": ["FLOAT", {"default": 1.0, "min": 0.01, "max": 16.0}]}}, "output": ["IMAGE"], "output_name": ["IMAGE"],
+        "name": "ImageScaleToTotalPixels", "display_name": "Scale Image to Total Pixels", "category": "image/upscaling", "python_module": "comfy_extras.nodes_upscale_model", "output_node": false},
+      "VAEEncode": {"input": {"required": {"pixels": ["IMAGE", {}], "vae": ["VAE", {}]}}, "output": ["LATENT"], "output_name": ["LATENT"],
+        "name": "VAEEncode", "display_name": "VAE Encode", "category": "latent", "python_module": "nodes", "output_node": false},
       "ComfyMathExpression": {"input": {"required": {"expression": ["STRING", {"default": "a + b"}], "values": ["COMFY_AUTOGROW_V3", {"template": {"names": ["a", "b"], "min": 1}}]}},
         "output": ["FLOAT", "INT"], "output_name": ["FLOAT", "INT"], "name": "ComfyMathExpression", "display_name": "Math Expression", "category": "math", "python_module": "comfy_extras.nodes_math", "output_node": false},
       "VHS_VideoCombine": {"input": {"required": {"images": ["IMAGE"], "frame_rate": ["FLOAT", {"default": 8}]}}, "output": [], "output_name": [],
@@ -103,7 +111,9 @@ internal sealed class FakeComfyServer : IDisposable
         switch (path)
         {
             case "system_stats":
-                Reply(ctx, 200, """{"system": {"comfyui_version": "0.19.0", "ram_total": 68000000000, "ram_free": 40000000000, "argv": ["ComfyUI\\main.py"]}, "devices": [{"name": "cuda:0 Test GPU", "vram_total": 17000000000, "vram_free": 15000000000}]}""");
+                Reply(ctx, 200, OnCpu
+                    ? """{"system": {"comfyui_version": "0.41.0", "ram_total": 16865644544, "ram_free": 8926543872, "argv": ["ComfyUI\\main.py", "--cpu"]}, "devices": [{"name": "cpu", "type": "cpu", "vram_total": 16865644544, "vram_free": 8903266304}]}"""
+                    : """{"system": {"comfyui_version": "0.19.0", "ram_total": 68000000000, "ram_free": 40000000000, "argv": ["ComfyUI\\main.py"]}, "devices": [{"name": "cuda:0 Test GPU", "vram_total": 17000000000, "vram_free": 15000000000}]}""");
                 return;
             case "object_info":
                 NodeTypeFetches++;

@@ -64,18 +64,19 @@ public sealed record ComfyInstall(string Root, string CodeDir, string Program, C
     }
 
     /// <summary>
-    /// Looks for ComfyUI on this PC: the Desktop app, then every fixed drive and the user's own
-    /// folders, a few levels deep (C:\ComfyUI_windows_portable, D:\AI\ComfyUI, …). Gives up
-    /// after <paramref name="budget"/>; the one used most recently comes first.
+    /// Looks for ComfyUI on this PC: the Desktop app, then <paramref name="firstLookIn"/> (BlackBox's
+    /// Data/tools, where it installs one), every fixed drive and the user's own folders, a few
+    /// levels deep (C:\ComfyUI_windows_portable, D:\AI\ComfyUI, …). Gives up after
+    /// <paramref name="budget"/>; the one used most recently comes first.
     /// </summary>
-    public static IReadOnlyList<ComfyInstall> Find(TimeSpan budget, CancellationToken ct)
+    public static IReadOnlyList<ComfyInstall> Find(TimeSpan budget, CancellationToken ct, IEnumerable<string>? firstLookIn = null)
     {
         var found = new List<ComfyInstall>();
         if (Desktop() is { } desktop)
             found.Add(desktop);
 
         var giveUp = DateTime.UtcNow + budget;
-        var roots = new List<string>();
+        var roots = new List<string>(firstLookIn ?? []);
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         foreach (var special in new[] { "Desktop", "Downloads", "Documents" })
             roots.Add(Path.Combine(home, special));
@@ -223,13 +224,20 @@ public static partial class ComfyProcess
         }
     }
 
-    /// <summary>How the official launchers start it (run_nvidia_gpu.bat), on the given port.</summary>
+    /// <summary>
+    /// How the official launchers start it (run_nvidia_gpu.bat, or run_cpu.bat on a PC without a
+    /// graphics card its PyTorch can use), on the given port, without opening the browser:
+    /// --windows-standalone-build opens ComfyUI's page in it at every start, and a server BlackBox
+    /// runs hidden popped up an Edge window on the laptop each time.
+    /// </summary>
     public static List<string> DefaultArguments(ComfyInstall install, int port)
     {
         var args = new List<string>();
         if (install.Kind == ComfyInstallKind.Portable)
             args.Add("-s");
         args.Add(Path.Combine(install.CodeDir, "main.py"));
+        if (ComfyHardware.NeedsCpu(install))
+            args.Add("--cpu");
         if (install.Kind == ComfyInstallKind.Portable)
             args.Add("--windows-standalone-build");
         if (port != DefaultPort)
@@ -237,6 +245,14 @@ public static partial class ComfyProcess
             args.Add("--port");
             args.Add(port.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
+        return Quietly(args);
+    }
+
+    /// <summary>The arguments with the browser kept closed (a restart reuses the ones a server ran with, which may open it).</summary>
+    public static List<string> Quietly(List<string> args)
+    {
+        if (!args.Contains("--disable-auto-launch"))
+            args.Add("--disable-auto-launch");
         return args;
     }
 
