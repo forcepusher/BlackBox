@@ -60,6 +60,13 @@ public partial class MainWindow : Window
             if (!_pinning && e.OffsetDelta.Y != 0 && e.ExtentDelta.Y == 0 && e.ViewportDelta.Y == 0)
                 UpdateStickiness();
         };
+        // What Tab or the arrow keys move to is scrolled into view; what a click focuses stays where
+        // it is under the mouse (the chat's ScrollViewer does neither by itself, see its markup).
+        ChatScroll.AddHandler(GotFocusEvent, (_, e) =>
+        {
+            if (e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional && e.Source is Control focused)
+                focused.BringIntoView();
+        });
     }
 
     private double MaxOffset => Math.Max(0, ChatScroll.Extent.Height - ChatScroll.Viewport.Height);

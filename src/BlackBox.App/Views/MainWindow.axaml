@@ -339,7 +339,9 @@
          server that failed to start), the two in the middle of the window, or read from the top
          when they don't fit. Spacing lives on the content as a margin, not as ScrollViewer padding:
          padding is not part of the scroll extent, so the last lines ended up clipped. -->
-    <ScrollViewer x:Name="ChatScroll" Grid.Row="3" HorizontalScrollBarVisibility="Disabled">
+    <!-- Focus brings an item into view only from the keyboard (see MainWindow): a click on a picture
+         partly out of view focused its button and scrolled the whole picture in, a jump under the mouse. -->
+    <ScrollViewer x:Name="ChatScroll" Grid.Row="3" HorizontalScrollBarVisibility="Disabled" BringIntoViewOnFocusChange="False">
       <StackPanel Classes="conversation" Classes.unused="{Binding ShowIntro}" MaxWidth="860" Margin="16,12,16,16" Spacing="10">
         <ItemsControl ItemsSource="{Binding Items}">
           <ItemsControl.ItemsPanel>
