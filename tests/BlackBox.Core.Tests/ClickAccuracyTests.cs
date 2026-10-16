@@ -20,7 +20,8 @@ namespace BlackBox.Core.Tests;
 /// BB_CLICK_COORDS=pixels|grid (default: what BlackBox picks for the model), BB_CLICK_RES (a
 /// <see cref="ScreenshotResolution"/> name), BB_CLICK_SEED (first layout, default 1000), BB_CLICK_TAG (report name),
 /// BB_CLICK_RETRY (extra clicks allowed after a miss, default 0: the target reacts when hit, so a
-/// miss gets BlackBox's miss note), BB_CLICK_CHECK=0 (no miss note), BB_CLICK_LOOK=0 (clicks go to the model's own x/y instead of where a fresh look finds the target), BB_CLICK_RULE
+/// miss gets BlackBox's miss note), BB_CLICK_CHECK=0 (no miss note), BB_CLICK_LOOK=0 (clicks go to the model's own x/y instead of where a fresh look finds the target),
+/// BB_CLICK_CROP=0 (the look sees the whole screen, not the quarter around the model's aim), BB_CLICK_THINK=1 (the look may think), BB_CLICK_RULE
 /// (extra instructions for the system prompt, to measure a prompt rule), BB_CLICK_TEMP (a temperature
 /// sent with the benchmark's own requests instead of the server's), BB_CLICK_SHIFT (the first screenshot
 /// shows everything this many pixels higher, so the model misjudges where things are, as one deep in a
@@ -140,6 +141,8 @@ public class ClickAccuracyTests
         var retries = int.TryParse(Env("BB_CLICK_RETRY"), out var rt) ? rt : 0;
         ClickCheck.Enabled = Env("BB_CLICK_CHECK") != "0";
         FreshLook.Enabled = Env("BB_CLICK_LOOK") != "0";
+        FreshLook.Cropped = Env("BB_CLICK_CROP") != "0";
+        FreshLook.Thinking = Env("BB_CLICK_THINK") == "1";
         var (retried, fixedLater) = (0, 0);
         var shift = int.TryParse(Env("BB_CLICK_SHIFT"), out var sh) ? sh : 0;
         foreach (var scene in Scenes.Where(s => only is null || only.Contains(s.Name)))
@@ -218,7 +221,8 @@ public class ClickAccuracyTests
         }
         foreach (var line in summary)
             Log(line);
-        Log($"TOTAL {allHits}/{allTrials} with {Model}, coordinates: {grid?.ToString() ?? "pixels"}, screenshots: {resolution}");
+        Log($"TOTAL {allHits}/{allTrials} with {Model}, coordinates: {grid?.ToString() ?? "pixels"}, screenshots: {resolution}, " +
+            (FreshLook.Enabled ? $"fresh look at {(FreshLook.Cropped ? "the quarter around the aim" : "the whole screen")}, thinking {(FreshLook.Thinking || !FreshLook.ThinksInQwenTags(Model) ? "on" : "skipped")}" : "no fresh look"));
         if (retries > 0)
             Log($"RETRY {fixedLater}/{retried} first-click misses hit within {retries} more tries (miss check {(ClickCheck.Enabled ? "on" : "off")}, fresh look {(FreshLook.Enabled ? "on" : "off")})");
         File.WriteAllLines(Path.Combine(Path.GetTempPath(), $"bb-click-{tag}.txt"), report);

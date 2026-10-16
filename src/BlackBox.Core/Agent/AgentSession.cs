@@ -167,7 +167,7 @@ public sealed partial class AgentSession(
         if (toolContext.Locate is null && FreshLook.Enabled)
         {
             var look = new FreshLook(client, requestOptions);
-            toolContext.Locate = (image, target, ct2) => look.LocateAsync(image, toolContext.GetScreenSpace().Describe(), target, ct2);
+            toolContext.Locate = (image, space, target, ct2) => look.LocateAsync(image, space.Describe(), target, ct2);
         }
         var nudges = 0;
         var loops = new LoopDetector();

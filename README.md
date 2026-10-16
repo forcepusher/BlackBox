@@ -457,7 +457,17 @@ call's coordinates after writing the right ones, while the same model looking at
 gets them right. In `ClickAccuracyTests` (qwen3.8, 79 trials in 16 scenes) first clicks hit 69 times
 against 57 with the model's own coordinates, and 19 of 19 menus, tabs and buttons on a real Unity
 screenshot (`ClickScenes/unity-editor.png`) against 10; with the first screenshot shifted 30 px, as
-a misjudged screen would be, 30 of 31 against 0. The look costs about 15 s per click on that server.
+a misjudged screen would be, 30 of 31 against 0.
+
+The look is shown the quarter of the screen around where the model aimed (half as wide and half as
+high, at the same scale), and the whole screen only when the target isn't there: on a 2560×1080
+screen that is 680 image tokens instead of 2,720. Qwen 3 and later answer it without thinking:
+BlackBox begins their reply with an empty think block, as their chat template does when thinking is
+off (LM Studio ignores `enable_thinking`, `reasoning_effort` and `/no_think`; a server that refuses
+a begun reply is asked again the usual way, and from then on). With qwen3.8 on an RTX 5070 Ti, which
+reads about 500 tokens a second, a look at the whole screen took 15-17 s (9 s reading it, the rest
+thinking); the look at the quarter around the aim takes about 3 s, and both found 19 of 19 targets
+on the Unity screenshot.
 
 After each click BlackBox also compares the screen just before it (after the look, so what changed
 while the model looked doesn't count) with the screen after it. When nothing changed near
@@ -468,6 +478,12 @@ table, half-covered buttons, an ultrawide screen) 4 of 9 misses were fixed withi
 with the note, 0 of 8 without it, and 4 of 10 when every click used the model's own coordinates.
 Before the fresh look, a red ring drawn at the click added nothing to the note, nor did a prompt
 rule about aiming carefully or temperature 0.2 instead of 0.6.
+
+A look can also find the wrong thing, and then the screen does change. In Blender it took the
+Animation tab for the "MCP for Blender" tab under it. The model saw the Animation panel open and
+named the tab again twice, aiming lower each time, and both times the look moved the click back up.
+So when the look moves a click more than 2% of the screen away from the model's aim, the result
+says where the click went, and that with `target` left out the click goes to the model's x/y.
 
 A notification that closes by itself in the seconds before the click is the opposite case: the
 look then finds something else that fits the words. In a chat run the model aimed at a desktop
