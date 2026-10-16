@@ -59,10 +59,25 @@ public sealed class ComfyTool : Tool
         };
     }
 
+    // Whether this task uses the server, and has run jobs on it.
+    private bool _usesServer, _ranJobs;
+
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         if (ctx.Comfy is not { } hub)
             return ToolResult.Error("ComfyUI isn't available in this run.");
+        // From before it may be started: when the task is over, a ComfyUI BlackBox started is closed.
+        if (!_usesServer)
+        {
+            _usesServer = true;
+            hub.Use();
+            ctx.AfterRun(nameof(ComfyTool), () =>
+            {
+                var ranJobs = _ranJobs;
+                (_usesServer, _ranJobs) = (false, false);
+                return hub.ReleaseAsync(ranJobs);
+            });
+        }
         var action = RequireString(args, "action").Trim().ToLowerInvariant();
         var notes = new List<string>();
         try
@@ -424,8 +439,7 @@ public sealed class ComfyTool : Tool
             return ToolResult.Error($"ComfyUI refused {what}; nothing was run:\n- " + string.Join("\n- ", refused));
         if (templateName is not null)
             lock (_lastRuns) _lastRuns[templateName] = args["set"] is JsonObject done ? ComfyWorkflow.Changes(done) : [];
-        // Its models are let go once the task is over, so the GPU is free for whatever comes next.
-        ctx.AfterRun(nameof(ComfyTool), () => api.FreeAsync(CancellationToken.None));
+        _ranJobs = true;
         hub.RememberJob(promptId, clientId, workflow.All().ToDictionary(n => n.Id, n => ComfyWorkflow.TitleOf(n.Node) ?? ComfyWorkflow.ClassOf(n.Node)));
         var result = await WaitForAsync(args, hub, api, promptId, ctx, ct).ConfigureAwait(false);
         var notes = refused.Select(r => "Left out: " + r).Concat(warnings.Select(w => "Note: " + w)).ToList();

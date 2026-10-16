@@ -122,6 +122,13 @@ var t0 = DateTime.UtcNow;
 await session.RunAsync(task, observer, cts.Token);
 Console.WriteLine($"\n[done] {observer.Reason} in {(DateTime.UtcNow - t0).TotalSeconds:0}s, {observer.Steps} model calls, {observer.ToolCalls} tool calls, {observer.ToolErrors} tool errors");
 if (observer.Detail is { } d) Console.WriteLine("[done] " + d);
+// A ComfyUI the task started is closed after its jobs, which may still be running.
+if (BlackBox.Core.Comfy.ComfyHub.For(paths.ComfyDir).Closing is { IsCompleted: false } closing)
+{
+    Console.WriteLine("[comfyui] closing ComfyUI once the jobs in its queue are done…");
+    try { await closing.WaitAsync(cts.Token); }
+    catch (OperationCanceledException) { }
+}
 return observer.Reason == AgentStopReason.Completed ? 0 : 1;
 
 /// <summary>

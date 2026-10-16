@@ -106,10 +106,13 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   and the model gets a look at them (below) to check its work.
 - **ComfyUI itself.** When it isn't running, BlackBox starts the one used last, or finds one
   (the ComfyUI Desktop app, then every drive and the user's folders a few levels deep; the one
-  used most recently wins) and starts it hidden, its output in `Data/comfyui/server.log`. It keeps
-  running after the task, but its models are unloaded once the task is over, so the GPU is free.
-  `action=restart` stops it and starts it again with the arguments it ran with (custom nodes load
-  only at start), `stop` and `free` do what they say. Models, custom node packs and programs a job
+  used most recently wins) and starts it hidden, its output in `Data/comfyui/server.log`. Once the
+  task is over it is closed, after the jobs still in its queue (the CLI waits for them before it
+  exits); a ComfyUI the user started keeps running, and only lets go of the models the task's jobs
+  loaded, so the GPU is free. BlackBox tells its own from the user's by the process it started,
+  kept in `Data/comfyui/state.json`. `action=restart` stops it and starts it again with the
+  arguments it ran with (custom nodes load only at start; the user's own stays theirs and keeps
+  running), `stop` and `free` do what they say. Models, custom node packs and programs a job
   lacks the agent downloads and installs itself, as with any program.
 
 `read_file` gives the model a look at media as well as pictures: a video as eight frames with their

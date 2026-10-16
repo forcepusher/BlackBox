@@ -162,7 +162,8 @@ public sealed record ComfyInstall(string Root, string CodeDir, string Program, C
 
 /// <summary>
 /// Starting and stopping a ComfyUI server on this PC. A server BlackBox starts runs hidden, with
-/// its output in a log file, and keeps running after BlackBox closes, as when the user starts it.
+/// its output in a log file, apart from BlackBox's own processes: a job still in its queue when
+/// BlackBox closes gets finished (<see cref="ComfyHub"/> closes the server when the task is over).
 /// </summary>
 public static partial class ComfyProcess
 {

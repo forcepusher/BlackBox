@@ -139,7 +139,10 @@ public sealed class ComfyHub(string stateDirectory)
                 var log = ComfyProcess.FreeLogFile(LogFile);
                 await ComfyProcess.StartAsync(install, api, log, null, TimeSpan.FromMinutes(5), progress, ct).ConfigureAwait(false);
                 Generation++;
-                notes.Add($"Started ComfyUI from {install.Root} at {address} (hidden; its log is {log}). It keeps running after this task.");
+                SaveState(address, install);
+                RememberServer(api, ours: true);
+                notes.Add($"Started ComfyUI from {install.Root} at {address} (hidden; its log is {log}). It is closed when this task is over.");
+                return api;
             }
             SaveState(address, install);
             return api;
@@ -165,8 +168,11 @@ public sealed class ComfyHub(string stateDirectory)
             var install = SavedInstall;
             if (install is null && stats is not null && await FoldersAsync(api, ct).ConfigureAwait(false) is { } dirs && dirs.TryGetValue("code", out var code))
                 install = ComfyInstall.FromFolder(code);
+            // One the user had running stays theirs after a restart: it keeps running after the task.
+            var ours = stats is null || IsOurs(api);
             var (stopped, program) = await ComfyProcess.StopAsync(api, ct).ConfigureAwait(false);
             Generation++;
+            RememberServer(api, ours: false);
             if (!start)
                 return stopped ? "ComfyUI is stopped." : "ComfyUI wasn't running.";
             install ??= ComfyInstall.Find(TimeSpan.FromSeconds(20), ct).FirstOrDefault()
@@ -188,11 +194,146 @@ public sealed class ComfyHub(string stateDirectory)
             await ComfyProcess.StartAsync(install, api, log, args, TimeSpan.FromMinutes(5), progress, ct).ConfigureAwait(false);
             Generation++;
             SaveState(Address, install);
-            return $"ComfyUI {(stopped ? "was restarted" : "was started")} from {install.Root} (hidden; its log is {log}).";
+            RememberServer(api, ours);
+            return $"ComfyUI {(stopped ? "was restarted" : "was started")} from {install.Root} (hidden; its log is {log})" +
+                   (ours ? ". It is closed when this task is over." : "; it was running before this task, so it keeps running after it.");
         }
         finally
         {
             _gate.Release();
+        }
+    }
+
+    // ---- closing it after the task ------------------------------------------------------------
+
+    // The user's choice (2026-10-16): ComfyUI closes after a job. A server BlackBox started is
+    // stopped when the last task using it is over and its queue is empty; one the user started
+    // keeps running, with the models BlackBox's jobs loaded let go.
+    private int _users;
+    private CancellationTokenSource? _waitForQueue;
+    private Task _closing = Task.CompletedTask;
+
+    /// <summary>Stand-ins for tests: whether the server that runs is the one BlackBox started, and how it is stopped.</summary>
+    internal Func<ComfyApi, bool>? OwnsForTests { get; set; }
+    internal Func<ComfyApi, CancellationToken, Task>? StopForTests { get; set; }
+
+    /// <summary>Done when a server BlackBox started has been closed after the last task (it may wait for its queue to empty first).</summary>
+    public Task Closing => _closing;
+
+    /// <summary>A task starts using the server; it calls <see cref="ReleaseAsync"/> when it is over.</summary>
+    public void Use()
+    {
+        Interlocked.Increment(ref _users);
+        Interlocked.Exchange(ref _waitForQueue, null)?.Cancel();
+    }
+
+    /// <summary>
+    /// A task that used the server is over. When no other task uses it, a server BlackBox started is
+    /// closed, once the jobs in its queue are done; <paramref name="ranJobs"/> lets one the user
+    /// started let go of the models the task's jobs loaded.
+    /// </summary>
+    public async Task ReleaseAsync(bool ranJobs)
+    {
+        var left = Interlocked.Decrement(ref _users);
+        if (left > 0)
+            return;
+        if (left < 0)
+            Interlocked.Exchange(ref _users, 0);
+        var api = new ComfyApi(Address);
+        if (!(OwnsForTests?.Invoke(api) ?? IsOurs(api)))
+        {
+            if (ranJobs)
+                await api.FreeAsync(CancellationToken.None).ConfigureAwait(false);
+            return;
+        }
+        var wait = new CancellationTokenSource();
+        Interlocked.Exchange(ref _waitForQueue, wait)?.Cancel();
+        _closing = CloseWhenIdleAsync(api, wait.Token);
+        // A short wait here; a queue still at work is waited for in the background.
+        await Task.WhenAny(_closing, Task.Delay(TimeSpan.FromSeconds(3))).ConfigureAwait(false);
+    }
+
+    private async Task CloseWhenIdleAsync(ComfyApi api, CancellationToken ct)
+    {
+        try
+        {
+            // Until the jobs in its queue are done. One that stops answering for half a minute is
+            // stopped all the same; one that has gone needs nothing.
+            for (var failures = 0; failures < 6; )
+            {
+                try
+                {
+                    var queue = await api.GetJsonAsync("queue", ct, TimeSpan.FromSeconds(10)).ConfigureAwait(false) as JsonObject;
+                    if ((queue?["queue_running"] as JsonArray)?.Count is null or 0 && (queue?["queue_pending"] as JsonArray)?.Count is null or 0)
+                        break;
+                    failures = 0;
+                }
+                catch (Exception ex) when (ex is ComfyApiException or System.Text.Json.JsonException)
+                {
+                    if (!(OwnsForTests?.Invoke(api) ?? IsOurs(api)))
+                        return;
+                    failures++;
+                }
+                await Task.Delay(TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
+            }
+            await _gate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                // Still the one BlackBox started, and still nobody's (a task that starts using it cancels this).
+                if (ct.IsCancellationRequested || !(OwnsForTests?.Invoke(api) ?? IsOurs(api)))
+                    return;
+                if (StopForTests is { } stop)
+                    await stop(api, ct).ConfigureAwait(false);
+                else
+                    await ComfyProcess.StopAsync(api, ct).ConfigureAwait(false);
+                Generation++;
+                RememberServer(api, ours: false);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (ComfyApiException) { } // it didn't stop in time; the next task's end tries again
+    }
+
+    /// <summary>Keeps which process is the server BlackBox started (by its id and start time), or forgets it.</summary>
+    private void RememberServer(ComfyApi api, bool ours)
+    {
+        var state = LoadState();
+        state.Remove("pid");
+        state.Remove("pidStarted");
+        if (ours && api.IsLocal && ComfyProcess.ListeningProcess(api.BaseUrl.Port) is { } pid && StartTime(pid) is { } started)
+        {
+            state["pid"] = pid;
+            state["pidStarted"] = started;
+        }
+        try
+        {
+            Settings.AtomicFile.Write(StateFile, state.ToJsonString(ComfyWorkflow.Indented));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    /// <summary>Whether the server that runs now is the one BlackBox started (it may have been started by an earlier BlackBox run).</summary>
+    private bool IsOurs(ComfyApi api)
+    {
+        var state = LoadState();
+        return api.IsLocal && state["pid"] is JsonValue p && p.TryGetValue<int>(out var pid) &&
+               ComfyProcess.ListeningProcess(api.BaseUrl.Port) == pid && StartTime(pid) is { } started && started == (string?)state["pidStarted"];
+    }
+
+    private static string? StartTime(int pid)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+            return process.StartTime.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            return null;
         }
     }
 

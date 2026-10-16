@@ -24,6 +24,9 @@ internal sealed class FakeComfyServer : IDisposable
     public List<string> Uploads { get; } = [];
     public int Frees { get; private set; }
     public int NodeTypeFetches { get; private set; }
+
+    /// <summary>Whether the queue says a job is running.</summary>
+    public bool QueueBusy { get; set; }
     public List<string> Checkpoints { get; } = ["v1-5-pruned-emaonly-fp16.safetensors", "sdxl.safetensors"];
 
     /// <summary>What a finished job's history says; the default saves one picture.</summary>
@@ -124,7 +127,7 @@ internal sealed class FakeComfyServer : IDisposable
                 return;
             case "queue":
                 if (ctx.Request.HttpMethod == "POST") { Reply(ctx, 200, ""); return; }
-                Reply(ctx, 200, """{"queue_running": [], "queue_pending": []}""");
+                Reply(ctx, 200, QueueBusy ? """{"queue_running": [[1, "job1", {}, {}, []]], "queue_pending": []}""" : """{"queue_running": [], "queue_pending": []}""");
                 return;
             case "prompt":
             {
@@ -561,6 +564,46 @@ public class ComfyToolTests : IDisposable
         Assert.False(result.IsError, result.Text);
         Assert.EndsWith(Path.Combine("3D", "chest_00001_.obj"), Assert.Single(result.Files!));
         Assert.Contains("3D model: 1 triangles", result.Text);
+    }
+
+    [Fact]
+    public async Task A_comfyui_blackbox_started_closes_after_the_task_once_its_jobs_are_done()
+    {
+        var stops = 0;
+        _hub.OwnsForTests = _ => stops == 0;
+        _hub.StopForTests = (_, _) => { stops++; return Task.CompletedTask; };
+        _server.QueueBusy = true;
+        await Call("""{"action": "status"}""");
+        await _ctx.FinishRunAsync();
+        Assert.Equal(0, stops);
+        Assert.False(_hub.Closing.IsCompleted);
+
+        // A task that starts using it meanwhile keeps it open; the end of that one closes it.
+        var next = new ComfyTool();
+        await next.ExecuteAsync(JsonNode.Parse("""{"action": "status"}""")!.AsObject(), _ctx, CancellationToken.None);
+        _server.QueueBusy = false;
+        await Task.Delay(6000, TestContext.Current.CancellationToken);
+        Assert.Equal(0, stops);
+        await _ctx.FinishRunAsync();
+        await _hub.Closing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal(1, stops);
+        Assert.Equal(0, _server.Frees);
+    }
+
+    [Fact]
+    public async Task A_comfyui_the_user_started_keeps_running_and_lets_go_only_of_models_a_job_loaded()
+    {
+        var stops = 0;
+        _hub.OwnsForTests = _ => false;
+        _hub.StopForTests = (_, _) => { stops++; return Task.CompletedTask; };
+        await Call("""{"action": "status"}""");
+        await _ctx.FinishRunAsync();
+        Assert.Equal(0, _server.Frees);
+
+        await Call("""{"action": "run", "name": "Mine/fox"}""");
+        await _ctx.FinishRunAsync();
+        Assert.Equal(1, _server.Frees);
+        Assert.Equal(0, stops);
     }
 
     [Fact]
