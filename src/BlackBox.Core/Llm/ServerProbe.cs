@@ -67,7 +67,11 @@ public static class ServerProbe
                 continue;
             var found = new ServerSettings { BaseUrl = candidates[i], ApiKey = server.ApiKey };
             var catalog = Usable(await CatalogAsync(http, found, models, ct).ConfigureAwait(false), server.ApiKey);
-            found.Model = ModelChoice.Choose(server.Model, catalog) ?? "";
+            // Kilo's free models carry no benchmark score, and their sizes don't tell how they click,
+            // so with none picked the one BlackBox was tested with comes first there.
+            found.Model = (server.Model.Length == 0 && KiloGateway.Is(candidates[i]) && catalog.Any(m => m.Id == KiloGateway.Model)
+                ? KiloGateway.Model
+                : ModelChoice.Choose(server.Model, catalog)) ?? "";
             var auto = found.Model.Length > 0 && found.Model != server.Model;
             var facts = await TryContextAsync(http, found, ct, models).ConfigureAwait(false);
             return new ProbeResult(true, catalog.Where(m => m.Chat).Select(m => m.Id).ToList(), facts.Context, facts.Vision,

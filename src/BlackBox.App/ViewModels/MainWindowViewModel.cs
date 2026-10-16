@@ -340,10 +340,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private string AutoModelDetails => _autoModelDetails is { } details ? $" ({details})" : "";
 
     /// <summary>Why the model shown is the one, when BlackBox picked it.</summary>
-    public string? ModelToolTip => string.IsNullOrEmpty(_settings.Server.Model) && _settings.Server.AutoModel is not null
-        ? $"Picked by BlackBox as the strongest model the server offers{AutoModelDetails}: the best score on an agent benchmark, " +
-          "else the most parameters, then the most bits per weight. Pick one yourself to keep using it."
-        : null;
+    public string? ModelToolTip => !string.IsNullOrEmpty(_settings.Server.Model) || _settings.Server.AutoModel is not { } auto ? null
+        : auto == KiloGateway.Model && KiloGateway.Is(_settings.Server.BaseUrl)
+            ? "Picked by BlackBox: of Kilo's free models, the one that clicked best in BlackBox's tests. Pick one yourself to keep using it."
+            : $"Picked by BlackBox as the strongest model the server offers{AutoModelDetails}: the best score on an agent benchmark, " +
+              "else the most parameters, then the most bits per weight. Pick one yourself to keep using it.";
 
     private async Task CheckAfterTypingAsync()
     {
@@ -477,8 +478,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private bool _offersKilo;
 
     /// <summary>
-    /// Switches to Kilo's free models (see <see cref="KiloGateway"/>): its address, its best free
-    /// model and no key, since a key meant for another server is none of Kilo's business. The
+    /// Switches back to Kilo's free models (see <see cref="KiloGateway"/>), where BlackBox starts: its
+    /// address and no key, since a key meant for another server is none of Kilo's business. No model
+    /// is picked, so Kilo's tested one is used there and another server's strongest one after it. The
     /// context goes back to Auto, which on Kilo is 100k of the model's million.
     /// </summary>
     [RelayCommand]
@@ -487,8 +489,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var server = _settings.Server;
         server.BaseUrl = KiloGateway.Address;
         server.ApiKey = "";
-        server.Model = KiloGateway.Model;
-        server.AutoModel = null;
+        server.Model = "";
+        server.AutoModel = KiloGateway.Model; // until the check finds it, or another free one
         server.AutoContext = true;
         SaveSettings();
         // In the list before the dropdown is told, as at startup: a selection the ComboBox can't find it doesn't take.

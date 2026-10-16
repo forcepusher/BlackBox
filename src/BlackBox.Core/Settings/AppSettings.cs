@@ -41,8 +41,11 @@ public enum ApprovalMode
 /// <summary>The OpenAI-compatible server the agent talks to (LM Studio, llama-server, vLLM, OpenAI…).</summary>
 public sealed class ServerSettings
 {
-    /// <summary>LM Studio's default local address.</summary>
-    public string BaseUrl { get; set; } = "http://localhost:1234/v1";
+    /// <summary>
+    /// Kilo's free models to start with (see <see cref="Llm.KiloGateway"/>), so BlackBox works before
+    /// any server is set up, without an account or a key. LM Studio's own address is http://localhost:1234/v1.
+    /// </summary>
+    public string BaseUrl { get; set; } = Llm.KiloGateway.Address;
     public string ApiKey { get; set; } = "";
 
     /// <summary>The model picked by hand in the dropdown (or with --model); empty until one is. Kept while the server doesn't offer it.</summary>

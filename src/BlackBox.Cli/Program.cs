@@ -8,7 +8,7 @@ using BlackBox.Core.Tools;
 // Usage: blackbox-cli [--root DIR] [--kilo] [--url URL] [--model ID] [--yes] [--save-shots DIR] [--attach FILE]... "task"
 //   --root        portable folder (default: BLACKBOX_HOME, else .dev/ when run from the repository, else the exe folder);
 //                 its Data/mcp.json lists the MCP servers to start, as in the app
-//   --kilo        use Kilo's free models (no account or key), as the app's "Use Kilo's free models" button does
+//   --kilo        use Kilo's free models (no account or key), where a new BlackBox starts, whatever server is saved
 //   --url/--model override the server address and model saved in Data/settings.json; with no model, or one the
 //                 server doesn't offer, the strongest model it offers is used
 //   --yes         approve risky tools without asking
@@ -73,10 +73,11 @@ platform.InputOverlay.Duration = TimeSpan.FromSeconds(AgentSettings.InputLogSeco
 platform.InputOverlay.Enabled = true;
 if (kilo)
 {
-    // Not saved, and no key: one meant for the saved server is none of Kilo's business.
+    // Not saved, and no key: one meant for the saved server is none of Kilo's business. With no
+    // model picked, Kilo's tested one is used.
     settings.Server.BaseUrl = KiloGateway.Address;
     settings.Server.ApiKey = "";
-    settings.Server.Model = KiloGateway.Model;
+    settings.Server.Model = "";
     settings.Server.AutoContext = true;
 }
 if (urlOverride is not null) settings.Server.BaseUrl = urlOverride;
@@ -100,9 +101,11 @@ using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a mo
         // As in the app: the strongest model the server offers, until the picked one is back.
         settings.Server.AutoModel = probe.Model;
         var details = probe.ModelDetails is { } known ? $" ({known})" : "";
-        Console.WriteLine(settings.Server.Model.Length == 0
-            ? $"[server] no model picked: using {probe.Model}{details}, the strongest the server offers"
-            : $"[server] the server doesn't offer {settings.Server.Model}: using {probe.Model}{details}, the strongest it offers");
+        Console.WriteLine(settings.Server.Model.Length > 0
+            ? $"[server] the server doesn't offer {settings.Server.Model}: using {probe.Model}{details}, the strongest it offers"
+            : probe.Model == KiloGateway.Model && KiloGateway.Is(probe.BaseUrl)
+                ? $"[server] no model picked: using {probe.Model}, the free model on Kilo that clicked best in BlackBox's tests"
+                : $"[server] no model picked: using {probe.Model}{details}, the strongest the server offers");
     }
     settings.Server.SupportsVision = probe.Vision ?? true;
     var facts = await ServerProbe.EnsureLoadedAsync(probeHttp, settings.Server, () => Console.WriteLine("[server] loading the model…"), cts.Token);

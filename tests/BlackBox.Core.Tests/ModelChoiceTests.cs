@@ -304,6 +304,7 @@ public class ModelChoiceTests
         {"id":"anthropic/claude-opus-5.5","architecture":{"input_modalities":["text","image"],"output_modalities":["text"]},"supported_parameters":["tools","tool_choice"],"pricing":{"prompt":"0.000004","completion":"0.00002"},"context_length":1000000},
         {"id":"nvidia/nemotron-3.5-super-vl:free","architecture":{"input_modalities":["text","image","video"],"output_modalities":["text"]},"supported_parameters":["max_tokens","tool_choice","tools"],"pricing":{"prompt":"0","completion":"0","discount":0},"context_length":1000000},
         {"id":"nvidia/nemotron-3.5-content-safety:free","architecture":{"input_modalities":["text","image"],"output_modalities":["text"]},"supported_parameters":["max_tokens"],"pricing":{"prompt":"0","completion":"0"},"context_length":128000},
+        {"id":"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free","architecture":{"input_modalities":["text","audio","image","video"],"output_modalities":["text"]},"supported_parameters":["tools"],"pricing":{"prompt":"0","completion":"0"},"context_length":256000},
         {"id":"google/lyria-3-pro-preview","architecture":{"input_modalities":["text","image"],"output_modalities":["text","audio"]},"supported_parameters":["max_tokens"],"pricing":{"prompt":"0","completion":"0"},"context_length":1048576},
         {"id":"google/lyria-3-clip-preview","architecture":{"input_modalities":["text","image"],"output_modalities":["audio"]},"supported_parameters":["max_tokens"],"pricing":{"prompt":"0","completion":"0"},"context_length":1048576},
         {"id":"nvidia/nemotron-3-ultra-550b-a55b:free","architecture":{"input_modalities":["text"],"output_modalities":["text"]},"supported_parameters":["tools"],"pricing":{"prompt":"0","completion":"0"},"context_length":1000000}
@@ -327,8 +328,16 @@ public class ModelChoiceTests
         Assert.Equal(1_000_000, probe.LoadedContext);
         Assert.True(probe.ContextHosted); // the most Kilo takes for it, not a size to work at
 
-        // With nothing picked: the free model that sees and calls tools, not the music or safety one, nor the larger blind one.
-        Assert.Equal(KiloGateway.Model, (await ProbeKilo("")).Model);
+        // BlackBox starts there, and with nothing picked uses the free model it was tested with: not
+        // Nano Omni, though its name is the only one that tells a size (it clicked 1 of 4 targets).
+        Assert.Equal(KiloGateway.Address, new ServerSettings().BaseUrl);
+        var auto = await ProbeKilo("");
+        Assert.Equal(KiloGateway.Model, auto.Model);
+        Assert.True(auto.AutoPicked);
+        Assert.Equal("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+            ModelChoice.Strongest((await ServerProbe.CatalogAsync(new HttpClient(new Routes([])), new ServerSettings(),
+                JsonNode.Parse(KiloModels)!["data"]!.AsArray().OfType<JsonObject>().Where(m => m["pricing"]!["prompt"]!.GetValue<string>() == "0").ToList(),
+                CancellationToken.None)))!.Id);
         Assert.False((await ProbeKilo("nvidia/nemotron-3-ultra-550b-a55b:free")).Vision);
 
         // With a key, everything it sells.
