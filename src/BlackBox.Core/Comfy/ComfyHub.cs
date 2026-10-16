@@ -233,9 +233,16 @@ public sealed class ComfyHub(string stateDirectory)
                 }
                 catch (ComfyApiException) { }
             }
+        // A model the agent just downloaded is a new choice in its loader node too: qwen3.8 found
+        // the node list it looked up next without it.
+        if (_models is not null && !SameModels(_models, models))
+            _library = null;
         _models = models;
         _modelStamp = (Generation, DateTime.UtcNow);
         return models;
+
+        static bool SameModels(Dictionary<string, HashSet<string>> a, Dictionary<string, HashSet<string>> b) =>
+            a.Count == b.Count && a.All(kv => b.TryGetValue(kv.Key, out var files) && files.SetEquals(kv.Value));
     }
 
     /// <summary>

@@ -132,7 +132,7 @@ long as the files are still there.
 ### How it does
 qwen3.8 27B (q6_k_xl, on the LM Studio server) with the ComfyUI on an RTX 5070 Ti (16 GB), each
 task one plain message and nothing more, ComfyUI stopped before the first
-(`./scripts/comfy-test.ps1` runs them):
+(`./scripts/comfy-test.ps1` runs the first seven):
 
 | Request | What the agent used | What it made | Time | Tool calls (errors) |
 | --- | --- | --- | --- | --- |
@@ -143,14 +143,34 @@ task one plain message and nothing more, ComfyUI stopped before the first
 | A calm female voice saying a sentence | VoxCPM2, in a workflow of its own (no template has it) | a 4.7 s MP3 | 5:35 | 20 (4) |
 | A wooden treasure chest 3D model for a game | a Z-Image-Turbo picture, then Trellis2 | a textured GLB (496k triangles) | 16:22 | 9 (0) |
 | A red dragon on a mossy rock, then a 3 s video of it breathing a puff of fire, with a fitting sound | a Z-Image-Turbo picture, then LTX 2.3 image to video (its sound too) | 1024×1024, 2.9 s, with sound | 11:06 | 11 (3) |
+| The lighthouse four times bigger with the 4x-UltraSharp model (not installed), next to the original | found the model with web_search and downloaded it from Hugging Face; a workflow of its own | a 4096×4096 PNG next to the original | 5:21 | 14 (0) |
+| The cat video at twice its frame rate with RIFE, keeping its sound (no RIFE node installed) | installed the ComfyUI-Frame-Interpolation pack (git clone; its Python packages were there), restarted ComfyUI, and patched the pack's loader for the checkpoint it downloads | 1280×704, 145 frames at 50 fps, with sound | 6:46 | 35 (5) |
 
 The agent looked at every result before it answered, and redid the dragon's video twice because the
 first flame looked like a tongue. The errors cost seconds each: inputs the editor adds that the check
-took for mistakes (fixed), a node id guessed before the template was shown, ComfyUI not answering for
-a while during the speech task, and a retry that left out the length and size of the first run (a
-rerun of a template without changes the last one made is now stopped once, saying which). Three of
-the results went to `Data/scratch`; the prompt has since been told that what the user asked for
-never goes there.
+took for mistakes, and a list of decimal choices that turned down a plain 1 (both fixed), a node id
+guessed before the template was shown (the error now lists the template's usual inputs), ComfyUI not
+answering for a while during the speech task, git's progress on stderr, a checkpoint the RIFE pack
+couldn't load, and a retry that left out the length and size of the first run (a rerun of a template
+without changes the last one made is now stopped once, saying which). Three of the results went to
+`Data/scratch`; the prompt has since been told that what the user asked for never goes there.
+
+### And comfyui-mcp?
+[comfyui-mcp](https://github.com/artokun/comfyui-mcp) isn't needed, and the agent does better
+without it. The lighthouse request again, on BlackBox as it was before the comfyui tool, ComfyUI
+stopped first each time:
+
+| | Time | Model calls | Tool calls (errors) | Prompt by the end | The picture's model |
+| --- | --- | --- | --- | --- | --- |
+| The comfyui tool | 1:52 | 4 | 3 (0) | 11k tokens | Z-Image-Turbo |
+| No tool: ComfyUI's HTTP API from the shell | 14:00 | 19 | 26 (3) | 31k tokens | SD 1.5 |
+| comfyui-mcp, which the agent set up itself (with npx, in 43 seconds) | 19:41 | 41 | 45 (0) | 78k tokens, the chat summed up twice to fit | Pony Diffusion V6 XL, six tries |
+
+comfyui-mcp's 41 tools add 56k tokens to every request (the server took two minutes to read the
+first one after it was added), and the agent drove it through its picture tool with an older
+checkpoint, which needed six tries for one lighthouse. Without a tool the agent spent six and a
+half minutes getting ComfyUI to stay up and wrote an SD 1.5 workflow from memory. It still sets
+comfyui-mcp up by itself when the user asks for it.
 
 ## Chat history
 Every chat is saved on its own in `Data/chats/` from its first message on, after every step, and

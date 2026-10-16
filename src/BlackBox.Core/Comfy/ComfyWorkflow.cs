@@ -288,6 +288,10 @@ public sealed class ComfyWorkflow
             var text = value is JsonValue v && v.TryGetValue<string>(out var s) ? s : value?.ToJsonString() ?? "";
             if (input.Choices.Contains(text) || uploaded || input.Choices.Count == 0)
                 return null;
+            // A number among numbers: 1 is one of [0.5, 1.0, 2.0] to ComfyUI (Python's 1 == 1.0).
+            if (value is JsonValue number && number.GetValueKind() == JsonValueKind.Number && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var n) &&
+                input.Choices.Any(c => double.TryParse(c, NumberStyles.Float, CultureInfo.InvariantCulture, out var x) && x == n))
+                return null;
             // ComfyUI accepts "file.png [output]" for files in its other folders.
             if (input.TakesInputFile && (text.EndsWith(" [output]", StringComparison.Ordinal) || text.EndsWith(" [temp]", StringComparison.Ordinal) || text.EndsWith(" [input]", StringComparison.Ordinal)))
                 return null;

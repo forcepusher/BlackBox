@@ -23,6 +23,8 @@ internal sealed class FakeComfyServer : IDisposable
     public List<JsonObject> Prompts { get; } = [];
     public List<string> Uploads { get; } = [];
     public int Frees { get; private set; }
+    public int NodeTypeFetches { get; private set; }
+    public List<string> Checkpoints { get; } = ["v1-5-pruned-emaonly-fp16.safetensors", "sdxl.safetensors"];
 
     /// <summary>What a finished job's history says; the default saves one picture.</summary>
     public Func<string, JsonObject>? History { get; set; }
@@ -53,7 +55,9 @@ internal sealed class FakeComfyServer : IDisposable
       "ComfyMathExpression": {"input": {"required": {"expression": ["STRING", {"default": "a + b"}], "values": ["COMFY_AUTOGROW_V3", {"template": {"names": ["a", "b"], "min": 1}}]}},
         "output": ["FLOAT", "INT"], "output_name": ["FLOAT", "INT"], "name": "ComfyMathExpression", "display_name": "Math Expression", "category": "math", "python_module": "comfy_extras.nodes_math", "output_node": false},
       "VHS_VideoCombine": {"input": {"required": {"images": ["IMAGE"], "frame_rate": ["FLOAT", {"default": 8}]}}, "output": [], "output_name": [],
-        "name": "VHS_VideoCombine", "display_name": "Video Combine", "category": "Video Helper Suite", "python_module": "custom_nodes.ComfyUI-VideoHelperSuite", "output_node": true}
+        "name": "VHS_VideoCombine", "display_name": "Video Combine", "category": "Video Helper Suite", "python_module": "custom_nodes.ComfyUI-VideoHelperSuite", "output_node": true},
+      "RIFE VFI": {"input": {"required": {"frames": ["IMAGE", {}], "scale_factor": [[0.25, 0.5, 1.0, 2.0, 4.0], {"default": 1.0}]}}, "output": ["IMAGE"], "output_name": ["IMAGE"],
+        "name": "RIFE VFI", "display_name": "RIFE VFI", "category": "ComfyUI-Frame-Interpolation/VFI", "python_module": "custom_nodes.ComfyUI-Frame-Interpolation", "output_node": false}
     }
     """;
 
@@ -99,13 +103,14 @@ internal sealed class FakeComfyServer : IDisposable
                 Reply(ctx, 200, """{"system": {"comfyui_version": "0.19.0", "ram_total": 68000000000, "ram_free": 40000000000, "argv": ["ComfyUI\\main.py"]}, "devices": [{"name": "cuda:0 Test GPU", "vram_total": 17000000000, "vram_free": 15000000000}]}""");
                 return;
             case "object_info":
+                NodeTypeFetches++;
                 Reply(ctx, 200, ObjectInfo);
                 return;
             case "models":
                 Reply(ctx, 200, """["checkpoints", "loras"]""");
                 return;
             case "models/checkpoints":
-                Reply(ctx, 200, """["v1-5-pruned-emaonly-fp16.safetensors", "sdxl.safetensors"]""");
+                Reply(ctx, 200, new JsonArray([.. Checkpoints.Select(c => JsonValue.Create(c))]).ToJsonString());
                 return;
             case "models/loras":
                 Reply(ctx, 200, "[]");
@@ -332,6 +337,19 @@ public class ComfyWorkflowTests
         Assert.Contains(problems, p => p.Contains("\"width\" is 8, below its least value 16"));
         Assert.Contains(problems, p => p.Contains("\"denoise\" is 1.5, above its greatest value 1"));
         Assert.Contains(problems, p => p.Contains("\"vae\" takes a link"));
+    }
+
+    [Fact]
+    public void A_number_among_numeric_choices_is_one_of_them_as_comfyui_compares_numbers()
+    {
+        const string wf = """
+            {"1": {"class_type": "LoadImage", "inputs": {"image": "example.png"}},
+             "2": {"class_type": "RIFE VFI", "inputs": {"frames": ["1", 0], "scale_factor": SCALE}},
+             "3": {"class_type": "SaveImage", "inputs": {"images": ["2", 0], "filename_prefix": "x"}}}
+            """;
+        Assert.Empty(Load(wf.Replace("SCALE", "1")).Validate(Library));
+        Assert.Empty(Load(wf.Replace("SCALE", "0.50")).Validate(Library));
+        Assert.Contains("isn't one of its choices", Assert.Single(Load(wf.Replace("SCALE", "3")).Validate(Library)));
     }
 
     [Fact]
@@ -605,6 +623,23 @@ public class ComfyToolTests : IDisposable
         var models = await Call("""{"action": "models", "search": "sdxl"}""");
         Assert.Contains("sdxl.safetensors", models.Text);
         Assert.DoesNotContain("v1-5", models.Text);
+    }
+
+    [Fact]
+    public async Task A_model_that_turned_up_gets_the_node_types_fetched_again()
+    {
+        await Call("""{"action": "models"}""");
+        await Call("""{"action": "nodes", "names": ["CheckpointLoaderSimple"]}""");
+        var fetches = _server.NodeTypeFetches;
+        await Call("""{"action": "models"}""");
+        await Call("""{"action": "nodes", "names": ["CheckpointLoaderSimple"]}""");
+        Assert.Equal(fetches, _server.NodeTypeFetches);
+
+        // The agent downloaded one: its loader's choices may have changed too.
+        _server.Checkpoints.Add("flux.safetensors");
+        await Call("""{"action": "models"}""");
+        await Call("""{"action": "nodes", "names": ["CheckpointLoaderSimple"]}""");
+        Assert.Equal(fetches + 1, _server.NodeTypeFetches);
     }
 
     [Fact]
