@@ -330,6 +330,8 @@
           <TextBlock Classes="muted" Text="{Binding SetupText}" TextWrapping="Wrap" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="12,0,0,0">
+          <Button Classes="ghost" Content="Use Kilo's free models" Command="{Binding UseKiloCommand}" IsVisible="{Binding OffersKilo}"
+                  ToolTip.Tip="Connects to Kilo's AI gateway (ai-gateway.kilo.ai), whose free models answer without an account or a key: up to 200 requests an hour" />
           <Button Classes="ghost" Content="Check again" Command="{Binding CheckServerCommand}" />
         </StackPanel>
       </Grid>

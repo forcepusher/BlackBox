@@ -26,6 +26,12 @@ public sealed record ModelInfo(string Id)
 
     /// <summary>Loaded on the server, so it answers without loading first.</summary>
     public bool Loaded { get; init; }
+
+    /// <summary>Whether it calls tools (OpenAI-style "tools"); null when nothing says.</summary>
+    public bool? Tools { get; init; }
+
+    /// <summary>Whether it costs nothing, on a service that prices its models (Kilo, OpenRouter); null where nothing is priced.</summary>
+    public bool? Free { get; init; }
 }
 
 /// <summary>
@@ -48,7 +54,8 @@ public static partial class ModelChoice
 
     /// <summary>
     /// The strongest model that can chat. One that takes images comes first (without them the agent
-    /// can't see the screen; where the server doesn't say, the benchmark table may). Then the best
+    /// can't see the screen; where the server doesn't say, the benchmark table may), then one not
+    /// listed as unable to call tools (a music model, a safety classifier). Then the best
     /// score on <see cref="AgentBenchmark"/>, and a model without one after every model with one;
     /// then the most parameters, a mixture of experts counted as the dense model it is about as
     /// strong as (<see cref="DenseEquivalent"/>); then, between equal scores and sizes, a later
@@ -62,6 +69,7 @@ public static partial class ModelChoice
             .Select(m => (Model: m, Rating: AgentBenchmark.Rate(m)))
             .OrderBy(x => LooksIncomplete(x.Model))
             .ThenBy(x => SeesImages(x.Model, x.Rating) == false)
+            .ThenBy(x => x.Model.Tools == false)
             .ThenByDescending(x => x.Rating?.Score ?? -1)
             .ThenByDescending(x => DenseEquivalent(x.Model) ?? -1)
             .ThenByDescending(x => x.Rating is { Exact: false })

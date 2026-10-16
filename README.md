@@ -280,14 +280,16 @@ sound, and games in any game engine). It says so when the model in use can't see
 failed to start show above it and don't count as using the chat.
 
 ## Connecting to a model
-Enter the server address in the bar at the top of the main window (LM Studio's default is
+BlackBox starts on Kilo's free models, which need no account or key (see below). For a server of
+your own, enter its address in the bar at the top of the main window (LM Studio's is
 `http://localhost:1234/v1`); the model dropdown fills in from the models the server reports. Any
 form of the address works: `host:1234`, with or without `/v1`, or a full endpoint link such as
 `.../v1/chat/completions`. Without `http://` or `https://`, BlackBox tries both and keeps the one
 that answers. An API key, if your server needs one, goes next to the address (the eye button
 shows it). For screen control the
 model must accept images (for example Qwen3.5+ VL models or Gemma 4 with their vision projector);
-LM Studio reports this and BlackBox follows it; models on other servers are assumed to see images.
+LM Studio reports this and BlackBox follows it, as it does what OpenRouter-style lists say of each
+model (OpenRouter, Kilo); models on other servers are assumed to see images.
 
 Until you pick a model, BlackBox uses the strongest one the server offers. One that takes images
 comes first. Then it goes by Terminal-Bench 2.1, a benchmark of agent tasks done in a terminal,
@@ -316,13 +318,39 @@ the server's own model configuration (in LM Studio, per model).
 Thinking models get their earlier reasoning sent back each step (`reasoning_content`,
 `preserve_thinking`), as the Qwen3.5+ and Gemma 4 templates expect.
 
+### Without a model server: Kilo's free models
+A new BlackBox's address is Kilo's AI gateway (`https://ai-gateway.kilo.ai/api/v1`), whose free
+models answer without an account or a key, and with no model picked it uses
+`nvidia/nemotron-3.5-super-vl:free` there. When another server doesn't answer, the banner under the
+top bar has a **Use Kilo's free models** button to go back to it; any key in the box is cleared,
+since one meant for another server is no business of Kilo's. Settings saved before keep their address. Without a key BlackBox lists only Kilo's free models (18
+of its 398 on 2026-10-16), as only those answer; five of them took screenshots and called tools.
+On BlackBox's click benchmark (fake screens, below) Nemotron 3.5 Super VL hit 12 of 16 targets in
+two runs on the 0-1000 grid it points on, every miss within 16 px of a small link or button;
+Dots3-Note Preview hit 0 of 4 and Nemotron 3 Nano Omni 1 of 4, and Inkling Small had used up the
+daily allowance Kilo shares among all its users. A file task through the
+command-line runner took 15 seconds on Nemotron 3 Super.
+
+Free use is 200 requests an hour per IP address: a step is one request, a click one more (its fresh
+look), so a long task can run into it. Kilo then answers 429 without saying for how long, and
+BlackBox waits and asks again (2 s, 10 s, 30 s, 1 min, 2 min, then every 5 min) until it gets
+through or you press Stop. Which models are free changes over time: if Nemotron 3.5 Super VL is
+gone, the strongest free one is used, as on any server. With a Kilo key (and credits) all its
+models are listed.
+
 ## Context window
 The OpenAI API has no field for the context length, so BlackBox asks each server its own way:
 LM Studio (`/api/v0/models/{id}`, `loaded_context_length`, after loading the model if needed),
 llama-server (`/props`, `n_ctx`), Ollama (`/api/ps`, or `num_ctx` from `/api/show`), vLLM
 (`max_model_len`) and OpenRouter (`context_length`); the first that answers wins. Servers that
 don't say are assumed to have 100k. If that is too much, the server's "too long" error usually
-names the real size, and BlackBox switches to it. BlackBox uses the whole context.
+names the real size, and BlackBox switches to it. BlackBox uses the whole context, except of a
+hosted service's `context_length`, which is the most it takes for the model: Kilo and OpenRouter list
+1M for some, and since every step sends the whole conversation again, screenshots and all, a
+request would grow toward 800k tokens and tens of megabytes. On Auto BlackBox uses 100k of it (the
+tooltip says so); untick Auto for more. A server that refuses a request for its size in bytes
+(HTTP 413: Kilo takes 20 MB) gets the same reset as a "too long" error, and the run goes on with a
+quarter less context.
 
 The **Context** slider in the top bar shows that size while **Auto** is ticked ("not loaded" until LM Studio has loaded
 the model, which your first message does; a `?` means the server doesn't say and it is the 100k guess). Untick Auto
@@ -361,9 +389,12 @@ up in a monospace font), as models write them; the thinking above them stays as 
 VPNs and proxies often cut a connection that has been silent for about a minute, which happens
 while a server processes a long prompt. BlackBox resends the identical request when a connection
 drops (also while an error answer comes in), a reply stream stops early, or the server (or a
-proxy in front of it) answers with a server error, "busy" or "gave up waiting for the request"
-(HTTP 5xx, 429 or 408); the server still has the already-processed prompt in its cache, so each
-retry continues where the last one stopped (up to 12 times per step). A VPN can also stall an
+proxy in front of it) answers with a server error or "gave up waiting for the request"
+(HTTP 5xx or 408); the server still has the already-processed prompt in its cache, so each
+retry continues where the last one stopped (up to 12 times per step). A server that holds requests
+back (HTTP 429: busy, or a free allowance used up) is asked again after the wait it names
+(Retry-After, OpenRouter's `X-RateLimit-Reset`, Gemini's "retry in 37s"), at most an hour at a time,
+or after growing waits from 2 seconds to 5 minutes, as often as it takes; Stop ends the wait. A VPN can also stall an
 upload without breaking it: a request carries every screenshot still in the context, several
 megabytes, and LM Studio waited five minutes for the rest of one before answering 408. So when
 nothing of a request gets through for 30 seconds, it is sent again. A tool that fails, however

@@ -90,13 +90,16 @@ using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a mo
         // As in the app: the strongest model the server offers, until the picked one is back.
         settings.Server.AutoModel = probe.Model;
         var details = probe.ModelDetails is { } known ? $" ({known})" : "";
-        Console.WriteLine(settings.Server.Model.Length == 0
-            ? $"[server] no model picked: using {probe.Model}{details}, the strongest the server offers"
-            : $"[server] the server doesn't offer {settings.Server.Model}: using {probe.Model}{details}, the strongest it offers");
+        Console.WriteLine(settings.Server.Model.Length > 0
+            ? $"[server] the server doesn't offer {settings.Server.Model}: using {probe.Model}{details}, the strongest it offers"
+            : probe.Model == KiloGateway.Model && KiloGateway.Is(probe.BaseUrl)
+                ? $"[server] no model picked: using {probe.Model}, the free model on Kilo that clicked best in BlackBox's tests"
+                : $"[server] no model picked: using {probe.Model}{details}, the strongest the server offers");
     }
     settings.Server.SupportsVision = probe.Vision ?? true;
-    if (await ServerProbe.EnsureLoadedAsync(probeHttp, settings.Server, () => Console.WriteLine("[server] loading the model…"), cts.Token) is { } c)
-        settings.Server.SetDetectedContext(c);
+    var facts = await ServerProbe.EnsureLoadedAsync(probeHttp, settings.Server, () => Console.WriteLine("[server] loading the model…"), cts.Token);
+    if (facts.Context is { } c)
+        settings.Server.SetDetectedContext(c, facts.Hosted);
     Console.WriteLine($"[server] {settings.Server.BaseUrl} · {settings.Server.ModelInUse} · {ContextSizes.Format(settings.Server.ContextSize)} context"
         + (settings.Server.AutoContext ? "" : " (set by hand)"));
 }

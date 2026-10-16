@@ -123,7 +123,9 @@ public class ClickAccuracyTests
         Assert.SkipWhen(Url is null || Model is null, "Set BB_SERVER_URL and BB_SERVER_MODEL to run.");
         var server = new ServerSettings { BaseUrl = Url!, Model = Model! };
         using var http = LlmHttp.Create(TimeSpan.FromMinutes(10));
-        var context = await ServerProbe.EnsureLoadedAsync(http, server, null, CancellationToken.None);
+        var facts = await ServerProbe.EnsureLoadedAsync(http, server, null, CancellationToken.None);
+        server.SetDetectedContext(facts.Context, facts.Hosted);
+        int? context = facts.Context is null ? null : server.ContextSize;
         var trials = int.TryParse(Env("BB_CLICK_TRIALS"), out var n) ? n : 5;
         var only = Env("BB_CLICK_SCENES")?.Split(',', StringSplitOptions.TrimEntries);
         var resolution = Env("BB_CLICK_RES") is { } res ? Enum.Parse<ScreenshotResolution>(res) : new AgentSettings().ScreenshotResolution;

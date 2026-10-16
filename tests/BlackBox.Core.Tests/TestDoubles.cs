@@ -37,6 +37,9 @@ internal sealed class ScriptedServer(params string[] responses) : HttpMessageHan
     /// <summary>Error responses returned before the scripted ones.</summary>
     public Queue<(HttpStatusCode Status, string Body)> Failures { get; } = [];
 
+    /// <summary>The Retry-After header the 429s among <see cref="Failures"/> carry, if any.</summary>
+    public TimeSpan? RetryAfter { get; set; }
+
     /// <summary>Number of requests to fail with a dropped connection first.</summary>
     public int Drops { get; set; }
 
@@ -60,7 +63,12 @@ internal sealed class ScriptedServer(params string[] responses) : HttpMessageHan
         }
         Requests.Add(JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!.AsObject());
         if (Failures.TryDequeue(out var failure))
-            return new HttpResponseMessage(failure.Status) { Content = new StringContent(failure.Body, Encoding.UTF8, "application/json") };
+        {
+            var response = new HttpResponseMessage(failure.Status) { Content = new StringContent(failure.Body, Encoding.UTF8, "application/json") };
+            if ((int)failure.Status == 429 && RetryAfter is { } wait)
+                response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(wait);
+            return response;
+        }
         if (Drops > 0)
         {
             Drops--;

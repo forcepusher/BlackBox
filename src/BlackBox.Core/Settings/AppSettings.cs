@@ -41,8 +41,11 @@ public enum ApprovalMode
 /// <summary>The OpenAI-compatible server the agent talks to (LM Studio, llama-server, vLLM, OpenAI…).</summary>
 public sealed class ServerSettings
 {
-    /// <summary>LM Studio's default local address.</summary>
-    public string BaseUrl { get; set; } = "http://localhost:1234/v1";
+    /// <summary>
+    /// Kilo's free models to start with (see <see cref="Llm.KiloGateway"/>), so BlackBox works before
+    /// any server is set up, without an account or a key. LM Studio's own address is http://localhost:1234/v1.
+    /// </summary>
+    public string BaseUrl { get; set; } = Llm.KiloGateway.Address;
     public string ApiKey { get; set; } = "";
 
     /// <summary>The model picked by hand in the dropdown (or with --model); empty until one is. Kept while the server doesn't offer it.</summary>
@@ -88,18 +91,39 @@ public sealed class ServerSettings
     public bool ContextReported { get; set; }
 
     /// <summary>
+    /// Whether <see cref="DetectedContextSize"/> is the most a hosted service takes for the model
+    /// (Kilo and OpenRouter list 1M for some), not a size a server of one's own runs it with.
+    /// </summary>
+    [JsonIgnore]
+    public bool ContextHosted { get; set; }
+
+    /// <summary>
+    /// What BlackBox uses on Auto of a hosted service's maximum: every step sends the whole
+    /// conversation again, every screenshot in it, so at 1M a request would grow toward 800k tokens,
+    /// tens of megabytes, more than Kilo's gateway takes (20 MB). The same size it assumes for a
+    /// server that doesn't say.
+    /// </summary>
+    public const int HostedContextSize = FallbackContextSize;
+
+    /// <summary>
     /// The context size BlackBox budgets with and resets by. A manual size is used as chosen, even
     /// above what the server reports; if the server then refuses a request as too long, the run
     /// drops to the size its error names.
     /// </summary>
     [JsonIgnore]
-    public int ContextSize => AutoContext || ManualContextSize <= 0 ? DetectedContextSize : ManualContextSize;
+    public int ContextSize => AutoContext || ManualContextSize <= 0
+        ? ContextHosted ? Math.Min(DetectedContextSize, HostedContextSize) : DetectedContextSize
+        : ManualContextSize;
 
-    /// <summary>Takes in what the server says the context is; a "too long" error only ever lowers it.</summary>
-    public void SetDetectedContext(int? reported)
+    /// <summary>
+    /// Takes in what the server says the context is; a "too long" error only ever lowers it.
+    /// <paramref name="hosted"/>: the size is a hosted service's maximum (see <see cref="ContextHosted"/>).
+    /// </summary>
+    public void SetDetectedContext(int? reported, bool hosted = false)
     {
         DetectedContextSize = reported ?? FallbackContextSize;
         ContextReported = reported is not null;
+        ContextHosted = hosted && reported is not null;
     }
 
     /// <summary>A run found the server's real limit (from its "too long" error); keep it for the next run on Auto.</summary>
@@ -109,6 +133,7 @@ public sealed class ServerSettings
             return;
         DetectedContextSize = tokens;
         ContextReported = true;
+        ContextHosted = false;
     }
 }
 

@@ -193,6 +193,59 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_request_too_large_for_the_server_resets_the_context_and_lowers_it()
+    {
+        // Kilo's gateway takes 20 MB: a request carrying many screenshots is refused for its size.
+        var server = new ScriptedServer(Sse.Text("NOTE: answered four old questions."), Sse.Text("Short answer."));
+        server.Failures.Enqueue((HttpStatusCode.RequestEntityTooLarge, "Request Entity Too Large\n\nFUNCTION_PAYLOAD_TOO_LARGE"));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 100_000);
+        for (var i = 0; i < 4; i++)
+        {
+            session.History.Add(ChatMessage.User("old question " + i));
+            session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "old answer " + new string('a', 20_000), PromptTokens = 30_000 + i });
+        }
+
+        await session.RunAsync("new question", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(3, server.Requests.Count); // refused, handoff note, retry
+        Assert.InRange(session.ContextTokens, 16_384, 99_999);
+        Assert.Contains(observer.Notices, n => n.Contains("more than the server takes"));
+        Assert.Equal("Short answer.", session.History[^1].Content);
+    }
+
+    [Fact]
+    public async Task A_server_holding_requests_back_is_asked_again_after_the_wait_it_names()
+    {
+        const string limited = """{"error":{"message":"Rate limit exceeded for free models. Please try again later."}}""";
+        var server = new ScriptedServer(Sse.Text("Made it.")) { RetryAfter = TimeSpan.FromSeconds(1) };
+        server.Failures.Enqueue(((HttpStatusCode)429, limited));
+        server.Failures.Enqueue(((HttpStatusCode)429, limited));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        await session.RunAsync("go", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(3, server.Requests.Count);
+        Assert.Equal(server.Requests[0].ToJsonString(), server.Requests[2].ToJsonString());
+        Assert.True(watch.Elapsed >= TimeSpan.FromSeconds(1.9), $"waited {watch.Elapsed}");
+        Assert.Equal(2, observer.Notices.Count(n => n.Contains("Rate limit exceeded for free models") && n.Contains("Trying again in 1 s")));
+        Assert.DoesNotContain(observer.Notices, n => n.Contains("Reconnecting")); // not a dropped connection, nor counted as one
+    }
+
+    [Fact]
+    public void Without_a_wait_named_the_waits_grow_to_five_minutes()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(2), AgentSession.RateLimitWait(null, 1)); // a server that was only busy
+        Assert.Equal(TimeSpan.FromSeconds(10), AgentSession.RateLimitWait(null, 2));
+        Assert.Equal(TimeSpan.FromMinutes(5), AgentSession.RateLimitWait(null, 6));
+        Assert.Equal(TimeSpan.FromMinutes(5), AgentSession.RateLimitWait(null, 40)); // an hourly allowance used up
+        Assert.Equal(TimeSpan.FromSeconds(1), AgentSession.RateLimitWait(TimeSpan.Zero, 1));
+        Assert.Equal(TimeSpan.FromHours(1), AgentSession.RateLimitWait(TimeSpan.FromHours(8), 1)); // asked again within the hour
+    }
+
+    [Fact]
     public async Task Fields_a_strict_server_rejects_are_dropped_once()
     {
         var server = new ScriptedServer(Sse.Text("ok"), Sse.Text("ok again"));

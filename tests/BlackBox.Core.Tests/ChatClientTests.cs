@@ -57,6 +57,48 @@ public class ChatClientTests
         var sse = """data: {"error":{"message":"context too long"}}""";
         var ex = await Assert.ThrowsAsync<LlmException>(() => OpenAiChatClient.ReadStreamAsync(new StringReader(sse), null, CancellationToken.None));
         Assert.Contains("context too long", ex.Message);
+
+        // OpenRouter and Kilo pass an upstream 429 on in the stream.
+        sse = """data: {"error":{"message":"Daily limit reached for thinkingmachines/inkling-small:free","code":429}}""";
+        await Assert.ThrowsAsync<RateLimitedException>(() => OpenAiChatClient.ReadStreamAsync(new StringReader(sse), null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Requests_too_large_and_requests_held_back_are_told_apart()
+    {
+        var server = new ScriptedServer();
+        server.Failures.Enqueue((System.Net.HttpStatusCode.RequestEntityTooLarge, "Request Entity Too Large\n\nFUNCTION_PAYLOAD_TOO_LARGE\n"));
+        server.Failures.Enqueue(((System.Net.HttpStatusCode)429, """{"error":{"message":"Rate limit exceeded for free models. Please try again later."}}"""));
+        var client = new OpenAiChatClient(new HttpClient(server), "http://test", null);
+        Task<ChatMessage> Send() => client.CompleteAsync([ChatMessage.User("hi")], [], new ChatRequestOptions(), null, CancellationToken.None);
+
+        var tooLarge = await Assert.ThrowsAsync<RequestTooLargeException>(Send);
+        Assert.True(tooLarge.Bytes > 0);
+        Assert.Contains("FUNCTION_PAYLOAD_TOO_LARGE", tooLarge.Message);
+        Assert.Null(tooLarge.ContextLimit);
+
+        var limited = await Assert.ThrowsAsync<RateLimitedException>(Send);
+        Assert.EndsWith("answered 429: Rate limit exceeded for free models. Please try again later.", limited.Message);
+        Assert.Null(limited.RetryAfter); // Kilo doesn't say how long
+    }
+
+    [Fact]
+    public void A_429_says_how_long_to_wait_however_the_server_puts_it()
+    {
+        var now = DateTimeOffset.FromUnixTimeSeconds(1_792_160_000);
+        var headers = new HttpResponseMessage().Headers;
+        headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(30));
+        Assert.Equal(TimeSpan.FromSeconds(30), OpenAiChatClient.RetryAfter(headers, "", now));
+
+        // OpenRouter's reset time, in milliseconds since 1970, as Kilo passes it on in the error's metadata.
+        const string kilo = """{"error":{"message":"Rate limit exceeded: limit_rpd/thinkingmachines/inkling-small-20260730","code":429,"metadata":{"headers":{"X-RateLimit-Limit":"1000","X-RateLimit-Remaining":"0","X-RateLimit-Reset":"1792163600000"}}}}""";
+        Assert.Equal(TimeSpan.FromHours(1), OpenAiChatClient.RetryAfter(null, kilo, now));
+
+        // Gemini says it in words, and again as retryDelay.
+        const string gemini = """{"error":{"code":429,"message":"You exceeded your current quota. Please retry in 37.25s.","details":[{"retryDelay":"37s"}]}}""";
+        Assert.Equal(TimeSpan.FromSeconds(37.25), OpenAiChatClient.RetryAfter(null, gemini, now));
+
+        Assert.Null(OpenAiChatClient.RetryAfter(null, """{"error":{"message":"Rate limit exceeded for free models. Please try again later."}}""", now));
     }
 
     [Fact]

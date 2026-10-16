@@ -9,11 +9,16 @@ namespace BlackBox.Core.Llm;
 public class LlmException(string message, Exception? inner = null) : Exception(message, inner);
 
 /// <summary>The server said the prompt does not fit in the model's context window.</summary>
-public sealed class ContextOverflowException(string serverMessage)
-    : LlmException("The conversation no longer fits in the model's context window: " + serverMessage)
+public class ContextOverflowException : LlmException
 {
+    public ContextOverflowException(string serverMessage)
+        : this("The conversation no longer fits in the model's context window: " + serverMessage, serverMessage) { }
+
+    private protected ContextOverflowException(string message, string serverMessage) : base(message) =>
+        ContextLimit = ParseLimit(serverMessage);
+
     /// <summary>The context size the error names, if it names one (OpenAI, vLLM, llama.cpp and OpenRouter do).</summary>
-    public int? ContextLimit { get; } = ParseLimit(serverMessage);
+    public int? ContextLimit { get; }
 
     internal static int? ParseLimit(string message)
     {
@@ -31,6 +36,27 @@ public sealed class ContextOverflowException(string serverMessage)
         }
         return null;
     }
+}
+
+/// <summary>
+/// The server refused the request for its size in bytes (HTTP 413), which is the screenshots it
+/// carries rather than its tokens: Kilo's gateway takes 20 MB and answers a 22 MB request with
+/// "FUNCTION_PAYLOAD_TOO_LARGE". A smaller context keeps fewer screenshots in each request.
+/// </summary>
+public sealed class RequestTooLargeException(string serverMessage, long bytes)
+    : ContextOverflowException($"The request ({bytes / 1e6:0.#} MB) is more than the server takes: {serverMessage}", serverMessage)
+{
+    public long Bytes { get; } = bytes;
+}
+
+/// <summary>
+/// The server is holding requests back (HTTP 429): too many in a while, or a free allowance used up
+/// (Kilo's free models take 200 requests an hour). Sending again after a wait gets through.
+/// </summary>
+public sealed class RateLimitedException(string message, TimeSpan? retryAfter) : LlmException(message)
+{
+    /// <summary>How long the server says to wait, if it says.</summary>
+    public TimeSpan? RetryAfter { get; } = retryAfter;
 }
 
 /// <summary>
@@ -105,7 +131,14 @@ public sealed partial class OpenAiChatClient
         return url;
     }
 
-    public async Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct) =>
+        (await ListModelEntriesAsync(ct).ConfigureAwait(false)).Select(m => GetString(m, "id")!).ToList();
+
+    /// <summary>
+    /// The model list as the server gives it, one object per model with its "id". OpenRouter-style
+    /// services (OpenRouter, Kilo) also say there what each model takes, costs and can do.
+    /// </summary>
+    public async Task<IReadOnlyList<JsonObject>> ListModelEntriesAsync(CancellationToken ct)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, _baseUrl + "/models");
         Authorize(req);
@@ -118,7 +151,7 @@ public sealed partial class OpenAiChatClient
         try { list = JsonNode.Parse(body); }
         catch (JsonException) { throw new LlmException("The answer at /models is not a model list (is this the right address?)."); }
         return list?["data"] is JsonArray data
-            ? data.OfType<JsonObject>().Select(m => GetString(m, "id")).OfType<string>().ToList()
+            ? data.OfType<JsonObject>().Where(m => GetString(m, "id") is not null).ToList()
             : [];
     }
 
@@ -136,13 +169,13 @@ public sealed partial class OpenAiChatClient
     {
         var sendReasoning = options.SendReasoning && !_reasoningRejected;
         var sendExtras = !_extrasRejected;
-        var payload = BuildRequest(messages, tools, options, sendReasoning, sendExtras);
+        var payload = Encoding.UTF8.GetBytes(BuildRequest(messages, tools, options, sendReasoning, sendExtras).ToJsonString());
         // Cancelled when sending stalls. Once the request is out, only Stop ends the wait: a
         // server reading a long prompt sends nothing for minutes.
         using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/chat/completions")
         {
-            Content = new UploadContent(Encoding.UTF8.GetBytes(payload.ToJsonString()), stall, UploadStallLimit, onSending),
+            Content = new UploadContent(payload, stall, UploadStallLimit, onSending),
         };
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
         Authorize(req);
@@ -180,6 +213,8 @@ public sealed partial class OpenAiChatClient
                 }
                 if (LooksLikeContextOverflow(err))
                     throw new ContextOverflowException(err.Clip(500));
+                if (status == 413)
+                    throw new RequestTooLargeException(err.Trim().ReplaceLineEndings(" ").Clip(300), payload.Length);
                 // Strict providers reject fields they do not know. Drop ours and try once more.
                 if (status is 400 or 422 && (sendReasoning || sendExtras) && LooksLikeUnknownField(err))
                 {
@@ -187,10 +222,12 @@ public sealed partial class OpenAiChatClient
                     _extrasRejected |= sendExtras;
                     return await CompleteAsync(messages, tools, options, onDelta, ct, onSending).ConfigureAwait(false);
                 }
+                if (status == 429)
+                    throw new RateLimitedException($"{_baseUrl} answered 429: {ErrorText(err).Clip(300)}", RetryAfter(resp.Headers, err, DateTimeOffset.UtcNow));
                 // A proxy whose link hiccuped, a server that is restarting or busy, or one that gave
                 // up waiting for the rest of the request (408): worth sending again, like a
                 // dropped connection, rather than ending a long run.
-                if (status is 408 or 429 or >= 500)
+                if (status is 408 or >= 500)
                     throw new ConnectionLostException($"{_baseUrl} answered {status}: {err.Clip(300)}", false);
                 throw new LlmException($"Chat request failed ({status}): {err.Clip(1000)}");
             }
@@ -240,7 +277,10 @@ public sealed partial class OpenAiChatClient
 
             if (chunk?["error"] is JsonNode error)
             {
-                var errorText = error["message"]?.ToString() ?? error.ToJsonString();
+                var errorText = (error as JsonObject)?["message"]?.ToString() ?? error.ToJsonString();
+                // OpenRouter and Kilo pass on an upstream 429 in the stream, under HTTP 200.
+                if ((error as JsonObject)?["code"]?.ToString() == "429")
+                    throw new RateLimitedException("Server error: " + errorText.Clip(300), RetryAfter(null, error.ToJsonString(), DateTimeOffset.UtcNow));
                 throw LooksLikeContextOverflow(errorText) ? new ContextOverflowException(errorText) : new LlmException("Server error: " + errorText);
             }
 
@@ -442,6 +482,50 @@ public sealed partial class OpenAiChatClient
 
         return obj;
     }
+
+    /// <summary>The message of a JSON error ({"error":{"message":…}} or {"error":"busy"}), else the answer as it is.</summary>
+    private static string ErrorText(string err)
+    {
+        try
+        {
+            if (JsonNode.Parse(err) is JsonObject answer && answer["error"] is JsonNode error)
+                return ((error as JsonObject)?["message"] ?? error).ToString();
+        }
+        catch (JsonException) { }
+        return err.Trim();
+    }
+
+    /// <summary>
+    /// How long a 429 says to wait: Retry-After (seconds or a date); X-RateLimit-Reset, OpenRouter's
+    /// time it lifts, which Kilo passes on in the error's metadata; or Gemini's "retry in 37s". Null
+    /// when it doesn't say.
+    /// </summary>
+    internal static TimeSpan? RetryAfter(HttpResponseHeaders? headers, string body, DateTimeOffset now)
+    {
+        if (headers?.RetryAfter?.Delta is { } delta)
+            return delta;
+        if (headers?.RetryAfter?.Date is { } date)
+            return date - now;
+        var reset = headers is not null && headers.TryGetValues("X-RateLimit-Reset", out var values) ? values.FirstOrDefault() : null;
+        reset ??= ResetInBody().Match(body) is { Success: true } r ? r.Groups[1].Value : null;
+        if (double.TryParse(reset, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var at))
+            return at switch
+            {
+                > 1e12 => DateTimeOffset.FromUnixTimeMilliseconds((long)at) - now, // milliseconds since 1970 (OpenRouter)
+                > 1e9 => DateTimeOffset.FromUnixTimeSeconds((long)at) - now,       // seconds since 1970
+                _ => TimeSpan.FromSeconds(at),                                     // seconds from now
+            };
+        if (RetryInBody().Match(body) is { Success: true } m
+            && double.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var seconds))
+            return TimeSpan.FromSeconds(seconds);
+        return null;
+    }
+
+    [GeneratedRegex(@"X-RateLimit-Reset""?\s*:\s*""?(\d{9,13})", RegexOptions.IgnoreCase)]
+    private static partial Regex ResetInBody();
+
+    [GeneratedRegex(@"(?:""retryDelay""\s*:\s*""|retry (?:in|after) )(\d+(?:\.\d+)?)\s*s", RegexOptions.IgnoreCase)]
+    private static partial Regex RetryInBody();
 
     private static bool LooksLikeUnknownField(string err) =>
         new[] { "unrecognized", "unknown", "not permitted", "extra", "unexpected", "reasoning", "chat_template_kwargs" }

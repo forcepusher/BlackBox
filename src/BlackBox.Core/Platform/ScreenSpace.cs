@@ -58,6 +58,10 @@ public sealed class ScreenSpace
 
     public (int X, int Y) ToScreen(double modelX, double modelY)
     {
+        // Fractions of the screenshot, (0.87, 0.88), whatever the model was asked for: Kilo's free
+        // Nemotron models slip into them. No point meant in pixels or on the grid is that near the corner.
+        if (modelX is >= 0 and <= 1 && modelY is >= 0 and <= 1 && (modelX % 1 != 0 || modelY % 1 != 0))
+            (modelX, modelY) = (modelX * ModelWidth, modelY * ModelHeight);
         var x = Screen.X + (int)Math.Round(Math.Clamp(modelX, 0, ModelWidth) * Screen.Width / ModelWidth);
         var y = Screen.Y + (int)Math.Round(Math.Clamp(modelY, 0, ModelHeight) * Screen.Height / ModelHeight);
         return (Math.Min(x, Screen.X + Screen.Width - 1), Math.Min(y, Screen.Y + Screen.Height - 1));
@@ -99,9 +103,15 @@ public static partial class ModelCoordinates
     /// clicks landed at about 1000/1920 of the intended x). Gemma 4 points on the same grid, asked
     /// for pixels or not: on a 1920x1200 screen it put Notepad's Save button at (492, 671) and the
     /// File name box at (387, 586), where the grid has them at (496, 678) and (385, 600), so every
-    /// click it aimed in pixels landed far up and to the left. Null (pixels) for every other model.
+    /// click it aimed in pixels landed far up and to the left. NVIDIA's Nemotron too: asked for pixels,
+    /// Kilo's free Nemotron 3.5 Super VL answered its fresh looks on the grid and hit 0 of 4 targets;
+    /// on the grid it hit 12 of 16 (ClickAccuracyTests, 2026-10-16). Null (pixels) for every other model.
     /// </summary>
-    public static int? GridFor(string? model) => model is not null && (QwenThreeOrLater().IsMatch(model) || GemmaFourOrLater().IsMatch(model)) ? 1000 : null;
+    public static int? GridFor(string? model) =>
+        model is not null && (QwenThreeOrLater().IsMatch(model) || GemmaFourOrLater().IsMatch(model) || Nemotron().IsMatch(model)) ? 1000 : null;
+
+    [System.Text.RegularExpressions.GeneratedRegex("nemotron", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex Nemotron();
 
     [System.Text.RegularExpressions.GeneratedRegex(@"qwen([3-9]|\d{2})", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex QwenThreeOrLater();
