@@ -524,6 +524,10 @@ public sealed partial class AgentSession(
             catch (ConnectionLostException ex) when (++drops <= MaxReconnects)
             {
                 observer.OnNotice($"Connection lost ({ex.Message}). Reconnecting, attempt {drops} of {MaxReconnects}…");
+                // A model server that fails a request may have got stuck on how the prompt begins,
+                // as Kilo's free Nemotron did for half an hour: the request goes again a line lower.
+                if (ex.Upstream)
+                    client.ShiftPrompt();
                 // Resending would only repeat a tool call too long to get through, so the model is
                 // asked to split it. The note stays in the history so later calls stay short too.
                 // If the smaller parts are still too long, it is told once more, with a firmer limit.

@@ -383,6 +383,41 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_gateways_model_server_failing_mid_stream_is_asked_again_with_the_prompt_a_line_lower()
+    {
+        // Kilo answers 200 and then says in the stream that the model server behind it failed. That
+        // ended the run; and for half an hour Kilo's free Nemotron failed every request that began
+        // with BlackBox's prompt, while one with a blank line in front got through in seconds.
+        var server = new ScriptedServer(
+            """data: {"error":{"message":"Upstream idle timeout exceeded"}}""" + "\n\n",
+            Sse.Text("Made it."));
+        var client = new OpenAiChatClient(new HttpClient(server), "http://stuck-gateway.test", null);
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(true), ctx, "sys");
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("go", observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count);
+        Assert.Equal("sys", server.Requests[0]["messages"]![0]!["content"]!.GetValue<string>());
+        Assert.Equal("\nsys", server.Requests[1]["messages"]![0]!["content"]!.GetValue<string>());
+        Assert.Contains(observer.Notices, n => n.Contains("Upstream idle timeout exceeded") && n.Contains("Reconnecting"));
+        // The requests after it begin the same way, so the server's cache holds again.
+        await session.RunAsync("and again", observer, TestContext.Current.CancellationToken);
+        Assert.Equal("\nsys", server.Requests[2]["messages"]![0]!["content"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData(null, "Upstream error from Nvidia: Internal server error", true)]
+    [InlineData("502", "Bad gateway", true)]
+    [InlineData(null, "The model is overloaded, try again later", true)]
+    [InlineData("400", "Invalid tool schema", false)]
+    [InlineData(null, "Your account has no access to this model", false)]
+    public void Errors_in_a_stream_are_sent_again_when_they_are_the_servers_own(string? code, string message, bool again) =>
+        Assert.Equal(again, OpenAiChatClient.Transient(code, message));
+
+    [Fact]
     public async Task Server_errors_and_busy_answers_are_sent_again_like_drops()
     {
         var server = new ScriptedServer(Sse.Text("Made it."));
