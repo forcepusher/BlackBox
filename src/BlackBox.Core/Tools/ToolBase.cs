@@ -147,8 +147,15 @@ public sealed class ToolContext
         return CurrentScreen;
     }
 
-    public string ResolvePath(string path) =>
-        Path.GetFullPath(Environment.ExpandEnvironmentVariables(path), WorkingDirectory);
+    public string ResolvePath(string path)
+    {
+        path = Environment.ExpandEnvironmentVariables(path);
+        // "~/Desktop/report.txt" is the home folder's Desktop, as in PowerShell and every shell;
+        // it made a folder named "~" in the working directory instead.
+        if (path == "~" || path.StartsWith("~/", StringComparison.Ordinal) || path.StartsWith(@"~\", StringComparison.Ordinal))
+            path = Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), path[1..].TrimStart('/', '\\'));
+        return Path.GetFullPath(path, WorkingDirectory);
+    }
 }
 
 public abstract class Tool

@@ -868,6 +868,18 @@ public class ToolTests
         Assert.Contains("after", binary.Text);
         Assert.True(binary.Text.Length < 1_000, binary.Text);
     }
+
+    [Fact]
+    public void A_path_that_starts_with_a_tilde_is_in_the_home_folder()
+    {
+        // "~/Desktop/report.txt" made a folder named "~" in the working directory.
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        Assert.Equal(Path.Combine(home, "Desktop", "report.txt"), ctx.ResolvePath("~/Desktop/report.txt"));
+        Assert.Equal(Path.Combine(home, "notes.txt"), ctx.ResolvePath(@"~\notes.txt"));
+        Assert.Equal(Path.GetFullPath(home), ctx.ResolvePath("~"));
+        Assert.Equal(Path.Combine(Path.GetTempPath(), "~notes.txt"), ctx.ResolvePath("~notes.txt"));
+    }
 }
 
 public class OverlayInputTests
