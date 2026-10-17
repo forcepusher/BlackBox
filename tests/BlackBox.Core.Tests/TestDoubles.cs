@@ -28,6 +28,11 @@ internal static class Sse
         return $"data: {chunk.ToJsonString()}\n\ndata: [DONE]\n\n";
     }
 
+    /// <summary>A tool call the server's length limit ends in the middle of its arguments.</summary>
+    public static string CutToolCall(string id, string name, string partialArgs) =>
+        ToolCall(id, name, partialArgs).Replace("data: [DONE]\n\n", "") +
+        $"data: {new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject(), ["finish_reason"] = "length" }) }.ToJsonString()}\n\ndata: [DONE]\n\n";
+
     /// <summary>A reply that thinks <paramref name="reasoning"/> first, then streams <paramref name="then"/>.</summary>
     public static string Thought(string reasoning, string then) =>
         $"data: {new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["reasoning_content"] = reasoning } }) }.ToJsonString()}\n\n" + then;

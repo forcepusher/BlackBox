@@ -178,6 +178,7 @@ public sealed partial class AgentSession(
             toolContext.Locate = (image, space, target, ct2) => look.LocateAsync(image, space.Describe(), target, ct2);
         }
         var nudges = 0;
+        var cutCalls = 0;
         var loops = new LoopDetector();
         // Pointing at web_search only makes sense when the model has it.
         var errors = tools.Find("web_search") is not null ? new ErrorRepeats() : null;
@@ -202,6 +203,7 @@ public sealed partial class AgentSession(
                 request.AddRange(History);
 
                 var reply = await CompleteWithResetAsync(request, observer, ct).ConfigureAwait(false);
+                var cutCall = reply.FinishReason == "length" && DropCutCalls(reply);
                 var cutOff = reply.FinishReason == "length" && !reply.HasToolCalls;
                 if (cutOff && contextTokens > 0 && !justReset && OutOfRoom(reply))
                 {
@@ -213,10 +215,14 @@ public sealed partial class AgentSession(
                     justReset = true;
                     continue;
                 }
-                if (cutOff && !justReset)
-                    observer.OnNotice("The server stopped the reply at its length limit (in LM Studio: Limit Response Length); asking the model to go on.");
+                var afterReset = justReset;
                 justReset = false;
                 TextToolCallParser.TryExtract(reply, tools);
+                cutCall |= reply.FinishReason == "length" && DropCutCalls(reply);
+                if (cutCall)
+                    observer.OnNotice("The server's length limit cut a tool call short (in LM Studio: Limit Response Length); it wasn't run, and the model is asked to write in smaller parts.");
+                else if (cutOff && !afterReset)
+                    observer.OnNotice("The server stopped the reply at its length limit (in LM Studio: Limit Response Length); asking the model to go on.");
                 // "The task is complete" followed by yet another screenshot: small models can keep
                 // re-verifying forever. A completion claim with only look-only calls ends the turn.
                 if (reply.HasToolCalls && LooksFinished(reply.Content) &&
@@ -227,6 +233,12 @@ public sealed partial class AgentSession(
 
                 if (!reply.HasToolCalls)
                 {
+                    // Its only call was cut short: it is told why nothing ran, a few times in a row at most.
+                    if (cutCall && ++cutCalls <= MaxCutCalls)
+                    {
+                        History.Add(ChatMessage.User(CutToolCallNote));
+                        continue;
+                    }
                     // The user wrote while the model answered: it goes on with that.
                     if (!_incoming.IsEmpty)
                         continue;
@@ -250,11 +262,14 @@ public sealed partial class AgentSession(
                     return;
                 }
                 nudges = 0; // it is moving again; a later stall gets its own nudges
+                if (!cutCall)
+                    cutCalls = 0;
 
                 // Only the last screenshot goes to the model: the tools' results come before it.
                 ChatMessage? shown = null;
                 ContentPart? screenshot = null;
                 string? caption = null;
+                ChatMessage? last = null;
                 // This reply's calls were decided on the screen in the last screenshot.
                 toolContext.Seen = toolContext.LastShot;
                 foreach (var call in reply.ToolCalls!)
@@ -264,11 +279,14 @@ public sealed partial class AgentSession(
                         result = result with { Text = result.Text + "\n" + warning };
                     if (errors?.Check(call, result) is { } lookItUp)
                         result = result with { Text = result.Text + "\n" + lookItUp };
-                    var message = ChatMessage.ToolResult(call.Id, result.Text);
+                    var message = last = ChatMessage.ToolResult(call.Id, result.Text);
                     History.Add(message);
                     if (result.Image is not null)
                         (shown, screenshot, caption) = (message, ContentPart.FromImage(result.Image, result.ImageMime), result.ImageCaption);
                 }
+                // The whole calls ran; the cut one is said with the last result.
+                if (cutCall && last is not null)
+                    last.Content += "\n" + CutToolCallNote;
 
                 // Most OpenAI-compatible servers only accept images in user messages,
                 // so the screenshot (or a picture read_file opened) is delivered right after the tool results.
@@ -326,6 +344,30 @@ public sealed partial class AgentSession(
 
     // Marked as BlackBox's: taken for the user's words, "continue" read as a go-ahead, and the
     // model asked again for a command the user had just declined twice.
+    /// <summary>A reply's tool call the server's length limit cut short, its arguments half written (see <see cref="DropCutCalls"/>).</summary>
+    internal const string CutToolCallNote =
+        "[BlackBox] Your last tool call was cut off by the server's limit on how long a reply may be, before its arguments were complete, " +
+        "so it was not run. Write long content in parts of at most about 100 lines: create the file with write_file, then add each next part " +
+        "with write_file and append set to true. Continue with the task.";
+
+    private const int MaxCutCalls = 3;
+
+    /// <summary>
+    /// Takes the tool calls whose arguments aren't whole JSON out of a reply the length limit
+    /// ended; true when there was one. Repaired by closing what was left open, such a call ran:
+    /// write_file wrote half the file, and edit_file put half its text in, and both said done.
+    /// </summary>
+    internal static bool DropCutCalls(ChatMessage reply)
+    {
+        if (reply.ToolCalls is not { Count: > 0 } calls)
+            return false;
+        var whole = calls.Where(c => ToolCallRepair.IsWholeJson(c.Arguments)).ToList();
+        if (whole.Count == calls.Count)
+            return false;
+        reply.ToolCalls = whole.Count > 0 ? whole : null;
+        return true;
+    }
+
     internal const string NudgeText =
         "[BlackBox] Continue with the task. If there is another step, call the tool for it now. If the task is finished, reply with a short summary of what you did.";
 
@@ -378,6 +420,10 @@ public sealed partial class AgentSession(
         try
         {
             args = ToolCallRepair.ParseArguments(call.Arguments);
+            // The conversation keeps the call as repaired: sent back as it came, arguments that
+            // aren't JSON can make a server's chat template fail every request after it.
+            if (!ToolCallRepair.IsWholeJson(call.Arguments))
+                call.Arguments = args.ToJsonString(Comfy.ComfyWorkflow.Compact);
             ToolCallRepair.ApplyNameHints(call.Name, args, tool);
             ToolCallRepair.NormalizeArguments(args, tool);
             summary = tool.Describe(args);

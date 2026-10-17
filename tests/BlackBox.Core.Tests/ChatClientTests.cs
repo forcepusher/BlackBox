@@ -285,6 +285,19 @@ public class ChatClientTests
     }
 
     [Fact]
+    public void A_repair_leaves_the_text_inside_values_alone()
+    {
+        // A file's None became null and its Markdown fences went, whenever its call needed a repair
+        // (here: one closing brace too many).
+        const string content = "def f(flag=True):\n    return None\n\n```python\nprint(f())\n```";
+        var raw = new JsonObject { ["path"] = "notes.md", ["content"] = content, ["append"] = false }.ToJsonString().Replace("false", "False") + "}";
+        var args = ToolCallRepair.ParseArguments(raw);
+        Assert.Equal(content, args["content"]!.GetValue<string>());
+        Assert.False(args["append"]!.GetValue<bool>());
+        Assert.Equal(content, ToolCallRepair.ParseArguments("```json\n" + raw + "\n```")["content"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void Coordinates_and_aliases_are_normalized()
     {
         var click = ToolCallRepair.NormalizeArguments(ToolCallRepair.ParseArguments("""{"coordinate": [5, 6]}"""), Registry.Find("mouse_click")!);

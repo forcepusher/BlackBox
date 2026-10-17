@@ -208,9 +208,16 @@ public static partial class ToolCallRepair
         }
     }
 
+    /// <summary>Whether tool arguments are a whole JSON object as they came (or nothing), with no repair needed.</summary>
+    public static bool IsWholeJson(string raw) => raw.Trim() is var t && (t.Length == 0 || TryParseObject(t) is not null);
+
     private static string StripWrappers(string text)
     {
-        text = CodeFence().Replace(text, "$1").Trim();
+        // Only a fence around the whole of it: one inside a value (a Markdown file's ```python
+        // block, written with write_file) was taken out of the file.
+        text = text.Trim();
+        if (text.StartsWith("```", StringComparison.Ordinal) && text.IndexOf('\n') is var open and > 0 && text.LastIndexOf("```", StringComparison.Ordinal) is var close and > 0 && close > open)
+            text = text[(open + 1)..close].Trim();
         text = text.Replace("<tool_call>", "").Replace("</tool_call>", "").Trim();
         var start = text.IndexOf('{');
         return start > 0 ? text[start..] : text;
@@ -219,7 +226,7 @@ public static partial class ToolCallRepair
     private static IEnumerable<string> Candidates(string text)
     {
         // Python-style literals and single quotes.
-        var pythonish = PythonLiteral().Replace(text, m => m.Value switch { "True" => "true", "False" => "false", _ => "null" });
+        var pythonish = PythonLiterals(text);
         yield return pythonish;
         if (!pythonish.Contains('"'))
             yield return pythonish.Replace('\'', '"');
@@ -232,6 +239,44 @@ public static partial class ToolCallRepair
         yield return Balance(quotedKeys);
         // Extra text after the object.
         yield return FirstObject(quotedKeys);
+    }
+
+    /// <summary>
+    /// Python's True, False and None as JSON's, outside strings only: replaced everywhere, a script
+    /// written with write_file got "return null" for "return None" whenever its call needed a repair.
+    /// </summary>
+    internal static string PythonLiterals(string text)
+    {
+        var sb = new StringBuilder(text.Length);
+        var inString = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (inString)
+            {
+                sb.Append(c);
+                if (c == '\\' && i + 1 < text.Length) sb.Append(text[++i]);
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"')
+            {
+                inString = true;
+                sb.Append(c);
+                continue;
+            }
+            if (char.IsLetter(c) && (i == 0 || !char.IsLetterOrDigit(text[i - 1]) && text[i - 1] != '_'))
+            {
+                var end = i;
+                while (end < text.Length && (char.IsLetterOrDigit(text[end]) || text[end] == '_')) end++;
+                var word = text[i..end];
+                sb.Append(word switch { "True" => "true", "False" => "false", "None" => "null", _ => word });
+                i = end - 1;
+                continue;
+            }
+            sb.Append(c);
+        }
+        return sb.ToString();
     }
 
     /// <summary>Quotes bare object keys ({x: 1} to {"x": 1}) without touching text inside strings.</summary>
@@ -317,12 +362,6 @@ public static partial class ToolCallRepair
         }
         return text;
     }
-
-    [GeneratedRegex(@"```(?:json|JSON)?\s*(.*?)\s*```", RegexOptions.Singleline)]
-    private static partial Regex CodeFence();
-
-    [GeneratedRegex(@"(?<![""\w])(True|False|None)(?![""\w])")]
-    private static partial Regex PythonLiteral();
 
     [GeneratedRegex(@"^\s*\(?\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*\)?\s*$")]
     private static partial Regex PointText();

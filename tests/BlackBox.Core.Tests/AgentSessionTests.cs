@@ -257,6 +257,49 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_tool_call_the_length_limit_cut_short_is_not_run()
+    {
+        // Repaired by closing what was left open, it ran: write_file wrote half the file and said done.
+        var dir = Directory.CreateTempSubdirectory("bb-cut-").FullName;
+        var server = new ScriptedServer(
+            Sse.CutToolCall("c1", "write_file", """{"path": "notes.txt", "content": "the first half of a long fi"""),
+            Sse.ToolCall("c2", "write_file", """{"path": "notes.txt", "content": "a short first part"}"""),
+            Sse.Text("Done."));
+        var (session, observer) = CreateSession(server, dir, new FakePlatform());
+        try
+        {
+            await session.RunAsync("write the notes", observer, TestContext.Current.CancellationToken);
+
+            Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+            Assert.Equal(["write_file"], observer.ToolsRun);
+            Assert.Equal("a short first part", await File.ReadAllTextAsync(Path.Combine(dir, "notes.txt"), TestContext.Current.CancellationToken));
+            Assert.Contains(observer.Notices, n => n.Contains("cut a tool call short"));
+            var told = server.Requests[1]["messages"]!.AsArray()[^1]!;
+            Assert.Contains("cut off by the server's limit", (string?)told["content"]);
+            // The cut call isn't in the conversation, which stays a valid request.
+            Assert.DoesNotContain("c1", server.Requests[1].ToJsonString());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task A_repaired_call_goes_back_to_the_server_as_whole_json()
+    {
+        // Sent back as it came, arguments that aren't JSON can make a chat template fail every later request.
+        var server = new ScriptedServer(Sse.ToolCall("c1", "list_directory", """{'path': '.'}"""), Sse.Text("Done."));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("look", observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal(["list_directory"], observer.ToolsRun);
+        var call = server.Requests[1]["messages"]!.AsArray().Single(m => m!["tool_calls"] is not null)!["tool_calls"]![0]!;
+        Assert.Equal(""".""", JsonNode.Parse(call["function"]!["arguments"]!.GetValue<string>())!["path"]!.ToJsonString().Trim('"'));
+    }
+
+    [Fact]
     public void Without_a_wait_named_the_waits_grow_to_five_minutes()
     {
         Assert.Equal(TimeSpan.FromSeconds(2), AgentSession.RateLimitWait(null, 1)); // a server that was only busy
