@@ -63,9 +63,17 @@ public sealed partial class FfmpegDecoder(Func<IEnumerable<string>> searchFolder
             psi.ArgumentList.Add(a);
         using var p = Process.Start(psi)!;
         _ = p.StandardOutput.ReadToEndAsync();
-        var text = p.StandardError.ReadToEnd();
-        p.WaitForExit(10_000);
-        return ParseProbe(text);
+        var said = p.StandardError.ReadToEndAsync();
+        // Ten seconds at most: the wait came after reading all it said, so ffmpeg stuck on a file
+        // on a share that is off held up read_file, which Stop couldn't end, for as long as it took.
+        if (!said.Wait(TimeSpan.FromSeconds(10)))
+        {
+            try { p.Kill(entireProcessTree: true); }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+            return null;
+        }
+        p.WaitForExit(2_000);
+        return ParseProbe(said.Result);
     }
 
     internal static MediaInfo? ParseProbe(string text)
