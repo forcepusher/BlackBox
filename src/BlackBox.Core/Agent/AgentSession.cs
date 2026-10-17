@@ -487,6 +487,8 @@ public sealed partial class AgentSession(
     /// <summary>Whether the model takes pictures as far as this run found: false once its server refused them, so the next runs are set up without.</summary>
     public bool SeesImages => toolContext.SeesImages;
 
+    private bool HasImages() => History.Any(m => m.Parts?.Any(p => p.IsImage) == true);
+
     /// <summary>Puts each picture in the conversation in words: the model can't be shown them.</summary>
     private void DropImages()
     {
@@ -534,11 +536,12 @@ public sealed partial class AgentSession(
                 }
                 attempt--;
             }
-            catch (ImagesRefusedException ex) when (toolContext.SeesImages)
+            catch (ImagesRefusedException ex) when (HasImages())
             {
-                // The model was taken to see, and its server refused the pictures: they leave the
-                // conversation (which the server then reads anew, once), and later ones are left
-                // out as they come. Kept in, they failed every request after the first screenshot.
+                // The model was taken to see, or the chat holds pictures from one that could, and
+                // its server refused them: they leave the conversation (which the server then reads
+                // anew, once), and later ones are left out as they come. Kept in, they failed every
+                // request after the first screenshot, or every message after switching models.
                 toolContext.SeesImages = false;
                 observer.OnNotice(ex.Message.TrimEnd().TrimEnd('.') + ". Going on without them.");
                 DropImages();

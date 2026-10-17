@@ -792,6 +792,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             }
 
             var session = _session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, _ssh, history, UserComposing);
+            // Taken now: another model can be picked at the top while the run goes on.
+            var imagesKey = session.SeesImages ? ImagesKey(server) : null;
             foreach (var pending in _steerPending)
                 session.Steer(pending);
             _steerPending.Clear();
@@ -803,11 +805,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             OnContextChanged();
             // Its server refused pictures: the next runs go without screen tools, as with a model
             // the server says can't see.
-            if (!session.SeesImages && server.SupportsVision)
+            if (imagesKey is not null && !session.SeesImages)
             {
-                _imagesRefused = ImagesKey(server);
-                server.SupportsVision = false;
-                OnPropertyChanged(nameof(CanSeeScreen));
+                _imagesRefused = imagesKey;
+                if (ImagesKey(server) == imagesKey)
+                {
+                    server.SupportsVision = false;
+                    OnPropertyChanged(nameof(CanSeeScreen));
+                }
             }
         }
         catch (OperationCanceledException)
