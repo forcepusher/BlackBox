@@ -185,8 +185,23 @@ public sealed partial class SshHost : IDisposable
     /// <summary>How long a command may print nothing (after printing something) before the call returns anyway.</summary>
     internal static TimeSpan QuietReturn { get; set; } = TimeSpan.FromSeconds(30);
 
-    /// <summary>The most of a call's output kept, and of that the beginning and the end (see <see cref="CollectAsync"/>).</summary>
+    /// <summary>The most of a call's output kept, and of that the beginning and the end (see <see cref="BoundRaw"/>).</summary>
     private const int MaxRaw = 4 << 20, KeepHead = 64 << 10, KeepTail = 1 << 20;
+
+    /// <summary>
+    /// Keeps the terminal's output to its beginning and its end, what was left out counted, under
+    /// <see cref="_gate"/>. A command that prints hundreds of megabytes (journalctl, cat of a big
+    /// log, docker logs) was copied whole at every wake-up, though the tool shows 16,000 characters
+    /// of it; and one left running between calls (a dev server, tail -f) grew it without end, as
+    /// only a call trimmed it.
+    /// </summary>
+    private void BoundRaw()
+    {
+        if (_raw.Length <= MaxRaw)
+            return;
+        var cut = _raw.Length - KeepHead - KeepTail;
+        _raw.Remove(KeepHead, cut).Insert(KeepHead, $"\n[... {cut:N0} characters left out ...]\n");
+    }
 
     private async Task<ShellResult> CollectAsync(TimeSpan wait, CancellationToken ct, bool waitForPrompt = true, bool returnWhenQuiet = true)
     {
@@ -198,14 +213,7 @@ public sealed partial class SshHost : IDisposable
             DateTime last;
             lock (_gate)
             {
-                // A command that prints hundreds of megabytes (journalctl, cat of a big log, docker
-                // logs) is kept as its beginning and its end, what was left out counted: the tool
-                // shows 16,000 characters of it, and all of it was copied at every wake-up.
-                if (_raw.Length > MaxRaw)
-                {
-                    var cut = _raw.Length - KeepHead - KeepTail;
-                    _raw.Remove(KeepHead, cut).Insert(KeepHead, $"\n[... {cut:N0} characters left out ...]\n");
-                }
+                BoundRaw();
                 raw = _raw.ToString();
                 last = _lastData;
             }
@@ -408,6 +416,7 @@ public sealed partial class SshHost : IDisposable
                 lock (_gate)
                 {
                     _raw.Append(chars, 0, c);
+                    BoundRaw();
                     _lastData = DateTime.UtcNow;
                 }
                 _signal.Release();
