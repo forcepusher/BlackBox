@@ -748,6 +748,20 @@ public class AgentSessionTests
         Assert.Equal(["yield", "type " + first, "yield", "type " + second, "type z"], platform.Actions);
     }
 
+    [Fact]
+    public async Task Stop_ends_long_text_between_its_pieces()
+    {
+        // It went on typing the rest after Stop, Enter for every line break, into whatever had the focus.
+        using var stop = new CancellationTokenSource();
+        var platform = new FakePlatform { OnType = _ => stop.Cancel() };
+        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false }, WorkingDirectory = Path.GetTempPath() };
+        var text = new string('x', TypeTextTool.Chunk * 3);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new TypeTextTool().ExecuteAsync(new JsonObject { ["text"] = text }, ctx, stop.Token));
+
+        Assert.Single(platform.Actions, a => a.StartsWith("type "));
+    }
+
     /// <summary>A context in which the user types to the agent for half a second once <paramref name="done"/> actions of a kind ("keys", "type") are done.</summary>
     private static ToolContext TypingStartsAfter(FakePlatform platform, string kind, int done)
     {

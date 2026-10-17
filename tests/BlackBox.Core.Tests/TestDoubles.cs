@@ -217,7 +217,10 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     /// <summary>How the fake screen reacts to a click (e.g. by changing <see cref="Desktop"/>).</summary>
     public Action<FakePlatform>? OnClick { get; set; }
     public void Scroll(int dx, int dy) => Actions.Add($"scroll {dx},{dy}");
-    public void TypeText(string text) => Actions.Add($"type {text}");
+    public void TypeText(string text) { Actions.Add($"type {text}"); OnType?.Invoke(this); }
+
+    /// <summary>What happens as text is typed (e.g. the user pressing Stop meanwhile).</summary>
+    public Action<FakePlatform>? OnType { get; set; }
     public void PressKeys(IReadOnlyList<string> keys) => Actions.Add("keys " + string.Join("+", keys));
     public IDisposable HoldKeys(IReadOnlyList<string> keys)
     {

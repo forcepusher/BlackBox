@@ -401,6 +401,9 @@ public sealed partial class TypeTextTool : DesktopActionTool
         // then goes back to the window it was meant for, not into the user's message.
         for (var at = 0; at < text.Length; at += Chunk)
         {
+            // Stop ends long text between pieces: it went on typing the rest, Enter for every
+            // line break, into whatever window had the focus.
+            ct.ThrowIfCancellationRequested();
             if (at > 0 && await WaitWhileUserTypesAsync(ctx, ct).ConfigureAwait(false))
                 ctx.Platform.HostWindow.YieldFocus();
             ctx.Platform.Input.TypeText(text.Substring(at, Math.Min(Chunk, text.Length - at)));
