@@ -153,7 +153,8 @@ public sealed class WriteFileTool : Tool
         "A path ending in .docx, .xlsx, .pptx or .pdf makes a real Word, Excel, PowerPoint or PDF document from Markdown content: " +
         "headings, paragraphs, lists, tables, **bold**, *italic*, links, pictures as ![caption](C:\\path\\picture.png), a line \\newpage for a new page. " +
         "In .xlsx each heading starts a sheet named after it and tables fill it; a cell starting with = is a formula, and numbers, 12%, $1,200 and " +
-        "2026-10-16 become values. In .pptx a line --- starts the next slide, and a slide's first heading is its title. " +
+        "2026-10-16 become values shown as written (write amounts as $1,200.00 to show them in dollars; a formula under them shows dollars too). " +
+        "In .pptx a line --- starts the next slide, and a slide's first heading is its title. " +
         "To change an existing document, use edit_file, which keeps its formatting.";
     public override ToolRisk Risk => ToolRisk.Risky;
     public override JsonObject Parameters => Schema(
@@ -210,7 +211,7 @@ public sealed class EditFileTool : Tool
         "Also changes Word (.docx) and PowerPoint (.pptx) files in place, keeping their formatting: old_text as read_file shows it, " +
         "new_text may use **bold** and *italic*, and a line break in it starts a new paragraph (\"# \" at its start makes a heading). " +
         "In Excel (.xlsx) give cells as read_file shows them: old_text the cells to change (\"B7 =SUM(B2:B6)\") or empty, new_text the cells to set " +
-        "(\"B7 =SUM(B2:B7)\", \"A8 Total\", \"Budget!C9 12.5\"); without cell addresses, text is replaced in the cells. " +
+        "(\"B7 =SUM(B2:B7)\", \"A8 Total\", \"B2 $1,200.00\" to show it in dollars, \"Budget!C9 12.5\"); without cell addresses, text is replaced in the cells. " +
         "To add a row between others (above a total), start new_text with a line \"insert row 7\" (old_text empty): the rows below move down " +
         "with every formula pointing at them, and the new row is formatted like the one above; \"delete rows 3-4\" takes rows out.";
     public override ToolRisk Risk => ToolRisk.Risky;
