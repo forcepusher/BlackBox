@@ -269,6 +269,9 @@ public sealed class SettingsStore(AppPaths paths)
 
             var text = File.ReadAllText(paths.SettingsFile);
             var settings = JsonSerializer.Deserialize(Migrate(text), SettingsJson.Default.AppSettings) ?? new AppSettings();
+            // A hand-edited "server": null left the window without a server to show, and it closed at start.
+            settings.Server ??= new();
+            settings.Agent ??= new();
             // Rewrite the file if it still has keys from older versions, so it only ever holds
             // settings that exist. A folder that can't be written to (a read-only stick) can wait.
             if (JsonSerializer.Serialize(settings, SettingsJson.Default.AppSettings) != text)

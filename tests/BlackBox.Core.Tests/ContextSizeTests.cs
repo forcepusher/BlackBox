@@ -121,6 +121,20 @@ public class ContextSizeTests
     }
 
     [Fact]
+    public void A_section_written_as_null_gets_its_defaults()
+    {
+        var root = Directory.CreateTempSubdirectory("bb-context-").FullName;
+        var paths = new AppPaths(root);
+        Directory.CreateDirectory(paths.DataDir);
+        File.WriteAllText(paths.SettingsFile, """{ "server": null, "agent": null }""");
+
+        var settings = new SettingsStore(paths).Load();
+
+        Assert.Equal(new ServerSettings().BaseUrl, settings.Server.BaseUrl);
+        Assert.NotNull(settings.Agent);
+    }
+
+    [Fact]
     public void The_slider_ends_at_the_servers_size_when_it_reports_one()
     {
         var all = ContextSizes.Stops(null);
