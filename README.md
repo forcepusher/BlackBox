@@ -115,18 +115,26 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   Illustrious model, Nemotron wrote its prompt in plain sentences and ran the template at 512x760;
   the model's Civitai page asks for quality tags and tag-style prompts, and its maker's pictures
   were made at 768x1344 with a hires pass. Four tries came out young, soft and off-style. Now a
-  checkpoint or LoRA comes with its card the first time a task meets it (`action=models` with its
-  name, a template's view, or after its first run): what its page says about settings and
+  checkpoint or LoRA comes with its card the first time a task meets it (`action=models search=`
+  its file name, a template's view, or after its first run): what its page says about settings and
   prompts, its trigger words, the size its base model is made for, and how one of its maker's own
-  pictures was made (prompt, negative prompt, sampler as ComfyUI names it, CFG, steps, size, clip
-  skip, hires pass), with what AUTOMATIC1111's settings are in ComfyUI. The file is found on
-  Civitai by Civitai's AutoV1 hash (64 KB a megabyte into it, no time at all) and its size, and
-  the cards are kept in `Data/comfyui/model-cards.json`. A file Civitai doesn't know gets its base
-  model from its own tensor names. A run that makes its pictures at under half the size its
-  checkpoint is made for says so. And a picture the user gives to follow (a character, a reference
-  sheet) is where the result starts: the tool tells the model to start from it, image to image,
-  and to crop or scale it inside the workflow. In that chat it described the reference sheet in
-  words for four tries, then cropped it with PowerShell in four calls, two of which failed.
+  pictures was made (prompt, negative prompt, sampler and schedule as ComfyUI names them, CFG,
+  steps, size, clip skip, hires pass and its upscaler), with what AUTOMATIC1111's settings are in
+  ComfyUI. The file is found on Civitai by its SHA-256, worked out once in the background and kept
+  with the file's size and time in `Data/comfyui/model-hashes.json` (6.6 GB took 7 s); Civitai's
+  quick AutoV1 hash, tried first, gave this PC's Pony Diffusion V6 XL and Juggernaut XL the cards of
+  other models of the same size, fine-tunes that share those bytes. A card waits ten seconds at
+  most, so a 27 GB checkpoint's first hash finishes in the background and its card comes with a
+  later call. Cards are kept in `Data/comfyui/model-cards.json`; a file Civitai doesn't know gets
+  its base model from its own tensor names. A run that makes its pictures at under half the size
+  its checkpoint is made for says so, image to image too (judged by the picture it made, with how
+  to scale and pad the picture it starts from), and so does a LoRA on a checkpoint of another base
+  model (one for SD 1.5 on SDXL isn't applied at all; an SDXL one on Pony, weaker). And a picture
+  the user gives to follow (a character, a reference sheet) is where the result starts: the tool
+  tells the model to start from it, image to image, and to crop or scale it inside the workflow; to
+  change or restyle a picture (a hat on the cat, a photo made anime), an installed edit model such
+  as Qwen-Image-Edit. In that chat it described the reference sheet in words for four tries, then
+  cropped it with PowerShell in four calls, two of which failed.
 - **The picture to follow next to each result.** The look at what a job made comes beside the
   picture the user gave in the chat (the latest message that came with pictures, found again in
   later runs), labelled, at the same height, so the model compares the two rather than the result
@@ -314,7 +322,10 @@ copied in a browser, files copied in Explorer), or pick them with the paperclip 
 They wait under the box, × takes one off, and they go with the next message; a message can be
 files alone. The agent gets each one's full path, to work on it with its tools (a picture to start
 a ComfyUI job from, a document to read, a folder to go through), and sees the pictures among them
-as `read_file` shows a picture; a model that can't see images gets the paths. A pasted picture is
+as `read_file` shows a picture; a model that can't see images gets the paths. A model that points
+on a 0-1000 grid (Qwen3 and later, Gemma 4, Nemotron) is told how its places in a picture become
+the picture's own pixels, for a crop: qwen3.8 took its grid numbers for pixels of the smaller view
+it was shown and cut the wrong figure from a reference sheet three times. A pasted picture is
 saved as a PNG in `Data/pasted` first and deleted with its chat; dropped files stay where they
 are. Text on the clipboard is pasted as text, also when a picture comes with it (cells copied from
 Excel bring one). The message's bubble shows its pictures and the names of its other files, and a
