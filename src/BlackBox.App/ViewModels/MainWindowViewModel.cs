@@ -290,6 +290,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>LM Studio said the model isn't loaded yet; it has no context size until the first message loads it.</summary>
     private bool _modelNotLoaded;
 
+    /// <summary>The server and model that refused pictures in a run though nothing said it takes none: the next runs go without them.</summary>
+    private string? _imagesRefused;
+
+    private static string ImagesKey(ServerSettings server) => server.BaseUrl + " " + server.ModelInUse;
+
     /// <summary>
     /// The size in use, next to the slider: "64k"; on Auto "not loaded" before LM Studio has loaded
     /// the model, and "98k?" when the server doesn't say and it is the guess.
@@ -451,9 +456,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             _modelNotLoaded = probe.Loaded == false;
             OnContextChanged();
         }
-        server.SupportsVision = probe.Vision ?? true;
+        server.SupportsVision = (probe.Vision ?? true) && _imagesRefused != ImagesKey(server);
         OnPropertyChanged(nameof(CanSeeScreen));
-        var status = "Connected" + (probe.Vision == false ? " · no vision" : "");
+        var status = "Connected" + (!server.SupportsVision ? " · no vision" : "");
         if (probe.AutoPicked && server.Model.Length > 0)
             SetStatus(ServerState.Connected, status,
                 $"The server doesn't offer \"{server.Model}\" right now, so BlackBox uses {probe.Model}{AutoModelDetails}, the strongest model it offers, " +
@@ -792,6 +797,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             // A server error may have revealed the real context size; keep it for the next run.
             _settings.Server.LearnContextLimit(session.ContextTokens);
             OnContextChanged();
+            // Its server refused pictures: the next runs go without screen tools, as with a model
+            // the server says can't see.
+            if (!session.SeesImages && server.SupportsVision)
+            {
+                _imagesRefused = ImagesKey(server);
+                server.SupportsVision = false;
+                OnPropertyChanged(nameof(CanSeeScreen));
+            }
         }
         catch (OperationCanceledException)
         {

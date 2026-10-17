@@ -478,6 +478,19 @@ public sealed partial class AgentSession(
         return result;
     }
 
+    /// <summary>Whether the model takes pictures as far as this run found: false once its server refused them, so the next runs are set up without.</summary>
+    public bool SeesImages => toolContext.SeesImages;
+
+    /// <summary>Puts each picture in the conversation in words: the model can't be shown them.</summary>
+    private void DropImages()
+    {
+        foreach (var m in History.Where(m => m.Parts?.Any(p => p.IsImage) == true))
+        {
+            m.Content = string.Join("\n", m.Parts!.Select(p => p.IsImage ? "(A picture, left out: the model in use can't see images.)" : p.Text));
+            m.Parts = null;
+        }
+    }
+
     private bool NeedsApproval(Tool tool) => toolContext.Settings.Approval switch
     {
         ApprovalMode.AskAll => tool.Risk != ToolRisk.ReadOnly,
@@ -513,6 +526,19 @@ public sealed partial class AgentSession(
                     History.Add(note);
                     request.Add(note);
                 }
+                attempt--;
+            }
+            catch (ImagesRefusedException ex) when (toolContext.SeesImages)
+            {
+                // The model was taken to see, and its server refused the pictures: they leave the
+                // conversation (which the server then reads anew, once), and later ones are left
+                // out as they come. Kept in, they failed every request after the first screenshot.
+                toolContext.SeesImages = false;
+                observer.OnNotice(ex.Message + " Going on without them.");
+                DropImages();
+                request.Clear();
+                request.Add(ChatMessage.System(systemPrompt));
+                request.AddRange(History);
                 attempt--;
             }
             catch (ContextOverflowException ex) when (attempt < 2)

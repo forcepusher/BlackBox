@@ -50,6 +50,13 @@ public sealed class RequestTooLargeException(string serverMessage, long bytes)
 }
 
 /// <summary>
+/// The server refused a request with pictures in it because its model takes none: one whose list
+/// doesn't say so (llama-server without its projector, Ollama, most other servers) is taken to
+/// see, and every request after the first screenshot failed, the picture being in the conversation.
+/// </summary>
+public sealed class ImagesRefusedException(string serverMessage) : LlmException("The model in use doesn't take pictures: " + serverMessage);
+
+/// <summary>
 /// The server is holding requests back (HTTP 429): too many in a while, or a free allowance used up
 /// (Kilo's free models take 200 requests an hour). Sending again after a wait gets through.
 /// </summary>
@@ -225,6 +232,9 @@ public sealed partial class OpenAiChatClient
                     throw new ContextOverflowException(err.Clip(500));
                 if (status == 413)
                     throw new RequestTooLargeException(err.Trim().ReplaceLineEndings(" ").Clip(300), payload.Length);
+                // Before the 5xx below are sent again: llama-server says it with a 500.
+                if ((status is 400 or 404 or 415 or 422 || status >= 500) && HasImages(messages) && LooksLikeImagesRefused(err))
+                    throw new ImagesRefusedException(ErrorText(err).Clip(300));
                 // Strict providers reject fields they do not know. Drop ours and try once more.
                 if (status is 400 or 422 && (sendReasoning || sendExtras) && LooksLikeUnknownField(err))
                 {
@@ -250,6 +260,12 @@ public sealed partial class OpenAiChatClient
                 using var reader = new StreamReader(stream, Encoding.UTF8);
                 return await ReadStreamAsync(reader, d => { received = true; onDelta?.Invoke(d); }, ct,
                     onToolCall: name => { received = true; toolCall = name; }).ConfigureAwait(false);
+            }
+            // A gateway passes the model server's refusal on in the stream.
+            catch (LlmException ex) when (ex is not (RateLimitedException or ContextOverflowException or ImagesRefusedException)
+                                          && HasImages(messages) && LooksLikeImagesRefused(ex.Message))
+            {
+                throw new ImagesRefusedException(ex.Message.Replace("Server error: ", "").Clip(300));
             }
             // After Stop the read fails too; that is the stop, not a dropped connection to resend on.
             catch (Exception ex) when (!ct.IsCancellationRequested && ex is IOException or HttpRequestException or TaskCanceledException)
@@ -587,6 +603,22 @@ public sealed partial class OpenAiChatClient
     internal static bool LooksLikeContextOverflow(string err) =>
         new[] { "context length", "context_length", "context window", "n_ctx", "maximum context", "too many tokens", "exceeds the context", "context size", "context overflow" }
             .Any(w => err.Contains(w, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// An error saying the model takes no pictures: "image input is not supported" (llama-server
+    /// without its projector), "No endpoints found that support image input" (OpenRouter), "image_url
+    /// is only supported by certain models" (OpenAI), "is not a multimodal model" (vLLM), "Model does
+    /// not support images" (LM Studio), "unknown variant `image_url`" (DeepSeek).
+    /// </summary>
+    internal static bool LooksLikeImagesRefused(string err) => ImageWord().IsMatch(err) && RefusalWord().IsMatch(err);
+
+    private static bool HasImages(IReadOnlyList<ChatMessage> messages) => messages.Any(m => m.Parts?.Any(p => p.IsImage) == true);
+
+    [GeneratedRegex(@"\b(images?|vision|multi-?modal|image_url|mmproj)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex ImageWord();
+
+    [GeneratedRegex(@"not (be )?supported|unsupported|do(es)?(n't| not) (support|accept|take)|only supported|no endpoints? found|not a multi-?modal|missing data required|unknown variant|can ?not (accept|process|read|handle)|can't (accept|process|read|handle)", RegexOptions.IgnoreCase)]
+    private static partial Regex RefusalWord();
 
     private void Authorize(HttpRequestMessage req)
     {
