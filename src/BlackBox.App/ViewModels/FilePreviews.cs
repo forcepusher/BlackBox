@@ -261,7 +261,7 @@ internal sealed class Playback : IDisposable
                 if (services.Decoder?.OpenAudio(path) is { } sound)
                 {
                     sound.Seek(from);
-                    var output = services.NewAudioOutput();
+                    var output = _stop.IsCancellationRequested ? null : services.NewAudioOutput();
                     if (output is null)
                         sound.Dispose();
                     else
@@ -320,6 +320,13 @@ internal sealed class Playback : IDisposable
                 reader?.Dispose();
                 if (!_stop.IsCancellationRequested)
                     onEnded();
+                else
+                {
+                    // Stopped: here too, as Dispose may have given up waiting before the sound was
+                    // open (ffmpeg starting, a file on a share), and the sound then played to its
+                    // end with nothing to stop it.
+                    Interlocked.Exchange(ref _output, null)?.Dispose();
+                }
             }
         });
     }
@@ -327,10 +334,13 @@ internal sealed class Playback : IDisposable
     public void Dispose()
     {
         _stop.Cancel();
-        try { _task.Wait(2000); }
+        try
+        {
+            if (!_task.Wait(2000))
+                return; // the task lets go of the sound when it ends
+        }
         catch (AggregateException) { }
-        _output?.Dispose();
-        _output = null;
+        Interlocked.Exchange(ref _output, null)?.Dispose();
     }
 }
 
@@ -361,15 +371,26 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
 
     public string TimeText => $"{Clock(TimeSpan.FromSeconds(Position))} / {Clock(TimeSpan.FromSeconds(Length))}";
 
+    private int _seek;
+
     /// <summary>The slider moved: by the user (go there) or by the playback reporting (nothing to do).</summary>
     partial void OnPositionChanged(double value)
     {
         if (_reporting)
             return;
-        if (IsPlaying)
-            Start(TimeSpan.FromSeconds(value));
-        else
+        if (!IsPlaying)
+        {
             ShowStill(TimeSpan.FromSeconds(value));
+            return;
+        }
+        // Once the slider rests, not at every step of a drag: each start opens the file afresh
+        // (ffmpeg twice), and the window stuttered through the drag.
+        var seek = ++_seek;
+        DispatcherTimer.RunOnce(() =>
+        {
+            if (seek == _seek && IsPlaying)
+                Start(TimeSpan.FromSeconds(Position));
+        }, TimeSpan.FromMilliseconds(150));
     }
 
     [RelayCommand]
@@ -385,7 +406,7 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
 
     private void Start(TimeSpan from)
     {
-        _playback?.Dispose();
+        End(_playback);
         IsPlaying = true;
         _playback = new Playback(Path, Services, from, HasVideo, HasVideo ? ShowFrame : null,
             at => Dispatcher.UIThread.Post(() => Report(at.TotalSeconds)),
@@ -398,9 +419,19 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
 
     public void Stop()
     {
-        _playback?.Dispose();
+        End(_playback);
         _playback = null;
         IsPlaying = false;
+    }
+
+    /// <summary>
+    /// Ends a playback off the UI thread: it waits up to two seconds for its thread, and its
+    /// speakers' for as long again, which held the window still at every pause or new position.
+    /// </summary>
+    private static void End(Playback? playback)
+    {
+        if (playback is not null)
+            _ = Task.Run(playback.Dispose);
     }
 
     private void Report(double seconds)

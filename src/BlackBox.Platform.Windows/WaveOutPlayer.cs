@@ -65,12 +65,19 @@ public sealed class WaveOutPlayer : IAudioOutput
             // A sound that stops decoding midway ends there; it must not take BlackBox down.
             _ended = true;
         }
+        finally
+        {
+            // Stopped while it waited on its decoder: Dispose left the rest to it (see there).
+            if (_stopping)
+                CleanUp();
+        }
     }
 
     private void PumpBuffers()
     {
-        var samples = new float[(int)(_rate * BufferSeconds) * Math.Max(2, _source!.Channels)];
-        var sourceChannels = Math.Max(1, _source.Channels);
+        var source = _source!;
+        var samples = new float[(int)(_rate * BufferSeconds) * Math.Max(2, source.Channels)];
+        var sourceChannels = Math.Max(1, source.Channels);
         var finished = false;
         var prepared = new bool[BufferCount];
         while (!_stopping)
@@ -93,7 +100,9 @@ public sealed class WaveOutPlayer : IAudioOutput
                 }
                 // Fill it: the sound's own channels down to one or two, as 16-bit samples.
                 var frames = (int)(_rate * BufferSeconds);
-                var read = _source.Read(samples, 0, frames * sourceChannels);
+                var read = source.Read(samples, 0, frames * sourceChannels);
+                if (_stopping)
+                    return; // the buffers may be going
                 var got = read / sourceChannels;
                 if (got <= 0)
                 {
@@ -156,9 +165,26 @@ public sealed class WaveOutPlayer : IAudioOutput
 
     public void Dispose()
     {
+        if (_stopping)
+            return;
         _stopping = true;
+        // Silent at once, what is queued included.
+        if (_device != 0)
+            waveOutReset(_device);
         _wake.Set();
-        _thread?.Join(2000);
+        // A pump stuck in its decoder's Read (ffmpeg's pipe from a slow share) cleans up itself when
+        // it gets out: freeing the buffers and the decoder under it would have it write through a
+        // freed pointer (an access violation, which ends BlackBox) or into a released reader.
+        if (_thread is null || _thread.Join(2000))
+            CleanUp();
+    }
+
+    private int _cleanedUp;
+
+    private void CleanUp()
+    {
+        if (Interlocked.Exchange(ref _cleanedUp, 1) == 1)
+            return;
         if (_device != 0)
         {
             waveOutReset(_device);
