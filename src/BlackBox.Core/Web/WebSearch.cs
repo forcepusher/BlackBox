@@ -50,12 +50,27 @@ public static class WebSearch
         try
         {
             var html = await browser.GetDomAsync(new Uri("https://www.bing.com/search?q=" + Uri.EscapeDataString(query)), runScripts: false, ct).ConfigureAwait(false);
-            return Dedupe(ParseBing(html)).Take(maxResults).ToList();
+            var hits = ParseBing(html);
+            // A page that isn't Bing's results (a check that this is a person, a consent form) is no
+            // answer: said to be "No results", it had the model write its query again and again.
+            if (hits.Count == 0 && NotBingResults(html) is { } shown)
+                throw new WebPageException($"it showed {shown} instead of its results; try again in a few minutes.");
+            return Dedupe(hits).Take(maxResults).ToList();
         }
         catch (WebPageException ex)
         {
             throw new WebSearchException((failure is null ? "" : failure + " ") + "Bing: " + ex.Message);
         }
+    }
+
+    /// <summary>What Bing showed when its page has no results list (#b_results, there when it found nothing too); null when it has one.</summary>
+    internal static string? NotBingResults(string html)
+    {
+        var doc = new HtmlParser().ParseDocument(html);
+        if (doc.QuerySelector("#b_results") is not null)
+            return null;
+        var title = Clean(doc.Title);
+        return title.Length > 0 ? $"a page titled \"{(title.Length > 80 ? title[..80] + "…" : title)}\"" : "an empty page";
     }
 
     /// <summary>

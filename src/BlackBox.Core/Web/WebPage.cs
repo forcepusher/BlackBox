@@ -83,9 +83,16 @@ public static class WebPage
         {
             if (browser is null)
                 throw new WebPageException(ex.Message);
-            return await BrowserAsync(uri, browser, ct).ConfigureAwait(false) is { Text.Length: >= ScriptShellChars } loaded && !IsBlockPage(loaded)
-                ? loaded
-                : throw new WebPageException(ex.Message);
+            WebPageText loaded;
+            try
+            {
+                loaded = await BrowserAsync(uri, browser, ct).ConfigureAwait(false);
+            }
+            catch (WebPageException failed)
+            {
+                throw new WebPageException($"{ex.Message} The browser couldn't load it either: {failed.Message}");
+            }
+            return loaded.Text.Length >= ScriptShellChars && !IsBlockPage(loaded) ? loaded : throw new WebPageException(ex.Message);
         }
         if (page.IsHtml && page.Text.Text.Length < ScriptShellChars && browser is not null)
         {

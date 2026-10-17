@@ -74,6 +74,32 @@ public class WebToolsTests
     }
 
     [Fact]
+    public async Task A_search_that_got_no_page_says_so_instead_of_no_results()
+    {
+        // A browser that gave back nothing, or Bing asking whether this is a person, came back as
+        // "No results", and the model wrote its query again and again.
+        Assert.Null(WebSearch.NotBingResults("""<html><body><ol id="b_results"><li class="b_no"><h1>There are no results</h1></li></ol></body></html>"""));
+        Assert.Equal("a page titled \"Verify you are human\"", WebSearch.NotBingResults("<html><head><title>Verify   you are human</title></head><body><form></form></body></html>"));
+        Assert.Equal("an empty page", WebSearch.NotBingResults("<html><head></head><body></body></html>"));
+#if WINDOWS
+        var dir = Directory.CreateTempSubdirectory("bb-browser-").FullName;
+        try
+        {
+            // A browser that quits at once, as Edge does on a profile another one holds.
+            var fake = Path.Combine(dir, "browser.cmd");
+            await File.WriteAllTextAsync(fake, "@echo off\r\necho [1017/103000.123:ERROR:process_singleton_win.cc] The profile appears to be in use 1>&2\r\nexit /b 21\r\n", TestContext.Current.CancellationToken);
+            var browser = new HeadlessBrowser(fake, Path.Combine(dir, "profile"));
+            var failed = await Assert.ThrowsAsync<WebPageException>(() => browser.GetDomAsync(new Uri("https://www.bing.com/search?q=unity"), false, TestContext.Current.CancellationToken));
+            Assert.Contains("gave back no page (exit code 21; it said: [1017/103000.123:ERROR:process_singleton_win.cc] The profile appears to be in use)", failed.Message);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
+        }
+#endif
+    }
+
+    [Fact]
     public void Page_text_keeps_the_content_and_drops_the_furniture()
     {
         const string html = """
