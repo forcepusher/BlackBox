@@ -6,7 +6,7 @@ using static BlackBox.Platform.Windows.Native;
 namespace BlackBox.Platform.Windows;
 
 /// <summary>
-/// GDI screen capture. Works everywhere back to Windows 7 and needs no extra packages.
+/// GDI screen capture. Works on every Windows .NET runs on and needs no extra packages.
 /// BlackBox's own windows (the main window, its dialogs, menus and tooltips) are left out of each capture,
 /// so the agent sees the desktop behind them, but only while it is taken: screen recorders and
 /// screen sharing show them the rest of the time. WDA_EXCLUDEFROMCAPTURE (Windows 10 2004+) takes
@@ -82,6 +82,7 @@ internal sealed class WindowsScreenCapture : IScreenCapture
         var memDc = CreateCompatibleDC(screenDc);
         var bitmap = CreateCompatibleBitmap(screenDc, region.Width, region.Height);
         var old = SelectObject(memDc, bitmap);
+        var selected = true;
         try
         {
             if (!BitBlt(memDc, 0, 0, region.Width, region.Height, screenDc, region.X, region.Y, SRCCOPY | CAPTUREBLT))
@@ -91,6 +92,7 @@ internal sealed class WindowsScreenCapture : IScreenCapture
                 DrawCursor(memDc, region);
 
             SelectObject(memDc, old);
+            selected = false;
             var header = new BITMAPINFOHEADER
             {
                 biSize = Marshal.SizeOf<BITMAPINFOHEADER>(),
@@ -114,6 +116,10 @@ internal sealed class WindowsScreenCapture : IScreenCapture
         }
         finally
         {
+            // A bitmap still selected into a DC isn't deleted: after a failed BitBlt (the screen
+            // locked, a UAC prompt up) every capture left a screen-sized bitmap and a GDI handle behind.
+            if (selected)
+                SelectObject(memDc, old);
             DeleteObject(bitmap);
             DeleteDC(memDc);
             ReleaseDC(0, screenDc);
