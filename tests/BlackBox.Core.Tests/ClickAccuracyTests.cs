@@ -199,7 +199,7 @@ public class ClickAccuracyTests
                 var label = $"{scene.Name,-9} #{trial} {target.Label,-12}";
                 if (click is null || observer.Args is null)
                 {
-                    Log($"{label} no click [{observer.Calls}]");
+                    Log($"{label} no click [{observer.Calls}] {observer.Ending}");
                     misses.Add(double.NaN);
                     continue;
                 }
@@ -474,12 +474,17 @@ public class ClickAccuracyTests
         public string Calls { get; private set; } = "";
         private int _count;
 
+        /// <summary>How a run without a click ended: the stop, its detail, the last notice and the model's last words.</summary>
+        public string Ending { get; private set; } = "";
+        private string _notice = "", _said = "";
+
         public void OnStepStarted(int step) { }
         public void OnDelta(StreamDelta delta) { }
-        public void OnAssistantMessage(ChatMessage message) { }
+        public void OnAssistantMessage(ChatMessage message) => _said = message.Content?.ReplaceLineEndings(" ").Clip(160) ?? "";
         public Task<bool> RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct) => Task.FromResult(true);
-        public void OnNotice(string text) { }
-        public void OnFinished(AgentStopReason reason, string? detail) { }
+        public void OnNotice(string text) => _notice = text.ReplaceLineEndings(" ").Clip(160);
+        public void OnFinished(AgentStopReason reason, string? detail) =>
+            Ending = string.Join(" · ", new[] { reason.ToString(), detail?.ReplaceLineEndings(" ").Clip(160), _notice, _said }.Where(s => !string.IsNullOrEmpty(s)));
 
         public void OnToolStarted(ToolCall call, string summary)
         {
