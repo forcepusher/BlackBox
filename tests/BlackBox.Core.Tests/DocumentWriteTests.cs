@@ -255,6 +255,20 @@ public class DocumentWriteTests : IDisposable
     }
 
     [Fact]
+    public async Task A_documents_footer_is_read_and_changed()
+    {
+        // edit_file changed headers and footers, but read_file didn't show them: the model couldn't see the footer it was asked to change.
+        Assert.False((await Write("letter.docx", "# Letter\n\nDear Ann,")).IsError);
+        using (var zip = System.IO.Compression.ZipFile.Open(Path.Combine(_dir, "letter.docx"), System.IO.Compression.ZipArchiveMode.Update))
+        using (var footer = new StreamWriter(zip.CreateEntry("word/footer1.xml").Open()))
+            footer.Write("""<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>Northwind Ltd, confidential</w:t></w:r></w:p></w:ftr>""");
+
+        Assert.Contains("Dear Ann,\nFooter: Northwind Ltd, confidential\n", await Read("letter.docx"));
+        Assert.False((await Edit("letter.docx", "Northwind Ltd", "Contoso Ltd")).IsError);
+        Assert.Contains("Footer: Contoso Ltd, confidential\n", await Read("letter.docx"));
+    }
+
+    [Fact]
     public async Task A_documents_comments_are_read_with_the_text_they_are_on()
     {
         // Asked to go through a document's comments, the model saw none of them.

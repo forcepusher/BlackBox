@@ -35,10 +35,10 @@ error closed the window and left no trace of why.
 ## Documents
 `read_file` reads more than text: PDFs (their text layer, page by page), Word, Excel and PowerPoint
 files (Excel cell by cell with its formulas, merged cells and charts, Word with headings, lists,
-bold, tables and comments, PowerPoint slide by slide with its speaker notes, which `edit_file`
-changes too) and pictures, which the model sees like a screenshot. Before, asked to summarize a PDF,
-qwen3.8 spent eight minutes inflating its streams and mapping glyphs in PowerShell, and a question
-about a chart picture took six minutes of finding a program to show it.
+bold, tables, headers, footers, footnotes and comments, PowerPoint slide by slide with its speaker
+notes, which `edit_file` changes too) and pictures, which the model sees like a screenshot. Before,
+asked to summarize a PDF, qwen3.8 spent eight minutes inflating its streams and mapping glyphs in
+PowerShell, and a question about a chart picture took six minutes of finding a program to show it.
 
 `write_file` makes Word, Excel, PowerPoint and PDF files from Markdown without Office, so they open
 in Word, Excel, PowerPoint, Google Drive and any PDF reader:

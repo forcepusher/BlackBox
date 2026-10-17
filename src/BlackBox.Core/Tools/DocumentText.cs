@@ -91,6 +91,17 @@ internal static class DocumentText
                 foreach (var row in block.Elements(W + "tr"))
                     sb.Append("| ").AppendJoin(" | ", row.Elements(W + "tc").Select(c => string.Join(" ", c.Elements(W + "p").Select(Paragraph)).Trim())).AppendLine(" |");
         }
+        // Headers, footers and footnotes, which edit_file changes too: the model couldn't see the
+        // footer it was asked to change.
+        foreach (var (title, pattern) in new[] { ("Header", "word/header"), ("Footer", "word/footer"), ("Footnotes", "word/footnotes.xml"), ("Endnotes", "word/endnotes.xml") })
+        {
+            var lines = zip.Entries.Where(e => e.FullName.StartsWith(pattern, StringComparison.Ordinal) && e.FullName.EndsWith(".xml", StringComparison.Ordinal))
+                .OrderBy(e => e.FullName, StringComparer.Ordinal)
+                .SelectMany(e => Load(zip, e.FullName).Descendants(W + "p").Select(Paragraph))
+                .Where(line => line.Trim().Length > 0).Distinct().ToList();
+            if (lines.Count > 0)
+                sb.Append(title).Append(": ").AppendJoin(" / ", lines).AppendLine();
+        }
         // The comments in the margin, with the text each is on: asked to go through a document's
         // comments, the model saw none of them.
         if (Comments(zip, body) is { Count: > 0 } comments)
