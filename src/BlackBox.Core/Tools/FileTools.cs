@@ -417,8 +417,32 @@ public sealed class ListDirectoryTool : Tool
             sb.AppendLine($"[stopped after searching for {SearchTime.TotalSeconds:0} seconds; give a narrower path or pattern]");
         }
         if (count == 0)
+        {
+            // Folders under it that can't be read are skipped, but one that can't be read itself
+            // listed as nothing at all, which said "(empty folder)".
+            if (!CanRead(dir))
+                return Task.FromResult(ToolResult.Error($"Permission denied to list {dir}: Windows doesn't let this account read it."));
             sb.AppendLine(pattern is null ? "(empty folder)" : $"(nothing matches {pattern} here or in the folders under it)");
+        }
         return Task.FromResult(new ToolResult(sb.ToString()));
+    }
+
+    private static bool CanRead(string dir)
+    {
+        try
+        {
+            using var entries = Directory.EnumerateFileSystemEntries(dir).GetEnumerator();
+            entries.MoveNext();
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
     }
 
     /// <summary>

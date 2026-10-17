@@ -659,6 +659,37 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task A_folder_the_account_cant_read_isnt_listed_as_empty()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Uses Windows access rules.");
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        var locked = Directory.CreateDirectory(Path.Combine(dir, "locked"));
+        File.WriteAllText(Path.Combine(locked.FullName, "secret.txt"), "x");
+        var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+        var deny = new System.Security.AccessControl.FileSystemAccessRule(me, System.Security.AccessControl.FileSystemRights.ListDirectory, System.Security.AccessControl.AccessControlType.Deny);
+        var rules = locked.GetAccessControl();
+        rules.AddAccessRule(deny);
+        locked.SetAccessControl(rules);
+        try
+        {
+            var ctx = Ctx(new FakePlatform(), dir);
+            var listed = await new ListDirectoryTool().ExecuteAsync(new JsonObject { ["path"] = locked.FullName }, ctx, CancellationToken.None);
+            Assert.True(listed.IsError);
+            Assert.Contains("Permission denied", listed.Text);
+            var searched = await new ListDirectoryTool().ExecuteAsync(new JsonObject { ["path"] = locked.FullName, ["pattern"] = "*.txt" }, ctx, CancellationToken.None);
+            Assert.Contains("Permission denied", searched.Text);
+            // Searching from above it still skips it quietly, as before.
+            var above = await new ListDirectoryTool().ExecuteAsync(new JsonObject { ["path"] = dir, ["pattern"] = "*.txt" }, ctx, CancellationToken.None);
+            Assert.False(above.IsError);
+        }
+        finally
+        {
+            rules.RemoveAccessRule(deny);
+            locked.SetAccessControl(rules);
+        }
+    }
+
+    [Fact]
     public void Settings_from_the_local_model_versions_are_migrated_and_cleaned()
     {
         var root = Directory.CreateTempSubdirectory("bb-settings-").FullName;
