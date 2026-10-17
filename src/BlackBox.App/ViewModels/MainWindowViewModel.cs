@@ -906,7 +906,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             Items.Add(item);
             // The files come back with the chat, as long as they are still there.
             if (entry.Kind == ChatEntryKind.Tool && entry.Files is { Count: > 0 } files)
+            {
+                // Kept for a save before they are looked up, which would otherwise drop them.
+                ((ToolCallItem)item).SavedFiles = files;
                 withFiles.Add((item, () => files.Where(Core.Media.FileMentions.Exists).ToList()));
+            }
             else if (item is AssistantMessageItem { HasText: true, Text: var text })
                 withFiles.Add((item, () => Core.Media.FileMentions.Find(text)));
         }
@@ -998,7 +1002,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             ToolCallItem t => new ChatEntry
             {
                 Kind = ChatEntryKind.Tool, CallId = t.CallId, Name = t.Name, Summary = t.Summary, State = t.State.ToString(), Text = t.ResultText,
-                Files = t.HasPreviews ? t.Previews.Select(p => p.Path).ToList() : null, Ended = t.Ended,
+                Files = t.HasPreviews ? t.Previews.Select(p => p.Path).ToList() : t.SavedFiles?.ToList(), Ended = t.Ended,
             },
             NoticeItem n => new ChatEntry { Kind = ChatEntryKind.Notice, Text = n.Text, IsError = n.IsError, Stopped = n.Stopped, Unsent = n.Unsent },
             _ => throw new ArgumentOutOfRangeException(nameof(item)),
