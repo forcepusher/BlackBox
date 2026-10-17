@@ -398,9 +398,15 @@ public static partial class ComfyProcess
         {
             var psi = new ProcessStartInfo("netstat.exe", "-ano -p TCP") { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
             using var p = Process.Start(psi)!;
-            var text = p.StandardOutput.ReadToEnd();
-            p.WaitForExit(5000);
-            return ListeningPid(text, port);
+            // Within ten seconds: the wait for its exit came after reading all it wrote, which only
+            // ends when it does, so it held nothing up.
+            var read = p.StandardOutput.ReadToEndAsync();
+            if (!read.Wait(TimeSpan.FromSeconds(10)))
+            {
+                try { p.Kill(); } catch (InvalidOperationException) { }
+                return null;
+            }
+            return ListeningPid(read.Result, port);
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
         return null;

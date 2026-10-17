@@ -166,12 +166,9 @@ public static class ComfyRunner
                     job.Elapsed = clock.Elapsed;
                     return job;
                 }
+                // Never throws: a Stop or a message ends the delay, and the next look ends the wait.
                 using var tick = CancellationTokenSource.CreateLinkedTokenSource(ct, userMessage);
-                try
-                {
-                    await Task.WhenAny(events.Changed.Task, Task.Delay(1000, tick.Token)).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
+                await Task.WhenAny(events.Changed.Task, Task.Delay(1000, tick.Token)).ConfigureAwait(false);
                 events.ResetChanged();
             }
         }
