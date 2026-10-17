@@ -367,6 +367,8 @@ public class DocumentWriteTests : IDisposable
         var edited = await Edit("deck.pptx", "Thank the team.", "Thank the whole team.");
         Assert.False(edited.IsError, edited.Text);
         Assert.Contains("Speaker notes:\nThank the whole team.\n", await Read("deck.pptx"));
+        // The slide's number on the notes page isn't in what read_file shows, so not text to change either.
+        Assert.Contains("not found", (await Edit("deck.pptx", "2", "3")).Text);
     }
 
     [Fact]
