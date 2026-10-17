@@ -28,8 +28,11 @@ public abstract class DesktopActionTool : Tool
         // Give the UI a moment to react before looking at it.
         await Task.Delay(500, ct).ConfigureAwait(false);
         // A fresh look that misses misses the same way again, so a retry goes to the model's own x/y.
+        // A click on what is already selected changes nothing either: Paint's oval tool, picked by
+        // one of the first clicks, was clicked some twenty times more, each "probably missed".
         if (check is not null && await check.MissedAsync(ctx, ct).ConfigureAwait(false))
-            text += "\nNothing on screen changed after this click, so it probably missed. If the mouse pointer in the screenshot is not on what you meant, " +
+            text += "\nNothing on screen changed after this click, so it probably missed, unless what you clicked was already selected or switched on " +
+                    "(a tool, a tab, a checkbox), which a click doesn't change: then go on. If the mouse pointer in the screenshot is not on what you meant, " +
                     "click again with target left out and x, y on it. If it only needs more time to respond, wait instead; " +
                     "if you clicked an empty spot only to focus a window, ignore this.";
         else if (moved is not null)
