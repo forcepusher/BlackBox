@@ -166,10 +166,18 @@ public sealed partial class ComfyModelCards(string stateDirectory)
         width ??= Number(meta["width"]) is { } w ? (int)w : null;
         height ??= Number(meta["height"]) is { } h ? (int)h : null;
         var hires = Text(meta["Hires upscale"]) is { Length: > 0 } scale
-            ? $"then hires {scale}x" + (Text(meta["Denoising strength"]) is { Length: > 0 } d ? $" at denoise {d}" : "")
+            ? $"then hires {scale}x" + (Text(meta["Hires upscaler"]) is { Length: > 0 } upscaler && upscaler != "None" ? $" with {upscaler}" : "")
+              + (Text(meta["Denoising strength"]) is { Length: > 0 } d ? $" at denoise {d}" : "")
             : null;
         var clip = Number(meta["clipSkip"]) ?? Number(meta["Clip skip"]);
-        return new ModelExample(prompt, Text(meta["negativePrompt"]), Text(meta["sampler"]), Number(meta["cfgScale"]), Number(meta["steps"]) is { } s ? (int)s : null,
+        // Since AUTOMATIC1111 1.9 the schedule is a field of its own ("Schedule type: Karras"), no
+        // longer part of the sampler's name: Juggernaut XL's maker's "DPM++ 2M SDE" was Karras, and
+        // run with ComfyUI's normal schedule it sprinkled the sky with coloured specks.
+        var sampler = Text(meta["sampler"]);
+        if (sampler is { Length: > 0 } && (Text(meta["Schedule type"]) ?? Text(meta["scheduler"])) is { Length: > 0 } schedule &&
+            !schedule.Equals("Automatic", StringComparison.OrdinalIgnoreCase) && !sampler.EndsWith(schedule, StringComparison.OrdinalIgnoreCase))
+            sampler += " " + schedule;
+        return new ModelExample(prompt, Text(meta["negativePrompt"]), sampler, Number(meta["cfgScale"]), Number(meta["steps"]) is { } s ? (int)s : null,
             width, height, clip is { } c ? (int)c : null, hires,
             new[] { meta["civitaiResources"], meta["resources"] }.OfType<JsonArray>().SelectMany(a => a.OfType<JsonObject>())
                 .Any(r => ((string?)r["type"])?.ToLowerInvariant() is "embed" or "embedding" or "textualinversion") || meta["TI hashes"] is not null);
@@ -220,7 +228,8 @@ public sealed partial class ComfyModelCards(string stateDirectory)
             return null;
         var name = a1111.Trim().ToLowerInvariant();
         var scheduler = "normal";
-        foreach (var (suffix, comfy) in new[] { (" karras", "karras"), (" exponential", "exponential"), (" sgm uniform", "sgm_uniform"), (" simple", "simple"), (" beta", "beta") })
+        foreach (var (suffix, comfy) in new[] { (" karras", "karras"), (" exponential", "exponential"), (" sgm uniform", "sgm_uniform"), (" simple", "simple"), (" beta", "beta"),
+                     (" normal", "normal"), (" kl optimal", "kl_optimal"), (" linear quadratic", "linear_quadratic"), (" ddim", "ddim_uniform") })
             if (name.EndsWith(suffix, StringComparison.Ordinal))
                 (name, scheduler) = (name[..^suffix.Length], comfy);
         var sampler = name switch

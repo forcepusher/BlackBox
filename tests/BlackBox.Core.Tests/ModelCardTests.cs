@@ -164,6 +164,24 @@ public class ModelCardTests : IDisposable
         Assert.Contains("embedding:Name", text);
     }
 
+    // Juggernaut XL's maker's pictures: "DPM++ 2M SDE" with its schedule in a field of its own, as
+    // AUTOMATIC1111 writes it since 1.9. Run with ComfyUI's normal schedule, the sky came out speckled.
+    [Fact]
+    public void A_schedule_given_on_its_own_and_the_hires_upscaler_are_in_the_recipe()
+    {
+        var image = JsonNode.Parse("""
+            {"meta": {"Size": "896x1152", "steps": 30, "prompt": "a lighthouse at sunset", "sampler": "DPM++ 2M SDE", "Schedule type": "Karras", "cfgScale": 5,
+                      "Hires upscale": "1.5", "Hires upscaler": "4x_NMKD-Siax_200k", "Denoising strength": "0.33"}}
+            """)!.AsObject();
+        var text = ComfyModelCards.Format("juggernautXL_ragnarok.safetensors",
+            new ModelCard("Juggernaut XL (Ragnarok)", "https://civitai.com/models/133005", "SDXL 1.0", [], null, [ComfyModelCards.Example(image)!]));
+        Assert.Contains("DPM++ 2M SDE Karras (sampler_name dpmpp_2m_sde, scheduler karras), CFG 5, 30 steps, 896x1152, then hires 1.5x with 4x_NMKD-Siax_200k at denoise 0.33", text);
+
+        // "Automatic" says nothing about the schedule.
+        image["meta"]!["Schedule type"] = "Automatic";
+        Assert.Equal("DPM++ 2M SDE", ComfyModelCards.Example(image)!.Sampler);
+    }
+
     [Theory]
     [InlineData("Euler a", "euler_ancestral", "normal")]
     [InlineData("DPM++ 2M Karras", "dpmpp_2m", "karras")]
