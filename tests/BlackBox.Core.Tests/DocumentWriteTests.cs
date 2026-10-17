@@ -255,6 +255,19 @@ public class DocumentWriteTests : IDisposable
     }
 
     [Fact]
+    public async Task Arabic_and_Hebrew_in_a_quote_or_code_are_written_in_the_regular_font()
+    {
+        // Arial Italic and Consolas have no Arabic, Consolas no Hebrew: a quote or code in them made
+        // the whole PDF fail with "font does not contain a character".
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Uses Arial and Consolas from Windows.");
+        var result = await Write("rtl.pdf", "# تقرير\n\n> اقتباس *with English* in it\n\nThe key is `מפתח` here.\n\n```\nקוד عربي\n```");
+        Assert.False(result.IsError, result.Text);
+        Assert.DoesNotContain("came out as ?", result.Text);
+        using var pdf = PdfDocument.Open(Path.Combine(_dir, "rtl.pdf"));
+        Assert.Contains("with English", pdf.GetPage(1).Text);
+    }
+
+    [Fact]
     public async Task An_existing_document_is_not_overwritten_but_one_made_here_can_be_added_to()
     {
         File.WriteAllBytes(Path.Combine(_dir, "theirs.docx"), File.ReadAllBytes(await Make("seed.docx", "# Theirs")));
