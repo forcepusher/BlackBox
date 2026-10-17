@@ -102,6 +102,15 @@ public class SshTests
         Assert.Equal(prompt, TerminalText.LooksLikePrompt(lastLine));
 
     [Fact]
+    public void Sudo_reads_the_password_line_every_time_it_is_sent_one()
+    {
+        // Without -k, a sudo that still remembered the password read nothing, and the password line
+        // went on to the command's input: into the file a write put it in.
+        Assert.Equal("sudo -k -S -p '' sh -c 'cat > /etc/motd'", SshHost.SudoCommand("cat > /etc/motd", withPassword: true));
+        Assert.Equal("sudo -n sh -c 'cat > /etc/motd'", SshHost.SudoCommand("cat > /etc/motd", withPassword: false));
+    }
+
+    [Fact]
     public void Sudo_prompt_is_recognised()
     {
         Assert.True(TerminalText.IsSudoPrompt("[sudo] password for admin: "));
