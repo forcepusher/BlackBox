@@ -61,8 +61,11 @@ Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 using var stopKey = platform.StopKey.Watch(() =>
 {
     if (cts.IsCancellationRequested) return false;
-    Console.WriteLine($"\n[stop] {DateTime.Now:HH:mm:ss} Pause/Break pressed");
-    cts.Cancel();
+    // Off the hook's thread, which holds up every key press on the PC: what the stop sets off, and
+    // the line, which waits while text is selected in the console.
+    var pressed = DateTime.Now;
+    _ = cts.CancelAsync();
+    _ = Task.Run(() => Console.WriteLine($"\n[stop] {pressed:HH:mm:ss} Pause/Break pressed"));
     return true;
 });
 

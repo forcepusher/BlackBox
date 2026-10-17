@@ -818,7 +818,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         if (cts is null || cts.IsCancellationRequested)
             return false;
         _stoppedByKey = true;
-        try { cts.Cancel(); }
+        // What the stop sets off (a tool's cleanup, the end of the run) runs on the thread pool.
+        // Cancel() ran it on the hook's thread, which held up every key press on the PC meanwhile;
+        // and Windows drops a hook that takes too long, which would leave Pause/Break dead.
+        try { _ = cts.CancelAsync(); }
         catch (ObjectDisposedException) { return false; } // the run ended at that very moment
         return true;
     }
