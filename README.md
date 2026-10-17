@@ -144,7 +144,9 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   task is over it is closed, after the jobs still in its queue (the CLI waits for them before it
   exits); a ComfyUI the user started keeps running, and only lets go of the models the task's jobs
   loaded, so the GPU is free. BlackBox tells its own from the user's by the process it started,
-  kept in `Data/comfyui/state.json`. `action=restart` stops it and starts it again with the
+  kept in `Data/comfyui/state.json`, and by the port it listens on, whatever language Windows
+  writes netstat's LISTENING in. One it started that doesn't come up (too slow, or the user
+  pressed Stop) is closed rather than left running hidden. `action=restart` stops it and starts it again with the
   arguments it ran with (custom nodes load only at start; the user's own stays theirs and keeps
   running), `stop` and `free` do what they say. Custom node packs and programs a job lacks the
   agent installs itself, as with any program.
@@ -546,7 +548,12 @@ headless browser instead. A PDF comes as its text, page by page, like `read_file
 doesn't download a page again. The browser's profile is `Data/browser`; like ComfyUI's, it is
 started with `--do-not-de-elevate`, or under a BlackBox run as administrator it would quit at once
 and leave no page to read. Where the browser's HeadlessModeEnabled policy is off, the tools say so
-instead of reading an empty page.
+instead of reading an empty page; a browser that gives back nothing at all (Edge quits with 21 on a
+profile another one holds), or Bing showing something other than its results (a check that you are
+a person), comes back as that, not as "No results", which had the model reword its query again and
+again. A page nested deeper than browsers nest (512 levels) is read as plain text, a line per block:
+reading it recursed once per level, and a page 2,000 deep overflowed the stack and ended BlackBox.
+A page that can't be taken apart in 30 seconds is given up on.
 
 ### Servers over SSH
 `ssh` logs in to a server (`user@host`, `user@host:port` or a `Host` from `~/.ssh/config`) with
@@ -597,7 +604,10 @@ The SSH client is built in (SSH.NET), so no
   contents). It travels as one tar stream over the same connection, binary files intact, and is
   unpacked with sudo where the login user can't write; what only root can read comes down with
   sudo too. In the baseline run the model wrote configs to a local file and called scp.exe
-  through PowerShell for want of this.
+  through PowerShell for want of this. Names Windows can't hold, coming from a server, are made to
+  fit: `: ? * \ | < > "` become `_` (a colon made the file a hidden stream of another one), and a
+  name ending in a dot or a space, or one Windows keeps for devices (`con`, `aux`, `nul`…), gets a
+  `_`; the result says how many names changed.
 - `copy` streams, so size doesn't matter: no more than 32 MB of it waits in memory. A server that
   sends can't be made to wait, so from one server to another whatever the target can't take yet
   waits on this PC's disk instead, in 64 MB temporary files each deleted once read. On the lab
@@ -634,7 +644,9 @@ it. The model sees each tool as `server__tool` (`filesystem__read_file`), so nam
 BlackBox's own tools; a call to the bare name still works when only one server has it. Tools a
 server marks read-only are treated like screenshots in the approval settings, all others like shell
 commands. Text results go back to the model as they are; an image result is shown to it like a
-screenshot. Comments and trailing commas in the file are fine. The settings dialog shows how each
+screenshot, scaled and as JPEG, so a server's full-size PNG doesn't cost thousands of tokens and an
+SVG or WebP the model's server can't read doesn't fail every request after it (one that isn't a
+picture at all is left out, with a line saying so). Comments and trailing commas in the file are fine. The settings dialog shows how each
 server is doing, and a server that fails to start is reported in the chat; the others keep working.
 
 The agent sets servers up itself too, with its `mcp_servers` tool: when a program it is asked to
