@@ -188,6 +188,12 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
                 await Task.Delay(TimeSpan.FromSeconds(3), ct).ConfigureAwait(false);
                 continue;
             }
+            catch (OperationCanceledException)
+            {
+                // Stopped: as "Can't connect to …: The operation was canceled." it read as a failed login.
+                client.Dispose();
+                throw;
+            }
             catch (Exception ex)
             {
                 client.Dispose();
@@ -211,8 +217,18 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
             }
 
             var host = new SshHost(client, t, password) { LoginKeys = offered };
-            var about = await DescribeAsync(host, ct).ConfigureAwait(false);
-            return (host, $"Connected to {t}: {about}" + (newKey is null ? "" : $" Its host key {newKey} was saved."));
+            try
+            {
+                var about = await DescribeAsync(host, ct).ConfigureAwait(false);
+                return (host, $"Connected to {t}: {about}" + (newKey is null ? "" : $" Its host key {newKey} was saved."));
+            }
+            catch
+            {
+                // Stopped while it looked at the system: the connection would be nobody's, and stay
+                // open (sending keep-alives) until BlackBox closes.
+                host.Dispose();
+                throw;
+            }
         }
     }
 
