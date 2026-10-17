@@ -119,6 +119,16 @@ public sealed partial class ComfyModelCards(string stateDirectory)
         }
     }
 
+    /// <summary>A file's SHA-256 known already (its download was checked against it), kept so its card needn't hash it again.</summary>
+    public void Remember(string path, string sha256)
+    {
+        if (HashKey(path) is not { } key)
+            return;
+        Load();
+        _hashes[key] = sha256.ToUpperInvariant();
+        SaveHashes();
+    }
+
     internal static async Task<ModelCard?> FetchAsync(string hash, CancellationToken ct)
     {
         var site = ComfyModelSearch.CivitaiBase;
@@ -326,6 +336,28 @@ public sealed partial class ComfyModelCards(string stateDirectory)
     /// </summary>
     public static string? BaseFromFile(string path)
     {
+        if (Header(path) is not var (keys, metadata))
+            return null;
+        string? said = null;
+        foreach (var name in new[] { "modelspec.architecture", "ss_base_model_version" })
+            if (metadata.TryGetValue(name, out var value))
+                said ??= BaseFromName(value);
+        return said ?? BaseFromTensors(keys);
+    }
+
+    /// <summary>
+    /// Whether a model file holds a VAE, as a whole checkpoint does; false for one that holds the
+    /// diffusion model alone, null when its header can't be read. Civitai lists both as
+    /// checkpoints: MiaoMiao Harem, an Anima model, is the diffusion model alone ("net." tensors),
+    /// which ComfyUI loads with UNETLoader from models/diffusion_models, with its base model's text
+    /// encoder and VAE.
+    /// </summary>
+    public static bool? HoldsVae(string path) =>
+        Header(path) is var (keys, _) ? keys.Any(k => k.StartsWith("first_stage_model.", StringComparison.Ordinal) || k.StartsWith("vae.", StringComparison.Ordinal)) : null;
+
+    /// <summary>The tensor names and the string metadata in a .safetensors file's header; null for another file or one that can't be read.</summary>
+    private static (List<string> Keys, Dictionary<string, string> Metadata)? Header(string path)
+    {
         if (!path.EndsWith(".safetensors", StringComparison.OrdinalIgnoreCase))
             return null;
         try
@@ -339,20 +371,17 @@ public sealed partial class ComfyModelCards(string stateDirectory)
             var header = new byte[length];
             file.ReadExactly(header);
             using var doc = JsonDocument.Parse(header);
-            string? said = null;
             var keys = new List<string>();
+            var metadata = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var p in doc.RootElement.EnumerateObject())
             {
-                if (p.Name == "__metadata__" && p.Value.ValueKind == JsonValueKind.Object)
-                {
-                    foreach (var name in new[] { "modelspec.architecture", "ss_base_model_version" })
-                        if (p.Value.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String)
-                            said ??= BaseFromName(v.GetString()!);
-                }
-                else
+                if (p.Name != "__metadata__")
                     keys.Add(p.Name);
+                else if (p.Value.ValueKind == JsonValueKind.Object)
+                    foreach (var m in p.Value.EnumerateObject().Where(m => m.Value.ValueKind == JsonValueKind.String))
+                        metadata[m.Name] = m.Value.GetString()!;
             }
-            return said ?? BaseFromTensors(keys);
+            return (keys, metadata);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or EndOfStreamException)
         {

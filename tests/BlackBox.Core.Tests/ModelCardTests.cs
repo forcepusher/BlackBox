@@ -237,6 +237,24 @@ public class ModelCardTests : IDisposable
         Assert.Equal(fit, ComfyModelCards.FitOf(lora, checkpoint));
 
     [Fact]
+    public void A_whole_checkpoint_holds_a_vae_and_a_diffusion_model_alone_none()
+    {
+        string File1(string name, string keys)
+        {
+            var header = Encoding.UTF8.GetBytes("{" + keys + "}");
+            var path = Path.Combine(_dir, name);
+            File.WriteAllBytes(path, [.. BitConverter.GetBytes((ulong)header.Length), .. header, 0, 0]);
+            return path;
+        }
+        const string Tensor = """{"dtype": "F16", "shape": [1], "data_offsets": [0, 2]}""";
+        Assert.True(ComfyModelCards.HoldsVae(File1("sdxl.safetensors", $"\"first_stage_model.decoder.conv_in.weight\": {Tensor}, \"model.diffusion_model.out.0.bias\": {Tensor}")));
+        Assert.True(ComfyModelCards.HoldsVae(File1("ltx.safetensors", $"\"vae.decoder.conv_in.weight\": {Tensor}, \"model.diffusion_model.x\": {Tensor}")));
+        Assert.False(ComfyModelCards.HoldsVae(File1("anima.safetensors", $"\"net.blocks.0.weight\": {Tensor}")));
+        Assert.Null(ComfyModelCards.HoldsVae(ModelFile("noise.safetensors").Path));
+        Assert.Null(ComfyModelCards.HoldsVae(Path.Combine(_dir, "model.gguf")));
+    }
+
+    [Fact]
     public void A_files_own_tensors_and_metadata_say_its_base_model()
     {
         Assert.Equal("SDXL", ComfyModelCards.BaseFromTensors(["conditioner.embedders.1.model.ln_final.weight", "model.diffusion_model.out.0.bias"]));

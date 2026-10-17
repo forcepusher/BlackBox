@@ -261,18 +261,34 @@ public sealed class ComfyTool : Tool
                   ?? throw new ComfyApiException("ComfyUI isn't installed yet, so there is no models folder to download into: install it first with action=install.");
         var target = Path.Combine(dir, name);
         if (File.Exists(target) && await IsWholeAsync(target, size, known?.Sha256, ct).ConfigureAwait(false))
-            return new ToolResult($"{name} is there already, in {dir}. {ComfyModelFolders.Use(folder, name)}");
+            return new ToolResult($"{name} is there already, in {dir}. {DiffusionModelAlone(folder, target) ?? ComfyModelFolders.Use(folder, name)}");
 
         var started = DateTime.UtcNow;
         await Web.Downloader.DownloadAsync(url, target, known?.Sha256, ctx.Progress, ct).ConfigureAwait(false);
         var took = DateTime.UtcNow - started;
+        var length = new FileInfo(target).Length;
+        if (known?.Sha256 is { Length: > 0 } sha)
+            hub.Cards.Remember(target, sha);
+        var use = DiffusionModelAlone(folder, target) ?? ComfyModelFolders.Use(folder, name);
         // The new file is a choice in its loader node from now on.
         var api = new ComfyApi(hub.Address);
         if (await api.TrySystemStatsAsync(ct).ConfigureAwait(false) is not null)
             await hub.ModelsAsync(api, ct, fresh: true).ConfigureAwait(false);
         var checkedNote = known?.Sha256 is { Length: > 0 } ? ", its SHA-256 checked" : "";
-        return new ToolResult($"Downloaded {name} ({Size(new FileInfo(target).Length)} in {ComfyRunner.Clock(took)}{checkedNote}) into {dir}. {ComfyModelFolders.Use(folder, name)}");
+        return new ToolResult($"Downloaded {name} ({Size(length)} in {ComfyRunner.Clock(took)}{checkedNote}) into {dir}. {use}");
     }
+
+    /// <summary>
+    /// How to load a file in models/checkpoints that holds the diffusion model alone (no VAE), as the
+    /// Anima, Krea and Z-Image models Civitai lists as checkpoints do; null for a whole checkpoint.
+    /// The download said "Load it with CheckpointLoaderSimple" of MiaoMiao Harem, an Anima model,
+    /// which gives such a file's MODEL and nothing else: qwen3.8 had to find its text encoder and VAE.
+    /// </summary>
+    internal static string? DiffusionModelAlone(string folder, string path) =>
+        folder == "checkpoints" && ComfyModelCards.HoldsVae(path) == false
+            ? $"It holds the diffusion model alone, no text encoder or VAE: CheckpointLoaderSimple (ckpt_name \"{Path.GetFileName(path)}\") gives its MODEL only, " +
+              "so load the text encoder and VAE as a template of its base model does (CLIPLoader, VAELoader), or load it with UNETLoader from models/diffusion_models as such a template does."
+            : null;
 
     private static string Size(long bytes) =>
         bytes >= 1L << 30 ? $"{bytes / 1073741824.0:0.0} GB" : bytes >= 1L << 20 ? $"{bytes / 1048576.0:0} MB" : $"{Math.Max(1, bytes / 1024)} KB";
@@ -438,7 +454,7 @@ public sealed class ComfyTool : Tool
     private async Task<List<string>> CardsAsync(ComfyApi api, ComfyHub hub, IEnumerable<(string Folder, string File)> files, CancellationToken ct)
     {
         var dirs = await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) ?? [];
-        var wanted = new List<(string File, string Path)>();
+        var wanted = new List<(string File, string Path, string Folder)>();
         foreach (var (folder, file) in files.Where(f => f.Folder is "checkpoints" or "loras").DistinctBy(f => f.File, StringComparer.OrdinalIgnoreCase).Take(3))
         {
             if (!dirs.TryGetValue("models:" + folder, out var dir) || Path.Combine(dir, file) is not { } path || !File.Exists(path))
@@ -446,12 +462,12 @@ public sealed class ComfyTool : Tool
             lock (_carded)
                 if (!_carded.Add(file))
                     continue;
-            wanted.Add((file, path));
+            wanted.Add((file, path, folder));
         }
         // All at once: a template of LTX 2.3 names two 27 GB checkpoints, whose first hashes take a while each.
         var looked = await Task.WhenAll(wanted.Select(w => CardAsync(hub, w.Path, ct))).ConfigureAwait(false);
         var cards = new List<string>();
-        foreach (var ((file, path), (card, answered)) in wanted.Zip(looked))
+        foreach (var ((file, path, folder), (card, answered)) in wanted.Zip(looked))
         {
             if (card is not null)
                 cards.Add(ComfyModelCards.Format(file, card));
@@ -460,6 +476,8 @@ public sealed class ComfyTool : Tool
                     _carded.Remove(file);
             else if (ComfyModelCards.BaseFromFile(path) is { } made)
                 cards.Add($"{file} isn't on Civitai; it is {ComfyModelCards.Describe(made)}.");
+            if (DiffusionModelAlone(folder, path) is { } alone)
+                cards.Add($"{file}: {alone}");
         }
         return cards;
     }
