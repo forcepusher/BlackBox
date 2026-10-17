@@ -31,7 +31,6 @@ public class PromptCacheTests
             Sse.Thought("Typing it.", Sse.ToolCall("c3", "type_text", """{"text":"hello"}""")),
             Sse.Thought("Enter too, then.", Sse.ToolCall("c4", "press_keys", """{"keys":["enter"]}""")),
             Sse.Thought("Both done.", Sse.Text("Typed hello and pressed Enter.")),
-            Sse.Thought("Nothing was left.", Sse.Text("That was all.")),
             // A wait the user stops with Pause/Break, and Continue after it.
             Sse.Thought("It takes a while.", Sse.ToolCall("c5", "wait", """{"seconds":30}""")),
             Sse.Thought("It is there now.", Sse.Text("The download finished.")),
@@ -42,7 +41,7 @@ public class PromptCacheTests
             {
                 if (request["tools"] is null)
                     return Sse.Text("(100, 50)"); // a click's fresh look
-                if (replies.Count == 6)
+                if (replies.Count == 5)
                     session!.Steer("and press Enter after it");
                 return replies.Dequeue();
             },
@@ -72,7 +71,7 @@ public class PromptCacheTests
         }
 
         var requests = server.Requests.Where(r => r["tools"] is not null).ToList();
-        Assert.Equal(9, requests.Count);
+        Assert.Equal(8, requests.Count);
         Assert.Equal(1, server.Requests.Count(r => r["tools"] is null));
         for (var i = 1; i < requests.Count; i++)
         {

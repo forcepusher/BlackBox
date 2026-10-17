@@ -28,8 +28,15 @@ public sealed class ComfyTool : Tool
         "action=run runs a workflow (template, workflow_file, or workflow itself), changed by set {\"node id.input\": value}, e.g. " +
         "{\"6.text\": \"a red fox in snow\", \"3.seed\": 42}; it is checked first, then it waits until the job is done and gives you the files " +
         "with a look at them. For an input picture, sound or video, put its full local path where LoadImage/LoadAudio/LoadVideo name a file: it is uploaded. " +
+        "A picture the user gives you to follow (a character, a reference sheet, a style) is where the result starts, not something to describe in words: " +
+        "image to image from it (blackbox/image_to_image; denoise 0.5 to 0.7 keeps the character), or a reference or edit model's template when one is installed; " +
+        "crop or scale it inside the workflow (ImageCrop, ImageScaleToTotalPixels), not with a script. " +
+        "A checkpoint's or LoRA's card (with action=models and its name, a template's view, or after its first run) says how its maker uses it: " +
+        "the prompt style, size, sampler, CFG and negative prompt to start from. " +
         "Change the seed for a different result. A model a workflow lacks: action=download with its url (a template lists the links of its models); " +
-        "action=find_models searches Civitai and Hugging Face for others (a style, a checkpoint the user named, a LoRA, an upscaler) with their sizes and links. " +
+        "action=find_models searches Civitai and Hugging Face for others (a style, a checkpoint the user named, a LoRA, an upscaler) with their sizes and links, " +
+        "and what the month's most downloaded on Civitai are for those words; without search it lists this month's most downloaded checkpoints " +
+        "(kind=lora: LoRAs) and the base models they are on, so you know what is current before you pick one. " +
         "action=status shows the server, GPU and queue (with prompt_id: waits for that job); " +
         "action=free unloads its models to free the GPU; action=restart restarts it (after installing custom nodes into its custom_nodes folder); action=stop stops it.";
 
@@ -37,7 +44,7 @@ public sealed class ComfyTool : Tool
 
     public override JsonObject Parameters => Schema(
         ("action", Str("What to do", "templates", "nodes", "models", "run", "status", "install", "find_models", "download", "free", "restart", "stop"), true),
-        ("search", Str("Words to look for: in templates (\"video from image\"), node types (\"wan video\"), installed model files (\"lora\"), or models online (find_models: \"watercolor\", \"DreamShaper\")"), false),
+        ("search", Str("Words to look for: in templates (\"video from image\"), node types (\"wan video\"), installed model files (\"lora\"), or models online (find_models: \"furry\", \"watercolor\", \"DreamShaper\"; none for this month's most downloaded)"), false),
         ("name", Str("A template's name as action=templates lists it: to see it (templates) or run it (run)"), false),
         ("names", StrArray("Node types to show in full: inputs, their types and choices, outputs (nodes)"), false),
         ("workflow", new JsonObject { ["description"] = "A workflow in API format to run (a JSON object or its text)" }, false),
@@ -157,31 +164,59 @@ public sealed class ComfyTool : Tool
 
     private async Task<ToolResult> FindModelsAsync(JsonObject args, ComfyHub hub, CancellationToken ct)
     {
-        var search = GetString(args, "search")?.Trim() is { Length: > 0 } s ? s : throw new ToolArgumentException("Give search: words for the model you want (\"watercolor\", \"DreamShaper\", \"4x upscaler\").");
-        var problems = new List<string>();
-        var found = await ComfyModelSearch.SearchAsync(search, GetString(args, "kind"), GetString(args, "base"), 10, problems, ct).ConfigureAwait(false);
-        lock (_found)
-            foreach (var m in found)
-                _found[m.Url] = m;
+        var search = GetString(args, "search")?.Trim() ?? "";
+        var (kind, baseModel) = (GetString(args, "kind"), GetString(args, "base"));
         var sb = new StringBuilder();
         var (device, cpu) = await DeviceAsync(hub, ct).ConfigureAwait(false);
-        sb.AppendLine(found.Count == 0 ? $"No model for \"{search}\" was found on Civitai or Hugging Face{(GetString(args, "kind") is { } k ? $" as a {k}" : "")}. Try other or fewer words."
-            : $"Models for \"{search}\", the most downloaded first on each site. ComfyUI {device}." + (cpu ? " " + ComfyHardware.CpuAdvice : ""));
+        var hardware = $"ComfyUI {device}." + (cpu ? " " + ComfyHardware.CpuAdvice : "");
         var n = 0;
-        foreach (var m in found)
+        void List(OnlineModel m, string? popularity)
         {
+            lock (_found)
+                _found[m.Url] = m;
             sb.Append(++n).Append(". ").Append(m.Title).Append(": ").Append(m.Kind)
                 .Append(m.Base is { Length: > 0 } b ? $" for {b}" : "")
                 .Append(m.Size is { } size ? $", {Size(size)}" : "")
-                .Append(m.Downloads > 0 ? $", {m.Downloads:N0} downloads" : "")
+                .Append(popularity ?? (m.Downloads > 0 ? $", {m.Downloads:N0} downloads" : ""))
                 .Append(m.Note is { } note ? $", {note}" : "")
                 .Append($" ({m.Source}, {m.Page})").AppendLine();
             sb.Append("   ").Append(m.File).Append(": url=").Append(m.Url).Append(" model_folder=").AppendLine(m.Folder);
         }
+
+        // What people use now: with no search the month's list itself, with one the ones that match it.
+        var snapshot = await hub.Popular.GetAsync(ct).ConfigureAwait(false);
+        var asOf = snapshot is null ? "" : $" (as of {snapshot.Fetched.ToLocalTime():d MMMM})";
+        var popular = snapshot is null ? [] : ComfyPopularModels.Matching(snapshot.Models, ComfyNodeLibrary.Words(search), kind ?? (search.Length == 0 ? "checkpoint" : null), baseModel);
+        if (search.Length == 0)
+        {
+            if (snapshot is null)
+                throw new ToolArgumentException("Civitai couldn't be asked for this month's popular models; give search: words for the model you want (\"watercolor\", \"DreamShaper\", \"4x upscaler\").");
+            var folder = ComfyModelSearch.KindOf(kind ?? "checkpoint")?.Folder ?? "checkpoints";
+            sb.AppendLine($"Civitai's most downloaded {(folder == "loras" ? "LoRAs" : "checkpoints")} this month{(baseModel is null ? "" : $" for {baseModel}")}{asOf}. {hardware}");
+            sb.AppendLine($"The month's most downloaded are on these base models: {ComfyPopularModels.Bases(snapshot.Models, folder)}.");
+            foreach (var p in popular.Take(10))
+                List(p.Model, $", #{p.Rank} this month");
+            sb.Append("search narrows it to what you need (a style, a subject: \"anime\", \"furry\", \"photorealistic\", \"landscape\"); kind=lora lists LoRAs; base= one base model. " +
+                      "Download one with action=download url=… model_folder=…; its card then says how its maker uses it.");
+            return new ToolResult(sb.ToString().TrimEnd());
+        }
+
+        var problems = new List<string>();
+        var found = await ComfyModelSearch.SearchAsync(search, kind, baseModel, popular.Count > 0 ? 6 : 10, problems, ct).ConfigureAwait(false);
+        if (popular.Count > 0)
+        {
+            sb.AppendLine($"Most downloaded on Civitai this month for \"{search}\"{asOf}: what people make such pictures with now. {hardware}");
+            foreach (var p in popular.Take(5))
+                List(p.Model, $", #{p.Rank} this month");
+        }
+        sb.AppendLine(found.Count == 0 ? $"No model named for \"{search}\" was found on Civitai or Hugging Face{(kind is { } k ? $" as a {k}" : "")}. Try other or fewer words."
+            : $"Models named for \"{search}\", the most downloaded of all time first on each site." + (popular.Count > 0 ? "" : " " + hardware));
+        foreach (var m in found)
+            List(m, null);
         foreach (var p in problems)
             sb.AppendLine(p);
-        if (found.Count > 0)
-            sb.Append("Download one with action=download url=… model_folder=…; prefer .safetensors files. A model's page says what it is good at and the trigger words of a LoRA.");
+        if (found.Count + popular.Count > 0)
+            sb.Append("Download one with action=download url=… model_folder=…; prefer .safetensors files. Its card then says how its maker uses it, and a LoRA's trigger words.");
         return new ToolResult(sb.ToString().TrimEnd());
     }
 
@@ -343,7 +378,7 @@ public sealed class ComfyTool : Tool
         return new ToolResult(sb.ToString().TrimEnd());
     }
 
-    private static async Task<ToolResult> ModelsAsync(JsonObject args, ComfyHub hub, ComfyApi api, CancellationToken ct)
+    private async Task<ToolResult> ModelsAsync(JsonObject args, ComfyHub hub, ComfyApi api, CancellationToken ct)
     {
         var words = ComfyNodeLibrary.Words(GetString(args, "search") ?? "");
         // Asked for on purpose, often right after a download: never from the cache.
@@ -370,8 +405,60 @@ public sealed class ComfyTool : Tool
         }
         if (shown == 0)
             return new ToolResult(words.Count > 0 ? $"No installed model matches \"{GetString(args, "search")}\"." : "No models are installed.");
-        sb.Append("A model too big for the GPU still runs, slower: ComfyUI keeps part of it in RAM.");
+        sb.AppendLine("A model too big for the GPU still runs, slower: ComfyUI keeps part of it in RAM.");
+        // Looked for by name, a checkpoint or LoRA is about to be used: how to use it comes with it.
+        if (words.Count > 0)
+        {
+            var named = models.Where(kv => kv.Key is "checkpoints" or "loras")
+                .SelectMany(kv => kv.Value.Where(f => words.All(w => ComfyNodeLibrary.Squash(f).Contains(w))).Select(f => (Folder: kv.Key, File: f)))
+                .ToList();
+            if (named.Count is > 0 and <= 3)
+                foreach (var card in await CardsAsync(api, hub, named, ct).ConfigureAwait(false))
+                    sb.AppendLine().AppendLine(card);
+        }
         return new ToolResult(sb.ToString().TrimEnd());
+    }
+
+    /// <summary>The checkpoints and LoRAs whose card this task has seen: each comes once.</summary>
+    private readonly HashSet<string> _carded = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// What Civitai says about the checkpoints and LoRAs given that this task hasn't seen yet (three
+    /// at most): how to prompt them, at what size and with which settings their makers made their
+    /// pictures. For a file Civitai doesn't know, the size its base model is made for.
+    /// </summary>
+    private async Task<List<string>> CardsAsync(ComfyApi api, ComfyHub hub, IEnumerable<(string Folder, string File)> files, CancellationToken ct)
+    {
+        var cards = new List<string>();
+        var dirs = await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) ?? [];
+        foreach (var (folder, file) in files.Where(f => f.Folder is "checkpoints" or "loras").DistinctBy(f => f.File, StringComparer.OrdinalIgnoreCase).Take(3))
+        {
+            if (!dirs.TryGetValue("models:" + folder, out var dir) || Path.Combine(dir, file) is not { } path || !File.Exists(path))
+                continue;
+            lock (_carded)
+                if (!_carded.Add(file))
+                    continue;
+            if (await CardAsync(hub, path, ct).ConfigureAwait(false) is { } card)
+                cards.Add(ComfyModelCards.Format(file, card));
+            else if (ComfyModelCards.BaseFromFile(path) is { } made)
+                cards.Add($"{file} isn't on Civitai; it is {ComfyModelCards.Describe(made)}.");
+        }
+        return cards;
+    }
+
+    /// <summary>A model file's card, or null when Civitai doesn't know it or doesn't answer within half a minute.</summary>
+    private static async Task<ModelCard?> CardAsync(ComfyHub hub, string path, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            return await hub.Cards.LookUpAsync(path, timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return null;
+        }
     }
 
     private static async Task<Dictionary<string, long>> SizesAsync(ComfyApi api, string folder, CancellationToken ct)
@@ -390,7 +477,7 @@ public sealed class ComfyTool : Tool
 
     // ---- templates ------------------------------------------------------------------------
 
-    private static async Task<ToolResult> TemplatesAsync(JsonObject args, ComfyHub hub, ComfyApi api, ToolContext ctx, CancellationToken ct)
+    private async Task<ToolResult> TemplatesAsync(JsonObject args, ComfyHub hub, ComfyApi api, ToolContext ctx, CancellationToken ct)
     {
         var all = await hub.TemplatesAsync(api, ct).ConfigureAwait(false);
         var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
@@ -407,6 +494,8 @@ public sealed class ComfyTool : Tool
             AppendReadiness(sb, editor, workflow, library, models);
             if ((ComfyBuiltins.For(template)?.Notes ?? ComfyTemplates.Notes(editor, 1500)) is { Length: > 0 } notes)
                 sb.AppendLine("Its notes:").AppendLine(notes);
+            foreach (var card in await CardsAsync(api, hub, ModelFiles(workflow, models), ct).ConfigureAwait(false))
+                sb.AppendLine(card);
             sb.AppendLine($"As an API-format workflow ({workflow.Nodes.Count} nodes), also saved to {file}:");
             sb.AppendLine(workflow.Listing());
             var usual = workflow.UsualChanges(library);
@@ -587,6 +676,7 @@ public sealed class ComfyTool : Tool
 
         // Files of the user's own: uploaded into ComfyUI's input folder, and named as it knows them.
         var uploaded = new HashSet<string>();
+        var inputPictures = new List<string>();
         foreach (var (id, input, path) in workflow.LocalFiles(library, ctx.ResolvePath))
         {
             if (!File.Exists(path))
@@ -594,6 +684,8 @@ public sealed class ComfyTool : Tool
             ctx.Progress?.Invoke($"Uploading {Path.GetFileName(path)}…");
             ((JsonObject)workflow.Nodes[id]!["inputs"]!)[input] = await api.UploadAsync(path, ct).ConfigureAwait(false);
             uploaded.Add(id + "." + input);
+            if (Picture.Handles(path))
+                inputPictures.Add(path);
         }
 
         var warnings = new List<string>();
@@ -621,10 +713,61 @@ public sealed class ComfyTool : Tool
             lock (_lastRuns) _lastRuns[templateName] = args["set"] is JsonObject done ? ComfyWorkflow.Changes(done) : [];
         _ranJobs = true;
         hub.RememberJob(promptId, clientId, workflow.All().ToDictionary(n => n.Id, n => ComfyWorkflow.TitleOf(n.Node) ?? ComfyWorkflow.ClassOf(n.Node)));
-        var result = await WaitForAsync(args, hub, api, promptId, ctx, ct).ConfigureAwait(false);
+        var result = await WaitForAsync(args, hub, api, promptId, ctx, ct, inputPictures).ConfigureAwait(false);
         var notes = refused.Select(r => "Left out: " + r).Concat(warnings.Select(w => "Note: " + w))
             .Concat(forgotten is null ? [] : ["Note: " + forgotten]).ToList();
-        return notes.Count > 0 ? result with { Text = string.Join("\n", notes) + "\n" + result.Text } : result;
+        if (notes.Count > 0)
+            result = result with { Text = string.Join("\n", notes) + "\n" + result.Text };
+        if (result.IsError)
+            return result;
+        // With the pictures in front of it: whether they were made at the checkpoint's size, and
+        // how the makers of the models it used make theirs, the first time it uses them.
+        var used = ModelFiles(workflow, await hub.ModelsAsync(api, ct).ConfigureAwait(false));
+        var after = new List<string>();
+        if (await SizeNoteAsync(api, hub, workflow, used, ct).ConfigureAwait(false) is { } sizeNote)
+            after.Add(sizeNote);
+        after.AddRange(await CardsAsync(api, hub, used, ct).ConfigureAwait(false));
+        return after.Count > 0 ? result with { Text = result.Text + "\n\n" + string.Join("\n\n", after) } : result;
+    }
+
+    /// <summary>The installed checkpoints and LoRAs a workflow's nodes are set to, with their folders.</summary>
+    private static List<(string Folder, string File)> ModelFiles(ComfyWorkflow workflow, Dictionary<string, HashSet<string>> models)
+    {
+        var found = new List<(string Folder, string File)>();
+        foreach (var (_, node) in workflow.All())
+            foreach (var (_, value) in node["inputs"] as JsonObject ?? [])
+                if (value is JsonValue v && v.TryGetValue<string>(out var name))
+                    foreach (var folder in new[] { "checkpoints", "loras" })
+                        if (models.TryGetValue(folder, out var files) && files.Contains(name))
+                            found.Add((folder, name));
+        return found;
+    }
+
+    /// <summary>
+    /// A note when a workflow makes its pictures at under half the size its checkpoint is made for:
+    /// the user's furry template ran an SDXL model at 512x760, and every picture came out soft.
+    /// </summary>
+    private static async Task<string?> SizeNoteAsync(ComfyApi api, ComfyHub hub, ComfyWorkflow workflow, List<(string Folder, string File)> used, CancellationToken ct)
+    {
+        if (used.FirstOrDefault(u => u.Folder == "checkpoints").File is not { } checkpoint ||
+            (await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false))?.GetValueOrDefault("models:checkpoints") is not { } dir)
+            return null;
+        var path = Path.Combine(dir, checkpoint);
+        if (!File.Exists(path) || ((await CardAsync(hub, path, ct).ConfigureAwait(false))?.Base ?? ComfyModelCards.BaseFromFile(path)) is not { } made ||
+            ComfyModelCards.NativeSide(made) is not { } side)
+            return null;
+        foreach (var (_, node) in workflow.All())
+        {
+            var type = ComfyWorkflow.ClassOf(node);
+            if (type.StartsWith("Empty", StringComparison.Ordinal) && type.Contains("Latent", StringComparison.Ordinal) &&
+                Number(node["inputs"]?["width"]) is { } w && Number(node["inputs"]?["height"]) is { } h && w * h < 0.55 * side * side)
+                return $"Note: it made its pictures at {w}x{h}, under half the size {checkpoint} is made for ({ComfyModelCards.Describe(made)}): " +
+                       "at that size it draws blurrier, with worse faces and anatomy. Make them at its size; to get them bigger still, upscale after.";
+        }
+        return null;
+
+        static double? Number(JsonNode? n) =>
+            n is JsonValue && double.TryParse(n.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
     }
 
     /// <summary>Files named in the text a job's nodes showed: full paths, or paths in ComfyUI's output folder, that exist.</summary>
@@ -650,7 +793,9 @@ public sealed class ComfyTool : Tool
             ? ComfyWorkflow.FromApi(await ToApiAsync(hub, api, json, ct).ConfigureAwait(false))
             : ComfyWorkflow.FromApi(json);
 
-    private static async Task<ToolResult> WaitForAsync(JsonObject args, ComfyHub hub, ComfyApi api, string promptId, ToolContext ctx, CancellationToken ct)
+    /// <param name="inputs">The pictures the job's workflow loads (LoadImage), for when the user gave none to follow.</param>
+    private static async Task<ToolResult> WaitForAsync(JsonObject args, ComfyHub hub, ComfyApi api, string promptId, ToolContext ctx, CancellationToken ct,
+        IReadOnlyList<string>? inputs = null)
     {
         var wait = TimeSpan.FromMinutes(Math.Clamp(GetNumber(args, "wait_minutes") ?? 30, 0.1, 240));
         var (clientId, titles) = hub.JobClient(promptId);
@@ -697,11 +842,28 @@ public sealed class ComfyTool : Tool
             sb.AppendLine("(These are previews in ComfyUI's temp folder, which it empties when it restarts: add a save node, or copy them with save_to, to keep them.)");
         foreach (var text in job.Texts.Take(10))
             sb.AppendLine("Text it gave: " + text.Clip(2000));
-        if (preview.Image is not null)
+        var image = preview.Image;
+        var imageCaption = "What the job made:";
+        // Next to a picture to follow, so the result is judged against it rather than against the
+        // model's memory of it: asked for a bunny from the user's reference sheet, Nemotron called
+        // four results mature and close to the sheet's style while the user saw a chubby teenager.
+        var (reference, given) = ctx.UserPictures.FirstOrDefault(File.Exists) is { } picture ? (picture, true) : (inputs?.FirstOrDefault(File.Exists), false);
+        if (image is not null && job.Status == "success" && reference is not null &&
+            MediaPreview.SideBySide(reference, image, given ? "The user's picture" : "The picture it started from") is { } both)
+        {
+            image = both;
+            imageCaption = given ? "The user's picture, and what the job made:" : "The picture the job started from, and what it made:";
+            sb.Append(given
+                ? $"On the left is the picture the user gave you ({Path.GetFileName(reference)}); on the right, what the job made. " +
+                  "Compare them where the user asked the result to follow it (the character, its age and build, colours, style), " +
+                  "and say what differs. On the right: " + preview.Caption
+                : $"On the left is the picture the job started from ({Path.GetFileName(reference)}); on the right, what it made. " + preview.Caption);
+        }
+        else if (image is not null)
             sb.Append(preview.Caption);
         var resultText = sb.ToString().TrimEnd();
         return job.Status == "success"
-            ? new ToolResult(resultText, preview.Image, ImageCaption: preview.Image is null ? null : "What the job made:", Files: paths)
-            : new ToolResult(resultText, preview.Image, IsError: true, ImageCaption: preview.Image is null ? null : "What the job made before it stopped:", Files: paths);
+            ? new ToolResult(resultText, image, ImageCaption: image is null ? null : imageCaption, Files: paths)
+            : new ToolResult(resultText, image, IsError: true, ImageCaption: image is null ? null : "What the job made before it stopped:", Files: paths);
     }
 }

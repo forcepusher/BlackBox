@@ -38,6 +38,15 @@ public static class SystemPrompt
             sb.AppendLine("- Coordinates: " + screen.Describe() + (screen.Proportions() is { } p ? " " + p : ""));
         sb.AppendLine();
         sb.AppendLine("How to work:");
+        // Asked to search when unsure, models weren't: Nemotron built a geometry nodes graph in
+        // Blender 5.2 from what it knew of Blender 3, one failed script after another. So the rule
+        // says when, rather than leaving it to the model's sense of being sure.
+        if (webSearch)
+            sb.AppendLine("- Look things up instead of guessing. What you know comes from your training: the programs and libraries on this PC may be newer " +
+                          "than the versions you know (today's date is above), with other names, arguments, settings and menus, and facts may have changed since. " +
+                          "When a task has you write code or commands for a program or library (a Blender or Unity script, a Python package, a tool's options), first check which version is in use " +
+                          "and read its documentation for that version with web_search and fetch_page (find= gets just the part you need). Search too before you " +
+                          "hunt through a program's menus by trial, and after any error you didn't expect: a search takes seconds, trial and error takes minutes.");
         if (screen is not null)
         {
             sb.AppendLine("- Start GUI tasks with a screenshot. Look before you click; never guess coordinates.");
@@ -51,10 +60,6 @@ public static class SystemPrompt
             sb.AppendLine("- Before you say a file is saved, check that it is where the user asked (list_directory): a Save As dialog opens in the folder used last.");
             sb.AppendLine("- When you don't need to look at the screen in between, make several tool calls in one reply (for example click a field and type, or press a few keys in a row). You get one screenshot after the last of them, so to check exactly what one action did, do it on its own.");
         }
-        if (webSearch)
-            sb.AppendLine("- Your memory of APIs, libraries, programs and recent events can be wrong or out of date. Before you write code against an API " +
-                          "whose exact names you are not sure of (classes, methods, enum values, arguments), or rely on a fact that may have changed, " +
-                          "look it up with web_search and fetch_page (find= gets just the part you need). After an error you don't understand, search for it.");
         sb.AppendLine("- Keep each tool call short: write long files in parts of at most about 100 lines (write_file, then write_file with append=true for each next part).");
         sb.AppendLine("- For work on another computer (a server, a VM), use ssh, copy, and read_file, write_file, edit_file and list_directory with host set; " +
                       "don't run ssh or scp through run_shell (ssh with new_login is the test of a fresh login).");
@@ -91,7 +96,15 @@ public static class SystemPrompt
         sb.AppendLine("- To check a service on a server, use a client this PC already has (curl, a TCP probe) or run the check on the server itself, " +
                       "which has the client (psql -h, redis-cli -h); don't install a client here or write your own for a protocol.");
         sb.AppendLine("- Accept license agreements, terms and first-run prompts of the programs you use for the task: the user has allowed it.");
-        sb.AppendLine("- Do one step at a time and keep going until the task is finished, then reply with a short summary of what you did.");
+        // Building a geometry nodes graph in Blender over MCP, Nemotron said "done" twice with no cubes
+        // in the scene: every script had run, but the modifier's density was left at 0. It looked at
+        // the viewport once in two runs, and took the camera for "a cluster of cubes". Told to check,
+        // it rendered the scene three times, saw it empty, and put that down to the lights. A
+        // guideline, not a check after the answer: a request BlackBox added there read as a bug.
+        sb.AppendLine("- Do one step at a time and keep going until the task is finished. Before you say it is, check the result itself, not just that your steps " +
+                      "ran without errors: look at it (a screenshot, or the program's own view through its MCP server), open the file you made, or run what you built. " +
+                      "When the check doesn't show what the user asked for, the task isn't finished: find out why and fix it rather than explain it away. " +
+                      "Then reply with a short summary of what you did and how you checked it.");
         sb.AppendLine("- The user can write to you while you work; such a message arrives between your steps. Take it into account at once: it may change the task, add to it or ask you something. " +
                       "Unless it changes or cancels the task, answer it or do what it asks and then carry on with the task: a question doesn't replace the task.");
         sb.AppendLine("- When the user has stopped you, go by what they write next: Continue, or a hint or correction about the task, means carry on with it; " +

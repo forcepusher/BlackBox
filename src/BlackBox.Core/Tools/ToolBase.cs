@@ -85,6 +85,12 @@ public sealed class ToolContext
     /// <summary>The ComfyUI server the comfyui tool works with; null when it isn't offered.</summary>
     public Comfy.ComfyHub? Comfy { get; init; }
 
+    /// <summary>
+    /// The pictures the user's latest message with pictures came with, in this chat: a picture to
+    /// follow, which the comfyui tool shows next to what each job makes. Set by the agent session.
+    /// </summary>
+    public IReadOnlyList<string> UserPictures { get; set; } = [];
+
     /// <summary>Reads video and sound, so the model can look at them (frames, waveforms); null when nothing can.</summary>
     public Media.IMediaDecoder? Media { get; init; }
 

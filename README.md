@@ -111,6 +111,28 @@ from memory, and those were often wrong, so the model doesn't work from memory h
 - **Names looked up, not remembered.** `action=nodes` searches the server's node types or shows
   some in full (inputs, types, ranges, choices, outputs); `action=models` lists the installed model
   files with their sizes.
+- **Each model as its maker uses it.** Asked for a bunny with the user's Nova Furry XL, an
+  Illustrious model, Nemotron wrote its prompt in plain sentences and ran the template at 512x760;
+  the model's Civitai page asks for quality tags and tag-style prompts, and its maker's pictures
+  were made at 768x1344 with a hires pass. Four tries came out young, soft and off-style. Now a
+  checkpoint or LoRA comes with its card the first time a task meets it (`action=models` with its
+  name, a template's view, or after its first run): what its page says about settings and
+  prompts, its trigger words, the size its base model is made for, and how one of its maker's own
+  pictures was made (prompt, negative prompt, sampler as ComfyUI names it, CFG, steps, size, clip
+  skip, hires pass), with what AUTOMATIC1111's settings are in ComfyUI. The file is found on
+  Civitai by Civitai's AutoV1 hash (64 KB a megabyte into it, no time at all) and its size, and
+  the cards are kept in `Data/comfyui/model-cards.json`. A file Civitai doesn't know gets its base
+  model from its own tensor names. A run that makes its pictures at under half the size its
+  checkpoint is made for says so. And a picture the user gives to follow (a character, a reference
+  sheet) is where the result starts: the tool tells the model to start from it, image to image,
+  and to crop or scale it inside the workflow. In that chat it described the reference sheet in
+  words for four tries, then cropped it with PowerShell in four calls, two of which failed.
+- **The picture to follow next to each result.** The look at what a job made comes beside the
+  picture the user gave in the chat (the latest message that came with pictures, found again in
+  later runs), labelled, at the same height, so the model compares the two rather than the result
+  with its memory of the reference: Nemotron called four of those bunnies mature and true to the
+  sheet's style while the user saw a chubby teenager. With no picture from the user, the one the
+  job started from (its LoadImage) takes that place.
 - **Checked before it runs.** Every workflow is checked against the server's node types first, and
   every wrong name comes back at once with the closest real one: "no node type SaveImag; did you
   mean SaveImage?", "no input sampler; did you mean sampler_name?", a model file that isn't
@@ -160,6 +182,15 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   style, a model the user named, a LoRA or an upscaler (`kind`, `base`), and lists each file with
   its kind, base model, size, downloads and link, the most downloaded first, without NSFW models
   and gated ones.
+- **What people use now.** Civitai ranks a search by downloads of all time, so "anime" brought
+  years-old SD 1.5 models first, and a model's memory stops at its training: in October 2026 half of
+  Civitai's 100 most downloaded checkpoints of the month were on Anima, a base model none of them
+  knew, and others on Krea 2, Z-Image Turbo and MiniMax H3. BlackBox keeps the month's 100 most
+  downloaded checkpoints and LoRAs, with their tags, in `Data/comfyui/popular-models.json`, fetched
+  again once a week. `find_models` without words lists them (by `kind` and `base`) with the base
+  models they are on; with words, the ones whose tags match ("furry": Nova Furry AM, a newer
+  version of the user's model, on Anima) come before the search's own results. Models tagged as
+  porn are left out, as Civitai's own NSFW mark was off on several.
 
 `read_file` gives the model a look at media as well as pictures: a video as eight frames with their
 times (and how loud its sound is, in words), a sound as its waveform and spectrogram with its
@@ -433,11 +464,17 @@ for the same way, so a long task carries on once it is back instead of ending on
 upload without breaking it: a request carries every screenshot still in the context, several
 megabytes, and LM Studio waited five minutes for the rest of one before answering 408. So when
 nothing of a request gets through for 30 seconds, it is sent again. A tool that fails, however
-it fails, reports the error to the model and the run goes on. When the same error comes back a
-second time, the result tells the model to search the web for the error message before trying
-again: it used to work around errors rather than look them up, and once decided Excel's chart
-interface was broken after a PowerShell call failed the same way four times (`ChartObjects` is a
-method there, not a property).
+it fails, reports the error to the model and the run goes on. Models work around errors and guess
+at names rather than look them up: qwen3.8 once decided Excel's chart interface was broken after a
+PowerShell call failed the same way four times (`ChartObjects` is a method there, not a property),
+and Nemotron built a geometry nodes graph in Blender 5.2 from names it knew from Blender 3, one failed
+script after another. So a failed call's result tells the model to search the web before it tries
+again when the error says a name doesn't exist (an attribute, method, argument, enum value, node
+type or command), when the same error comes back, on every failure from the third since its last
+`web_search` or `fetch_page`, and the first time a script or command fails in a task before
+anything was looked up. Errors a tool that runs code reports as its output count too: an
+MCP server's "Error executing code: ..." comes as an ordinary result, and Blender run with a script
+prints the traceback and exits with 0.
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |
@@ -460,6 +497,14 @@ Models often fumble tool-call syntax, so BlackBox repairs calls on the fly: Qwen
 JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…) and misnamed
 arguments (`coordinate: [x, y]`) are all accepted, and a model that announces a step without taking
 it gets nudged to continue.
+
+Before it says a task is done, the model is asked to check the result itself, not just that its
+steps ran without errors (a look at it, the file it made, a run of what it built), and to say how
+it checked; a check that doesn't show what the user asked for means the task isn't finished.
+Building a geometry nodes graph in Blender, Nemotron twice said "done" with no cubes in the scene:
+every script had run, but the modifier's density was left at 0. Told only to check, it rendered
+the scene three times, saw it empty, and put that down to the lights. It is a guideline in the
+system prompt, not a request of BlackBox's after the answer, which read to the user as a bug.
 
 With several monitors the agent sees one at a time: screenshots show the screen it looked at last
 (the primary at first) and `screen=N` switches. All coordinates refer to the screen in the latest
@@ -533,10 +578,16 @@ nothing is clicked: the model gets the new screen, and a click it then asks for 
 
 ### Web search
 A local model's memory of APIs is where it slips most (qwen3.8 writes Unity's `KeyCode.Left`, which
-doesn't exist, for `KeyCode.LeftArrow`), so the agent can look things up, and the system prompt
-tells it to whenever it isn't sure of an exact name or meets an error it doesn't understand. Given
+doesn't exist, for `KeyCode.LeftArrow`), so the agent can look things up. Told to whenever it wasn't
+sure, it rarely was, so the system prompt says when instead: before it writes code or commands for a
+program or library, it checks the version in use and reads that version's documentation; it
+searches before hunting through a program's menus, and after any error it didn't expect. Given
 Unity's CS0117 error for `KeyCode.Left`, qwen3.8 searched, read the `KeyCode` page with
-`find=Arrow` and fixed the file in 55 s.
+`find=Arrow` and fixed the file in 55 s. On a Blender 5.2 task over mcp-for-blender (cubes scattered
+over a plane with geometry nodes, each turned and sized at random, the density and the cube size as
+inputs of the modifier), qwen3.8 failed 11 and 6 scripts in two runs before the rule and the notes
+(see Unstable connections), and searched only after the 7th and the 4th failure; with them it failed
+4 and 3, searched after the second, and finished in 6.4 minutes on average instead of 7.7.
 
 No API key and nothing to install. `web_search` asks DuckDuckGo's HTML page through the system's
 `curl` (built into Windows 10 and later; a fraction of a second): DuckDuckGo recognizes .NET's own
@@ -698,9 +749,12 @@ you stopped it goes back in the box.
 
 Such a message reaches the model marked as sent while it worked on the request, which it names
 ("Try using pony diffusion"): a question or a side request is answered or done and the request goes
-on, unless the message changes or cancels it. Before a run that took one ends, the model is asked
-once whether that request is done. Asked mid-task why something had failed, the model used to
-answer the question and stop, the request forgotten.
+on, unless the message changes or cancels it. When the model answers one without going back to
+work, it is asked once, before the run ends, whether that request is done: asked mid-task why
+something had failed, the model used to answer the question and stop, the request forgotten. A
+model that did go back to work isn't asked, and a message that comes while the model writes its
+final answer isn't marked (the task is done by then, so it is the next request, as if sent after
+the run): asked anyway, the model wrote the same answer a second time.
 
 ## Build
 Requires the .NET 10 SDK.

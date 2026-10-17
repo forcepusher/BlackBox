@@ -8,12 +8,12 @@ public sealed class WebSearchTool : Tool
 {
     public override string Name => "web_search";
     public override string Description =>
-        "Search the web. Returns titles, links and short snippets. Use it whenever you are not sure of something: " +
-        "exact API names and signatures, error messages, versions, how a program works, current facts. " +
-        "Then read the best result with fetch_page.";
+        "Search the web. Returns titles, links and short snippets. Use it rather than guess or try things out: how something is done " +
+        "in the version of a program or library in use (API names and arguments, settings, menus), what an error means, current facts. " +
+        "Name the program and its version in the query. Then read the best result with fetch_page.";
     public override ToolRisk Risk => ToolRisk.ReadOnly;
     public override JsonObject Parameters => Schema(
-        ("query", Str("What to search for, e.g. 'Unity KeyCode left arrow' or 'site:learn.microsoft.com HttpClient timeout'"), true),
+        ("query", Str("What to search for, e.g. 'Blender 5.2 geometry nodes interface new_socket', 'Unity KeyCode left arrow' or 'site:learn.microsoft.com HttpClient timeout'"), true),
         ("max_results", Int("How many results (default 8, max 20)"), false));
     public override string Describe(JsonObject args) => $"Search the web: {GetString(args, "query")}";
 
