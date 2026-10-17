@@ -81,9 +81,65 @@ internal static class TextFiles
     public static async Task AppendAsync(string path, string text, CancellationToken ct)
     {
         var encoding = Detect(path);
+        if (NeedsSignature(path, encoding, text))
+        {
+            // A script begun with only ASCII in it, which gets more now: it needs the signature first.
+            var (old, _) = await ReadAllAsync(path, ct).ConfigureAwait(false);
+            await WriteAllAsync(path, old + text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true), ct).ConfigureAwait(false);
+            return;
+        }
         var bytes = encoding.GetBytes(text); // GetBytes writes no signature
         await using var file = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
         await file.WriteAsync(bytes, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>A Windows PowerShell script (.ps1, .psm1, .psd1).</summary>
+    public static bool IsPowerShellScript(string path) => Path.GetExtension(path).ToLowerInvariant() is ".ps1" or ".psm1" or ".psd1";
+
+    /// <summary>
+    /// The encoding of a file written anew: UTF-8, with the signature for a PowerShell script.
+    /// Windows PowerShell reads a script without one in the ANSI code page, where a "—" or "✓" has
+    /// bytes that are quote marks: the script failed with "The string is missing the terminator"
+    /// on a line that looked right.
+    /// </summary>
+    public static Encoding ForNewFile(string path) => new UTF8Encoding(encoderShouldEmitUTF8Identifier: IsPowerShellScript(path));
+
+    /// <summary>A PowerShell script in UTF-8 without the signature, which <paramref name="text"/> would take past ASCII.</summary>
+    public static bool NeedsSignature(string path, Encoding encoding, string text) =>
+        IsPowerShellScript(path) && encoding is UTF8Encoding && encoding.GetPreamble().Length == 0 && !Ascii.IsValid(text);
+
+    /// <summary>
+    /// Writes a whole file through a temporary one beside it, which then takes its place with the
+    /// old one's attributes and permissions: written in place, a Stop or a full disk in the middle
+    /// left the file cut short and the rest of it gone.
+    /// </summary>
+    public static async Task WriteAllAsync(string path, string text, Encoding encoding, CancellationToken ct)
+    {
+        if (!File.Exists(path))
+        {
+            await File.WriteAllTextAsync(path, text, encoding, ct).ConfigureAwait(false);
+            return;
+        }
+        var temp = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            await File.WriteAllTextAsync(temp, text, encoding, ct).ConfigureAwait(false);
+            try
+            {
+                File.Replace(temp, path, destinationBackupFileName: null, ignoreMetadataErrors: true);
+            }
+            catch (IOException)
+            {
+                // Held by a program that lets it be written but not replaced (an editor, a log
+                // viewer): in place, as before.
+                await File.WriteAllTextAsync(path, text, encoding, CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            try { File.Delete(temp); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
     }
 
     /// <summary>A reader for the file in its own encoding, line by line, however big it is.</summary>

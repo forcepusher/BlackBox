@@ -258,7 +258,7 @@ public sealed class WriteFileTool : Tool
             return new ToolResult($"Appended {content.Length} chars to {path} (now {new FileInfo(path).Length} bytes).");
         }
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, content, ct).ConfigureAwait(false);
+        await TextFiles.WriteAllAsync(path, content, TextFiles.ForNewFile(path), ct).ConfigureAwait(false);
         return new ToolResult($"{(existed ? "Overwrote" : "Created")} {path} ({content.Length} chars).");
     }
 }
@@ -332,7 +332,10 @@ public sealed class EditFileTool : Tool
         if (count > 1 && !all)
             return ToolResult.Error($"old_text occurs {count} times. Include more surrounding text to make it unique, or set replace_all to change every one.");
 
-        await File.WriteAllTextAsync(path, text.Replace(oldText, newText, StringComparison.Ordinal), encoding, ct).ConfigureAwait(false);
+        var edited = text.Replace(oldText, newText, StringComparison.Ordinal);
+        if (TextFiles.NeedsSignature(path, encoding, edited))
+            encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+        await TextFiles.WriteAllAsync(path, edited, encoding, ct).ConfigureAwait(false);
         return new ToolResult(count > 1 ? $"Edited {path}: replaced {count} occurrences." : $"Edited {path}.");
     }
 

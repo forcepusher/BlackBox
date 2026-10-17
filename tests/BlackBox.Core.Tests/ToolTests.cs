@@ -933,6 +933,42 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task A_powershell_script_written_with_write_file_runs_in_windows_powershell()
+    {
+#if !WINDOWS
+        Assert.Skip("Windows only");
+        IPlatformServices platform = new UnsupportedPlatform();
+#else
+        var platform = new BlackBox.Platform.Windows.WindowsPlatform();
+#endif
+        // Without a signature, Windows PowerShell reads a script in the ANSI code page, where the
+        // em dash's last byte is a closing quote: "The string is missing the terminator".
+        var dir = Directory.CreateTempSubdirectory("bb-ps1-").FullName;
+        try
+        {
+            var ctx = Ctx(platform, dir);
+            Assert.False((await new WriteFileTool().ExecuteAsync(new JsonObject { ["path"] = "done.ps1", ["content"] = "Write-Output \"Done — copied ✓\"\n" }, ctx, TestContext.Current.CancellationToken)).IsError);
+            var run = await new ShellTool().ExecuteAsync(new JsonObject { ["command"] = $"powershell -NoProfile -ExecutionPolicy Bypass -File \"{Path.Combine(dir, "done.ps1")}\"" }, ctx, TestContext.Current.CancellationToken);
+            Assert.False(run.IsError, run.Text);
+            Assert.Contains("Done — copied ✓", run.Text);
+
+            // A script begun in ASCII gets the signature once an edit or a part added takes it past ASCII.
+            await File.WriteAllTextAsync(Path.Combine(dir, "plain.ps1"), "Write-Output 'start'\n", TestContext.Current.CancellationToken);
+            Assert.False((await new EditFileTool().ExecuteAsync(new JsonObject { ["path"] = "plain.ps1", ["old_text"] = "start", ["new_text"] = "start — now" }, ctx, TestContext.Current.CancellationToken)).IsError);
+            Assert.Equal([0xEF, 0xBB, 0xBF], (await File.ReadAllBytesAsync(Path.Combine(dir, "plain.ps1"), TestContext.Current.CancellationToken))[..3]);
+            await File.WriteAllTextAsync(Path.Combine(dir, "parts.ps1"), "Write-Output 'one'\n", TestContext.Current.CancellationToken);
+            Assert.False((await new WriteFileTool().ExecuteAsync(new JsonObject { ["path"] = "parts.ps1", ["content"] = "Write-Output 'two — ✓'\n", ["append"] = true }, ctx, TestContext.Current.CancellationToken)).IsError);
+            var parts = await File.ReadAllBytesAsync(Path.Combine(dir, "parts.ps1"), TestContext.Current.CancellationToken);
+            Assert.Equal([0xEF, 0xBB, 0xBF], parts[..3]);
+            Assert.Equal("Write-Output 'one'\nWrite-Output 'two — ✓'\n", System.Text.Encoding.UTF8.GetString(parts, 3, parts.Length - 3));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task A_command_too_long_for_a_windows_command_line_runs_all_the_same()
     {
 #if !WINDOWS
