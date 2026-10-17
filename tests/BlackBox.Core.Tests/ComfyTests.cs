@@ -35,6 +35,9 @@ internal sealed class FakeComfyServer : IDisposable
     /// <summary>What a finished job's history says; the default saves one picture.</summary>
     public Func<string, JsonObject>? History { get; set; }
 
+    /// <summary>Whether its jobs never reach the history, as one taken out of the queue or lost to a restart.</summary>
+    public bool Forgets { get; set; }
+
     public static readonly string ObjectInfo = """
     {
       "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [["v1-5-pruned-emaonly-fp16.safetensors", "sdxl.safetensors"], {}]}},
@@ -174,7 +177,7 @@ internal sealed class FakeComfyServer : IDisposable
         {
             var id = path["history/".Length..];
             _looks[id] = _looks.GetValueOrDefault(id) + 1;
-            if (_looks[id] < 2)
+            if (_looks[id] < 2 || Forgets)
             {
                 Reply(ctx, 200, "{}");
                 return;
@@ -243,8 +246,12 @@ internal sealed class FakeComfyServer : IDisposable
         ctx.Response.Close();
     }
 
+    private bool _disposed;
+
     public void Dispose()
     {
+        if (_disposed) return; // a test may stop it early, as a server gone
+        _disposed = true;
         _listener.Stop();
         _listener.Close();
         try { _loop.Wait(2000); } catch (AggregateException) { }
@@ -559,6 +566,34 @@ public class ComfyToolTests : IDisposable
         // The models are let go once the task is over.
         await _ctx.FinishRunAsync();
         Assert.Equal(1, _server.Frees);
+    }
+
+    [Fact]
+    public async Task A_job_gone_from_comfyui_or_a_server_gone_is_said_so_instead_of_waited_on()
+    {
+        // Taken out of the queue, ComfyUI restarted or its process gone: it was waited on for the
+        // whole 30 minutes, then said to be still running.
+        var giveUp = ComfyRunner.GiveUpAfter;
+        ComfyRunner.GiveUpAfter = 2;
+        try
+        {
+            _server.Forgets = true;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var gone = await Call(new JsonObject { ["action"] = "run", ["workflow"] = JsonNode.Parse(FakeComfyServer.ApiWorkflow) }.ToJsonString());
+            Assert.Contains("isn't in ComfyUI's queue or history any more", gone.Text);
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(30), $"took {clock.Elapsed}");
+
+            // ComfyUI's process gone in the middle: nothing answers any more.
+            var api = new ComfyApi(_server.Url);
+            _server.Dispose();
+            var job = await ComfyRunner.WaitAsync(api, "job9", "client", new Dictionary<string, string>(), TimeSpan.FromMinutes(30), null, CancellationToken.None, TestContext.Current.CancellationToken);
+            Assert.Equal("error", job.Status);
+            Assert.Contains("ComfyUI stopped answering", job.Error);
+        }
+        finally
+        {
+            ComfyRunner.GiveUpAfter = giveUp;
+        }
     }
 
     [Fact]
