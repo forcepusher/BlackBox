@@ -78,7 +78,7 @@ public static class ComfyRunner
         return (null, problems);
     }
 
-    /// <summary>ComfyUI's per-node complaints, one line each, with the node's type and title.</summary>
+    /// <summary>ComfyUI's per-node complaints, one line each, with the node's id and type.</summary>
     private static List<string> NodeErrors(JsonObject? nodeErrors)
     {
         var lines = new List<string>();
