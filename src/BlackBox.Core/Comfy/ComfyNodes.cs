@@ -22,7 +22,7 @@ public sealed class ComfyInputDef
     public static readonly HashSet<string> WidgetTypes = ["INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"];
 
     /// <summary>A value typed in (a number, a text, a choice), as opposed to a link from another node's output.</summary>
-    public bool IsWidget => (WidgetTypes.Contains(Type) || Choices is not null) && Extra["forceInput"]?.GetValue<bool>() != true;
+    public bool IsWidget => (WidgetTypes.Contains(Type) || Choices is not null) && !ComfyNodeLibrary.IsTrue(Extra["forceInput"]);
 
     /// <summary>A V3 input that stands for several (values.a, values.b…, or the inputs of a chosen option).</summary>
     public bool IsDynamic => Type is "COMFY_AUTOGROW_V3" or "COMFY_DYNAMICCOMBO_V3" or "COMFY_DYNAMICSLOT_V3";
@@ -60,7 +60,7 @@ public sealed class ComfyInputDef
             sb.Append(", ").Append(Num(min)).Append("..").Append(Num(max));
         else if (Min is { } onlyMin)
             sb.Append(", at least ").Append(Num(onlyMin));
-        if (Extra["multiline"]?.GetValue<bool>() == true)
+        if (ComfyNodeLibrary.IsTrue(Extra["multiline"]))
             sb.Append(", multiline");
         if (Extra["control_after_generate"] is not null)
             sb.Append(" (change it for a different result)");
@@ -182,7 +182,7 @@ public sealed class ComfyNodeLibrary
                 Category = (string?)n["category"] ?? "",
                 Description = n["description"] is JsonValue d && d.TryGetValue<string>(out var desc) ? desc : "",
                 Module = (string?)n["python_module"] ?? "",
-                IsOutput = n["output_node"]?.GetValue<bool>() == true,
+                IsOutput = IsTrue(n["output_node"]),
                 Deprecated = n["deprecated"] is JsonValue dep && dep.TryGetValue<bool>(out var isDep) && isDep,
                 ApiNode = n["api_node"] is JsonValue api && api.TryGetValue<bool>(out var isApi) && isApi,
                 Aliases = n["search_aliases"] is JsonArray a ? a.Select(x => (string?)x).OfType<string>().ToList() : [],
@@ -324,4 +324,12 @@ public sealed class ComfyNodeLibrary
         JsonValue v when v.TryGetValue<string>(out var s) => "\"" + s.ReplaceLineEndings("\\n").Clip(max) + "\"",
         _ => node.ToJsonString().Clip(max),
     };
+
+    /// <summary>
+    /// Whether a flag (forceInput, multiline, output_node) is true. A custom node that wrote one as
+    /// "true" or 1 made reading it throw, and with it the whole list of the server's nodes.
+    /// </summary>
+    internal static bool IsTrue(JsonNode? node) => node is JsonValue v && (v.TryGetValue<bool>(out var b) ? b
+        : v.TryGetValue<string>(out var s) ? s.Equals("true", StringComparison.OrdinalIgnoreCase)
+        : v.TryGetValue<double>(out var n) && n != 0);
 }

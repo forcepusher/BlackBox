@@ -490,6 +490,20 @@ public class ComfyTemplateTests
     """)!;
 
     [Fact]
+    public void A_custom_node_that_writes_its_flags_as_text_or_numbers_is_read_too()
+    {
+        // "forceInput": "true" or "output_node": 1 made reading the flag throw, and with it the whole node list.
+        var info = JsonNode.Parse("""
+            {"OddNode": {"input": {"required": {"text": ["STRING", {"multiline": "true"}], "image": ["INT", {"forceInput": 1}]}},
+                         "output": ["IMAGE"], "output_name": ["IMAGE"], "name": "OddNode", "display_name": "Odd", "category": "x", "output_node": "true"}}
+            """)!.AsObject();
+        var odd = ComfyNodeLibrary.Parse(info).Find("OddNode")!;
+        Assert.True(odd.IsOutput);
+        Assert.False(odd.Inputs.Single(i => i.Name == "image").IsWidget);
+        Assert.True(odd.Inputs.Single(i => i.Name == "text").IsWidget);
+    }
+
+    [Fact]
     public void Notes_missing_node_types_and_missing_models_are_read_from_the_editor_format()
     {
         var library = ComfyNodeLibrary.Parse(JsonNode.Parse(FakeComfyServer.ObjectInfo)!.AsObject());
