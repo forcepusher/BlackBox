@@ -98,14 +98,14 @@ internal static class DocumentText
         {
             var lines = zip.Entries.Where(e => e.FullName.StartsWith(pattern, StringComparison.Ordinal) && e.FullName.EndsWith(".xml", StringComparison.Ordinal))
                 .OrderBy(e => e.FullName, StringComparer.Ordinal)
-                .SelectMany(e => Load(zip, e.FullName).Descendants(W + "p").Select(Paragraph))
+                .SelectMany(e => Optional(() => Load(zip, e.FullName).Descendants(W + "p").Select(Paragraph).ToList(), []))
                 .Where(line => line.Trim().Length > 0).Distinct().ToList();
             if (lines.Count > 0)
                 sb.Append(title).Append(": ").AppendJoin(" / ", lines).AppendLine();
         }
         // The comments in the margin, with the text each is on: asked to go through a document's
         // comments, the model saw none of them.
-        if (Comments(zip, body) is { Count: > 0 } comments)
+        if (Optional(() => Comments(zip, body), []) is { Count: > 0 } comments)
         {
             sb.AppendLine("Comments:");
             foreach (var (on, text) in comments)
@@ -214,7 +214,7 @@ internal static class DocumentText
             // What else a person sees on the sheet: a title across merged cells, its charts.
             if (data.Element(S + "mergeCells")?.Elements(S + "mergeCell").Select(m => (string?)m.Attribute("ref")).OfType<string>().ToList() is { Count: > 0 } merged)
                 sb.Append("(merged: ").AppendJoin(", ", merged).AppendLine(")");
-            if (Charts(zip, target) is > 0 and var charts)
+            if (Optional(() => Charts(zip, target), 0) is > 0 and var charts)
                 sb.AppendLine(charts == 1 ? "(1 chart)" : $"({charts} charts)");
         }
         return sb.ToString();
@@ -333,7 +333,7 @@ internal static class DocumentText
                 if (string.Concat(para.Descendants(A + "t").Select(t => t.Value)) is { Length: > 0 } text)
                     sb.AppendLine(text);
             // The speaker notes, which went unseen: asked to change them, the model had nothing to go on.
-            if (Notes(zip, target) is { Count: > 0 } notes)
+            if (Optional(() => Notes(zip, target), []) is { Count: > 0 } notes)
             {
                 sb.AppendLine("Speaker notes:");
                 foreach (var line in notes)
@@ -371,6 +371,13 @@ internal static class DocumentText
             else if (piece is not ("." or "")) path.Add(piece);
         }
         return string.Join('/', path);
+    }
+
+    /// <summary>What a part beside the main text says (notes, comments, footers, charts), or nothing when it can't be read: the text itself still is.</summary>
+    private static T Optional<T>(Func<T> read, T none)
+    {
+        try { return read(); }
+        catch (Exception ex) when (ex is System.Xml.XmlException or InvalidDataException or KeyNotFoundException or ArgumentException) { return none; }
     }
 
     // ---- the zip package -------------------------------------------------------------------------

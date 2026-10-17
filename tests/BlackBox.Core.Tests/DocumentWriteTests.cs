@@ -292,6 +292,17 @@ public class DocumentWriteTests : IDisposable
         }
 
         Assert.Contains("Hire two people.\nComments:\n- on \"Open a third store before spring.\": Check the date with Finance.\n", await Read("plan.docx"));
+
+        // Comments that can't be read leave the rest readable, as before they were read at all.
+        using (var zip = System.IO.Compression.ZipFile.Open(Path.Combine(_dir, "plan.docx"), System.IO.Compression.ZipArchiveMode.Update))
+        {
+            zip.GetEntry("word/comments.xml")!.Delete();
+            using var broken = new StreamWriter(zip.CreateEntry("word/comments.xml").Open());
+            broken.Write("<w:comments xmlns:w=");
+        }
+        var text = await Read("plan.docx");
+        Assert.Contains("Hire two people.", text);
+        Assert.DoesNotContain("Comments:", text);
     }
 
     [Fact]
