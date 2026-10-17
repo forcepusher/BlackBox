@@ -51,7 +51,11 @@ public static class AgentSetup
         // agent sets up a server itself (mcp_servers), whose tools then join it.
         var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: [new McpServersTool(), .. mcp.Tools]);
         mcpSetup.Registry = registry;
-        var prompt = SystemPrompt.Build(platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, mcp.Connected, webSearch: true, paths.ToolsDir, paths.ScratchDir);
-        return new AgentSession(backend.Client, backend.Options, registry, ctx, prompt, history, backend.ContextTokens);
+        string Prompt() => SystemPrompt.Build(platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, mcp.Connected, webSearch: true, paths.ToolsDir, paths.ScratchDir);
+        var session = new AgentSession(backend.Client, backend.Options, registry, ctx, Prompt(), history, backend.ContextTokens);
+        // A server the agent adds or removes: the prompt then lists the servers as the next
+        // message's will, in the same request whose tools change anyway.
+        mcpSetup.ToolsChanged = () => session.UsePrompt(Prompt());
+        return session;
     }
 }

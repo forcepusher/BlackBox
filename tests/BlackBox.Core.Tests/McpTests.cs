@@ -408,6 +408,48 @@ public class McpTests
     }
 
     [Fact]
+    public async Task A_server_the_agent_adds_has_the_chat_read_again_once_not_twice()
+    {
+        // Its tools change the start of the prompt once. The system prompt, which lists the
+        // servers, changed again at the next message, and LM Studio read the whole chat once more.
+        var servers = new InProcessServer();
+        await using var _ = servers;
+        await using var mcp = new McpHost { TransportFactory = c => servers.Start(c.Name) };
+        var paths = new AppPaths(Directory.CreateTempSubdirectory("bb-mcp-").FullName);
+        var model = new ScriptedServer(
+            Sse.ToolCall("c1", "mcp_servers", """{"action": "add", "name": "test", "command": "uvx"}"""),
+            Sse.ToolCall("c2", "test__add", """{"a": 2, "b": 3}"""),
+            Sse.ToolCall("c3", "mcp_servers", """{"action": "add", "name": "test", "command": "uvx", "args": ["again"]}"""),
+            Sse.Text("It's 5."),
+            Sse.Text("You're welcome."));
+        var settings = new ServerSettings { BaseUrl = "http://test", Model = "qwen3.8-27b@q6_k_xl" };
+        var history = new List<ChatMessage>();
+        using var ssh = new BlackBox.Core.Ssh.SshHosts(paths.KnownHostsFile);
+        foreach (var message in new[] { "Set up the test server and add 2 and 3", "Thanks" })
+        {
+            var session = AgentSetup.Create(BackendConnection.Create(new HttpClient(model), settings), new FakePlatform(), new AgentSettings(), paths, mcp, ssh, history);
+            var observer = new RecordingObserver();
+            await session.RunAsync(message, observer, TestContext.Current.CancellationToken);
+            Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        }
+
+        Assert.Equal(5, model.Requests.Count);
+        static string Start(JsonObject request) => request["tools"]!.ToJsonString() + request["messages"]![0]!.ToJsonString();
+        // The server's arrival changes the tools and the system prompt together...
+        Assert.NotEqual(Start(model.Requests[0]), Start(model.Requests[1]));
+        Assert.Contains("test__*", model.Requests[1]["messages"]![0]!["content"]!.GetValue<string>());
+        // ...and nothing after it does: not set up again in its place, nor the next message.
+        for (var i = 2; i < model.Requests.Count; i++)
+        {
+            Assert.Equal(Start(model.Requests[1]), Start(model.Requests[i]));
+            var before = model.Requests[i - 1]["messages"]!.AsArray();
+            var after = model.Requests[i]["messages"]!.AsArray();
+            for (var m = 0; m < before.Count; m++)
+                Assert.Equal(before[m]!.ToJsonString(), after[m]!.ToJsonString());
+        }
+    }
+
+    [Fact]
     public async Task A_server_the_agent_adds_is_usable_even_when_settings_cant_be_saved()
     {
         // Another entry in mcp.json the file check refuses: the result said the tools were usable,

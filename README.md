@@ -662,7 +662,9 @@ every server it uses ends up there. A settings dialog left open shows a server t
 a second, and Save keeps it: the list is written only when you changed it, and then merged with
 what the agent changed meanwhile, your edit winning where you both changed the same server. A server
 that doesn't start isn't kept, and the agent is told why. `remove` and `list` do what they say.
-Adding tools mid-run changes the tool list, so the server works through the whole prompt once more.
+Adding tools mid-run changes the tool list, so the server works through the whole prompt once more;
+the system prompt, which lists the servers, changes in that same request, so the next message
+doesn't cost a second time.
 
 Actions run without asking by default (approvals can be switched on in Settings).
 Pressing Stop, or Pause/Break anywhere, halts the agent: Pause, or Ctrl+Pause, which Windows

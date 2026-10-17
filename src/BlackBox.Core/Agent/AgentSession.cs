@@ -478,6 +478,9 @@ public sealed partial class AgentSession(
         return result;
     }
 
+    /// <summary>The system prompt from the next request on (an MCP server added mid-run, which the prompt lists).</summary>
+    internal void UsePrompt(string prompt) => systemPrompt = prompt;
+
     /// <summary>Whether the model takes pictures as far as this run found: false once its server refused them, so the next runs are set up without.</summary>
     public bool SeesImages => toolContext.SeesImages;
 
