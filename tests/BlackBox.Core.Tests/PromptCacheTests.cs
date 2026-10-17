@@ -90,6 +90,47 @@ public class PromptCacheTests
         Assert.Equal(["I should look at the screen first.", "The OK button is in the middle.", "It closed.", "Typing it."], thoughts.Take(4));
     }
 
+    [Fact]
+    public async Task A_repaired_call_and_one_cut_short_change_nothing_sent_before_them()
+    {
+        // Both are put right before the next request: the repaired call's arguments in place of the
+        // model's, the note about the cut call after the last result or as a message of its own.
+        var paths = new AppPaths(Directory.CreateTempSubdirectory("bb-cache-").FullName);
+        // With the token counts LM Studio sends: far from a full context, so cut by a reply-length limit.
+        var usage = new JsonObject { ["choices"] = new JsonArray(), ["usage"] = new JsonObject { ["prompt_tokens"] = 3000, ["completion_tokens"] = 500 } };
+        var server = new ScriptedServer(
+            Sse.ToolCall("c1", "wait", "{'seconds': 0}"),
+            Sse.CutToolCall("c2", "write_file", """{"path": "a.txt", "content": "the first half of a long fi""")
+                .Replace("data: [DONE]", $"data: {usage.ToJsonString()}\n\ndata: [DONE]"),
+            Sse.ToolCall("c3", "write_file", """{"path": "a.txt", "content": "short"}"""),
+            Sse.Text("Done."),
+            Sse.Text("Again."));
+        var settings = new ServerSettings { BaseUrl = "http://test", Model = "qwen3.8-27b@q6_k_xl" };
+        var history = new List<ChatMessage>();
+        await using var mcp = new McpHost();
+        using var ssh = new SshHosts(paths.KnownHostsFile);
+        var platform = new FakePlatform();
+        foreach (var message in new[] { "Write it down", "Once more" })
+        {
+            var session = AgentSetup.Create(BackendConnection.Create(new HttpClient(server), settings), platform, new AgentSettings(), paths, mcp, ssh, history);
+            var observer = new RecordingObserver();
+            await session.RunAsync(message, observer, TestContext.Current.CancellationToken);
+            Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        }
+
+        Assert.Equal(5, server.Requests.Count);
+        Assert.Contains("cut off by the server's limit", (string?)server.Requests[2]["messages"]!.AsArray()[^1]!["content"]);
+        for (var i = 1; i < server.Requests.Count; i++)
+        {
+            Assert.Equal(AllBut(server.Requests[0], "messages"), AllBut(server.Requests[i], "messages"));
+            var before = server.Requests[i - 1]["messages"]!.AsArray();
+            var after = server.Requests[i]["messages"]!.AsArray();
+            Assert.True(after.Count > before.Count, $"request {i + 1} is not longer than the one before it");
+            for (var m = 0; m < before.Count; m++)
+                Assert.Equal(before[m]!.ToJsonString(), after[m]!.ToJsonString());
+        }
+    }
+
     private static string AllBut(JsonObject request, string key)
     {
         var copy = request.DeepClone().AsObject();
