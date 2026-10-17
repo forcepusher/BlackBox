@@ -243,17 +243,16 @@ public class AgentSessionTests
         const string limited = """{"error":{"message":"Rate limit exceeded for free models. Please try again later."}}""";
         var server = new ScriptedServer(Sse.Text("Made it.")) { RetryAfter = TimeSpan.FromSeconds(1) };
         server.Failures.Enqueue(((HttpStatusCode)429, limited));
-        server.Failures.Enqueue(((HttpStatusCode)429, limited));
         var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
         var watch = System.Diagnostics.Stopwatch.StartNew();
 
         await session.RunAsync("go", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal(3, server.Requests.Count);
-        Assert.Equal(server.Requests[0].ToJsonString(), server.Requests[2].ToJsonString());
-        Assert.True(watch.Elapsed >= TimeSpan.FromSeconds(1.9), $"waited {watch.Elapsed}");
-        Assert.Equal(2, observer.Notices.Count(n => n.Contains("Rate limit exceeded for free models") && n.Contains("Trying again in 1 s")));
+        Assert.Equal(2, server.Requests.Count);
+        Assert.Equal(server.Requests[0].ToJsonString(), server.Requests[1].ToJsonString());
+        Assert.True(watch.Elapsed >= TimeSpan.FromSeconds(0.9), $"waited {watch.Elapsed}");
+        Assert.Single(observer.Notices, n => n.Contains("Rate limit exceeded for free models") && n.Contains("Trying again in 1 s"));
         Assert.DoesNotContain(observer.Notices, n => n.Contains("Reconnecting")); // not a dropped connection, nor counted as one
     }
 
@@ -266,6 +265,10 @@ public class AgentSessionTests
         Assert.Equal(TimeSpan.FromMinutes(5), AgentSession.RateLimitWait(null, 40)); // an hourly allowance used up
         Assert.Equal(TimeSpan.FromSeconds(1), AgentSession.RateLimitWait(TimeSpan.Zero, 1));
         Assert.Equal(TimeSpan.FromHours(1), AgentSession.RateLimitWait(TimeSpan.FromHours(8), 1)); // asked again within the hour
+        // A server that goes on saying "in a second" isn't asked once a second for as long as it says no.
+        Assert.Equal(TimeSpan.FromSeconds(10), AgentSession.RateLimitWait(TimeSpan.FromSeconds(1), 2));
+        Assert.Equal(TimeSpan.FromMinutes(1), AgentSession.RateLimitWait(TimeSpan.Zero, 9));
+        Assert.Equal(TimeSpan.FromMinutes(30), AgentSession.RateLimitWait(TimeSpan.FromMinutes(30), 3));
     }
 
     [Fact]

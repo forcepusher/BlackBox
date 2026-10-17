@@ -568,10 +568,21 @@ public sealed partial class AgentSession(
     internal static readonly TimeSpan[] RateLimitWaits =
         [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(5)];
 
-    /// <summary>How long to wait after the <paramref name="attempt"/>th 429 in a row: what the server says, within a second and an hour, else <see cref="RateLimitWaits"/>.</summary>
-    internal static TimeSpan RateLimitWait(TimeSpan? said, int attempt) => said is { } s
-        ? TimeSpan.FromTicks(Math.Clamp(s.Ticks, TimeSpan.TicksPerSecond, TimeSpan.TicksPerHour))
-        : RateLimitWaits[Math.Clamp(attempt, 1, RateLimitWaits.Length) - 1];
+    /// <summary>
+    /// How long to wait after the <paramref name="attempt"/>th 429 in a row: what the server says,
+    /// within a second and an hour, else <see cref="RateLimitWaits"/>. From the second try on, no
+    /// sooner than those, up to a minute: a server that went on saying "in a second" (or a reset
+    /// time already past) was asked once a second for as long as it said no, with a line each time.
+    /// </summary>
+    internal static TimeSpan RateLimitWait(TimeSpan? said, int attempt)
+    {
+        var growing = RateLimitWaits[Math.Clamp(attempt, 1, RateLimitWaits.Length) - 1];
+        if (said is not { } s)
+            return growing;
+        var named = TimeSpan.FromTicks(Math.Clamp(s.Ticks, TimeSpan.TicksPerSecond, TimeSpan.TicksPerHour));
+        var least = attempt <= 1 ? TimeSpan.Zero : growing < TimeSpan.FromMinutes(1) ? growing : TimeSpan.FromMinutes(1);
+        return named >= least ? named : least;
+    }
 
     private static string Describe(TimeSpan wait) => wait.TotalSeconds < 90 ? $"{Math.Ceiling(wait.TotalSeconds):0} s" : $"{Math.Ceiling(wait.TotalMinutes):0} min";
 

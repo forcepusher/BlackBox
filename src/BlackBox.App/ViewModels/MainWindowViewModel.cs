@@ -1284,8 +1284,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     void IAgentObserver.OnNotice(string text) => PostTimed(at =>
     {
-        if (!_runDetached) Items.Add(new NoticeItem(text, isError: false) { At = at });
+        if (_runDetached) return;
+        var notice = new NoticeItem(text, isError: false) { At = at };
+        // One line for a wait that goes on (a busy or unreachable server), not one per try: no
+        // step starts meanwhile to trim the chat, and an hour of tries filled it.
+        if (text.EndsWith(WaitNoticeEnd, StringComparison.Ordinal) && Items.Count > 0 && Items[^1] is NoticeItem { Text: var last } && last.EndsWith(WaitNoticeEnd, StringComparison.Ordinal))
+            Items[^1] = notice;
+        else
+            Items.Add(notice);
     });
+
+    /// <summary>How AgentSession's notices of a wait before trying again end.</summary>
+    private const string WaitNoticeEnd = "(Stop ends the wait)…";
 
     void IAgentObserver.OnToolStarted(ToolCall call, string summary) => PostTimed(at =>
     {
