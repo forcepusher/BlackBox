@@ -649,6 +649,28 @@ public class SshIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task Listing_works_where_ls_and_find_are_BusyBoxs()
+    {
+        if (Host is null) return;
+        // Alpine, OpenWrt and many a NAS: BusyBox's ls has no --time-style and its find no -printf,
+        // and the listing came back empty. Stand-ins that refuse those two the way BusyBox does.
+        await Ssh("rm -rf /tmp/bbx /tmp/bb-list && mkdir -p /tmp/bbx /tmp/bb-list/sub && echo hi > /tmp/bb-list/sub/notes.txt && " +
+                  "printf '#!/bin/sh\\nfor a in \"$@\"; do case \"$a\" in --time-style*) echo \"ls: unrecognized option: $a\" >&2; exit 1;; esac; done\\nexec /bin/ls \"$@\"\\n' > /tmp/bbx/ls && " +
+                  "printf '#!/bin/sh\\nfor a in \"$@\"; do [ \"$a\" = -printf ] && { echo \"find: unrecognized: -printf\" >&2; exit 1; }; done\\nexec /usr/bin/find \"$@\"\\n' > /tmp/bbx/find && " +
+                  "chmod +x /tmp/bbx/ls /tmp/bbx/find");
+        try
+        {
+            Assert.Contains("unrecognized", (await Ssh("( PATH=/tmp/bbx:$PATH; ls -d --time-style=+%Y / )")).Text);
+            Assert.Contains(" sub", (await Ssh($"( PATH=/tmp/bbx:$PATH; {RemoteFiles.ListScript("/tmp/bb-list", null)} )")).Text);
+            Assert.Contains("/tmp/bb-list/sub/notes.txt", (await Ssh($"( PATH=/tmp/bbx:$PATH; {RemoteFiles.ListScript("/tmp/bb-list", "*.txt")} )")).Text);
+        }
+        finally
+        {
+            await Ssh("rm -rf /tmp/bbx /tmp/bb-list");
+        }
+    }
+
+    [Fact]
     public async Task Edit_file_leaves_a_file_that_isnt_UTF_8_alone()
     {
         if (Host is null) return;

@@ -137,11 +137,7 @@ public static class RemoteFiles
     /// <summary>A folder's entries, or with a pattern a search through its subfolders.</summary>
     public static async Task<(string Text, bool IsError)> ListAsync(SshHost host, string path, string? pattern, CancellationToken ct)
     {
-        var p = SshHost.Quote(path);
-        var script = pattern is null
-            ? $"[ -d {p} ] || {{ echo BB-MISSING; exit 0; }}; [ -r {p} ] && [ -x {p} ] || {{ echo BB-DENIED; exit 0; }}; ls -la --time-style=+%Y-%m-%d.%H:%M {p} | head -501"
-            : $"[ -d {p} ] || {{ echo BB-MISSING; exit 0; }}; timeout 20 find {p} -name {SshHost.Quote(pattern)} -printf '%p  (%s bytes)\\n' 2>/dev/null | head -501";
-        var (r, sudo) = await RunAsync(host, script, null, "BB-DENIED", ct).ConfigureAwait(false);
+        var (r, sudo) = await RunAsync(host, ListScript(path, pattern), null, "BB-DENIED", ct).ConfigureAwait(false);
         if (r.Output.StartsWith("BB-MISSING")) return ($"Directory not found on {host.Target}: {path}", true);
         if (r.Output.StartsWith("BB-DENIED")) return (Denied(host, path, "list"), true);
         var lines = r.Output.TrimEnd('\n').Split('\n');
@@ -151,6 +147,22 @@ public static class RemoteFiles
         if (lines.Length > 500) sb.Append("[stopped after 500 entries]\n");
         if (sudo) sb.Append("[listed with sudo]\n");
         return (sb.ToString(), false);
+    }
+
+    /// <summary>
+    /// The script that lists a folder or searches it. BusyBox (Alpine, OpenWrt, many a NAS) has
+    /// neither ls --time-style nor find -printf: the listing came back empty, without a word, and
+    /// the folder read as empty. Each is tried first, and plain ls and find do without.
+    /// </summary>
+    internal static string ListScript(string path, string? pattern)
+    {
+        var p = SshHost.Quote(path);
+        return pattern is null
+            ? $"[ -d {p} ] || {{ echo BB-MISSING; exit 0; }}; [ -r {p} ] && [ -x {p} ] || {{ echo BB-DENIED; exit 0; }}; " +
+              $"if ls -d --time-style=+%Y / >/dev/null 2>&1; then ls -la --time-style=+%Y-%m-%d.%H:%M {p}; else ls -la {p}; fi | head -501"
+            : $"[ -d {p} ] || {{ echo BB-MISSING; exit 0; }}; " +
+              $"if find / -maxdepth 0 -printf '' >/dev/null 2>&1; then timeout 20 find {p} -name {SshHost.Quote(pattern)} -printf '%p  (%s bytes)\\n' 2>/dev/null; " +
+              $"else timeout 20 find {p} -name {SshHost.Quote(pattern)} 2>/dev/null; fi | head -501";
     }
 
     /// <summary>
