@@ -75,6 +75,12 @@ public sealed class ConnectionLostException(string message, bool receivedTokens,
     /// file) is a silent stretch that idle-cutting proxies kill, and resending repeats it.
     /// </summary>
     public string? ToolCallInProgress { get; } = toolCallInProgress;
+
+    /// <summary>
+    /// Nothing of the request got out: the server couldn't be reached at all (its PC asleep or
+    /// restarting, LM Studio closed, the VPN down), rather than a link that broke mid-request.
+    /// </summary>
+    public bool Unreachable { get; init; }
 }
 
 /// <summary>
@@ -173,10 +179,8 @@ public sealed partial class OpenAiChatClient
         // Cancelled when sending stalls. Once the request is out, only Stop ends the wait: a
         // server reading a long prompt sends nothing for minutes.
         using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/chat/completions")
-        {
-            Content = new UploadContent(payload, stall, UploadStallLimit, onSending),
-        };
+        var upload = new UploadContent(payload, stall, UploadStallLimit, onSending);
+        using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/chat/completions") { Content = upload };
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
         Authorize(req);
 
@@ -191,7 +195,7 @@ public sealed partial class OpenAiChatClient
         }
         catch (HttpRequestException ex)
         {
-            throw new ConnectionLostException($"Could not reach {_baseUrl}: {ex.Message}", false, ex);
+            throw new ConnectionLostException($"Could not reach {_baseUrl}: {ex.Message}", false, ex) { Unreachable = !upload.Started };
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
@@ -573,8 +577,12 @@ public sealed partial class OpenAiChatClient
         protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context) =>
             SerializeToStreamAsync(stream, context, CancellationToken.None);
 
+        /// <summary>Whether sending the body began, which takes a connection to the server.</summary>
+        public bool Started { get; private set; }
+
         protected override async Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context, CancellationToken ct)
         {
+            Started = true;
             for (var at = 0; at < _body.Length; at += Piece)
             {
                 _onSending?.Invoke(at, _body.Length);

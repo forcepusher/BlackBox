@@ -43,6 +43,9 @@ internal sealed class ScriptedServer(params string[] responses) : HttpMessageHan
     /// <summary>Number of requests to fail with a dropped connection first.</summary>
     public int Drops { get; set; }
 
+    /// <summary>Number of requests to fail before any of them is sent, as with a server that is down.</summary>
+    public int Unreachable { get; set; }
+
     /// <summary>Number of requests answered with an error whose body breaks off, as when the link drops while it comes in.</summary>
     public int BrokenErrors { get; set; }
 
@@ -54,6 +57,11 @@ internal sealed class ScriptedServer(params string[] responses) : HttpMessageHan
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
+        if (Unreachable > 0)
+        {
+            Unreachable--;
+            throw new HttpRequestException(HttpRequestError.ConnectionError, "No connection could be made because the target machine actively refused it. (test:1234)");
+        }
         if (StalledUploads > 0)
         {
             // Before anything reads the body: a body once read is kept in memory and copied from there.

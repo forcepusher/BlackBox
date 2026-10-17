@@ -485,6 +485,7 @@ public sealed partial class AgentSession(
     {
         var drops = 0;
         var held = 0;
+        var away = 0;
         while (true)
         {
             try
@@ -497,6 +498,16 @@ public sealed partial class AgentSession(
                 // take 200 an hour), so the same request goes again after the wait it names, or a
                 // growing one. As many times as it takes: Stop ends the wait.
                 var wait = RateLimitWait(ex.RetryAfter, ++held);
+                observer.OnNotice($"{ex.Message} Trying again in {Describe(wait)} (Stop ends the wait)…");
+                await Task.Delay(wait, ct).ConfigureAwait(false);
+            }
+            catch (ConnectionLostException ex) when (ex.Unreachable)
+            {
+                // Nothing got through: the server's PC asleep or restarting, LM Studio closed, the
+                // VPN down. Twelve quick tries were over in half a minute, and an unattended task of
+                // hours ended on a short outage; it waits for the server instead, the waits growing
+                // as for a busy server. Stop ends the wait.
+                var wait = RateLimitWait(null, ++away);
                 observer.OnNotice($"{ex.Message} Trying again in {Describe(wait)} (Stop ends the wait)…");
                 await Task.Delay(wait, ct).ConfigureAwait(false);
             }

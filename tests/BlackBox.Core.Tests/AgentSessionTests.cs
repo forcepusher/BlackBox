@@ -345,6 +345,22 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_server_that_cannot_be_reached_is_waited_for_and_the_task_goes_on()
+    {
+        // Twelve quick tries were over in half a minute: an unattended task ended on a short outage
+        // (the server's PC restarting, the VPN reconnecting). Waits like these go on until Stop.
+        var server = new ScriptedServer(Sse.Text("Made it.")) { Unreachable = 1 };
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("go", observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Single(server.Requests);
+        Assert.Contains(observer.Notices, n => n.StartsWith("Could not reach http://test/v1:") && n.EndsWith("Trying again in 2 s (Stop ends the wait)…"));
+        Assert.DoesNotContain(observer.Notices, n => n.Contains("Reconnecting"));
+    }
+
+    [Fact]
     public async Task Server_errors_and_busy_answers_are_sent_again_like_drops()
     {
         var server = new ScriptedServer(Sse.Text("Made it."));
