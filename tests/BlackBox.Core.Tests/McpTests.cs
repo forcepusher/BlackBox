@@ -93,7 +93,7 @@ public class McpTests
         const string text = "{\n  // mine\n  \"mcpServers\": {}\n}";
         McpConfig.Save(path, text);
         Assert.Equal(text, McpConfig.Load(path));
-        Assert.False(File.Exists(path + ".tmp"));
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(path)!, "*.tmp"));
     }
 
     [Fact]

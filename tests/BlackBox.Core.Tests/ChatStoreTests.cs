@@ -141,7 +141,21 @@ public class ChatStoreTests : IDisposable
 
         await release;
         Assert.Equal("Second", store.Load("c")!.Title);
-        Assert.False(File.Exists(Path.Combine(_dir, "c.json.tmp")));
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+    }
+
+    [Fact]
+    public async Task Two_saves_of_one_file_at_once_both_get_through_whole()
+    {
+        // The agent (mcp_servers) and the Settings dialog can write mcp.json at the same moment;
+        // sharing one temporary file, one write could throw or the other's be lost.
+        var path = Path.Combine(_dir, "mcp.json");
+        var texts = Enumerable.Range(0, 8).Select(i => new string((char)('a' + i), 50_000)).ToList();
+
+        await Task.WhenAll(texts.Select(t => Task.Run(() => BlackBox.Core.Settings.AtomicFile.Write(path, t), TestContext.Current.CancellationToken)));
+
+        Assert.Contains(File.ReadAllText(path), texts);
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
     }
 
     [Theory]
