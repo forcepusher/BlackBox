@@ -143,7 +143,7 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   start, template list and model search: SD 1.5 checkpoints at about 512 pixels, since anything much
   bigger takes very long or doesn't fit in memory. Once the
   task is over it is closed, after the jobs still in its queue (the CLI waits for them before it
-  exits); a ComfyUI the user started keeps running, and only lets go of the models the task's jobs
+  exits; one the window was closed on is closed at the next start, once its jobs are done); a ComfyUI the user started keeps running, and only lets go of the models the task's jobs
   loaded, so the GPU is free. BlackBox tells its own from the user's by the process it started,
   kept in `Data/comfyui/state.json`, and by the port it listens on, whatever language Windows
   writes netstat's LISTENING in. One it started that doesn't come up (too slow, or the user
