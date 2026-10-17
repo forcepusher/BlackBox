@@ -766,6 +766,7 @@ dotnet test                       # unit tests
 ./scripts/publish.ps1 -Folder     # classic self-contained folder in publish/BlackBox-win-x64
 dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   # headless run
 dotnet run --project src/BlackBox.Cli -- --yes --attach photo.jpg "make it a watercolor"   # with a file, as if dropped on the window
+dotnet run --project src/BlackBox.Cli -- --yes --then "brighter" --then "@20 and bigger" "make a lighthouse picture"   # a chat played again: each --then once the run before it ends, "@N" N seconds into it
 ./scripts/agent-tasks.ps1         # real desktop task suite (drives your mouse and keyboard)
 ./scripts/game2048-test.ps1       # long run: BlackBox writes, play-tests and fixes its own 2048
 ./scripts/sysadmin-vm.ps1         # once: the portable Debian lab VM (QEMU in .dev/sysadmin-lab, nothing installed)
