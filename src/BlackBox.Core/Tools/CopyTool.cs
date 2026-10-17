@@ -54,7 +54,7 @@ public sealed partial class CopyTool : Tool
             var dst = to.Host is null ? null : await Login(to.Host).ConfigureAwait(false);
 
             // What goes (its shape and size), and where it lands (into a folder, or as a new name).
-            var source = src is null ? LocalSource(ctx.ResolvePath(from.Path), from.ContentsOnly) : await RemoteSourceAsync(src, from.Path, from.ContentsOnly, ct).ConfigureAwait(false);
+            var source = src is null ? LocalSource(ctx.ResolvePath(from.Path), from.ContentsOnly, ct) : await RemoteSourceAsync(src, from.Path, from.ContentsOnly, ct).ConfigureAwait(false);
             var target = dst is null ? LocalTarget(ctx.ResolvePath(to.Path), source) : await RemoteTargetAsync(dst, to.Path, source, ct).ConfigureAwait(false);
 
             var clock = Stopwatch.StartNew();
@@ -141,6 +141,8 @@ public sealed partial class CopyTool : Tool
         // down, and the target may take bytes more slowly than the source sends them.
         using var pipe = new CopyPipe(MemoryLimit, spillToDisk: source.Host is not null && target.Host is not null);
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        // The ends on this PC know nothing of Stop: a copy within this PC went on to the end.
+        using var stopped = ct.Register(() => pipe.Fail(new OperationCanceledException(ct)));
         var produce = Task.Run(async () =>
         {
             try
@@ -248,7 +250,7 @@ public sealed partial class CopyTool : Tool
 
     // ---- this PC -------------------------------------------------------------------------
 
-    private static Source LocalSource(string path, bool contentsOnly)
+    private static Source LocalSource(string path, bool contentsOnly, CancellationToken ct)
     {
         if (File.Exists(path) && !contentsOnly)
             return new Source(null, path, false, Path.GetFileName(path), false, 1, new FileInfo(path).Length);
@@ -260,6 +262,7 @@ public sealed partial class CopyTool : Tool
         var bytes = 0L;
         foreach (var file in new DirectoryInfo(path).EnumerateFiles("*", SearchOption.AllDirectories))
         {
+            ct.ThrowIfCancellationRequested();
             files++;
             bytes += file.Length;
         }

@@ -242,6 +242,30 @@ public class SshTests
     }
 
     [Fact]
+    public async Task A_copy_on_this_pc_ends_when_the_user_stops_it()
+    {
+        // Neither end of a copy within this PC heard Stop: it went on to the last file.
+        var root = Path.Combine(Path.GetTempPath(), "bb-copy-" + Guid.NewGuid().ToString("N"));
+        var src = Path.Combine(root, "photos");
+        Directory.CreateDirectory(src);
+        var data = new byte[1024];
+        for (var i = 0; i < 3000; i++)
+            await File.WriteAllBytesAsync(Path.Combine(src, $"{i:0000}.jpg"), data, TestContext.Current.CancellationToken);
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = root };
+        try
+        {
+            using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new CopyTool().ExecuteAsync(new() { ["from"] = src, ["to"] = Path.Combine(root, "backup") }, ctx, stop.Token));
+            var copied = Directory.Exists(Path.Combine(root, "backup")) ? Directory.GetFiles(Path.Combine(root, "backup")).Length : 0;
+            Assert.True(copied < 3000, $"all {copied} files were copied");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Ssh_without_a_host_needs_one_the_first_time()
     {
         using var hosts = new SshHosts(Path.Combine(Path.GetTempPath(), "bb-known-" + Guid.NewGuid().ToString("N")));
