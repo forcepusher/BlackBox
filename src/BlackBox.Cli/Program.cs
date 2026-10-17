@@ -284,7 +284,9 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir, bool fullR
     /// <summary>A long call's progress, every 15 seconds or when it moves on to another stage.</summary>
     public void OnToolProgress(ToolCall call, string text)
     {
-        var stage = text.Split(" · ")[0].Split(", step")[0];
+        // Without its numbers: a download's "4.19 of 16.06 GB, 13.8 MB/s" changes every second and
+        // wrote a line each time, a thousand lines for a 16 GB model.
+        var stage = System.Text.RegularExpressions.Regex.Replace(text.Split(" · ")[0].Split(", step")[0], @"[\d.:]+", "#");
         if (DateTime.Now - _lastProgress < TimeSpan.FromSeconds(15) && stage == _progressStage)
             return;
         (_lastProgress, _progressStage) = (DateTime.Now, stage);
