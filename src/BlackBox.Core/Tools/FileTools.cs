@@ -310,13 +310,17 @@ public sealed class ListDirectoryTool : Tool
         if (!Directory.Exists(dir))
             return Task.FromResult(ToolResult.Error($"Directory not found: {dir}"));
 
-        var pattern = GetString(args, "pattern");
+        var pattern = Glob(GetString(args, "pattern"));
+        // A pattern with a folder in it ("src/*.cs") is matched against the path under dir, with
+        // forward slashes: a backslash escapes the next character in these patterns.
+        var byPath = pattern?.Contains('/') == true;
         var giveUp = DateTime.UtcNow + SearchTime;
         var entries = new FileSystemEnumerable<string>(dir,
             (ref FileSystemEntry e) => e.IsDirectory
                 ? Path.GetRelativePath(dir, e.ToFullPath()) + Path.DirectorySeparatorChar
                 : $"{Path.GetRelativePath(dir, e.ToFullPath())}  ({e.Length:N0} bytes)",
-            new EnumerationOptions { RecurseSubdirectories = pattern is not null, IgnoreInaccessible = true })
+            // Hidden folders too (.git, AppData), which were left out without a word.
+            new EnumerationOptions { RecurseSubdirectories = pattern is not null, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.System })
         {
             // Asked for every entry looked at, matching or not, so a search through a whole drive
             // for something that isn't there still ends on time, or at once on Stop.
@@ -325,7 +329,9 @@ public sealed class ListDirectoryTool : Tool
                 ct.ThrowIfCancellationRequested();
                 if (DateTime.UtcNow > giveUp)
                     throw new TimeoutException();
-                return pattern is null || FileSystemName.MatchesSimpleExpression(pattern, e.FileName);
+                return pattern is null || (byPath
+                    ? FileSystemName.MatchesSimpleExpression(pattern, Path.GetRelativePath(dir, e.ToFullPath()).Replace('\\', '/'))
+                    : FileSystemName.MatchesSimpleExpression(pattern, e.FileName));
             },
         };
 
@@ -347,6 +353,26 @@ public sealed class ListDirectoryTool : Tool
         {
             sb.AppendLine($"[stopped after searching for {SearchTime.TotalSeconds:0} seconds; give a narrower path or pattern]");
         }
+        if (count == 0)
+            sb.AppendLine(pattern is null ? "(empty folder)" : $"(nothing matches {pattern} here or in the folders under it)");
         return Task.FromResult(new ToolResult(sb.ToString()));
+    }
+
+    /// <summary>
+    /// The pattern as a search for files at any depth: "**/*.py", the usual way models write it,
+    /// is "*.py" (which searches subfolders anyway), and an empty one is none. "**/*.py" matched
+    /// against a bare file name never matched, and the search said nothing for 20 seconds.
+    /// </summary>
+    internal static string? Glob(string? pattern)
+    {
+        var p = pattern?.Trim().Replace('\\', '/');
+        while (true)
+        {
+            if (p?.StartsWith("**/", StringComparison.Ordinal) == true) p = p[3..];
+            else if (p?.StartsWith("./", StringComparison.Ordinal) == true) p = p[2..];
+            else break;
+        }
+        p = p?.Replace("/**/", "/");
+        return string.IsNullOrEmpty(p) ? null : p is "**" ? "*" : p;
     }
 }

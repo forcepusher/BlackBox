@@ -636,6 +636,29 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task List_directory_takes_patterns_as_models_write_them_and_says_when_nothing_matches()
+    {
+        // "**/*.py" was matched against bare file names and never matched; hidden folders (.git)
+        // were left out; either way the answer was the folder's name and nothing else.
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        Directory.CreateDirectory(Path.Combine(dir, "src", "game"));
+        File.WriteAllText(Path.Combine(dir, "src", "game", "main.py"), "x");
+        var hidden = Directory.CreateDirectory(Path.Combine(dir, ".git"));
+        hidden.Attributes |= FileAttributes.Hidden;
+        File.WriteAllText(Path.Combine(hidden.FullName, "config"), "x");
+        var ctx = Ctx(new FakePlatform(), dir);
+        async Task<string> List(string? pattern) => (await new ListDirectoryTool().ExecuteAsync(
+            pattern is null ? new JsonObject { ["path"] = dir } : new JsonObject { ["path"] = dir, ["pattern"] = pattern }, ctx, CancellationToken.None)).Text;
+
+        Assert.Contains(Path.Combine("src", "game", "main.py"), await List("**/*.py"));
+        Assert.Contains(Path.Combine("src", "game", "main.py"), await List("src/**/*.py"));
+        Assert.Contains(".git" + Path.DirectorySeparatorChar, await List(null));
+        Assert.Contains("(nothing matches *.rs here or in the folders under it)", await List("*.rs"));
+        Assert.Contains(Path.Combine("src", "game", "main.py"), await List("**"));
+        Assert.Null(ListDirectoryTool.Glob("  "));
+    }
+
+    [Fact]
     public void Settings_from_the_local_model_versions_are_migrated_and_cleaned()
     {
         var root = Directory.CreateTempSubdirectory("bb-settings-").FullName;
