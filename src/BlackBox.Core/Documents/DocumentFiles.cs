@@ -121,7 +121,7 @@ internal static partial class DocumentFiles
                     foreach (var notes in parts.Names.Where(n => NotesPart().IsMatch(n)).OrderBy(n => int.Parse(NotesPart().Match(n).Groups[1].Value)).ToList())
                     {
                         try { documents[notes] = parts.Get(notes); }
-                        catch (System.Xml.XmlException) { }
+                        catch (Exception ex) when (ex is System.Xml.XmlException or InvalidDataException) { }
                     }
                 if (documents.Count == 0)
                     throw new InvalidOperationException($"{Path.GetFileName(path)} has no text to change.");
