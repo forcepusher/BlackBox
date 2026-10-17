@@ -23,6 +23,8 @@ internal static partial class XlsxWriter
         public readonly Dictionary<int, string?> Formats = [];
         public int Next = 1;
         public bool FreezeHeader;
+        /// <summary>Whether a cell holds a number written without $, % or as a date (see <see cref="Write"/>).</summary>
+        public bool PlainNumbers;
     }
 
     public static byte[] Write(IReadOnlyList<Block> blocks, List<string> notes)
@@ -78,6 +80,12 @@ internal static partial class XlsxWriter
         }
         if (sheets.Count == 0)
             sheets.Add(new Sheet("Sheet1"));
+        // Asked for amounts in dollars, Kilo's free Nemotron wrote plain numbers and then took the
+        // workbook apart to add the format by hand, twice, though the tool said how; said here, it
+        // comes when it is needed.
+        if (sheets.Any(s => s.PlainNumbers))
+            notes.Add("Its numbers are shown as they are; written as $1,200.00, 12% or 2026-10-16 they show in dollars, as percentages or as dates " +
+                      "(edit_file sets cells that way too, such as \"B2 $1,200.00\").");
 
         var package = new OfficePackage();
         package.AddRelationships("", [("rId1", OfficePackage.OfficeDocument, "xl/workbook.xml", false), ("rId2", OfficePackage.CoreProperties, "docProps/core.xml", false)]);
@@ -129,8 +137,9 @@ internal static partial class XlsxWriter
         var text = MarkdownDocument.Plain(spans).Trim();
         if (text.Length == 0) return;
         var bold = header || spans.Where(s => s.Text.Trim().Length > 0).All(s => s.Bold);
-        var (_, format) = Value(text);
+        var (value, format) = Value(text);
         if (!header && !text.StartsWith('=')) sheet.Formats[column] = format;
+        if (value is double && format is null) sheet.PlainNumbers = true;
         var cell = Cell(Reference(row, column), text, styles, bold, header, text.StartsWith('=') ? sheet.Formats.GetValueOrDefault(column) : null);
         if (!sheet.Rows.TryGetValue(row, out var cells))
             sheet.Rows[row] = cells = [];

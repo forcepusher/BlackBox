@@ -134,6 +134,16 @@ public class DocumentWriteTests : IDisposable
     }
 
     [Fact]
+    public async Task A_workbook_of_plain_numbers_says_how_to_show_them_in_dollars()
+    {
+        // Asked for amounts in dollars, a model wrote plain numbers and then took the workbook apart.
+        var plain = await Write("plain.xlsx", "| Item | Amount |\n|---|---|\n| Rent | 1200 |\n| Total | =SUM(B2:B2) |");
+        Assert.Contains("written as $1,200.00, 12% or 2026-10-16 they show in dollars", plain.Text);
+        var dollars = await Write("dollars.xlsx", "| Item | Amount |\n|---|---|\n| Rent | $1,200.00 |\n| Total | =SUM(B2:B2) |");
+        Assert.DoesNotContain("show in dollars", dollars.Text);
+    }
+
+    [Fact]
     public async Task A_presentation_gets_a_slide_per_section_with_a_title_slide_first()
     {
         using (var bmp = new SKBitmap(400, 300))
