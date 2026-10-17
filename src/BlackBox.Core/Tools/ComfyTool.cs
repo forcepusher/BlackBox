@@ -732,7 +732,7 @@ public sealed class ComfyTool : Tool
         // how the makers of the models it used make theirs, the first time it uses them.
         var used = ModelFiles(workflow, await hub.ModelsAsync(api, ct).ConfigureAwait(false));
         var after = new List<string>();
-        if (await SizeNoteAsync(api, hub, workflow, used, ct).ConfigureAwait(false) is { } sizeNote)
+        if (await SizeNoteAsync(api, hub, workflow, used, result.Files ?? [], ct).ConfigureAwait(false) is { } sizeNote)
             after.Add(sizeNote);
         after.AddRange(await CardsAsync(api, hub, used, ct).ConfigureAwait(false));
         return after.Count > 0 ? result with { Text = result.Text + "\n\n" + string.Join("\n\n", after) } : result;
@@ -754,8 +754,12 @@ public sealed class ComfyTool : Tool
     /// <summary>
     /// A note when a workflow makes its pictures at under half the size its checkpoint is made for:
     /// the user's furry template ran an SDXL model at 512x760, and every picture came out soft.
+    /// Image to image works at the size of the picture it starts from, so there the pictures made
+    /// say it: qwen3.8 repainted a figure cropped from the user's reference sheet at 432x1216.
     /// </summary>
-    private static async Task<string?> SizeNoteAsync(ComfyApi api, ComfyHub hub, ComfyWorkflow workflow, List<(string Folder, string File)> used, CancellationToken ct)
+    /// <param name="files">The files the job made.</param>
+    private static async Task<string?> SizeNoteAsync(ComfyApi api, ComfyHub hub, ComfyWorkflow workflow, List<(string Folder, string File)> used,
+        IReadOnlyList<string> files, CancellationToken ct)
     {
         if (used.FirstOrDefault(u => u.Folder == "checkpoints").File is not { } checkpoint ||
             (await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false))?.GetValueOrDefault("models:checkpoints") is not { } dir)
@@ -764,15 +768,39 @@ public sealed class ComfyTool : Tool
         if (!File.Exists(path) || ((await CardAsync(hub, path, ct).ConfigureAwait(false)).Card?.Base ?? ComfyModelCards.BaseFromFile(path)) is not { } made ||
             ComfyModelCards.NativeSide(made) is not { } side)
             return null;
+        var empty = false;
         foreach (var (_, node) in workflow.All())
         {
             var type = ComfyWorkflow.ClassOf(node);
-            if (type.StartsWith("Empty", StringComparison.Ordinal) && type.Contains("Latent", StringComparison.Ordinal) &&
-                Number(node["inputs"]?["width"]) is { } w && Number(node["inputs"]?["height"]) is { } h && w * h < 0.55 * side * side)
+            if (!type.StartsWith("Empty", StringComparison.Ordinal) || !type.Contains("Latent", StringComparison.Ordinal))
+                continue;
+            empty = true;
+            if (Number(node["inputs"]?["width"]) is { } w && Number(node["inputs"]?["height"]) is { } h && w * h < 0.55 * side * side)
                 return $"Note: it made its pictures at {w}x{h}, under half the size {checkpoint} is made for ({ComfyModelCards.Describe(made)}): " +
                        "at that size it draws blurrier, with worse faces and anatomy. Make them at its size; to get them bigger still, upscale after.";
         }
-        return null;
+        if (empty || !workflow.All().Any(n => ComfyWorkflow.ClassOf(n.Node) == "VAEEncode"))
+            return null;
+        var biggest = files.Where(Picture.Handles).Select(PictureSize).OfType<(int Width, int Height)>().DefaultIfEmpty().MaxBy(s => (long)s.Width * s.Height);
+        if (biggest.Width == 0 || (long)biggest.Width * biggest.Height >= 0.55 * side * side)
+            return null;
+        return $"Note: it made its picture at {biggest.Width}x{biggest.Height}, under half the size {checkpoint} is made for ({ComfyModelCards.Describe(made)}): " +
+               "image to image works at the size of the picture it starts from, and at this size it draws blurrier, with worse faces and anatomy. " +
+               FormattableString.Invariant($"Scale that picture to the checkpoint's size before it is encoded (ImageScaleToTotalPixels, megapixels {side * side / 1048576.0:0.##}); ") +
+               "a tall or wide crop can be padded to a usual shape first (ImagePadForOutpaint, which pads with grey), so the figure keeps its proportions.";
+
+        static (int Width, int Height)? PictureSize(string file)
+        {
+            try
+            {
+                using var codec = SkiaSharp.SKCodec.Create(file);
+                return codec is null ? null : (codec.Info.Width, codec.Info.Height);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
 
         static double? Number(JsonNode? n) =>
             n is JsonValue && double.TryParse(n.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;

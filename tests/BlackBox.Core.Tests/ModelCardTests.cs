@@ -294,6 +294,30 @@ public class ModelCardToolTests : IDisposable
         Assert.DoesNotContain("under half the size", again.Text);
         Assert.DoesNotContain("on Civitai", again.Text);
     }
+
+    // qwen3.8 repainted a figure cropped from the user's reference sheet at the crop's 432x1216.
+    [Fact]
+    public async Task Image_to_image_well_under_the_checkpoints_size_is_said_by_the_picture_it_made()
+    {
+        var workflow = """
+            {"1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "sdxl.safetensors"}},
+             "2": {"class_type": "CLIPTextEncode", "inputs": {"text": "a bunny", "clip": ["1", 1]}},
+             "3": {"class_type": "CLIPTextEncode", "inputs": {"text": "", "clip": ["1", 1]}},
+             "4": {"class_type": "LoadImage", "inputs": {"image": "example.png"}},
+             "5": {"class_type": "VAEEncode", "inputs": {"pixels": ["4", 0], "vae": ["1", 2]}},
+             "6": {"class_type": "KSampler", "inputs": {"model": ["1", 0], "positive": ["2", 0], "negative": ["3", 0], "latent_image": ["5", 0],
+                   "seed": 1, "steps": 20, "cfg": 4, "sampler_name": "euler_ancestral", "scheduler": "normal", "denoise": 0.6}},
+             "8": {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["1", 2]}},
+             "9": {"class_type": "SaveImage", "inputs": {"images": ["8", 0], "filename_prefix": "bunny"}}}
+            """;
+
+        var ran = await Call(new ComfyTool(), new JsonObject { ["action"] = "run", ["workflow"] = workflow }.ToJsonString());
+
+        // The stand-in ComfyUI makes a 64x48 picture.
+        Assert.False(ran.IsError, ran.Text);
+        Assert.Contains("Note: it made its picture at 64x48, under half the size sdxl.safetensors is made for (Illustrious, an SDXL model", ran.Text);
+        Assert.Contains("ImageScaleToTotalPixels, megapixels 1)", ran.Text);
+    }
 }
 
 /// <summary>The tests that point <see cref="ComfyModelSearch.CivitaiBase"/> at a stand-in, one at a time: it is shared by all.</summary>
