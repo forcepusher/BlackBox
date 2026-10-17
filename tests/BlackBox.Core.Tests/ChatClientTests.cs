@@ -91,6 +91,9 @@ public class ChatClientTests
     [InlineData("Failed to deserialize the JSON body: unknown variant `image_url`, expected `text`", true)]               // DeepSeek
     [InlineData("Invalid tool schema", false)]
     [InlineData("The image is 21 MB; the most is 20 MB.", false)]
+    [InlineData("registry.ollama.ai/library/llama3.2-vision:latest does not support tools", false)]                    // a model's name
+    [InlineData("No endpoints found for meta-llama/llama-3.2-11b-vision-instruct.", false)]
+    [InlineData("Images are scaled to 1 MP. " + "Some long explanation of the limits that has nothing to do with it at all; " + "tools are not supported", false)]
     public void Errors_saying_the_model_takes_no_pictures_are_told_apart(string error, bool refused) =>
         Assert.Equal(refused, OpenAiChatClient.LooksLikeImagesRefused(error));
 

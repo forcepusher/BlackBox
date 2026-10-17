@@ -610,11 +610,23 @@ public sealed partial class OpenAiChatClient
     /// is only supported by certain models" (OpenAI), "is not a multimodal model" (vLLM), "Model does
     /// not support images" (LM Studio), "unknown variant `image_url`" (DeepSeek).
     /// </summary>
-    internal static bool LooksLikeImagesRefused(string err) => ImageWord().IsMatch(err) && RefusalWord().IsMatch(err);
+    internal static bool LooksLikeImagesRefused(string err)
+    {
+        // Close together, and the picture word not part of a model's name: "llama3.2-vision:latest
+        // does not support tools" is about tools.
+        foreach (var word in ImageWord().EnumerateMatches(err))
+        {
+            var from = Math.Max(0, word.Index - 80);
+            var to = Math.Min(err.Length, word.Index + word.Length + 80);
+            if (RefusalWord().IsMatch(err.AsSpan(from, to - from)))
+                return true;
+        }
+        return false;
+    }
 
     private static bool HasImages(IReadOnlyList<ChatMessage> messages) => messages.Any(m => m.Parts?.Any(p => p.IsImage) == true);
 
-    [GeneratedRegex(@"\b(images?|vision|multi-?modal|image_url|mmproj)\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![-/])\b(images?|vision|multi-?modal|image_url|mmproj)\b(?![-:/])", RegexOptions.IgnoreCase)]
     private static partial Regex ImageWord();
 
     [GeneratedRegex(@"not (be )?supported|unsupported|do(es)?(n't| not) (support|accept|take)|only supported|no endpoints? found|not a multi-?modal|missing data required|unknown variant|can ?not (accept|process|read|handle)|can't (accept|process|read|handle)", RegexOptions.IgnoreCase)]
