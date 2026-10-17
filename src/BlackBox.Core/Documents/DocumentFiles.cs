@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
@@ -35,8 +34,12 @@ internal static partial class DocumentFiles
         _ => null,
     };
 
-    /// <summary>The Markdown each document made here came from, by path, to add to it with append; and what its file was.</summary>
-    private static readonly ConcurrentDictionary<string, (string Hash, string Markdown)> Made = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// The Markdown each document made here came from, by path, to add to it with append; and what
+    /// its file was. The last ones made: kept for the process's life, every document's whole text
+    /// only added up.
+    /// </summary>
+    private static readonly RecentMap<string, (string Hash, string Markdown)> Made = new(64, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Makes the document at <paramref name="path"/> from Markdown; returns what to tell the model.
@@ -48,13 +51,14 @@ internal static partial class DocumentFiles
         var kind = WriteKind(path) ?? throw new ArgumentException("not a document", nameof(path));
         var name = Path.GetFileName(path);
         var existed = File.Exists(path);
-        var ours = existed && Made.TryGetValue(path, out var made) && made.Hash == Hash(File.ReadAllBytes(path));
+        (string Hash, string Markdown) made = ("", "");
+        var ours = existed && Made.TryGet(path, out made) && made.Hash == Hash(File.ReadAllBytes(path));
         if (append)
         {
             if (!ours)
                 throw new InvalidOperationException($"append adds to a document write_file made in this task, unchanged since. To add to {name}, " +
                     (kind == "pdf" ? "write it again whole." : "use edit_file: old_text its last paragraph, new_text that paragraph and what comes after it."));
-            markdown = Made[path].Markdown.TrimEnd() + "\n\n" + markdown;
+            markdown = made.Markdown.TrimEnd() + "\n\n" + markdown;
         }
         else if (existed && !ours)
             throw new InvalidOperationException($"{name} already exists, and writing it would replace it whole, its formatting with it. " +
@@ -72,7 +76,7 @@ internal static partial class DocumentFiles
         };
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         Save(path, bytes);
-        Made[path] = (Hash(bytes), markdown);
+        Made.Set(path, (Hash(bytes), markdown));
         var what = $"{(append ? "Added to" : existed ? "Overwrote" : "Created")} {path}: {Describe(kind, blocks, bytes)}.";
         return notes.Count == 0 ? what : what + " " + string.Join(" ", notes);
     }
@@ -124,7 +128,7 @@ internal static partial class DocumentFiles
             throw new InvalidOperationException($"{Path.GetFileName(path)} could not be read as a document: {ex.Message}", ex);
         }
         Save(path, buffer.ToArray());
-        Made.TryRemove(path, out _);
+        Made.Remove(path);
         return $"Edited {path}: {message}";
     }
 

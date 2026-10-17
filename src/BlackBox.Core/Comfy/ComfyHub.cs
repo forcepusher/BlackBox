@@ -27,16 +27,19 @@ public sealed class ComfyHub(string stateDirectory)
     /// <summary>Changes whenever BlackBox (re)starts the server, so caches of its node types and templates are refreshed.</summary>
     public int Generation { get; private set; }
 
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string ClientId, IReadOnlyDictionary<string, string> Titles)> _jobs = new();
+    /// <summary>The jobs queued last: the hub lives as long as the process, and a long batch of jobs only added to it.</summary>
+    private readonly RecentMap<string, (string ClientId, IReadOnlyDictionary<string, string> Titles)> _jobs = new(MaxJobs);
+
+    internal const int MaxJobs = 200;
 
     /// <summary>
     /// The client a job was queued as, and its nodes' names: ComfyUI reports a job's progress only
     /// to the web socket of the client that queued it, so a later wait for it connects as that client.
     /// </summary>
-    public void RememberJob(string promptId, string clientId, IReadOnlyDictionary<string, string> titles) => _jobs[promptId] = (clientId, titles);
+    public void RememberJob(string promptId, string clientId, IReadOnlyDictionary<string, string> titles) => _jobs.Set(promptId, (clientId, titles));
 
     public (string ClientId, IReadOnlyDictionary<string, string> Titles) JobClient(string promptId) =>
-        _jobs.TryGetValue(promptId, out var known) ? known : ("blackbox-" + Guid.NewGuid().ToString("N")[..12], new Dictionary<string, string>());
+        _jobs.TryGet(promptId, out var known) ? known : ("blackbox-" + Guid.NewGuid().ToString("N")[..12], new Dictionary<string, string>());
 
     public ComfyFrontend Frontend { get; } = new(Path.Combine(stateDirectory, "browser"));
 
