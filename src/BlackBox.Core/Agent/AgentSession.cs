@@ -175,7 +175,10 @@ public sealed partial class AgentSession(
         if (toolContext.Locate is null && FreshLook.Enabled)
         {
             var look = new FreshLook(client, requestOptions);
-            toolContext.Locate = (image, space, target, ct2) => look.LocateAsync(image, space.Describe(), target, ct2);
+            // Not once the server has refused pictures: every click would send it one more.
+            toolContext.Locate = (image, space, target, ct2) => toolContext.SeesImages
+                ? look.LocateAsync(image, space.Describe(), target, ct2)
+                : Task.FromResult<(double X, double Y)?>(null);
         }
         var nudges = 0;
         var cutCalls = 0;

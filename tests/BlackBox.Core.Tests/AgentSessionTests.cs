@@ -920,7 +920,8 @@ public class AgentSessionTests
         // A model nothing said can't see got screen tools, and from its first screenshot on every
         // request failed: the screenshot stays in the conversation.
         const string refusal = """data: {"error":{"message":"image input is not supported - hint: if this is unexpected, you may need to provide the mmproj","code":400}}""" + "\n\n";
-        var replies = new Queue<string>([Sse.ToolCall("s1", "screenshot", "{}"), Sse.ToolCall("s2", "screenshot", "{}"), Sse.Text("I can't see the screen, but the file is saved.")]);
+        var replies = new Queue<string>([Sse.ToolCall("s1", "screenshot", "{}"), Sse.ToolCall("s2", "screenshot", "{}"),
+            Sse.ToolCall("m1", "mouse_click", """{"target": "OK button", "x": 100, "y": 50}"""), Sse.Text("I can't see the screen, but the file is saved.")]);
         var server = new ScriptedServer { Responder = req => Images(req) > 0 ? refusal : replies.Dequeue() };
         var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
 
@@ -929,9 +930,11 @@ public class AgentSessionTests
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
         Assert.False(session.SeesImages);
         Assert.Contains(observer.Notices, n => n.Contains("doesn't take pictures") && n.Contains("mmproj"));
-        // Asked once with the picture, then without it, and the second screenshot never had one.
-        Assert.Equal(4, server.Requests.Count);
-        Assert.Equal([0, 1, 0, 0], server.Requests.Select(Images));
+        // Asked once with the picture, then without it, and the second screenshot never had one;
+        // nor did the click send one to be aimed (a look of its own, without tools).
+        Assert.Equal(5, server.Requests.Count);
+        Assert.Equal([0, 1, 0, 0, 0], server.Requests.Select(Images));
+        Assert.All(server.Requests, r => Assert.NotNull(r["tools"]));
         Assert.Contains("A picture, left out", server.Requests[2].ToJsonString());
         Assert.Contains("left out: the model in use can't see images", server.Requests[3]["messages"]!.AsArray()[^1]!["content"]!.GetValue<string>());
     }
