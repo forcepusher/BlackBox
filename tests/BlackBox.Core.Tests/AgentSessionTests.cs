@@ -552,8 +552,11 @@ public class AgentSessionTests
     }
 
     [Fact]
-    public async Task A_message_sent_while_the_model_writes_its_answer_keeps_the_run_going()
+    public async Task A_message_sent_while_the_model_writes_its_answer_keeps_the_run_going_as_the_next_request()
     {
+        // As in a chat of the user's: the message came as the model wrote its final answer, was
+        // answered, and then the model was asked whether the finished task was done and answered
+        // the same thing again.
         AgentSession? session = null;
         var replies = new Queue<string>([Sse.Text("Done: the file says hello."), Sse.Text("Changed it to hello world."), Sse.Text("That was all.")]);
         var server = new ScriptedServer
@@ -570,8 +573,35 @@ public class AgentSessionTests
         await session.RunAsync("Write hello into the file", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count);
+        Assert.Equal("Make it hello world instead", LastText(server.Requests[1]));
+        Assert.Equal("Changed it to hello world.", session.History[^1].Content);
+    }
+
+    [Fact]
+    public async Task A_message_the_model_goes_back_to_work_after_needs_no_reminder_at_the_end()
+    {
+        // As in the same chat: "The style is off" came in while a picture was being made; the model
+        // made another with that in mind and finished, and was then asked whether the task was done.
+        AgentSession? session = null;
+        var replies = new Queue<string>([Sse.ToolCall("w1", "wait", """{"seconds":0}"""), Sse.ToolCall("w2", "wait", """{"seconds":0}"""), Sse.Text("Made it in the new style."), Sse.Text("That was all.")]);
+        var server = new ScriptedServer
+        {
+            Responder = _ =>
+            {
+                if (replies.Count == 4) session!.Steer("The style is off");
+                return replies.Dequeue();
+            },
+        };
+        var (s, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        session = s;
+
+        await session.RunAsync("Make a bunny picture", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
         Assert.Equal(3, server.Requests.Count);
-        Assert.Equal(SentDuring("Write hello into the file") + "Make it hello world instead", LastText(server.Requests[1]));
+        Assert.Equal(SentDuring("Make a bunny picture") + "The style is off", LastText(server.Requests[1]));
+        Assert.Equal("Made it in the new style.", session.History[^1].Content);
     }
 
     [Fact]

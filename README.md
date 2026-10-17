@@ -698,9 +698,12 @@ you stopped it goes back in the box.
 
 Such a message reaches the model marked as sent while it worked on the request, which it names
 ("Try using pony diffusion"): a question or a side request is answered or done and the request goes
-on, unless the message changes or cancels it. Before a run that took one ends, the model is asked
-once whether that request is done. Asked mid-task why something had failed, the model used to
-answer the question and stop, the request forgotten.
+on, unless the message changes or cancels it. When the model answers one without going back to
+work, it is asked once, before the run ends, whether that request is done: asked mid-task why
+something had failed, the model used to answer the question and stop, the request forgotten. A
+model that did go back to work isn't asked, and a message that comes while the model writes its
+final answer isn't marked (the task is done by then, so it is the next request, as if sent after
+the run): asked anyway, the model wrote the same answer a second time.
 
 ## Build
 Requires the .NET 10 SDK.

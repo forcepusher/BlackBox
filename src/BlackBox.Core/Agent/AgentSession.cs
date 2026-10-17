@@ -93,7 +93,13 @@ public sealed partial class AgentSession(
     }
 
     /// <summary>Adds the user's messages that arrived since the last step, as user messages: the history only grows.</summary>
-    private void DeliverIncoming()
+    /// <param name="turnEnded">
+    /// The model's last reply ended its turn: the messages are what it works on next, as if sent
+    /// after the run, not something on top of a task in progress. Marked as that, a message sent as
+    /// the model wrote its final answer was answered, and then the model was asked whether the task
+    /// it had already finished was done, and answered the same thing again.
+    /// </param>
+    private void DeliverIncoming(bool turnEnded)
     {
         lock (_incoming)
         {
@@ -102,8 +108,17 @@ public sealed partial class AgentSession(
             // A fresh token for the next message; the one a wait may still hold stays cancelled.
             _arrived = new CancellationTokenSource();
             toolContext.UserMessage = _arrived.Token;
+            var first = true;
             while (_incoming.TryDequeue(out var input))
             {
+                if (turnEnded)
+                {
+                    if (first)
+                        (_request, _interrupted) = (RequestOf(input), false);
+                    first = false;
+                    History.Add(input.ToMessage(toolContext.SeesImages));
+                    continue;
+                }
                 History.Add(Interjection(input.ToMessage(toolContext.SeesImages)));
                 _interrupted = true;
             }
@@ -113,7 +128,10 @@ public sealed partial class AgentSession(
     /// <summary>What the user asked for in this run, quoted to the model when a message of theirs comes in on top of it.</summary>
     private string? _request;
 
-    /// <summary>A message came in during the run since the model was last reminded of the request it came in on.</summary>
+    /// <summary>
+    /// A message came in on top of the request, and the model hasn't gone back to work since (no
+    /// tool call): it may have answered it and stopped there.
+    /// </summary>
     private bool _interrupted;
 
     /// <summary>
@@ -186,6 +204,7 @@ public sealed partial class AgentSession(
         // Pointing at web_search only makes sense when the model has it.
         var errors = tools.Find("web_search") is not null ? new ErrorRepeats() : null;
         var justReset = false;
+        var turnEnded = false;
 
         try
         {
@@ -195,7 +214,8 @@ public sealed partial class AgentSession(
             for (var step = 1; ; step++)
             {
                 ct.ThrowIfCancellationRequested();
-                DeliverIncoming();
+                DeliverIncoming(turnEnded);
+                turnEnded = false;
                 // The reset first: its handoff note is a reply of its own, and the step's reply
                 // comes after it, in a new step.
                 if (contextTokens > 0 && TokensInUse() > ResetThreshold)
@@ -242,9 +262,13 @@ public sealed partial class AgentSession(
                         History.Add(ChatMessage.User(CutToolCallNote));
                         continue;
                     }
-                    // The user wrote while the model answered: it goes on with that.
+                    // The user wrote while the model answered: it goes on with that, as its next
+                    // request when this answer finished the task.
                     if (!_incoming.IsEmpty)
+                    {
+                        turnEnded = !cutOff && !LooksUnfinished(reply);
                         continue;
+                    }
                     // Small models sometimes announce an action ("Let me click Save.") and stop,
                     // or return nothing at all. Push them on a couple of times before giving up.
                     if (nudges < MaxNudges && (cutOff || LooksUnfinished(reply)))
@@ -253,8 +277,9 @@ public sealed partial class AgentSession(
                         History.Add(ChatMessage.User(NudgeText));
                         continue;
                     }
-                    // A message came in on top of the request: with it answered, the request may
-                    // still be waiting. Once per such message, the model is asked.
+                    // A message came in on top of the request and the model answered it without
+                    // going back to work: the request may still be waiting. Once per such message,
+                    // the model is asked.
                     if (_interrupted)
                     {
                         _interrupted = false;
@@ -265,6 +290,9 @@ public sealed partial class AgentSession(
                     return;
                 }
                 nudges = 0; // it is moving again; a later stall gets its own nudges
+                // Working again after the user's message, it is back on the request. Asked at the
+                // end whether that was done anyway, the model wrote its answer a second time.
+                _interrupted = false;
                 if (!cutCall)
                     cutCalls = 0;
 
