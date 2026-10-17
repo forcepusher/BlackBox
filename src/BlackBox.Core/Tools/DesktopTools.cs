@@ -75,8 +75,9 @@ public abstract class DesktopActionTool : Tool
     protected static IDisposable Aside(ToolContext ctx, params (int X, int Y)[] points) =>
         ctx.Platform.HostWindow.StepAside(points);
 
+    // Invariant: with a German PC's culture an x of 512.5 read "(512,5, 300)", to the model as well.
     protected static string Fmt(JsonObject args, string xKey = "x", string yKey = "y") =>
-        $"({GetNumber(args, xKey)}, {GetNumber(args, yKey)})";
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"({GetNumber(args, xKey)}, {GetNumber(args, yKey)})");
 
     /// <summary>The schema of the keys a click or drag can hold, as a person does to select several things.</summary>
     protected static JsonObject ModifiersParameter() =>
