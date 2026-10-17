@@ -1313,7 +1313,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         // Files the call made or showed get a preview (a player, a model to turn), which says more
         // than the picture made for the model; anything else keeps its screenshot.
         if (result.Files is { Count: > 0 } files)
-            item.AddPreviews(files.Where(File.Exists), _previews);
+        {
+            // Looked for in the background, as a reply's: a ComfyUI save_to or a document on a share.
+            item.SavedFiles = files;
+            ShowFilesLater([(item, () => files.Where(Core.Media.FileMentions.Exists).ToList())]);
+        }
         else if (result.Image is not null)
         {
             // An MCP server's picture can be one the window doesn't read (an SVG, a broken file):

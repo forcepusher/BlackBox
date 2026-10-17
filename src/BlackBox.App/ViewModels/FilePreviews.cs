@@ -36,15 +36,19 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
     [ObservableProperty]
     private string _details = "";
 
+    // Both off the UI thread: Windows' opening of a file on a share that is off waits for the share.
     [RelayCommand]
-    private void Open()
+    private void Open() => Task.Run(() =>
     {
         try { Process.Start(new ProcessStartInfo(Path) { UseShellExecute = true })?.Dispose(); }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { Details = "Nothing on this PC opens it."; }
-    }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            Dispatcher.UIThread.Post(() => Details = "Nothing on this PC opens it.");
+        }
+    });
 
     [RelayCommand]
-    private void ShowInFolder()
+    private void ShowInFolder() => Task.Run(() =>
     {
         try
         {
@@ -54,7 +58,7 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
                 Process.Start(new ProcessStartInfo(System.IO.Path.GetDirectoryName(Path)!) { UseShellExecute = true })?.Dispose();
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
-    }
+    });
 
     /// <summary>Set once the preview has left the chat: what a load still under way brings then is let go at once.</summary>
     protected bool Disposed { get; private set; }
@@ -114,7 +118,9 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Dispatcher.UIThread.Post(() => Details = File.Exists(Path) ? $"Can't be shown: {ex.Message}" : "The file is no longer there.");
+            // Looked at here, not on the UI thread: a share that just went away is the usual cause.
+            var details = File.Exists(Path) ? $"Can't be shown: {ex.Message}" : "The file is no longer there.";
+            Dispatcher.UIThread.Post(() => Details = details);
         }
     });
 
@@ -215,7 +221,11 @@ public sealed partial class AnimationPreview(string path) : FilePreview(path)
 /// <summary>A file with nothing to show inside the chat: its name and size, to open or find.</summary>
 public sealed class FileCardPreview(string path) : FilePreview(path)
 {
-    protected override void Load() => Details = File.Exists(Path) ? Size(Path) : "The file is no longer there.";
+    protected override void Load() => Background(() =>
+    {
+        var details = File.Exists(Path) ? Size(Path) : "The file is no longer there.";
+        Show(() => Details = details);
+    });
 }
 
 /// <summary>A 3D model, turned around with the mouse (see <see cref="Views.ModelViewer"/>).</summary>
