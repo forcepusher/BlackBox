@@ -306,7 +306,7 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
     private bool _reporting;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PlayGlyph), nameof(PlayIcon))]
+    [NotifyPropertyChangedFor(nameof(PlayIcon))]
     private bool _isPlaying;
 
     private static readonly Avalonia.Media.Geometry PlayShape = Avalonia.Media.StreamGeometry.Parse("M8 5v14l11-7z");
@@ -322,9 +322,6 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TimeText))]
     private double _position;
-
-    /// <summary>The path of the button's icon: в–¶ or вќљвќљ.</summary>
-    public string PlayGlyph => IsPlaying ? "M6 4h4v16H6zM14 4h4v16h-4z" : "M8 5v14l11-7z";
 
     public string TimeText => $"{Clock(TimeSpan.FromSeconds(Position))} / {Clock(TimeSpan.FromSeconds(Length))}";
 

@@ -1,7 +1,7 @@
 namespace BlackBox.Core.Comfy;
 
 /// <summary>
-/// BlackBox's own small workflows, listed with the templates as blackbox/â€¦: the classic text to
+/// BlackBox's own small workflows, listed with the templates as blackbox/…: the classic text to
 /// image and image to image for any single-file checkpoint (SD 1.5, SD 2, SDXL). ComfyUI's own
 /// templates are all for big new models now (Z-Image, Flux, Qwen-Image, 6 to 20 GB), and its
 /// classic SD 1.5 ones are gone, so on a PC without a graphics card none of them was usable; these
@@ -76,7 +76,7 @@ public static class ComfyBuiltins
 
     private const string Prefix = "builtin:";
 
-    /// <summary>The built-in workflows as templates, named blackbox/â€¦.</summary>
+    /// <summary>The built-in workflows as templates, named blackbox/….</summary>
     public static IEnumerable<ComfyTemplate> Templates =>
         All.Select(b => new ComfyTemplate("blackbox/" + b.Name, b.Title, b.Description, Prefix + b.Name, "blackbox", b.Tags));
 
