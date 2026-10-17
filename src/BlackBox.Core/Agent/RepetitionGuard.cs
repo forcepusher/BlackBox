@@ -13,8 +13,15 @@ internal sealed class RepetitionGuard(Action<StreamDelta>? inner)
     /// <summary>Length of the tail that is looked up earlier in the reply.</summary>
     internal const int TailChars = 200;
 
-    /// <summary>The tail appearing this many times means the reply is going in circles.</summary>
+    /// <summary>The tail appearing this many times, evenly spaced, means the reply is going in circles.</summary>
     internal const int Repeats = 3;
+
+    /// <summary>
+    /// Or this many times however spaced: a paragraph going round with a number changed somewhere
+    /// else in it. Three times was taken for a loop whatever the spacing, and a song's chorus,
+    /// which comes back between verses, cut the lyrics off as the model drafted them.
+    /// </summary>
+    internal const int UnevenRepeats = 6;
 
     private const int CheckEvery = 100;
 
@@ -38,10 +45,14 @@ internal sealed class RepetitionGuard(Action<StreamDelta>? inner)
         // Lines of nothing but board digits or punctuation repeat legitimately; real loops are prose.
         if (tail.Count(char.IsLetter) < TailChars / 4)
             return false;
-        var count = 0;
+        var at = new List<int>();
         for (var i = text.IndexOf(tail, StringComparison.Ordinal); i >= 0; i = text.IndexOf(tail, i + TailChars, StringComparison.Ordinal))
-            if (++count >= Repeats)
+        {
+            at.Add(i);
+            // A loop comes back at a steady pace (the last three, as Repeats is three).
+            if (at.Count >= UnevenRepeats || at.Count >= Repeats && at[^1] - at[^2] == at[^2] - at[^3])
                 return true;
+        }
         return false;
     }
 }

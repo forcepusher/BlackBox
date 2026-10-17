@@ -1079,6 +1079,29 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public void A_chorus_that_comes_back_between_verses_is_not_a_loop()
+    {
+        // Lyrics drafted for a song in the thinking: the chorus three times, other lines between.
+        const string chorus = "[Chorus]\nWe are the lights that never fade, we are the songs the city made,\n" +
+                              "hold on, hold on, the night is young, so sing it loud with everyone,\n" +
+                              "we are the lights that never fade, never fade, never fade away.\n\n";
+        Assert.True(chorus.Length > RepetitionGuard.TailChars);
+        var song = "[Verse 1]\nMorning trains and coffee cups, a hundred faces waking up,\n\n" + chorus +
+                   "[Verse 2]\nNeon rain on window glass, we let the quiet moments pass, and every street is calling out our names tonight,\n\n" + chorus +
+                   "[Bridge]\nIf the music stops we keep the beat alive,\n\n" + chorus;
+        var guard = new RepetitionGuard(null);
+        foreach (var piece in song.Chunk(7))
+            guard.OnDelta(new StreamDelta(StreamChannel.Reasoning, new string(piece)));
+
+        // A paragraph going round with a number changed in each round is still caught, a little later.
+        const string paragraph = "and if that doesn't work either, the dialog must still be open behind the main window, so I should " +
+                                 "bring it to the front first and then look at the screenshot again before I decide anything else about it. ";
+        var rounds = new[] { 5, 40, 300, 7, 2000, 61, 9 }.Select(x => $"Let me try clicking at ({x}, {x * 3}) instead, " + paragraph);
+        Assert.True(RepetitionGuard.IsRepeating(string.Concat(rounds)));
+        Assert.False(RepetitionGuard.IsRepeating(string.Concat(rounds.Take(5))));
+    }
+
+    [Fact]
     public void Repeated_board_printouts_are_not_a_loop()
     {
         var board = string.Concat(Enumerable.Repeat("8 2 8 2\n16 8 16 4\n8 32 256 2\n4 16 2 2\n", 20));
