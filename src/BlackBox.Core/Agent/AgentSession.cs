@@ -376,6 +376,9 @@ public sealed partial class AgentSession(
 
         if (NeedsApproval(tool) && !await observer.RequestApprovalAsync(call, tool, summary, ct).ConfigureAwait(false))
         {
+            // A stop while the call waited for an OK is no answer to it. Taken for a no, it went into
+            // the conversation as declined, and after Continue the model asked what to do instead.
+            ct.ThrowIfCancellationRequested();
             var denied = ToolResult.Error(DeclinedText);
             observer.OnToolFinished(call, denied);
             return denied;

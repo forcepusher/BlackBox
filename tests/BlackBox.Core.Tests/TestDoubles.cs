@@ -118,9 +118,13 @@ internal sealed class RecordingObserver : IAgentObserver
     public void OnDelta(StreamDelta delta) { }
     public void OnAssistantMessage(ChatMessage message) => Events.Add("reply " + message.Content);
 
+    /// <summary>Runs while an OK is asked for, before the answer (e.g. the user pressing Stop meanwhile).</summary>
+    public Action? WhileAsked { get; set; }
+
     public Task<bool> RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct)
     {
         ApprovalRequests++;
+        WhileAsked?.Invoke();
         return Task.FromResult(Approve);
     }
 

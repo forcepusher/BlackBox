@@ -102,6 +102,27 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_stop_while_a_call_waits_for_an_OK_is_not_taken_for_a_no()
+    {
+        // The window answers a pending OK with no when the run stops. That went into the conversation
+        // as declined, and after Continue the model asked the user what to do instead.
+        var server = new ScriptedServer(Sse.ToolCall("w1", "write_file", """{"path":"x.txt","content":"hi"}"""), Sse.Text("(not asked)"));
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        var (session, observer) = CreateSession(server, dir, new FakePlatform());
+        using var stop = new CancellationTokenSource();
+        observer.Approve = false;
+        observer.WhileAsked = stop.Cancel;
+
+        await session.RunAsync("write", observer, stop.Token);
+
+        Assert.Equal(AgentStopReason.Cancelled, observer.StopReason);
+        Assert.Single(server.Requests);
+        Assert.False(File.Exists(Path.Combine(dir, "x.txt")));
+        Assert.Equal("Not run: the user stopped the agent.", session.History[^1].Content);
+        Assert.DoesNotContain(session.History, m => m.Content?.Contains("declined") == true);
+    }
+
+    [Fact]
     public async Task After_a_denial_the_models_question_ends_the_turn_without_a_nudge()
     {
         // Seen live: the model asked how to go on, a nudge ("Continue with the task") read as the
