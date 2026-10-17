@@ -108,7 +108,8 @@ public sealed class McpHost : IAsyncDisposable
 
     private async Task ConnectOneAsync(Connection c, CancellationToken ct, TimeSpan? limit = null)
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        // Ends with its connection: the settings changed again while it started.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct, c.Stopping);
         timeout.CancelAfter(limit ?? ConnectTimeout);
         var stderr = new Queue<string>();
         try
@@ -119,7 +120,10 @@ public sealed class McpHost : IAsyncDisposable
             try
             {
                 var tools = await client.ListToolsAsync(cancellationToken: timeout.Token).ConfigureAwait(false);
-                c.Connected(client, tools);
+                // Its connection was stopped meanwhile: kept there, the server's process would run on
+                // with nobody to end it.
+                if (!c.Connected(client, tools))
+                    await client.DisposeAsync().ConfigureAwait(false);
             }
             catch
             {
@@ -127,6 +131,7 @@ public sealed class McpHost : IAsyncDisposable
                 throw;
             }
         }
+        catch (OperationCanceledException) when (c.Stopping.IsCancellationRequested) { }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             c.Failed($"It did not answer within {(limit ?? ConnectTimeout).TotalSeconds:0} seconds.", stderr);
@@ -222,11 +227,21 @@ public sealed class McpHost : IAsyncDisposable
             _state == McpServerState.Connected ? _clientTools.Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal).ToList() : [], _error,
             _client?.ServerInstructions is { Length: > 0 } i ? i.Trim() : null);
 
-        public void Connected(McpClient client, IList<McpClientTool> tools)
+        private readonly object _lock = new();
+        private bool _stopped;
+
+        /// <summary>Keeps the client; false when the connection was stopped first, and the client is the caller's to end.</summary>
+        public bool Connected(McpClient client, IList<McpClientTool> tools)
         {
-            _client = client;
-            _clientTools = tools;
-            _state = McpServerState.Connected;
+            lock (_lock)
+            {
+                if (_stopped)
+                    return false;
+                _client = client;
+                _clientTools = tools;
+                _state = McpServerState.Connected;
+                return true;
+            }
         }
 
         public void Failed(string error, Queue<string> stderr)
@@ -254,6 +269,9 @@ public sealed class McpHost : IAsyncDisposable
         // Ends calls in flight when the server is stopped; a run that still holds the tool gets an error, not a hang.
         private readonly CancellationTokenSource _stopping = new();
 
+        /// <summary>Cancelled when the connection is stopped, its start as well.</summary>
+        public CancellationToken Stopping => _stopping.Token;
+
         private async Task<ModelContextProtocol.Protocol.CallToolResult> CallAsync(McpClientTool tool, IReadOnlyDictionary<string, object?> args, CancellationToken ct)
         {
             if (_stopping.IsCancellationRequested)
@@ -273,11 +291,16 @@ public sealed class McpHost : IAsyncDisposable
 
         public async ValueTask DisposeAsync()
         {
+            McpClient? client;
+            lock (_lock)
+            {
+                _stopped = true;
+                (client, _client) = (_client, null);
+            }
             _stopping.Cancel();
-            if (_client is null) return;
-            try { await _client.DisposeAsync().ConfigureAwait(false); }
+            if (client is null) return;
+            try { await client.DisposeAsync().ConfigureAwait(false); }
             catch (Exception ex) when (ex is not OutOfMemoryException) { /* a server that is already gone */ }
-            _client = null;
         }
     }
 }

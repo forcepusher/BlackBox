@@ -283,6 +283,36 @@ public class McpTests
     }
 
     [Fact]
+    public async Task Connecting_again_while_a_server_starts_ends_that_start_at_once()
+    {
+        // The settings changed again while a server started (npx downloading it): the first start
+        // went on for its 90 seconds, and a server that came up after its connection was stopped
+        // ran on with nobody to end it.
+        await using var servers = new InProcessServer();
+        var unanswered = new List<Pipe>();
+        var host = new McpHost
+        {
+            TransportFactory = c =>
+            {
+                if (c.Name != "slow")
+                    return servers.Start(c.Name);
+                var (toServer, toClient) = (new Pipe(), new Pipe());
+                unanswered.Add(toClient); // no server reads or answers
+                return new StreamClientTransport(toServer.Writer.AsStream(), toClient.Reader.AsStream());
+            },
+        };
+        await using var _ = host;
+        var first = host.ConnectAsync([Server("slow")], CancellationToken.None);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        Assert.False(first.IsCompleted);
+
+        await host.ConnectAsync([Server("test")], CancellationToken.None);
+        await first.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        var status = Assert.Single(host.Statuses);
+        Assert.Equal(("test", McpServerState.Connected), (status.Name, status.State));
+    }
+
+    [Fact]
     public async Task The_model_calls_mcp_tools_like_any_other()
     {
         var (host, servers) = await ConnectAsync("test");
