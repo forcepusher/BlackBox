@@ -246,7 +246,7 @@ public sealed class McpHost : IAsyncDisposable
             {
                 var name = McpTool.ExposedName(Config.Name, t.Name);
                 for (var n = 2; !taken.Add(name); n++)
-                    name = McpTool.ExposedName(Config.Name, t.Name + "_" + n);
+                    name = McpTool.ExposedName(Config.Name, t.Name, "_" + n);
                 Tools.Add(new McpTool(Config.Name, name, t.ProtocolTool, (args, ct) => CallAsync(t, args, ct)));
             }
         }

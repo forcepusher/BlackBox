@@ -133,6 +133,12 @@ public class McpTests
         var longName = McpTool.ExposedName(new string('s', 40), new string('t', 40));
         Assert.True(longName.Length <= McpTool.MaxNameLength);
         Assert.StartsWith(new string('s', 40) + "__", longName);
+        // Two long names that are the same once cut keep the number that tells them apart: cut off
+        // with the rest, it was lost, and naming them went round for ever.
+        var second = McpTool.ExposedName(new string('s', 40), new string('t', 40), "_2");
+        Assert.NotEqual(longName, second);
+        Assert.EndsWith("_2", second);
+        Assert.True(second.Length <= McpTool.MaxNameLength);
     }
 
     [Fact]
@@ -392,6 +398,24 @@ public class McpTests
         var registry = ToolRegistry.CreateDefault(false, extra: host.Tools);
         Assert.Null(ToolCallRepair.ResolveTool("add", registry)); // ambiguous, so not guessed
         Assert.Equal("beta__add", ToolCallRepair.ResolveTool("beta__add", registry)!.Name);
+    }
+
+    [Fact]
+    public async Task A_server_whose_name_fills_the_tool_names_still_gets_one_name_per_tool()
+    {
+        // Cut to 64 characters, every tool of a server with a 62-character name came out the same,
+        // and numbering them went round for ever with the MCP lock held: runs, Settings and closing
+        // the app all waited on it.
+        var connect = ConnectAsync(new string('s', 62));
+        Assert.Same(connect, await Task.WhenAny(connect, Task.Delay(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken)));
+        var (host, servers) = await connect;
+        await using var _ = host;
+        await using var __ = servers;
+
+        var names = host.Tools.Select(t => t.Name).ToList();
+        Assert.True(names.Count > 1);
+        Assert.Equal(names.Count, names.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.All(names, n => Assert.True(n.Length <= McpTool.MaxNameLength, n));
     }
 
     [Fact]

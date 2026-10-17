@@ -79,11 +79,17 @@ public sealed partial class McpTool : Tools.Tool
         }
     }
 
-    /// <summary>The name shown to the model: <c>server__tool</c>, with only the characters function names allow.</summary>
-    public static string ExposedName(string serverName, string toolName)
+    /// <summary>
+    /// The name shown to the model: <c>server__tool</c>, with only the characters function names
+    /// allow, and <paramref name="suffix"/> (a number that tells apart two names that came out the
+    /// same) after the cut to <see cref="MaxNameLength"/>: cut off with the rest, it was lost, and
+    /// naming two long tools that clashed went round for ever.
+    /// </summary>
+    public static string ExposedName(string serverName, string toolName, string suffix = "")
     {
         var name = Prefix(serverName) + Clean(toolName);
-        return name.Length <= MaxNameLength ? name : name[..MaxNameLength].TrimEnd('_', '-');
+        var room = MaxNameLength - suffix.Length;
+        return (name.Length <= room ? name : name[..room].TrimEnd('_', '-')) + suffix;
     }
 
     /// <summary>What all of a server's tool names start with: <c>server__</c>.</summary>
