@@ -279,6 +279,10 @@ public sealed partial class AgentSession(
                         result = result with { Text = result.Text + "\n" + warning };
                     if (errors?.Check(call, result) is { } lookItUp)
                         result = result with { Text = result.Text + "\n" + lookItUp };
+                    // A model that can't see gets no picture (an MCP tool's, say): its server
+                    // refused that request and every one after it, since the conversation keeps it.
+                    if (result.Image is not null && !toolContext.SeesImages)
+                        result = result with { Image = null, Text = result.Text + "\n(A picture came with this, left out: the model in use can't see images.)" };
                     var message = last = ChatMessage.ToolResult(call.Id, result.Text);
                     History.Add(message);
                     if (result.Image is not null)

@@ -897,6 +897,34 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_model_that_cant_see_gets_no_picture_from_a_tool()
+    {
+        // An MCP tool's picture reached a text-only model's server, which refused that request and
+        // every one after it, the picture being in the conversation.
+        var server = new ScriptedServer(Sse.ToolCall("p1", "render", "{}"), Sse.Text("Rendered."));
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(), SeesImages = false };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null),
+            new ChatRequestOptions(), new ToolRegistry([new PictureTool()]), ctx, "sys");
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("render it", observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(0, Images(server.Requests[1]));
+        Assert.Contains("left out: the model in use can't see images", server.Requests[1]["messages"]!.AsArray()[^1]!["content"]!.GetValue<string>());
+    }
+
+    private sealed class PictureTool : Tool
+    {
+        public override string Name => "render";
+        public override string Description => "Gives a picture back, as some MCP tools do.";
+        public override ToolRisk Risk => ToolRisk.ReadOnly;
+        public override JsonObject Parameters => Schema();
+        public override Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct) =>
+            Task.FromResult(new ToolResult("Rendered the scene.", McpTestServer.TestTools.Png, "image/png", ImageCaption: "The picture the tool gave back:"));
+    }
+
+    [Fact]
     public async Task A_reply_cut_by_the_servers_length_cap_is_continued_not_reset()
     {
         // 6k of a 100k context: the server stopped at its reply-length limit, not at the context's end.
