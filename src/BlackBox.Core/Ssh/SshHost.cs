@@ -500,16 +500,6 @@ public sealed partial class SshHost : IDisposable
         return new(code, Encoding.UTF8.GetString(output), error);
     }
 
-    /// <summary>A command's output as bytes (an archive, say); with <paramref name="sudo"/> run as root. Throws when it fails.</summary>
-    public async Task<byte[]> ExecBytesAsync(string command, bool sudo, TimeSpan timeout, CancellationToken ct)
-    {
-        var (text, prefix) = await SudoWrapAsync(command, sudo, ct).ConfigureAwait(false);
-        var (code, output, error) = await RunExecAsync(text, prefix, timeout, ct).ConfigureAwait(false);
-        if (code != 0)
-            throw new IOException($"{command} failed on {Target}: {error.Trim()}");
-        return output;
-    }
-
     /// <summary>A command that reads bytes (an archive, say) from its input; with <paramref name="sudo"/> run as root.</summary>
     public async Task<ExecResult> ExecBytesInAsync(string command, byte[] stdin, bool sudo, TimeSpan timeout, CancellationToken ct)
     {

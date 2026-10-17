@@ -112,9 +112,11 @@ public sealed class ComfyHub(string stateDirectory)
             {
                 // Something holds the port but doesn't answer: a server that is busy (a custom node
                 // downloading models blocked one for minutes), not one to start a second time.
-                for (var waited = 0; waited < 90 && await api.TrySystemStatsAsync(ct).ConfigureAwait(false) is null; waited += 3)
+                // By the clock: each look waits for an answer too, so counting 3 s a round said 90 s at about 180.
+                var waited = System.Diagnostics.Stopwatch.StartNew();
+                while (waited.Elapsed < TimeSpan.FromSeconds(90) && await api.TrySystemStatsAsync(ct).ConfigureAwait(false) is null)
                 {
-                    progress?.Invoke($"ComfyUI is busy and doesn't answer yet… {waited} s");
+                    progress?.Invoke($"ComfyUI is busy and doesn't answer yet… {waited.Elapsed.TotalSeconds:0} s");
                     await Task.Delay(3000, ct).ConfigureAwait(false);
                 }
                 if (await api.TrySystemStatsAsync(ct).ConfigureAwait(false) is null)

@@ -56,9 +56,16 @@ public static class MediaPreview
     /// <returns>A line about it, a picture of it (null when none is made) and what that picture shows.</returns>
     public static (string Line, SKBitmap? Tile, string Shows) Look(string path, IMediaDecoder? decoder, bool makeTile)
     {
-        if (!File.Exists(path))
+        string size;
+        try
+        {
+            size = Size(new FileInfo(path).Length);
+        }
+        // Gone (or never there): deleted after a look found it threw out of the whole look.
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
             return ("not found", null, "");
-        var size = Size(new FileInfo(path).Length);
+        }
         try
         {
             switch (KindOf(path))
