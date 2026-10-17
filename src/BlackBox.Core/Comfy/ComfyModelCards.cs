@@ -253,6 +253,42 @@ public sealed partial class ComfyModelCards(string stateDirectory)
         SdVersion().Match(baseModel) is { Success: true } m ? (m.Groups[1].Value == "1" ? 512 : m.Groups[1].Value == "2" ? 768 : 1024)
         : PictureModel().IsMatch(baseModel) ? 1024 : null;
 
+    /// <summary>How a LoRA made for one base model fits a checkpoint of another.</summary>
+    public enum Fit
+    {
+        /// <summary>The same base, or one the LoRA is as good on, or one this can't tell.</summary>
+        Fits,
+        /// <summary>The same kind of model but another line of it (SDXL, Pony, Illustrious): it applies, but weaker or off-style.</summary>
+        OtherLine,
+        /// <summary>Another kind of model (SD 1.5 and SDXL, SDXL and Flux): ComfyUI can't apply it at all.</summary>
+        OtherKind,
+    }
+
+    /// <summary>
+    /// How a LoRA for <paramref name="loraBase"/> fits a checkpoint of <paramref name="checkpointBase"/>,
+    /// as Civitai names base models ("SD 1.5", "SDXL 1.0", "Pony", "Illustrious", "Flux.1 D").
+    /// </summary>
+    public static Fit FitOf(string loraBase, string checkpointBase)
+    {
+        if (Kind(loraBase) is not { } lora || Kind(checkpointBase) is not { } checkpoint)
+            return Fit.Fits;
+        if (lora != checkpoint)
+            return Fit.OtherKind;
+        return lora == "SDXL" && Line(loraBase) != Line(checkpointBase) ? Fit.OtherLine : Fit.Fits;
+
+        static string? Kind(string b) =>
+            b.Contains("flux", StringComparison.OrdinalIgnoreCase) ? "Flux"
+            : SdxlFamily().IsMatch(b) ? "SDXL"
+            : SdVersion().Match(b) is { Success: true } m ? "SD " + m.Groups[1].Value
+            : null;
+
+        // NoobAI is trained on Illustrious, and their LoRAs are used on both.
+        static string Line(string b) =>
+            b.Contains("pony", StringComparison.OrdinalIgnoreCase) ? "Pony"
+            : b.Contains("illustrious", StringComparison.OrdinalIgnoreCase) || b.Contains("noob", StringComparison.OrdinalIgnoreCase) ? "Illustrious"
+            : "SDXL";
+    }
+
     /// <summary>What a base model is, said for the sizes it makes: "Illustrious, an SDXL model, made for about 1 megapixel".</summary>
     public static string Describe(string baseModel)
     {

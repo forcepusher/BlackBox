@@ -185,6 +185,18 @@ public class ModelCardTests : IDisposable
     public void Each_base_model_has_the_size_it_is_made_for(string baseModel, int? side) =>
         Assert.Equal(side, ComfyModelCards.NativeSide(baseModel));
 
+    [Theory]
+    [InlineData("SD 1.5", "SDXL 1.0", ComfyModelCards.Fit.OtherKind)]
+    [InlineData("Flux.1 D", "Illustrious", ComfyModelCards.Fit.OtherKind)]
+    [InlineData("SDXL 1.0", "Pony", ComfyModelCards.Fit.OtherLine)]
+    [InlineData("Pony", "Illustrious", ComfyModelCards.Fit.OtherLine)]
+    [InlineData("Illustrious", "NoobAI", ComfyModelCards.Fit.Fits)]
+    [InlineData("Pony", "Pony", ComfyModelCards.Fit.Fits)]
+    [InlineData("SD 1.4", "SD 1.5", ComfyModelCards.Fit.Fits)]
+    [InlineData("LTXV", "SDXL 1.0", ComfyModelCards.Fit.Fits)]
+    public void A_lora_fits_checkpoints_of_its_own_base(string lora, string checkpoint, ComfyModelCards.Fit fit) =>
+        Assert.Equal(fit, ComfyModelCards.FitOf(lora, checkpoint));
+
     [Fact]
     public void A_files_own_tensors_and_metadata_say_its_base_model()
     {
@@ -293,6 +305,36 @@ public class ModelCardToolTests : IDisposable
         var again = await Call(tool, new JsonObject { ["action"] = "run", ["workflow"] = workflow.Replace("512", "832").Replace("760", "1216") }.ToJsonString());
         Assert.DoesNotContain("under half the size", again.Text);
         Assert.DoesNotContain("on Civitai", again.Text);
+    }
+
+    // A LoRA for another kind of model isn't applied at all: ComfyUI only logs "lora key not loaded".
+    [Fact]
+    public async Task A_lora_for_another_kind_of_model_than_the_checkpoint_is_said_once()
+    {
+        var loras = Path.Combine(_comfy.CodeDir, "models", "loras");
+        Directory.CreateDirectory(loras);
+        var header = Encoding.UTF8.GetBytes("""{"lora_te_text_model_encoder_layers_0_mlp_fc1.alpha": {"dtype": "F16", "shape": [], "data_offsets": [0, 2]}}""");
+        File.WriteAllBytes(Path.Combine(loras, "pixel.safetensors"), [.. BitConverter.GetBytes((ulong)header.Length), .. header, 0, 0]);
+        _comfy.Loras.Add("pixel.safetensors");
+        var workflow = """
+            {"1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "sdxl.safetensors"}},
+             "8": {"class_type": "LoraLoader", "inputs": {"model": ["1", 0], "clip": ["1", 1], "lora_name": "pixel.safetensors", "strength_model": 1, "strength_clip": 1}},
+             "2": {"class_type": "CLIPTextEncode", "inputs": {"text": "a tavern", "clip": ["8", 1]}},
+             "3": {"class_type": "CLIPTextEncode", "inputs": {"text": "", "clip": ["8", 1]}},
+             "4": {"class_type": "EmptyLatentImage", "inputs": {"width": 1216, "height": 832, "batch_size": 1}},
+             "5": {"class_type": "KSampler", "inputs": {"model": ["8", 0], "positive": ["2", 0], "negative": ["3", 0], "latent_image": ["4", 0],
+                   "seed": 1, "steps": 20, "cfg": 4, "sampler_name": "euler_ancestral", "scheduler": "normal", "denoise": 1}},
+             "6": {"class_type": "VAEDecode", "inputs": {"samples": ["5", 0], "vae": ["1", 2]}},
+             "7": {"class_type": "SaveImage", "inputs": {"images": ["6", 0], "filename_prefix": "tavern"}}}
+            """;
+        var tool = new ComfyTool();
+
+        var ran = await Call(tool, new JsonObject { ["action"] = "run", ["workflow"] = workflow }.ToJsonString());
+
+        Assert.False(ran.IsError, ran.Text);
+        Assert.Contains("Note: pixel.safetensors is a LoRA for SD 1.5, but the base model of sdxl.safetensors is Illustrious", ran.Text);
+        Assert.Contains("find_models kind=lora base=\"Illustrious\"", ran.Text);
+        Assert.DoesNotContain("lora key not loaded", (await Call(tool, new JsonObject { ["action"] = "run", ["workflow"] = workflow }.ToJsonString())).Text);
     }
 
     // qwen3.8 repainted a figure cropped from the user's reference sheet at the crop's 432x1216.

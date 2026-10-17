@@ -734,8 +734,58 @@ public sealed class ComfyTool : Tool
         var after = new List<string>();
         if (await SizeNoteAsync(api, hub, workflow, used, result.Files ?? [], ct).ConfigureAwait(false) is { } sizeNote)
             after.Add(sizeNote);
+        after.AddRange(await LoraNotesAsync(api, hub, used, ct).ConfigureAwait(false));
         after.AddRange(await CardsAsync(api, hub, used, ct).ConfigureAwait(false));
         return after.Count > 0 ? result with { Text = result.Text + "\n\n" + string.Join("\n\n", after) } : result;
+    }
+
+    /// <summary>The LoRAs and checkpoints whose fit this task has been told about.</summary>
+    private readonly HashSet<(string Lora, string Checkpoint)> _paired = [];
+
+    /// <summary>
+    /// A note for each LoRA a workflow put on a checkpoint of another base model. Asked for a pixel
+    /// art tavern, qwen3.8 put Pixel Art XL, made for SDXL 1.0, on Pony Diffusion V6 and got a
+    /// washed-out picture twice, while a Pony one was in the list it chose from; and a LoRA of
+    /// another kind of model (SD 1.5 on SDXL) isn't applied at all: ComfyUI only logs "lora key not
+    /// loaded" and goes on. A line of SDXL (Pony, Illustrious) is told only from Civitai's cards.
+    /// Each pair is said once in a task.
+    /// </summary>
+    private async Task<List<string>> LoraNotesAsync(ComfyApi api, ComfyHub hub, List<(string Folder, string File)> used, CancellationToken ct)
+    {
+        var notes = new List<string>();
+        if (used.FirstOrDefault(u => u.Folder == "checkpoints").File is not { } checkpoint || !used.Any(u => u.Folder == "loras"))
+            return notes;
+        var dirs = await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) ?? [];
+        if (await BaseAsync("checkpoints", checkpoint) is not { } made)
+            return notes;
+        foreach (var lora in used.Where(u => u.Folder == "loras").Select(u => u.File).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            lock (_paired)
+                if (_paired.Contains((lora, checkpoint)))
+                    continue;
+            if (await BaseAsync("loras", lora) is not { } own)
+                continue;
+            lock (_paired)
+                _paired.Add((lora, checkpoint));
+            var fit = ComfyModelCards.FitOf(own.Base, made.Base);
+            if (fit == ComfyModelCards.Fit.OtherKind)
+                notes.Add($"Note: {lora} is a LoRA for {own.Base}, but the base model of {checkpoint} is {made.Base}: a LoRA only fits the kind of model it was made for, " +
+                          $"so ComfyUI couldn't apply it (its log says \"lora key not loaded\"). Use a LoRA made for {made.Base} " +
+                          $"(action=find_models kind=lora base=\"{made.Base}\"), or a checkpoint for {own.Base}.");
+            else if (fit == ComfyModelCards.Fit.OtherLine && own.FromCard && made.FromCard)
+                notes.Add($"Note: {lora} was made for {own.Base}, and the base model of {checkpoint} is {made.Base}: it applies, but weaker or off-style; " +
+                          $"a LoRA made for {made.Base} fits better (action=find_models kind=lora base=\"{made.Base}\").");
+        }
+        return notes;
+
+        async Task<(string Base, bool FromCard)?> BaseAsync(string folder, string file)
+        {
+            if (!dirs.TryGetValue("models:" + folder, out var dir) || Path.Combine(dir, file) is not { } path || !File.Exists(path))
+                return null;
+            if ((await CardAsync(hub, path, ct).ConfigureAwait(false)).Card?.Base is { Length: > 0 } fromCard)
+                return (fromCard, true);
+            return ComfyModelCards.BaseFromFile(path) is { } fromFile ? (fromFile, false) : null;
+        }
     }
 
     /// <summary>The installed checkpoints and LoRAs a workflow's nodes are set to, with their folders.</summary>

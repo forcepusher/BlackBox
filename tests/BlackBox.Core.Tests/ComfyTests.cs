@@ -32,6 +32,9 @@ internal sealed class FakeComfyServer : IDisposable
     public bool OnCpu { get; set; }
     public List<string> Checkpoints { get; } = ["v1-5-pruned-emaonly-fp16.safetensors", "sdxl.safetensors"];
 
+    /// <summary>The LoRA files it lists (models/loras).</summary>
+    public List<string> Loras { get; } = [];
+
     /// <summary>What a finished job's history says; the default saves one picture.</summary>
     public Func<string, JsonObject>? History { get; set; }
 
@@ -59,6 +62,9 @@ internal sealed class FakeComfyServer : IDisposable
         "name": "VAEDecode", "display_name": "VAE Decode", "category": "latent", "python_module": "nodes", "output_node": false},
       "SaveImage": {"input": {"required": {"images": ["IMAGE", {}], "filename_prefix": ["STRING", {"default": "ComfyUI"}]}}, "output": [], "output_name": [],
         "name": "SaveImage", "display_name": "Save Image", "category": "image", "python_module": "nodes", "output_node": true},
+      "LoraLoader": {"input": {"required": {"model": ["MODEL", {}], "clip": ["CLIP", {}], "lora_name": [["pixel.safetensors"], {}],
+        "strength_model": ["FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0}], "strength_clip": ["FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0}]}},
+        "output": ["MODEL", "CLIP"], "output_name": ["MODEL", "CLIP"], "name": "LoraLoader", "display_name": "Load LoRA", "category": "loaders", "python_module": "nodes", "output_node": false},
       "LoadImage": {"input": {"required": {"image": [["example.png"], {"image_upload": true}]}}, "output": ["IMAGE", "MASK"], "output_name": ["IMAGE", "MASK"],
         "name": "LoadImage", "display_name": "Load Image", "category": "image", "python_module": "nodes", "output_node": false},
       "ImageScaleToTotalPixels": {"input": {"required": {"image": ["IMAGE", {}], "upscale_method": [["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], {}],
@@ -129,13 +135,14 @@ internal sealed class FakeComfyServer : IDisposable
                 Reply(ctx, 200, new JsonArray([.. Checkpoints.Select(c => JsonValue.Create(c))]).ToJsonString());
                 return;
             case "models/loras":
-                Reply(ctx, 200, "[]");
+                Reply(ctx, 200, new JsonArray([.. Loras.Select(l => JsonValue.Create(l))]).ToJsonString());
                 return;
             case "internal/folder_paths":
                 Reply(ctx, 200, new JsonObject
                 {
                     ["custom_nodes"] = new JsonArray(Path.Combine(CodeDir, "custom_nodes")),
                     ["checkpoints"] = new JsonArray(Path.Combine(CodeDir, "models", "checkpoints")),
+                    ["loras"] = new JsonArray(Path.Combine(CodeDir, "models", "loras")),
                 }.ToJsonString());
                 return;
             case "queue":
