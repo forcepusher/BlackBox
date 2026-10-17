@@ -20,30 +20,41 @@ public static class WebPage
     /// <summary>Less text than this from an HTML page means its content is built by scripts (or it is an error page).</summary>
     private const int ScriptShellChars = 300;
 
-    private static readonly LinkedList<WebPageText> Cache = new();
+    private static readonly LinkedList<(WebPageText Page, DateTime At)> Cache = new();
     private static readonly Lock CacheLock = new();
 
-    public static async Task<WebPageText> ReadAsync(string url, HeadlessBrowser? browser, CancellationToken ct)
+    /// <param name="maxAge">
+    /// How old a kept copy may be to be used: long enough to read on in a page in parts, short
+    /// for a new look. Kept for ever, a page fetched again after a change (a local server restarted
+    /// with new code, a status page watched) came back as it had been the first time.
+    /// </param>
+    public static async Task<WebPageText> ReadAsync(string url, HeadlessBrowser? browser, CancellationToken ct, TimeSpan? maxAge = null)
     {
         var uri = ParseAddress(url);
         var key = uri.GetLeftPart(UriPartial.Query);
+        var oldest = DateTime.UtcNow - (maxAge ?? TimeSpan.FromMinutes(1));
         lock (CacheLock)
         {
-            if (Cache.FirstOrDefault(p => p.Url == key) is { } cached)
+            if (Cache.FirstOrDefault(p => p.Page.Url == key) is { Page: not null } cached)
             {
                 Cache.Remove(cached);
-                Cache.AddFirst(cached);
-                return cached;
+                if (cached.At >= oldest)
+                {
+                    Cache.AddFirst(cached);
+                    return cached.Page;
+                }
             }
         }
 
         var page = await DownloadAsync(uri, browser, ct).ConfigureAwait(false) with { Url = key };
-        lock (CacheLock)
-        {
-            Cache.AddFirst(page);
-            while (Cache.Count > CacheSize)
-                Cache.RemoveLast();
-        }
+        // A page with no text (blocked, not loaded yet) is fetched again next time, not kept.
+        if (page.Text.Length > 0)
+            lock (CacheLock)
+            {
+                Cache.AddFirst((page, DateTime.UtcNow));
+                while (Cache.Count > CacheSize)
+                    Cache.RemoveLast();
+            }
         return page;
     }
 

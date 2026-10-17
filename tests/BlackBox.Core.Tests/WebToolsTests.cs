@@ -11,6 +11,38 @@ public class WebToolsTests
         PageText.Extract(new HtmlParser().ParseDocument(html), keepNoscript).Text;
 
     [Fact]
+    public async Task A_page_read_again_later_is_fetched_again_and_reading_on_uses_the_copy()
+    {
+        // Kept for ever, a local server's page fetched again after a change came back as it had
+        // been the first time.
+        var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        probe.Start();
+        var port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        using var listener = new System.Net.HttpListener();
+        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        listener.Start();
+        var served = 0;
+        _ = Task.Run(async () =>
+        {
+            while (listener.IsListening)
+            {
+                var ctx = await listener.GetContextAsync();
+                var body = System.Text.Encoding.UTF8.GetBytes($"<html><body><h1>Status</h1><p>Build number {++served} is live. " + new string('x', 400) + "</p></body></html>");
+                ctx.Response.ContentType = "text/html; charset=utf-8";
+                await ctx.Response.OutputStream.WriteAsync(body);
+                ctx.Response.Close();
+            }
+        }, TestContext.Current.CancellationToken);
+        var url = $"http://127.0.0.1:{port}/status";
+
+        Assert.Contains("Build number 1", (await WebPage.ReadAsync(url, null, TestContext.Current.CancellationToken)).Text);
+        Assert.Contains("Build number 1", (await WebPage.ReadAsync(url, null, TestContext.Current.CancellationToken, TimeSpan.FromMinutes(15))).Text);
+        Assert.Contains("Build number 2", (await WebPage.ReadAsync(url, null, TestContext.Current.CancellationToken, TimeSpan.Zero)).Text);
+        listener.Stop();
+    }
+
+    [Fact]
     public void DuckDuckGo_results_are_read_and_ads_dropped()
     {
         const string html = """
