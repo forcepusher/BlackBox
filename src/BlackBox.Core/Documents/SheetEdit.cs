@@ -130,6 +130,9 @@ internal static partial class SheetEdit
         return char.ToUpperInvariant(said[0]) + said[1..] + (formulas || rows.Count > 0 ? ". Excel works the formulas out when it opens the file." : ".");
     }
 
+    /// <summary>Excel's last row, and the most rows one line may insert.</summary>
+    private const int MaxRow = 1_048_576, MaxInsert = 100_000;
+
     /// <summary>
     /// Cell lines as read_file shows them and row insertions and deletions ("insert row 7",
     /// "delete rows 3-4"), or null when the text isn't made of them. A line # Sheet "Name" sets the
@@ -150,8 +153,13 @@ internal static partial class SheetEdit
                 var to = row.Groups["to"].Success ? int.Parse(row.Groups["to"].Value, CultureInfo.InvariantCulture) : from;
                 if (from < 1 || to < from)
                     return null;
+                var insert = row.Groups["verb"].Value.Equals("insert", StringComparison.OrdinalIgnoreCase);
+                // Inserting copies the styled cells of the row above into each new row: "insert rows
+                // 2-9999999" ran for minutes and out of memory, past where Excel's sheets end anyway.
+                if (to > MaxRow || insert && to - from + 1 > MaxInsert)
+                    throw new InvalidOperationException(string.Create(CultureInfo.InvariantCulture, $"{line}: a sheet ends at row {MaxRow:N0}, and one line inserts at most {MaxInsert:N0} rows."));
                 var on = row.Groups["sheet"].Success ? row.Groups["sheet"].Value.Trim().Trim('"', '\'') : sheet;
-                rows.Add(new RowChange(on, row.Groups["verb"].Value.Equals("insert", StringComparison.OrdinalIgnoreCase), from, to - from + 1));
+                rows.Add(new RowChange(on, insert, from, to - from + 1));
                 continue;
             }
             if (SheetHeader().Match(line) is { Success: true } header)

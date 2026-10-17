@@ -437,6 +437,11 @@ public class DocumentWriteTests : IDisposable
         text = await Read("budget.xlsx");
         Assert.Contains("A3 Internet | B3 $40", text);
         Assert.Contains("A4 Total | B4 =SUM(B2:B3)", text);
+
+        // Ten million rows ran out of memory, past where a sheet ends anyway.
+        var huge = await Edit("budget.xlsx", "", "insert rows 2-9999999");
+        Assert.True(huge.IsError);
+        Assert.Contains("a sheet ends at row 1,048,576", huge.Text);
     }
 
     [Theory]
