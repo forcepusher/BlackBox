@@ -537,7 +537,7 @@ public sealed partial class AgentSession(
                 // conversation (which the server then reads anew, once), and later ones are left
                 // out as they come. Kept in, they failed every request after the first screenshot.
                 toolContext.SeesImages = false;
-                observer.OnNotice(ex.Message + " Going on without them.");
+                observer.OnNotice(ex.Message.TrimEnd().TrimEnd('.') + ". Going on without them.");
                 DropImages();
                 request.Clear();
                 request.Add(ChatMessage.System(systemPrompt));
