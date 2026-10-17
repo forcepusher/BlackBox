@@ -27,6 +27,10 @@ internal static class Sse
         var chunk = new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["tool_calls"] = new JsonArray(call) } }) };
         return $"data: {chunk.ToJsonString()}\n\ndata: [DONE]\n\n";
     }
+
+    /// <summary>A reply that thinks <paramref name="reasoning"/> first, then streams <paramref name="then"/>.</summary>
+    public static string Thought(string reasoning, string then) =>
+        $"data: {new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["reasoning_content"] = reasoning } }) }.ToJsonString()}\n\n" + then;
 }
 
 internal sealed class ScriptedServer(params string[] responses) : HttpMessageHandler
