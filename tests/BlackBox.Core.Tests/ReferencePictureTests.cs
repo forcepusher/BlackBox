@@ -58,6 +58,25 @@ public class ReferencePictureTests : IDisposable
         Assert.Empty(UserInput.PicturesIn([new UserInput("hello").ToMessage(seesImages: true)]));
     }
 
+    // Asked to crop the clothed figure from the sheet, qwen3.8 read its corner on its 0-1000 grid and
+    // cropped at those numbers as pixels: three crops of the wrong figure.
+    [Fact]
+    public void A_model_that_points_on_a_grid_is_told_how_its_places_in_a_picture_become_pixels()
+    {
+        var sheet = Png("Anton Zilberman Refsheet.png", 2945, 2160, SKColors.Gray);
+
+        var gridModel = new UserInput("A bunny like this", [sheet]).ToMessage(seesImages: true, grid: 1000);
+        var text = gridModel.Parts![0].Text!;
+        Assert.Contains("a 2945x2160 picture, shown below at 2048x1504; places you see in it are on your 0-1000 grid, " +
+                        "so in its own pixels x is 2.945 times your x and y 2.16 times your y)", text);
+        Assert.Equal([sheet], UserInput.PicturesIn([gridModel]));
+        Assert.Contains("2.945 times your x", Picture.Read(sheet, 1000).Text);
+
+        // A model that points in pixels of what it sees gets no such note.
+        Assert.DoesNotContain("grid", new UserInput("A bunny like this", [sheet]).ToMessage(seesImages: true).Parts![0].Text!);
+        Assert.DoesNotContain("grid", Picture.Read(sheet).Text);
+    }
+
     [Fact]
     public async Task A_run_knows_the_picture_given_earlier_in_the_chat()
     {

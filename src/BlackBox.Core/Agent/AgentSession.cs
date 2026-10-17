@@ -116,10 +116,10 @@ public sealed partial class AgentSession(
                     if (first)
                         (_request, _interrupted) = (RequestOf(input), false);
                     first = false;
-                    History.Add(input.ToMessage(toolContext.SeesImages));
+                    History.Add(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid));
                     continue;
                 }
-                History.Add(Interjection(input.ToMessage(toolContext.SeesImages)));
+                History.Add(Interjection(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid)));
                 _interrupted = true;
             }
             toolContext.UserPictures = UserInput.PicturesIn(History);
@@ -189,7 +189,7 @@ public sealed partial class AgentSession(
     {
         _request = RequestOf(input);
         _interrupted = false;
-        History.Add(input.ToMessage(toolContext.SeesImages));
+        History.Add(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid));
         // A picture given earlier in the chat (a reference sheet) is still the one to follow.
         toolContext.UserPictures = UserInput.PicturesIn(History);
         toolContext.UserMessage = _arrived.Token;

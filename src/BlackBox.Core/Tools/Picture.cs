@@ -56,14 +56,27 @@ internal static class Picture
         return new Shown(original.Width, original.Height, width, height, jpeg.ToArray());
     }
 
-    public static ToolResult Read(string path)
+    /// <param name="grid">The grid the model points on (1000), or null when it points in pixels.</param>
+    public static ToolResult Read(string path, int? grid = null)
     {
         if (Load(path) is not { } picture)
             return ToolResult.Error($"{path} could not be read as a picture (damaged, or not what its name says).");
         var size = picture.ShownWidth == picture.Width && picture.ShownHeight == picture.Height ? "" : $", shown at {picture.ShownWidth}x{picture.ShownHeight}";
-        return new ToolResult($"{path}: a {picture.Width}x{picture.Height} picture{size}.", picture.Jpeg,
+        return new ToolResult($"{path}: a {picture.Width}x{picture.Height} picture{size}{GridNote(picture, grid)}.", picture.Jpeg,
             ImageCaption: $"The picture {Path.GetFileName(path)}:");
     }
+
+    /// <summary>
+    /// For a model that points on a 0-1000 grid (see <see cref="Platform.ModelCoordinates"/>), how
+    /// the places it sees in a picture are found in the picture's own pixels, to crop it or measure
+    /// it. Asked to crop the clothed figure from the user's 2945x2160 reference sheet, qwen3.8 read
+    /// its corner at (795, 435), on its grid, took that for pixels of the 2048-wide view it was
+    /// shown, and cropped the wrong figure three times before it found the clothes by their colour.
+    /// </summary>
+    internal static string GridNote(Shown picture, int? grid) => grid is { } g
+        ? FormattableString.Invariant(
+            $"; places you see in it are on your 0-{g} grid, so in its own pixels x is {picture.Width / (double)g:0.###} times your x and y {picture.Height / (double)g:0.###} times your y")
+        : "";
 
     private static int Snap(double size) => Math.Max(Patch, (int)Math.Round(size / Patch) * Patch);
 }
