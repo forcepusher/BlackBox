@@ -413,6 +413,20 @@ public class SshIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task A_login_made_after_the_chat_ended_is_closed_not_kept()
+    {
+        if (Host is null) return;
+        // The app logs out of a chat it leaves while that chat's stopped run may still be logging in.
+        var hosts = new SshHosts(_knownHosts);
+        var (first, _) = await hosts.GetAsync(Host, Key, null, CancellationToken.None);
+        hosts.Dispose();
+        Assert.False(first.IsConnected);
+        var late = await Assert.ThrowsAsync<IOException>(() => hosts.GetAsync(Host, Key, null, CancellationToken.None));
+        Assert.Contains("The chat ended", late.Message);
+        Assert.Empty(hosts.Connected);
+    }
+
+    [Fact]
     public async Task A_key_named_once_is_offered_to_the_next_server()
     {
         if (Host is null) return;

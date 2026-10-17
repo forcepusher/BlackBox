@@ -13,15 +13,23 @@ namespace BlackBox.Core.Ssh;
 /// </summary>
 public sealed class SshHosts(string knownHostsFile) : IDisposable
 {
+    /// <summary>Locked itself for each look or change: <see cref="Dispose"/> doesn't wait for <see cref="_lock"/>, held through a login.</summary>
     private readonly Dictionary<string, SshHost> _hosts = [];
     private readonly SemaphoreSlim _lock = new(1, 1);
+    private bool _disposed;
     /// <summary>Key files named in this chat that a server took: also offered to the next servers.</summary>
     private readonly List<string> _keysUsed = [];
 
     /// <summary>How long a server that refuses connections (rebooting, say) is retried before giving up.</summary>
     internal static TimeSpan RetryFor { get; set; } = TimeSpan.FromSeconds(45);
 
-    public IReadOnlyCollection<SshHost> Connected => _hosts.Values.Where(h => h.IsConnected).ToList();
+    public IReadOnlyCollection<SshHost> Connected
+    {
+        get
+        {
+            lock (_hosts) return _hosts.Values.Where(h => h.IsConnected).ToList();
+        }
+    }
 
     /// <summary>The host of the last successful GetAsync: where an ssh call without a host goes.</summary>
     public string? LastTarget { get; private set; }
@@ -44,7 +52,14 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
         try
         {
             string? lost = null;
-            if (_hosts.TryGetValue(t.Key, out var known))
+            SshHost? known;
+            lock (_hosts)
+            {
+                if (_disposed)
+                    throw new IOException($"The chat ended, so it isn't logged in to {t} any more.");
+                _hosts.TryGetValue(t.Key, out known);
+            }
+            if (known is not null)
             {
                 // A key this connection didn't log in with (one just installed, say) is a login to test too.
                 var otherKey = keyFile is not null && !known.LoginKeys.Contains(Path.GetFullPath(keyFile), StringComparer.OrdinalIgnoreCase);
@@ -71,7 +86,7 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
                     }
                     fresh.Password = password is { Length: > 0 } ? password : known.Password;
                     known.Dispose();
-                    _hosts[t.Key] = fresh;
+                    Keep(t, fresh);
                     LastTarget = target;
                     Remember(keyFile);
                     var with = !newLogin ? $"{keyFile} alone" : (keyFile, password) switch
@@ -84,11 +99,11 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
                     return (fresh, $"Logged in afresh with {with}: the server accepts that login. This is a new terminal. " + about);
                 }
                 known.Dispose();
-                _hosts.Remove(t.Key);
+                lock (_hosts) _hosts.Remove(t.Key);
                 lost = "The earlier connection was lost (a reboot?), so this is a new one: the directory and variables start fresh.";
             }
             var (host, notice) = await ConnectAsync(t, keyFile, password, ct, onlyGiven: newLogin && given).ConfigureAwait(false);
-            _hosts[t.Key] = host;
+            Keep(t, host);
             LastTarget = target;
             Remember(keyFile);
             return (host, lost is null ? notice : lost + " " + notice);
@@ -106,6 +121,24 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
     private static bool AuthGaveUp(Exception ex) => ex is SshConnectionException c &&
         (c.DisconnectReason == Renci.SshNet.Messages.Transport.DisconnectReason.NoMoreAuthenticationMethodsAvailable ||
          c.Message.Contains("authentication", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Keeps a login for the chat, unless the chat ended while it was made (the chat was left
+    /// during a stopped run's login): it would be nobody's, open until BlackBox closes.
+    /// </summary>
+    private void Keep(SshTarget t, SshHost host)
+    {
+        lock (_hosts)
+        {
+            if (!_disposed)
+            {
+                _hosts[t.Key] = host;
+                return;
+            }
+        }
+        host.Dispose();
+        throw new IOException($"The chat ended while logging in to {t}, so that login was closed.");
+    }
 
     private void Remember(string? keyFile)
     {
@@ -294,11 +327,22 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
     }
 
     /// <summary>Logs out of every server (removing each terminal's private folder; at most 5 seconds per server).</summary>
+    /// <remarks>
+    /// The app logs out of a chat it leaves on another thread, while a login of that chat's stopped
+    /// run may still be finishing: going through the list as it changed threw, and every login was
+    /// left open.
+    /// </remarks>
     public void Dispose()
     {
-        foreach (var h in _hosts.Values)
+        List<SshHost> hosts;
+        lock (_hosts)
+        {
+            _disposed = true;
+            hosts = [.. _hosts.Values];
+            _hosts.Clear();
+        }
+        foreach (var h in hosts)
             h.Dispose();
-        _hosts.Clear();
         LastTarget = null;
     }
 }
