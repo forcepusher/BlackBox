@@ -242,6 +242,43 @@ public class SshTests
     }
 
     [Fact]
+    public void Names_from_linux_are_made_to_fit_windows_and_nothing_lands_beside_the_folder()
+    {
+#if WINDOWS
+        var root = Path.Combine(Path.GetTempPath(), "bb-copy-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "www"));
+        Directory.CreateDirectory(Path.Combine(root, "www2"));
+        try
+        {
+            // "notes:v2.txt" went into a hidden stream of a file "notes"; "a\b.txt" made a folder "a".
+            Assert.Equal((0, 4), CopyTool.UnpackInto(Tar("site/notes:v2.txt", "site/a\\b.txt", "site/con.txt", "site/draft."), Path.Combine(root, "www")));
+            Assert.Equal(["_con.txt", "a_b.txt", "draft._", "notes_v2.txt"], Directory.GetFiles(Path.Combine(root, "www", "site")).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+            Assert.False(File.Exists(Path.Combine(root, "www", "site", "notes")));
+
+            // A bare prefix let "../www2/x" into the www2 beside www.
+            Assert.Throws<InvalidDataException>(() => CopyTool.UnpackInto(Tar("../www2/evil.txt"), Path.Combine(root, "www")));
+            Assert.Empty(Directory.GetFiles(Path.Combine(root, "www2")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+
+        static MemoryStream Tar(params string[] names)
+        {
+            var tar = new MemoryStream();
+            using (var writer = new System.Formats.Tar.TarWriter(tar, System.Formats.Tar.TarEntryFormat.Pax, leaveOpen: true))
+                foreach (var name in names)
+                    writer.WriteEntry(new System.Formats.Tar.PaxTarEntry(System.Formats.Tar.TarEntryType.RegularFile, name) { DataStream = new MemoryStream("hi"u8.ToArray()) });
+            tar.Position = 0;
+            return tar;
+        }
+#else
+        Assert.Skip("Windows only");
+#endif
+    }
+
+    [Fact]
     public async Task A_copy_on_this_pc_ends_when_the_user_stops_it()
     {
         // Neither end of a copy within this PC heard Stop: it went on to the last file.

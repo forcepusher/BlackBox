@@ -66,6 +66,9 @@ public sealed partial class CopyTool : Tool
             var text = $"Copied {source.Files} file{(source.Files == 1 ? "" : "s")} ({Size(source.Bytes)}) to {where}{(sudo ? " with sudo" : "")}{speed}.";
             if (target.Skipped > 0)
                 text += $" {target.Skipped} link{(target.Skipped == 1 ? "" : "s")} or special file{(target.Skipped == 1 ? "" : "s")} left out (this PC keeps only files and folders).";
+            if (target.Renamed > 0)
+                text += $" {target.Renamed} name{(target.Renamed == 1 ? " was" : "s were")} changed to fit Windows: characters it doesn't take in names (: ? * \\ | < > \") became _, " +
+                        "and a name ending in a dot or a space, or one it keeps for devices (con, aux, nul…), got a _.";
             // A config file copied into place (sudoers, sshd, nginx, ...) is checked as if written.
             if (dst is not null && ConfigChecks.KindOf(target.Where) is not null && await ConfigChecks.RunAsync(dst, [target.Where], ct).ConfigureAwait(false) is { } checkedNote)
                 text += $"\n[{checkedNote}]";
@@ -114,7 +117,30 @@ public sealed partial class CopyTool : Tool
     private sealed record Target(SshHost? Host, string Path, bool Into, string Where, bool Sudo)
     {
         public int Skipped { get; set; }
+
+        /// <summary>Names changed to fit Windows (see <see cref="WindowsName"/>).</summary>
+        public int Renamed { get; set; }
     }
+
+    /// <summary>
+    /// A file or folder name from another system as Windows can hold it. With a colon the file
+    /// became a hidden stream of another one ("notes:v2.txt" went into "notes"), and a backslash
+    /// made a folder of the part before it; a name ending in a dot or a space, or one Windows
+    /// keeps for devices (con, aux, nul, com1…), can't be made. Such characters become _, and
+    /// such a name gets one.
+    /// </summary>
+    internal static string WindowsName(string name)
+    {
+        var fitted = string.Concat(name.Select(c => c < ' ' || c is '<' or '>' or ':' or '"' or '\\' or '|' or '?' or '*' ? '_' : c));
+        if (fitted.EndsWith('.') || fitted.EndsWith(' '))
+            fitted += "_";
+        if (DeviceName().IsMatch(fitted))
+            fitted = "_" + fitted;
+        return fitted;
+    }
+
+    [GeneratedRegex(@"^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\.|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex DeviceName();
 
     /// <summary>
     /// Streams the archive from the source to the target, both ends at once; returns whether sudo
@@ -306,6 +332,13 @@ public sealed partial class CopyTool : Tool
     private const UnixFileMode Files = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead;
     private const UnixFileMode Dirs = Files | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
 
+    /// <summary>Unpacks an archive into a folder as a copy from a host does; for tests.</summary>
+    internal static (int Skipped, int Renamed) UnpackInto(Stream tar, string folder)
+    {
+        var target = new Target(null, folder, true, folder, false);
+        return (UnpackLocal(tar, target), target.Renamed);
+    }
+
     /// <summary>
     /// Unpacks the archive as it arrives: into the target folder, or (as a new name) with the one
     /// thing sent taking that name, as with cp and scp. Returns how many entries that aren't files
@@ -314,6 +347,7 @@ public sealed partial class CopyTool : Tool
     private static int UnpackLocal(Stream tar, Target target)
     {
         var dest = target.Path;
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(dest));
         var skipped = 0;
         using var reader = new TarReader(tar, leaveOpen: true);
         while (reader.GetNextEntry(copyData: false) is { } e)
@@ -328,8 +362,21 @@ public sealed partial class CopyTool : Tool
                 var slash = name.IndexOf('/');
                 name = slash < 0 ? "" : name[(slash + 1)..];
             }
+            if (OperatingSystem.IsWindows())
+            {
+                var names = name.Split('/');
+                for (var i = 0; i < names.Length; i++)
+                    if (names[i] is not ("." or "..") && WindowsName(names[i]) is var fitted && fitted != names[i])
+                    {
+                        names[i] = fitted;
+                        target.Renamed++;
+                    }
+                name = string.Join('/', names);
+            }
             var path = name.Length == 0 ? dest : Path.Combine(dest, name.Replace('/', Path.DirectorySeparatorChar));
-            if (!Path.GetFullPath(path).StartsWith(Path.GetFullPath(dest), StringComparison.OrdinalIgnoreCase))
+            // Below the folder itself: a bare prefix let "../www2/x" into a www2 beside a www.
+            var full = Path.GetFullPath(path);
+            if (!full.Equals(root, StringComparison.OrdinalIgnoreCase) && !full.StartsWith(Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException($"Refusing to write outside {dest}: {e.Name}");
             switch (e.EntryType)
             {
