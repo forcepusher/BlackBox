@@ -647,4 +647,25 @@ public class SshIntegrationTests : IDisposable
         Assert.True(missing.IsError);
         await Ssh($"sudo rm -rf {dir}");
     }
+
+    [Fact]
+    public async Task Edit_file_leaves_a_file_that_isnt_UTF_8_alone()
+    {
+        if (Host is null) return;
+        // Read as UTF-8 and written back as UTF-8, every Latin-1 "é" in the file became U+FFFD.
+        await Ssh(@"printf 'caf\351 = 1\n' > /tmp/bb-latin1.conf; printf 'a\000b\n' > /tmp/bb-binary");
+        try
+        {
+            var latin1 = await new EditFileTool().ExecuteAsync(new JsonObject { ["path"] = "/tmp/bb-latin1.conf", ["old_text"] = "= 1", ["new_text"] = "= 2", ["host"] = Host }, _ctx, CancellationToken.None);
+            Assert.True(latin1.IsError);
+            Assert.Contains("isn't UTF-8", latin1.Text);
+            Assert.Contains("63 61 66 e9 20 3d 20 31", (await Ssh("od -An -tx1 /tmp/bb-latin1.conf")).Text);
+            var binary = await new EditFileTool().ExecuteAsync(new JsonObject { ["path"] = "/tmp/bb-binary", ["old_text"] = "a", ["new_text"] = "c", ["host"] = Host }, _ctx, CancellationToken.None);
+            Assert.Contains("not a text file", binary.Text);
+        }
+        finally
+        {
+            await Ssh("rm -f /tmp/bb-latin1.conf /tmp/bb-binary");
+        }
+    }
 }

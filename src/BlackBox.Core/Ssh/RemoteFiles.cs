@@ -100,6 +100,13 @@ public static class RemoteFiles
         if (r.Output.StartsWith("BB-DENIED")) return (Denied(host, path, "read"), true);
         if (!r.Output.StartsWith("BB-OK\n")) return ($"Could not read {path} on {host.Target}: {r.Error.Trim()}", true);
         var text = r.Output["BB-OK\n".Length..];
+        // The file comes as UTF-8 and goes back as UTF-8: every byte of a Latin-1 file that isn't
+        // UTF-8 was written back as U+FFFD, all through the file, and a binary file was mangled.
+        if (text.Contains('\0'))
+            return ($"{path} on {host.Target} is not a text file; edit_file edits text only.", true);
+        if (text.Contains('�'))
+            return ($"{path} on {host.Target} isn't UTF-8 (Latin-1, say), and edit_file would change each character in it that isn't. " +
+                    "Edit it with sed through ssh instead, which leaves the rest of the file as it is.", true);
         var count = Count(text, oldText);
         if (count == 0 && text.Contains("\r\n") && oldText.Contains('\n') && !oldText.Contains('\r'))
         {
