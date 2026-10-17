@@ -46,6 +46,9 @@ public sealed class ComfyHub(string stateDirectory)
     /// <summary>What Civitai says about the model files: how to prompt them, at what size, with which settings.</summary>
     public ComfyModelCards Cards { get; } = new(stateDirectory);
 
+    /// <summary>Civitai's most downloaded checkpoints and LoRAs this month, kept for a week.</summary>
+    public ComfyPopularModels Popular { get; } = new(stateDirectory);
+
     public string LogFile => Path.Combine(stateDirectory, "server.log");
 
     /// <summary>BlackBox's Data/tools, beside Data/comfyui: where it installs ComfyUI, and looks for it first.</summary>

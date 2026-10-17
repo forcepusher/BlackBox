@@ -34,7 +34,9 @@ public sealed class ComfyTool : Tool
         "A checkpoint's or LoRA's card (with action=models and its name, a template's view, or after its first run) says how its maker uses it: " +
         "the prompt style, size, sampler, CFG and negative prompt to start from. " +
         "Change the seed for a different result. A model a workflow lacks: action=download with its url (a template lists the links of its models); " +
-        "action=find_models searches Civitai and Hugging Face for others (a style, a checkpoint the user named, a LoRA, an upscaler) with their sizes and links. " +
+        "action=find_models searches Civitai and Hugging Face for others (a style, a checkpoint the user named, a LoRA, an upscaler) with their sizes and links, " +
+        "and what the month's most downloaded on Civitai are for those words; without search it lists this month's most downloaded checkpoints " +
+        "(kind=lora: LoRAs) and the base models they are on, so you know what is current before you pick one. " +
         "action=status shows the server, GPU and queue (with prompt_id: waits for that job); " +
         "action=free unloads its models to free the GPU; action=restart restarts it (after installing custom nodes into its custom_nodes folder); action=stop stops it.";
 
@@ -42,7 +44,7 @@ public sealed class ComfyTool : Tool
 
     public override JsonObject Parameters => Schema(
         ("action", Str("What to do", "templates", "nodes", "models", "run", "status", "install", "find_models", "download", "free", "restart", "stop"), true),
-        ("search", Str("Words to look for: in templates (\"video from image\"), node types (\"wan video\"), installed model files (\"lora\"), or models online (find_models: \"watercolor\", \"DreamShaper\")"), false),
+        ("search", Str("Words to look for: in templates (\"video from image\"), node types (\"wan video\"), installed model files (\"lora\"), or models online (find_models: \"furry\", \"watercolor\", \"DreamShaper\"; none for this month's most downloaded)"), false),
         ("name", Str("A template's name as action=templates lists it: to see it (templates) or run it (run)"), false),
         ("names", StrArray("Node types to show in full: inputs, their types and choices, outputs (nodes)"), false),
         ("workflow", new JsonObject { ["description"] = "A workflow in API format to run (a JSON object or its text)" }, false),
@@ -162,31 +164,59 @@ public sealed class ComfyTool : Tool
 
     private async Task<ToolResult> FindModelsAsync(JsonObject args, ComfyHub hub, CancellationToken ct)
     {
-        var search = GetString(args, "search")?.Trim() is { Length: > 0 } s ? s : throw new ToolArgumentException("Give search: words for the model you want (\"watercolor\", \"DreamShaper\", \"4x upscaler\").");
-        var problems = new List<string>();
-        var found = await ComfyModelSearch.SearchAsync(search, GetString(args, "kind"), GetString(args, "base"), 10, problems, ct).ConfigureAwait(false);
-        lock (_found)
-            foreach (var m in found)
-                _found[m.Url] = m;
+        var search = GetString(args, "search")?.Trim() ?? "";
+        var (kind, baseModel) = (GetString(args, "kind"), GetString(args, "base"));
         var sb = new StringBuilder();
         var (device, cpu) = await DeviceAsync(hub, ct).ConfigureAwait(false);
-        sb.AppendLine(found.Count == 0 ? $"No model for \"{search}\" was found on Civitai or Hugging Face{(GetString(args, "kind") is { } k ? $" as a {k}" : "")}. Try other or fewer words."
-            : $"Models for \"{search}\", the most downloaded first on each site. ComfyUI {device}." + (cpu ? " " + ComfyHardware.CpuAdvice : ""));
+        var hardware = $"ComfyUI {device}." + (cpu ? " " + ComfyHardware.CpuAdvice : "");
         var n = 0;
-        foreach (var m in found)
+        void List(OnlineModel m, string? popularity)
         {
+            lock (_found)
+                _found[m.Url] = m;
             sb.Append(++n).Append(". ").Append(m.Title).Append(": ").Append(m.Kind)
                 .Append(m.Base is { Length: > 0 } b ? $" for {b}" : "")
                 .Append(m.Size is { } size ? $", {Size(size)}" : "")
-                .Append(m.Downloads > 0 ? $", {m.Downloads:N0} downloads" : "")
+                .Append(popularity ?? (m.Downloads > 0 ? $", {m.Downloads:N0} downloads" : ""))
                 .Append(m.Note is { } note ? $", {note}" : "")
                 .Append($" ({m.Source}, {m.Page})").AppendLine();
             sb.Append("   ").Append(m.File).Append(": url=").Append(m.Url).Append(" model_folder=").AppendLine(m.Folder);
         }
+
+        // What people use now: with no search the month's list itself, with one the ones that match it.
+        var snapshot = await hub.Popular.GetAsync(ct).ConfigureAwait(false);
+        var asOf = snapshot is null ? "" : $" (as of {snapshot.Fetched.ToLocalTime():d MMMM})";
+        var popular = snapshot is null ? [] : ComfyPopularModels.Matching(snapshot.Models, ComfyNodeLibrary.Words(search), kind ?? (search.Length == 0 ? "checkpoint" : null), baseModel);
+        if (search.Length == 0)
+        {
+            if (snapshot is null)
+                throw new ToolArgumentException("Civitai couldn't be asked for this month's popular models; give search: words for the model you want (\"watercolor\", \"DreamShaper\", \"4x upscaler\").");
+            var folder = ComfyModelSearch.KindOf(kind ?? "checkpoint")?.Folder ?? "checkpoints";
+            sb.AppendLine($"Civitai's most downloaded {(folder == "loras" ? "LoRAs" : "checkpoints")} this month{(baseModel is null ? "" : $" for {baseModel}")}{asOf}. {hardware}");
+            sb.AppendLine($"The month's most downloaded are on these base models: {ComfyPopularModels.Bases(snapshot.Models, folder)}.");
+            foreach (var p in popular.Take(10))
+                List(p.Model, $", #{p.Rank} this month");
+            sb.Append("search narrows it to what you need (a style, a subject: \"anime\", \"furry\", \"photorealistic\", \"landscape\"); kind=lora lists LoRAs; base= one base model. " +
+                      "Download one with action=download url=… model_folder=…; its card then says how its maker uses it.");
+            return new ToolResult(sb.ToString().TrimEnd());
+        }
+
+        var problems = new List<string>();
+        var found = await ComfyModelSearch.SearchAsync(search, kind, baseModel, popular.Count > 0 ? 6 : 10, problems, ct).ConfigureAwait(false);
+        if (popular.Count > 0)
+        {
+            sb.AppendLine($"Most downloaded on Civitai this month for \"{search}\"{asOf}: what people make such pictures with now. {hardware}");
+            foreach (var p in popular.Take(5))
+                List(p.Model, $", #{p.Rank} this month");
+        }
+        sb.AppendLine(found.Count == 0 ? $"No model named for \"{search}\" was found on Civitai or Hugging Face{(kind is { } k ? $" as a {k}" : "")}. Try other or fewer words."
+            : $"Models named for \"{search}\", the most downloaded of all time first on each site." + (popular.Count > 0 ? "" : " " + hardware));
+        foreach (var m in found)
+            List(m, null);
         foreach (var p in problems)
             sb.AppendLine(p);
-        if (found.Count > 0)
-            sb.Append("Download one with action=download url=… model_folder=…; prefer .safetensors files. A model's page says what it is good at and the trigger words of a LoRA.");
+        if (found.Count + popular.Count > 0)
+            sb.Append("Download one with action=download url=… model_folder=…; prefer .safetensors files. Its card then says how its maker uses it, and a LoRA's trigger words.");
         return new ToolResult(sb.ToString().TrimEnd());
     }
 

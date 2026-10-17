@@ -509,6 +509,8 @@ public class ComfyModelToolTests : IDisposable
         var paths = new AppPaths(_home);
         Directory.CreateDirectory(paths.ComfyDir);
         File.WriteAllText(Path.Combine(paths.ComfyDir, "state.json"), new JsonObject { ["url"] = _comfy.Url.ToString() }.ToJsonString());
+        // The month's popular models as just fetched, and none: the stand-in answers that fetch as it does a search.
+        File.WriteAllText(Path.Combine(paths.ComfyDir, "popular-models.json"), new JsonObject { ["fetched"] = DateTime.UtcNow, ["models"] = new JsonArray() }.ToJsonString());
         _ctx = new ToolContext
         {
             Platform = new FakePlatform(),

@@ -151,30 +151,35 @@ public static partial class ComfyModelSearch
             url += "&types=" + Uri.EscapeDataString(type);
         var found = new List<OnlineModel>();
         foreach (var item in (await GetJsonAsync(url, ct).ConfigureAwait(false))?["items"] as JsonArray ?? [])
-        {
-            if (item is not JsonObject model || (bool?)model["nsfw"] == true)
-                continue;
-            var version = (model["modelVersions"] as JsonArray ?? []).OfType<JsonObject>().FirstOrDefault(v => baseModel is null || SameBase((string?)v["baseModel"], baseModel));
-            if (version is null)
-                continue;
-            var files = (version["files"] as JsonArray ?? []).OfType<JsonObject>().ToList();
-            var file = files.FirstOrDefault(f => (bool?)f["primary"] == true) ?? files.FirstOrDefault(f => (string?)f["type"] == "Model");
-            if (file is null || (string?)file["downloadUrl"] is not { } link || (string?)file["name"] is not { } name)
-                continue;
-            var type = (string?)model["type"] ?? "";
-            var folder = Kinds.FirstOrDefault(k => k.Civitai.Contains(type, StringComparer.OrdinalIgnoreCase)).Folder ?? FolderFor(name, null);
-            var meta = file["metadata"] as JsonObject;
-            var note = string.Join(", ", new[] { (string?)meta?["fp"], (string?)meta?["size"] }.Where(s => !string.IsNullOrEmpty(s)));
-            if ((string?)version["availability"] is "EarlyAccess")
-                note = (note.Length > 0 ? note + ", " : "") + "early access: may need a paid Civitai login";
-            var title = (string?)model["name"] ?? name;
-            if ((string?)version["name"] is { Length: > 0 } versionName && !title.Contains(versionName, StringComparison.OrdinalIgnoreCase))
-                title += $" ({versionName})";
-            found.Add(new OnlineModel(title, "Civitai", $"{CivitaiBase}/models/{(long?)model["id"]}", KindName(folder, type), (string?)version["baseModel"], name,
-                (long?)((double?)file["sizeKB"] * 1024), link, folder, (string?)file["hashes"]?["SHA256"], (long?)model["stats"]?["downloadCount"] ?? 0,
-                note.Length > 0 ? note : null));
-        }
+            if (item is JsonObject model && FromCivitai(model, baseModel) is { } m)
+                found.Add(m);
         return found;
+    }
+
+    /// <summary>A model of Civitai's API as a file to download: its newest version (on <paramref name="baseModel"/> when given) and that version's main file; null for one marked NSFW or without a file.</summary>
+    internal static OnlineModel? FromCivitai(JsonObject model, string? baseModel)
+    {
+        if ((bool?)model["nsfw"] == true)
+            return null;
+        var version = (model["modelVersions"] as JsonArray ?? []).OfType<JsonObject>().FirstOrDefault(v => baseModel is null || SameBase((string?)v["baseModel"], baseModel));
+        if (version is null)
+            return null;
+        var files = (version["files"] as JsonArray ?? []).OfType<JsonObject>().ToList();
+        var file = files.FirstOrDefault(f => (bool?)f["primary"] == true) ?? files.FirstOrDefault(f => (string?)f["type"] == "Model");
+        if (file is null || (string?)file["downloadUrl"] is not { } link || (string?)file["name"] is not { } name)
+            return null;
+        var type = (string?)model["type"] ?? "";
+        var folder = Kinds.FirstOrDefault(k => k.Civitai.Contains(type, StringComparer.OrdinalIgnoreCase)).Folder ?? FolderFor(name, null);
+        var meta = file["metadata"] as JsonObject;
+        var note = string.Join(", ", new[] { (string?)meta?["fp"], (string?)meta?["size"] }.Where(s => !string.IsNullOrEmpty(s)));
+        if ((string?)version["availability"] is "EarlyAccess")
+            note = (note.Length > 0 ? note + ", " : "") + "early access: may need a paid Civitai login";
+        var title = (string?)model["name"] ?? name;
+        if ((string?)version["name"] is { Length: > 0 } versionName && !title.Contains(versionName, StringComparison.OrdinalIgnoreCase))
+            title += $" ({versionName})";
+        return new OnlineModel(title, "Civitai", $"{CivitaiBase}/models/{(long?)model["id"]}", KindName(folder, type), (string?)version["baseModel"], name,
+            (long?)((double?)file["sizeKB"] * 1024), link, folder, (string?)file["hashes"]?["SHA256"], (long?)model["stats"]?["downloadCount"] ?? 0,
+            note.Length > 0 ? note : null);
     }
 
     // ---- Hugging Face ---------------------------------------------------------------------------

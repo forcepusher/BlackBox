@@ -182,6 +182,15 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   style, a model the user named, a LoRA or an upscaler (`kind`, `base`), and lists each file with
   its kind, base model, size, downloads and link, the most downloaded first, without NSFW models
   and gated ones.
+- **What people use now.** Civitai ranks a search by downloads of all time, so "anime" brought
+  years-old SD 1.5 models first, and a model's memory stops at its training: in October 2026 half of
+  Civitai's 100 most downloaded checkpoints of the month were on Anima, a base model none of them
+  knew, and others on Krea 2, Z-Image Turbo and MiniMax H3. BlackBox keeps the month's 100 most
+  downloaded checkpoints and LoRAs, with their tags, in `Data/comfyui/popular-models.json`, fetched
+  again once a week. `find_models` without words lists them (by `kind` and `base`) with the base
+  models they are on; with words, the ones whose tags match ("furry": Nova Furry AM, a newer
+  version of the user's model, on Anima) come before the search's own results. Models tagged as
+  porn are left out, as Civitai's own NSFW mark was off on several.
 
 `read_file` gives the model a look at media as well as pictures: a video as eight frames with their
 times (and how loud its sound is, in words), a sound as its waveform and spectrogram with its
