@@ -307,9 +307,10 @@ that answers. An API key, if your server needs one, goes next to the address (th
 shows it). For screen control the
 model must accept images (for example Qwen3.5+ VL models or Gemma 4 with their vision projector);
 LM Studio reports this and BlackBox follows it, as it does what OpenRouter-style lists say of each
-model (OpenRouter, Kilo); models on other servers are assumed to see images. When such a server
-refuses a picture after all (llama-server without its projector, say), the pictures already in the
-chat become a line each, the run goes on without them, and the next runs have no screen tools.
+model (OpenRouter, Kilo), what llama-server says of its vision projector and what Ollama lists among
+a model's capabilities; models on other servers are assumed to see images. When such a server
+refuses a picture after all, the pictures already in the chat become a line each, the run goes on
+without them, and the next runs have no screen tools.
 
 Until you pick a model, BlackBox uses the strongest one the server offers. One that takes images
 comes first. Then it goes by Terminal-Bench 2.1, a benchmark of agent tasks done in a terminal,

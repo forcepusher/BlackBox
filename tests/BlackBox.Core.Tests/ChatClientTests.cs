@@ -421,12 +421,22 @@ public class ContextDetectionTests
 
         routes["/api/ps"] = """{"models":[{"name":"m","model":"m","context_length":8192}]}""";
         Assert.Equal(8192, (await Probe(routes)).Context);
+        Assert.Null((await Probe(routes)).Vision); // an older Ollama doesn't say what it takes
+
+        // Whether it takes images, so a model that doesn't gets no screenshots.
+        routes["/api/show"] = """{"parameters":"num_ctx 16384","capabilities":["completion","tools"]}""";
+        Assert.Equal((8192, false), ((await Probe(routes)).Context, (await Probe(routes)).Vision));
+        routes["/api/show"] = """{"capabilities":["completion","vision","tools"]}""";
+        Assert.True((await Probe(routes)).Vision);
     }
 
     [Fact]
     public async Task llama_cpp_and_vLLM_report_their_context()
     {
         Assert.Equal(4096, (await Probe(new() { ["/props"] = """{"default_generation_settings":{"n_ctx":4096}}""" })).Context);
+        // llama-server started without a vision projector says so.
+        Assert.False((await Probe(new() { ["/props"] = """{"default_generation_settings":{"n_ctx":4096},"modalities":{"vision":false,"audio":false}}""" })).Vision);
+        Assert.True((await Probe(new() { ["/props"] = """{"default_generation_settings":{"n_ctx":4096},"modalities":{"vision":true,"audio":false}}""" })).Vision);
         Assert.Equal(32768, (await Probe(new() { ["/v1/models"] = """{"data":[{"id":"m","max_model_len":32768}]}""" })).Context);
         Assert.Null((await Probe([])).Context); // nothing answers: the caller assumes 100k
     }
