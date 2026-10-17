@@ -96,18 +96,34 @@ public sealed class ReadFileTool : Tool
         return await NumberedAsync(reader, offset, limit, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Lines <paramref name="offset"/> on, numbered, up to <paramref name="limit"/> of them and <see cref="MaxChars"/> in all.</summary>
+    /// <summary>The longest line shown whole; what a longer one has past it is counted, not shown.</summary>
+    internal const int MaxLine = 20_000;
+
+    /// <summary>
+    /// Lines <paramref name="offset"/> on, numbered, up to <paramref name="limit"/> of them and
+    /// <see cref="MaxChars"/> in all, the line being added included. The limit was checked before
+    /// each line went in, so a minified file's single line went in whole, megabytes of it, filled
+    /// the context, and couldn't be read in parts either.
+    /// </summary>
     private static async Task<ToolResult> NumberedAsync(TextReader reader, int offset, int limit, CancellationToken ct)
     {
         var sb = new StringBuilder();
         int total = 0, last = 0;
-        while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
+        var full = false;
+        await foreach (var (line, leftOut) in LinesAsync(reader, MaxLine, ct).ConfigureAwait(false))
         {
-            if (++total >= offset && total < offset + limit && sb.Length < MaxChars)
+            if (++total < offset || total >= offset + limit || full)
+                continue;
+            if (last > 0 && sb.Length + line.Length > MaxChars)
             {
-                sb.Append(total).Append('\t').AppendLine(line);
-                last = total;
+                full = true;
+                continue;
             }
+            sb.Append(total).Append('\t').Append(line);
+            if (leftOut > 0)
+                sb.Append(LeftOut(leftOut));
+            sb.AppendLine();
+            last = total;
         }
         if (total == 0)
             return new ToolResult("(empty file)");
@@ -116,6 +132,50 @@ public sealed class ReadFileTool : Tool
         if (offset > 1 || last < total)
             sb.AppendLine($"[showing lines {offset}-{last} of {total}; use offset to read more]");
         return new ToolResult(sb.ToString());
+    }
+
+    /// <summary>The note in place of the rest of a line longer than <see cref="MaxLine"/>.</summary>
+    internal static string LeftOut(long chars) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $" [... {chars:N0} more characters of this line left out; run_shell can show parts of it ...]");
+
+    /// <summary>
+    /// The lines of <paramref name="reader"/> as ReadLine splits them, each cut to
+    /// <paramref name="maxLine"/> characters with the count of the rest: a file of one line of
+    /// hundreds of megabytes was read into memory whole.
+    /// </summary>
+    internal static async IAsyncEnumerable<(string Line, long LeftOut)> LinesAsync(TextReader reader, int maxLine,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        var buffer = new char[16 * 1024];
+        var line = new StringBuilder();
+        long leftOut = 0;
+        var afterCr = false;
+        int n;
+        while ((n = await reader.ReadAsync(buffer.AsMemory(), ct).ConfigureAwait(false)) > 0)
+        {
+            for (var i = 0; i < n; i++)
+            {
+                var c = buffer[i];
+                if (c is '\r' or '\n')
+                {
+                    if (c == '\n' && afterCr)
+                    {
+                        afterCr = false; // the \n of a \r\n
+                        continue;
+                    }
+                    afterCr = c == '\r';
+                    yield return (line.ToString(), leftOut);
+                    line.Clear();
+                    leftOut = 0;
+                    continue;
+                }
+                afterCr = false;
+                if (line.Length < maxLine) line.Append(c);
+                else leftOut++;
+            }
+        }
+        if (line.Length > 0 || leftOut > 0)
+            yield return (line.ToString(), leftOut);
     }
 
     /// <summary>A GIF or WebP with more than one frame.</summary>

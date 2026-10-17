@@ -44,9 +44,19 @@ public static class RemoteFiles
         var lines = body.Split('\n');
         var count = body.EndsWith('\n') ? lines.Length - 1 : lines.Length;
         var last = offset - 1;
-        for (var i = 0; i < count && sb.Length < maxChars; i++, n++)
+        // As read_file does on this PC: a long line cut, and the limit counting the line being added.
+        for (var i = 0; i < count; i++, n++)
         {
-            sb.Append(n).Append('\t').Append(lines[i]).Append('\n');
+            var line = lines[i];
+            var leftOut = line.Length > Tools.ReadFileTool.MaxLine ? line.Length - Tools.ReadFileTool.MaxLine : 0;
+            if (leftOut > 0)
+                line = line[..Tools.ReadFileTool.MaxLine];
+            if (last >= offset && sb.Length + line.Length > maxChars)
+                break;
+            sb.Append(n).Append('\t').Append(line);
+            if (leftOut > 0)
+                sb.Append(Tools.ReadFileTool.LeftOut(leftOut));
+            sb.Append('\n');
             last = n;
         }
         if (offset > 1 || last < total)

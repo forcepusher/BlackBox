@@ -87,6 +87,25 @@ public class ReadFileTests : IDisposable
     }
 
     [Fact]
+    public async Task A_file_of_one_huge_line_comes_back_cut_and_lines_keep_to_the_limit()
+    {
+        // A minified file's single line went in whole: megabytes in one tool result.
+        File.WriteAllText(Path.Combine(_dir, "bundle.min.js"), "var a=1;" + new string('x', 3_000_000) + "\r\nconsole.log(a);\n");
+        var result = await Read("bundle.min.js");
+        Assert.False(result.IsError, result.Text);
+        Assert.True(result.Text.Length < 70_000, $"{result.Text.Length:N0} characters");
+        Assert.StartsWith("1\tvar a=1;xxx", result.Text);
+        Assert.Contains("[... 2,980,008 more characters of this line left out", result.Text);
+        Assert.Contains("2\tconsole.log(a);", result.Text);
+
+        // Lines of 15,000 characters: as many as fit in 60,000, then where to go on.
+        File.WriteAllText(Path.Combine(_dir, "wide.txt"), string.Join("\n", Enumerable.Range(1, 10).Select(i => new string((char)('a' + i), 15_000))));
+        var wide = await Read("wide.txt");
+        Assert.True(wide.Text.Length <= 61_000, $"{wide.Text.Length:N0} characters");
+        Assert.Contains("[showing lines 1-3 of 10; use offset to read more]", wide.Text);
+    }
+
+    [Fact]
     public void Reading_a_document_ends_when_the_user_stops()
     {
         // A PDF of a thousand pages takes minutes to read, and Stop waited for its last page.
