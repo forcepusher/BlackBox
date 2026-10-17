@@ -61,8 +61,11 @@ Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 using var stopKey = platform.StopKey.Watch(() =>
 {
     if (cts.IsCancellationRequested) return false;
-    Console.WriteLine($"\n[stop] {DateTime.Now:HH:mm:ss} Pause/Break pressed");
-    cts.Cancel();
+    // Off the hook's thread, which holds up every key press on the PC: what the stop sets off, and
+    // the line, which waits while text is selected in the console.
+    var pressed = DateTime.Now;
+    _ = cts.CancelAsync();
+    _ = Task.Run(() => Console.WriteLine($"\n[stop] {pressed:HH:mm:ss} Pause/Break pressed"));
     return true;
 });
 
@@ -72,6 +75,7 @@ platform.InputOverlay.Enabled = true;
 if (urlOverride is not null) settings.Server.BaseUrl = urlOverride;
 if (modelOverride is not null) settings.Server.Model = modelOverride;
 using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a model can take a while
+try
 {
     var probe = await ServerProbe.CheckAsync(probeHttp, settings.Server, cts.Token);
     if (!probe.Reachable)
@@ -102,6 +106,12 @@ using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a mo
         settings.Server.SetDetectedContext(c, facts.Hosted);
     Console.WriteLine($"[server] {settings.Server.BaseUrl} · {settings.Server.ModelInUse} · {ContextSizes.Format(settings.Server.ContextSize)} context"
         + (settings.Server.AutoContext ? "" : " (set by hand)"));
+}
+catch (OperationCanceledException) when (cts.IsCancellationRequested)
+{
+    // Stopped while the model loaded, which can take minutes: a stack trace said so before.
+    Console.WriteLine("[server] stopped while connecting to the server");
+    return 1;
 }
 // MCP servers from Data/mcp.json, as in the app; a broken list is reported and skipped.
 await using var mcp = new McpHost();
@@ -199,11 +209,13 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
             Console.WriteLine($"[call] {Now} {c.Name} {c.Arguments}{(c.Id.StartsWith("text_") ? "   (recovered from text)" : "")}");
     }
 
-    public Task<bool> RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct)
+    public async Task<bool> RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct)
     {
-        if (autoYes) return Task.FromResult(true);
+        if (autoYes) return true;
         Console.Write($"[approve?] {summary} [y/N] ");
-        return Task.FromResult(Console.ReadLine()?.Trim().ToLowerInvariant() is "y" or "yes");
+        // Pause/Break or Ctrl+C stops the run while it asks; the run waited for Enter first.
+        var answer = await Task.Run(Console.ReadLine, CancellationToken.None).WaitAsync(ct);
+        return answer?.Trim().ToLowerInvariant() is "y" or "yes";
     }
 
     public void OnNotice(string text)
@@ -250,6 +262,9 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
             File.WriteAllBytes(Path.Combine(shotsDir, $"shot-{++_shot:000}.jpg"), result.Image);
         }
     }
+
+    /// <summary>A bug ended the run: its stack trace, which the one-line message leaves out.</summary>
+    public void OnFailed(Exception error) => Console.Error.WriteLine($"\n[failed] {Now} {error}");
 
     public void OnFinished(AgentStopReason reason, string? detail)
     {

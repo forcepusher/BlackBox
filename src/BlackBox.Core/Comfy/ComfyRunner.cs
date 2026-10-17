@@ -58,8 +58,8 @@ public static class ComfyRunner
         try { answer = JsonNode.Parse(text); }
         catch (System.Text.Json.JsonException) { }
         if (status == HttpStatusCode.OK && (string?)answer?["prompt_id"] is { } id)
-            return (id, NodeErrors(answer?["node_errors"] as JsonObject, workflow));
-        var problems = NodeErrors(answer?["node_errors"] as JsonObject, workflow);
+            return (id, NodeErrors(answer?["node_errors"] as JsonObject));
+        var problems = NodeErrors(answer?["node_errors"] as JsonObject);
         if (answer?["error"] is JsonObject error)
         {
             var type = (string?)error["type"];
@@ -78,8 +78,8 @@ public static class ComfyRunner
         return (null, problems);
     }
 
-    /// <summary>ComfyUI's per-node complaints, one line each, with the node's type and title.</summary>
-    private static List<string> NodeErrors(JsonObject? nodeErrors, ComfyWorkflow workflow)
+    /// <summary>ComfyUI's per-node complaints, one line each, with the node's id and type.</summary>
+    private static List<string> NodeErrors(JsonObject? nodeErrors)
     {
         var lines = new List<string>();
         foreach (var (id, entry) in nodeErrors ?? [])
@@ -122,20 +122,38 @@ public static class ComfyRunner
         try
         {
             var nextPoll = TimeSpan.Zero;
+            // A server that died in the middle of the job (out of memory, a crash), or a job taken
+            // out of the queue, was waited on for the whole wait, then said to be "still running",
+            // and the next wait did the same. Each is told once it has gone on for a while.
+            int unanswered = 0, missing = 0;
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
                 if (events.Finished || clock.Elapsed >= nextPoll)
                 {
                     nextPoll = clock.Elapsed + TimeSpan.FromSeconds(events.Finished ? 0 : 4);
-                    if (await HistoryAsync(api, promptId, ct).ConfigureAwait(false) is { } entry)
+                    var (entry, answered, listed) = await HistoryAsync(api, promptId, ct).ConfigureAwait(false);
+                    if (entry is not null)
                     {
-                        Collect(api, entry, job, events);
+                        Collect(entry, job, events);
                         job.Elapsed = clock.Elapsed;
                         return job;
                     }
-                    if (!events.Started && await QueuePositionAsync(api, promptId, ct).ConfigureAwait(false) is { } ahead)
-                        job.Progress = ahead switch { < 0 => "starting", 0 => "next in ComfyUI's queue", _ => $"waiting in ComfyUI's queue behind {ahead} job(s)" };
+                    var (ahead, queueAnswered) = await QueuePositionAsync(api, promptId, ct).ConfigureAwait(false);
+                    // Not answering with its socket still open is a server busy in Python, not one gone.
+                    unanswered = answered || queueAnswered || listening is { IsCompleted: false } ? 0 : unanswered + 1;
+                    missing = answered && queueAnswered && !listed && ahead is null ? missing + 1 : 0;
+                    if (unanswered >= GiveUpAfter || missing >= GiveUpAfter)
+                    {
+                        job.Status = "error";
+                        job.Error = unanswered > 0
+                            ? $"ComfyUI stopped answering while the job ran (for {Clock(clock.Elapsed)} now): its process may have ended, out of memory or with an error. Its log says why; action=status shows ComfyUI's state."
+                            : "The job isn't in ComfyUI's queue or history any more: it was taken out of the queue, or ComfyUI was restarted since. Run it again.";
+                        job.Elapsed = clock.Elapsed;
+                        return job;
+                    }
+                    if (!events.Started && ahead is { } position)
+                        job.Progress = position switch { < 0 => "starting", 0 => "next in ComfyUI's queue", _ => $"waiting in ComfyUI's queue behind {position} job(s)" };
                 }
                 if (events.Started)
                 {
@@ -148,12 +166,9 @@ public static class ComfyRunner
                     job.Elapsed = clock.Elapsed;
                     return job;
                 }
+                // Never throws: a Stop or a message ends the delay, and the next look ends the wait.
                 using var tick = CancellationTokenSource.CreateLinkedTokenSource(ct, userMessage);
-                try
-                {
-                    await Task.WhenAny(events.Changed.Task, Task.Delay(1000, tick.Token)).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
+                await Task.WhenAny(events.Changed.Task, Task.Delay(1000, tick.Token)).ConfigureAwait(false);
                 events.ResetChanged();
             }
         }
@@ -175,41 +190,46 @@ public static class ComfyRunner
 
     internal static string Clock(TimeSpan t) => t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t:mm\\:ss}" : $"{(int)t.TotalMinutes}:{t:ss}";
 
-    private static async Task<JsonObject?> HistoryAsync(ComfyApi api, string promptId, CancellationToken ct)
+    /// <summary>The polls in a row after which a server that doesn't answer, or a job that is nowhere, is given up on (about half a minute).</summary>
+    internal static int GiveUpAfter { get; set; } = 8;
+
+    /// <summary>The job's history entry once it has ended; whether the server answered at all, and whether its history has the job in any state.</summary>
+    private static async Task<(JsonObject? Entry, bool Answered, bool Listed)> HistoryAsync(ComfyApi api, string promptId, CancellationToken ct)
     {
         try
         {
-            return await api.GetJsonAsync("history/" + Uri.EscapeDataString(promptId), ct, TimeSpan.FromSeconds(30)).ConfigureAwait(false) is JsonObject h
-                   && h[promptId] is JsonObject entry && entry["status"]?["completed"] is not null ? entry : null;
+            var listed = await api.GetJsonAsync("history/" + Uri.EscapeDataString(promptId), ct, TimeSpan.FromSeconds(30)).ConfigureAwait(false) is JsonObject h
+                         && h[promptId] is JsonObject e ? e : null;
+            return (listed?["status"]?["completed"] is not null ? listed : null, true, listed is not null);
         }
         catch (Exception ex) when (ex is ComfyApiException or System.Text.Json.JsonException)
         {
-            return null;
+            return (null, false, false);
         }
     }
 
-    /// <summary>How many jobs run or wait before this one: -1 when it is running, null when it isn't in the queue.</summary>
-    private static async Task<int?> QueuePositionAsync(ComfyApi api, string promptId, CancellationToken ct)
+    /// <summary>How many jobs run or wait before this one: -1 when it is running, null when it isn't in the queue; and whether the server answered.</summary>
+    private static async Task<(int? Ahead, bool Answered)> QueuePositionAsync(ComfyApi api, string promptId, CancellationToken ct)
     {
         try
         {
             if (await api.GetJsonAsync("queue", ct, TimeSpan.FromSeconds(10)).ConfigureAwait(false) is not JsonObject q)
-                return null;
+                return (null, false);
             var running = (q["queue_running"] as JsonArray ?? []).OfType<JsonArray>().ToList();
             if (running.Any(r => r.Count > 1 && (string?)r[1] == promptId))
-                return -1;
+                return (-1, true);
             var pending = (q["queue_pending"] as JsonArray ?? []).OfType<JsonArray>().OrderBy(r => r.Count > 0 && r[0] is JsonValue n && n.TryGetValue<double>(out var d) ? d : 0).ToList();
             var at = pending.FindIndex(r => r.Count > 1 && (string?)r[1] == promptId);
-            return at < 0 ? null : at + running.Count;
+            return (at < 0 ? null : at + running.Count, true);
         }
         catch (Exception ex) when (ex is ComfyApiException or System.Text.Json.JsonException or InvalidOperationException)
         {
-            return null;
+            return (null, false);
         }
     }
 
     /// <summary>The outcome and the files of a finished job, from its history entry.</summary>
-    private static void Collect(ComfyApi api, JsonObject entry, ComfyJob job, JobEvents events)
+    private static void Collect(JsonObject entry, ComfyJob job, JobEvents events)
     {
         var status = entry["status"] as JsonObject;
         job.Status = (string?)status?["status_str"] == "success" ? "success" : "error";
@@ -338,7 +358,6 @@ public static class ComfyRunner
         public string? Error { get; private set; }
         private string? _node;
         private int _value, _max;
-        private int _cached;
         public TaskCompletionSource Changed { get; private set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public void ResetChanged()
@@ -363,7 +382,6 @@ public static class ComfyRunner
                         break;
                     case "execution_cached":
                         Started = true;
-                        _cached = (data["nodes"] as JsonArray)?.Count ?? 0;
                         break;
                     case "executing":
                         Started = true;

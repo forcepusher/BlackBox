@@ -14,6 +14,13 @@ public sealed class McpSetup(McpHost host, string configFile)
 
     /// <summary>The run's tools, which a new server's tools join.</summary>
     public ToolRegistry? Registry { get; set; }
+
+    /// <summary>
+    /// Called when a server's tools joined or left the run: the system prompt, which lists the
+    /// servers, is made again then. Made at the next message instead, it changed the start of the
+    /// prompt a second time, and the server read the whole chat again once more.
+    /// </summary>
+    public Action? ToolsChanged { get; set; }
 }
 
 /// <summary>
@@ -70,9 +77,23 @@ public sealed class McpServersTool : Tool
             {
                 var name = RequireString(args, "name").Trim();
                 var stopped = await mcp.Host.RemoveAsync(name).ConfigureAwait(false);
-                var text = McpConfig.WithoutServer(McpConfig.Load(mcp.ConfigFile), name);
-                if (text is not null) McpConfig.Save(mcp.ConfigFile, text);
-                mcp.Registry?.RemoveServer(name);
+                // Its tools leave the run first, as on add: a save that failed left them there,
+                // calling a server that was stopped.
+                var dropped = mcp.Registry?.RemoveServer(name) == true;
+                if (stopped || dropped)
+                    mcp.ToolsChanged?.Invoke();
+                string? text;
+                try
+                {
+                    text = McpConfig.WithoutServer(McpConfig.Load(mcp.ConfigFile), name);
+                    if (text is not null) McpConfig.Save(mcp.ConfigFile, text);
+                }
+                catch (Exception ex) when (ex is McpConfigException or IOException or UnauthorizedAccessException)
+                {
+                    return stopped
+                        ? new ToolResult($"Stopped the MCP server \"{name}\", but it could not be taken out of Settings ({ex.Message}), so it starts again with BlackBox.")
+                        : ToolResult.Error($"The MCP server \"{name}\" could not be taken out of Settings: {ex.Message}");
+                }
                 return stopped || text is not null ? new ToolResult($"Removed the MCP server \"{name}\".") : ToolResult.Error($"There is no MCP server \"{name}\". {List(mcp)}");
             }
             case "add":
@@ -106,9 +127,21 @@ public sealed class McpServersTool : Tool
         var timeout = TimeSpan.FromSeconds(Math.Clamp(GetNumber(args, "timeout_seconds") ?? DefaultStartTimeout.TotalSeconds, 10, 900));
         var (status, tools) = await mcp.Host.AddAsync(config, timeout, ct).ConfigureAwait(false);
         if (status.State != McpServerState.Connected)
+        {
+            // One of that name that ran before was stopped for it: its tools go too, or calls to
+            // them went to a server no longer there.
+            if (mcp.Registry?.RemoveServer(name) == true)
+                mcp.ToolsChanged?.Invoke();
             return ToolResult.Error($"The MCP server \"{name}\" did not start, so it wasn't kept: {status.Error} " +
                                     "Check the command and its arguments in the server's instructions; run it with run_shell to see what it says.");
+        }
 
+        // Its tools join the run first: when saving failed (another entry in mcp.json the file
+        // check refuses, a file held open), the result said they were usable, and every call to
+        // them was an unknown tool.
+        mcp.Registry?.RemoveServer(name);
+        mcp.Registry?.Add(tools);
+        mcp.ToolsChanged?.Invoke();
         try
         {
             McpConfig.Save(mcp.ConfigFile, McpConfig.WithServer(McpConfig.Load(mcp.ConfigFile), name, entry));
@@ -117,8 +150,6 @@ public sealed class McpServersTool : Tool
         {
             return new ToolResult(Started(name, status, tools, saved: false) + $"\nIt could not be saved in Settings ({ex.Message}), so it runs only until BlackBox closes.");
         }
-        mcp.Registry?.RemoveServer(name);
-        mcp.Registry?.Add(tools);
         return new ToolResult(Started(name, status, tools, saved: true));
     }
 

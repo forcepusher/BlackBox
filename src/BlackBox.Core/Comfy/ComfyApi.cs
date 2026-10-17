@@ -156,8 +156,10 @@ public sealed class ComfyApi(Uri baseUrl)
     /// <summary>Stops the job if it is the one running, and takes it out of the queue if it waits there.</summary>
     public async Task CancelAsync(string promptId, CancellationToken ct)
     {
-        await PostJsonAsync("interrupt", new JsonObject { ["prompt_id"] = promptId }, ct).ConfigureAwait(false);
-        await PostJsonAsync("queue", new JsonObject { ["delete"] = new JsonArray(promptId) }, ct).ConfigureAwait(false);
+        // A few seconds each: this runs when the user presses Stop, which a server that doesn't
+        // answer must not hold up for two minutes.
+        await PostJsonAsync("interrupt", new JsonObject { ["prompt_id"] = promptId }, ct, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await PostJsonAsync("queue", new JsonObject { ["delete"] = new JsonArray(promptId) }, ct, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
     }
 
     /// <summary>The web socket the server reports progress on, for this client.</summary>

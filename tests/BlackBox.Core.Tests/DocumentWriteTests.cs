@@ -117,9 +117,10 @@ public class DocumentWriteTests : IDisposable
 
         var text = await Read("budget.xlsx");
         Assert.Contains("# Sheet \"Budget\"", text);
-        Assert.Contains("B2 1200", text);
-        Assert.Contains("C2 0.4", text);
-        Assert.Contains("D2 46327", text); // 2026-11-01 as Excel's date number
+        // Numbers as Excel shows them, in a form edit_file reads back as the same value and format.
+        Assert.Contains("B2 $1,200.00", text);
+        Assert.Contains("C2 40%", text);
+        Assert.Contains("D2 2026-11-01", text); // not 46327, Excel's number for that day
         Assert.Contains("B4 007", text);   // leading zeros stay text
         Assert.Contains("B5 =SUM(B2:B4)", text);
         Assert.Contains("# Sheet \"Notes\"", text);
@@ -131,6 +132,41 @@ public class DocumentWriteTests : IDisposable
         Assert.Contains("\"$\"#,##0.00", formats);
         Assert.Contains("yyyy-mm-dd", formats);
         Assert.Contains("fullCalcOnLoad=\"1\"", XDocument.Load(zip.GetEntry("xl/workbook.xml")!.Open()).ToString());
+    }
+
+    [Fact]
+    public async Task Documents_are_written_whatever_the_digits_characters_or_culture()
+    {
+        // Arabic-Indic and full-width digits matched \d and then failed int.Parse and double.Parse;
+        // a form feed or a terminal's escape code made the XML writer throw; and with a Finnish
+        // culture the document's date came out as 2026-10-17T12.34.56Z.
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("fi-FI");
+        try
+        {
+            Assert.False((await Write("arabic.docx", "١. البند الأول\n٢. البند الثاني\n\nPage\fbreak and \u001b[31mred\u001b[0m")).IsError);
+            Assert.False((await Write("numbers.xlsx", "| A | B |\n|---|---|\n| ١٢٣ | １２３ |\n| 1e400 | 5 |")).IsError);
+            var text = await Read("numbers.xlsx");
+            Assert.Contains("A2 ١٢٣", text);
+            Assert.Contains("A3 1e400", text);
+            using var zip = ZipFile.OpenRead(Path.Combine(_dir, "arabic.docx"));
+            var core = XDocument.Load(zip.GetEntry("docProps/core.xml")!.Open()).ToString();
+            Assert.Matches(@"<dcterms:created[^>]*>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z<", core);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
+    }
+
+    [Fact]
+    public async Task A_workbook_of_plain_numbers_says_how_to_show_them_in_dollars()
+    {
+        // Asked for amounts in dollars, a model wrote plain numbers and then took the workbook apart.
+        var plain = await Write("plain.xlsx", "| Item | Amount |\n|---|---|\n| Rent | 1200 |\n| Total | =SUM(B2:B2) |");
+        Assert.Contains("written as $1,200.00, 12% or 2026-10-16 they show in dollars", plain.Text);
+        var dollars = await Write("dollars.xlsx", "| Item | Amount |\n|---|---|\n| Rent | $1,200.00 |\n| Total | =SUM(B2:B2) |");
+        Assert.DoesNotContain("show in dollars", dollars.Text);
     }
 
     [Fact]
@@ -216,6 +252,136 @@ public class DocumentWriteTests : IDisposable
         Assert.Contains("Продажи выросли на 12% (€5)", pdf.GetPage(1).Text);
         // The font goes in with only the letters used.
         Assert.True(new FileInfo(Path.Combine(_dir, "ru.pdf")).Length < 300_000);
+    }
+
+    [Fact]
+    public async Task A_documents_footer_is_read_and_changed()
+    {
+        // edit_file changed headers and footers, but read_file didn't show them: the model couldn't see the footer it was asked to change.
+        Assert.False((await Write("letter.docx", "# Letter\n\nDear Ann,")).IsError);
+        using (var zip = System.IO.Compression.ZipFile.Open(Path.Combine(_dir, "letter.docx"), System.IO.Compression.ZipArchiveMode.Update))
+        using (var footer = new StreamWriter(zip.CreateEntry("word/footer1.xml").Open()))
+            footer.Write("""<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>Northwind Ltd, confidential</w:t></w:r></w:p></w:ftr>""");
+
+        Assert.Contains("Dear Ann,\nFooter: Northwind Ltd, confidential\n", await Read("letter.docx"));
+        Assert.False((await Edit("letter.docx", "Northwind Ltd", "Contoso Ltd")).IsError);
+        Assert.Contains("Footer: Contoso Ltd, confidential\n", await Read("letter.docx"));
+    }
+
+    [Fact]
+    public async Task A_documents_comments_are_read_with_the_text_they_are_on()
+    {
+        // Asked to go through a document's comments, the model saw none of them.
+        Assert.False((await Write("plan.docx", "# Plan\n\nOpen a third store before spring.\n\nHire two people.")).IsError);
+        using (var zip = System.IO.Compression.ZipFile.Open(Path.Combine(_dir, "plan.docx"), System.IO.Compression.ZipArchiveMode.Update))
+        {
+            System.Xml.Linq.XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+            var entry = zip.GetEntry("word/document.xml")!;
+            System.Xml.Linq.XDocument doc;
+            using (var read = entry.Open())
+                doc = System.Xml.Linq.XDocument.Load(read);
+            // As Word marks a comment: where its text starts and ends, around the runs of a paragraph.
+            var p = doc.Descendants(w + "p").First(x => string.Concat(x.Descendants(w + "t").Select(t => t.Value)).StartsWith("Open a third"));
+            p.Elements(w + "r").First().AddBeforeSelf(new System.Xml.Linq.XElement(w + "commentRangeStart", new System.Xml.Linq.XAttribute(w + "id", "0")));
+            p.Elements(w + "r").Last().AddAfterSelf(new System.Xml.Linq.XElement(w + "commentRangeEnd", new System.Xml.Linq.XAttribute(w + "id", "0")));
+            entry.Delete();
+            using (var write = zip.CreateEntry("word/document.xml").Open())
+                doc.Save(write);
+            using var comments = new StreamWriter(zip.CreateEntry("word/comments.xml").Open());
+            comments.Write("""<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:comment w:id="0" w:author="Ann"><w:p><w:r><w:t>Check the date with Finance.</w:t></w:r></w:p></w:comment></w:comments>""");
+        }
+
+        Assert.Contains("Hire two people.\nComments:\n- on \"Open a third store before spring.\": Check the date with Finance.\n", await Read("plan.docx"));
+
+        // Comments that can't be read leave the rest readable, as before they were read at all.
+        using (var zip = System.IO.Compression.ZipFile.Open(Path.Combine(_dir, "plan.docx"), System.IO.Compression.ZipArchiveMode.Update))
+        {
+            zip.GetEntry("word/comments.xml")!.Delete();
+            using var broken = new StreamWriter(zip.CreateEntry("word/comments.xml").Open());
+            broken.Write("<w:comments xmlns:w=");
+        }
+        var text = await Read("plan.docx");
+        Assert.Contains("Hire two people.", text);
+        Assert.DoesNotContain("Comments:", text);
+    }
+
+    [Fact]
+    public async Task A_sheets_merged_cells_and_charts_are_said()
+    {
+        // A title across merged cells and a chart, as Excel keeps them; read_file said nothing of either.
+        Assert.False((await Write("book.xlsx", "# Budget\n| Item | Amount |\n|---|---|\n| Rent | 1200 |")).IsError);
+        using (var zip = System.IO.Compression.ZipFile.Open(Path.Combine(_dir, "book.xlsx"), System.IO.Compression.ZipArchiveMode.Update))
+        {
+            System.Xml.Linq.XNamespace s = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            System.Xml.Linq.XNamespace r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            var sheetEntry = zip.GetEntry("xl/worksheets/sheet1.xml")!;
+            System.Xml.Linq.XDocument sheet;
+            using (var read = sheetEntry.Open())
+                sheet = System.Xml.Linq.XDocument.Load(read);
+            sheet.Root!.Element(s + "sheetData")!.AddAfterSelf(
+                new System.Xml.Linq.XElement(s + "mergeCells", new System.Xml.Linq.XElement(s + "mergeCell", new System.Xml.Linq.XAttribute("ref", "A1:B1"))),
+                new System.Xml.Linq.XElement(s + "drawing", new System.Xml.Linq.XAttribute(r + "id", "rIdChart")));
+            sheetEntry.Delete();
+            using (var write = zip.CreateEntry("xl/worksheets/sheet1.xml").Open())
+                sheet.Save(write);
+            zip.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")?.Delete();
+            using (var rels = new StreamWriter(zip.CreateEntry("xl/worksheets/_rels/sheet1.xml.rels").Open()))
+                rels.Write("""<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdChart" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>""");
+            using (var drawing = new StreamWriter(zip.CreateEntry("xl/drawings/drawing1.xml").Open()))
+                drawing.Write("""<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:twoCellAnchor><xdr:graphicFrame><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart r:id="rId1"/></a:graphicData></a:graphic></xdr:graphicFrame></xdr:twoCellAnchor></xdr:wsDr>""");
+        }
+
+        Assert.Contains("(merged: A1:B1)\n(1 chart)\n", await Read("book.xlsx"));
+    }
+
+    [Fact]
+    public async Task A_slides_speaker_notes_are_read_and_changed()
+    {
+        // read_file left them out, and edit_file couldn't reach them: asked to change the notes, the model had nothing to go on.
+        Assert.False((await Write("deck.pptx", "# Q3 results\nNorthwind\n\n---\n\n## Sales\n- Airport up 8%")).IsError);
+        var path = Path.Combine(_dir, "deck.pptx");
+        using (var zip = System.IO.Compression.ZipFile.Open(path, System.IO.Compression.ZipArchiveMode.Update))
+        {
+            // As PowerPoint keeps them: a notes page with the slide's number and a body of notes.
+            using (var notes = new StreamWriter(zip.CreateEntry("ppt/notesSlides/notesSlide2.xml").Open()))
+                notes.Write("""
+                    <p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree>
+                    <p:sp><p:nvSpPr><p:cNvPr id="2" name="Slide Number"/><p:cNvSpPr/><p:nvPr><p:ph type="sldNum"/></p:nvPr></p:nvSpPr><p:txBody><a:p><a:fld id="{1}" type="slidenum"><a:t>2</a:t></a:fld></a:p></p:txBody></p:sp>
+                    <p:sp><p:nvSpPr><p:cNvPr id="3" name="Notes"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:txBody><a:p><a:r><a:t>Thank the team.</a:t></a:r></a:p></p:txBody></p:sp>
+                    </p:spTree></p:cSld></p:notes>
+                    """);
+            var relsEntry = zip.GetEntry("ppt/slides/_rels/slide2.xml.rels")!;
+            System.Xml.Linq.XDocument rels;
+            using (var read = relsEntry.Open())
+                rels = System.Xml.Linq.XDocument.Load(read);
+            System.Xml.Linq.XNamespace pr = "http://schemas.openxmlformats.org/package/2006/relationships";
+            rels.Root!.Add(new System.Xml.Linq.XElement(pr + "Relationship", new System.Xml.Linq.XAttribute("Id", "rIdNotes"),
+                new System.Xml.Linq.XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide"),
+                new System.Xml.Linq.XAttribute("Target", "../notesSlides/notesSlide2.xml")));
+            relsEntry.Delete();
+            using var write = zip.CreateEntry("ppt/slides/_rels/slide2.xml.rels").Open();
+            rels.Save(write);
+        }
+
+        Assert.Contains("Airport up 8%\nSpeaker notes:\nThank the team.\n", await Read("deck.pptx"));
+        var edited = await Edit("deck.pptx", "Thank the team.", "Thank the whole team.");
+        Assert.False(edited.IsError, edited.Text);
+        Assert.Contains("Speaker notes:\nThank the whole team.\n", await Read("deck.pptx"));
+        // The slide's number on the notes page isn't in what read_file shows, so not text to change either.
+        Assert.Contains("not found", (await Edit("deck.pptx", "2", "3")).Text);
+    }
+
+    [Fact]
+    public async Task Arabic_and_Hebrew_in_a_quote_or_code_are_written_in_the_regular_font()
+    {
+        // Arial Italic and Consolas have no Arabic, Consolas no Hebrew: a quote or code in them made
+        // the whole PDF fail with "font does not contain a character".
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Uses Arial and Consolas from Windows.");
+        var result = await Write("rtl.pdf", "# تقرير\n\n> اقتباس *with English* in it\n\nThe key is `מפתח` here.\n\n```\nקוד عربي\n```");
+        Assert.False(result.IsError, result.Text);
+        Assert.DoesNotContain("came out as ?", result.Text);
+        using var pdf = PdfDocument.Open(Path.Combine(_dir, "rtl.pdf"));
+        Assert.Contains("with English", pdf.GetPage(1).Text);
     }
 
     [Fact]
@@ -372,6 +538,32 @@ public class DocumentWriteTests : IDisposable
     }
 
     [Fact]
+    public async Task A_number_changed_under_a_total_has_excel_work_the_total_out_again()
+    {
+        // In a workbook Excel saved last, the total it kept in the file was shown unchanged.
+        await Write("budget.xlsx", "# Budget\n\n| Item | Cost |\n|---|---|\n| Rent | 1200 |\n| Food | 850 |\n| **Total** | =SUM(B2:B3) |");
+        var path = Path.Combine(_dir, "budget.xlsx");
+        XNamespace s = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Update))
+        {
+            // As Excel leaves it: the total worked out, and no recalculation asked for.
+            var entry = zip.GetEntry("xl/workbook.xml")!;
+            XDocument workbook;
+            using (var stream = entry.Open()) workbook = XDocument.Load(stream);
+            workbook.Descendants(s + "calcPr").Attributes("fullCalcOnLoad").Remove();
+            entry.Delete();
+            using (var stream = zip.CreateEntry("xl/workbook.xml").Open()) workbook.Save(stream);
+        }
+
+        var result = await Edit("budget.xlsx", "", "B3 900");
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains("Excel works the formulas out when it opens the file", result.Text);
+        using var check = ZipFile.OpenRead(path);
+        Assert.Equal("1", (string?)XDocument.Load(check.GetEntry("xl/workbook.xml")!.Open()).Descendants(s + "calcPr").Single().Attribute("fullCalcOnLoad"));
+    }
+
+    [Fact]
     public async Task Rows_are_inserted_above_a_total_and_deleted_with_formulas_following()
     {
         await Write("budget.xlsx", "# Budget\n\n| Item | Cost |\n|---|---|\n| Rent | $1,200 |\n| Food | $850 |\n| **Total** | =SUM(B2:B3) |");
@@ -381,8 +573,9 @@ public class DocumentWriteTests : IDisposable
         Assert.False(result.IsError, result.Text);
         Assert.Contains(": Inserted row 4 on sheet \"Budget\", then set A4, B4, B5", result.Text);
         var text = await Read("budget.xlsx");
-        Assert.Contains("A4 Internet | B4 40", text);
+        Assert.Contains("A4 Internet | B4 $40", text); // in dollars, as the row above it
         Assert.Contains("A5 Total | B5 =SUM(B2:B4)", text);
+        Assert.Contains("(bold: A1, B1, A5)", text);
 
         // The new row looks like the one above it, the total row stays bold.
         XNamespace s = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -398,8 +591,13 @@ public class DocumentWriteTests : IDisposable
         // Deleting Food: the total's range loses that row and the total moves up.
         Assert.False((await Edit("budget.xlsx", "", "delete row 3")).IsError);
         text = await Read("budget.xlsx");
-        Assert.Contains("A3 Internet | B3 40", text);
+        Assert.Contains("A3 Internet | B3 $40", text);
         Assert.Contains("A4 Total | B4 =SUM(B2:B3)", text);
+
+        // Ten million rows ran out of memory, past where a sheet ends anyway.
+        var huge = await Edit("budget.xlsx", "", "insert rows 2-9999999");
+        Assert.True(huge.IsError);
+        Assert.Contains("a sheet ends at row 1,048,576", huge.Text);
     }
 
     [Theory]

@@ -104,11 +104,19 @@ public sealed class HeadlessBrowser(string executable, string profileDirectory)
                 throw new WebPageException($"The browser did not finish loading {url.Host} in 30 seconds.");
             }
             var html = await stdout.ConfigureAwait(false);
-            // Nothing back: where Edge's (or Chrome's) HeadlessModeEnabled policy is off, it quits with
-            // 0 and only a line on its error output says why. --dump-dom works headless only.
-            if (html.Length == 0 && await SaidAsync(stderr).ConfigureAwait(false) is { } said &&
-                said.Contains("Headless mode is disallowed", StringComparison.OrdinalIgnoreCase))
-                throw new WebPageException("The browser won't run headless on this PC (its HeadlessModeEnabled policy is off), so pages that need one can't be loaded here.");
+            if (html.Length == 0)
+            {
+                // Nothing back: where Edge's (or Chrome's) HeadlessModeEnabled policy is off, it quits with
+                // 0 and only a line on its error output says why. --dump-dom works headless only.
+                var said = await SaidAsync(stderr).ConfigureAwait(false);
+                if (said?.Contains("Headless mode is disallowed", StringComparison.OrdinalIgnoreCase) == true)
+                    throw new WebPageException("The browser won't run headless on this PC (its HeadlessModeEnabled policy is off), so pages that need one can't be loaded here.");
+                // Taken for a page without text, or a search without results: "No results", and the
+                // model wrote its query again and again. A page loaded is never empty (<html>…).
+                var last = said?.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+                throw new WebPageException($"The browser gave back no page (exit code {process.ExitCode}" +
+                                           (last is null ? ")." : $"; it said: {(last.Length > 200 ? last[..200] + "…" : last)})."));
+            }
             return html;
         }
         finally

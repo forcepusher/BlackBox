@@ -23,6 +23,8 @@ internal static partial class XlsxWriter
         public readonly Dictionary<int, string?> Formats = [];
         public int Next = 1;
         public bool FreezeHeader;
+        /// <summary>Whether a cell holds a number written without $, % or as a date (see <see cref="Write"/>).</summary>
+        public bool PlainNumbers;
     }
 
     public static byte[] Write(IReadOnlyList<Block> blocks, List<string> notes)
@@ -78,6 +80,12 @@ internal static partial class XlsxWriter
         }
         if (sheets.Count == 0)
             sheets.Add(new Sheet("Sheet1"));
+        // Asked for amounts in dollars, Kilo's free Nemotron wrote plain numbers and then took the
+        // workbook apart to add the format by hand, twice, though the tool said how; said here, it
+        // comes when it is needed.
+        if (sheets.Any(s => s.PlainNumbers))
+            notes.Add("Its numbers are shown as they are; written as $1,200.00, 12% or 2026-10-16 they show in dollars, as percentages or as dates " +
+                      "(edit_file sets cells that way too, such as \"B2 $1,200.00\").");
 
         var package = new OfficePackage();
         package.AddRelationships("", [("rId1", OfficePackage.OfficeDocument, "xl/workbook.xml", false), ("rId2", OfficePackage.CoreProperties, "docProps/core.xml", false)]);
@@ -129,8 +137,9 @@ internal static partial class XlsxWriter
         var text = MarkdownDocument.Plain(spans).Trim();
         if (text.Length == 0) return;
         var bold = header || spans.Where(s => s.Text.Trim().Length > 0).All(s => s.Bold);
-        var (_, format) = Value(text);
+        var (value, format) = Value(text);
         if (!header && !text.StartsWith('=')) sheet.Formats[column] = format;
+        if (value is double && format is null) sheet.PlainNumbers = true;
         var cell = Cell(Reference(row, column), text, styles, bold, header, text.StartsWith('=') ? sheet.Formats.GetValueOrDefault(column) : null);
         if (!sheet.Rows.TryGetValue(row, out var cells))
             sheet.Rows[row] = cells = [];
@@ -189,8 +198,11 @@ internal static partial class XlsxWriter
         }
         if (Grouped().IsMatch(t))
             return (double.Parse(t.Replace(",", ""), CultureInfo.InvariantCulture), t.Contains('.') ? "#,##0.00" : "#,##0");
-        if (Plain().IsMatch(t) && !(t.TrimStart('-').StartsWith('0') && t.TrimStart('-').Length > 1 && !t.TrimStart('-').StartsWith("0.")) && t.Count(char.IsDigit) <= 15)
-            return (double.Parse(t, CultureInfo.InvariantCulture), null);
+        // 1e400 is past what a cell holds: as a number it was written as "Infinity", which Excel
+        // takes for a damaged file; it stays text.
+        if (Plain().IsMatch(t) && !(t.TrimStart('-').StartsWith('0') && t.TrimStart('-').Length > 1 && !t.TrimStart('-').StartsWith("0.")) && t.Count(char.IsDigit) <= 15
+            && double.Parse(t, CultureInfo.InvariantCulture) is var plain && double.IsFinite(plain))
+            return (plain, null);
         if (IsoDate().IsMatch(t) && DateTime.TryParseExact(t, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
             return ((date - new DateTime(1899, 12, 30)).TotalDays, "yyyy-mm-dd");
         return (text, null);
@@ -290,20 +302,20 @@ internal static partial class XlsxWriter
                 new XElement(S + "cellStyle", new XAttribute("name", "Normal"), new XAttribute("xfId", 0), new XAttribute("builtinId", 0)))));
     }
 
-    [GeneratedRegex(@"^(-?\d+(\.(\d+))?)\s?%$")]
+    [GeneratedRegex(@"^(-?[0-9]+(\.([0-9]+))?)\s?%$")]
     private static partial Regex Percent();
 
     // $1,200.50, -€12, (no parentheses), 12 €, 1.200 kr is left as text.
-    [GeneratedRegex(@"^(?<neg>-)?(?:(?<pre>[$€£¥₹])\s?(?<n>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)|(?<n>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s?(?<post>[€£¥₹]))$")]
+    [GeneratedRegex(@"^(?<neg>-)?(?:(?<pre>[$€£¥₹])\s?(?<n>[0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)|(?<n>[0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)\s?(?<post>[€£¥₹]))$")]
     private static partial Regex Money();
 
-    [GeneratedRegex(@"^-?\d{1,3}(,\d{3})+(\.\d+)?$")]
+    [GeneratedRegex(@"^-?[0-9]{1,3}(,[0-9]{3})+(\.[0-9]+)?$")]
     private static partial Regex Grouped();
 
-    [GeneratedRegex(@"^-?\d+(\.\d+)?([eE][-+]?\d+)?$")]
+    [GeneratedRegex(@"^-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?$")]
     private static partial Regex Plain();
 
-    [GeneratedRegex(@"^\d{4}-\d{2}-\d{2}$")]
+    [GeneratedRegex(@"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")]
     private static partial Regex IsoDate();
 
     [GeneratedRegex(@"[\[\]:*?/\\]")]

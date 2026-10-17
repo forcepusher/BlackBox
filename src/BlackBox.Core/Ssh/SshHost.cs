@@ -185,6 +185,24 @@ public sealed partial class SshHost : IDisposable
     /// <summary>How long a command may print nothing (after printing something) before the call returns anyway.</summary>
     internal static TimeSpan QuietReturn { get; set; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>The most of a call's output kept, and of that the beginning and the end (see <see cref="BoundRaw"/>).</summary>
+    private const int MaxRaw = 4 << 20, KeepHead = 64 << 10, KeepTail = 1 << 20;
+
+    /// <summary>
+    /// Keeps the terminal's output to its beginning and its end, what was left out counted, under
+    /// <see cref="_gate"/>. A command that prints hundreds of megabytes (journalctl, cat of a big
+    /// log, docker logs) was copied whole at every wake-up, though the tool shows 16,000 characters
+    /// of it; and one left running between calls (a dev server, tail -f) grew it without end, as
+    /// only a call trimmed it.
+    /// </summary>
+    private void BoundRaw()
+    {
+        if (_raw.Length <= MaxRaw)
+            return;
+        var cut = _raw.Length - KeepHead - KeepTail;
+        _raw.Remove(KeepHead, cut).Insert(KeepHead, $"\n[... {cut:N0} characters left out ...]\n");
+    }
+
     private async Task<ShellResult> CollectAsync(TimeSpan wait, CancellationToken ct, bool waitForPrompt = true, bool returnWhenQuiet = true)
     {
         var until = DateTime.UtcNow + wait;
@@ -195,6 +213,7 @@ public sealed partial class SshHost : IDisposable
             DateTime last;
             lock (_gate)
             {
+                BoundRaw();
                 raw = _raw.ToString();
                 last = _lastData;
             }
@@ -275,8 +294,9 @@ public sealed partial class SshHost : IDisposable
                     notes.Add(now);
                 return new(ShellState.Running, output, Note: Join(notes));
             }
+            // Never below zero: a wait of -1 ms is one without end, and less than that throws.
             var left = until - DateTime.UtcNow;
-            await _signal.WaitAsync(left < TimeSpan.FromMilliseconds(250) ? left : TimeSpan.FromMilliseconds(250), ct).ConfigureAwait(false);
+            await _signal.WaitAsync(left <= TimeSpan.Zero ? TimeSpan.Zero : left < TimeSpan.FromMilliseconds(250) ? left : TimeSpan.FromMilliseconds(250), ct).ConfigureAwait(false);
         }
 
         ShellResult Waiting(string raw, string prompt, string? note)
@@ -334,30 +354,46 @@ public sealed partial class SshHost : IDisposable
                     "printf '\\036BB-%s-%s-%s\\036\\n' \"$__bb_id\" \"$rc\" \"$PWD\"; rm -f \"$f\".*; __bb_id=; }; " +
                     "PROMPT_COMMAND=__bb_done; printf '\\036BB-INIT-%s-%s\\036\\n' \"${BASH_VERSION:+bash}\" \"$__bb_d\"\n");
         shell.Flush();
-        var until = DateTime.UtcNow + TimeSpan.FromSeconds(20);
-        while (DateTime.UtcNow < until)
+        var started = false;
+        try
         {
-            string raw;
-            lock (_gate)
-                raw = _raw.ToString();
-            if (InitMarker().Match(raw) is { Success: true } m)
+            var until = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+            while (DateTime.UtcNow < until)
             {
-                _dir = m.Groups[2].Value;
+                string raw;
                 lock (_gate)
-                    _raw.Clear();
-                if (m.Groups[1].Value == "bash")
+                    raw = _raw.ToString();
+                if (InitMarker().Match(raw) is { Success: true } m)
+                {
+                    _dir = m.Groups[2].Value;
+                    lock (_gate)
+                        _raw.Clear();
+                    started = true;
+                    if (m.Groups[1].Value == "bash")
+                        return;
+                    // No bash to keep a terminal with: RunAsync runs each command on its own instead.
+                    shell.Dispose();
+                    _shell = null;
+                    _noBash = true;
                     return;
-                // No bash to keep a terminal with: RunAsync runs each command on its own instead.
+                }
+                if (_shellClosed)
+                    break;
+                await _signal.WaitAsync(TimeSpan.FromMilliseconds(250), ct).ConfigureAwait(false);
+            }
+            throw new IOException($"The terminal on {Target} did not start (no bash?).");
+        }
+        finally
+        {
+            // A terminal that didn't come up (a slow login, Stop meanwhile) is let go, so the next
+            // call starts one afresh: kept half set up, its commands went to /1.sh, /2.sh… for want
+            // of the folder the setup makes.
+            if (!started && ReferenceEquals(_shell, shell))
+            {
                 shell.Dispose();
                 _shell = null;
-                _noBash = true;
-                return;
             }
-            if (_shellClosed)
-                break;
-            await _signal.WaitAsync(TimeSpan.FromMilliseconds(250), ct).ConfigureAwait(false);
         }
-        throw new IOException($"The terminal on {Target} did not start (no bash?).");
     }
 
     private void ReadLoop(ShellStream shell)
@@ -380,6 +416,7 @@ public sealed partial class SshHost : IDisposable
                 lock (_gate)
                 {
                     _raw.Append(chars, 0, c);
+                    BoundRaw();
                     _lastData = DateTime.UtcNow;
                 }
                 _signal.Release();
@@ -463,16 +500,6 @@ public sealed partial class SshHost : IDisposable
         return new(code, Encoding.UTF8.GetString(output), error);
     }
 
-    /// <summary>A command's output as bytes (an archive, say); with <paramref name="sudo"/> run as root. Throws when it fails.</summary>
-    public async Task<byte[]> ExecBytesAsync(string command, bool sudo, TimeSpan timeout, CancellationToken ct)
-    {
-        var (text, prefix) = await SudoWrapAsync(command, sudo, ct).ConfigureAwait(false);
-        var (code, output, error) = await RunExecAsync(text, prefix, timeout, ct).ConfigureAwait(false);
-        if (code != 0)
-            throw new IOException($"{command} failed on {Target}: {error.Trim()}");
-        return output;
-    }
-
     /// <summary>A command that reads bytes (an archive, say) from its input; with <paramref name="sudo"/> run as root.</summary>
     public async Task<ExecResult> ExecBytesInAsync(string command, byte[] stdin, bool sudo, TimeSpan timeout, CancellationToken ct)
     {
@@ -541,9 +568,18 @@ public sealed partial class SshHost : IDisposable
         if (!sudo)
             return (command, null);
         if (await CheckSudoAsync(ct).ConfigureAwait(false) && Password is { Length: > 0 } pw)
-            return ($"sudo -S -p '' sh -c {Quote(command)}", Encoding.UTF8.GetBytes(pw + "\n"));
-        return ($"sudo -n sh -c {Quote(command)}", null);
+            return (SudoCommand(command, withPassword: true), Encoding.UTF8.GetBytes(pw + "\n"));
+        return (SudoCommand(command, withPassword: false), null);
     }
+
+    /// <summary>
+    /// The command run as root by sudo: reading the password from the first line of its input
+    /// (-S), or with none (-n). -k makes sudo read that line every time: while sudo still remembers
+    /// the password from a sudo moments before, it reads nothing, and the line goes on to the
+    /// command as the first line of its input (into the file a write puts it in).
+    /// </summary>
+    internal static string SudoCommand(string command, bool withPassword) =>
+        withPassword ? $"sudo -k -S -p '' sh -c {Quote(command)}" : $"sudo -n sh -c {Quote(command)}";
 
     private async Task<(int Code, byte[] Output, string Error)> RunExecAsync(string command, byte[]? stdin, TimeSpan timeout, CancellationToken ct)
     {

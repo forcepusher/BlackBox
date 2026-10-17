@@ -33,8 +33,8 @@ public sealed class ToolContext
     /// <summary>The relative grid the model gives x/y on (see <see cref="ScreenSpace"/>), or null for screenshot pixels. Set from the model, see <see cref="ModelCoordinates"/>.</summary>
     public int? CoordinateGrid { get; init; }
 
-    /// <summary>Whether the model takes images, so read_file can show it a picture.</summary>
-    public bool SeesImages { get; init; } = true;
+    /// <summary>Whether the model takes images, so read_file can show it a picture. Turned off mid-run when its server refuses one.</summary>
+    public bool SeesImages { get; set; } = true;
 
     /// <summary>Cancelled when the user sends a message during the run: a wait ends early so the model reads it soon.</summary>
     public CancellationToken UserMessage { get; set; }
@@ -147,8 +147,15 @@ public sealed class ToolContext
         return CurrentScreen;
     }
 
-    public string ResolvePath(string path) =>
-        Path.GetFullPath(Environment.ExpandEnvironmentVariables(path), WorkingDirectory);
+    public string ResolvePath(string path)
+    {
+        path = Environment.ExpandEnvironmentVariables(path);
+        // "~/Desktop/report.txt" is the home folder's Desktop, as in PowerShell and every shell;
+        // it made a folder named "~" in the working directory instead.
+        if (path == "~" || path.StartsWith("~/", StringComparison.Ordinal) || path.StartsWith(@"~\", StringComparison.Ordinal))
+            path = Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), path[1..].TrimStart('/', '\\'));
+        return Path.GetFullPath(path, WorkingDirectory);
+    }
 }
 
 public abstract class Tool

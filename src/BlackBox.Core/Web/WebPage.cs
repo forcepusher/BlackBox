@@ -20,30 +20,41 @@ public static class WebPage
     /// <summary>Less text than this from an HTML page means its content is built by scripts (or it is an error page).</summary>
     private const int ScriptShellChars = 300;
 
-    private static readonly LinkedList<WebPageText> Cache = new();
+    private static readonly LinkedList<(WebPageText Page, DateTime At)> Cache = new();
     private static readonly Lock CacheLock = new();
 
-    public static async Task<WebPageText> ReadAsync(string url, HeadlessBrowser? browser, CancellationToken ct)
+    /// <param name="maxAge">
+    /// How old a kept copy may be to be used: long enough to read on in a page in parts, short
+    /// for a new look. Kept for ever, a page fetched again after a change (a local server restarted
+    /// with new code, a status page watched) came back as it had been the first time.
+    /// </param>
+    public static async Task<WebPageText> ReadAsync(string url, HeadlessBrowser? browser, CancellationToken ct, TimeSpan? maxAge = null)
     {
         var uri = ParseAddress(url);
         var key = uri.GetLeftPart(UriPartial.Query);
+        var oldest = DateTime.UtcNow - (maxAge ?? TimeSpan.FromMinutes(1));
         lock (CacheLock)
         {
-            if (Cache.FirstOrDefault(p => p.Url == key) is { } cached)
+            if (Cache.FirstOrDefault(p => p.Page.Url == key) is { Page: not null } cached)
             {
                 Cache.Remove(cached);
-                Cache.AddFirst(cached);
-                return cached;
+                if (cached.At >= oldest)
+                {
+                    Cache.AddFirst(cached);
+                    return cached.Page;
+                }
             }
         }
 
         var page = await DownloadAsync(uri, browser, ct).ConfigureAwait(false) with { Url = key };
-        lock (CacheLock)
-        {
-            Cache.AddFirst(page);
-            while (Cache.Count > CacheSize)
-                Cache.RemoveLast();
-        }
+        // A page with no text (blocked, not loaded yet) is fetched again next time, not kept.
+        if (page.Text.Length > 0)
+            lock (CacheLock)
+            {
+                Cache.AddFirst((page, DateTime.UtcNow));
+                while (Cache.Count > CacheSize)
+                    Cache.RemoveLast();
+            }
         return page;
     }
 
@@ -72,9 +83,16 @@ public static class WebPage
         {
             if (browser is null)
                 throw new WebPageException(ex.Message);
-            return await BrowserAsync(uri, browser, ct).ConfigureAwait(false) is { Text.Length: >= ScriptShellChars } loaded && !IsBlockPage(loaded)
-                ? loaded
-                : throw new WebPageException(ex.Message);
+            WebPageText loaded;
+            try
+            {
+                loaded = await BrowserAsync(uri, browser, ct).ConfigureAwait(false);
+            }
+            catch (WebPageException failed)
+            {
+                throw new WebPageException($"{ex.Message} The browser couldn't load it either: {failed.Message}");
+            }
+            return loaded.Text.Length >= ScriptShellChars && !IsBlockPage(loaded) ? loaded : throw new WebPageException(ex.Message);
         }
         if (page.IsHtml && page.Text.Text.Length < ScriptShellChars && browser is not null)
         {
@@ -143,7 +161,7 @@ public static class WebPage
             {
                 try
                 {
-                    return (new(finalUri.ToString(), Uri.UnescapeDataString(finalUri.Segments[^1]), Tools.DocumentText.Pdf(new MemoryStream(body))), false);
+                    return (new(finalUri.ToString(), Uri.UnescapeDataString(finalUri.Segments[^1]), Tools.DocumentText.Pdf(new MemoryStream(body), ct)), false);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -170,22 +188,34 @@ public static class WebPage
         return await ParseAsync(uri, r => r.Content(html), ct).ConfigureAwait(false);
     }
 
+    /// <summary>How long taking a page apart may take: AngleSharp took five minutes over a page nested 200,000 elements deep.</summary>
+    internal static TimeSpan ParseLimit { get; set; } = TimeSpan.FromSeconds(30);
+
     private static async Task<WebPageText> ParseAsync(Uri address, Action<AngleSharp.Io.VirtualResponse> response, CancellationToken ct)
     {
         var context = BrowsingContext.New(Configuration.Default);
-        var (title, text) = await ExtractAsync(keepNoscript: false).ConfigureAwait(false);
-        if (text.Length < ScriptShellChars)
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limit.CancelAfter(ParseLimit);
+        try
         {
-            // Extracting takes the document apart, so the second reading parses the page again.
-            var withNoscript = await ExtractAsync(keepNoscript: true).ConfigureAwait(false);
-            if (withNoscript.Text.Length > text.Length * 2)
-                text = withNoscript.Text;
+            var (title, text) = await ExtractAsync(keepNoscript: false).ConfigureAwait(false);
+            if (text.Length < ScriptShellChars)
+            {
+                // Extracting takes the document apart, so the second reading parses the page again.
+                var withNoscript = await ExtractAsync(keepNoscript: true).ConfigureAwait(false);
+                if (withNoscript.Text.Length > text.Length * 2)
+                    text = withNoscript.Text;
+            }
+            return new(address.ToString(), title, text);
         }
-        return new(address.ToString(), title, text);
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new WebPageException($"This page could not be taken apart in {ParseLimit.TotalSeconds:0} seconds (its HTML is nested unusually deep); try another result.");
+        }
 
         async Task<(string Title, string Text)> ExtractAsync(bool keepNoscript)
         {
-            using var document = await context.OpenAsync(r => response(r.Address(address)), ct).ConfigureAwait(false);
+            using var document = await context.OpenAsync(r => response(r.Address(address)), limit.Token).ConfigureAwait(false);
             return PageText.Extract(document, keepNoscript);
         }
     }

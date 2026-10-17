@@ -102,6 +102,15 @@ public class SshTests
         Assert.Equal(prompt, TerminalText.LooksLikePrompt(lastLine));
 
     [Fact]
+    public void Sudo_reads_the_password_line_every_time_it_is_sent_one()
+    {
+        // Without -k, a sudo that still remembered the password read nothing, and the password line
+        // went on to the command's input: into the file a write put it in.
+        Assert.Equal("sudo -k -S -p '' sh -c 'cat > /etc/motd'", SshHost.SudoCommand("cat > /etc/motd", withPassword: true));
+        Assert.Equal("sudo -n sh -c 'cat > /etc/motd'", SshHost.SudoCommand("cat > /etc/motd", withPassword: false));
+    }
+
+    [Fact]
     public void Sudo_prompt_is_recognised()
     {
         Assert.True(TerminalText.IsSudoPrompt("[sudo] password for admin: "));
@@ -205,8 +214,8 @@ public class SshTests
         var image = new byte[70000];
         new Random(3).NextBytes(image);
         image[1] = 0; image[2] = (byte)'\n';
-        await File.WriteAllBytesAsync(Path.Combine(src, "img", "logo.png"), image);
-        await File.WriteAllTextAsync(Path.Combine(src, "index.html"), "<h1>hi</h1>\n");
+        await File.WriteAllBytesAsync(Path.Combine(src, "img", "logo.png"), image, TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(src, "index.html"), "<h1>hi</h1>\n", TestContext.Current.CancellationToken);
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = root };
         try
         {
@@ -215,7 +224,7 @@ public class SshTests
             var r = await new CopyTool().ExecuteAsync(new() { ["from"] = src, ["to"] = Path.Combine(root, "www") }, ctx, CancellationToken.None);
             Assert.False(r.IsError, r.Text);
             Assert.Contains("Copied 2 files", r.Text);
-            Assert.Equal(image, await File.ReadAllBytesAsync(Path.Combine(root, "www", "site", "img", "logo.png")));
+            Assert.Equal(image, await File.ReadAllBytesAsync(Path.Combine(root, "www", "site", "img", "logo.png"), TestContext.Current.CancellationToken));
             // To a new name: the folder takes it. With /*: only what is in it.
             await new CopyTool().ExecuteAsync(new() { ["from"] = src, ["to"] = Path.Combine(root, "renamed") }, ctx, CancellationToken.None);
             Assert.True(File.Exists(Path.Combine(root, "renamed", "index.html")));
@@ -224,7 +233,68 @@ public class SshTests
             Assert.True(File.Exists(Path.Combine(root, "flat", "img", "logo.png")));
             // A single file to a new name.
             await new CopyTool().ExecuteAsync(new() { ["from"] = Path.Combine(src, "index.html"), ["to"] = Path.Combine(root, "home.html") }, ctx, CancellationToken.None);
-            Assert.Equal("<h1>hi</h1>\n", await File.ReadAllTextAsync(Path.Combine(root, "home.html")));
+            Assert.Equal("<h1>hi</h1>\n", await File.ReadAllTextAsync(Path.Combine(root, "home.html"), TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Names_from_linux_are_made_to_fit_windows_and_nothing_lands_beside_the_folder()
+    {
+#if WINDOWS
+        var root = Path.Combine(Path.GetTempPath(), "bb-copy-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "www"));
+        Directory.CreateDirectory(Path.Combine(root, "www2"));
+        try
+        {
+            // "notes:v2.txt" went into a hidden stream of a file "notes"; "a\b.txt" made a folder "a".
+            Assert.Equal((0, 4), CopyTool.UnpackInto(Tar("site/notes:v2.txt", "site/a\\b.txt", "site/con.txt", "site/draft."), Path.Combine(root, "www")));
+            Assert.Equal(["_con.txt", "a_b.txt", "draft._", "notes_v2.txt"], Directory.GetFiles(Path.Combine(root, "www", "site")).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+            Assert.False(File.Exists(Path.Combine(root, "www", "site", "notes")));
+
+            // A bare prefix let "../www2/x" into the www2 beside www.
+            Assert.Throws<InvalidDataException>(() => CopyTool.UnpackInto(Tar("../www2/evil.txt"), Path.Combine(root, "www")));
+            Assert.Empty(Directory.GetFiles(Path.Combine(root, "www2")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+
+        static MemoryStream Tar(params string[] names)
+        {
+            var tar = new MemoryStream();
+            using (var writer = new System.Formats.Tar.TarWriter(tar, System.Formats.Tar.TarEntryFormat.Pax, leaveOpen: true))
+                foreach (var name in names)
+                    writer.WriteEntry(new System.Formats.Tar.PaxTarEntry(System.Formats.Tar.TarEntryType.RegularFile, name) { DataStream = new MemoryStream("hi"u8.ToArray()) });
+            tar.Position = 0;
+            return tar;
+        }
+#else
+        Assert.Skip("Windows only");
+#endif
+    }
+
+    [Fact]
+    public async Task A_copy_on_this_pc_ends_when_the_user_stops_it()
+    {
+        // Neither end of a copy within this PC heard Stop: it went on to the last file.
+        var root = Path.Combine(Path.GetTempPath(), "bb-copy-" + Guid.NewGuid().ToString("N"));
+        var src = Path.Combine(root, "photos");
+        Directory.CreateDirectory(src);
+        var data = new byte[1024];
+        for (var i = 0; i < 3000; i++)
+            await File.WriteAllBytesAsync(Path.Combine(src, $"{i:0000}.jpg"), data, TestContext.Current.CancellationToken);
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = root };
+        try
+        {
+            using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new CopyTool().ExecuteAsync(new() { ["from"] = src, ["to"] = Path.Combine(root, "backup") }, ctx, stop.Token));
+            var copied = Directory.Exists(Path.Combine(root, "backup")) ? Directory.GetFiles(Path.Combine(root, "backup")).Length : 0;
+            Assert.True(copied < 3000, $"all {copied} files were copied");
         }
         finally
         {

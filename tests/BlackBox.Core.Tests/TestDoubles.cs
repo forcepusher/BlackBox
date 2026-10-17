@@ -27,6 +27,15 @@ internal static class Sse
         var chunk = new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["tool_calls"] = new JsonArray(call) } }) };
         return $"data: {chunk.ToJsonString()}\n\ndata: [DONE]\n\n";
     }
+
+    /// <summary>A tool call the server's length limit ends in the middle of its arguments.</summary>
+    public static string CutToolCall(string id, string name, string partialArgs) =>
+        ToolCall(id, name, partialArgs).Replace("data: [DONE]\n\n", "") +
+        $"data: {new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject(), ["finish_reason"] = "length" }) }.ToJsonString()}\n\ndata: [DONE]\n\n";
+
+    /// <summary>A reply that thinks <paramref name="reasoning"/> first, then streams <paramref name="then"/>.</summary>
+    public static string Thought(string reasoning, string then) =>
+        $"data: {new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["reasoning_content"] = reasoning } }) }.ToJsonString()}\n\n" + then;
 }
 
 internal sealed class ScriptedServer(params string[] responses) : HttpMessageHandler
@@ -43,6 +52,9 @@ internal sealed class ScriptedServer(params string[] responses) : HttpMessageHan
     /// <summary>Number of requests to fail with a dropped connection first.</summary>
     public int Drops { get; set; }
 
+    /// <summary>Number of requests to fail before any of them is sent, as with a server that is down.</summary>
+    public int Unreachable { get; set; }
+
     /// <summary>Number of requests answered with an error whose body breaks off, as when the link drops while it comes in.</summary>
     public int BrokenErrors { get; set; }
 
@@ -54,6 +66,11 @@ internal sealed class ScriptedServer(params string[] responses) : HttpMessageHan
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
+        if (Unreachable > 0)
+        {
+            Unreachable--;
+            throw new HttpRequestException(HttpRequestError.ConnectionError, "No connection could be made because the target machine actively refused it. (test:1234)");
+        }
         if (StalledUploads > 0)
         {
             // Before anything reads the body: a body once read is kept in memory and copied from there.
@@ -118,9 +135,13 @@ internal sealed class RecordingObserver : IAgentObserver
     public void OnDelta(StreamDelta delta) { }
     public void OnAssistantMessage(ChatMessage message) => Events.Add("reply " + message.Content);
 
+    /// <summary>Runs while an OK is asked for, before the answer (e.g. the user pressing Stop meanwhile).</summary>
+    public Action? WhileAsked { get; set; }
+
     public Task<bool> RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct)
     {
         ApprovalRequests++;
+        WhileAsked?.Invoke();
         return Task.FromResult(Approve);
     }
 
@@ -133,6 +154,10 @@ internal sealed class RecordingObserver : IAgentObserver
     /// <summary>What the request upload reported, in order: (sent, total).</summary>
     public List<(long Sent, long Total)> Sending { get; } = [];
     public void OnSending(long sent, long total) => Sending.Add((sent, total));
+
+    /// <summary>The exception a bug ended the run with, if one did.</summary>
+    public Exception? Failed { get; private set; }
+    public void OnFailed(Exception error) => Failed = error;
 
     public void OnFinished(AgentStopReason reason, string? detail)
     {
@@ -197,7 +222,10 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     /// <summary>How the fake screen reacts to a click (e.g. by changing <see cref="Desktop"/>).</summary>
     public Action<FakePlatform>? OnClick { get; set; }
     public void Scroll(int dx, int dy) => Actions.Add($"scroll {dx},{dy}");
-    public void TypeText(string text) => Actions.Add($"type {text}");
+    public void TypeText(string text) { Actions.Add($"type {text}"); OnType?.Invoke(this); }
+
+    /// <summary>What happens as text is typed (e.g. the user pressing Stop meanwhile).</summary>
+    public Action<FakePlatform>? OnType { get; set; }
     public void PressKeys(IReadOnlyList<string> keys) => Actions.Add("keys " + string.Join("+", keys));
     public IDisposable HoldKeys(IReadOnlyList<string> keys)
     {

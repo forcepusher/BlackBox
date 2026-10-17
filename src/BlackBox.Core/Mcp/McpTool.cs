@@ -79,11 +79,17 @@ public sealed partial class McpTool : Tools.Tool
         }
     }
 
-    /// <summary>The name shown to the model: <c>server__tool</c>, with only the characters function names allow.</summary>
-    public static string ExposedName(string serverName, string toolName)
+    /// <summary>
+    /// The name shown to the model: <c>server__tool</c>, with only the characters function names
+    /// allow, and <paramref name="suffix"/> (a number that tells apart two names that came out the
+    /// same) after the cut to <see cref="MaxNameLength"/>: cut off with the rest, it was lost, and
+    /// naming two long tools that clashed went round for ever.
+    /// </summary>
+    public static string ExposedName(string serverName, string toolName, string suffix = "")
     {
         var name = Prefix(serverName) + Clean(toolName);
-        return name.Length <= MaxNameLength ? name : name[..MaxNameLength].TrimEnd('_', '-');
+        var room = MaxNameLength - suffix.Length;
+        return (name.Length <= room ? name : name[..room].TrimEnd('_', '-')) + suffix;
     }
 
     /// <summary>What all of a server's tool names start with: <c>server__</c>.</summary>
@@ -117,7 +123,7 @@ public sealed partial class McpTool : Tools.Tool
     {
         var sb = new StringBuilder();
         byte[]? image = null;
-        var imageMime = "image/png";
+        var imageMime = "image/jpeg";
         var imagesLeftOut = 0;
 
         foreach (var block in result.Content ?? [])
@@ -160,7 +166,9 @@ public sealed partial class McpTool : Tools.Tool
             text = text[..MaxTextChars] + "\n[output truncated]";
         if (text.Length == 0)
             text = image is null ? "(no output)" : "(image attached)";
-        return new ToolResult(text, image, imageMime, IsError: result.IsError == true);
+        // Not called a screenshot: it is whatever the server made (a viewport render, a chart), and
+        // a context reset put the last screenshot after its note as the screen.
+        return new ToolResult(text, image, imageMime, IsError: result.IsError == true, ImageCaption: image is null ? null : "The picture the tool gave back:");
 
         void Line(string? s)
         {
@@ -172,8 +180,16 @@ public sealed partial class McpTool : Tools.Tool
         bool TakeImage(ReadOnlyMemory<byte> bytes, string? mime)
         {
             if (image is not null) return false;
-            image = bytes.ToArray();
-            if (!string.IsNullOrWhiteSpace(mime)) imageMime = mime;
+            // Scaled and sent as JPEG, as a screenshot is: a server's image may be of any size (a
+            // generated picture's full PNG) or kind (SVG, TIFF), and one the model's server can't
+            // take fails every request after it, since the conversation keeps it.
+            if (Tools.Picture.Load(bytes.ToArray()) is not { } shown)
+            {
+                Line($"(an image of type {mime ?? "unknown"} left out: it isn't a picture the model can be shown)");
+                return true;
+            }
+            image = shown.Jpeg;
+            imageMime = "image/jpeg";
             return true;
         }
     }

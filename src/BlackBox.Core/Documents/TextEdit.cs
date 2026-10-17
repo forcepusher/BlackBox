@@ -19,6 +19,7 @@ internal static partial class TextEdit
     private static readonly XNamespace W = DocxWriter.W;
     private static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+    private static readonly XNamespace P = "http://schemas.openxmlformats.org/presentationml/2006/main";
 
     /// <summary>A stretch of paragraphs in a part where text can be matched: one after the other with nothing between.</summary>
     private sealed record Stretch(string Part, XDocument Xml, List<XElement> Paragraphs);
@@ -113,7 +114,11 @@ internal static partial class TextEdit
     private static IEnumerable<Stretch> Stretches(string part, XDocument xml, Format format)
     {
         Stretch? current = null;
-        foreach (var p in xml.Descendants(format.Paragraph).Where(p => !p.Ancestors(Mc + "Fallback").Any()))
+        var paragraphs = xml.Descendants(format.Paragraph).Where(p => !p.Ancestors(Mc + "Fallback").Any());
+        // A notes page: its notes, which read_file shows, not the slide's number or a header on it.
+        if (part.Contains("/notesSlides/", StringComparison.Ordinal))
+            paragraphs = paragraphs.Where(p => p.Ancestors(P + "sp").FirstOrDefault()?.Descendants(P + "ph").Any(ph => (string?)ph.Attribute("type") == "body") == true);
+        foreach (var p in paragraphs)
         {
             if (current is not null && PreviousParagraph(p, format) == current.Paragraphs[^1])
                 current.Paragraphs.Add(p);

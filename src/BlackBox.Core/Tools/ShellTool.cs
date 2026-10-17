@@ -42,10 +42,13 @@ public sealed partial class ShellTool : Tool
         psi.StandardOutputEncoding = Encoding.UTF8;
         psi.StandardErrorEncoding = Encoding.UTF8;
 
-        using var process = new Process { StartInfo = psi };
-        var output = new StringBuilder();
+        using var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
+        var output = new OutputCapture(MaxOutput);
         var gate = new object();
         long binary = 0;
+        var stdoutClosed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stderrClosed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         void Append(string? line)
         {
             if (line is null || line == ClixmlMarker) return;
@@ -59,16 +62,17 @@ public sealed partial class ShellTool : Tool
                     return;
                 }
                 FlushBinary();
-                if (output.Length < MaxOutput) output.AppendLine(line);
+                output.Add(line);
             }
         }
         void FlushBinary()
         {
-            if (binary > 0 && output.Length < MaxOutput) output.AppendLine(Ssh.TerminalText.BinaryNote(binary));
+            if (binary > 0) output.Add(Ssh.TerminalText.BinaryNote(binary));
             binary = 0;
         }
-        process.OutputDataReceived += (_, e) => Append(e.Data);
-        process.ErrorDataReceived += (_, e) => Append(e.Data);
+        process.OutputDataReceived += (_, e) => { if (e.Data is null) stdoutClosed.TrySetResult(); else Append(e.Data); };
+        process.ErrorDataReceived += (_, e) => { if (e.Data is null) stderrClosed.TrySetResult(); else Append(e.Data); };
+        process.Exited += (_, _) => exited.TrySetResult();
 
         process.Start();
         process.StandardInput.Close();
@@ -79,20 +83,24 @@ public sealed partial class ShellTool : Tool
         timeoutCts.CancelAfter(timeout);
         try
         {
-            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            // Until the shell has exited, not until its output pipes close (WaitForExitAsync waits
+            // for both): a program the command left running, as Start-Process -NoNewWindow does,
+            // holds them open, and a command that was done waited out its timeout, was reported as
+            // timed out, and then had what it started killed with it.
+            await exited.Task.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            try { process.Kill(entireProcessTree: true); }
+            catch (Exception ex) when (ex is InvalidOperationException or AggregateException or System.ComponentModel.Win32Exception) { }
             ct.ThrowIfCancellationRequested();
             return ToolResult.Error($"Timed out after {timeout.TotalSeconds:0}s.\n{Snapshot()}");
         }
 
-        // Let the async readers drain.
-        process.WaitForExit();
-        var text = Snapshot();
-        if (text.Length >= MaxOutput) text += "\n[output truncated]";
-        return new ToolResult($"Exit code {process.ExitCode}\n{text}", IsError: process.ExitCode != 0);
+        // The rest of what it printed; a program it left running keeps the pipes, so not for long.
+        await Task.WhenAny(Task.WhenAll(stdoutClosed.Task, stderrClosed.Task), Task.Delay(TimeSpan.FromSeconds(2), ct)).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        return new ToolResult($"Exit code {process.ExitCode}\n{Snapshot()}", IsError: process.ExitCode != 0);
 
         string Snapshot()
         {
@@ -101,6 +109,51 @@ public sealed partial class ShellTool : Tool
                 FlushBinary();
                 return output.ToString();
             }
+        }
+    }
+
+    /// <summary>
+    /// A command's output as the model gets it: the beginning and the end of a long one (errors and
+    /// summaries come last; only the beginning was kept), with what was left out between them
+    /// counted, and very long lines cut in the middle (a minified file or a base64 dump came back
+    /// whole and filled the context). Holds no more than that, however much the command prints.
+    /// </summary>
+    internal sealed class OutputCapture(int max)
+    {
+        private const int MaxLine = 4_000;
+        private readonly int _headMax = max / 4, _tailMax = max - max / 4;
+        private readonly StringBuilder _head = new();
+        private readonly Queue<string> _tail = new();
+        private long _tailChars, _leftOutLines, _leftOutChars;
+
+        public void Add(string line)
+        {
+            if (line.Length > MaxLine)
+                line = line[..(MaxLine / 2)] + $" [... {line.Length - MaxLine:N0} characters of this line left out ...] " + line[^(MaxLine / 2)..];
+            if (_tail.Count == 0 && _head.Length + line.Length + 1 <= _headMax)
+            {
+                _head.Append(line).Append('\n');
+                return;
+            }
+            _tail.Enqueue(line);
+            _tailChars += line.Length + 1;
+            while (_tailChars > _tailMax && _tail.Count > 1)
+            {
+                var gone = _tail.Dequeue();
+                _tailChars -= gone.Length + 1;
+                _leftOutLines++;
+                _leftOutChars += gone.Length + 1;
+            }
+        }
+
+        public override string ToString()
+        {
+            var sb = new StringBuilder(_head.ToString());
+            if (_leftOutLines > 0)
+                sb.Append($"[... {_leftOutLines:N0} lines ({_leftOutChars:N0} characters) left out ...]\n");
+            foreach (var line in _tail)
+                sb.Append(line).Append('\n');
+            return sb.ToString();
         }
     }
 

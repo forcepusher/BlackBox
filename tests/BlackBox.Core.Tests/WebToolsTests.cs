@@ -11,6 +11,38 @@ public class WebToolsTests
         PageText.Extract(new HtmlParser().ParseDocument(html), keepNoscript).Text;
 
     [Fact]
+    public async Task A_page_read_again_later_is_fetched_again_and_reading_on_uses_the_copy()
+    {
+        // Kept for ever, a local server's page fetched again after a change came back as it had
+        // been the first time.
+        var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        probe.Start();
+        var port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        using var listener = new System.Net.HttpListener();
+        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        listener.Start();
+        var served = 0;
+        _ = Task.Run(async () =>
+        {
+            while (listener.IsListening)
+            {
+                var ctx = await listener.GetContextAsync();
+                var body = System.Text.Encoding.UTF8.GetBytes($"<html><body><h1>Status</h1><p>Build number {++served} is live. " + new string('x', 400) + "</p></body></html>");
+                ctx.Response.ContentType = "text/html; charset=utf-8";
+                await ctx.Response.OutputStream.WriteAsync(body);
+                ctx.Response.Close();
+            }
+        }, TestContext.Current.CancellationToken);
+        var url = $"http://127.0.0.1:{port}/status";
+
+        Assert.Contains("Build number 1", (await WebPage.ReadAsync(url, null, TestContext.Current.CancellationToken)).Text);
+        Assert.Contains("Build number 1", (await WebPage.ReadAsync(url, null, TestContext.Current.CancellationToken, TimeSpan.FromMinutes(15))).Text);
+        Assert.Contains("Build number 2", (await WebPage.ReadAsync(url, null, TestContext.Current.CancellationToken, TimeSpan.Zero)).Text);
+        listener.Stop();
+    }
+
+    [Fact]
     public void DuckDuckGo_results_are_read_and_ads_dropped()
     {
         const string html = """
@@ -39,6 +71,82 @@ public class WebToolsTests
               <div class="b_caption"><p class="b_lineclamp2">The snippet.</p></div></li></ol>
             """;
         Assert.Equal([new SearchHit("Example", "https://example.com/x", "The snippet.")], WebSearch.ParseBing(html));
+    }
+
+    [Fact]
+    public async Task A_page_that_takes_too_long_to_take_apart_is_given_up()
+    {
+        // AngleSharp took five minutes over a page nested 200,000 deep; the limit is 30 seconds, here a fraction of one.
+        var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        probe.Start();
+        var port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        using var listener = new System.Net.HttpListener();
+        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        listener.Start();
+        var body = System.Text.Encoding.UTF8.GetBytes("<html><body>" + string.Concat(Enumerable.Repeat("<div>", 60_000)) + "deep</body></html>");
+        _ = Task.Run(async () =>
+        {
+            while (listener.IsListening)
+            {
+                var ctx = await listener.GetContextAsync();
+                ctx.Response.ContentType = "text/html; charset=utf-8";
+                await ctx.Response.OutputStream.WriteAsync(body);
+                ctx.Response.Close();
+            }
+        }, TestContext.Current.CancellationToken);
+        var limit = WebPage.ParseLimit;
+        WebPage.ParseLimit = TimeSpan.FromMilliseconds(300);
+        try
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var failed = await Assert.ThrowsAsync<WebPageException>(() => WebPage.ReadAsync($"http://127.0.0.1:{port}/deep", null, TestContext.Current.CancellationToken));
+            Assert.Contains("could not be taken apart", failed.Message);
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), $"took {clock.Elapsed}");
+        }
+        finally
+        {
+            WebPage.ParseLimit = limit;
+            listener.Stop();
+        }
+    }
+
+    [Fact]
+    public void A_page_nested_thousands_deep_is_read_as_plain_text()
+    {
+        // The reading recursed once per level, and a page 2,000 elements deep overflowed the stack,
+        // which ends BlackBox on the spot.
+        var html = "<html><head><title>Deep</title></head><body><main><p>Above it all.</p>" + string.Concat(Enumerable.Repeat("<div>", 3000)) +
+                   "<h2>Down here</h2><p>the deep text</p>" + string.Concat(Enumerable.Repeat("</div>", 3000)) + "</main></body></html>";
+        var (title, text) = PageText.Extract(new HtmlParser().ParseDocument(html));
+        Assert.Equal("Deep", title);
+        Assert.Equal("Above it all.\nDown here\nthe deep text", text);
+    }
+
+    [Fact]
+    public async Task A_search_that_got_no_page_says_so_instead_of_no_results()
+    {
+        // A browser that gave back nothing, or Bing asking whether this is a person, came back as
+        // "No results", and the model wrote its query again and again.
+        Assert.Null(WebSearch.NotBingResults("""<html><body><ol id="b_results"><li class="b_no"><h1>There are no results</h1></li></ol></body></html>"""));
+        Assert.Equal("a page titled \"Verify you are human\"", WebSearch.NotBingResults("<html><head><title>Verify   you are human</title></head><body><form></form></body></html>"));
+        Assert.Equal("an empty page", WebSearch.NotBingResults("<html><head></head><body></body></html>"));
+#if WINDOWS
+        var dir = Directory.CreateTempSubdirectory("bb-browser-").FullName;
+        try
+        {
+            // A browser that quits at once, as Edge does on a profile another one holds.
+            var fake = Path.Combine(dir, "browser.cmd");
+            await File.WriteAllTextAsync(fake, "@echo off\r\necho [1017/103000.123:ERROR:process_singleton_win.cc] The profile appears to be in use 1>&2\r\nexit /b 21\r\n", TestContext.Current.CancellationToken);
+            var browser = new HeadlessBrowser(fake, Path.Combine(dir, "profile"));
+            var failed = await Assert.ThrowsAsync<WebPageException>(() => browser.GetDomAsync(new Uri("https://www.bing.com/search?q=unity"), false, TestContext.Current.CancellationToken));
+            Assert.Contains("gave back no page (exit code 21; it said: [1017/103000.123:ERROR:process_singleton_win.cc] The profile appears to be in use)", failed.Message);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
+        }
+#endif
     }
 
     [Fact]

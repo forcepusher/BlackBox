@@ -36,15 +36,19 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
     [ObservableProperty]
     private string _details = "";
 
+    // Both off the UI thread: Windows' opening of a file on a share that is off waits for the share.
     [RelayCommand]
-    private void Open()
+    private void Open() => Task.Run(() =>
     {
         try { Process.Start(new ProcessStartInfo(Path) { UseShellExecute = true })?.Dispose(); }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { Details = "Nothing on this PC opens it."; }
-    }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            Dispatcher.UIThread.Post(() => Details = "Nothing on this PC opens it.");
+        }
+    });
 
     [RelayCommand]
-    private void ShowInFolder()
+    private void ShowInFolder() => Task.Run(() =>
     {
         try
         {
@@ -54,9 +58,30 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
                 Process.Start(new ProcessStartInfo(System.IO.Path.GetDirectoryName(Path)!) { UseShellExecute = true })?.Dispose();
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
+    });
+
+    /// <summary>Set once the preview has left the chat: what a load still under way brings then is let go at once.</summary>
+    protected bool Disposed { get; private set; }
+
+    public void Dispose()
+    {
+        Disposed = true;
+        Release();
     }
 
-    public virtual void Dispose() { }
+    /// <summary>Lets go of what the preview holds (decoded pictures, a player).</summary>
+    protected virtual void Release() { }
+
+    /// <summary>
+    /// Runs <paramref name="show"/> on the UI thread, unless the preview has left the chat by then:
+    /// then <paramref name="drop"/> lets go of what was loaded for it. A chat left while a GIF
+    /// loaded kept its frames, and their timer went on turning them for as long as BlackBox ran.
+    /// </summary>
+    protected void Show(Action show, Action? drop = null) => Dispatcher.UIThread.Post(() =>
+    {
+        if (Disposed) drop?.Invoke();
+        else show();
+    });
 
     /// <summary>The preview that suits a file, by its kind; it reads the file in the background.</summary>
     public static FilePreview For(string path, PreviewServices services)
@@ -93,7 +118,9 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Dispatcher.UIThread.Post(() => Details = File.Exists(Path) ? $"Can't be shown: {ex.Message}" : "The file is no longer there.");
+            // Looked at here, not on the UI thread: a share that just went away is the usual cause.
+            var details = File.Exists(Path) ? $"Can't be shown: {ex.Message}" : "The file is no longer there.";
+            Dispatcher.UIThread.Post(() => Details = details);
         }
     });
 
@@ -120,10 +147,10 @@ public sealed partial class ImagePreview(string path) : FilePreview(path)
         var size = Size(Path);
         using var probe = SKCodec.Create(Path);
         var details = probe is null ? size : $"{probe.Info.Width}x{probe.Info.Height}, {size}";
-        Dispatcher.UIThread.Post(() => (Image, Details) = (bitmap, details));
+        Show(() => (Image, Details) = (bitmap, details), bitmap.Dispose);
     });
 
-    public override void Dispose()
+    protected override void Release()
     {
         Image?.Dispose();
         Image = null;
@@ -159,7 +186,7 @@ public sealed partial class AnimationPreview(string path) : FilePreview(path)
             frames.Add((ToBitmap(small), ms));
         }
         var details = codec.FrameCount > 1 ? $"{codec.Info.Width}x{codec.Info.Height}, {codec.FrameCount} frames ({total / 1000.0:0.0} s), {Size(Path)}" : Size(Path);
-        Dispatcher.UIThread.Post(() =>
+        Show(() =>
         {
             _frames.AddRange(frames);
             Details = details;
@@ -169,6 +196,9 @@ public sealed partial class AnimationPreview(string path) : FilePreview(path)
                 _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(_frames[0].Ms), DispatcherPriority.Background, (_, _) => Advance());
                 _timer.Start();
             }
+        }, () =>
+        {
+            foreach (var (frame, _) in frames) frame.Dispose();
         });
     });
 
@@ -179,7 +209,7 @@ public sealed partial class AnimationPreview(string path) : FilePreview(path)
         _timer!.Interval = TimeSpan.FromMilliseconds(_frames[_at].Ms);
     }
 
-    public override void Dispose()
+    protected override void Release()
     {
         _timer?.Stop();
         Image = null;
@@ -191,7 +221,11 @@ public sealed partial class AnimationPreview(string path) : FilePreview(path)
 /// <summary>A file with nothing to show inside the chat: its name and size, to open or find.</summary>
 public sealed class FileCardPreview(string path) : FilePreview(path)
 {
-    protected override void Load() => Details = File.Exists(Path) ? Size(Path) : "The file is no longer there.";
+    protected override void Load() => Background(() =>
+    {
+        var details = File.Exists(Path) ? Size(Path) : "The file is no longer there.";
+        Show(() => Details = details);
+    });
 }
 
 /// <summary>A 3D model, turned around with the mouse (see <see cref="Views.ModelViewer"/>).</summary>
@@ -204,10 +238,10 @@ public sealed partial class ModelPreview(string path) : FilePreview(path)
     {
         var mesh = Mesh.Load(Path);
         var details = mesh.Describe().Replace("3D model: ", "") + ", " + Size(Path);
-        Dispatcher.UIThread.Post(() => (Mesh, Details) = (mesh, details));
+        Show(() => (Mesh, Details) = (mesh, details), mesh.Dispose);
     });
 
-    public override void Dispose()
+    protected override void Release()
     {
         Mesh?.Dispose();
         Mesh = null;
@@ -237,9 +271,21 @@ internal sealed class Playback : IDisposable
                 if (services.Decoder?.OpenAudio(path) is { } sound)
                 {
                     sound.Seek(from);
-                    _output = services.NewAudioOutput();
-                    if (_output is null) sound.Dispose();
-                    else _output.Play(sound);
+                    var output = _stop.IsCancellationRequested ? null : services.NewAudioOutput();
+                    if (output is null)
+                        sound.Dispose();
+                    else
+                        try
+                        {
+                            output.Play(sound); // the output has the sound from here on
+                            _output = output;
+                        }
+                        catch (Exception ex) when (ex is not OutOfMemoryException)
+                        {
+                            // No speakers to open (a remote session without sound, a headset just
+                            // unplugged): the video didn't play at all; its frames go by the clock now.
+                            output.Dispose();
+                        }
                 }
                 var clock = Stopwatch.StartNew();
                 TimeSpan Now() => _output is { } o ? o.Played : clock.Elapsed;
@@ -284,6 +330,13 @@ internal sealed class Playback : IDisposable
                 reader?.Dispose();
                 if (!_stop.IsCancellationRequested)
                     onEnded();
+                else
+                {
+                    // Stopped: here too, as Dispose may have given up waiting before the sound was
+                    // open (ffmpeg starting, a file on a share), and the sound then played to its
+                    // end with nothing to stop it.
+                    Interlocked.Exchange(ref _output, null)?.Dispose();
+                }
             }
         });
     }
@@ -291,10 +344,13 @@ internal sealed class Playback : IDisposable
     public void Dispose()
     {
         _stop.Cancel();
-        try { _task.Wait(2000); }
+        try
+        {
+            if (!_task.Wait(2000))
+                return; // the task lets go of the sound when it ends
+        }
         catch (AggregateException) { }
-        _output?.Dispose();
-        _output = null;
+        Interlocked.Exchange(ref _output, null)?.Dispose();
     }
 }
 
@@ -306,7 +362,7 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
     private bool _reporting;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PlayGlyph), nameof(PlayIcon))]
+    [NotifyPropertyChangedFor(nameof(PlayIcon))]
     private bool _isPlaying;
 
     private static readonly Avalonia.Media.Geometry PlayShape = Avalonia.Media.StreamGeometry.Parse("M8 5v14l11-7z");
@@ -323,20 +379,28 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
     [NotifyPropertyChangedFor(nameof(TimeText))]
     private double _position;
 
-    /// <summary>The path of the button's icon: в–¶ or вќљвќљ.</summary>
-    public string PlayGlyph => IsPlaying ? "M6 4h4v16H6zM14 4h4v16h-4z" : "M8 5v14l11-7z";
-
     public string TimeText => $"{Clock(TimeSpan.FromSeconds(Position))} / {Clock(TimeSpan.FromSeconds(Length))}";
+
+    private int _seek;
 
     /// <summary>The slider moved: by the user (go there) or by the playback reporting (nothing to do).</summary>
     partial void OnPositionChanged(double value)
     {
         if (_reporting)
             return;
-        if (IsPlaying)
-            Start(TimeSpan.FromSeconds(value));
-        else
+        if (!IsPlaying)
+        {
             ShowStill(TimeSpan.FromSeconds(value));
+            return;
+        }
+        // Once the slider rests, not at every step of a drag: each start opens the file afresh
+        // (ffmpeg twice), and the window stuttered through the drag.
+        var seek = ++_seek;
+        DispatcherTimer.RunOnce(() =>
+        {
+            if (seek == _seek && IsPlaying)
+                Start(TimeSpan.FromSeconds(Position));
+        }, TimeSpan.FromMilliseconds(150));
     }
 
     [RelayCommand]
@@ -352,7 +416,7 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
 
     private void Start(TimeSpan from)
     {
-        _playback?.Dispose();
+        End(_playback);
         IsPlaying = true;
         _playback = new Playback(Path, Services, from, HasVideo, HasVideo ? ShowFrame : null,
             at => Dispatcher.UIThread.Post(() => Report(at.TotalSeconds)),
@@ -365,9 +429,19 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
 
     public void Stop()
     {
-        _playback?.Dispose();
+        End(_playback);
         _playback = null;
         IsPlaying = false;
+    }
+
+    /// <summary>
+    /// Ends a playback off the UI thread: it waits up to two seconds for its thread, and its
+    /// speakers' for as long again, which held the window still at every pause or new position.
+    /// </summary>
+    private static void End(Playback? playback)
+    {
+        if (playback is not null)
+            _ = Task.Run(playback.Dispose);
     }
 
     private void Report(double seconds)
@@ -385,7 +459,7 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
     /// <summary>Shows the still at a point when the slider is moved while paused.</summary>
     protected virtual void ShowStill(TimeSpan at) { }
 
-    public override void Dispose() => Stop();
+    protected override void Release() => Stop();
 }
 
 /// <summary>A video: its first frame, then playing in place with its sound.</summary>
@@ -393,9 +467,9 @@ public sealed partial class VideoPreview(string path, PreviewServices services) 
 {
     private int _stillRequest;
 
-    public override void Dispose()
+    protected override void Release()
     {
-        base.Dispose();
+        base.Release();
         Frame?.Dispose();
         Frame = null;
     }
@@ -418,7 +492,7 @@ public sealed partial class VideoPreview(string path, PreviewServices services) 
         var first = reader?.Next();
         var details = $"{info.Width}x{info.Height}, {info.Duration.TotalSeconds:0.0} s" + (info.FrameRate > 0 ? $" at {info.FrameRate:0.##} fps" : "") +
                       (info.HasAudio ? ", with sound" : ", no sound") + ", " + Size(Path);
-        Dispatcher.UIThread.Post(() =>
+        Show(() =>
         {
             Details = details;
             Length = Math.Max(0.1, info.Duration.TotalSeconds);
@@ -427,7 +501,7 @@ public sealed partial class VideoPreview(string path, PreviewServices services) 
         });
     });
 
-    protected override void ShowFrame(RawImage frame) => Dispatcher.UIThread.Post(() => ShowFrameNow(frame));
+    protected override void ShowFrame(RawImage frame) => Show(() => ShowFrameNow(frame));
 
     /// <summary>A bitmap of its own for each frame (the Image redraws when its source changes); the one before is let go.</summary>
     private void ShowFrameNow(RawImage frame)
@@ -457,7 +531,7 @@ public sealed partial class VideoPreview(string path, PreviewServices services) 
             if (reader is null) return;
             reader.Seek(at);
             if (reader.Next() is { } f && request == _stillRequest)
-                Dispatcher.UIThread.Post(() => ShowFrameNow(f.Frame));
+                Show(() => ShowFrameNow(f.Frame));
         });
     }
 }
@@ -484,7 +558,7 @@ public sealed partial class AudioPreview(string path, PreviewServices services) 
         var bitmap = ToBitmap(wave);
         var channels = reader.Channels == 1 ? "mono" : reader.Channels == 2 ? "stereo" : $"{reader.Channels} channels";
         var details = $"{seconds:0.0} s, {rate / 1000.0:0.#} kHz {channels}, {Size(Path)}";
-        Dispatcher.UIThread.Post(() => (Waveform, Details, Length) = (bitmap, details, Math.Max(0.1, seconds)));
+        Show(() => (Waveform, Details, Length) = (bitmap, details, Math.Max(0.1, seconds)), bitmap.Dispose);
     });
 
     private static SKBitmap DrawWaveform(float[] mono)
@@ -511,9 +585,9 @@ public sealed partial class AudioPreview(string path, PreviewServices services) 
         return bitmap;
     }
 
-    public override void Dispose()
+    protected override void Release()
     {
-        base.Dispose();
+        base.Release();
         Waveform?.Dispose();
         Waveform = null;
     }

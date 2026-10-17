@@ -38,9 +38,26 @@ public sealed class WindowsPlatform : IPlatformServices
         var script = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $ProgressPreference = 'SilentlyContinue'; " +
                      "Remove-Item Alias:curl -Force -ErrorAction SilentlyContinue\n" + command;
         var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
-        return new ProcessStartInfo("powershell.exe")
+        var psi = new ProcessStartInfo("powershell.exe") { ArgumentList = { "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass" } };
+        if (encoded.Length <= MaxEncodedCommand)
         {
-            ArgumentList = { "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded },
-        };
+            psi.ArgumentList.Add("-EncodedCommand");
+            psi.ArgumentList.Add(encoded);
+            return psi;
+        }
+        // Windows starts nothing with a command line over 32,767 characters, which a command of
+        // about 12,000 is once encoded: a long script the model wrote failed with "The filename or
+        // extension is too long". Such a one runs from a file, which deletes itself once read, with
+        // a BOM (Windows PowerShell reads a .ps1 without one in the ANSI code page), and ends with
+        // the exit code -Command would give: 1 when its last command failed.
+        var file = Path.Combine(Path.GetTempPath(), $"blackbox-command-{Guid.NewGuid():N}.ps1");
+        File.WriteAllText(file, "Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue\n" + script + "\nif (-not $?) { exit 1 }\n",
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        psi.ArgumentList.Add("-File");
+        psi.ArgumentList.Add(file);
+        return psi;
     }
+
+    /// <summary>What fits on a command line with powershell.exe and its other arguments.</summary>
+    private const int MaxEncodedCommand = 32_000;
 }

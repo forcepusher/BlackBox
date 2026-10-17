@@ -25,8 +25,23 @@ internal static class Picture
     public static Shown? Load(string path)
     {
         using var original = SKBitmap.Decode(path);
-        if (original is null)
+        return original is null ? null : Show(original);
+    }
+
+    /// <summary>A picture's bytes (an MCP server's image) scaled for the model; null when they aren't a picture this can read.</summary>
+    public static Shown? Load(byte[] data)
+    {
+        // Through a codec: SKBitmap.Decode of bytes that are no picture throws rather than say null.
+        using var bytes = SKData.CreateCopy(data);
+        using var codec = SKCodec.Create(bytes);
+        if (codec is null)
             return null;
+        using var original = SKBitmap.Decode(codec);
+        return original is null ? null : Show(original);
+    }
+
+    private static Shown Show(SKBitmap original)
+    {
         var scale = Math.Min(1.0, Math.Min((double)MaxSide / Math.Max(original.Width, original.Height),
                                            Math.Sqrt((double)MaxPixels / ((long)original.Width * original.Height))));
         var width = Snap(original.Width * scale);

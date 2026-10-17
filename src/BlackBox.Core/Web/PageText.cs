@@ -37,6 +37,11 @@ public static partial class PageText
         var title = Collapse(doc.Title ?? "");
         if (doc.Body is not { } body)
             return (title, "");
+        // The reading below recurses, as AngleSharp's own TextContent does, and a stack overflow
+        // ends BlackBox on the spot: a page nested 2,000 elements deep did. Nested deeper than
+        // browsers nest (they stop at 512), a page is read as plain text.
+        if (Deeper(body, MaxDepth))
+            return (title, FlatText(body));
 
         foreach (var e in body.QuerySelectorAll(keepNoscript ? NoiseSelector.Replace("noscript, ", "") : NoiseSelector).ToList())
             e.Remove();
@@ -170,6 +175,51 @@ public static partial class PageText
     }
 
     internal static string Collapse(string s) => string.Join(' ', s.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    private const int MaxDepth = 512;
+
+    /// <summary>Whether elements are nested more than <paramref name="limit"/> deep under <paramref name="root"/>, found without recursing.</summary>
+    private static bool Deeper(IElement root, int limit)
+    {
+        var stack = new Stack<(IElement Element, int Depth)>();
+        stack.Push((root, 0));
+        while (stack.Count > 0)
+        {
+            var (e, depth) = stack.Pop();
+            if (depth > limit)
+                return true;
+            foreach (var child in e.Children)
+                stack.Push((child, depth + 1));
+        }
+        return false;
+    }
+
+    /// <summary>The text of everything under <paramref name="root"/>, a line per block, without recursing (see <see cref="Deeper"/>).</summary>
+    private static string FlatText(IElement root)
+    {
+        var sb = new StringBuilder();
+        var stack = new Stack<INode>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            if (node is IText t)
+            {
+                sb.Append(t.Data);
+                continue;
+            }
+            if (node is IElement e)
+            {
+                if (e.LocalName is "script" or "style" or "noscript" or "template" or "svg" or "head")
+                    continue;
+                if (e.LocalName is "br" or "li" or "tr" or "h1" or "h2" or "h3" or "h4" or "h5" or "h6" or "pre" or "blockquote" || TextWriter.IsBlock(e.LocalName))
+                    sb.Append('\n');
+            }
+            for (var child = node.LastChild; child is not null; child = child.PreviousSibling)
+                stack.Push(child);
+        }
+        return string.Join('\n', sb.ToString().Split('\n').Select(Collapse).Where(line => line.Length > 0));
+    }
 
     /// <summary>Writes the DOM as text, collapsing whitespace like a browser does except inside &lt;pre&gt;.</summary>
     private sealed class TextWriter
@@ -354,7 +404,7 @@ public static partial class PageText
             return start + i;
         }
 
-        private static bool IsBlock(string tag) => tag is
+        internal static bool IsBlock(string tag) => tag is
             "p" or "div" or "section" or "article" or "main" or "header" or "footer" or "aside" or "nav" or
             "form" or "fieldset" or "figure" or "figcaption" or "details" or "summary" or "address" or
             "dl" or "center" or "caption";

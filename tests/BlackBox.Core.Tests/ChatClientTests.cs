@@ -82,6 +82,38 @@ public class ChatClientTests
         Assert.Null(limited.RetryAfter); // Kilo doesn't say how long
     }
 
+    [Theory]
+    [InlineData("image input is not supported - hint: if this is unexpected, you may need to provide the mmproj", true)] // llama-server
+    [InlineData("No endpoints found that support image input", true)]                                                   // OpenRouter
+    [InlineData("Invalid content type. image_url is only supported by certain models.", true)]                          // OpenAI
+    [InlineData("Qwen3-32B is not a multimodal model", true)]                                                           // vLLM
+    [InlineData("Model does not support images. Please use a model that does.", true)]                                  // LM Studio
+    [InlineData("Failed to deserialize the JSON body: unknown variant `image_url`, expected `text`", true)]               // DeepSeek
+    [InlineData("Invalid tool schema", false)]
+    [InlineData("The image is 21 MB; the most is 20 MB.", false)]
+    [InlineData("registry.ollama.ai/library/llama3.2-vision:latest does not support tools", false)]                    // a model's name
+    [InlineData("No endpoints found for meta-llama/llama-3.2-11b-vision-instruct.", false)]
+    [InlineData("Images are scaled to 1 MP. " + "Some long explanation of the limits that has nothing to do with it at all; " + "tools are not supported", false)]
+    public void Errors_saying_the_model_takes_no_pictures_are_told_apart(string error, bool refused) =>
+        Assert.Equal(refused, OpenAiChatClient.LooksLikeImagesRefused(error));
+
+    [Fact]
+    public async Task A_server_refusing_pictures_says_so_rather_than_being_asked_again()
+    {
+        // llama-server without its projector answers 500, which was sent again twelve times as a dropped connection.
+        var server = new ScriptedServer();
+        server.Failures.Enqueue((System.Net.HttpStatusCode.InternalServerError, """{"error":{"code":500,"message":"image input is not supported - hint: if this is unexpected, you may need to provide the mmproj","type":"server_error"}}"""));
+        server.Failures.Enqueue((System.Net.HttpStatusCode.BadRequest, """{"error":{"message":"image input is not supported"}}"""));
+        var client = new OpenAiChatClient(new HttpClient(server), "http://test", null);
+        var picture = new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText("Screenshot after the last action:"), ContentPart.FromImage([1, 2, 3], "image/jpeg")] };
+
+        var refused = await Assert.ThrowsAsync<ImagesRefusedException>(() => client.CompleteAsync([ChatMessage.User("hi"), picture], [], new ChatRequestOptions(), null, CancellationToken.None));
+        Assert.Contains("you may need to provide the mmproj", refused.Message);
+        // Without a picture in the request, the same words are some other trouble.
+        var other = await Assert.ThrowsAsync<LlmException>(() => client.CompleteAsync([ChatMessage.User("hi")], [], new ChatRequestOptions(), null, CancellationToken.None));
+        Assert.IsNotType<ImagesRefusedException>(other);
+    }
+
     [Fact]
     public void A_429_says_how_long_to_wait_however_the_server_puts_it()
     {
@@ -285,6 +317,19 @@ public class ChatClientTests
     }
 
     [Fact]
+    public void A_repair_leaves_the_text_inside_values_alone()
+    {
+        // A file's None became null and its Markdown fences went, whenever its call needed a repair
+        // (here: one closing brace too many).
+        const string content = "def f(flag=True):\n    return None\n\n```python\nprint(f())\n```";
+        var raw = new JsonObject { ["path"] = "notes.md", ["content"] = content, ["append"] = false }.ToJsonString().Replace("false", "False") + "}";
+        var args = ToolCallRepair.ParseArguments(raw);
+        Assert.Equal(content, args["content"]!.GetValue<string>());
+        Assert.False(args["append"]!.GetValue<bool>());
+        Assert.Equal(content, ToolCallRepair.ParseArguments("```json\n" + raw + "\n```")["content"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void Coordinates_and_aliases_are_normalized()
     {
         var click = ToolCallRepair.NormalizeArguments(ToolCallRepair.ParseArguments("""{"coordinate": [5, 6]}"""), Registry.Find("mouse_click")!);
@@ -379,12 +424,22 @@ public class ContextDetectionTests
 
         routes["/api/ps"] = """{"models":[{"name":"m","model":"m","context_length":8192}]}""";
         Assert.Equal(8192, (await Probe(routes)).Context);
+        Assert.Null((await Probe(routes)).Vision); // an older Ollama doesn't say what it takes
+
+        // Whether it takes images, so a model that doesn't gets no screenshots.
+        routes["/api/show"] = """{"parameters":"num_ctx 16384","capabilities":["completion","tools"]}""";
+        Assert.Equal((8192, false), ((await Probe(routes)).Context, (await Probe(routes)).Vision));
+        routes["/api/show"] = """{"capabilities":["completion","vision","tools"]}""";
+        Assert.True((await Probe(routes)).Vision);
     }
 
     [Fact]
     public async Task llama_cpp_and_vLLM_report_their_context()
     {
         Assert.Equal(4096, (await Probe(new() { ["/props"] = """{"default_generation_settings":{"n_ctx":4096}}""" })).Context);
+        // llama-server started without a vision projector says so.
+        Assert.False((await Probe(new() { ["/props"] = """{"default_generation_settings":{"n_ctx":4096},"modalities":{"vision":false,"audio":false}}""" })).Vision);
+        Assert.True((await Probe(new() { ["/props"] = """{"default_generation_settings":{"n_ctx":4096},"modalities":{"vision":true,"audio":false}}""" })).Vision);
         Assert.Equal(32768, (await Probe(new() { ["/v1/models"] = """{"data":[{"id":"m","max_model_len":32768}]}""" })).Context);
         Assert.Null((await Probe([])).Context); // nothing answers: the caller assumes 100k
     }

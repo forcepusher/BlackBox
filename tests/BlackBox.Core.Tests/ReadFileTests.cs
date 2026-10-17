@@ -23,6 +23,23 @@ public class ReadFileTests : IDisposable
     private Task<ToolResult> Read(string file, ToolContext? ctx = null, int? offset = null) =>
         new ReadFileTool().ExecuteAsync(offset is { } o ? new JsonObject { ["path"] = file, ["offset"] = o } : new JsonObject { ["path"] = file }, ctx ?? Ctx(), CancellationToken.None);
 
+    [Theory]
+    [InlineData(1200, "\"$\"#,##0.00", "$1,200.00")]
+    [InlineData(-1200.5, "\"$\"#,##0.00_);[Red](\"$\"#,##0.00)", "-$1,200.50")] // Excel's own currency format
+    [InlineData(1200, "#,##0.00 \"€\"", "1,200.00 €")]
+    [InlineData(1200, "#,##0", "1,200")]
+    [InlineData(0.285, "0.0%", "28.5%")]
+    [InlineData(46327, "m/d/yyyy", "2026-11-01")]
+    [InlineData(0.5, "h:mm", null)] // a time stays the number it is
+    [InlineData(1200, null, null)]
+    public void Workbook_numbers_read_as_excel_shows_them(double value, string? format, string? shown)
+    {
+        Assert.Equal(shown, DocumentText.Formatted(value, format));
+        // edit_file reads them back as the same number.
+        if (shown is not null)
+            Assert.Equal(value, (double)BlackBox.Core.Documents.XlsxWriter.Value(shown).Value, 6);
+    }
+
     [Fact]
     public async Task A_picture_is_shown_to_the_model_scaled_and_on_white()
     {
@@ -67,6 +84,40 @@ public class ReadFileTests : IDisposable
         Assert.Contains("--- page 2 of 2 ---", result.Text);
         Assert.Contains("Airport September 37,450", result.Text);
         Assert.Matches(@"\d+\tBoard meets on 12 November", result.Text); // numbered lines, as for text files
+    }
+
+    [Fact]
+    public async Task A_file_of_one_huge_line_comes_back_cut_and_lines_keep_to_the_limit()
+    {
+        // A minified file's single line went in whole: megabytes in one tool result.
+        File.WriteAllText(Path.Combine(_dir, "bundle.min.js"), "var a=1;" + new string('x', 3_000_000) + "\r\nconsole.log(a);\n");
+        var result = await Read("bundle.min.js");
+        Assert.False(result.IsError, result.Text);
+        Assert.True(result.Text.Length < 70_000, $"{result.Text.Length:N0} characters");
+        Assert.StartsWith("1\tvar a=1;xxx", result.Text);
+        Assert.Contains("[... 2,980,008 more characters of this line left out", result.Text);
+        Assert.Contains("2\tconsole.log(a);", result.Text);
+
+        // Lines of 15,000 characters: as many as fit in 60,000, then where to go on.
+        File.WriteAllText(Path.Combine(_dir, "wide.txt"), string.Join("\n", Enumerable.Range(1, 10).Select(i => new string((char)('a' + i), 15_000))));
+        var wide = await Read("wide.txt");
+        Assert.True(wide.Text.Length <= 61_000, $"{wide.Text.Length:N0} characters");
+        Assert.Contains("[showing lines 1-3 of 10; use offset to read more]", wide.Text);
+    }
+
+    [Fact]
+    public void Reading_a_document_ends_when_the_user_stops()
+    {
+        // A PDF of a thousand pages takes minutes to read, and Stop waited for its last page.
+        var builder = new PdfDocumentBuilder();
+        var font = builder.AddStandard14Font(Standard14Font.Helvetica);
+        for (var i = 1; i <= 3; i++)
+            builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4).AddText($"Page {i}", 12, new UglyToad.PdfPig.Core.PdfPoint(50, 750), font);
+        File.WriteAllBytes(Path.Combine(_dir, "long.pdf"), builder.Build());
+        using var stopped = new CancellationTokenSource();
+        stopped.Cancel();
+        Assert.ThrowsAny<OperationCanceledException>(() => DocumentText.Read(Path.Combine(_dir, "long.pdf"), stopped.Token));
+        Assert.Contains("Page 3", DocumentText.Read(Path.Combine(_dir, "long.pdf"), TestContext.Current.CancellationToken));
     }
 
     [Fact]

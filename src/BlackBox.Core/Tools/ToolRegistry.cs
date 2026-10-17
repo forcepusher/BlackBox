@@ -56,11 +56,20 @@ public sealed class ToolRegistry
             _tools[t.Name] = t;
     }
 
-    /// <summary>The tools of an MCP server that was removed.</summary>
-    public void RemoveServer(string serverName)
+    /// <summary>The tools of an MCP server that was removed; false when it had none here.</summary>
+    /// <remarks>
+    /// The rest are put back in order: tools added later would take the removed ones' places, and
+    /// the list then differed from the next message's, which the server read whole once more.
+    /// </remarks>
+    public bool RemoveServer(string serverName)
     {
-        foreach (var name in _tools.Values.OfType<Mcp.McpTool>().Where(t => t.ServerName.Equals(serverName, StringComparison.OrdinalIgnoreCase)).Select(t => t.Name).ToList())
-            _tools.Remove(name);
+        var kept = _tools.Values.Where(t => t is not Mcp.McpTool m || !m.ServerName.Equals(serverName, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (kept.Count == _tools.Count)
+            return false;
+        _tools.Clear();
+        foreach (var t in kept)
+            _tools[t.Name] = t;
+        return true;
     }
 
     public Tool? Find(string name) => _tools.GetValueOrDefault(name);

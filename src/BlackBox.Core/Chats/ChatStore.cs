@@ -75,7 +75,8 @@ public sealed class ChatStore(string dir)
 {
     public string Folder { get; } = dir;
 
-    public static string NewId() => DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..6];
+    // Invariant: a Thai Windows wrote the Buddhist year (25691017-…) and a Saudi one the Hijri date.
+    public static string NewId() => DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture) + "-" + Guid.NewGuid().ToString("N")[..6];
 
     /// <summary>The first line of the first message, cut to fit the dropdown.</summary>
     public static string TitleFrom(string firstMessage)
@@ -175,6 +176,80 @@ public sealed class ChatStore(string dir)
         }).ToList();
         AgentSession.RepairDanglingToolCalls(copy);
         return copy;
+    }
+}
+
+/// <summary>
+/// Writes chats in the background, one at a time, the newest version of each: a long run's chat is
+/// megabytes, and turning it into JSON and onto the disk at every step held the window still.
+/// What is handed over must not change afterwards (the window hands over copies).
+/// </summary>
+public sealed class ChatSaver(ChatStore store)
+{
+    private readonly Lock _gate = new();
+    private readonly Dictionary<string, SavedChat> _pending = [];
+    private bool _writing;
+    private Task _writer = Task.CompletedTask;
+
+    /// <summary>Writes the chat soon; a version still waiting for the same chat is replaced by it.</summary>
+    public void Save(SavedChat chat)
+    {
+        lock (_gate)
+        {
+            _pending[chat.Id] = chat;
+            if (_writing)
+                return;
+            _writing = true;
+            _writer = Task.Run(WriteAll);
+        }
+    }
+
+    /// <summary>Drops a version of the chat still waiting to be written (it is being deleted).</summary>
+    public void Forget(string id)
+    {
+        lock (_gate)
+            _pending.Remove(id);
+    }
+
+    /// <summary>Waits until what was handed over is on the disk, for up to <paramref name="timeout"/>; false when it isn't yet.</summary>
+    public bool Flush(TimeSpan timeout)
+    {
+        var until = DateTime.UtcNow + timeout;
+        while (true)
+        {
+            Task writer;
+            lock (_gate)
+            {
+                if (!_writing)
+                    return true;
+                writer = _writer;
+            }
+            var left = until - DateTime.UtcNow;
+            if (left <= TimeSpan.Zero || !writer.Wait(left))
+                return false;
+        }
+    }
+
+    private void WriteAll()
+    {
+        while (true)
+        {
+            SavedChat chat;
+            lock (_gate)
+            {
+                if (_pending.Count == 0)
+                {
+                    _writing = false;
+                    return;
+                }
+                var (id, next) = _pending.First();
+                _pending.Remove(id);
+                chat = next;
+            }
+            // A full or read-only disk: the chat goes on, unsaved. Whatever fails, the next ones are still written.
+            try { store.Save(chat); }
+            catch (Exception ex) when (ex is not OutOfMemoryException) { }
+        }
     }
 }
 

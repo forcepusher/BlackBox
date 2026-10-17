@@ -141,7 +141,45 @@ public class ChatStoreTests : IDisposable
 
         await release;
         Assert.Equal("Second", store.Load("c")!.Title);
-        Assert.False(File.Exists(Path.Combine(_dir, "c.json.tmp")));
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+    }
+
+    [Fact]
+    public async Task Two_saves_of_one_file_at_once_both_get_through_whole()
+    {
+        // The agent (mcp_servers) and the Settings dialog can write mcp.json at the same moment;
+        // sharing one temporary file, one write could throw or the other's be lost.
+        var path = Path.Combine(_dir, "mcp.json");
+        var texts = Enumerable.Range(0, 8).Select(i => new string((char)('a' + i), 50_000)).ToList();
+
+        await Task.WhenAll(texts.Select(t => Task.Run(() => BlackBox.Core.Settings.AtomicFile.Write(path, t), TestContext.Current.CancellationToken)));
+
+        Assert.Contains(File.ReadAllText(path), texts);
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+    }
+
+    [Fact]
+    public void Chats_written_in_the_background_end_as_their_last_version()
+    {
+        // At every step a long run's chat, megabytes, went onto the disk on the window's thread.
+        var store = new ChatStore(_dir);
+        var saver = new ChatSaver(store);
+        for (var i = 1; i <= 50; i++)
+        {
+            saver.Save(new SavedChat { Id = "a", Title = $"A {i}", Entries = [new ChatEntry { Text = new string('x', 100_000) }] });
+            saver.Save(new SavedChat { Id = "b", Title = $"B {i}" });
+        }
+        Assert.True(saver.Flush(TimeSpan.FromSeconds(30)));
+        Assert.Equal("A 50", store.Load("a")!.Title);
+        Assert.Equal("B 50", store.Load("b")!.Title);
+        Assert.True(saver.Flush(TimeSpan.Zero)); // nothing left to write
+
+        // A chat being deleted isn't written again after it is gone.
+        saver.Forget("a");
+        store.Delete("a");
+        Assert.True(saver.Flush(TimeSpan.FromSeconds(5)));
+        Assert.Null(store.Load("a"));
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
     }
 
     [Theory]

@@ -171,6 +171,14 @@ public static partial class MarkdownLite
             ? cells[separator].Select(c => c.EndsWith(':') ? (c.StartsWith(':') ? 0 : 1) : -1).ToList()
             : [];
         var body = cells.Where((_, i) => i != separator).ToList();
+        if (body.Count == 0)
+        {
+            // Nothing but a |---| line: a scale drawn in text, or a table whose first line is still
+            // streaming in. It shows as written; measuring a table of no rows threw.
+            foreach (var row in rows)
+                yield return Inline(row, MdStyle.Code);
+            yield break;
+        }
         var header = separator > 0 ? 1 : 0;
         var parsed = body.Select(r => r.Select(c => Inline(c, MdStyle.Code)).ToList()).ToList();
         var columns = parsed.Max(r => r.Count);

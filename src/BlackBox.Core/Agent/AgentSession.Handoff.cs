@@ -84,8 +84,14 @@ public sealed partial class AgentSession
         if (note.Length == 0)
             note = FallbackNote();
 
-        var userMessages = History.Where(m => m.FromUser).ToList();
-        var screen = History.LastOrDefault(m => m.Parts?.Any(p => p.IsImage) == true)?.Parts?.LastOrDefault(p => p.IsImage);
+        // The user's messages, and where they stopped a task: without it the model took up a task
+        // the user had stopped again after the reset, from its own note's "not done yet".
+        var userMessages = History.Where(m => m.FromUser || m.Content == StoppedNote).ToList();
+        // The last screenshot, not the last picture: a picture the user attached (kept with their
+        // message anyway), one read_file opened or a ComfyUI job's result was put after the note
+        // as "The screen right now:". The screen an earlier reset carried counts: a second reset
+        // before the next screenshot kept none.
+        var screen = History.LastOrDefault(m => !m.FromUser && m.Parts is [{ Text: ScreenshotText or CurrentScreenText }, { IsImage: true }])?.Parts![1];
         History.Clear();
         History.AddRange(userMessages);
         History.Add(ChatMessage.User(HandoffHeader + "\n\n" + note));

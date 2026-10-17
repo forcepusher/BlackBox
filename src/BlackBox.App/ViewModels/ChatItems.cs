@@ -279,6 +279,9 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
     /// <summary>The screenshot as the model got it, at its full size, for Copy; it goes when the thumbnail does.</summary>
     public byte[]? ScreenshotData { get; set; }
 
+    /// <summary>The files the call made or showed, for the chat's file until their previews come (they are looked for in the background).</summary>
+    public IReadOnlyList<string>? SavedFiles { get; set; }
+
     public bool IsAwaitingApproval => State == ToolItemState.AwaitingApproval;
     public bool IsError => State is ToolItemState.Error or ToolItemState.Denied;
     public bool HasResult => ResultText.Length > 0;

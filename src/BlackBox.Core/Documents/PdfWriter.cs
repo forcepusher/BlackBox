@@ -255,7 +255,7 @@ internal sealed partial class PdfWriter
         var x = 0.0;
         foreach (var span in spans)
         {
-            var font = Font(bold || span.Bold, italic || span.Italic, span.Code);
+            var styled = Font(bold || span.Bold, italic || span.Italic, span.Code);
             var link = span.Link is { } url && Uri.TryCreate(url, UriKind.Absolute, out _) ? url : null;
             var spanColor = link is not null ? Blue : color;
             var parts = span.Text.Split('\n');
@@ -275,6 +275,7 @@ internal sealed partial class PdfWriter
                         if (lines[^1].Count == 0) continue;
                         text = text.Contains('\t') ? "    " : " ";
                     }
+                    var font = Covering(text, styled);
                     var w = Measure(text, font, size);
                     if (!isSpace && x + w > width && lines[^1].Any(piece => !piece.IsSpace))
                     {
@@ -323,6 +324,41 @@ internal sealed partial class PdfWriter
                 : bold && italic ? Standard14Font.HelveticaBoldOblique : bold ? Standard14Font.HelveticaBold
                 : italic ? Standard14Font.HelveticaOblique : Standard14Font.Helvetica);
         return _fonts[key] = font;
+    }
+
+    /// <summary>
+    /// The font, or the regular one for a word it lacks a letter of. Only the regular font is
+    /// checked for the whole text, but Arial Italic and Consolas have no Arabic and Consolas no
+    /// Hebrew, so a quote or code in them made the whole PDF fail ("font does not contain").
+    /// </summary>
+    private AddedFont Covering(string text, AddedFont font)
+    {
+        if (!_unicode || font == Font(false, false, false))
+            return font;
+        foreach (var c in text)
+            if (!Has(font, c))
+                return Font(false, false, false);
+        return font;
+    }
+
+    private readonly Dictionary<(AddedFont, char), bool> _has = [];
+
+    private bool Has(AddedFont font, char c)
+    {
+        if (char.IsWhiteSpace(c))
+            return true;
+        if (_has.TryGetValue((font, c), out var has))
+            return has;
+        try
+        {
+            _page.MeasureText(c.ToString(), 10, new PdfPoint(0, 0), font);
+            has = true;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            has = false;
+        }
+        return _has[(font, c)] = has;
     }
 
     /// <summary>The text with what the built-in fonts can't show as ?, when they are the ones in use.</summary>
@@ -410,7 +446,7 @@ internal sealed partial class PdfWriter
                 if (_y - height < _margin) NewPage();
                 Fill(_margin, _y - height, TextWidth, height, (242, 242, 242));
                 if (line.Trim().Length > 0)
-                    _page.AddText(line, size, new PdfPoint(_margin + 6, _y - size * 1.1), font);
+                    _page.AddText(line, size, new PdfPoint(_margin + 6, _y - size * 1.1), Covering(line, font));
                 _y -= height;
                 if (raw.Length == 0) break;
             }

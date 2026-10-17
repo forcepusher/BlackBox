@@ -22,17 +22,47 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
         Path = path;
         _remove = remove;
         FileName = System.IO.Path.GetFileName(path.TrimEnd('\\', '/')) is { Length: > 0 } name ? name : path;
-        IsFolder = Directory.Exists(path);
-        IsPicture = !IsFolder && MediaPreview.KindOf(path) is "image" or "animation";
-        Details = IsFolder ? "folder" : File.Exists(path) ? Size(path) : "no longer there";
-        if (IsPicture && File.Exists(path))
-            Task.Run(LoadThumbnail);
+        IsPicture = MediaPreview.KindOf(path) is "image" or "animation";
+        // Looked at off the UI thread: a file on a share that is off (a NAS, a mapped drive whose
+        // server is gone) holds each look up for half a minute, and a reopened chat whose messages
+        // had a few froze the window for minutes.
+        Task.Run(Look);
+    }
+
+    private void Look()
+    {
+        bool folder;
+        string details;
+        try
+        {
+            folder = Directory.Exists(Path);
+            details = folder ? "folder" : File.Exists(Path) ? Size(Path) : "no longer there";
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return;
+        }
+        Dispatcher.UIThread.Post(() =>
+        {
+            (IsFolder, Details) = (folder, details);
+            if (folder)
+                IsPicture = false;
+        });
+        if (IsPicture && !folder && details != "no longer there")
+            LoadThumbnail(details);
     }
 
     public string Path { get; }
     public string FileName { get; }
-    public bool IsPicture { get; }
-    public bool IsFolder { get; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsName))]
+    private bool _isPicture;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Icon))]
+    private bool _isFolder;
+
     public bool CanRemove => _remove is not null;
 
     /// <summary>A file's name and size, or a folder's name; what a picture's thumbnail is for the rest.</summary>
@@ -59,15 +89,19 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
 
     partial void OnDetailsChanged(string value) => OnPropertyChanged(nameof(Tip));
 
-    private void LoadThumbnail()
+    private void LoadThumbnail(string size)
     {
         try
         {
             using var stream = File.OpenRead(Path);
             var bitmap = Bitmap.DecodeToHeight(stream, 240, BitmapInterpolationMode.HighQuality);
             using var probe = SkiaSharp.SKCodec.Create(Path);
-            var details = probe is null ? Details : $"{probe.Info.Width}x{probe.Info.Height}, {Details}";
-            Dispatcher.UIThread.Post(() => (Thumbnail, Details) = (bitmap, details));
+            var details = probe is null ? size : $"{probe.Info.Width}x{probe.Info.Height}, {size}";
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_disposed) bitmap.Dispose(); // taken off, or its chat left, while it loaded
+                else (Thumbnail, Details) = (bitmap, details);
+            });
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -91,15 +125,19 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
     [RelayCommand]
     private void Remove() => _remove?.Invoke(this);
 
+    // Off the UI thread: Windows' opening of a file on a share that is off waits for the share.
     [RelayCommand]
-    private void Open()
+    private void Open() => Task.Run(() =>
     {
         try { Process.Start(new ProcessStartInfo(Path) { UseShellExecute = true })?.Dispose(); }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
-    }
+    });
+
+    private bool _disposed;
 
     public void Dispose()
     {
+        _disposed = true;
         Thumbnail?.Dispose();
         Thumbnail = null;
     }

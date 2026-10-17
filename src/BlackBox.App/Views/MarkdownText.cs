@@ -28,7 +28,15 @@ public static class MarkdownText
     private static void Render(TextBlock block, string markdown)
     {
         var inlines = new InlineCollection();
-        var lines = MarkdownLite.Render(markdown);
+        List<List<MdSpan>> lines;
+        try { lines = MarkdownLite.Render(markdown); }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Markdown the renderer trips on shows as written: this runs at every streamed piece of
+            // a reply, on the window's thread.
+            CrashLog.Write("showing a reply's Markdown", ex);
+            lines = markdown.Replace("\r\n", "\n").Split('\n').Select(l => new List<MdSpan> { new(l, MdStyle.None) }).ToList();
+        }
         for (var i = 0; i < lines.Count; i++)
         {
             if (i > 0) inlines.Add(new LineBreak());

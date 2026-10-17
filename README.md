@@ -16,7 +16,8 @@ BlackBox/
   Data/        settings.json, chats/ (see Chat history), runtime/ (unpacked by the single-file exe), browser/ (see Web search),
                tools/ (portable programs the agent downloaded), scratch/ (helper files it made for a task),
                comfyui/ (ComfyUI's address and folder, the log of a server BlackBox started, see Pictures, video and sound),
-               pasted/ (pictures pasted into the chat, see Files in a message)
+               pasted/ (pictures pasted into the chat, see Files in a message),
+               crash.log (errors no code caught, see below)
 ```
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
@@ -26,12 +27,18 @@ rather than among yours: a reminder used to leave its script in the home folder.
 also keeps the main window's size and place, and it opens there again unless that place is no
 longer on a screen.
 
+An error no code caught goes into `Data/crash.log` with its stack trace. One in the window says so
+in the chat, and the window and a run in progress go on; one that ends BlackBox is shown in the
+chat at the next start, and one that keeps it from starting in a message box. Before, such an
+error closed the window and left no trace of why.
+
 ## Documents
 `read_file` reads more than text: PDFs (their text layer, page by page), Word, Excel and PowerPoint
-files (Excel cell by cell with its formulas, Word with headings, lists, bold and tables) and
-pictures, which the model sees like a screenshot. Before, asked to summarize a PDF, qwen3.8 spent
-eight minutes inflating its streams and mapping glyphs in PowerShell, and a question about a chart
-picture took six minutes of finding a program to show it.
+files (Excel cell by cell with its formulas, merged cells and charts, Word with headings, lists,
+bold, tables, headers, footers, footnotes and comments, PowerPoint slide by slide with its speaker
+notes, which `edit_file` changes too) and pictures, which the model sees like a screenshot. Before,
+asked to summarize a PDF, qwen3.8 spent eight minutes inflating its streams and mapping glyphs in
+PowerShell, and a question about a chart picture took six minutes of finding a program to show it.
 
 `write_file` makes Word, Excel, PowerPoint and PDF files from Markdown without Office, so they open
 in Word, Excel, PowerPoint, Google Drive and any PDF reader:
@@ -136,9 +143,12 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   start, template list and model search: SD 1.5 checkpoints at about 512 pixels, since anything much
   bigger takes very long or doesn't fit in memory. Once the
   task is over it is closed, after the jobs still in its queue (the CLI waits for them before it
-  exits); a ComfyUI the user started keeps running, and only lets go of the models the task's jobs
+  exits; one the window was closed on is closed at the next start, once its jobs are done, unless
+  another BlackBox runs then); a ComfyUI the user started keeps running, and only lets go of the models the task's jobs
   loaded, so the GPU is free. BlackBox tells its own from the user's by the process it started,
-  kept in `Data/comfyui/state.json`. `action=restart` stops it and starts it again with the
+  kept in `Data/comfyui/state.json`, and by the port it listens on, whatever language Windows
+  writes netstat's LISTENING in. One it started that doesn't come up (too slow, or the user
+  pressed Stop) is closed rather than left running hidden. `action=restart` stops it and starts it again with the
   arguments it ran with (custom nodes load only at start; the user's own stays theirs and keeps
   running), `stop` and `free` do what they say. Custom node packs and programs a job lacks the
   agent installs itself, as with any program.
@@ -299,7 +309,10 @@ that answers. An API key, if your server needs one, goes next to the address (th
 shows it). For screen control the
 model must accept images (for example Qwen3.5+ VL models or Gemma 4 with their vision projector);
 LM Studio reports this and BlackBox follows it, as it does what OpenRouter-style lists say of each
-model (OpenRouter, Kilo); models on other servers are assumed to see images.
+model (OpenRouter, Kilo), what llama-server says of its vision projector and what Ollama lists among
+a model's capabilities; models on other servers are assumed to see images. When such a server
+refuses a picture after all, the pictures already in the chat become a line each, the run goes on
+without them, and the next runs have no screen tools.
 
 Until you pick a model, BlackBox uses the strongest one the server offers. One that takes images
 comes first. Then it goes by Terminal-Bench 2.1, a benchmark of agent tasks done in a terminal,
@@ -376,7 +389,7 @@ Until the context is nearly full (a fifth left, at least 16k but at most half), 
 only grows at the end, so the server reuses its cache and each step processes only the new
 messages. Then BlackBox does a **context reset**: the model writes a handoff note for itself on the
 cached history (it streams at once), and the conversation is replaced by your messages, that note
-and the current screenshot, a few thousand tokens. When to reset is decided from the token counts the server
+and the last screenshot (not a picture a tool opened), a few thousand tokens. When to reset is decided from the token counts the server
 reports, not guessed. If the model can't write the note, a record of its last steps is used
 instead; a reply cut off by the context limit, or a server's "context length exceeded" error,
 triggers the same reset and a retry. A reply cut off by a reply-length limit set on the server
@@ -412,7 +425,11 @@ proxy in front of it) answers with a server error or "gave up waiting for the re
 retry continues where the last one stopped (up to 12 times per step). A server that holds requests
 back (HTTP 429: busy, or a free allowance used up) is asked again after the wait it names
 (Retry-After, OpenRouter's `X-RateLimit-Reset`, Gemini's "retry in 37s"), at most an hour at a time,
-or after growing waits from 2 seconds to 5 minutes, as often as it takes; Stop ends the wait. A VPN can also stall an
+or after growing waits from 2 seconds to 5 minutes, as often as it takes; Stop ends the wait. From
+the second try on it waits at least those growing waits (up to a minute) whatever the server names,
+and the chat shows one line for the wait rather than one per try. A
+server that can't be reached at all (its PC restarting, LM Studio closed, the VPN down) is waited
+for the same way, so a long task carries on once it is back instead of ending on a short outage. A VPN can also stall an
 upload without breaking it: a request carries every screenshot still in the context, several
 megabytes, and LM Studio waited five minutes for the rest of one before answering 408. So when
 nothing of a request gets through for 30 seconds, it is sent again. A tool that fails, however
@@ -538,7 +555,12 @@ headless browser instead. A PDF comes as its text, page by page, like `read_file
 doesn't download a page again. The browser's profile is `Data/browser`; like ComfyUI's, it is
 started with `--do-not-de-elevate`, or under a BlackBox run as administrator it would quit at once
 and leave no page to read. Where the browser's HeadlessModeEnabled policy is off, the tools say so
-instead of reading an empty page.
+instead of reading an empty page; a browser that gives back nothing at all (Edge quits with 21 on a
+profile another one holds), or Bing showing something other than its results (a check that you are
+a person), comes back as that, not as "No results", which had the model reword its query again and
+again. A page nested deeper than browsers nest (512 levels) is read as plain text, a line per block:
+reading it recursed once per level, and a page 2,000 deep overflowed the stack and ended BlackBox.
+A page that can't be taken apart in 30 seconds is given up on.
 
 ### Servers over SSH
 `ssh` logs in to a server (`user@host`, `user@host:port` or a `Host` from `~/.ssh/config`) with
@@ -589,7 +611,10 @@ The SSH client is built in (SSH.NET), so no
   contents). It travels as one tar stream over the same connection, binary files intact, and is
   unpacked with sudo where the login user can't write; what only root can read comes down with
   sudo too. In the baseline run the model wrote configs to a local file and called scp.exe
-  through PowerShell for want of this.
+  through PowerShell for want of this. Names Windows can't hold, coming from a server, are made to
+  fit: `: ? * \ | < > "` become `_` (a colon made the file a hidden stream of another one), and a
+  name ending in a dot or a space, or one Windows keeps for devices (`con`, `aux`, `nul`…), gets a
+  `_`; the result says how many names changed.
 - `copy` streams, so size doesn't matter: no more than 32 MB of it waits in memory. A server that
   sends can't be made to wait, so from one server to another whatever the target can't take yet
   waits on this PC's disk instead, in 64 MB temporary files each deleted once read. On the lab
@@ -625,8 +650,10 @@ server only speaks that (`"type": "sse"` forces it). `"disabled": true` keeps an
 it. The model sees each tool as `server__tool` (`filesystem__read_file`), so names never clash with
 BlackBox's own tools; a call to the bare name still works when only one server has it. Tools a
 server marks read-only are treated like screenshots in the approval settings, all others like shell
-commands. Text results go back to the model as they are; an image result is shown to it like a
-screenshot. Comments and trailing commas in the file are fine. The settings dialog shows how each
+commands. Text results go back to the model as they are; an image result is shown to it as the
+tool's picture, scaled and as JPEG like a screenshot, so a server's full-size PNG doesn't cost thousands of tokens and an
+SVG or WebP the model's server can't read doesn't fail every request after it (one that isn't a
+picture at all is left out, with a line saying so). Comments and trailing commas in the file are fine. The settings dialog shows how each
 server is doing, and a server that fails to start is reported in the chat; the others keep working.
 
 The agent sets servers up itself too, with its `mcp_servers` tool: when a program it is asked to
@@ -638,7 +665,9 @@ every server it uses ends up there. A settings dialog left open shows a server t
 a second, and Save keeps it: the list is written only when you changed it, and then merged with
 what the agent changed meanwhile, your edit winning where you both changed the same server. A server
 that doesn't start isn't kept, and the agent is told why. `remove` and `list` do what they say.
-Adding tools mid-run changes the tool list, so the server works through the whole prompt once more.
+Adding tools mid-run changes the tool list, so the server works through the whole prompt once more;
+the system prompt, which lists the servers, changes in that same request, so the next message
+doesn't cost a second time.
 
 Actions run without asking by default (approvals can be switched on in Settings).
 Pressing Stop, or Pause/Break anywhere, halts the agent: Pause, or Ctrl+Pause, which Windows

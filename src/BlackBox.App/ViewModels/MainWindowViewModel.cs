@@ -24,6 +24,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private readonly HttpClient _http = LlmHttp.Create(Timeout.InfiniteTimeSpan);
     private List<ChatMessage> _history = [];
     private readonly ChatStore _chats;
+    private readonly ChatSaver _chatSaver;
     private readonly McpHost _mcp = new();
     /// <summary>The chat's SSH logins: they last from one message to the next, and end with the chat.</summary>
     private Core.Ssh.SshHosts _ssh;
@@ -49,7 +50,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _settings = settings;
         _platform = platform;
         _previews = new PreviewServices(Core.Media.MediaDecoders.Create(platform, paths, Core.Comfy.ComfyHub.For(paths.ComfyDir)), platform.CreateAudioOutput);
+        // A ComfyUI an earlier BlackBox started and left at work is closed once its jobs are done.
+        Core.Comfy.ComfyHub.For(paths.ComfyDir).CloseLeftover();
         _chats = new ChatStore(paths.ChatsDir);
+        _chatSaver = new ChatSaver(_chats);
         _ssh = new Core.Ssh.SshHosts(paths.KnownHostsFile);
         _tick = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) =>
         {
@@ -150,10 +154,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         // A chat is saved at every step and when its run ends, so only one in progress needs it here.
         if (IsBusy) SaveChat(SnapshotHistory());
+        _chatSaver.Flush(TimeSpan.FromSeconds(10));
+        if (_settingsSave?.IsEnabled == true)
+        {
+            _settingsSave.Stop();
+            SaveSettings(); // what was typed just before closing
+        }
         _runCts?.Cancel();
         _stopKey?.Dispose();
-        _ssh.Dispose();
-        try { _mcp.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5)); }
+        // Logging out of the SSH servers and stopping the MCP ones, at the same time and for five
+        // seconds at most: one after the other, a server that didn't answer kept the process
+        // alive five seconds a server after the window had gone.
+        var ssh = Task.Run(_ssh.Dispose);
+        var mcp = _mcp.DisposeAsync().AsTask();
+        try { Task.WaitAll([ssh, mcp], TimeSpan.FromSeconds(5)); }
         catch (AggregateException) { /* a server that would not stop; the process ends anyway */ }
     }
 
@@ -163,7 +177,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private int _checkVersion;
     private bool _refreshingModels;
 
-    /// <summary>Server address typed in the top bar. Saved as you type; checked once typing pauses.</summary>
+    /// <summary>Server address typed in the top bar. Saved and checked once typing pauses.</summary>
     public string ServerAddress
     {
         get => _settings.Server.BaseUrl;
@@ -172,13 +186,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             value = value.Trim();
             if (value == _settings.Server.BaseUrl) return;
             _settings.Server.BaseUrl = value;
-            SaveSettings();
+            SaveSettingsSoon();
             OnPropertyChanged();
             _ = CheckAfterTypingAsync();
         }
     }
 
-    /// <summary>API key typed in the top bar, for servers that want one. Saved as you type; checked once typing pauses.</summary>
+    /// <summary>API key typed in the top bar, for servers that want one. Saved and checked once typing pauses.</summary>
     public string ApiKey
     {
         get => _settings.Server.ApiKey;
@@ -187,10 +201,27 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             value = value.Trim();
             if (value == _settings.Server.ApiKey) return;
             _settings.Server.ApiKey = value;
-            SaveSettings();
+            SaveSettingsSoon();
             OnPropertyChanged();
             _ = CheckAfterTypingAsync();
         }
+    }
+
+    private DispatcherTimer? _settingsSave;
+
+    /// <summary>
+    /// Saves the settings once typing pauses: written at every key press, each one waited on the
+    /// disk (and on an antivirus holding the file just written) on the UI thread, while typing.
+    /// </summary>
+    private void SaveSettingsSoon()
+    {
+        _settingsSave ??= new DispatcherTimer(TimeSpan.FromMilliseconds(700), DispatcherPriority.Background, (_, _) =>
+        {
+            _settingsSave!.Stop();
+            SaveSettings();
+        });
+        _settingsSave.Stop();
+        _settingsSave.Start();
     }
 
     /// <summary>The eye button next to the API key: shows the key instead of dots.</summary>
@@ -264,6 +295,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     /// <summary>LM Studio said the model isn't loaded yet; it has no context size until the first message loads it.</summary>
     private bool _modelNotLoaded;
+
+    /// <summary>The server and model that refused pictures in a run though nothing said it takes none: the next runs go without them.</summary>
+    private string? _imagesRefused;
+
+    private static string ImagesKey(ServerSettings server) => server.BaseUrl + " " + server.ModelInUse;
 
     /// <summary>
     /// The size in use, next to the slider: "64k"; on Auto "not loaded" before LM Studio has loaded
@@ -426,9 +462,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             _modelNotLoaded = probe.Loaded == false;
             OnContextChanged();
         }
-        server.SupportsVision = probe.Vision ?? true;
+        server.SupportsVision = (probe.Vision ?? true) && _imagesRefused != ImagesKey(server);
         OnPropertyChanged(nameof(CanSeeScreen));
-        var status = "Connected" + (probe.Vision == false ? " · no vision" : "");
+        var status = "Connected" + (!server.SupportsVision ? " · no vision" : "");
         if (probe.AutoPicked && server.Model.Length > 0)
             SetStatus(ServerState.Connected, status,
                 $"The server doesn't offer \"{server.Model}\" right now, so BlackBox uses {probe.Model}{AutoModelDetails}, the strongest model it offers, " +
@@ -581,6 +617,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private readonly List<UserInput> _steerPending = [];
 
     /// <summary>
+    /// Messages sent in the chat on screen while the run of a chat just left (New chat, or another
+    /// one opened) was still ending: they start this chat's run once it has. Handed to the ending
+    /// run, they were thrown away with it, the bubble left in the chat and nothing run.
+    /// </summary>
+    private readonly List<UserInput> _forNextRun = [];
+
+    /// <summary>
     /// Sends what is in the box, with the files under it. With no run going it starts one; during a
     /// run it goes to the agent, which reads it before its next step (see <see cref="AgentSession.Steer(UserInput)"/>).
     /// </summary>
@@ -598,7 +641,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         Items.Add(new UserMessageItem(input.Text, input.Files));
         if (IsBusy)
         {
-            if (_session is { } running) running.Steer(input);
+            if (_runDetached) _forNextRun.Add(input);
+            else if (_session is { } running) running.Steer(input);
             else _steerPending.Add(input);
             SaveChat(SnapshotHistory());
             return;
@@ -709,6 +753,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _runDetached = false;
         IsBusy = true;
         HideContinue();
+        // A Pause/Break that came as the last run was ending stopped nothing, and its mark called
+        // this run's next stop with the Stop button "Stopped with Pause/Break".
+        _stoppedByKey = false;
         _runCts = new CancellationTokenSource();
         var ct = _runCts.Token;
         // This chat's conversation: picking another chat while the run starts up replaces _history.
@@ -747,6 +794,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             }
 
             var session = _session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, _ssh, history, UserComposing);
+            // Taken now: another model can be picked at the top while the run goes on.
+            var imagesKey = session.SeesImages ? ImagesKey(server) : null;
             foreach (var pending in _steerPending)
                 session.Steer(pending);
             _steerPending.Clear();
@@ -756,6 +805,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             // A server error may have revealed the real context size; keep it for the next run.
             _settings.Server.LearnContextLimit(session.ContextTokens);
             OnContextChanged();
+            // Its server refused pictures: the next runs go without screen tools, as with a model
+            // the server says can't see.
+            if (imagesKey is not null && !session.SeesImages)
+            {
+                _imagesRefused = imagesKey;
+                if (ImagesKey(server) == imagesKey)
+                {
+                    server.SupportsVision = false;
+                    OnPropertyChanged(nameof(CanSeeScreen));
+                }
+            }
         }
         catch (OperationCanceledException)
         {
@@ -789,7 +849,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             }
         }
 
-        if (late.Count == 0 || _runDetached)
+        if (_runDetached)
+        {
+            if (_forNextRun.Count == 0)
+                return null;
+            var next = UserInput.Join(_forNextRun);
+            _forNextRun.Clear();
+            return next;
+        }
+        if (late.Count == 0)
             return null;
         if (ct.IsCancellationRequested)
         {
@@ -818,7 +886,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         if (cts is null || cts.IsCancellationRequested)
             return false;
         _stoppedByKey = true;
-        try { cts.Cancel(); }
+        // What the stop sets off (a tool's cleanup, the end of the run) runs on the thread pool.
+        // Cancel() ran it on the hook's thread, which held up every key press on the PC meanwhile;
+        // and Windows drops a hook that takes too long, which would leave Pause/Break dead.
+        try { _ = cts.CancelAsync(); }
         catch (ObjectDisposedException) { return false; } // the run ended at that very moment
         return true;
     }
@@ -868,6 +939,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         // The stopped run keeps its own list until it ends, so it can't write into the next chat.
         _history = [];
         _steerPending.Clear();
+        // Left before they could run: back in the box, with their files, to send again or not.
+        if (_forNextRun.Count > 0)
+        {
+            Input = string.Join("\n\n", _forNextRun.Select(m => m.Text).Append(Input).Where(t => t.Length > 0));
+            Attach(_forNextRun.SelectMany(m => m.Files));
+            _forNextRun.Clear();
+        }
         // Logins belong to the chat: the next one starts logged out (the stopped run's tools fail).
         // Logging out talks to the servers, so it happens off the UI thread.
         var ended = _ssh;
@@ -886,6 +964,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         if (row.Id == _chatId)
             return;
+        // A chat left a moment ago may still be on its way to the disk.
+        _chatSaver.Flush(TimeSpan.FromSeconds(10));
         if (_chats.Load(row.Id) is not { } chat)
         {
             PastChats.Remove(row);
@@ -896,8 +976,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _chatId = chat.Id;
         _chatTitle = chat.Title;
         _history = chat.History;
+        var withFiles = new List<(ChatItemViewModel, Func<IReadOnlyList<string>>)>();
         foreach (var entry in chat.Entries)
-            Items.Add(FromEntry(entry));
+        {
+            var item = FromEntry(entry);
+            Items.Add(item);
+            // The files come back with the chat, as long as they are still there.
+            if (entry.Kind == ChatEntryKind.Tool && entry.Files is { Count: > 0 } files)
+            {
+                // Kept for a save before they are looked up, which would otherwise drop them.
+                ((ToolCallItem)item).SavedFiles = files;
+                withFiles.Add((item, () => files.Where(Core.Media.FileMentions.Exists).ToList()));
+            }
+            else if (item is AssistantMessageItem { HasText: true, Text: var text })
+                withFiles.Add((item, () => Core.Media.FileMentions.Find(text)));
+        }
+        ShowFilesLater(withFiles);
         // A chat that ended stopped can be carried on from where it stopped; an earlier stop it went on from can't.
         foreach (var notice in Items.OfType<NoticeItem>())
             notice.CanContinue = notice.Stopped && ReferenceEquals(notice, Items[^1]);
@@ -906,11 +1000,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     private void DeleteChat(PastChat row)
     {
+        // Its last version on the disk, for its pictures; and none still on its way there afterwards.
+        _chatSaver.Flush(TimeSpan.FromSeconds(10));
         // The pictures pasted into it go with it; files dropped on the window were the user's own and stay.
         var pasted = (_chats.Load(row.Id)?.Entries ?? []).Where(e => e.Kind == ChatEntryKind.User).SelectMany(e => e.Files ?? [])
             .Where(f => string.Equals(Path.GetDirectoryName(f), _paths.PastedDir, StringComparison.OrdinalIgnoreCase)).ToList();
         if (row.Id == _chatId)
             LeaveChat(save: false);
+        _chatSaver.Forget(row.Id);
         _chats.Delete(row.Id);
         PastChats.Remove(row);
         OnPropertyChanged(nameof(HasPastChats));
@@ -937,11 +1034,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>Writes the chat on screen to its file and moves it to the top of the History list. A chat with nothing typed yet isn't saved.</summary>
     private void SaveChat(List<ChatMessage>? history)
     {
-        if (history is null || Items.OfType<UserMessageItem>().FirstOrDefault() is not { } first)
+        // A chat with nothing typed yet isn't saved. One whose first message the chat has dropped
+        // to stay small (TrimChat, some 200 steps into a long run) still is: it stopped being
+        // saved there, and the rest of the run was lost to History and to a crash.
+        var first = Items.OfType<UserMessageItem>().FirstOrDefault();
+        if (history is null || first is null && _chatTitle is null)
             return;
         _chatId ??= ChatStore.NewId();
         // A message that is only a file is named after it.
-        _chatTitle ??= ChatStore.TitleFrom(first.HasText ? first.Text : string.Join(", ", first.Attachments.Select(a => a.FileName)));
+        _chatTitle ??= ChatStore.TitleFrom(first!.HasText ? first.Text : string.Join(", ", first.Attachments.Select(a => a.FileName)));
         var chat = new SavedChat
         {
             Id = _chatId,
@@ -951,11 +1052,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             Entries = Items.Where(i => i is not AssistantMessageItem { IsStreaming: true, HasText: false, HasReasoning: false }).Select(ToEntry).ToList(),
             History = history,
         };
-        try { _chats.Save(chat); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return; // a full or read-only disk: the chat goes on, just unsaved
-        }
+        // Written in the background: a long run's chat is megabytes, at every step.
+        _chatSaver.Save(chat);
 
         var row = PastChats.FirstOrDefault(r => r.Id == chat.Id);
         if (row is null)
@@ -985,7 +1083,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             ToolCallItem t => new ChatEntry
             {
                 Kind = ChatEntryKind.Tool, CallId = t.CallId, Name = t.Name, Summary = t.Summary, State = t.State.ToString(), Text = t.ResultText,
-                Files = t.HasPreviews ? t.Previews.Select(p => p.Path).ToList() : null, Ended = t.Ended,
+                Files = t.HasPreviews ? t.Previews.Select(p => p.Path).ToList() : t.SavedFiles?.ToList(), Ended = t.Ended,
             },
             NoticeItem n => new ChatEntry { Kind = ChatEntryKind.Notice, Text = n.Text, IsError = n.IsError, Stopped = n.Stopped, Unsent = n.Unsent },
             _ => throw new ArgumentOutOfRangeException(nameof(item)),
@@ -1015,11 +1113,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         };
         // Lines saved before the chat kept times show none.
         (item.At, item.RunTook) = (e.At, e.RunTook);
-        // The files come back with the chat, as long as they are still there.
-        if (e.Kind == ChatEntryKind.Tool && e.Files is { Count: > 0 } files)
-            item.AddPreviews(files.Where(File.Exists), _previews);
-        else if (item is AssistantMessageItem { HasText: true } reply)
-            item.AddPreviews(Core.Media.FileMentions.Find(reply.Text), _previews);
         return item;
     }
 
@@ -1041,7 +1134,23 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     // ---- settings -------------------------------------------------------------------
 
-    public SettingsViewModel CreateSettingsViewModel() => new(_settings.Clone(), _paths, McpConfig.Load(_paths.McpConfigFile), _mcp.Statuses);
+    public SettingsViewModel CreateSettingsViewModel() => new(_settings.Clone(), _paths, LoadMcpConfig(), _mcp.Statuses);
+
+    /// <summary>
+    /// mcp.json as it is, read again a moment later when caught while the agent replaces it:
+    /// Settings didn't open then, and the window showed an error instead.
+    /// </summary>
+    private string LoadMcpConfig()
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try { return McpConfig.Load(_paths.McpConfigFile); }
+            catch (Exception ex) when (attempt < 5 && ex is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(50);
+            }
+        }
+    }
 
     /// <summary>Shows an open Settings dialog the MCP servers as they are now: one the agent added or removed, and how each one is doing.</summary>
     public void RefreshMcp(SettingsViewModel dialog)
@@ -1124,6 +1233,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     }
 
     private void AddNotice(string text, bool isError) => Items.Add(new NoticeItem(text, isError));
+
+    private readonly HashSet<string> _problemsShown = [];
+
+    /// <summary>Something no code caught (see <see cref="CrashLog"/>), said in the chat once, with where to read more.</summary>
+    public void ShowProblem(string text)
+    {
+        if (_problemsShown.Add(text))
+            AddNotice(text + @" Details are in Data\crash.log.", isError: true);
+    }
 
     // ---- IAgentObserver (called from the agent thread) -------------------------------
 
@@ -1223,9 +1341,32 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         if (!_current.HasText && !_current.HasReasoning && message is not { HasToolCalls: true })
             Items.Remove(_current);
         else if (message is not null && _current.HasText)
+        {
             // The files the reply names (what the agent made) are shown under it, to look at, play or open.
-            _current.AddPreviews(Core.Media.FileMentions.Find(_current.Text), _previews);
+            var text = _current.Text;
+            ShowFilesLater([(_current, () => Core.Media.FileMentions.Find(text))]);
+        }
         _current = null;
+    }
+
+    /// <summary>
+    /// Shows under each line the files it names, looked for off the UI thread: a path on a server
+    /// that is off (\\nas\…, a mapped drive whose server is gone) holds up the look for half a
+    /// minute, and the window froze for as long when a reply or a reopened chat named one.
+    /// </summary>
+    private async void ShowFilesLater(List<(ChatItemViewModel Item, Func<IReadOnlyList<string>> Files)> lines)
+    {
+        try
+        {
+            var found = await Task.Run(() => lines.Select(l => (l.Item, Files: l.Files())).Where(l => l.Files.Count > 0).ToList());
+            foreach (var (item, files) in found)
+                if (Items.Contains(item))
+                    item.AddPreviews(files, _previews);
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("the files a chat names", ex);
+        }
     }
 
     async Task<bool> IAgentObserver.RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct)
@@ -1240,8 +1381,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     void IAgentObserver.OnNotice(string text) => PostTimed(at =>
     {
-        if (!_runDetached) Items.Add(new NoticeItem(text, isError: false) { At = at });
+        if (_runDetached) return;
+        var notice = new NoticeItem(text, isError: false) { At = at };
+        // One line for a wait that goes on (a busy or unreachable server), not one per try: no
+        // step starts meanwhile to trim the chat, and an hour of tries filled it.
+        if (text.EndsWith(WaitNoticeEnd, StringComparison.Ordinal) && Items.Count > 0 && Items[^1] is NoticeItem { Text: var last } && last.EndsWith(WaitNoticeEnd, StringComparison.Ordinal))
+            Items[^1] = notice;
+        else
+            Items.Add(notice);
     });
+
+    /// <summary>How AgentSession's notices of a wait before trying again end.</summary>
+    private const string WaitNoticeEnd = "(Stop ends the wait)…";
 
     void IAgentObserver.OnToolStarted(ToolCall call, string summary) => PostTimed(at =>
     {
@@ -1269,12 +1420,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         // Files the call made or showed get a preview (a player, a model to turn), which says more
         // than the picture made for the model; anything else keeps its screenshot.
         if (result.Files is { Count: > 0 } files)
-            item.AddPreviews(files.Where(File.Exists), _previews);
+        {
+            // Looked for in the background, as a reply's: a ComfyUI save_to or a document on a share.
+            item.SavedFiles = files;
+            ShowFilesLater([(item, () => files.Where(Core.Media.FileMentions.Exists).ToList())]);
+        }
         else if (result.Image is not null)
         {
-            using var ms = new MemoryStream(result.Image);
-            item.Screenshot = Bitmap.DecodeToWidth(ms, 480);
-            item.ScreenshotData = result.Image;
+            // An MCP server's picture can be one the window doesn't read (an SVG, a broken file):
+            // the call's card goes without it rather than the window closing.
+            try
+            {
+                using var ms = new MemoryStream(result.Image);
+                item.Screenshot = Bitmap.DecodeToWidth(ms, 480);
+                item.ScreenshotData = result.Image;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException) { }
         }
         if (item.State == ToolItemState.AwaitingApproval)
             item.State = ToolItemState.Stopped; // the run was stopped while the call waited for an OK; Deny would have said Declined
@@ -1286,10 +1447,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
     });
 
+    /// <summary>Set when the run is ending on a bug (see <see cref="IAgentObserver.OnFailed"/>), whose stack trace went into the crash log.</summary>
+    private volatile bool _failureLogged;
+
+    void IAgentObserver.OnFailed(Exception error)
+    {
+        CrashLog.Write("the agent", error);
+        _failureLogged = true;
+    }
+
     void IAgentObserver.OnFinished(AgentStopReason reason, string? detail)
     {
         // Read here: by the time the window gets to this, a run of what came too late for this one may have started.
         var started = _runStarted;
+        var logged = _failureLogged;
+        _failureLogged = false;
         PostTimed(at =>
         {
             var stopped = StoppedText();
@@ -1308,7 +1480,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                     AddStopNotice(stopped, isError: false);
                     break;
                 case AgentStopReason.Error:
-                    AddStopNotice(detail ?? "Something went wrong.", isError: true);
+                    AddStopNotice((detail ?? "Something went wrong.") + (logged ? @" Details are in Data\crash.log." : ""), isError: true);
                     break;
             }
 

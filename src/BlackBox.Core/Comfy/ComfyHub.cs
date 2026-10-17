@@ -27,16 +27,19 @@ public sealed class ComfyHub(string stateDirectory)
     /// <summary>Changes whenever BlackBox (re)starts the server, so caches of its node types and templates are refreshed.</summary>
     public int Generation { get; private set; }
 
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string ClientId, IReadOnlyDictionary<string, string> Titles)> _jobs = new();
+    /// <summary>The jobs queued last: the hub lives as long as the process, and a long batch of jobs only added to it.</summary>
+    private readonly RecentMap<string, (string ClientId, IReadOnlyDictionary<string, string> Titles)> _jobs = new(MaxJobs);
+
+    internal const int MaxJobs = 200;
 
     /// <summary>
     /// The client a job was queued as, and its nodes' names: ComfyUI reports a job's progress only
     /// to the web socket of the client that queued it, so a later wait for it connects as that client.
     /// </summary>
-    public void RememberJob(string promptId, string clientId, IReadOnlyDictionary<string, string> titles) => _jobs[promptId] = (clientId, titles);
+    public void RememberJob(string promptId, string clientId, IReadOnlyDictionary<string, string> titles) => _jobs.Set(promptId, (clientId, titles));
 
     public (string ClientId, IReadOnlyDictionary<string, string> Titles) JobClient(string promptId) =>
-        _jobs.TryGetValue(promptId, out var known) ? known : ("blackbox-" + Guid.NewGuid().ToString("N")[..12], new Dictionary<string, string>());
+        _jobs.TryGet(promptId, out var known) ? known : ("blackbox-" + Guid.NewGuid().ToString("N")[..12], new Dictionary<string, string>());
 
     public ComfyFrontend Frontend { get; } = new(Path.Combine(stateDirectory, "browser"));
 
@@ -109,9 +112,11 @@ public sealed class ComfyHub(string stateDirectory)
             {
                 // Something holds the port but doesn't answer: a server that is busy (a custom node
                 // downloading models blocked one for minutes), not one to start a second time.
-                for (var waited = 0; waited < 90 && await api.TrySystemStatsAsync(ct).ConfigureAwait(false) is null; waited += 3)
+                // By the clock: each look waits for an answer too, so counting 3 s a round said 90 s at about 180.
+                var waited = System.Diagnostics.Stopwatch.StartNew();
+                while (waited.Elapsed < TimeSpan.FromSeconds(90) && await api.TrySystemStatsAsync(ct).ConfigureAwait(false) is null)
                 {
-                    progress?.Invoke($"ComfyUI is busy and doesn't answer yet… {waited} s");
+                    progress?.Invoke($"ComfyUI is busy and doesn't answer yet… {waited.Elapsed.TotalSeconds:0} s");
                     await Task.Delay(3000, ct).ConfigureAwait(false);
                 }
                 if (await api.TrySystemStatsAsync(ct).ConfigureAwait(false) is null)
@@ -360,6 +365,51 @@ public sealed class ComfyHub(string stateDirectory)
         _closing = CloseWhenIdleAsync(api, wait.Token);
         // A short wait here; a queue still at work is waited for in the background.
         await Task.WhenAny(_closing, Task.Delay(TimeSpan.FromSeconds(3))).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// At start: a server an earlier BlackBox started and left running (it was closed while jobs
+    /// were still queued) is closed once its queue is empty, unless a task starts using it first.
+    /// It ran on, hidden, until a later task that used ComfyUI ended.
+    /// </summary>
+    public void CloseLeftover()
+    {
+        if (Volatile.Read(ref _users) > 0)
+            return;
+        var wait = new CancellationTokenSource();
+        if (Interlocked.CompareExchange(ref _waitForQueue, wait, null) is not null)
+            return;
+        _closing = Task.Run(async () =>
+        {
+            // Not while another BlackBox runs (a second window, the command line): it may be
+            // between two of its jobs, and each BlackBox counts only its own tasks.
+            if (OthersRunForTests?.Invoke() ?? OtherBlackBoxRuns())
+                return;
+            var api = new ComfyApi(Address);
+            if (OwnsForTests?.Invoke(api) ?? IsOurs(api))
+                await CloseWhenIdleAsync(api, wait.Token).ConfigureAwait(false);
+        });
+    }
+
+    /// <summary>Stand-in for tests: whether another BlackBox runs.</summary>
+    internal Func<bool>? OthersRunForTests { get; set; }
+
+    private static bool OtherBlackBoxRuns()
+    {
+        var found = false;
+        foreach (var process in System.Diagnostics.Process.GetProcesses())
+        {
+            try
+            {
+                found |= process.Id != Environment.ProcessId && process.ProcessName.StartsWith("BlackBox", StringComparison.OrdinalIgnoreCase);
+            }
+            catch (InvalidOperationException) { } // ended meanwhile
+            finally
+            {
+                process.Dispose();
+            }
+        }
+        return found;
     }
 
     private async Task CloseWhenIdleAsync(ComfyApi api, CancellationToken ct)

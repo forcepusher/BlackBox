@@ -44,9 +44,19 @@ public static class RemoteFiles
         var lines = body.Split('\n');
         var count = body.EndsWith('\n') ? lines.Length - 1 : lines.Length;
         var last = offset - 1;
-        for (var i = 0; i < count && sb.Length < maxChars; i++, n++)
+        // As read_file does on this PC: a long line cut, and the limit counting the line being added.
+        for (var i = 0; i < count; i++, n++)
         {
-            sb.Append(n).Append('\t').Append(lines[i]).Append('\n');
+            var line = lines[i];
+            var leftOut = line.Length > Tools.ReadFileTool.MaxLine ? line.Length - Tools.ReadFileTool.MaxLine : 0;
+            if (leftOut > 0)
+                line = line[..Tools.ReadFileTool.MaxLine];
+            if (last >= offset && sb.Length + line.Length > maxChars)
+                break;
+            sb.Append(n).Append('\t').Append(line);
+            if (leftOut > 0)
+                sb.Append(Tools.ReadFileTool.LeftOut(leftOut));
+            sb.Append('\n');
             last = n;
         }
         if (offset > 1 || last < total)
@@ -66,14 +76,33 @@ public static class RemoteFiles
         var existed = state.Contains("exists");
         if (append && !existed)
             return ($"Cannot append: {path} does not exist on {host.Target}. Check the path, or create the file first with append=false.", true);
-        var script = $"mkdir -p \"$(dirname {p})\" 2>/dev/null; cat {(append ? ">>" : ">")} {p} 2>/dev/null || {{ echo BB-DENIED; exit 1; }}";
-        var (r, sudo) = await RunAsync(host, script, content, "BB-DENIED", ct).ConfigureAwait(false);
+        var (r, sudo) = await RunAsync(host, WriteScript(path, Encoding.UTF8.GetByteCount(content), append), content, "BB-DENIED", ct).ConfigureAwait(false);
+        if (r.Output.Contains("BB-CUT"))
+            return ($"Could not write {path} on {host.Target}: only part of it arrived (the connection broke, or /tmp is full there); the file was left as it was.", true);
         if (r.Output.Contains("BB-DENIED") || r.ExitCode != 0)
             return (r.Output.Contains("BB-DENIED") ? Denied(host, path, "write") : $"Could not write {path} on {host.Target}: {r.Error.Trim()}", true);
         var how = sudo ? " with sudo" : "";
         var done = append ? $"Appended {content.Length} chars to {path} on {host.Target}{how}."
                           : $"{(existed ? "Overwrote" : "Created")} {path} on {host.Target}{how} ({content.Length} chars).";
         return (done + (checkConfig ? await CheckAsync(host, path, ct).ConfigureAwait(false) : ""), false);
+    }
+
+    /// <summary>
+    /// The script that writes what it reads to a file. The content goes into a file of its own
+    /// first, and into the target only once all of it is there: written straight from the
+    /// connection ("cat > file"), a link that dropped or the minute running out left the file cut
+    /// short, a config under /etc among them. The target itself is written as before, so it keeps
+    /// its owner, mode and links. Where no temporary file can be made (Termux has no /tmp, only
+    /// $TMPDIR), it is written straight, as before.
+    /// </summary>
+    internal static string WriteScript(string path, int bytes, bool append)
+    {
+        var p = SshHost.Quote(path);
+        var into = append ? ">>" : ">";
+        return "d=${TMPDIR:-/tmp}; t=$(mktemp \"$d/.blackbox-write.XXXXXX\" 2>/dev/null) || { t=\"$d/.blackbox-write.$$\"; (umask 077; : > \"$t\") 2>/dev/null || t=; }; " +
+               $"if [ -z \"$t\" ]; then mkdir -p \"$(dirname {p})\" 2>/dev/null; cat {into} {p} 2>/dev/null || {{ echo BB-DENIED; exit 1; }}; exit 0; fi; " +
+               $"cat > \"$t\"; [ $(wc -c < \"$t\") -eq {bytes} ] || {{ rm -f \"$t\"; echo BB-CUT; exit 1; }}; " +
+               $"mkdir -p \"$(dirname {p})\" 2>/dev/null; cat \"$t\" {into} {p} 2>/dev/null || {{ rm -f \"$t\"; echo BB-DENIED; exit 1; }}; rm -f \"$t\"";
     }
 
     /// <summary>A line "[Checked after writing: ...]" for a config file, or nothing.</summary>
@@ -90,6 +119,13 @@ public static class RemoteFiles
         if (r.Output.StartsWith("BB-DENIED")) return (Denied(host, path, "read"), true);
         if (!r.Output.StartsWith("BB-OK\n")) return ($"Could not read {path} on {host.Target}: {r.Error.Trim()}", true);
         var text = r.Output["BB-OK\n".Length..];
+        // The file comes as UTF-8 and goes back as UTF-8: every byte of a Latin-1 file that isn't
+        // UTF-8 was written back as U+FFFD, all through the file, and a binary file was mangled.
+        if (text.Contains('\0'))
+            return ($"{path} on {host.Target} is not a text file; edit_file edits text only.", true);
+        if (text.Contains('�'))
+            return ($"{path} on {host.Target} isn't plain UTF-8 (it is Latin-1, say, or holds \"�\" already), and edit_file would turn each character " +
+                    "in it that isn't into \"�\". Edit it with sed through ssh instead, which leaves the rest of the file as it is.", true);
         var count = Count(text, oldText);
         if (count == 0 && text.Contains("\r\n") && oldText.Contains('\n') && !oldText.Contains('\r'))
         {
@@ -112,11 +148,7 @@ public static class RemoteFiles
     /// <summary>A folder's entries, or with a pattern a search through its subfolders.</summary>
     public static async Task<(string Text, bool IsError)> ListAsync(SshHost host, string path, string? pattern, CancellationToken ct)
     {
-        var p = SshHost.Quote(path);
-        var script = pattern is null
-            ? $"[ -d {p} ] || {{ echo BB-MISSING; exit 0; }}; [ -r {p} ] && [ -x {p} ] || {{ echo BB-DENIED; exit 0; }}; ls -la --time-style=+%Y-%m-%d.%H:%M {p} | head -501"
-            : $"[ -d {p} ] || {{ echo BB-MISSING; exit 0; }}; timeout 20 find {p} -name {SshHost.Quote(pattern)} -printf '%p  (%s bytes)\\n' 2>/dev/null | head -501";
-        var (r, sudo) = await RunAsync(host, script, null, "BB-DENIED", ct).ConfigureAwait(false);
+        var (r, sudo) = await RunAsync(host, ListScript(path, pattern), null, "BB-DENIED", ct).ConfigureAwait(false);
         if (r.Output.StartsWith("BB-MISSING")) return ($"Directory not found on {host.Target}: {path}", true);
         if (r.Output.StartsWith("BB-DENIED")) return (Denied(host, path, "list"), true);
         var lines = r.Output.TrimEnd('\n').Split('\n');
@@ -126,6 +158,25 @@ public static class RemoteFiles
         if (lines.Length > 500) sb.Append("[stopped after 500 entries]\n");
         if (sudo) sb.Append("[listed with sudo]\n");
         return (sb.ToString(), false);
+    }
+
+    /// <summary>
+    /// The script that lists a folder or searches it. BusyBox (Alpine, OpenWrt, many a NAS) has
+    /// neither ls --time-style nor find -printf: the listing came back empty, without a word, and
+    /// the folder read as empty. Each is tried first, and plain ls and find do without. So is
+    /// timeout, which an older BusyBox writes "timeout -t 20" and macOS hasn't got. It is kept in
+    /// "$@", not a variable: the script runs in the login shell, and zsh doesn't split one into words.
+    /// </summary>
+    internal static string ListScript(string path, string? pattern)
+    {
+        var p = SshHost.Quote(path);
+        return pattern is null
+            ? $"[ -d {p} ] || {{ echo BB-MISSING; exit 0; }}; [ -r {p} ] && [ -x {p} ] || {{ echo BB-DENIED; exit 0; }}; " +
+              $"if ls -d --time-style=+%Y / >/dev/null 2>&1; then ls -la --time-style=+%Y-%m-%d.%H:%M {p}; else ls -la {p}; fi | head -501"
+            : $"[ -d {p} ] || {{ echo BB-MISSING; exit 0; }}; " +
+              "if timeout 5 true 2>/dev/null; then set -- timeout 20; elif timeout -t 5 true 2>/dev/null; then set -- timeout -t 20; else set --; fi; " +
+              $"if find / -maxdepth 0 -printf '' >/dev/null 2>&1; then \"$@\" find {p} -name {SshHost.Quote(pattern)} -printf '%p  (%s bytes)\\n' 2>/dev/null; " +
+              $"else \"$@\" find {p} -name {SshHost.Quote(pattern)} 2>/dev/null; fi | head -501";
     }
 
     /// <summary>

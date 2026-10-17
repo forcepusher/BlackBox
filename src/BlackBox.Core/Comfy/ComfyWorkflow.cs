@@ -427,7 +427,7 @@ public sealed class ComfyWorkflow
                     why = value is JsonValue fv && fv.TryGetValue<string>(out var file) && input.Choices?.Contains(file) == false
                         ? "an input file; the template's example isn't there, give a full local path"
                         : "an input file";
-                else if (input.Type == "STRING" && (input.Extra["multiline"]?.GetValue<bool>() == true || name is "text" or "prompt" or "lyrics" or "tags" or "positive" or "negative" or "value"))
+                else if (input.Type == "STRING" && (ComfyNodeLibrary.IsTrue(input.Extra["multiline"]) || name is "text" or "prompt" or "lyrics" or "tags" or "positive" or "negative" or "value"))
                     why = "text";
                 else if (input.Extra["control_after_generate"] is not null || name is "seed" or "noise_seed")
                     why = "seed";

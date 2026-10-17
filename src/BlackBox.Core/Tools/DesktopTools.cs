@@ -28,8 +28,11 @@ public abstract class DesktopActionTool : Tool
         // Give the UI a moment to react before looking at it.
         await Task.Delay(500, ct).ConfigureAwait(false);
         // A fresh look that misses misses the same way again, so a retry goes to the model's own x/y.
+        // A click on what is already selected changes nothing either: Paint's oval tool, picked by
+        // one of the first clicks, was clicked some twenty times more, each "probably missed".
         if (check is not null && await check.MissedAsync(ctx, ct).ConfigureAwait(false))
-            text += "\nNothing on screen changed after this click, so it probably missed. If the mouse pointer in the screenshot is not on what you meant, " +
+            text += "\nNothing on screen changed after this click, so it probably missed, unless what you clicked was already selected or switched on " +
+                    "(a tool, a tab, a checkbox), which a click doesn't change: then go on. If the mouse pointer in the screenshot is not on what you meant, " +
                     "click again with target left out and x, y on it. If it only needs more time to respond, wait instead; " +
                     "if you clicked an empty spot only to focus a window, ignore this.";
         else if (moved is not null)
@@ -72,8 +75,9 @@ public abstract class DesktopActionTool : Tool
     protected static IDisposable Aside(ToolContext ctx, params (int X, int Y)[] points) =>
         ctx.Platform.HostWindow.StepAside(points);
 
+    // Invariant: with a German PC's culture an x of 512.5 read "(512,5, 300)", to the model as well.
     protected static string Fmt(JsonObject args, string xKey = "x", string yKey = "y") =>
-        $"({GetNumber(args, xKey)}, {GetNumber(args, yKey)})";
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"({GetNumber(args, xKey)}, {GetNumber(args, yKey)})");
 
     /// <summary>The schema of the keys a click or drag can hold, as a person does to select several things.</summary>
     protected static JsonObject ModifiersParameter() =>
@@ -386,7 +390,8 @@ public sealed partial class TypeTextTool : DesktopActionTool
     // Not "use \n for Enter": read as the two characters, Gemma 4 typed "gemma.txt\n" into a
     // Save As dialog's file name, backslash and all.
     public override string Description =>
-        "Type text into the focused control, exactly as given; a line break in the text presses Enter. Click the target field first.";
+        "Type text into the focused control, exactly as given; a line break in the text presses Enter. Click the target field first. " +
+        "Into a Save As or Open dialog's file name box, type the whole path (C:\\folder\\name.txt), whatever folder the dialog shows.";
     public override JsonObject Parameters => Schema(("text", Str("Text to type"), true));
     public override string Describe(JsonObject args) => $"Type \"{(GetString(args, "text") ?? "").Clip(60)}\"";
 
@@ -401,6 +406,9 @@ public sealed partial class TypeTextTool : DesktopActionTool
         // then goes back to the window it was meant for, not into the user's message.
         for (var at = 0; at < text.Length; at += Chunk)
         {
+            // Stop ends long text between pieces: it went on typing the rest, Enter for every
+            // line break, into whatever window had the focus.
+            ct.ThrowIfCancellationRequested();
             if (at > 0 && await WaitWhileUserTypesAsync(ctx, ct).ConfigureAwait(false))
                 ctx.Platform.HostWindow.YieldFocus();
             ctx.Platform.Input.TypeText(text.Substring(at, Math.Min(Chunk, text.Length - at)));

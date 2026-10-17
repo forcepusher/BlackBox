@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using BlackBox.Core.Settings;
@@ -244,14 +243,15 @@ public static class ServerProbe
             return new ModelFacts(state == "loaded" ? Int(lms["loaded_context_length"]) : null, state == "loaded", vision);
         }
 
-        // llama.cpp llama-server
+        // llama.cpp llama-server; "modalities" (2025 on) says whether it runs with a vision projector.
+        // Taken to see without it, a model that can't refused every request after its first screenshot.
         if (await GetJsonAsync(http, server, $"{root}/props", ct).ConfigureAwait(false) is { } props
             && (Int(props["default_generation_settings"]?["n_ctx"]) ?? Int(props["n_ctx"])) is { } nctx)
-            return new ModelFacts(nctx, true, null);
+            return new ModelFacts(nctx, true, props["modalities"]?["vision"] is JsonValue projector && projector.TryGetValue<bool>(out var takesImages) ? takesImages : null);
 
         // Ollama: the context a model runs with is its num_ctx, not what the model could do.
-        if (await OllamaContextAsync(http, server, root, ct).ConfigureAwait(false) is { } ollama)
-            return new ModelFacts(ollama, null, null);
+        if (await OllamaFactsAsync(http, server, root, ct).ConfigureAwait(false) is { } ollama)
+            return ollama;
 
         // vLLM / OpenRouter style metadata on the model list
         listed ??= await GetJsonAsync(http, server, $"{v1}/models", ct).ConfigureAwait(false) is { } list && list["data"] is JsonArray data
@@ -267,24 +267,25 @@ public static class ServerProbe
         return Int(entry["context_length"]) is { } most ? new ModelFacts(most, null, sees, Hosted: true) : new ModelFacts(null, null, sees);
     }
 
-    private static async Task<int?> OllamaContextAsync(HttpClient http, ServerSettings server, string root, CancellationToken ct)
+    /// <summary>The context an Ollama model runs with, and whether it takes images ("vision" among its capabilities).</summary>
+    private static async Task<ModelFacts?> OllamaFactsAsync(HttpClient http, ServerSettings server, string root, CancellationToken ct)
     {
         if (await GetJsonAsync(http, server, $"{root}/api/version", ct).ConfigureAwait(false) is not { } version || version["version"] is null)
             return null;
+        int? context = null;
         if (await GetJsonAsync(http, server, $"{root}/api/ps", ct).ConfigureAwait(false) is { } ps && ps["models"] is JsonArray running)
         {
             var entry = running.FirstOrDefault(m => (m?["name"] ?? m?["model"])?.ToString() == server.ModelInUse);
-            if (Int(entry?["context_length"]) is { } loaded)
-                return loaded;
+            context = Int(entry?["context_length"]);
         }
-        if (await GetJsonAsync(http, server, $"{root}/api/show", ct, new JsonObject { ["model"] = server.ModelInUse }).ConfigureAwait(false) is not { } show)
-            return null;
-        if (show["parameters"]?.ToString() is { } parameters
+        var show = await GetJsonAsync(http, server, $"{root}/api/show", ct, new JsonObject { ["model"] = server.ModelInUse }).ConfigureAwait(false);
+        bool? vision = show?["capabilities"] is JsonArray capabilities ? capabilities.Any(c => c?.ToString() == "vision") : null;
+        if (context is null && show?["parameters"]?.ToString() is { } parameters
             && Regex.Match(parameters, @"(?m)^\s*num_ctx\s+(\d+)") is { Success: true } numCtx)
-            return int.Parse(numCtx.Groups[1].Value);
-        return show["model_info"] is JsonObject info
-            ? info.Where(p => p.Key.EndsWith(".context_length", StringComparison.Ordinal)).Select(p => Int(p.Value)).FirstOrDefault(v => v is not null)
-            : null;
+            context = int.Parse(numCtx.Groups[1].Value);
+        if (context is null && show?["model_info"] is JsonObject info)
+            context = info.Where(p => p.Key.EndsWith(".context_length", StringComparison.Ordinal)).Select(p => Int(p.Value)).FirstOrDefault(v => v is not null);
+        return context is null && vision is null ? null : new ModelFacts(context, null, vision);
     }
 
     private static async Task<JsonNode?> GetJsonAsync(HttpClient http, ServerSettings server, string url, CancellationToken ct, JsonObject? postBody = null)

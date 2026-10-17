@@ -35,6 +35,9 @@ internal sealed class FakeComfyServer : IDisposable
     /// <summary>What a finished job's history says; the default saves one picture.</summary>
     public Func<string, JsonObject>? History { get; set; }
 
+    /// <summary>Whether its jobs never reach the history, as one taken out of the queue or lost to a restart.</summary>
+    public bool Forgets { get; set; }
+
     public static readonly string ObjectInfo = """
     {
       "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [["v1-5-pruned-emaonly-fp16.safetensors", "sdxl.safetensors"], {}]}},
@@ -174,7 +177,7 @@ internal sealed class FakeComfyServer : IDisposable
         {
             var id = path["history/".Length..];
             _looks[id] = _looks.GetValueOrDefault(id) + 1;
-            if (_looks[id] < 2)
+            if (_looks[id] < 2 || Forgets)
             {
                 Reply(ctx, 200, "{}");
                 return;
@@ -243,8 +246,12 @@ internal sealed class FakeComfyServer : IDisposable
         ctx.Response.Close();
     }
 
+    private bool _disposed;
+
     public void Dispose()
     {
+        if (_disposed) return; // a test may stop it early, as a server gone
+        _disposed = true;
         _listener.Stop();
         _listener.Close();
         try { _loop.Wait(2000); } catch (AggregateException) { }
@@ -483,6 +490,20 @@ public class ComfyTemplateTests
     """)!;
 
     [Fact]
+    public void A_custom_node_that_writes_its_flags_as_text_or_numbers_is_read_too()
+    {
+        // "forceInput": "true" or "output_node": 1 made reading the flag throw, and with it the whole node list.
+        var info = JsonNode.Parse("""
+            {"OddNode": {"input": {"required": {"text": ["STRING", {"multiline": "true"}], "image": ["INT", {"forceInput": 1}]}},
+                         "output": ["IMAGE"], "output_name": ["IMAGE"], "name": "OddNode", "display_name": "Odd", "category": "x", "output_node": "true"}}
+            """)!.AsObject();
+        var odd = ComfyNodeLibrary.Parse(info).Find("OddNode")!;
+        Assert.True(odd.IsOutput);
+        Assert.False(odd.Inputs.Single(i => i.Name == "image").IsWidget);
+        Assert.True(odd.Inputs.Single(i => i.Name == "text").IsWidget);
+    }
+
+    [Fact]
     public void Notes_missing_node_types_and_missing_models_are_read_from_the_editor_format()
     {
         var library = ComfyNodeLibrary.Parse(JsonNode.Parse(FakeComfyServer.ObjectInfo)!.AsObject());
@@ -562,6 +583,34 @@ public class ComfyToolTests : IDisposable
     }
 
     [Fact]
+    public async Task A_job_gone_from_comfyui_or_a_server_gone_is_said_so_instead_of_waited_on()
+    {
+        // Taken out of the queue, ComfyUI restarted or its process gone: it was waited on for the
+        // whole 30 minutes, then said to be still running.
+        var giveUp = ComfyRunner.GiveUpAfter;
+        ComfyRunner.GiveUpAfter = 2;
+        try
+        {
+            _server.Forgets = true;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var gone = await Call(new JsonObject { ["action"] = "run", ["workflow"] = JsonNode.Parse(FakeComfyServer.ApiWorkflow) }.ToJsonString());
+            Assert.Contains("isn't in ComfyUI's queue or history any more", gone.Text);
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(30), $"took {clock.Elapsed}");
+
+            // ComfyUI's process gone in the middle: nothing answers any more.
+            var api = new ComfyApi(_server.Url);
+            _server.Dispose();
+            var job = await ComfyRunner.WaitAsync(api, "job9", "client", new Dictionary<string, string>(), TimeSpan.FromMinutes(30), null, CancellationToken.None, TestContext.Current.CancellationToken);
+            Assert.Equal("error", job.Status);
+            Assert.Contains("ComfyUI stopped answering", job.Error);
+        }
+        finally
+        {
+            ComfyRunner.GiveUpAfter = giveUp;
+        }
+    }
+
+    [Fact]
     public async Task A_failed_job_says_where_and_why_with_a_hint_for_running_out_of_memory()
     {
         _server.History = _ => JsonNode.Parse("""
@@ -613,6 +662,39 @@ public class ComfyToolTests : IDisposable
         await _hub.Closing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         Assert.Equal(1, stops);
         Assert.Equal(0, _server.Frees);
+    }
+
+    [Fact]
+    public async Task A_comfyui_an_earlier_blackbox_left_running_is_closed_once_its_jobs_are_done()
+    {
+        // BlackBox closed while its jobs were still queued left it running, hidden, until a later
+        // task that used ComfyUI ended.
+        var stops = 0;
+        _hub.OwnsForTests = _ => stops == 0;
+        _hub.StopForTests = (_, _) => { stops++; return Task.CompletedTask; };
+        _hub.OthersRunForTests = () => false;
+        _server.QueueBusy = true;
+        _hub.CloseLeftover();
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        Assert.Equal(0, stops);
+        Assert.False(_hub.Closing.IsCompleted);
+
+        _server.QueueBusy = false;
+        await _hub.Closing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal(1, stops);
+    }
+
+    [Fact]
+    public async Task A_comfyui_is_left_running_at_start_while_another_blackbox_runs()
+    {
+        // A second window, or the command line, may be between two of its jobs.
+        var stops = 0;
+        _hub.OwnsForTests = _ => true;
+        _hub.StopForTests = (_, _) => { stops++; return Task.CompletedTask; };
+        _hub.OthersRunForTests = () => true;
+        _hub.CloseLeftover();
+        await _hub.Closing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal(0, stops);
     }
 
     [Fact]
@@ -744,6 +826,16 @@ public class MediaTests
     }
 
     [Fact]
+    public void A_long_line_full_of_paths_that_are_not_there_is_searched_in_a_moment()
+    {
+        // Minified JSON: every word end of the line was a look at the disk, for every path in it.
+        var line = string.Concat(Enumerable.Repeat(@"{""file"": ""C:\no such folder\made up name of a thing.txt"", ""size"": 12} ", 2000));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Empty(FileMentions.Find(line));
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), $"took {clock.Elapsed}");
+    }
+
+    [Fact]
     public void Sound_stats_tell_loudness_and_where_it_is_silent()
     {
         const int rate = 1000;
@@ -822,6 +914,19 @@ public class MeshTests : IDisposable
         Assert.Equal(1, ply.TriangleCount);
         Assert.True(ply.HasVertexColors);
         Assert.Equal(new SkiaSharp.SKColor(0, 255, 0), ply.Colors[1]);
+    }
+
+    [Fact]
+    public void A_gltf_whose_nodes_loop_back_is_read_in_a_moment()
+    {
+        // Each node its own two children: within the depth limit of 64, 2^64 visits.
+        var path = Write("loop.gltf", """
+            {"asset": {"version": "2.0"}, "nodes": [{"children": [0, 0, 7, -1]}], "meshes": []}
+            """);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        using var mesh = Mesh.Load(path);
+        Assert.Equal(0, mesh.TriangleCount);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), $"took {clock.Elapsed}");
     }
 
     [Fact]

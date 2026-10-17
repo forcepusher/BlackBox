@@ -98,7 +98,7 @@ public class SshIntegrationTests : IDisposable
         // An answer that comes after the question went away isn't typed: bash would run it.
         var timed = await Ssh("read -t 8 -p 'Name? ' a; echo; echo timed-out");
         Assert.Contains("waits for input", timed.Text);
-        await Task.Delay(TimeSpan.FromSeconds(8));
+        await Task.Delay(TimeSpan.FromSeconds(8), TestContext.Current.CancellationToken);
         var late = await Ssh(input: "late-answer");
         Assert.Contains("nothing was typed", late.Text);
         Assert.Contains("timed-out", late.Text);
@@ -133,8 +133,8 @@ public class SshIntegrationTests : IDisposable
         Directory.CreateDirectory(Path.Combine(site, "img"));
         var image = new byte[200_000];
         new Random(5).NextBytes(image);
-        await File.WriteAllBytesAsync(Path.Combine(site, "img", "a.png"), image);
-        await File.WriteAllTextAsync(Path.Combine(site, "index.html"), "v2\n");
+        await File.WriteAllBytesAsync(Path.Combine(site, "img", "a.png"), image, TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(site, "index.html"), "v2\n", TestContext.Current.CancellationToken);
         try
         {
             await Ssh("sudo rm -rf /srv/bb-copy; sudo mkdir -p /srv/bb-copy");
@@ -147,12 +147,12 @@ public class SshIntegrationTests : IDisposable
             var back = Path.Combine(local, "back");
             var down = await new CopyTool().ExecuteAsync(new() { ["from"] = $"{Host}:/srv/bb-copy/site", ["to"] = back }, _ctx, CancellationToken.None);
             Assert.False(down.IsError, down.Text);
-            Assert.Equal(image, await File.ReadAllBytesAsync(Path.Combine(back, "img", "a.png")));
+            Assert.Equal(image, await File.ReadAllBytesAsync(Path.Combine(back, "img", "a.png"), TestContext.Current.CancellationToken));
 
             // A root-only file comes down with sudo.
             var shadow = await new CopyTool().ExecuteAsync(new() { ["from"] = $"{Host}:/etc/shadow", ["to"] = Path.Combine(local, "shadow") }, _ctx, CancellationToken.None);
             Assert.False(shadow.IsError, shadow.Text);
-            Assert.Contains("root:", await File.ReadAllTextAsync(Path.Combine(local, "shadow")));
+            Assert.Contains("root:", await File.ReadAllTextAsync(Path.Combine(local, "shadow"), TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -413,6 +413,28 @@ public class SshIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task A_login_made_after_the_chat_ended_is_closed_not_kept()
+    {
+        if (Host is null) return;
+        // The app logs out of a chat it leaves while that chat's stopped run may still be logging in.
+        var hosts = new SshHosts(_knownHosts);
+        var (first, _) = await hosts.GetAsync(Host, Key, null, CancellationToken.None);
+        hosts.Dispose();
+        Assert.False(first.IsConnected);
+        var late = await Assert.ThrowsAsync<IOException>(() => hosts.GetAsync(Host, Key, null, CancellationToken.None));
+        Assert.Contains("The chat ended", late.Message);
+        Assert.Empty(hosts.Connected);
+
+        // And one still being made when the chat ends: it is closed once it's there.
+        var others = new SshHosts(_knownHosts);
+        var logging = others.GetAsync(Host, Key, null, CancellationToken.None, newLogin: true);
+        others.Dispose();
+        var ended = await Assert.ThrowsAsync<IOException>(() => logging);
+        Assert.Contains("while logging in", ended.Message);
+        Assert.Empty(others.Connected);
+    }
+
+    [Fact]
     public async Task A_key_named_once_is_offered_to_the_next_server()
     {
         if (Host is null) return;
@@ -598,7 +620,7 @@ public class SshIntegrationTests : IDisposable
         if (Host is null || Environment.GetEnvironmentVariable("BB_SSH_TEST_REBOOT") != "1") return;
         await Ssh("cd /tmp");
         await Ssh("sudo systemctl reboot", wait: 20); // returns at once, or as the connection drops
-        await Task.Delay(TimeSpan.FromSeconds(10));
+        await Task.Delay(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         SshHosts.RetryFor = TimeSpan.FromMinutes(4); // software-emulated VMs boot slowly
         var back = await Ssh("pwd; uptime", wait: 30);
         Assert.Contains("The earlier connection was lost", back.Text);
@@ -632,5 +654,79 @@ public class SshIntegrationTests : IDisposable
         var missing = await new ReadFileTool().ExecuteAsync(new JsonObject { ["path"] = dir + "/nope", ["host"] = Host }, _ctx, CancellationToken.None);
         Assert.True(missing.IsError);
         await Ssh($"sudo rm -rf {dir}");
+    }
+
+    [Fact]
+    public async Task Listing_works_where_ls_and_find_are_BusyBoxs()
+    {
+        if (Host is null) return;
+        // Alpine, OpenWrt and many a NAS: BusyBox's ls has no --time-style and its find no -printf,
+        // and the listing came back empty. Stand-ins that refuse those two the way BusyBox does.
+        await Ssh("rm -rf /tmp/bbx /tmp/bb-list && mkdir -p /tmp/bbx /tmp/bb-list/sub && echo hi > /tmp/bb-list/sub/notes.txt && " +
+                  "printf '#!/bin/sh\\nfor a in \"$@\"; do case \"$a\" in --time-style*) echo \"ls: unrecognized option: $a\" >&2; exit 1;; esac; done\\nexec /bin/ls \"$@\"\\n' > /tmp/bbx/ls && " +
+                  "printf '#!/bin/sh\\nfor a in \"$@\"; do [ \"$a\" = -printf ] && { echo \"find: unrecognized: -printf\" >&2; exit 1; }; done\\nexec /usr/bin/find \"$@\"\\n' > /tmp/bbx/find && " +
+                  "chmod +x /tmp/bbx/ls /tmp/bbx/find");
+        try
+        {
+            Assert.Contains("unrecognized", (await Ssh("( PATH=/tmp/bbx:$PATH; ls -d --time-style=+%Y / )")).Text);
+            Assert.Contains(" sub", (await Ssh($"( PATH=/tmp/bbx:$PATH; {RemoteFiles.ListScript("/tmp/bb-list", null)} )")).Text);
+            Assert.Contains("/tmp/bb-list/sub/notes.txt", (await Ssh($"( PATH=/tmp/bbx:$PATH; {RemoteFiles.ListScript("/tmp/bb-list", "*.txt")} )")).Text);
+            // An older BusyBox's timeout wants "-t 20", and some have none: the search came back empty.
+            await Ssh("printf '#!/bin/sh\\n[ \"$1\" = -t ] || { echo \"timeout: cannot execute $1\" >&2; exit 127; }\\ns=$2; shift 2; exec /usr/bin/timeout \"$s\" \"$@\"\\n' > /tmp/bbx/timeout && chmod +x /tmp/bbx/timeout");
+            Assert.Contains("/tmp/bb-list/sub/notes.txt", (await Ssh($"( PATH=/tmp/bbx:$PATH; {RemoteFiles.ListScript("/tmp/bb-list", "*.txt")} )")).Text);
+            await Ssh("printf '#!/bin/sh\\necho \"sh: timeout: not found\" >&2; exit 127\\n' > /tmp/bbx/timeout");
+            Assert.Contains("/tmp/bb-list/sub/notes.txt", (await Ssh($"( PATH=/tmp/bbx:$PATH; {RemoteFiles.ListScript("/tmp/bb-list", "*.txt")} )")).Text);
+            // The script runs in the login shell, and zsh doesn't split a variable into words.
+            if ((await Ssh("command -v zsh >/dev/null && echo HAVE-ZSH")).Text.Contains("HAVE-ZSH"))
+                Assert.Contains("/tmp/bb-list/sub/notes.txt", (await Ssh($"zsh -c {SshHost.Quote(RemoteFiles.ListScript("/tmp/bb-list", "*.txt"))}")).Text);
+        }
+        finally
+        {
+            await Ssh("rm -rf /tmp/bbx /tmp/bb-list");
+        }
+    }
+
+    [Fact]
+    public async Task A_file_is_written_where_no_temporary_file_can_be_made()
+    {
+        if (Host is null) return;
+        // Termux has no /tmp, only its own $TMPDIR: every write there said the connection broke.
+        // An rm that does nothing leaves the temporary file where it was made, to be seen.
+        await Ssh("rm -rf /tmp/bb-direct /tmp/bb-own /tmp/bb-norm && mkdir -p /tmp/bb-direct /tmp/bb-own /tmp/bb-norm && " +
+                  "printf '#!/bin/sh\\nexit 0\\n' > /tmp/bb-norm/rm && chmod +x /tmp/bb-norm/rm");
+        try
+        {
+            await Ssh($"printf hello | ( TMPDIR=/tmp/bb-own; export TMPDIR; PATH=/tmp/bb-norm:$PATH; {RemoteFiles.WriteScript("/tmp/bb-direct/b.txt", 5, append: false)} )");
+            Assert.Contains("SAME", (await Ssh("[ \"$(cat /tmp/bb-direct/b.txt)\" = hello ] && ls -A /tmp/bb-own | grep -q blackbox-write && echo SAME")).Text);
+            // With none to be had, the file is written straight, as before: without the size
+            // check, so four bytes of five go in, and nothing is said.
+            await Ssh($"printf hell | ( TMPDIR=/nonexistent; export TMPDIR; {RemoteFiles.WriteScript("/tmp/bb-direct/a.txt", 5, append: false)} ) > /tmp/bb-direct/said");
+            Assert.Contains("SAME", (await Ssh("[ \"$(cat /tmp/bb-direct/a.txt)\" = hell ] && [ ! -s /tmp/bb-direct/said ] && echo SAME")).Text);
+        }
+        finally
+        {
+            await Ssh("rm -rf /tmp/bb-direct /tmp/bb-own /tmp/bb-norm");
+        }
+    }
+
+    [Fact]
+    public async Task Edit_file_leaves_a_file_that_isnt_UTF_8_alone()
+    {
+        if (Host is null) return;
+        // Read as UTF-8 and written back as UTF-8, every Latin-1 "é" in the file became U+FFFD.
+        await Ssh(@"printf 'caf\351 = 1\n' > /tmp/bb-latin1.conf; printf 'a\000b\n' > /tmp/bb-binary");
+        try
+        {
+            var latin1 = await new EditFileTool().ExecuteAsync(new JsonObject { ["path"] = "/tmp/bb-latin1.conf", ["old_text"] = "= 1", ["new_text"] = "= 2", ["host"] = Host }, _ctx, CancellationToken.None);
+            Assert.True(latin1.IsError);
+            Assert.Contains("isn't plain UTF-8", latin1.Text);
+            Assert.Contains("63 61 66 e9 20 3d 20 31", (await Ssh("od -An -tx1 /tmp/bb-latin1.conf")).Text);
+            var binary = await new EditFileTool().ExecuteAsync(new JsonObject { ["path"] = "/tmp/bb-binary", ["old_text"] = "a", ["new_text"] = "c", ["host"] = Host }, _ctx, CancellationToken.None);
+            Assert.Contains("not a text file", binary.Text);
+        }
+        finally
+        {
+            await Ssh("rm -f /tmp/bb-latin1.conf /tmp/bb-binary");
+        }
     }
 }

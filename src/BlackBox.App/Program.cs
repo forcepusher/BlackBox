@@ -4,12 +4,25 @@ namespace BlackBox.App;
 
 internal static class Program
 {
+    /// <summary>Set once the window is up: a failure before that kept BlackBox from starting.</summary>
+    internal static bool Started { get; set; }
+
     [STAThread]
     public static void Main(string[] args)
     {
-        // Must run before Avalonia touches Skia.
-        PortableRuntime.Prepare(PortableRuntime.FindPaths());
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        var paths = PortableRuntime.FindPaths();
+        CrashLog.Watch(paths);
+        try
+        {
+            // Must run before Avalonia touches Skia.
+            PortableRuntime.Prepare(paths);
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        }
+        catch (Exception ex)
+        {
+            if (Started) CrashLog.Ended(ex);
+            else CrashLog.ShowCouldNotStart(ex);
+        }
     }
 
     // Also used by the Avalonia designer.

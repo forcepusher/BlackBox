@@ -102,6 +102,28 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_stop_while_a_call_waits_for_an_OK_is_not_taken_for_a_no()
+    {
+        // The window answers a pending OK with no when the run stops. That went into the conversation
+        // as declined, and after Continue the model asked the user what to do instead.
+        var server = new ScriptedServer(Sse.ToolCall("w1", "write_file", """{"path":"x.txt","content":"hi"}"""), Sse.Text("(not asked)"));
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        var (session, observer) = CreateSession(server, dir, new FakePlatform());
+        using var stop = new CancellationTokenSource();
+        observer.Approve = false;
+        observer.WhileAsked = stop.Cancel;
+
+        await session.RunAsync("write", observer, stop.Token);
+
+        Assert.Equal(AgentStopReason.Cancelled, observer.StopReason);
+        Assert.Single(server.Requests);
+        Assert.False(File.Exists(Path.Combine(dir, "x.txt")));
+        Assert.Equal("Not run: the user stopped the agent.", session.History[^2].Content);
+        Assert.Equal(AgentSession.StoppedNote, session.History[^1].Content);
+        Assert.DoesNotContain(session.History, m => m.Content?.Contains("declined") == true);
+    }
+
+    [Fact]
     public async Task After_a_denial_the_models_question_ends_the_turn_without_a_nudge()
     {
         // Seen live: the model asked how to go on, a nudge ("Continue with the task") read as the
@@ -131,8 +153,9 @@ public class AgentSessionTests
         await session.RunAsync("wait", observer, cts.Token);
 
         Assert.Equal(AgentStopReason.Cancelled, observer.StopReason);
-        Assert.Equal(ChatRole.Tool, session.History[^1].Role);
-        Assert.Equal("t1", session.History[^1].ToolCallId);
+        Assert.Equal(ChatRole.Tool, session.History[^2].Role);
+        Assert.Equal("t1", session.History[^2].ToolCallId);
+        Assert.Equal(AgentSession.StoppedNote, session.History[^1].Content);
     }
 
     [Fact]
@@ -220,18 +243,60 @@ public class AgentSessionTests
         const string limited = """{"error":{"message":"Rate limit exceeded for free models. Please try again later."}}""";
         var server = new ScriptedServer(Sse.Text("Made it.")) { RetryAfter = TimeSpan.FromSeconds(1) };
         server.Failures.Enqueue(((HttpStatusCode)429, limited));
-        server.Failures.Enqueue(((HttpStatusCode)429, limited));
         var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
         var watch = System.Diagnostics.Stopwatch.StartNew();
 
         await session.RunAsync("go", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal(3, server.Requests.Count);
-        Assert.Equal(server.Requests[0].ToJsonString(), server.Requests[2].ToJsonString());
-        Assert.True(watch.Elapsed >= TimeSpan.FromSeconds(1.9), $"waited {watch.Elapsed}");
-        Assert.Equal(2, observer.Notices.Count(n => n.Contains("Rate limit exceeded for free models") && n.Contains("Trying again in 1 s")));
+        Assert.Equal(2, server.Requests.Count);
+        Assert.Equal(server.Requests[0].ToJsonString(), server.Requests[1].ToJsonString());
+        Assert.True(watch.Elapsed >= TimeSpan.FromSeconds(0.9), $"waited {watch.Elapsed}");
+        Assert.Single(observer.Notices, n => n.Contains("Rate limit exceeded for free models") && n.Contains("Trying again in 1 s"));
         Assert.DoesNotContain(observer.Notices, n => n.Contains("Reconnecting")); // not a dropped connection, nor counted as one
+    }
+
+    [Fact]
+    public async Task A_tool_call_the_length_limit_cut_short_is_not_run()
+    {
+        // Repaired by closing what was left open, it ran: write_file wrote half the file and said done.
+        var dir = Directory.CreateTempSubdirectory("bb-cut-").FullName;
+        var server = new ScriptedServer(
+            Sse.CutToolCall("c1", "write_file", """{"path": "notes.txt", "content": "the first half of a long fi"""),
+            Sse.ToolCall("c2", "write_file", """{"path": "notes.txt", "content": "a short first part"}"""),
+            Sse.Text("Done."));
+        var (session, observer) = CreateSession(server, dir, new FakePlatform());
+        try
+        {
+            await session.RunAsync("write the notes", observer, TestContext.Current.CancellationToken);
+
+            Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+            Assert.Equal(["write_file"], observer.ToolsRun);
+            Assert.Equal("a short first part", await File.ReadAllTextAsync(Path.Combine(dir, "notes.txt"), TestContext.Current.CancellationToken));
+            Assert.Contains(observer.Notices, n => n.Contains("cut a tool call short"));
+            var told = server.Requests[1]["messages"]!.AsArray()[^1]!;
+            Assert.Contains("cut off by the server's limit", (string?)told["content"]);
+            // The cut call isn't in the conversation, which stays a valid request.
+            Assert.DoesNotContain("c1", server.Requests[1].ToJsonString());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task A_repaired_call_goes_back_to_the_server_as_whole_json()
+    {
+        // Sent back as it came, arguments that aren't JSON can make a chat template fail every later request.
+        var server = new ScriptedServer(Sse.ToolCall("c1", "list_directory", """{'path': '.'}"""), Sse.Text("Done."));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("look", observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal(["list_directory"], observer.ToolsRun);
+        var call = server.Requests[1]["messages"]!.AsArray().Single(m => m!["tool_calls"] is not null)!["tool_calls"]![0]!;
+        Assert.Equal(""".""", JsonNode.Parse(call["function"]!["arguments"]!.GetValue<string>())!["path"]!.ToJsonString().Trim('"'));
     }
 
     [Fact]
@@ -243,6 +308,10 @@ public class AgentSessionTests
         Assert.Equal(TimeSpan.FromMinutes(5), AgentSession.RateLimitWait(null, 40)); // an hourly allowance used up
         Assert.Equal(TimeSpan.FromSeconds(1), AgentSession.RateLimitWait(TimeSpan.Zero, 1));
         Assert.Equal(TimeSpan.FromHours(1), AgentSession.RateLimitWait(TimeSpan.FromHours(8), 1)); // asked again within the hour
+        // A server that goes on saying "in a second" isn't asked once a second for as long as it says no.
+        Assert.Equal(TimeSpan.FromSeconds(10), AgentSession.RateLimitWait(TimeSpan.FromSeconds(1), 2));
+        Assert.Equal(TimeSpan.FromMinutes(1), AgentSession.RateLimitWait(TimeSpan.Zero, 9));
+        Assert.Equal(TimeSpan.FromMinutes(30), AgentSession.RateLimitWait(TimeSpan.FromMinutes(30), 3));
     }
 
     [Fact]
@@ -324,6 +393,79 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_server_that_cannot_be_reached_is_waited_for_and_the_task_goes_on()
+    {
+        // Twelve quick tries were over in half a minute: an unattended task ended on a short outage
+        // (the server's PC restarting, the VPN reconnecting). Waits like these go on until Stop.
+        var server = new ScriptedServer(Sse.Text("Made it.")) { Unreachable = 1 };
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("go", observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Single(server.Requests);
+        Assert.Contains(observer.Notices, n => n.StartsWith("Could not reach http://test/v1:") && n.EndsWith("Trying again in 2 s (Stop ends the wait)…"));
+        Assert.DoesNotContain(observer.Notices, n => n.Contains("Reconnecting"));
+    }
+
+    [Fact]
+    public async Task A_bug_that_ends_a_run_is_handed_over_whole_and_a_servers_error_is_not()
+    {
+        // "Object reference not set to an instance of an object." alone tells nobody where.
+        var bug = new InvalidOperationException("a bug");
+        var server = new ScriptedServer { Responder = _ => throw bug };
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("go", observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal(AgentStopReason.Error, observer.StopReason);
+        Assert.Equal("a bug", observer.Detail);
+        Assert.Same(bug, observer.Failed);
+
+        var refused = new ScriptedServer();
+        refused.Failures.Enqueue((HttpStatusCode.BadRequest, "no such model"));
+        (session, observer) = CreateSession(refused, Path.GetTempPath(), new FakePlatform());
+        await session.RunAsync("go", observer, TestContext.Current.CancellationToken);
+        Assert.Equal(AgentStopReason.Error, observer.StopReason);
+        Assert.Null(observer.Failed);
+    }
+
+    [Fact]
+    public async Task A_gateways_model_server_failing_mid_stream_is_asked_again_with_the_prompt_a_line_lower()
+    {
+        // Kilo answers 200 and then says in the stream that the model server behind it failed. That
+        // ended the run; and for half an hour Kilo's free Nemotron failed every request that began
+        // with BlackBox's prompt, while one with a blank line in front got through in seconds.
+        var server = new ScriptedServer(
+            """data: {"error":{"message":"Upstream idle timeout exceeded"}}""" + "\n\n",
+            Sse.Text("Made it."));
+        var client = new OpenAiChatClient(new HttpClient(server), "http://stuck-gateway.test", null);
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(true), ctx, "sys");
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("go", observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count);
+        Assert.Equal("sys", server.Requests[0]["messages"]![0]!["content"]!.GetValue<string>());
+        Assert.Equal("\nsys", server.Requests[1]["messages"]![0]!["content"]!.GetValue<string>());
+        Assert.Contains(observer.Notices, n => n.Contains("Upstream idle timeout exceeded") && n.Contains("Reconnecting"));
+        // The requests after it begin the same way, so the server's cache holds again.
+        await session.RunAsync("and again", observer, TestContext.Current.CancellationToken);
+        Assert.Equal("\nsys", server.Requests[2]["messages"]![0]!["content"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData(null, "Upstream error from Nvidia: Internal server error", true)]
+    [InlineData("502", "Bad gateway", true)]
+    [InlineData(null, "The model is overloaded, try again later", true)]
+    [InlineData("400", "Invalid tool schema", false)]
+    [InlineData(null, "Your account has no access to this model", false)]
+    public void Errors_in_a_stream_are_sent_again_when_they_are_the_servers_own(string? code, string message, bool again) =>
+        Assert.Equal(again, OpenAiChatClient.Transient(code, message));
+
+    [Fact]
     public async Task Server_errors_and_busy_answers_are_sent_again_like_drops()
     {
         var server = new ScriptedServer(Sse.Text("Made it."));
@@ -353,7 +495,7 @@ public class AgentSessionTests
         var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(true), ctx, "sys");
         var observer = new RecordingObserver();
 
-        await session.RunAsync("go", observer, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20));
+        await session.RunAsync("go", observer, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
         Assert.Single(server.Requests); // the one that got through
@@ -497,10 +639,10 @@ public class AgentSessionTests
         var server = new ScriptedServer(Sse.ToolCall("w1", "wait", """{"seconds":120}"""), Sse.Text("Okay, stopping the watch."), Sse.Text("Nothing else to do."));
         var (s, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
         session = s;
-        _ = Task.Delay(500).ContinueWith(_ => session.Steer("You can stop watching now"));
+        _ = Task.Delay(500, TestContext.Current.CancellationToken).ContinueWith(_ => session.Steer("You can stop watching now"), TestContext.Current.CancellationToken);
         var clock = System.Diagnostics.Stopwatch.StartNew();
 
-        await session.RunAsync("Watch the chat for two minutes", observer, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+        await session.RunAsync("Watch the chat for two minutes", observer, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
 
         Assert.True(clock.Elapsed < TimeSpan.FromSeconds(20), $"the wait went on for {clock.Elapsed}");
         Assert.Contains("the user sent you a message", observer.Results[0].Text);
@@ -689,6 +831,20 @@ public class AgentSessionTests
         Assert.Equal(["yield", "type " + first, "yield", "type " + second, "type z"], platform.Actions);
     }
 
+    [Fact]
+    public async Task Stop_ends_long_text_between_its_pieces()
+    {
+        // It went on typing the rest after Stop, Enter for every line break, into whatever had the focus.
+        using var stop = new CancellationTokenSource();
+        var platform = new FakePlatform { OnType = _ => stop.Cancel() };
+        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false }, WorkingDirectory = Path.GetTempPath() };
+        var text = new string('x', TypeTextTool.Chunk * 3);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new TypeTextTool().ExecuteAsync(new JsonObject { ["text"] = text }, ctx, stop.Token));
+
+        Assert.Single(platform.Actions, a => a.StartsWith("type "));
+    }
+
     /// <summary>A context in which the user types to the agent for half a second once <paramref name="done"/> actions of a kind ("keys", "type") are done.</summary>
     private static ToolContext TypingStartsAfter(FakePlatform platform, string kind, int done)
     {
@@ -738,6 +894,59 @@ public class AgentSessionTests
         public override ToolRisk Risk => ToolRisk.ReadOnly;
         public override JsonObject Parameters => Schema();
         public override Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct) => throw new FormatException("the format was odd");
+    }
+
+    [Fact]
+    public async Task A_model_that_cant_see_gets_no_picture_from_a_tool()
+    {
+        // An MCP tool's picture reached a text-only model's server, which refused that request and
+        // every one after it, the picture being in the conversation.
+        var server = new ScriptedServer(Sse.ToolCall("p1", "render", "{}"), Sse.Text("Rendered."));
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(), SeesImages = false };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null),
+            new ChatRequestOptions(), new ToolRegistry([new PictureTool()]), ctx, "sys");
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("render it", observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(0, Images(server.Requests[1]));
+        Assert.Contains("left out: the model in use can't see images", server.Requests[1]["messages"]!.AsArray()[^1]!["content"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task A_server_that_refuses_pictures_gets_them_in_words_and_the_run_goes_on()
+    {
+        // A model nothing said can't see got screen tools, and from its first screenshot on every
+        // request failed: the screenshot stays in the conversation.
+        const string refusal = """data: {"error":{"message":"image input is not supported - hint: if this is unexpected, you may need to provide the mmproj","code":400}}""" + "\n\n";
+        var replies = new Queue<string>([Sse.ToolCall("s1", "screenshot", "{}"), Sse.ToolCall("s2", "screenshot", "{}"),
+            Sse.ToolCall("m1", "mouse_click", """{"target": "OK button", "x": 100, "y": 50}"""), Sse.Text("I can't see the screen, but the file is saved.")]);
+        var server = new ScriptedServer { Responder = req => Images(req) > 0 ? refusal : replies.Dequeue() };
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("check the screen", observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.False(session.SeesImages);
+        Assert.Contains(observer.Notices, n => n.Contains("doesn't take pictures") && n.Contains("mmproj"));
+        // Asked once with the picture, then without it, and the second screenshot never had one;
+        // nor did the click send one to be aimed (a look of its own, without tools).
+        Assert.Equal(5, server.Requests.Count);
+        Assert.Equal([0, 1, 0, 0, 0], server.Requests.Select(Images));
+        Assert.All(server.Requests, r => Assert.NotNull(r["tools"]));
+        Assert.Contains("A picture, left out", server.Requests[2].ToJsonString());
+        Assert.Contains("left out: the model in use can't see images", server.Requests[3]["messages"]!.AsArray()[^1]!["content"]!.GetValue<string>());
+    }
+
+    private sealed class PictureTool : Tool
+    {
+        public override string Name => "render";
+        public override string Description => "Gives a picture back, as some MCP tools do.";
+        public override ToolRisk Risk => ToolRisk.ReadOnly;
+        public override JsonObject Parameters => Schema();
+        public override Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct) =>
+            Task.FromResult(new ToolResult("Rendered the scene.", McpTestServer.TestTools.Png, "image/png", ImageCaption: "The picture the tool gave back:"));
     }
 
     [Fact]
@@ -873,6 +1082,29 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public void A_chorus_that_comes_back_between_verses_is_not_a_loop()
+    {
+        // Lyrics drafted for a song in the thinking: the chorus three times, other lines between.
+        const string chorus = "[Chorus]\nWe are the lights that never fade, we are the songs the city made,\n" +
+                              "hold on, hold on, the night is young, so sing it loud with everyone,\n" +
+                              "we are the lights that never fade, never fade, never fade away.\n\n";
+        Assert.True(chorus.Length > RepetitionGuard.TailChars);
+        var song = "[Verse 1]\nMorning trains and coffee cups, a hundred faces waking up,\n\n" + chorus +
+                   "[Verse 2]\nNeon rain on window glass, we let the quiet moments pass, and every street is calling out our names tonight,\n\n" + chorus +
+                   "[Bridge]\nIf the music stops we keep the beat alive,\n\n" + chorus;
+        var guard = new RepetitionGuard(null);
+        foreach (var piece in song.Chunk(7))
+            guard.OnDelta(new StreamDelta(StreamChannel.Reasoning, new string(piece)));
+
+        // A paragraph going round with a number changed in each round is still caught, a little later.
+        const string paragraph = "and if that doesn't work either, the dialog must still be open behind the main window, so I should " +
+                                 "bring it to the front first and then look at the screenshot again before I decide anything else about it. ";
+        var rounds = new[] { 5, 40, 300, 7, 2000, 61, 9 }.Select(x => $"Let me try clicking at ({x}, {x * 3}) instead, " + paragraph);
+        Assert.True(RepetitionGuard.IsRepeating(string.Concat(rounds)));
+        Assert.False(RepetitionGuard.IsRepeating(string.Concat(rounds.Take(5))));
+    }
+
+    [Fact]
     public void Repeated_board_printouts_are_not_a_loop()
     {
         var board = string.Concat(Enumerable.Repeat("8 2 8 2\n16 8 16 4\n8 32 256 2\n4 16 2 2\n", 20));
@@ -927,6 +1159,56 @@ public class AgentSessionTests
         Assert.Contains("notes.txt", messages[3]!["content"]!.ToString());
         Assert.Equal(1, Images(server.Requests[1]));
         Assert.Contains(observer.Notices, n => n.StartsWith("Context reset"));
+    }
+
+    [Fact]
+    public async Task A_reset_shows_the_last_screenshot_as_the_screen_not_the_last_picture()
+    {
+        // A picture read_file opened, or one the user attached (kept with their message anyway),
+        // was put after the note as "The screen right now:".
+        var server = new ScriptedServer { Responder = _ => Sse.Text("NOTE: looked at cat.png.") };
+        var (session, observer) = LongSession(server, contextTokens: 40_000);
+        session.History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText("The picture cat.png:"), ContentPart.FromImage([8, 8, 8], "image/jpeg")] });
+        session.History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText("Like this one"), ContentPart.FromImage([9, 9, 9], "image/jpeg")], FromUser = true });
+
+        await session.ResetContextAsync(observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal("The screen right now:", session.History[^1].Parts![0].Text);
+        Assert.Equal([7, 7, 7], session.History[^1].Parts![1].ImageBytes);
+        Assert.Equal([[9, 9, 9], [7, 7, 7]], session.History.SelectMany(m => m.Parts ?? []).Where(p => p.IsImage).Select(p => p.ImageBytes!));
+
+        // A second reset before the next screenshot kept no screen at all.
+        await session.ResetContextAsync(observer, TestContext.Current.CancellationToken);
+        Assert.Equal("The screen right now:", session.History[^1].Parts![0].Text);
+        Assert.Equal([7, 7, 7], session.History[^1].Parts![1].ImageBytes);
+    }
+
+    [Fact]
+    public async Task Where_the_user_stopped_a_task_is_said_in_the_conversation_and_kept_through_a_reset()
+    {
+        // Stopped in Paint and given a story to write next, the model wrote it and then "returned
+        // to the Paint task, which is still incomplete"; its handoff note carried Paint on after a reset.
+        var server = new ScriptedServer
+        {
+            Responder = req => LastText(req) == AgentSession.HandoffRequest ? Sse.Text("NOTE: the story is written.")
+                : LastText(req) == "Write a story" ? Sse.Text("Done.")
+                : Sse.ToolCall("w1", "wait", """{"seconds":30}"""),
+        };
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+
+        await session.RunAsync("Draw a circle in Paint", observer, stop.Token);
+        Assert.Equal(AgentStopReason.Cancelled, observer.StopReason);
+        Assert.Equal(AgentSession.StoppedNote, session.History[^1].Content);
+        Assert.Equal("Not run: the user stopped the agent.", session.History[^2].Content);
+
+        await session.RunAsync("Write a story", observer, TestContext.Current.CancellationToken);
+        var messages = server.Requests[^1]["messages"]!.AsArray();
+        Assert.Equal(AgentSession.StoppedNote, messages[^2]!["content"]!.ToString());
+        Assert.Equal("Write a story", messages[^1]!["content"]!.ToString());
+
+        await session.ResetContextAsync(observer, TestContext.Current.CancellationToken);
+        Assert.Equal(["Draw a circle in Paint", AgentSession.StoppedNote, "Write a story"], session.History.Take(3).Select(m => m.Content));
     }
 
     [Theory]

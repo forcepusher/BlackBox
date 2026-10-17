@@ -83,7 +83,7 @@ public sealed class ReadFileTool : Tool
         if (DocumentText.Handles(path))
         {
             string text;
-            try { text = DocumentText.Read(path); }
+            try { text = DocumentText.Read(path, ct); }
             catch (InvalidDataException ex) { return ToolResult.Error(ex.Message); }
             using var lines = new StringReader(text);
             return await NumberedAsync(lines, offset, limit, ct).ConfigureAwait(false);
@@ -92,22 +92,38 @@ public sealed class ReadFileTool : Tool
             return ToolResult.Error($"{path} is not a text file ({new FileInfo(path).Length:N0} bytes); read_file reads text, PDF and Office documents, and pictures.");
 
         // Line by line, so a log of gigabytes doesn't have to fit in memory to read a part of it.
-        using var reader = new StreamReader(path, detectEncodingFromByteOrderMarks: true);
+        using var reader = TextFiles.OpenText(path);
         return await NumberedAsync(reader, offset, limit, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Lines <paramref name="offset"/> on, numbered, up to <paramref name="limit"/> of them and <see cref="MaxChars"/> in all.</summary>
+    /// <summary>The longest line shown whole; what a longer one has past it is counted, not shown.</summary>
+    internal const int MaxLine = 20_000;
+
+    /// <summary>
+    /// Lines <paramref name="offset"/> on, numbered, up to <paramref name="limit"/> of them and
+    /// <see cref="MaxChars"/> in all, the line being added included. The limit was checked before
+    /// each line went in, so a minified file's single line went in whole, megabytes of it, filled
+    /// the context, and couldn't be read in parts either.
+    /// </summary>
     private static async Task<ToolResult> NumberedAsync(TextReader reader, int offset, int limit, CancellationToken ct)
     {
         var sb = new StringBuilder();
         int total = 0, last = 0;
-        while (await reader.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
+        var full = false;
+        await foreach (var (line, leftOut) in LinesAsync(reader, MaxLine, ct).ConfigureAwait(false))
         {
-            if (++total >= offset && total < offset + limit && sb.Length < MaxChars)
+            if (++total < offset || total >= offset + limit || full)
+                continue;
+            if (last > 0 && sb.Length + line.Length > MaxChars)
             {
-                sb.Append(total).Append('\t').AppendLine(line);
-                last = total;
+                full = true;
+                continue;
             }
+            sb.Append(total).Append('\t').Append(line);
+            if (leftOut > 0)
+                sb.Append(LeftOut(leftOut));
+            sb.AppendLine();
+            last = total;
         }
         if (total == 0)
             return new ToolResult("(empty file)");
@@ -116,6 +132,50 @@ public sealed class ReadFileTool : Tool
         if (offset > 1 || last < total)
             sb.AppendLine($"[showing lines {offset}-{last} of {total}; use offset to read more]");
         return new ToolResult(sb.ToString());
+    }
+
+    /// <summary>The note in place of the rest of a line longer than <see cref="MaxLine"/>.</summary>
+    internal static string LeftOut(long chars) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $" [... {chars:N0} more characters of this line left out; run_shell can show parts of it ...]");
+
+    /// <summary>
+    /// The lines of <paramref name="reader"/> as ReadLine splits them, each cut to
+    /// <paramref name="maxLine"/> characters with the count of the rest: a file of one line of
+    /// hundreds of megabytes was read into memory whole.
+    /// </summary>
+    internal static async IAsyncEnumerable<(string Line, long LeftOut)> LinesAsync(TextReader reader, int maxLine,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        var buffer = new char[16 * 1024];
+        var line = new StringBuilder();
+        long leftOut = 0;
+        var afterCr = false;
+        int n;
+        while ((n = await reader.ReadAsync(buffer.AsMemory(), ct).ConfigureAwait(false)) > 0)
+        {
+            for (var i = 0; i < n; i++)
+            {
+                var c = buffer[i];
+                if (c is '\r' or '\n')
+                {
+                    if (c == '\n' && afterCr)
+                    {
+                        afterCr = false; // the \n of a \r\n
+                        continue;
+                    }
+                    afterCr = c == '\r';
+                    yield return (line.ToString(), leftOut);
+                    line.Clear();
+                    leftOut = 0;
+                    continue;
+                }
+                afterCr = false;
+                if (line.Length < maxLine) line.Append(c);
+                else leftOut++;
+            }
+        }
+        if (line.Length > 0 || leftOut > 0)
+            yield return (line.ToString(), leftOut);
     }
 
     /// <summary>A GIF or WebP with more than one frame.</summary>
@@ -137,7 +197,7 @@ public sealed class ReadFileTool : Tool
     {
         Span<byte> head = stackalloc byte[8000];
         int read;
-        using (var stream = File.OpenRead(path))
+        using (var stream = TextFiles.OpenRead(path))
             read = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
         head = head[..read];
         return !head.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xFE]) && !head.StartsWith((ReadOnlySpan<byte>)[0xFE, 0xFF]) && head.Contains((byte)0);
@@ -153,7 +213,8 @@ public sealed class WriteFileTool : Tool
         "A path ending in .docx, .xlsx, .pptx or .pdf makes a real Word, Excel, PowerPoint or PDF document from Markdown content: " +
         "headings, paragraphs, lists, tables, **bold**, *italic*, links, pictures as ![caption](C:\\path\\picture.png), a line \\newpage for a new page. " +
         "In .xlsx each heading starts a sheet named after it and tables fill it; a cell starting with = is a formula, and numbers, 12%, $1,200 and " +
-        "2026-10-16 become values. In .pptx a line --- starts the next slide, and a slide's first heading is its title. " +
+        "2026-10-16 become values shown as written (write amounts as $1,200.00 to show them in dollars; a formula under them shows dollars too). " +
+        "In .pptx a line --- starts the next slide, and a slide's first heading is its title. " +
         "To change an existing document, use edit_file, which keeps its formatting.";
     public override ToolRisk Risk => ToolRisk.Risky;
     public override JsonObject Parameters => Schema(
@@ -193,11 +254,11 @@ public sealed class WriteFileTool : Tool
             // Appending only continues a file; a typo in the path must not start a new one.
             if (!existed)
                 return ToolResult.Error($"Cannot append: {path} does not exist. Check the path, or create the file first with append=false.");
-            await File.AppendAllTextAsync(path, content, ct).ConfigureAwait(false);
+            await TextFiles.AppendAsync(path, content, ct).ConfigureAwait(false);
             return new ToolResult($"Appended {content.Length} chars to {path} (now {new FileInfo(path).Length} bytes).");
         }
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, content, ct).ConfigureAwait(false);
+        await TextFiles.WriteAllAsync(path, content, TextFiles.ForNewFile(path), ct).ConfigureAwait(false);
         return new ToolResult($"{(existed ? "Overwrote" : "Created")} {path} ({content.Length} chars).");
     }
 }
@@ -210,7 +271,7 @@ public sealed class EditFileTool : Tool
         "Also changes Word (.docx) and PowerPoint (.pptx) files in place, keeping their formatting: old_text as read_file shows it, " +
         "new_text may use **bold** and *italic*, and a line break in it starts a new paragraph (\"# \" at its start makes a heading). " +
         "In Excel (.xlsx) give cells as read_file shows them: old_text the cells to change (\"B7 =SUM(B2:B6)\") or empty, new_text the cells to set " +
-        "(\"B7 =SUM(B2:B7)\", \"A8 Total\", \"Budget!C9 12.5\"); without cell addresses, text is replaced in the cells. " +
+        "(\"B7 =SUM(B2:B7)\", \"A8 Total\", \"B2 $1,200.00\" to show it in dollars, \"Budget!C9 12.5\"); without cell addresses, text is replaced in the cells. " +
         "To add a row between others (above a total), start new_text with a line \"insert row 7\" (old_text empty): the rows below move down " +
         "with every formula pointing at them, and the new row is formatted like the one above; \"delete rows 3-4\" takes rows out.";
     public override ToolRisk Risk => ToolRisk.Risky;
@@ -250,30 +311,31 @@ public sealed class EditFileTool : Tool
         if (oldText.Length == 0)
             return ToolResult.Error("old_text must not be empty.");
 
-        // Read and written back in the file's own encoding: a UTF-8 signature or UTF-16 stays.
-        string text;
-        Encoding encoding;
-        using (var reader = new StreamReader(path, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: true))
-        {
-            text = await reader.ReadToEndAsync(ct).ConfigureAwait(false);
-            encoding = reader.CurrentEncoding;
-        }
+        // Read and written back in the file's own encoding: a UTF-8 signature, UTF-16 or the ANSI
+        // code page stays, and so does every character the edit doesn't touch.
+        var (text, encoding) = await TextFiles.ReadAllAsync(path, ct).ConfigureAwait(false);
 
         var count = Count(text, oldText);
+        var crlf = text.Contains("\r\n");
         // The model writes \n; in a file saved with Windows line endings that never matches.
-        if (count == 0 && text.Contains("\r\n") && oldText.Contains('\n') && !oldText.Contains('\r'))
+        if (count == 0 && crlf && oldText.Contains('\n') && !oldText.Contains('\r'))
         {
             oldText = oldText.Replace("\n", "\r\n");
-            newText = newText.ReplaceLineEndings("\r\n");
             count = Count(text, oldText);
         }
+        // New lines get the file's line endings, also where old_text had none to change.
+        if (crlf && newText.Contains('\n') && !newText.Contains('\r'))
+            newText = newText.ReplaceLineEndings("\r\n");
         if (count == 0)
             return ToolResult.Error("old_text was not found in the file. Read the file again and copy the text exactly.");
         var all = GetBool(args, "replace_all");
         if (count > 1 && !all)
             return ToolResult.Error($"old_text occurs {count} times. Include more surrounding text to make it unique, or set replace_all to change every one.");
 
-        await File.WriteAllTextAsync(path, text.Replace(oldText, newText, StringComparison.Ordinal), encoding, ct).ConfigureAwait(false);
+        var edited = text.Replace(oldText, newText, StringComparison.Ordinal);
+        if (TextFiles.NeedsSignature(path, encoding, edited))
+            encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+        await TextFiles.WriteAllAsync(path, edited, encoding, ct).ConfigureAwait(false);
         return new ToolResult(count > 1 ? $"Edited {path}: replaced {count} occurrences." : $"Edited {path}.");
     }
 
@@ -311,13 +373,17 @@ public sealed class ListDirectoryTool : Tool
         if (!Directory.Exists(dir))
             return Task.FromResult(ToolResult.Error($"Directory not found: {dir}"));
 
-        var pattern = GetString(args, "pattern");
+        var pattern = Glob(GetString(args, "pattern"));
+        // A pattern with a folder in it ("src/*.cs") is matched against the path under dir, with
+        // forward slashes: a backslash escapes the next character in these patterns.
+        var byPath = pattern?.Contains('/') == true;
         var giveUp = DateTime.UtcNow + SearchTime;
         var entries = new FileSystemEnumerable<string>(dir,
             (ref FileSystemEntry e) => e.IsDirectory
                 ? Path.GetRelativePath(dir, e.ToFullPath()) + Path.DirectorySeparatorChar
                 : $"{Path.GetRelativePath(dir, e.ToFullPath())}  ({e.Length:N0} bytes)",
-            new EnumerationOptions { RecurseSubdirectories = pattern is not null, IgnoreInaccessible = true })
+            // Hidden folders too (.git, AppData), which were left out without a word.
+            new EnumerationOptions { RecurseSubdirectories = pattern is not null, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.System })
         {
             // Asked for every entry looked at, matching or not, so a search through a whole drive
             // for something that isn't there still ends on time, or at once on Stop.
@@ -326,7 +392,9 @@ public sealed class ListDirectoryTool : Tool
                 ct.ThrowIfCancellationRequested();
                 if (DateTime.UtcNow > giveUp)
                     throw new TimeoutException();
-                return pattern is null || FileSystemName.MatchesSimpleExpression(pattern, e.FileName);
+                return pattern is null || (byPath
+                    ? FileSystemName.MatchesSimpleExpression(pattern, Path.GetRelativePath(dir, e.ToFullPath()).Replace('\\', '/'))
+                    : FileSystemName.MatchesSimpleExpression(pattern, e.FileName));
             },
         };
 
@@ -348,6 +416,50 @@ public sealed class ListDirectoryTool : Tool
         {
             sb.AppendLine($"[stopped after searching for {SearchTime.TotalSeconds:0} seconds; give a narrower path or pattern]");
         }
+        if (count == 0)
+        {
+            // Folders under it that can't be read are skipped, but one that can't be read itself
+            // listed as nothing at all, which said "(empty folder)".
+            if (!CanRead(dir))
+                return Task.FromResult(ToolResult.Error($"Permission denied to list {dir}: Windows doesn't let this account read it."));
+            sb.AppendLine(pattern is null ? "(empty folder)" : $"(nothing matches {pattern} here or in the folders under it)");
+        }
         return Task.FromResult(new ToolResult(sb.ToString()));
+    }
+
+    private static bool CanRead(string dir)
+    {
+        try
+        {
+            using var entries = Directory.EnumerateFileSystemEntries(dir).GetEnumerator();
+            entries.MoveNext();
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// The pattern as a search for files at any depth: "**/*.py", the usual way models write it,
+    /// is "*.py" (which searches subfolders anyway), and an empty one is none. "**/*.py" matched
+    /// against a bare file name never matched, and the search said nothing for 20 seconds.
+    /// </summary>
+    internal static string? Glob(string? pattern)
+    {
+        var p = pattern?.Trim().Replace('\\', '/');
+        while (true)
+        {
+            if (p?.StartsWith("**/", StringComparison.Ordinal) == true) p = p[3..];
+            else if (p?.StartsWith("./", StringComparison.Ordinal) == true) p = p[2..];
+            else break;
+        }
+        p = p?.Replace("/**/", "/");
+        return string.IsNullOrEmpty(p) ? null : p is "**" ? "*" : p;
     }
 }

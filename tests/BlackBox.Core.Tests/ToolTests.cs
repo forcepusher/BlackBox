@@ -536,6 +536,50 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task Files_in_the_ansi_code_page_or_utf16_are_read_edited_and_appended_to_as_they_are()
+    {
+        // Windows PowerShell's Set-Content writes ANSI and Out-File UTF-16: read as UTF-8, é and €
+        // turned into U+FFFD all through the file, and edit_file wrote that back.
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+        // In the PC's own code page, as Set-Content writes it: 1252 on an English Windows, 1251 on a
+        // Russian one, where é is read as й. A text that code page holds: it failed on a 1251 PC.
+        var ansi = System.Text.Encoding.GetEncoding(0);
+        var sample = new[] { "Café 5 €", "Привет 5 €", "Γειά 5 €", "日本語 5" }.FirstOrDefault(s => ansi.GetString(ansi.GetBytes(s)) == s);
+        Assert.SkipWhen(sample is null, $"No sample text for code page {ansi.CodePage}.");
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        var ctx = Ctx(new FakePlatform(), dir);
+        var notes = Path.Combine(dir, "notes.txt");
+        File.WriteAllBytes(notes, ansi.GetBytes(sample + "\r\nTotal 5\r\n"));
+
+        Assert.Contains(sample, (await new ReadFileTool().ExecuteAsync(new JsonObject { ["path"] = notes }, ctx, CancellationToken.None)).Text);
+        var edit = await new EditFileTool().ExecuteAsync(new JsonObject { ["path"] = notes, ["old_text"] = "Total 5", ["new_text"] = "Total 6\nPaid" }, ctx, CancellationToken.None);
+        Assert.False(edit.IsError, edit.Text);
+        // Every other byte as it was, and the new line with the file's own line ending.
+        Assert.Equal(ansi.GetBytes(sample + "\r\nTotal 6\r\nPaid\r\n"), File.ReadAllBytes(notes));
+
+        var list = Path.Combine(dir, "processes.txt");
+        File.WriteAllText(list, "notepad\r\n", new System.Text.UnicodeEncoding(bigEndian: false, byteOrderMark: true));
+        await new WriteFileTool().ExecuteAsync(new JsonObject { ["path"] = list, ["content"] = "calc\r\n", ["append"] = true }, ctx, CancellationToken.None);
+        Assert.Equal("notepad\r\ncalc\r\n", File.ReadAllText(list)); // one UTF-16 text, not UTF-8 bytes after UTF-16 ones
+    }
+
+    [Fact]
+    public async Task A_file_another_program_is_writing_can_still_be_read()
+    {
+        // A running server's log: Windows refuses a plain read while another handle can write.
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        var log = Path.Combine(dir, "server.log");
+        await using var writer = new FileStream(log, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+        await writer.WriteAsync("started on port 5000\n"u8.ToArray(), TestContext.Current.CancellationToken);
+        await writer.FlushAsync(TestContext.Current.CancellationToken);
+
+        var result = await new ReadFileTool().ExecuteAsync(new JsonObject { ["path"] = log }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains("started on port 5000", result.Text);
+    }
+
+    [Fact]
     public async Task Edit_file_replaces_every_occurrence_when_asked()
     {
         var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
@@ -593,6 +637,60 @@ public class ToolTests
 
         var found = await new ListDirectoryTool().ExecuteAsync(new JsonObject { ["path"] = dir, ["pattern"] = "*.TXT" }, Ctx(new FakePlatform(), dir), CancellationToken.None);
         Assert.Contains("a.txt  (1 bytes)", found.Text);
+    }
+
+    [Fact]
+    public async Task List_directory_takes_patterns_as_models_write_them_and_says_when_nothing_matches()
+    {
+        // "**/*.py" was matched against bare file names and never matched; hidden folders (.git)
+        // were left out; either way the answer was the folder's name and nothing else.
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        Directory.CreateDirectory(Path.Combine(dir, "src", "game"));
+        File.WriteAllText(Path.Combine(dir, "src", "game", "main.py"), "x");
+        var hidden = Directory.CreateDirectory(Path.Combine(dir, ".git"));
+        hidden.Attributes |= FileAttributes.Hidden;
+        File.WriteAllText(Path.Combine(hidden.FullName, "config"), "x");
+        var ctx = Ctx(new FakePlatform(), dir);
+        async Task<string> List(string? pattern) => (await new ListDirectoryTool().ExecuteAsync(
+            pattern is null ? new JsonObject { ["path"] = dir } : new JsonObject { ["path"] = dir, ["pattern"] = pattern }, ctx, CancellationToken.None)).Text;
+
+        Assert.Contains(Path.Combine("src", "game", "main.py"), await List("**/*.py"));
+        Assert.Contains(Path.Combine("src", "game", "main.py"), await List("src/**/*.py"));
+        Assert.Contains(".git" + Path.DirectorySeparatorChar, await List(null));
+        Assert.Contains("(nothing matches *.rs here or in the folders under it)", await List("*.rs"));
+        Assert.Contains(Path.Combine("src", "game", "main.py"), await List("**"));
+        Assert.Null(ListDirectoryTool.Glob("  "));
+    }
+
+    [Fact]
+    public async Task A_folder_the_account_cant_read_isnt_listed_as_empty()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Uses Windows access rules.");
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        var locked = Directory.CreateDirectory(Path.Combine(dir, "locked"));
+        File.WriteAllText(Path.Combine(locked.FullName, "secret.txt"), "x");
+        var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+        var deny = new System.Security.AccessControl.FileSystemAccessRule(me, System.Security.AccessControl.FileSystemRights.ListDirectory, System.Security.AccessControl.AccessControlType.Deny);
+        var rules = locked.GetAccessControl();
+        rules.AddAccessRule(deny);
+        locked.SetAccessControl(rules);
+        try
+        {
+            var ctx = Ctx(new FakePlatform(), dir);
+            var listed = await new ListDirectoryTool().ExecuteAsync(new JsonObject { ["path"] = locked.FullName }, ctx, CancellationToken.None);
+            Assert.True(listed.IsError);
+            Assert.Contains("Permission denied", listed.Text);
+            var searched = await new ListDirectoryTool().ExecuteAsync(new JsonObject { ["path"] = locked.FullName, ["pattern"] = "*.txt" }, ctx, CancellationToken.None);
+            Assert.Contains("Permission denied", searched.Text);
+            // Searching from above it still skips it quietly, as before.
+            var above = await new ListDirectoryTool().ExecuteAsync(new JsonObject { ["path"] = dir, ["pattern"] = "*.txt" }, ctx, CancellationToken.None);
+            Assert.False(above.IsError);
+        }
+        finally
+        {
+            rules.RemoveAccessRule(deny);
+            locked.SetAccessControl(rules);
+        }
     }
 
     [Fact]
@@ -867,6 +965,135 @@ public class ToolTests
         Assert.Contains("[binary data left out:", binary.Text);
         Assert.Contains("after", binary.Text);
         Assert.True(binary.Text.Length < 1_000, binary.Text);
+    }
+
+    [Fact]
+    public async Task A_powershell_script_written_with_write_file_runs_in_windows_powershell()
+    {
+#if !WINDOWS
+        Assert.Skip("Windows only");
+        IPlatformServices platform = new UnsupportedPlatform();
+#else
+        var platform = new BlackBox.Platform.Windows.WindowsPlatform();
+#endif
+        // Without a signature, Windows PowerShell reads a script in the ANSI code page, where the
+        // em dash's last byte is a closing quote: "The string is missing the terminator".
+        var dir = Directory.CreateTempSubdirectory("bb-ps1-").FullName;
+        try
+        {
+            var ctx = Ctx(platform, dir);
+            Assert.False((await new WriteFileTool().ExecuteAsync(new JsonObject { ["path"] = "done.ps1", ["content"] = "Write-Output \"Done — copied ✓\"\n" }, ctx, TestContext.Current.CancellationToken)).IsError);
+            var run = await new ShellTool().ExecuteAsync(new JsonObject { ["command"] = $"powershell -NoProfile -ExecutionPolicy Bypass -File \"{Path.Combine(dir, "done.ps1")}\"" }, ctx, TestContext.Current.CancellationToken);
+            Assert.False(run.IsError, run.Text);
+            Assert.Contains("Done — copied ✓", run.Text);
+
+            // A script begun in ASCII gets the signature once an edit or a part added takes it past ASCII.
+            await File.WriteAllTextAsync(Path.Combine(dir, "plain.ps1"), "Write-Output 'start'\n", TestContext.Current.CancellationToken);
+            Assert.False((await new EditFileTool().ExecuteAsync(new JsonObject { ["path"] = "plain.ps1", ["old_text"] = "start", ["new_text"] = "start — now" }, ctx, TestContext.Current.CancellationToken)).IsError);
+            Assert.Equal([0xEF, 0xBB, 0xBF], (await File.ReadAllBytesAsync(Path.Combine(dir, "plain.ps1"), TestContext.Current.CancellationToken))[..3]);
+            await File.WriteAllTextAsync(Path.Combine(dir, "parts.ps1"), "Write-Output 'one'\n", TestContext.Current.CancellationToken);
+            Assert.False((await new WriteFileTool().ExecuteAsync(new JsonObject { ["path"] = "parts.ps1", ["content"] = "Write-Output 'two — ✓'\n", ["append"] = true }, ctx, TestContext.Current.CancellationToken)).IsError);
+            var parts = await File.ReadAllBytesAsync(Path.Combine(dir, "parts.ps1"), TestContext.Current.CancellationToken);
+            Assert.Equal([0xEF, 0xBB, 0xBF], parts[..3]);
+            Assert.Equal("Write-Output 'one'\nWrite-Output 'two — ✓'\n", System.Text.Encoding.UTF8.GetString(parts, 3, parts.Length - 3));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task A_command_too_long_for_a_windows_command_line_runs_all_the_same()
+    {
+#if !WINDOWS
+        Assert.Skip("Windows only");
+        IPlatformServices platform = new UnsupportedPlatform();
+#else
+        var platform = new BlackBox.Platform.Windows.WindowsPlatform();
+#endif
+        // Encoded for -EncodedCommand, a script of 20,000 characters is over the 32,767 Windows
+        // takes on a command line: it failed with "The filename or extension is too long".
+        var filler = "$x = '" + new string('a', 20_000) + "'\n";
+        var before = Directory.GetFiles(Path.GetTempPath(), "blackbox-command-*.ps1").Length;
+        var result = await new ShellTool().ExecuteAsync(new JsonObject
+        {
+            ["command"] = filler + "Write-Output \"length $($x.Length), wörld\"; exit 3",
+        }, Ctx(platform), TestContext.Current.CancellationToken);
+        Assert.Contains("length 20000, wörld", result.Text);
+        Assert.Contains("Exit code 3", result.Text);
+        // Its last command failing fails it, as with -Command; the file it ran from is gone.
+        var failed = await new ShellTool().ExecuteAsync(new JsonObject
+        {
+            ["command"] = filler + "Get-Item 'C:\\no such folder here'",
+        }, Ctx(platform), TestContext.Current.CancellationToken);
+        Assert.True(failed.IsError, failed.Text);
+        Assert.Contains("Exit code 1", failed.Text);
+        var ok = await new ShellTool().ExecuteAsync(new JsonObject { ["command"] = filler + "'fine'" }, Ctx(platform), TestContext.Current.CancellationToken);
+        Assert.False(ok.IsError, ok.Text);
+        Assert.Equal(before, Directory.GetFiles(Path.GetTempPath(), "blackbox-command-*.ps1").Length);
+    }
+
+    [Fact]
+    public void A_path_that_starts_with_a_tilde_is_in_the_home_folder()
+    {
+        // "~/Desktop/report.txt" made a folder named "~" in the working directory.
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        Assert.Equal(Path.Combine(home, "Desktop", "report.txt"), ctx.ResolvePath("~/Desktop/report.txt"));
+        Assert.Equal(Path.Combine(home, "notes.txt"), ctx.ResolvePath(@"~\notes.txt"));
+        Assert.Equal(Path.GetFullPath(home), ctx.ResolvePath("~"));
+        Assert.Equal(Path.Combine(Path.GetTempPath(), "~notes.txt"), ctx.ResolvePath("~notes.txt"));
+    }
+
+    [Fact]
+    public void Long_output_keeps_its_beginning_and_its_end_and_long_lines_are_cut()
+    {
+        // npm or pip print pages of progress and then the error, which was the part cut off.
+        var output = new ShellTool.OutputCapture(30_000);
+        for (var i = 1; i <= 3000; i++)
+            output.Add($"progress line {i} of the install");
+        output.Add("ERROR: the build failed");
+        var text = output.ToString();
+        Assert.StartsWith("progress line 1 of the install\n", text);
+        Assert.EndsWith("ERROR: the build failed\n", text);
+        Assert.Contains("lines (", text);
+        Assert.True(text.Length < 31_000, $"{text.Length} characters");
+
+        // A minified file or a base64 dump on one line came back whole and filled the context.
+        var one = new ShellTool.OutputCapture(30_000);
+        one.Add(new string('x', 200_000));
+        Assert.True(one.ToString().Length < 5_000, $"{one.ToString().Length} characters");
+        Assert.Contains("characters of this line left out", one.ToString());
+    }
+
+    [Fact]
+    public async Task A_command_that_leaves_a_program_running_returns_and_leaves_it_running()
+    {
+#if !WINDOWS
+        Assert.Skip("Windows only");
+        IPlatformServices platform = new UnsupportedPlatform();
+#else
+        var platform = new BlackBox.Platform.Windows.WindowsPlatform();
+#endif
+        // Start-Process -NoNewWindow hands the output pipes on: the command waited out its timeout,
+        // said it had timed out, and killed the program it had started.
+        var marker = Path.Combine(Path.GetTempPath(), $"bb-left-running-{Guid.NewGuid():N}.txt");
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var result = await new ShellTool().ExecuteAsync(new JsonObject
+        {
+            ["command"] = "Start-Process powershell -NoNewWindow -ArgumentList '-NoProfile','-Command',\"Start-Sleep 12; Set-Content '" + marker + "' done\"; 'started'",
+            ["timeout_seconds"] = 10,
+        }, Ctx(platform), TestContext.Current.CancellationToken);
+
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(8), $"took {clock.Elapsed}");
+        Assert.Contains("started", result.Text);
+        Assert.DoesNotContain("Timed out", result.Text);
+        // What it started finishes its own work.
+        for (var i = 0; i < 30 && !File.Exists(marker); i++)
+            await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.True(File.Exists(marker), "the program the command started was killed");
+        File.Delete(marker);
     }
 }
 

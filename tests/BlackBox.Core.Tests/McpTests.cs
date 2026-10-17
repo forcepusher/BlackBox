@@ -93,7 +93,7 @@ public class McpTests
         const string text = "{\n  // mine\n  \"mcpServers\": {}\n}";
         McpConfig.Save(path, text);
         Assert.Equal(text, McpConfig.Load(path));
-        Assert.False(File.Exists(path + ".tmp"));
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(path)!, "*.tmp"));
     }
 
     [Fact]
@@ -133,6 +133,12 @@ public class McpTests
         var longName = McpTool.ExposedName(new string('s', 40), new string('t', 40));
         Assert.True(longName.Length <= McpTool.MaxNameLength);
         Assert.StartsWith(new string('s', 40) + "__", longName);
+        // Two long names that are the same once cut keep the number that tells them apart: cut off
+        // with the rest, it was lost, and naming them went round for ever.
+        var second = McpTool.ExposedName(new string('s', 40), new string('t', 40), "_2");
+        Assert.NotEqual(longName, second);
+        Assert.EndsWith("_2", second);
+        Assert.True(second.Length <= McpTool.MaxNameLength);
     }
 
     [Fact]
@@ -166,9 +172,19 @@ public class McpTests
         };
         var mapped = McpTool.ToToolResult(result);
         Assert.Equal("line one\nembedded text\nResource: file:///b.txt (b)\n(1 more image left out)", mapped.Text);
-        Assert.Equal(TestTools.Png, mapped.Image);
-        Assert.Equal("image/png", mapped.ImageMime);
+        // Sent as a screenshot is: JPEG, its sides on the vision patch grid.
+        Assert.Equal("image/jpeg", mapped.ImageMime);
+        using (var shown = SkiaSharp.SKBitmap.Decode(mapped.Image))
+            Assert.Equal((32, 32), (shown.Width, shown.Height));
+        // But not called a screenshot of the screen.
+        Assert.Equal("The picture the tool gave back:", mapped.ImageCaption);
         Assert.False(mapped.IsError);
+        Assert.Null(McpTool.ToToolResult(new CallToolResult { Content = [new TextContentBlock { Text = "no picture" }] }).ImageCaption);
+
+        // An image the model's server couldn't take, kept in the conversation, failed every request after it.
+        var svg = McpTool.ToToolResult(new CallToolResult { Content = [ImageContentBlock.FromBytes("<svg xmlns='http://www.w3.org/2000/svg'/>"u8.ToArray(), "image/svg+xml"), ImageContentBlock.FromBytes(TestTools.Png, "image/png")] });
+        Assert.Equal("(an image of type image/svg+xml left out: it isn't a picture the model can be shown)", svg.Text);
+        Assert.NotNull(svg.Image);
 
         var failed = McpTool.ToToolResult(new CallToolResult { IsError = true, Content = [new TextContentBlock { Text = "nope" }] });
         Assert.True(failed.IsError);
@@ -277,6 +293,36 @@ public class McpTests
     }
 
     [Fact]
+    public async Task Connecting_again_while_a_server_starts_ends_that_start_at_once()
+    {
+        // The settings changed again while a server started (npx downloading it): the first start
+        // went on for its 90 seconds, and a server that came up after its connection was stopped
+        // ran on with nobody to end it.
+        await using var servers = new InProcessServer();
+        var unanswered = new List<Pipe>();
+        var host = new McpHost
+        {
+            TransportFactory = c =>
+            {
+                if (c.Name != "slow")
+                    return servers.Start(c.Name);
+                var (toServer, toClient) = (new Pipe(), new Pipe());
+                unanswered.Add(toClient); // no server reads or answers
+                return new StreamClientTransport(toServer.Writer.AsStream(), toClient.Reader.AsStream());
+            },
+        };
+        await using var _ = host;
+        var first = host.ConnectAsync([Server("slow")], CancellationToken.None);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        Assert.False(first.IsCompleted);
+
+        await host.ConnectAsync([Server("test")], CancellationToken.None);
+        await first.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        var status = Assert.Single(host.Statuses);
+        Assert.Equal(("test", McpServerState.Connected), (status.Name, status.State));
+    }
+
+    [Fact]
     public async Task The_model_calls_mcp_tools_like_any_other()
     {
         var (host, servers) = await ConnectAsync("test");
@@ -299,7 +345,8 @@ public class McpTests
         Assert.True(observer.Results[2].IsError);
         Assert.Equal("It broke.", observer.Results[2].Text);
         Assert.True(observer.Results[3].Image is not null, "no image; the tool said: " + observer.Results[3].Text);
-        Assert.Equal(TestTools.Png, observer.Results[3].Image);
+        using (var picture = SkiaSharp.SKBitmap.Decode(observer.Results[3].Image))
+            Assert.NotNull(picture);
 
         // The request offered the tool with its schema, and the picture reached the model as an image.
         var tools = model.Requests[0]["tools"]!.AsArray().Select(t => t!["function"]!).ToList();
@@ -361,6 +408,96 @@ public class McpTests
     }
 
     [Fact]
+    public async Task A_server_the_agent_adds_has_the_chat_read_again_once_not_twice()
+    {
+        // Its tools change the start of the prompt once. The system prompt, which lists the
+        // servers, changed again at the next message, and LM Studio read the whole chat once more.
+        var servers = new InProcessServer();
+        await using var _ = servers;
+        await using var mcp = new McpHost { TransportFactory = c => servers.Start(c.Name) };
+        var paths = new AppPaths(Directory.CreateTempSubdirectory("bb-mcp-").FullName);
+        var model = new ScriptedServer(
+            Sse.ToolCall("c1", "mcp_servers", """{"action": "add", "name": "test", "command": "uvx"}"""),
+            Sse.ToolCall("c2", "test__add", """{"a": 2, "b": 3}"""),
+            Sse.ToolCall("c3", "mcp_servers", """{"action": "add", "name": "test", "command": "uvx", "args": ["again"]}"""),
+            Sse.Text("It's 5."),
+            Sse.Text("You're welcome."));
+        var settings = new ServerSettings { BaseUrl = "http://test", Model = "qwen3.8-27b@q6_k_xl" };
+        var history = new List<ChatMessage>();
+        using var ssh = new BlackBox.Core.Ssh.SshHosts(paths.KnownHostsFile);
+        foreach (var message in new[] { "Set up the test server and add 2 and 3", "Thanks" })
+        {
+            var session = AgentSetup.Create(BackendConnection.Create(new HttpClient(model), settings), new FakePlatform(), new AgentSettings(), paths, mcp, ssh, history);
+            var observer = new RecordingObserver();
+            await session.RunAsync(message, observer, TestContext.Current.CancellationToken);
+            Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        }
+
+        Assert.Equal(5, model.Requests.Count);
+        static string Start(JsonObject request) => request["tools"]!.ToJsonString() + request["messages"]![0]!.ToJsonString();
+        // The server's arrival changes the tools and the system prompt together...
+        Assert.NotEqual(Start(model.Requests[0]), Start(model.Requests[1]));
+        Assert.Contains("test__*", model.Requests[1]["messages"]![0]!["content"]!.GetValue<string>());
+        // ...and nothing after it does: not set up again in its place, nor the next message.
+        for (var i = 2; i < model.Requests.Count; i++)
+        {
+            Assert.Equal(Start(model.Requests[1]), Start(model.Requests[i]));
+            var before = model.Requests[i - 1]["messages"]!.AsArray();
+            var after = model.Requests[i]["messages"]!.AsArray();
+            for (var m = 0; m < before.Count; m++)
+                Assert.Equal(before[m]!.ToJsonString(), after[m]!.ToJsonString());
+        }
+    }
+
+    [Fact]
+    public async Task A_server_the_agent_adds_is_usable_even_when_settings_cant_be_saved()
+    {
+        // Another entry in mcp.json the file check refuses: the result said the tools were usable,
+        // and every call to them was an unknown tool.
+        var servers = new InProcessServer();
+        await using var _ = servers;
+        await using var host = new McpHost { TransportFactory = c => servers.Start(c.Name) };
+        var file = Path.Combine(Directory.CreateTempSubdirectory("bb-mcp-").FullName, "mcp.json");
+        File.WriteAllText(file, """{ "mcpServers": { "odd": { "command": "x", "type": "grpc" } } }""");
+        var setup = new McpSetup(host, file);
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(), Mcp = setup };
+        var registry = ToolRegistry.CreateDefault(includeScreenTools: false, extra: [new McpServersTool()]);
+        setup.Registry = registry;
+
+        var added = await new McpServersTool().ExecuteAsync(new JsonObject { ["action"] = "add", ["name"] = "test", ["command"] = "uvx" }, ctx, TestContext.Current.CancellationToken);
+
+        Assert.Contains("could not be saved in Settings", added.Text);
+        Assert.NotNull(registry.Find("test__add"));
+    }
+
+    [Fact]
+    public async Task A_server_the_agent_removes_leaves_the_run_even_when_settings_cant_be_saved()
+    {
+        // The save threw before its tools left: the result was about the other entry, and the
+        // tools stayed, calling a server that had been stopped.
+        var servers = new InProcessServer();
+        await using var _ = servers;
+        await using var host = new McpHost { TransportFactory = c => servers.Start(c.Name) };
+        var file = Path.Combine(Directory.CreateTempSubdirectory("bb-mcp-").FullName, "mcp.json");
+        var setup = new McpSetup(host, file);
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(), Mcp = setup };
+        var registry = ToolRegistry.CreateDefault(includeScreenTools: false, extra: [new McpServersTool()]);
+        setup.Registry = registry;
+        var changes = 0;
+        setup.ToolsChanged = () => changes++;
+        var tool = new McpServersTool();
+        await tool.ExecuteAsync(new JsonObject { ["action"] = "add", ["name"] = "test", ["command"] = "uvx" }, ctx, TestContext.Current.CancellationToken);
+        File.WriteAllText(file, """{ "mcpServers": { "test": { "command": "uvx" }, "odd": { "command": "x", "type": "grpc" } } }""");
+
+        var removed = await tool.ExecuteAsync(new JsonObject { ["action"] = "remove", ["name"] = "test" }, ctx, TestContext.Current.CancellationToken);
+
+        Assert.False(removed.IsError);
+        Assert.Contains("could not be taken out of Settings", removed.Text);
+        Assert.Null(registry.Find("test__add"));
+        Assert.Equal(2, changes);
+    }
+
+    [Fact]
     public async Task Approval_follows_the_servers_read_only_annotation()
     {
         var (host, servers) = await ConnectAsync("test");
@@ -392,6 +529,24 @@ public class McpTests
         var registry = ToolRegistry.CreateDefault(false, extra: host.Tools);
         Assert.Null(ToolCallRepair.ResolveTool("add", registry)); // ambiguous, so not guessed
         Assert.Equal("beta__add", ToolCallRepair.ResolveTool("beta__add", registry)!.Name);
+    }
+
+    [Fact]
+    public async Task A_server_whose_name_fills_the_tool_names_still_gets_one_name_per_tool()
+    {
+        // Cut to 64 characters, every tool of a server with a 62-character name came out the same,
+        // and numbering them went round for ever with the MCP lock held: runs, Settings and closing
+        // the app all waited on it.
+        var connect = ConnectAsync(new string('s', 62));
+        Assert.Same(connect, await Task.WhenAny(connect, Task.Delay(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken)));
+        var (host, servers) = await connect;
+        await using var _ = host;
+        await using var __ = servers;
+
+        var names = host.Tools.Select(t => t.Name).ToList();
+        Assert.True(names.Count > 1);
+        Assert.Equal(names.Count, names.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.All(names, n => Assert.True(n.Length <= McpTool.MaxNameLength, n));
     }
 
     [Fact]

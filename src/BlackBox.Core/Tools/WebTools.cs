@@ -73,10 +73,14 @@ public sealed class FetchPageTool : Tool
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var url = RequireString(args, "url");
+        var find = GetString(args, "find");
+        var start = Math.Max(0, (int)(GetNumber(args, "start") ?? 0));
         WebPageText page;
         try
         {
-            page = await WebPage.ReadAsync(url, ctx.Browser, ct).ConfigureAwait(false);
+            // Reading on (a later part, a find) uses the copy read before; a new look is a new fetch.
+            var readingOn = start > 0 || find is { Length: > 0 };
+            page = await WebPage.ReadAsync(url, ctx.Browser, ct, readingOn ? TimeSpan.FromMinutes(15) : TimeSpan.FromMinutes(1)).ConfigureAwait(false);
         }
         catch (WebPageException ex)
         {
@@ -85,10 +89,7 @@ public sealed class FetchPageTool : Tool
         if (page.Text.Length == 0)
             return ToolResult.Error($"{page.Url} has no readable text (it may be built by JavaScript or need a login). Try another result.");
 
-        var find = GetString(args, "find");
-        return new ToolResult(find is { Length: > 0 }
-            ? Find(page, find)
-            : Part(page, Math.Max(0, (int)(GetNumber(args, "start") ?? 0))));
+        return new ToolResult(find is { Length: > 0 } ? Find(page, find) : Part(page, start));
     }
 
     private static string Header(WebPageText page) =>
