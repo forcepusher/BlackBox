@@ -87,6 +87,21 @@ public class ReadFileTests : IDisposable
     }
 
     [Fact]
+    public void Reading_a_document_ends_when_the_user_stops()
+    {
+        // A PDF of a thousand pages takes minutes to read, and Stop waited for its last page.
+        var builder = new PdfDocumentBuilder();
+        var font = builder.AddStandard14Font(Standard14Font.Helvetica);
+        for (var i = 1; i <= 3; i++)
+            builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4).AddText($"Page {i}", 12, new UglyToad.PdfPig.Core.PdfPoint(50, 750), font);
+        File.WriteAllBytes(Path.Combine(_dir, "long.pdf"), builder.Build());
+        using var stopped = new CancellationTokenSource();
+        stopped.Cancel();
+        Assert.ThrowsAny<OperationCanceledException>(() => DocumentText.Read(Path.Combine(_dir, "long.pdf"), stopped.Token));
+        Assert.Contains("Page 3", DocumentText.Read(Path.Combine(_dir, "long.pdf"), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task A_word_document_keeps_headings_lists_bold_and_tables()
     {
         Package("letter.docx", ("word/document.xml", $"""

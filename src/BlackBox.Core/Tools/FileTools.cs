@@ -83,7 +83,7 @@ public sealed class ReadFileTool : Tool
         if (DocumentText.Handles(path))
         {
             string text;
-            try { text = DocumentText.Read(path); }
+            try { text = DocumentText.Read(path, ct); }
             catch (InvalidDataException ex) { return ToolResult.Error(ex.Message); }
             using var lines = new StringReader(text);
             return await NumberedAsync(lines, offset, limit, ct).ConfigureAwait(false);

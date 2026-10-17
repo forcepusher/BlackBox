@@ -26,7 +26,8 @@ internal static class DocumentText
     };
 
     /// <summary>The document as lines of text; throws <see cref="InvalidDataException"/> when it can't be read.</summary>
-    public static string Read(string path)
+    /// <param name="ct">Stop: looked at page by page (a PDF of a thousand pages takes minutes) and row by row.</param>
+    public static string Read(string path, CancellationToken ct = default)
     {
         // Shared for writing too: Excel and Word keep an open file locked against plain readers.
         using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
@@ -34,13 +35,13 @@ internal static class DocumentText
         {
             return Kind(path) switch
             {
-                "pdf" => Pdf(file),
-                "docx" => Docx(file),
-                "xlsx" => Xlsx(file),
-                _ => Pptx(file),
+                "pdf" => Pdf(file, ct),
+                "docx" => Docx(file, ct),
+                "xlsx" => Xlsx(file, ct),
+                _ => Pptx(file, ct),
             };
         }
-        catch (Exception ex) when (ex is not (IOException or UnauthorizedAccessException))
+        catch (Exception ex) when (ex is not (IOException or UnauthorizedAccessException or OperationCanceledException))
         {
             // A damaged file, one that is password-protected, or not what its name says.
             throw new InvalidDataException($"{Path.GetFileName(path)} could not be read as a document: {ex.Message}", ex);
@@ -50,13 +51,14 @@ internal static class DocumentText
     // ---- PDF -------------------------------------------------------------------------------------
 
     /// <summary>A PDF's text layer, page by page; also what fetch_page shows of a PDF on the web.</summary>
-    internal static string Pdf(Stream file)
+    internal static string Pdf(Stream file, CancellationToken ct = default)
     {
         using var pdf = PdfDocument.Open(file);
         var sb = new StringBuilder();
         var withText = 0;
         foreach (var page in pdf.GetPages())
         {
+            ct.ThrowIfCancellationRequested();
             var text = ContentOrderTextExtractor.GetText(page).Trim();
             sb.Append("--- page ").Append(page.Number).Append(" of ").Append(pdf.NumberOfPages).AppendLine(" ---");
             if (text.Length == 0)
@@ -75,13 +77,14 @@ internal static class DocumentText
 
     private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
-    private static string Docx(Stream file)
+    private static string Docx(Stream file, CancellationToken ct)
     {
         using var zip = new ZipArchive(file, ZipArchiveMode.Read, leaveOpen: true);
         var body = Load(zip, "word/document.xml").Root?.Element(W + "body") ?? throw new InvalidDataException("no document body");
         var sb = new StringBuilder();
         foreach (var block in body.Elements())
         {
+            ct.ThrowIfCancellationRequested();
             if (block.Name == W + "p")
                 sb.AppendLine(Paragraph(block));
             else if (block.Name == W + "tbl")
@@ -128,7 +131,7 @@ internal static class DocumentText
     /// which cells are bold. Without formats a model asked for amounts in dollars couldn't see
     /// whether they were, and unzipped the workbook to look; a date read 46327.
     /// </summary>
-    private static string Xlsx(Stream file)
+    private static string Xlsx(Stream file, CancellationToken ct)
     {
         using var zip = new ZipArchive(file, ZipArchiveMode.Read, leaveOpen: true);
         var shared = zip.GetEntry("xl/sharedStrings.xml") is null ? []
@@ -149,6 +152,7 @@ internal static class DocumentText
             var bold = new List<string>();
             foreach (var row in data.Element(S + "sheetData")?.Elements(S + "row") ?? [])
             {
+                ct.ThrowIfCancellationRequested();
                 var cells = new List<string>();
                 foreach (var c in row.Elements(S + "c"))
                 {
@@ -248,7 +252,7 @@ internal static class DocumentText
     private static readonly XNamespace P = "http://schemas.openxmlformats.org/presentationml/2006/main";
     private static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
-    private static string Pptx(Stream file)
+    private static string Pptx(Stream file, CancellationToken ct)
     {
         using var zip = new ZipArchive(file, ZipArchiveMode.Read, leaveOpen: true);
         var targets = Relations(zip, "ppt/_rels/presentation.xml.rels", "ppt/");
@@ -257,6 +261,7 @@ internal static class DocumentText
         var number = 0;
         foreach (var id in ids)
         {
+            ct.ThrowIfCancellationRequested();
             number++;
             if (id is null || !targets.TryGetValue(id, out var target) || zip.GetEntry(target) is null)
                 continue;

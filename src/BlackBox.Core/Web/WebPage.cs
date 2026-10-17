@@ -161,7 +161,7 @@ public static class WebPage
             {
                 try
                 {
-                    return (new(finalUri.ToString(), Uri.UnescapeDataString(finalUri.Segments[^1]), Tools.DocumentText.Pdf(new MemoryStream(body))), false);
+                    return (new(finalUri.ToString(), Uri.UnescapeDataString(finalUri.Segments[^1]), Tools.DocumentText.Pdf(new MemoryStream(body), ct)), false);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
