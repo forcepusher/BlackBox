@@ -433,8 +433,8 @@ public sealed class ComfyTool : Tool
     /// </summary>
     private async Task<List<string>> CardsAsync(ComfyApi api, ComfyHub hub, IEnumerable<(string Folder, string File)> files, CancellationToken ct)
     {
-        var cards = new List<string>();
         var dirs = await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) ?? [];
+        var wanted = new List<(string File, string Path)>();
         foreach (var (folder, file) in files.Where(f => f.Folder is "checkpoints" or "loras").DistinctBy(f => f.File, StringComparer.OrdinalIgnoreCase).Take(3))
         {
             if (!dirs.TryGetValue("models:" + folder, out var dir) || Path.Combine(dir, file) is not { } path || !File.Exists(path))
@@ -442,7 +442,13 @@ public sealed class ComfyTool : Tool
             lock (_carded)
                 if (!_carded.Add(file))
                     continue;
-            var (card, answered) = await CardAsync(hub, path, ct).ConfigureAwait(false);
+            wanted.Add((file, path));
+        }
+        // All at once: a template of LTX 2.3 names two 27 GB checkpoints, whose first hashes take a while each.
+        var looked = await Task.WhenAll(wanted.Select(w => CardAsync(hub, w.Path, ct))).ConfigureAwait(false);
+        var cards = new List<string>();
+        foreach (var ((file, path), (card, answered)) in wanted.Zip(looked))
+        {
             if (card is not null)
                 cards.Add(ComfyModelCards.Format(file, card));
             else if (!answered)
@@ -456,13 +462,15 @@ public sealed class ComfyTool : Tool
 
     /// <summary>
     /// A model file's card, or none: Civitai doesn't know the file (answered), or it couldn't be
-    /// asked within half a minute, which a big file's first hash can take (not answered; the hash
-    /// goes on for the next look). A card is a help; it must never fail the call it comes with.
+    /// asked within ten seconds (not answered). A big file's first hash takes longer (a 27 GB LTX
+    /// checkpoint held a template's view up half a minute): it goes on, and the card comes with a
+    /// later call, after the run at the latest. A card is a help; it must never hold up or fail the
+    /// call it comes with.
     /// </summary>
     private static async Task<(ModelCard? Card, bool Answered)> CardAsync(ComfyHub hub, string path, CancellationToken ct)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
         try
         {
             return (await hub.Cards.LookUpAsync(path, timeout.Token).ConfigureAwait(false), true);
