@@ -389,7 +389,8 @@ public sealed partial class TypeTextTool : DesktopActionTool
     // Not "use \n for Enter": read as the two characters, Gemma 4 typed "gemma.txt\n" into a
     // Save As dialog's file name, backslash and all.
     public override string Description =>
-        "Type text into the focused control, exactly as given; a line break in the text presses Enter. Click the target field first.";
+        "Type text into the focused control, exactly as given; a line break in the text presses Enter. Click the target field first. " +
+        "Into a Save As or Open dialog's file name box, type the whole path (C:\\folder\\name.txt), whatever folder the dialog shows.";
     public override JsonObject Parameters => Schema(("text", Str("Text to type"), true));
     public override string Describe(JsonObject args) => $"Type \"{(GetString(args, "text") ?? "").Clip(60)}\"";
 
