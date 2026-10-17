@@ -665,6 +665,25 @@ public class ComfyToolTests : IDisposable
     }
 
     [Fact]
+    public async Task A_comfyui_an_earlier_blackbox_left_running_is_closed_once_its_jobs_are_done()
+    {
+        // BlackBox closed while its jobs were still queued left it running, hidden, until a later
+        // task that used ComfyUI ended.
+        var stops = 0;
+        _hub.OwnsForTests = _ => stops == 0;
+        _hub.StopForTests = (_, _) => { stops++; return Task.CompletedTask; };
+        _server.QueueBusy = true;
+        _hub.CloseLeftover();
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        Assert.Equal(0, stops);
+        Assert.False(_hub.Closing.IsCompleted);
+
+        _server.QueueBusy = false;
+        await _hub.Closing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal(1, stops);
+    }
+
+    [Fact]
     public async Task A_comfyui_the_user_started_keeps_running_and_lets_go_only_of_models_a_job_loaded()
     {
         var stops = 0;

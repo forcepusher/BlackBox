@@ -50,6 +50,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _settings = settings;
         _platform = platform;
         _previews = new PreviewServices(Core.Media.MediaDecoders.Create(platform, paths, Core.Comfy.ComfyHub.For(paths.ComfyDir)), platform.CreateAudioOutput);
+        // A ComfyUI an earlier BlackBox started and left at work is closed once its jobs are done.
+        Core.Comfy.ComfyHub.For(paths.ComfyDir).CloseLeftover();
         _chats = new ChatStore(paths.ChatsDir);
         _chatSaver = new ChatSaver(_chats);
         _ssh = new Core.Ssh.SshHosts(paths.KnownHostsFile);

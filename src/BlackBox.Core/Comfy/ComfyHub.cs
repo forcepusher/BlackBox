@@ -367,6 +367,26 @@ public sealed class ComfyHub(string stateDirectory)
         await Task.WhenAny(_closing, Task.Delay(TimeSpan.FromSeconds(3))).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// At start: a server an earlier BlackBox started and left running (it was closed while jobs
+    /// were still queued) is closed once its queue is empty, unless a task starts using it first.
+    /// It ran on, hidden, until a later task that used ComfyUI ended.
+    /// </summary>
+    public void CloseLeftover()
+    {
+        if (Volatile.Read(ref _users) > 0)
+            return;
+        var wait = new CancellationTokenSource();
+        if (Interlocked.CompareExchange(ref _waitForQueue, wait, null) is not null)
+            return;
+        _closing = Task.Run(async () =>
+        {
+            var api = new ComfyApi(Address);
+            if (OwnsForTests?.Invoke(api) ?? IsOurs(api))
+                await CloseWhenIdleAsync(api, wait.Token).ConfigureAwait(false);
+        });
+    }
+
     private async Task CloseWhenIdleAsync(ComfyApi api, CancellationToken ct)
     {
         try
