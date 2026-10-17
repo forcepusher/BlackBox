@@ -111,12 +111,18 @@ internal static partial class DocumentFiles
                 message = SheetEdit.Edit(parts, oldText, newText, all);
             else
             {
-                // A deck's speaker notes too: read_file shows them.
                 var names = kind == "docx"
                     ? parts.Names.Where(n => n == "word/document.xml" || WordPart().IsMatch(n)).OrderBy(n => n == "word/document.xml" ? 0 : 1).ThenBy(n => n)
-                    : parts.Names.Where(n => SlidePart().IsMatch(n)).OrderBy(n => int.Parse(SlidePart().Match(n).Groups[1].Value))
-                        .Concat(parts.Names.Where(n => NotesPart().IsMatch(n)).OrderBy(n => int.Parse(NotesPart().Match(n).Groups[1].Value)));
+                    : parts.Names.Where(n => SlidePart().IsMatch(n)).OrderBy(n => int.Parse(SlidePart().Match(n).Groups[1].Value));
                 var documents = names.ToDictionary(n => n, parts.Get);
+                // A deck's speaker notes too, which read_file shows; one that can't be read is left
+                // out rather than the whole change refused.
+                if (kind == "pptx")
+                    foreach (var notes in parts.Names.Where(n => NotesPart().IsMatch(n)).OrderBy(n => int.Parse(NotesPart().Match(n).Groups[1].Value)).ToList())
+                    {
+                        try { documents[notes] = parts.Get(notes); }
+                        catch (System.Xml.XmlException) { }
+                    }
                 if (documents.Count == 0)
                     throw new InvalidOperationException($"{Path.GetFileName(path)} has no text to change.");
                 var (count, changed) = TextEdit.Replace(documents, slides: kind == "pptx", oldText, newText, all);
