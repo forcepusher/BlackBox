@@ -89,8 +89,9 @@ public sealed partial class AgentSession
         var userMessages = History.Where(m => m.FromUser || m.Content == StoppedNote).ToList();
         // The last screenshot, not the last picture: a picture the user attached (kept with their
         // message anyway), one read_file opened or a ComfyUI job's result was put after the note
-        // as "The screen right now:".
-        var screen = History.LastOrDefault(m => !m.FromUser && m.Parts is [{ Text: ScreenshotText }, { IsImage: true }])?.Parts![1];
+        // as "The screen right now:". The screen an earlier reset carried counts: a second reset
+        // before the next screenshot kept none.
+        var screen = History.LastOrDefault(m => !m.FromUser && m.Parts is [{ Text: ScreenshotText or CurrentScreenText }, { IsImage: true }])?.Parts![1];
         History.Clear();
         History.AddRange(userMessages);
         History.Add(ChatMessage.User(HandoffHeader + "\n\n" + note));

@@ -1176,6 +1176,11 @@ public class AgentSessionTests
         Assert.Equal("The screen right now:", session.History[^1].Parts![0].Text);
         Assert.Equal([7, 7, 7], session.History[^1].Parts![1].ImageBytes);
         Assert.Equal([[9, 9, 9], [7, 7, 7]], session.History.SelectMany(m => m.Parts ?? []).Where(p => p.IsImage).Select(p => p.ImageBytes!));
+
+        // A second reset before the next screenshot kept no screen at all.
+        await session.ResetContextAsync(observer, TestContext.Current.CancellationToken);
+        Assert.Equal("The screen right now:", session.History[^1].Parts![0].Text);
+        Assert.Equal([7, 7, 7], session.History[^1].Parts![1].ImageBytes);
     }
 
     [Fact]
