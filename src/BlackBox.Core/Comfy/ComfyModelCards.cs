@@ -139,7 +139,11 @@ public sealed partial class ComfyModelCards(string stateDirectory)
         if ((string?)version["name"] is { Length: > 0 } versionName && !title.Contains(versionName, StringComparison.OrdinalIgnoreCase))
             title += $" ({versionName})";
         var words = (version["trainedWords"] as JsonArray ?? []).Select(w => ((string?)w)?.Trim()).OfType<string>().Where(w => w.Length > 0).Distinct().Take(12).ToList();
-        var advice = Advice((string?)model?["description"]) ?? Advice((string?)version["description"]);
+        // The version's own settings first, when it names any: MiaoMiao Harem's page only points to
+        // "About this version", where Euler with sgm_uniform and its CFG are. Most versions only list
+        // their changes ("Booru tags" in one), and the model's page has the settings.
+        var (modelText, versionText) = ((string?)model?["description"], (string?)version["description"]);
+        var advice = (NamesSettings(versionText) ? Advice(versionText) : null) ?? Advice(modelText) ?? Advice(versionText);
 
         var examples = new List<ModelExample>();
         if ((string?)model?["creator"]?["username"] is { Length: > 0 } maker && (long?)version["id"] is { } versionId)
@@ -185,6 +189,10 @@ public sealed partial class ComfyModelCards(string stateDirectory)
         static string? Text(JsonNode? n) => n is JsonValue v ? v.ToString().Trim() : null;
         static double? Number(JsonNode? n) => n is JsonValue v && (v.TryGetValue<double>(out var d) || double.TryParse(v.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out d)) ? d : null;
     }
+
+    /// <summary>Whether a page names settings outright (recommended, sampler, steps, CFG…), not just tags or prompts.</summary>
+    internal static bool NamesSettings(string? html) =>
+        !string.IsNullOrWhiteSpace(html) && StrongSettingsWord().IsMatch(WebUtility.HtmlDecode(Tag().Replace(html, " ")));
 
     /// <summary>
     /// The part of a model's page that says how to use it: from its first line about settings

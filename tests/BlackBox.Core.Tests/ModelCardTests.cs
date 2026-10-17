@@ -129,6 +129,27 @@ public class ModelCardTests : IDisposable
         Assert.Equal(asked, _civitai.Requests.Count);
     }
 
+    // MiaoMiao Harem's page points to "About this version", where its settings are; Juggernaut XL's
+    // version only says what it was trained on ("Booru tags"), and its page has the settings.
+    [Theory]
+    [InlineData("<p>Recommended Settings</p><p>Sampler / Scheduler: Euler + sgm-uniform</p><p>CFG: 4</p>",
+                "<p>Please refer to the About this version section for the recommended settings.</p>", "Recommended Settings\nSampler / Scheduler: Euler + sgm-uniform\nCFG: 4")]
+    [InlineData("<p>Trained another set on SDXL (using Booru tags).</p>",
+                "<p>Recommended Settings:</p><p>Sampler: DPM++ 2M SDE</p>", "Recommended Settings:\nSampler: DPM++ 2M SDE")]
+    public async Task A_versions_own_settings_come_before_its_models_page(string versionText, string modelText, string advice)
+    {
+        var (path, hash) = ModelFile("m.safetensors");
+        _civitai.Json($"/api/v1/model-versions/by-hash/{hash}", new JsonObject
+        {
+            ["id"] = 7, ["modelId"] = 70, ["name"] = "v1", ["baseModel"] = "Anima", ["description"] = versionText, ["files"] = new JsonArray(),
+        }.ToJsonString());
+        _civitai.Json("/api/v1/models/70", new JsonObject { ["id"] = 70, ["name"] = "M", ["description"] = modelText }.ToJsonString());
+
+        var card = await new ComfyModelCards(_dir).LookUpAsync(path, TestContext.Current.CancellationToken);
+
+        Assert.Equal(advice, card?.Advice);
+    }
+
     [Fact]
     public async Task A_files_hash_is_worked_out_once_and_again_when_the_file_changes()
     {
