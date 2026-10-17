@@ -438,26 +438,34 @@ public sealed class ComfyTool : Tool
             lock (_carded)
                 if (!_carded.Add(file))
                     continue;
-            if (await CardAsync(hub, path, ct).ConfigureAwait(false) is { } card)
+            var (card, answered) = await CardAsync(hub, path, ct).ConfigureAwait(false);
+            if (card is not null)
                 cards.Add(ComfyModelCards.Format(file, card));
+            else if (!answered)
+                lock (_carded) // Looked up again next time, not called unknown.
+                    _carded.Remove(file);
             else if (ComfyModelCards.BaseFromFile(path) is { } made)
                 cards.Add($"{file} isn't on Civitai; it is {ComfyModelCards.Describe(made)}.");
         }
         return cards;
     }
 
-    /// <summary>A model file's card, or null when Civitai doesn't know it or doesn't answer within half a minute.</summary>
-    private static async Task<ModelCard?> CardAsync(ComfyHub hub, string path, CancellationToken ct)
+    /// <summary>
+    /// A model file's card, or none: Civitai doesn't know the file (answered), or it couldn't be
+    /// asked within half a minute, which a big file's first hash can take (not answered; the hash
+    /// goes on for the next look). A card is a help; it must never fail the call it comes with.
+    /// </summary>
+    private static async Task<(ModelCard? Card, bool Answered)> CardAsync(ComfyHub hub, string path, CancellationToken ct)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
         try
         {
-            return await hub.Cards.LookUpAsync(path, timeout.Token).ConfigureAwait(false);
+            return (await hub.Cards.LookUpAsync(path, timeout.Token).ConfigureAwait(false), true);
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (Exception) when (!ct.IsCancellationRequested)
         {
-            return null;
+            return (null, false);
         }
     }
 
@@ -753,7 +761,7 @@ public sealed class ComfyTool : Tool
             (await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false))?.GetValueOrDefault("models:checkpoints") is not { } dir)
             return null;
         var path = Path.Combine(dir, checkpoint);
-        if (!File.Exists(path) || ((await CardAsync(hub, path, ct).ConfigureAwait(false))?.Base ?? ComfyModelCards.BaseFromFile(path)) is not { } made ||
+        if (!File.Exists(path) || ((await CardAsync(hub, path, ct).ConfigureAwait(false)).Card?.Base ?? ComfyModelCards.BaseFromFile(path)) is not { } made ||
             ComfyModelCards.NativeSide(made) is not { } side)
             return null;
         foreach (var (_, node) in workflow.All())

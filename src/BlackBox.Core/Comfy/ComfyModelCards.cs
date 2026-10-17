@@ -26,8 +26,11 @@ public sealed record ModelCard(string Title, string Page, string? Base, IReadOnl
 /// prompt in plain sentences and ran it at 512x760 with the template's settings; the model's page
 /// asks for quality tags and booru-style tags, and its maker's own pictures were made at 768x1344
 /// with a 1.5x hires pass. The pictures came out young, soft and off-style, four times running. A
-/// file is found on Civitai by the hash of 64 KB a megabyte into it (Civitai's "AutoV1"), which
-/// takes no time, unlike hashing 6 GB; it is the file when its size matches too. Cards are kept in
+/// file is found on Civitai by its SHA-256, worked out once and kept with the file's size and time
+/// in Data/comfyui/model-hashes.json (6.9 GB took 7 s here). The quick hash of 64 KB a megabyte in
+/// (Civitai's "AutoV1") was tried first and gave this PC's Pony Diffusion V6 XL the card of
+/// "Incomplete anime pony", a fine-tune of it of the same size: models trained on one base with
+/// its text encoder left as it was share those bytes. Cards are kept in
 /// Data/comfyui/model-cards.json, and a file Civitai doesn't know is asked about again after a week.
 /// </summary>
 public sealed partial class ComfyModelCards(string stateDirectory)
@@ -36,59 +39,87 @@ public sealed partial class ComfyModelCards(string stateDirectory)
     private const int MaxAdvice = 1_200;
 
     private readonly ConcurrentDictionary<string, (ModelCard? Card, DateTime At)> _cards = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The SHA-256 of model files, by path, size and time (see <see cref="HashKey"/>).</summary>
+    private readonly ConcurrentDictionary<string, string> _hashes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Task<string?>> _hashing = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _gate = new();
     private bool _loaded;
 
     private string CacheFile => Path.Combine(stateDirectory, "model-cards.json");
+    private string HashFile => Path.Combine(stateDirectory, "model-hashes.json");
 
-    /// <summary>The card of the model file at <paramref name="path"/>, or null when Civitai doesn't know it or can't be asked.</summary>
+    /// <summary>
+    /// The card of the model file at <paramref name="path"/>, or null when Civitai doesn't know it.
+    /// Throws when Civitai can't be asked or <paramref name="ct"/> ends the wait, which a big file's
+    /// first hash can outlast: the hash goes on being worked out, for the next look.
+    /// </summary>
     public async Task<ModelCard?> LookUpAsync(string path, CancellationToken ct)
     {
-        if (QuickHash(path) is not { } hash)
+        if (await HashAsync(path).WaitAsync(ct).ConfigureAwait(false) is not { } hash)
             return null;
-        var key = $"{hash}:{new FileInfo(path).Length}";
         Load();
-        if (_cards.TryGetValue(key, out var known) && (known.Card is not null || DateTime.UtcNow - known.At < NotFoundLife))
+        if (_cards.TryGetValue(hash, out var known) && (known.Card is not null || DateTime.UtcNow - known.At < NotFoundLife))
             return known.Card;
-        ModelCard? card;
-        try
-        {
-            card = await FetchAsync(hash, new FileInfo(path).Length, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
-        {
-            // Offline, Civitai down, or an answer of another shape: no card, and asked again next
-            // time. A card is a help; it must never fail the call it comes with.
-            return null;
-        }
-        _cards[key] = (card, DateTime.UtcNow);
+        var card = await FetchAsync(hash, ct).ConfigureAwait(false);
+        _cards[hash] = (card, DateTime.UtcNow);
         Save();
         return card;
     }
 
-    /// <summary>
-    /// Civitai's AutoV1 of a file: the first 8 hex digits of the SHA-256 of the 64 KB that start a
-    /// megabyte into it. Null for a file too small to have them.
-    /// </summary>
-    internal static string? QuickHash(string path)
+    /// <summary>A file's place in the hash cache: its full path, size and time, so a changed file is hashed again.</summary>
+    private static string? HashKey(string path)
     {
         try
         {
-            using var file = File.OpenRead(path);
-            if (file.Length < 0x110000)
-                return null;
-            file.Position = 0x100000;
-            var block = new byte[0x10000];
-            file.ReadExactly(block);
-            return Convert.ToHexString(SHA256.HashData(block))[..8];
+            var file = new FileInfo(path);
+            return file.Exists ? $"{file.FullName}|{file.Length}|{file.LastWriteTimeUtc.Ticks}" : null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             return null;
         }
     }
 
-    internal static async Task<ModelCard?> FetchAsync(string hash, long length, CancellationToken ct)
+    /// <summary>
+    /// The SHA-256 of the file at <paramref name="path"/> (upper-case hex), as Civitai finds files by
+    /// it: the saved one, or worked out once in the background, where it goes on when a wait for it
+    /// ends. Null for a file that can't be read.
+    /// </summary>
+    internal Task<string?> HashAsync(string path)
+    {
+        if (HashKey(path) is not { } key)
+            return Task.FromResult<string?>(null);
+        Load();
+        if (_hashes.TryGetValue(key, out var saved))
+            return Task.FromResult<string?>(saved);
+        lock (_hashing)
+        {
+            if (_hashing.TryGetValue(key, out var running))
+                return running;
+            // Done between the look above and the lock.
+            if (_hashes.TryGetValue(key, out saved))
+                return Task.FromResult<string?>(saved);
+            var hashing = Task.Run(() =>
+            {
+                string? hash = null;
+                try
+                {
+                    using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 20, FileOptions.SequentialScan);
+                    hash = Convert.ToHexString(SHA256.HashData(file));
+                    _hashes[key] = hash;
+                    SaveHashes();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+                lock (_hashing)
+                    _hashing.Remove(key);
+                return hash;
+            });
+            _hashing[key] = hashing;
+            return hashing;
+        }
+    }
+
+    internal static async Task<ModelCard?> FetchAsync(string hash, CancellationToken ct)
     {
         var site = ComfyModelSearch.CivitaiBase;
         JsonObject? version;
@@ -100,10 +131,7 @@ public sealed partial class ComfyModelCards(string stateDirectory)
         {
             return null;
         }
-        // The same 64 KB in another file of another size is a different model.
-        if (version is null || (long?)version["modelId"] is not { } modelId || !(version["files"] as JsonArray ?? []).OfType<JsonObject>().Any(f =>
-                string.Equals((string?)f["hashes"]?["AutoV1"], hash, StringComparison.OrdinalIgnoreCase) &&
-                (double?)f["sizeKB"] is { } kb && Math.Abs(kb * 1024 - length) <= Math.Max(4096, length / 200)))
+        if (version is null || (long?)version["modelId"] is not { } modelId)
             return null;
 
         var model = await ComfyModelSearch.GetJsonAsync($"{site}/api/v1/models/{modelId}", ct).ConfigureAwait(false) as JsonObject;
@@ -355,6 +383,26 @@ public sealed partial class ComfyModelCards(string stateDirectory)
                         _cards[key] = (entry.Card, entry.At);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { }
+            try
+            {
+                if (File.Exists(HashFile) && JsonSerializer.Deserialize(File.ReadAllText(HashFile), ModelCardJson.Default.DictionaryStringString) is { } hashes)
+                    foreach (var (key, hash) in hashes)
+                        _hashes[key] = hash;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { }
+        }
+    }
+
+    private void SaveHashes()
+    {
+        lock (_gate)
+        {
+            try
+            {
+                Directory.CreateDirectory(stateDirectory);
+                AtomicFile.Write(HashFile, JsonSerializer.Serialize(new Dictionary<string, string>(_hashes, StringComparer.OrdinalIgnoreCase), ModelCardJson.Default.DictionaryStringString));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
     }
 
@@ -405,4 +453,5 @@ public sealed record CachedCard(ModelCard? Card, DateTime At);
 
 [System.Text.Json.Serialization.JsonSourceGenerationOptions(PropertyNamingPolicy = System.Text.Json.Serialization.JsonKnownNamingPolicy.CamelCase, WriteIndented = true)]
 [System.Text.Json.Serialization.JsonSerializable(typeof(Dictionary<string, CachedCard>))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(Dictionary<string, string>))]
 internal sealed partial class ModelCardJson : System.Text.Json.Serialization.JsonSerializerContext;

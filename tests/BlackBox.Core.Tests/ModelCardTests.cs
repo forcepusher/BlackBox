@@ -45,21 +45,21 @@ public class ModelCardTests : IDisposable
           "username": "Crody", "baseModel": "Illustrious"}]}
         """;
 
-    /// <summary>A model file of <paramref name="size"/> bytes whose 64 KB a megabyte in are <paramref name="seed"/>'s, and its AutoV1.</summary>
+    /// <summary>A model file of <paramref name="size"/> bytes made from <paramref name="seed"/>, and its SHA-256.</summary>
     private (string Path, string Hash) ModelFile(string name, int size = 0x120000, byte seed = 7)
     {
         var bytes = new byte[size];
         new Random(seed).NextBytes(bytes);
         var path = Path.Combine(_dir, name);
         File.WriteAllBytes(path, bytes);
-        return (path, size >= 0x110000 ? Convert.ToHexString(SHA256.HashData(bytes.AsSpan(0x100000, 0x10000)))[..8] : "");
+        return (path, Convert.ToHexString(SHA256.HashData(bytes)));
     }
 
     private void Civitai(string hash, long size, string baseModel = "Illustrious")
     {
         _civitai.Json($"/api/v1/model-versions/by-hash/{hash}", $$$"""
             {"id": 2792241, "modelId": 503815, "name": "IL v17.0", "baseModel": "{{{baseModel}}}", "trainedWords": [],
-             "files": [{"name": "novaFurryXL_ilV170.safetensors", "sizeKB": {{{size / 1024.0}}}, "hashes": {"AutoV1": "{{{hash}}}"}}]}
+             "files": [{"name": "novaFurryXL_ilV170.safetensors", "sizeKB": {{{size / 1024.0}}}, "hashes": {"SHA256": "{{{hash}}}"}}]}
             """);
         _civitai.Json("/api/v1/models/503815", new JsonObject
         {
@@ -70,7 +70,7 @@ public class ModelCardTests : IDisposable
     }
 
     [Fact]
-    public async Task A_checkpoint_found_by_its_quick_hash_comes_with_its_pages_settings_and_its_makers_recipe()
+    public async Task A_checkpoint_found_by_its_hash_comes_with_its_pages_settings_and_its_makers_recipe()
     {
         var (path, hash) = ModelFile("novaFurryXL_ilV170.safetensors");
         Civitai(hash, new FileInfo(path).Length);
@@ -102,12 +102,23 @@ public class ModelCardTests : IDisposable
         Assert.Equal(asked, _civitai.Requests.Count);
     }
 
+    // This PC's Pony Diffusion V6 XL got the card of "Incomplete anime pony", a fine-tune of it of the
+    // same size: the 64 KB a megabyte in that Civitai's quick hash (AutoV1) reads were the same in both.
     [Fact]
-    public async Task A_file_of_another_size_with_the_same_quick_hash_is_another_model()
+    public async Task A_file_is_looked_up_by_its_whole_hash_not_the_quick_one_its_fine_tunes_share()
     {
-        var (path, hash) = ModelFile("other.safetensors");
-        Civitai(hash, new FileInfo(path).Length * 3);
-        Assert.Null(await new ComfyModelCards(_dir).LookUpAsync(path, TestContext.Current.CancellationToken));
+        var (path, hash) = ModelFile("ponyDiffusionV6XL_v6StartWithThisOne.safetensors");
+        var bytes = File.ReadAllBytes(path);
+        var quick = Convert.ToHexString(SHA256.HashData(bytes.AsSpan(0x100000, 0x10000)))[..8];
+        _civitai.Json($"/api/v1/model-versions/by-hash/{quick}", """{"id": 1, "modelId": 336883, "name": "v1.0", "baseModel": "Pony", "files": []}""");
+        _civitai.Json("/api/v1/models/336883", """{"id": 336883, "name": "Incomplete anime pony"}""");
+        _civitai.Json($"/api/v1/model-versions/by-hash/{hash}", """{"id": 290640, "modelId": 257749, "name": "V6 (start with this one)", "baseModel": "Pony", "files": []}""");
+        _civitai.Json("/api/v1/models/257749", """{"id": 257749, "name": "Pony Diffusion V6 XL"}""");
+
+        var card = await new ComfyModelCards(_dir).LookUpAsync(path, TestContext.Current.CancellationToken);
+
+        Assert.Equal("Pony Diffusion V6 XL (V6 (start with this one))", card?.Title);
+        Assert.DoesNotContain(_civitai.Requests, r => r.Contains(quick, StringComparison.Ordinal));
 
         // Civitai doesn't know it: not asked again for a while.
         var (unknown, _) = ModelFile("mine.safetensors", seed: 9);
@@ -116,6 +127,24 @@ public class ModelCardTests : IDisposable
         var asked = _civitai.Requests.Count;
         Assert.Null(await cards.LookUpAsync(unknown, TestContext.Current.CancellationToken));
         Assert.Equal(asked, _civitai.Requests.Count);
+    }
+
+    [Fact]
+    public async Task A_files_hash_is_worked_out_once_and_again_when_the_file_changes()
+    {
+        var (path, hash) = ModelFile("x.safetensors");
+        Assert.Equal(hash, await new ComfyModelCards(_dir).HashAsync(path));
+        Assert.Contains(hash, File.ReadAllText(Path.Combine(_dir, "model-hashes.json")));
+
+        // Kept with the file's size and time: a new start of BlackBox reads it back.
+        File.WriteAllText(Path.Combine(_dir, "model-hashes.json"), File.ReadAllText(Path.Combine(_dir, "model-hashes.json")).Replace(hash, "SAVED"));
+        Assert.Equal("SAVED", await new ComfyModelCards(_dir).HashAsync(path));
+
+        // A file changed since is hashed again.
+        var (_, changed) = ModelFile("x.safetensors", seed: 8);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(1));
+        Assert.Equal(changed, await new ComfyModelCards(_dir).HashAsync(path));
+        Assert.Null(await new ComfyModelCards(_dir).HashAsync(Path.Combine(_dir, "gone.safetensors")));
     }
 
     [Fact]
@@ -133,14 +162,6 @@ public class ModelCardTests : IDisposable
         Assert.Contains("SD 1.5, made for about 512x512", text);
         Assert.Contains("DPM++ SDE Karras (sampler_name dpmpp_sde, scheduler karras)", text);
         Assert.Contains("embedding:Name", text);
-    }
-
-    [Fact]
-    public void The_quick_hash_is_civitais_autov1()
-    {
-        var (path, hash) = ModelFile("x.safetensors");
-        Assert.Equal(hash, ComfyModelCards.QuickHash(path));
-        Assert.Null(ComfyModelCards.QuickHash(ModelFile("small.safetensors", size: 4096).Path));
     }
 
     [Theory]
@@ -212,10 +233,10 @@ public class ModelCardToolTests : IDisposable
         var bytes = new byte[0x120000];
         new Random(3).NextBytes(bytes);
         File.WriteAllBytes(Path.Combine(checkpoints, "sdxl.safetensors"), bytes);
-        var hash = Convert.ToHexString(SHA256.HashData(bytes.AsSpan(0x100000, 0x10000)))[..8];
+        var hash = Convert.ToHexString(SHA256.HashData(bytes));
         _civitai.Json($"/api/v1/model-versions/by-hash/{hash}", $$$"""
             {"id": 2792241, "modelId": 503815, "name": "IL v17.0", "baseModel": "Illustrious", "trainedWords": [],
-             "files": [{"name": "sdxl.safetensors", "sizeKB": {{{bytes.Length / 1024.0}}}, "hashes": {"AutoV1": "{{{hash}}}"}}]}
+             "files": [{"name": "sdxl.safetensors", "sizeKB": {{{bytes.Length / 1024.0}}}, "hashes": {"SHA256": "{{{hash}}}"}}]}
             """);
         _civitai.Json("/api/v1/models/503815", new JsonObject
         {
