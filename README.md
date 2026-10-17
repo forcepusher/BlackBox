@@ -412,7 +412,9 @@ proxy in front of it) answers with a server error or "gave up waiting for the re
 retry continues where the last one stopped (up to 12 times per step). A server that holds requests
 back (HTTP 429: busy, or a free allowance used up) is asked again after the wait it names
 (Retry-After, OpenRouter's `X-RateLimit-Reset`, Gemini's "retry in 37s"), at most an hour at a time,
-or after growing waits from 2 seconds to 5 minutes, as often as it takes; Stop ends the wait. A VPN can also stall an
+or after growing waits from 2 seconds to 5 minutes, as often as it takes; Stop ends the wait. A
+server that can't be reached at all (its PC restarting, LM Studio closed, the VPN down) is waited
+for the same way, so a long task carries on once it is back instead of ending on a short outage. A VPN can also stall an
 upload without breaking it: a request carries every screenshot still in the context, several
 megabytes, and LM Studio waited five minutes for the rest of one before answering 408. So when
 nothing of a request gets through for 30 seconds, it is sent again. A tool that fails, however
