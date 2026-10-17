@@ -987,11 +987,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>Writes the chat on screen to its file and moves it to the top of the History list. A chat with nothing typed yet isn't saved.</summary>
     private void SaveChat(List<ChatMessage>? history)
     {
-        if (history is null || Items.OfType<UserMessageItem>().FirstOrDefault() is not { } first)
+        // A chat with nothing typed yet isn't saved. One whose first message the chat has dropped
+        // to stay small (TrimChat, some 200 steps into a long run) still is: it stopped being
+        // saved there, and the rest of the run was lost to History and to a crash.
+        var first = Items.OfType<UserMessageItem>().FirstOrDefault();
+        if (history is null || first is null && _chatTitle is null)
             return;
         _chatId ??= ChatStore.NewId();
         // A message that is only a file is named after it.
-        _chatTitle ??= ChatStore.TitleFrom(first.HasText ? first.Text : string.Join(", ", first.Attachments.Select(a => a.FileName)));
+        _chatTitle ??= ChatStore.TitleFrom(first!.HasText ? first.Text : string.Join(", ", first.Attachments.Select(a => a.FileName)));
         var chat = new SavedChat
         {
             Id = _chatId,
