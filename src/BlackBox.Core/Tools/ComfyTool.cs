@@ -209,12 +209,17 @@ public sealed class ComfyTool : Tool
             known = _found.GetValueOrDefault(given);
         known ??= await ComfyModelSearch.ResolveAsync(link, ct).ConfigureAwait(false);
         var url = known is not null ? new Uri(known.Url) : link;
-        var name = known?.File is { Length: > 0 } file ? Path.GetFileName(file) : (await Web.Downloader.ProbeAsync(url, ct).ConfigureAwait(false)).Name;
+        var (name, size) = (known?.File is { Length: > 0 } file ? Path.GetFileName(file) : null, known?.Size);
+        if (name is null)
+        {
+            var probe = await Web.Downloader.ProbeAsync(url, ct).ConfigureAwait(false);
+            (name, size) = (probe.Name, size ?? probe.Size);
+        }
         var folder = ComfyModelFolders.Normalize(GetString(args, "model_folder") ?? known?.Folder ?? ComfyModelSearch.FolderFor(known?.File ?? name, null));
         var dir = await hub.ModelsFolderAsync(folder, ct).ConfigureAwait(false)
                   ?? throw new ComfyApiException("ComfyUI isn't installed yet, so there is no models folder to download into: install it first with action=install.");
         var target = Path.Combine(dir, name);
-        if (File.Exists(target) && (known?.Size is not { } expected || Math.Abs(new FileInfo(target).Length - expected) < 2048))
+        if (File.Exists(target) && await IsWholeAsync(target, size, known?.Sha256, ct).ConfigureAwait(false))
             return new ToolResult($"{name} is there already, in {dir}. {ComfyModelFolders.Use(folder, name)}");
 
         var started = DateTime.UtcNow;
@@ -230,6 +235,23 @@ public sealed class ComfyTool : Tool
 
     private static string Size(long bytes) =>
         bytes >= 1L << 30 ? $"{bytes / 1073741824.0:0.0} GB" : bytes >= 1L << 20 ? $"{bytes / 1048576.0:0} MB" : $"{Math.Max(1, bytes / 1024)} KB";
+
+    /// <summary>
+    /// Whether a model file already there is all of it: its size as the site gives it, else its
+    /// SHA-256; one neither says anything about is taken as whole. A file of that name was taken
+    /// as whole whatever its size when the link was one find_models hadn't given, so what an
+    /// earlier curl left half done went to ComfyUI.
+    /// </summary>
+    private static async Task<bool> IsWholeAsync(string path, long? size, string? sha256, CancellationToken ct)
+    {
+        if (size is { } expected)
+            return Math.Abs(new FileInfo(path).Length - expected) < 2048;
+        if (sha256 is not { Length: > 0 })
+            return true;
+        await using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, useAsync: true);
+        var hash = await System.Security.Cryptography.SHA256.HashDataAsync(file, ct).ConfigureAwait(false);
+        return Convert.ToHexString(hash).Equals(sha256, StringComparison.OrdinalIgnoreCase);
+    }
 
     // ---- status, free -------------------------------------------------------------------
 

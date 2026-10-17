@@ -615,6 +615,24 @@ public class ComfyModelToolTests : IDisposable
     }
 
     [Fact]
+    public async Task A_model_file_left_half_done_is_downloaded_again()
+    {
+        // From a link find_models hadn't given, a file of that name was taken as there already
+        // whatever its size: what an earlier curl left half done went to ComfyUI.
+        _sites.File("/files/style_lora.safetensors", Model);
+        var folder = Directory.CreateDirectory(Path.Combine(_comfy.CodeDir, "models", "loras")).FullName;
+        var file = Path.Combine(folder, "style_lora.safetensors");
+        File.WriteAllBytes(file, Model[..1000]);
+
+        var result = await Call(new ComfyTool(), $$"""{"action": "download", "url": "{{_sites.Base}}/files/style_lora.safetensors", "model_folder": "loras"}""");
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains("Downloaded style_lora.safetensors", result.Text);
+        Assert.Equal(Model, File.ReadAllBytes(file));
+        Assert.Contains("is there already", (await Call(new ComfyTool(), $$"""{"action": "download", "url": "{{_sites.Base}}/files/style_lora.safetensors", "model_folder": "loras"}""")).Text);
+    }
+
+    [Fact]
     public async Task A_model_page_link_is_turned_into_its_files_link()
     {
         // A Civitai page with a version: its main file, named and checked as Civitai says.
