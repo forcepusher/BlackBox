@@ -74,6 +74,18 @@ public class WebToolsTests
     }
 
     [Fact]
+    public void A_page_nested_thousands_deep_is_read_as_plain_text()
+    {
+        // The reading recursed once per level, and a page 2,000 elements deep overflowed the stack,
+        // which ends BlackBox on the spot.
+        var html = "<html><head><title>Deep</title></head><body><main><p>Above it all.</p>" + string.Concat(Enumerable.Repeat("<div>", 3000)) +
+                   "<h2>Down here</h2><p>the deep text</p>" + string.Concat(Enumerable.Repeat("</div>", 3000)) + "</main></body></html>";
+        var (title, text) = PageText.Extract(new HtmlParser().ParseDocument(html));
+        Assert.Equal("Deep", title);
+        Assert.Equal("Above it all.\nDown here\nthe deep text", text);
+    }
+
+    [Fact]
     public async Task A_search_that_got_no_page_says_so_instead_of_no_results()
     {
         // A browser that gave back nothing, or Bing asking whether this is a person, came back as
