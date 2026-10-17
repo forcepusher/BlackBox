@@ -96,13 +96,15 @@ public class PromptCacheTests
         // Both are put right before the next request: the repaired call's arguments in place of the
         // model's, the note about the cut call after the last result or as a message of its own.
         var paths = new AppPaths(Directory.CreateTempSubdirectory("bb-cache-").FullName);
+        // In the test's own folder: a bare name would land in the profile folder the agent starts in.
+        var file = Path.Combine(paths.Root, "a.txt").Replace('\\', '/');
         // With the token counts LM Studio sends: far from a full context, so cut by a reply-length limit.
         var usage = new JsonObject { ["choices"] = new JsonArray(), ["usage"] = new JsonObject { ["prompt_tokens"] = 3000, ["completion_tokens"] = 500 } };
         var server = new ScriptedServer(
             Sse.ToolCall("c1", "wait", "{'seconds': 0}"),
-            Sse.CutToolCall("c2", "write_file", """{"path": "a.txt", "content": "the first half of a long fi""")
+            Sse.CutToolCall("c2", "write_file", $$"""{"path": "{{file}}", "content": "the first half of a long fi""")
                 .Replace("data: [DONE]", $"data: {usage.ToJsonString()}\n\ndata: [DONE]"),
-            Sse.ToolCall("c3", "write_file", """{"path": "a.txt", "content": "short"}"""),
+            Sse.ToolCall("c3", "write_file", $$"""{"path": "{{file}}", "content": "short"}"""),
             Sse.Text("Done."),
             Sse.Text("Again."));
         var settings = new ServerSettings { BaseUrl = "http://test", Model = "qwen3.8-27b@q6_k_xl" };
