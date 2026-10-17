@@ -899,8 +899,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _chatId = chat.Id;
         _chatTitle = chat.Title;
         _history = chat.History;
+        var withFiles = new List<(ChatItemViewModel, Func<IReadOnlyList<string>>)>();
         foreach (var entry in chat.Entries)
-            Items.Add(FromEntry(entry));
+        {
+            var item = FromEntry(entry);
+            Items.Add(item);
+            // The files come back with the chat, as long as they are still there.
+            if (entry.Kind == ChatEntryKind.Tool && entry.Files is { Count: > 0 } files)
+                withFiles.Add((item, () => files.Where(Core.Media.FileMentions.Exists).ToList()));
+            else if (item is AssistantMessageItem { HasText: true, Text: var text })
+                withFiles.Add((item, () => Core.Media.FileMentions.Find(text)));
+        }
+        ShowFilesLater(withFiles);
         // A chat that ended stopped can be carried on from where it stopped; an earlier stop it went on from can't.
         foreach (var notice in Items.OfType<NoticeItem>())
             notice.CanContinue = notice.Stopped && ReferenceEquals(notice, Items[^1]);
@@ -1018,11 +1028,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         };
         // Lines saved before the chat kept times show none.
         (item.At, item.RunTook) = (e.At, e.RunTook);
-        // The files come back with the chat, as long as they are still there.
-        if (e.Kind == ChatEntryKind.Tool && e.Files is { Count: > 0 } files)
-            item.AddPreviews(files.Where(File.Exists), _previews);
-        else if (item is AssistantMessageItem { HasText: true } reply)
-            item.AddPreviews(Core.Media.FileMentions.Find(reply.Text), _previews);
         return item;
     }
 
@@ -1235,9 +1240,32 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         if (!_current.HasText && !_current.HasReasoning && message is not { HasToolCalls: true })
             Items.Remove(_current);
         else if (message is not null && _current.HasText)
+        {
             // The files the reply names (what the agent made) are shown under it, to look at, play or open.
-            _current.AddPreviews(Core.Media.FileMentions.Find(_current.Text), _previews);
+            var text = _current.Text;
+            ShowFilesLater([(_current, () => Core.Media.FileMentions.Find(text))]);
+        }
         _current = null;
+    }
+
+    /// <summary>
+    /// Shows under each line the files it names, looked for off the UI thread: a path on a server
+    /// that is off (\\nas\…, a mapped drive whose server is gone) holds up the look for half a
+    /// minute, and the window froze for as long when a reply or a reopened chat named one.
+    /// </summary>
+    private async void ShowFilesLater(List<(ChatItemViewModel Item, Func<IReadOnlyList<string>> Files)> lines)
+    {
+        try
+        {
+            var found = await Task.Run(() => lines.Select(l => (l.Item, Files: l.Files())).Where(l => l.Files.Count > 0).ToList());
+            foreach (var (item, files) in found)
+                if (Items.Contains(item))
+                    item.AddPreviews(files, _previews);
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("the files a chat names", ex);
+        }
     }
 
     async Task<bool> IAgentObserver.RequestApprovalAsync(ToolCall call, Tool tool, string summary, CancellationToken ct)

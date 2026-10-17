@@ -34,13 +34,15 @@ public static partial class FileMentions
                     continue;
                 try
                 {
-                    if (File.Exists(candidate))
+                    if (Exists(candidate))
                     {
                         var full = Path.GetFullPath(candidate);
                         if (!found.Contains(full, StringComparer.OrdinalIgnoreCase))
                             found.Add(full);
                         break;
                     }
+                    if (Unanswered(candidate))
+                        break;
                 }
                 catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { }
             }
@@ -48,6 +50,46 @@ public static partial class FileMentions
         return found;
 
         static bool IsBoundary(char c) => char.IsWhiteSpace(c) || c is '.' or ',' or ';' or ':' or '!' or '?' or ')' or ']' or '`' or '*' or '"' or '\'' or '<' or '>' or '|';
+    }
+
+    private static readonly TimeSpan SlowAnswer = TimeSpan.FromSeconds(2), SkipFor = TimeSpan.FromMinutes(2);
+
+    /// <summary>Network roots (\\server\share, a mapped drive) that were slow to say a file isn't there, and when.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> SlowRoots = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a file is there, as File.Exists, but false at once on a network share that was slow
+    /// to answer in the last two minutes: a server that is off (\\nas\…, a mapped drive whose
+    /// server is gone) holds File.Exists up for half a minute each time, and a reply naming a path
+    /// there was looked up once for every word its line had.
+    /// </summary>
+    public static bool Exists(string path)
+    {
+        if (Unanswered(path))
+            return false;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var exists = File.Exists(path);
+        if (!exists && clock.Elapsed > SlowAnswer && NetworkRoot(path) is { } root)
+            SlowRoots[root] = DateTime.UtcNow;
+        return exists;
+    }
+
+    private static bool Unanswered(string path) =>
+        !SlowRoots.IsEmpty && NetworkRoot(path) is { } root && SlowRoots.TryGetValue(root, out var since) && DateTime.UtcNow - since < SkipFor;
+
+    private static string? NetworkRoot(string path)
+    {
+        try
+        {
+            var root = Path.GetPathRoot(path);
+            if (string.IsNullOrEmpty(root))
+                return null;
+            return root.StartsWith(@"\\", StringComparison.Ordinal) || new DriveInfo(root).DriveType == DriveType.Network ? root : null;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
     }
 
     [GeneratedRegex(@"(?<![\w\\])(?:[A-Za-z]:\\|\\\\[\w.$-]+\\|file:///?[A-Za-z]:/)", RegexOptions.IgnoreCase)]
