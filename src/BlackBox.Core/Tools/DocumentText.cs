@@ -8,9 +8,10 @@ namespace BlackBox.Core.Tools;
 
 /// <summary>
 /// The text of the documents people hand over most, for read_file: PDF (its text layer, page by
-/// page), Word (.docx, with headings, lists, **bold** and tables), Excel (.xlsx, cell by cell with
-/// the formulas) and PowerPoint (.pptx, slide by slide). Without it a PDF took qwen3.8 eight
-/// minutes of inflating streams and mapping glyphs by hand in PowerShell.
+/// page), Word (.docx, with headings, lists, **bold**, tables, headers, footers and comments), Excel
+/// (.xlsx, cell by cell with the formulas, merged cells and charts) and PowerPoint (.pptx, slide by
+/// slide with the speaker notes). Without it a PDF took qwen3.8 eight minutes of inflating streams
+/// and mapping glyphs by hand in PowerShell.
 /// </summary>
 internal static class DocumentText
 {
