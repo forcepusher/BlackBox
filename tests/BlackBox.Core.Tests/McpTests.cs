@@ -176,7 +176,10 @@ public class McpTests
         Assert.Equal("image/jpeg", mapped.ImageMime);
         using (var shown = SkiaSharp.SKBitmap.Decode(mapped.Image))
             Assert.Equal((32, 32), (shown.Width, shown.Height));
+        // But not called a screenshot of the screen.
+        Assert.Equal("The picture the tool gave back:", mapped.ImageCaption);
         Assert.False(mapped.IsError);
+        Assert.Null(McpTool.ToToolResult(new CallToolResult { Content = [new TextContentBlock { Text = "no picture" }] }).ImageCaption);
 
         // An image the model's server couldn't take, kept in the conversation, failed every request after it.
         var svg = McpTool.ToToolResult(new CallToolResult { Content = [ImageContentBlock.FromBytes("<svg xmlns='http://www.w3.org/2000/svg'/>"u8.ToArray(), "image/svg+xml"), ImageContentBlock.FromBytes(TestTools.Png, "image/png")] });

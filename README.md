@@ -384,7 +384,7 @@ Until the context is nearly full (a fifth left, at least 16k but at most half), 
 only grows at the end, so the server reuses its cache and each step processes only the new
 messages. Then BlackBox does a **context reset**: the model writes a handoff note for itself on the
 cached history (it streams at once), and the conversation is replaced by your messages, that note
-and the current screenshot, a few thousand tokens. When to reset is decided from the token counts the server
+and the last screenshot (not a picture a tool opened), a few thousand tokens. When to reset is decided from the token counts the server
 reports, not guessed. If the model can't write the note, a record of its last steps is used
 instead; a reply cut off by the context limit, or a server's "context length exceeded" error,
 triggers the same reset and a retry. A reply cut off by a reply-length limit set on the server
@@ -645,8 +645,8 @@ server only speaks that (`"type": "sse"` forces it). `"disabled": true` keeps an
 it. The model sees each tool as `server__tool` (`filesystem__read_file`), so names never clash with
 BlackBox's own tools; a call to the bare name still works when only one server has it. Tools a
 server marks read-only are treated like screenshots in the approval settings, all others like shell
-commands. Text results go back to the model as they are; an image result is shown to it like a
-screenshot, scaled and as JPEG, so a server's full-size PNG doesn't cost thousands of tokens and an
+commands. Text results go back to the model as they are; an image result is shown to it as the
+tool's picture, scaled and as JPEG like a screenshot, so a server's full-size PNG doesn't cost thousands of tokens and an
 SVG or WebP the model's server can't read doesn't fail every request after it (one that isn't a
 picture at all is left out, with a line saying so). Comments and trailing commas in the file are fine. The settings dialog shows how each
 server is doing, and a server that fails to start is reported in the chat; the others keep working.

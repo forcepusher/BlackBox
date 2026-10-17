@@ -1086,6 +1086,23 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_reset_shows_the_last_screenshot_as_the_screen_not_the_last_picture()
+    {
+        // A picture read_file opened, or one the user attached (kept with their message anyway),
+        // was put after the note as "The screen right now:".
+        var server = new ScriptedServer { Responder = _ => Sse.Text("NOTE: looked at cat.png.") };
+        var (session, observer) = LongSession(server, contextTokens: 40_000);
+        session.History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText("The picture cat.png:"), ContentPart.FromImage([8, 8, 8], "image/jpeg")] });
+        session.History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText("Like this one"), ContentPart.FromImage([9, 9, 9], "image/jpeg")], FromUser = true });
+
+        await session.ResetContextAsync(observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal("The screen right now:", session.History[^1].Parts![0].Text);
+        Assert.Equal([7, 7, 7], session.History[^1].Parts![1].ImageBytes);
+        Assert.Equal([[9, 9, 9], [7, 7, 7]], session.History.SelectMany(m => m.Parts ?? []).Where(p => p.IsImage).Select(p => p.ImageBytes!));
+    }
+
+    [Fact]
     public async Task Where_the_user_stopped_a_task_is_said_in_the_conversation_and_kept_through_a_reset()
     {
         // Stopped in Paint and given a story to write next, the model wrote it and then "returned

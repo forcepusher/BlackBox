@@ -293,7 +293,7 @@ public sealed partial class AgentSession(
                 if (screenshot is not null)
                 {
                     shown!.Content += caption is null ? "\n(The screenshot is attached in the next message.)" : "\n(The picture is attached in the next message.)";
-                    History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText(caption ?? "Screenshot after the last action:"), screenshot] });
+                    History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText(caption ?? ScreenshotText), screenshot] });
                 }
             }
         }
@@ -373,6 +373,9 @@ public sealed partial class AgentSession(
 
     /// <summary>Where the user stopped a run (Stop, Pause/Break), so what they write next is read in that light (see <see cref="SystemPrompt"/>).</summary>
     internal const string StoppedNote = "[BlackBox] The user stopped you here.";
+
+    /// <summary>Said above a screenshot a tool took; any other picture a tool gives comes with its own caption.</summary>
+    internal const string ScreenshotText = "Screenshot after the last action:";
 
     // Not "try another approach": told that after a declined listing command, the model asked for
     // it twice more in other words and then listed the folder with another tool.

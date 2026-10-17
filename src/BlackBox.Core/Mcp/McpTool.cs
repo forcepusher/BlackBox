@@ -166,7 +166,9 @@ public sealed partial class McpTool : Tools.Tool
             text = text[..MaxTextChars] + "\n[output truncated]";
         if (text.Length == 0)
             text = image is null ? "(no output)" : "(image attached)";
-        return new ToolResult(text, image, imageMime, IsError: result.IsError == true);
+        // Not called a screenshot: it is whatever the server made (a viewport render, a chart), and
+        // a context reset put the last screenshot after its note as the screen.
+        return new ToolResult(text, image, imageMime, IsError: result.IsError == true, ImageCaption: image is null ? null : "The picture the tool gave back:");
 
         void Line(string? s)
         {
