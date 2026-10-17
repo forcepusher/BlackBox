@@ -326,7 +326,7 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
         File.AppendAllText(knownHostsFile, $"{Name(t)} {key}\n");
     }
 
-    /// <summary>Logs out of every server (removing each terminal's private folder; at most 5 seconds per server).</summary>
+    /// <summary>Logs out of every server at once (removing each terminal's private folder; at most 5 seconds in all).</summary>
     /// <remarks>
     /// The app logs out of a chat it leaves on another thread, while a login of that chat's stopped
     /// run may still be finishing: going through the list as it changed threw, and every login was
@@ -341,8 +341,8 @@ public sealed class SshHosts(string knownHostsFile) : IDisposable
             hosts = [.. _hosts.Values];
             _hosts.Clear();
         }
-        foreach (var h in hosts)
-            h.Dispose();
+        // All at once: each may wait five seconds for a server that doesn't answer.
+        Parallel.ForEach(hosts, h => h.Dispose());
         LastTarget = null;
     }
 }

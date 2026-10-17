@@ -160,8 +160,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         _runCts?.Cancel();
         _stopKey?.Dispose();
-        _ssh.Dispose();
-        try { _mcp.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5)); }
+        // Logging out of the SSH servers and stopping the MCP ones, at the same time and for five
+        // seconds at most: one after the other, a server that didn't answer kept the process
+        // alive five seconds a server after the window had gone.
+        var ssh = Task.Run(_ssh.Dispose);
+        var mcp = _mcp.DisposeAsync().AsTask();
+        try { Task.WaitAll([ssh, mcp], TimeSpan.FromSeconds(5)); }
         catch (AggregateException) { /* a server that would not stop; the process ends anyway */ }
     }
 
