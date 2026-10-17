@@ -111,9 +111,11 @@ internal static partial class DocumentFiles
                 message = SheetEdit.Edit(parts, oldText, newText, all);
             else
             {
+                // A deck's speaker notes too: read_file shows them.
                 var names = kind == "docx"
                     ? parts.Names.Where(n => n == "word/document.xml" || WordPart().IsMatch(n)).OrderBy(n => n == "word/document.xml" ? 0 : 1).ThenBy(n => n)
-                    : parts.Names.Where(n => SlidePart().IsMatch(n)).OrderBy(n => int.Parse(SlidePart().Match(n).Groups[1].Value));
+                    : parts.Names.Where(n => SlidePart().IsMatch(n)).OrderBy(n => int.Parse(SlidePart().Match(n).Groups[1].Value))
+                        .Concat(parts.Names.Where(n => NotesPart().IsMatch(n)).OrderBy(n => int.Parse(NotesPart().Match(n).Groups[1].Value)));
                 var documents = names.ToDictionary(n => n, parts.Get);
                 if (documents.Count == 0)
                     throw new InvalidOperationException($"{Path.GetFileName(path)} has no text to change.");
@@ -192,6 +194,9 @@ internal static partial class DocumentFiles
 
     [GeneratedRegex(@"^ppt/slides/slide(\d+)\.xml$")]
     private static partial Regex SlidePart();
+
+    [GeneratedRegex(@"^ppt/notesSlides/notesSlide(\d+)\.xml$")]
+    private static partial Regex NotesPart();
 }
 
 /// <summary>The XML parts of an Office file open for changing; the changed ones are written back on <see cref="Save"/>.</summary>

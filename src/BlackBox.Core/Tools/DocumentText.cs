@@ -269,8 +269,45 @@ internal static class DocumentText
             foreach (var para in Load(zip, target).Descendants(A + "p"))
                 if (string.Concat(para.Descendants(A + "t").Select(t => t.Value)) is { Length: > 0 } text)
                     sb.AppendLine(text);
+            // The speaker notes, which went unseen: asked to change them, the model had nothing to go on.
+            if (Notes(zip, target) is { Count: > 0 } notes)
+            {
+                sb.AppendLine("Speaker notes:");
+                foreach (var line in notes)
+                    sb.AppendLine(line);
+            }
         }
         return sb.ToString();
+    }
+
+    /// <summary>The paragraphs of a slide's speaker notes (their body, not the slide number or picture); empty when it has none.</summary>
+    private static List<string> Notes(ZipArchive zip, string slide)
+    {
+        var folder = slide[..(slide.LastIndexOf('/') + 1)];
+        var rels = $"{folder}_rels/{slide[folder.Length..]}.rels";
+        if (zip.GetEntry(rels) is null)
+            return [];
+        var target = Load(zip, rels).Root!.Elements(Pr + "Relationship")
+            .FirstOrDefault(r => ((string?)r.Attribute("Type"))?.EndsWith("/notesSlide", StringComparison.Ordinal) == true)?.Attribute("Target")?.Value;
+        if (target is null || zip.GetEntry(Resolve(folder, target)) is null)
+            return [];
+        var body = Load(zip, Resolve(folder, target)).Descendants(P + "sp")
+            .FirstOrDefault(sp => sp.Descendants(P + "ph").Any(ph => (string?)ph.Attribute("type") == "body"));
+        return body?.Descendants(A + "p").Select(p => string.Concat(p.Descendants(A + "t").Select(t => t.Value))).Where(t => t.Length > 0).ToList() ?? [];
+    }
+
+    /// <summary>A relationship's target ("../notesSlides/notesSlide2.xml") as an entry of the package, from the folder of the part it belongs to.</summary>
+    internal static string Resolve(string folder, string target)
+    {
+        if (target.StartsWith('/'))
+            return target.TrimStart('/');
+        var path = new List<string>(folder.Split('/', StringSplitOptions.RemoveEmptyEntries));
+        foreach (var piece in target.Split('/'))
+        {
+            if (piece == "..") { if (path.Count > 0) path.RemoveAt(path.Count - 1); }
+            else if (piece is not ("." or "")) path.Add(piece);
+        }
+        return string.Join('/', path);
     }
 
     // ---- the zip package -------------------------------------------------------------------------

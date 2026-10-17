@@ -34,7 +34,8 @@ error closed the window and left no trace of why.
 
 ## Documents
 `read_file` reads more than text: PDFs (their text layer, page by page), Word, Excel and PowerPoint
-files (Excel cell by cell with its formulas, Word with headings, lists, bold and tables) and
+files (Excel cell by cell with its formulas, Word with headings, lists, bold and tables, PowerPoint
+slide by slide with its speaker notes, which `edit_file` changes too) and
 pictures, which the model sees like a screenshot. Before, asked to summarize a PDF, qwen3.8 spent
 eight minutes inflating its streams and mapping glyphs in PowerShell, and a question about a chart
 picture took six minutes of finding a program to show it.

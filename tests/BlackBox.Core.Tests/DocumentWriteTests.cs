@@ -255,6 +255,41 @@ public class DocumentWriteTests : IDisposable
     }
 
     [Fact]
+    public async Task A_slides_speaker_notes_are_read_and_changed()
+    {
+        // read_file left them out, and edit_file couldn't reach them: asked to change the notes, the model had nothing to go on.
+        Assert.False((await Write("deck.pptx", "# Q3 results\nNorthwind\n\n---\n\n## Sales\n- Airport up 8%")).IsError);
+        var path = Path.Combine(_dir, "deck.pptx");
+        using (var zip = System.IO.Compression.ZipFile.Open(path, System.IO.Compression.ZipArchiveMode.Update))
+        {
+            // As PowerPoint keeps them: a notes page with the slide's number and a body of notes.
+            using (var notes = new StreamWriter(zip.CreateEntry("ppt/notesSlides/notesSlide2.xml").Open()))
+                notes.Write("""
+                    <p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree>
+                    <p:sp><p:nvSpPr><p:cNvPr id="2" name="Slide Number"/><p:cNvSpPr/><p:nvPr><p:ph type="sldNum"/></p:nvPr></p:nvSpPr><p:txBody><a:p><a:fld id="{1}" type="slidenum"><a:t>2</a:t></a:fld></a:p></p:txBody></p:sp>
+                    <p:sp><p:nvSpPr><p:cNvPr id="3" name="Notes"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:txBody><a:p><a:r><a:t>Thank the team.</a:t></a:r></a:p></p:txBody></p:sp>
+                    </p:spTree></p:cSld></p:notes>
+                    """);
+            var relsEntry = zip.GetEntry("ppt/slides/_rels/slide2.xml.rels")!;
+            System.Xml.Linq.XDocument rels;
+            using (var read = relsEntry.Open())
+                rels = System.Xml.Linq.XDocument.Load(read);
+            System.Xml.Linq.XNamespace pr = "http://schemas.openxmlformats.org/package/2006/relationships";
+            rels.Root!.Add(new System.Xml.Linq.XElement(pr + "Relationship", new System.Xml.Linq.XAttribute("Id", "rIdNotes"),
+                new System.Xml.Linq.XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide"),
+                new System.Xml.Linq.XAttribute("Target", "../notesSlides/notesSlide2.xml")));
+            relsEntry.Delete();
+            using var write = zip.CreateEntry("ppt/slides/_rels/slide2.xml.rels").Open();
+            rels.Save(write);
+        }
+
+        Assert.Contains("Airport up 8%\nSpeaker notes:\nThank the team.\n", await Read("deck.pptx"));
+        var edited = await Edit("deck.pptx", "Thank the team.", "Thank the whole team.");
+        Assert.False(edited.IsError, edited.Text);
+        Assert.Contains("Speaker notes:\nThank the whole team.\n", await Read("deck.pptx"));
+    }
+
+    [Fact]
     public async Task Arabic_and_Hebrew_in_a_quote_or_code_are_written_in_the_regular_font()
     {
         // Arial Italic and Consolas have no Arabic, Consolas no Hebrew: a quote or code in them made
