@@ -192,6 +192,66 @@ public class ComfyHardwareTests
     }
 
     [Fact]
+    public void The_server_on_a_port_is_found_whatever_language_netstat_speaks()
+    {
+        const string english = """
+
+            Active Connections
+
+              Proto  Local Address          Foreign Address        State           PID
+              TCP    0.0.0.0:135            0.0.0.0:0              LISTENING       1012
+              TCP    127.0.0.1:8188         127.0.0.1:50211        ESTABLISHED     4242
+              TCP    127.0.0.1:8188         0.0.0.0:0              LISTENING       5150
+              TCP    127.0.0.1:50211        127.0.0.1:8188         ESTABLISHED     7777
+            """;
+        Assert.Equal(5150, ComfyProcess.ListeningPid(english.ReplaceLineEndings("\r\n"), 8188));
+        Assert.Null(ComfyProcess.ListeningPid(english, 50211));
+        Assert.Null(ComfyProcess.ListeningPid(english, 818));
+        const string german = """
+              Proto  Lokale Adresse         Remoteadresse          Status           PID
+              TCP    127.0.0.1:8000         0.0.0.0:0              ABHÖREN         6006
+            """;
+        Assert.Equal(6006, ComfyProcess.ListeningPid(german, 8000));
+        Assert.Equal(3131, ComfyProcess.ListeningPid("  TCP    127.0.0.1:8188         0.0.0.0:0              IN ASCOLTO      3131\r\n", 8188));
+    }
+
+    [Fact]
+    public async Task A_server_stopped_while_it_starts_is_not_left_running_hidden()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        // A server that never answers, as a ComfyUI still loading its custom nodes; it says its process.
+        var dir = Directory.CreateTempSubdirectory("bb-start-").FullName;
+        var pidFile = Path.Combine(dir, "pid.txt");
+        var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        var install = new ComfyInstall(dir, dir, powershell, ComfyInstallKind.SystemPython);
+        var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        var api = new ComfyApi(new Uri($"http://127.0.0.1:{((IPEndPoint)probe.LocalEndpoint).Port}/"));
+        probe.Stop();
+        using var stop = new CancellationTokenSource();
+        var starting = ComfyProcess.StartAsync(install, api, Path.Combine(dir, "server.log"),
+            ["-NoProfile", "-Command", $"$PID | Set-Content '{pidFile}'; Start-Sleep 60"], TimeSpan.FromMinutes(1), null, stop.Token);
+        int? pid = null;
+        for (var i = 0; i < 100 && pid is null; i++)
+        {
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+            try { pid = int.TryParse(File.ReadAllText(pidFile).Trim(), out var p) ? p : null; }
+            catch (IOException) { }
+        }
+        Assert.NotNull(pid);
+        await stop.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => starting);
+        try
+        {
+            using var server = System.Diagnostics.Process.GetProcessById(pid.Value);
+            Assert.True(server.WaitForExit(5000), "the server still runs");
+        }
+        catch (ArgumentException) { } // gone already
+        try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
+    }
+
+    [Fact]
     public void What_the_server_runs_on_is_said_in_words()
     {
         var cpu = ComfyHardware.Device(JsonNode.Parse("""{"system": {"ram_total": 16865644544}, "devices": [{"name": "cpu", "type": "cpu"}]}""")!.AsObject());

@@ -253,19 +253,36 @@ public static partial class ComfyProcess
             process = Process.Start(psi)!;
         }
 
+        using var _ = process;
         progress?.Invoke("Starting ComfyUI…");
         var started = DateTime.UtcNow;
-        while (true)
+        var up = false;
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            if (await api.TrySystemStatsAsync(ct, TimeSpan.FromSeconds(2)).ConfigureAwait(false) is not null)
-                return;
-            if (install.Kind != ComfyInstallKind.Desktop && process.HasExited)
-                throw new ComfyApiException($"ComfyUI stopped while starting (exit code {process.ExitCode}). The end of its log ({logFile}):\n{Tail(logFile, 40)}");
-            if (DateTime.UtcNow - started > timeout)
-                throw new ComfyApiException($"ComfyUI did not answer at {api.BaseUrl} within {timeout.TotalMinutes:0} minutes of starting. The end of its log ({logFile}):\n{Tail(logFile, 40)}");
-            progress?.Invoke($"Starting ComfyUI… {(DateTime.UtcNow - started).TotalSeconds:0} s");
-            await Task.Delay(1000, ct).ConfigureAwait(false);
+            while (true)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (await api.TrySystemStatsAsync(ct, TimeSpan.FromSeconds(2)).ConfigureAwait(false) is not null)
+                {
+                    up = true;
+                    return;
+                }
+                if (install.Kind != ComfyInstallKind.Desktop && process.HasExited)
+                    throw new ComfyApiException($"ComfyUI stopped while starting (exit code {process.ExitCode}). The end of its log ({logFile}):\n{Tail(logFile, 40)}");
+                if (DateTime.UtcNow - started > timeout)
+                    throw new ComfyApiException($"ComfyUI did not answer at {api.BaseUrl} within {timeout.TotalMinutes:0} minutes of starting. The end of its log ({logFile}):\n{Tail(logFile, 40)}");
+                progress?.Invoke($"Starting ComfyUI… {(DateTime.UtcNow - started).TotalSeconds:0} s");
+                await Task.Delay(1000, ct).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            // One that didn't come up (it took too long, or the user pressed Stop) would go on
+            // running hidden, as nobody's server that no task closes, holding the port the next
+            // start needs. The Desktop app's window the user sees and closes.
+            if (!up && install.Kind != ComfyInstallKind.Desktop)
+                try { process.Kill(entireProcessTree: true); }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or AggregateException) { }
         }
     }
 
@@ -383,14 +400,27 @@ public static partial class ComfyProcess
             using var p = Process.Start(psi)!;
             var text = p.StandardOutput.ReadToEnd();
             p.WaitForExit(5000);
-            foreach (Match m in NetstatListen().Matches(text))
-                if (int.Parse(m.Groups[1].Value) == port)
-                    return int.Parse(m.Groups[2].Value);
+            return ListeningPid(text, port);
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
         return null;
     }
 
-    [GeneratedRegex(@"TCP\s+\S+:(\d+)\s+\S+\s+LISTENING\s+(\d+)", RegexOptions.IgnoreCase)]
+    /// <summary>
+    /// The process listening on <paramref name="port"/> in netstat -ano's output, told by the remote
+    /// address a listening socket has (0.0.0.0:0) rather than by its state, which is in the PC's
+    /// language: a German Windows says ABHÖREN, an Italian one IN ASCOLTO. Matched by LISTENING,
+    /// BlackBox on such a PC never knew the server it had started, so it left it running after the task.
+    /// </summary>
+    internal static int? ListeningPid(string netstat, int port)
+    {
+        foreach (Match m in NetstatListen().Matches(netstat))
+            if (int.TryParse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture, out var p) && p == port &&
+                int.TryParse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture, out var pid))
+                return pid;
+        return null;
+    }
+
+    [GeneratedRegex(@"^\s*TCP\s+\S+:([0-9]+)\s+(?:0\.0\.0\.0|\[::\]):0\s.*?\s([0-9]+)\s*$", RegexOptions.IgnoreCase | RegexOptions.Multiline)]
     private static partial Regex NetstatListen();
 }
