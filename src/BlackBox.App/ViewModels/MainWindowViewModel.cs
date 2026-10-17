@@ -24,6 +24,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private readonly HttpClient _http = LlmHttp.Create(Timeout.InfiniteTimeSpan);
     private List<ChatMessage> _history = [];
     private readonly ChatStore _chats;
+    private readonly ChatSaver _chatSaver;
     private readonly McpHost _mcp = new();
     /// <summary>The chat's SSH logins: they last from one message to the next, and end with the chat.</summary>
     private Core.Ssh.SshHosts _ssh;
@@ -50,6 +51,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _platform = platform;
         _previews = new PreviewServices(Core.Media.MediaDecoders.Create(platform, paths, Core.Comfy.ComfyHub.For(paths.ComfyDir)), platform.CreateAudioOutput);
         _chats = new ChatStore(paths.ChatsDir);
+        _chatSaver = new ChatSaver(_chats);
         _ssh = new Core.Ssh.SshHosts(paths.KnownHostsFile);
         _tick = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) =>
         {
@@ -150,6 +152,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         // A chat is saved at every step and when its run ends, so only one in progress needs it here.
         if (IsBusy) SaveChat(SnapshotHistory());
+        _chatSaver.Flush(TimeSpan.FromSeconds(10));
         if (_settingsSave?.IsEnabled == true)
         {
             _settingsSave.Stop();
@@ -914,6 +917,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         if (row.Id == _chatId)
             return;
+        // A chat left a moment ago may still be on its way to the disk.
+        _chatSaver.Flush(TimeSpan.FromSeconds(10));
         if (_chats.Load(row.Id) is not { } chat)
         {
             PastChats.Remove(row);
@@ -948,11 +953,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     private void DeleteChat(PastChat row)
     {
+        // Its last version on the disk, for its pictures; and none still on its way there afterwards.
+        _chatSaver.Flush(TimeSpan.FromSeconds(10));
         // The pictures pasted into it go with it; files dropped on the window were the user's own and stay.
         var pasted = (_chats.Load(row.Id)?.Entries ?? []).Where(e => e.Kind == ChatEntryKind.User).SelectMany(e => e.Files ?? [])
             .Where(f => string.Equals(Path.GetDirectoryName(f), _paths.PastedDir, StringComparison.OrdinalIgnoreCase)).ToList();
         if (row.Id == _chatId)
             LeaveChat(save: false);
+        _chatSaver.Forget(row.Id);
         _chats.Delete(row.Id);
         PastChats.Remove(row);
         OnPropertyChanged(nameof(HasPastChats));
@@ -993,11 +1001,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             Entries = Items.Where(i => i is not AssistantMessageItem { IsStreaming: true, HasText: false, HasReasoning: false }).Select(ToEntry).ToList(),
             History = history,
         };
-        try { _chats.Save(chat); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return; // a full or read-only disk: the chat goes on, just unsaved
-        }
+        // Written in the background: a long run's chat is megabytes, at every step.
+        _chatSaver.Save(chat);
 
         var row = PastChats.FirstOrDefault(r => r.Id == chat.Id);
         if (row is null)
