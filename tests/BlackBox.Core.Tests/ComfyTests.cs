@@ -744,6 +744,16 @@ public class MediaTests
     }
 
     [Fact]
+    public void A_long_line_full_of_paths_that_are_not_there_is_searched_in_a_moment()
+    {
+        // Minified JSON: every word end of the line was a look at the disk, for every path in it.
+        var line = string.Concat(Enumerable.Repeat(@"{""file"": ""C:\no such folder\made up name of a thing.txt"", ""size"": 12} ", 2000));
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Empty(FileMentions.Find(line));
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), $"took {clock.Elapsed}");
+    }
+
+    [Fact]
     public void Sound_stats_tell_loudness_and_where_it_is_silent()
     {
         const int rate = 1000;

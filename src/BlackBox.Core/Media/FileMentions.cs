@@ -15,13 +15,18 @@ public static partial class FileMentions
         var found = new List<string>();
         if (string.IsNullOrEmpty(text) || !OperatingSystem.IsWindows())
             return found;
+        var looked = 0;
         foreach (Match m in PathStart().Matches(text))
         {
-            if (found.Count >= max)
+            // Within reason: every word end of a long line is a look at the disk, and a reply of
+            // minified JSON full of paths that aren't there took minutes.
+            if (found.Count >= max || ++looked > MaxPaths)
                 break;
             var start = m.Index;
             var lineEnd = text.IndexOfAny(['\n', '\r'], start);
             var rest = text[start..(lineEnd < 0 ? text.Length : lineEnd)];
+            if (rest.Length > MaxPathText)
+                rest = rest[..MaxPathText];
             if (rest.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
                 rest = Uri.UnescapeDataString(rest[(rest.StartsWith("file:///", StringComparison.OrdinalIgnoreCase) ? 8 : 5)..]).Replace('/', '\\');
             // From the whole rest of the line down to the shortest stretch that ends a word.
@@ -51,6 +56,9 @@ public static partial class FileMentions
 
         static bool IsBoundary(char c) => char.IsWhiteSpace(c) || c is '.' or ',' or ';' or ':' or '!' or '?' or ')' or ']' or '`' or '*' or '"' or '\'' or '<' or '>' or '|';
     }
+
+    /// <summary>The most paths a text is searched for, and the most of a line one path may take (paths seldom pass 260 characters).</summary>
+    private const int MaxPaths = 64, MaxPathText = 400;
 
     private static readonly TimeSpan SlowAnswer = TimeSpan.FromSeconds(2), SkipFor = TimeSpan.FromMinutes(2);
 
