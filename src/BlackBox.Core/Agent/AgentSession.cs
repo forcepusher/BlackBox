@@ -202,7 +202,7 @@ public sealed partial class AgentSession(
         var cutCalls = 0;
         var loops = new LoopDetector();
         // Pointing at web_search only makes sense when the model has it.
-        var errors = tools.Find("web_search") is not null ? new ErrorRepeats() : null;
+        var guesswork = tools.Find("web_search") is not null ? new Guesswork() : null;
         var justReset = false;
         var turnEnded = false;
 
@@ -308,7 +308,7 @@ public sealed partial class AgentSession(
                     var result = await RunToolAsync(call, observer, ct).ConfigureAwait(false);
                     if (loops.Check(call, result) is { } warning)
                         result = result with { Text = result.Text + "\n" + warning };
-                    if (errors?.Check(result) is { } lookItUp)
+                    if (guesswork?.Check(ToolCallRepair.ResolveTool(call.Name, tools), result) is { } lookItUp)
                         result = result with { Text = result.Text + "\n" + lookItUp };
                     // A model that can't see gets no picture (an MCP tool's, say): its server
                     // refused that request and every one after it, since the conversation keeps it.

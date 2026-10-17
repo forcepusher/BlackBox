@@ -433,11 +433,17 @@ for the same way, so a long task carries on once it is back instead of ending on
 upload without breaking it: a request carries every screenshot still in the context, several
 megabytes, and LM Studio waited five minutes for the rest of one before answering 408. So when
 nothing of a request gets through for 30 seconds, it is sent again. A tool that fails, however
-it fails, reports the error to the model and the run goes on. When the same error comes back a
-second time, the result tells the model to search the web for the error message before trying
-again: it used to work around errors rather than look them up, and once decided Excel's chart
-interface was broken after a PowerShell call failed the same way four times (`ChartObjects` is a
-method there, not a property).
+it fails, reports the error to the model and the run goes on. Models work around errors and guess
+at names rather than look them up: qwen3.8 once decided Excel's chart interface was broken after a
+PowerShell call failed the same way four times (`ChartObjects` is a method there, not a property),
+and Nemotron built a geometry nodes graph in Blender 5.2 from names it knew from Blender 3, one failed
+script after another. So a failed call's result tells the model to search the web before it tries
+again when the error says a name doesn't exist (an attribute, method, argument, enum value, node
+type or command), when the same error comes back, on every failure from the third since its last
+`web_search` or `fetch_page`, and the first time a script or command fails in a task before
+anything was looked up. Errors a tool that runs code reports as its output count too: an
+MCP server's "Error executing code: ..." comes as an ordinary result, and Blender run with a script
+prints the traceback and exits with 0.
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |
@@ -533,10 +539,16 @@ nothing is clicked: the model gets the new screen, and a click it then asks for 
 
 ### Web search
 A local model's memory of APIs is where it slips most (qwen3.8 writes Unity's `KeyCode.Left`, which
-doesn't exist, for `KeyCode.LeftArrow`), so the agent can look things up, and the system prompt
-tells it to whenever it isn't sure of an exact name or meets an error it doesn't understand. Given
+doesn't exist, for `KeyCode.LeftArrow`), so the agent can look things up. Told to whenever it wasn't
+sure, it rarely was, so the system prompt says when instead: before it writes code or commands for a
+program or library, it checks the version in use and reads that version's documentation; it
+searches before hunting through a program's menus, and after any error it didn't expect. Given
 Unity's CS0117 error for `KeyCode.Left`, qwen3.8 searched, read the `KeyCode` page with
-`find=Arrow` and fixed the file in 55 s.
+`find=Arrow` and fixed the file in 55 s. On a Blender 5.2 task over mcp-for-blender (cubes scattered
+over a plane with geometry nodes, each turned and sized at random, the density and the cube size as
+inputs of the modifier), qwen3.8 failed 11 and 6 scripts in two runs before the rule and the notes
+(see Unstable connections), and searched only after the 7th and the 4th failure; with them it failed
+4 and 3, searched after the second, and finished in 6.4 minutes on average instead of 7.7.
 
 No API key and nothing to install. `web_search` asks DuckDuckGo's HTML page through the system's
 `curl` (built into Windows 10 and later; a fraction of a second): DuckDuckGo recognizes .NET's own
