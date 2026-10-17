@@ -150,6 +150,10 @@ internal sealed class RecordingObserver : IAgentObserver
     public List<(long Sent, long Total)> Sending { get; } = [];
     public void OnSending(long sent, long total) => Sending.Add((sent, total));
 
+    /// <summary>The exception a bug ended the run with, if one did.</summary>
+    public Exception? Failed { get; private set; }
+    public void OnFailed(Exception error) => Failed = error;
+
     public void OnFinished(AgentStopReason reason, string? detail)
     {
         StopReason = reason;

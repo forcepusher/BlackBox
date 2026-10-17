@@ -251,6 +251,9 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
         }
     }
 
+    /// <summary>A bug ended the run: its stack trace, which the one-line message leaves out.</summary>
+    public void OnFailed(Exception error) => Console.Error.WriteLine($"\n[failed] {Now} {error}");
+
     public void OnFinished(AgentStopReason reason, string? detail)
     {
         Reason = reason;

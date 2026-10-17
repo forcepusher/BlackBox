@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using BlackBox.App.ViewModels;
 using BlackBox.App.Views;
 using BlackBox.Core.Platform;
@@ -28,7 +29,18 @@ public partial class App : Application
             desktop.MainWindow = window;
             // Stops the MCP server processes with the app; otherwise they would outlive it.
             desktop.Exit += (_, _) => vm.Shutdown();
+            // An exception nothing caught on the window's thread is written down and said in the
+            // chat, and the window goes on, with the run in progress: it closed with them before.
+            Dispatcher.UIThread.UnhandledException += (_, e) =>
+            {
+                CrashLog.Write("the window", e.Exception);
+                e.Handled = true;
+                vm.ShowProblem($"Something went wrong in BlackBox's window: {CrashLog.Summary(e.Exception)}");
+            };
             vm.OnStartup();
+            if (CrashLog.TakeLastCrash(paths) is { } crash)
+                vm.ShowProblem($"BlackBox closed unexpectedly last time ({crash}).");
+            Program.Started = true;
         }
 
         base.OnFrameworkInitializationCompleted();

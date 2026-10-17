@@ -16,7 +16,8 @@ BlackBox/
   Data/        settings.json, chats/ (see Chat history), runtime/ (unpacked by the single-file exe), browser/ (see Web search),
                tools/ (portable programs the agent downloaded), scratch/ (helper files it made for a task),
                comfyui/ (ComfyUI's address and folder, the log of a server BlackBox started, see Pictures, video and sound),
-               pasted/ (pictures pasted into the chat, see Files in a message)
+               pasted/ (pictures pasted into the chat, see Files in a message),
+               crash.log (errors no code caught, see below)
 ```
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
@@ -25,6 +26,11 @@ Files it makes only to get a task done (a script, the script a reminder runs) go
 rather than among yours: a reminder used to leave its script in the home folder. `settings.json`
 also keeps the main window's size and place, and it opens there again unless that place is no
 longer on a screen.
+
+An error no code caught goes into `Data/crash.log` with its stack trace. One in the window says so
+in the chat, and the window and a run in progress go on; one that ends BlackBox is shown in the
+chat at the next start, and one that keeps it from starting in a message box. Before, such an
+error closed the window and left no trace of why.
 
 ## Documents
 `read_file` reads more than text: PDFs (their text layer, page by page), Word, Excel and PowerPoint

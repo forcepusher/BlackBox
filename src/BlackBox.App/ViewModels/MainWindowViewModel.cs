@@ -1125,6 +1125,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     private void AddNotice(string text, bool isError) => Items.Add(new NoticeItem(text, isError));
 
+    private readonly HashSet<string> _problemsShown = [];
+
+    /// <summary>Something no code caught (see <see cref="CrashLog"/>), said in the chat once, with where to read more.</summary>
+    public void ShowProblem(string text)
+    {
+        if (_problemsShown.Add(text))
+            AddNotice(text + @" Details are in Data\crash.log.", isError: true);
+    }
+
     // ---- IAgentObserver (called from the agent thread) -------------------------------
 
     // A run can last hours. The model's context is kept in check by context resets; the chat
@@ -1272,9 +1281,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             item.AddPreviews(files.Where(File.Exists), _previews);
         else if (result.Image is not null)
         {
-            using var ms = new MemoryStream(result.Image);
-            item.Screenshot = Bitmap.DecodeToWidth(ms, 480);
-            item.ScreenshotData = result.Image;
+            // An MCP server's picture can be one the window doesn't read (an SVG, a broken file):
+            // the call's card goes without it rather than the window closing.
+            try
+            {
+                using var ms = new MemoryStream(result.Image);
+                item.Screenshot = Bitmap.DecodeToWidth(ms, 480);
+                item.ScreenshotData = result.Image;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException) { }
         }
         if (item.State == ToolItemState.AwaitingApproval)
             item.State = ToolItemState.Stopped; // the run was stopped while the call waited for an OK; Deny would have said Declined
@@ -1286,10 +1301,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
     });
 
+    /// <summary>Set when the run is ending on a bug (see <see cref="IAgentObserver.OnFailed"/>), whose stack trace went into the crash log.</summary>
+    private volatile bool _failureLogged;
+
+    void IAgentObserver.OnFailed(Exception error)
+    {
+        CrashLog.Write("the agent", error);
+        _failureLogged = true;
+    }
+
     void IAgentObserver.OnFinished(AgentStopReason reason, string? detail)
     {
         // Read here: by the time the window gets to this, a run of what came too late for this one may have started.
         var started = _runStarted;
+        var logged = _failureLogged;
+        _failureLogged = false;
         PostTimed(at =>
         {
             var stopped = StoppedText();
@@ -1308,7 +1334,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                     AddStopNotice(stopped, isError: false);
                     break;
                 case AgentStopReason.Error:
-                    AddStopNotice(detail ?? "Something went wrong.", isError: true);
+                    AddStopNotice((detail ?? "Something went wrong.") + (logged ? @" Details are in Data\crash.log." : ""), isError: true);
                     break;
             }
 

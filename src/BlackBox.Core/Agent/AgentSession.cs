@@ -29,6 +29,14 @@ public interface IAgentObserver
     /// </summary>
     void OnSending(long sent, long total) { }
     void OnToolFinished(ToolCall call, ToolResult result);
+
+    /// <summary>
+    /// The run is ending on an exception that is no server's answer: a bug, whose message alone
+    /// ("Object reference not set to an instance of an object.") tells nobody where. Called before
+    /// <see cref="OnFinished"/>, with the whole exception for a log.
+    /// </summary>
+    void OnFailed(Exception error) { }
+
     void OnFinished(AgentStopReason reason, string? detail);
 }
 
@@ -277,6 +285,8 @@ public sealed partial class AgentSession(
         }
         catch (Exception ex)
         {
+            if (ex is not LlmException)
+                observer.OnFailed(ex);
             observer.OnFinished(AgentStopReason.Error, ex.Message);
         }
         finally

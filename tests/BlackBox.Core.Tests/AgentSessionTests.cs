@@ -361,6 +361,28 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_bug_that_ends_a_run_is_handed_over_whole_and_a_servers_error_is_not()
+    {
+        // "Object reference not set to an instance of an object." alone tells nobody where.
+        var bug = new InvalidOperationException("a bug");
+        var server = new ScriptedServer { Responder = _ => throw bug };
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("go", observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal(AgentStopReason.Error, observer.StopReason);
+        Assert.Equal("a bug", observer.Detail);
+        Assert.Same(bug, observer.Failed);
+
+        var refused = new ScriptedServer();
+        refused.Failures.Enqueue((HttpStatusCode.BadRequest, "no such model"));
+        (session, observer) = CreateSession(refused, Path.GetTempPath(), new FakePlatform());
+        await session.RunAsync("go", observer, TestContext.Current.CancellationToken);
+        Assert.Equal(AgentStopReason.Error, observer.StopReason);
+        Assert.Null(observer.Failed);
+    }
+
+    [Fact]
     public async Task Server_errors_and_busy_answers_are_sent_again_like_drops()
     {
         var server = new ScriptedServer(Sse.Text("Made it."));
