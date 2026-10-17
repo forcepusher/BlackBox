@@ -76,14 +76,7 @@ public static class RemoteFiles
         var existed = state.Contains("exists");
         if (append && !existed)
             return ($"Cannot append: {path} does not exist on {host.Target}. Check the path, or create the file first with append=false.", true);
-        // The content goes into a file of its own first, and into the target only once all of it is
-        // there: written straight from the connection ("cat > file"), a link that dropped or the
-        // minute running out left the file cut short, a config under /etc among them. The target
-        // itself is written as before, so it keeps its owner, mode and links.
-        var script = "t=$(mktemp /tmp/.blackbox-write.XXXXXX 2>/dev/null) || t=/tmp/.blackbox-write.$$; (umask 077; cat > \"$t\"); " +
-                     $"[ $(wc -c < \"$t\") -eq {Encoding.UTF8.GetByteCount(content)} ] || {{ rm -f \"$t\"; echo BB-CUT; exit 1; }}; " +
-                     $"mkdir -p \"$(dirname {p})\" 2>/dev/null; cat \"$t\" {(append ? ">>" : ">")} {p} 2>/dev/null || {{ rm -f \"$t\"; echo BB-DENIED; exit 1; }}; rm -f \"$t\"";
-        var (r, sudo) = await RunAsync(host, script, content, "BB-DENIED", ct).ConfigureAwait(false);
+        var (r, sudo) = await RunAsync(host, WriteScript(path, Encoding.UTF8.GetByteCount(content), append), content, "BB-DENIED", ct).ConfigureAwait(false);
         if (r.Output.Contains("BB-CUT"))
             return ($"Could not write {path} on {host.Target}: only part of it arrived (the connection broke, or /tmp is full there); the file was left as it was.", true);
         if (r.Output.Contains("BB-DENIED") || r.ExitCode != 0)
@@ -92,6 +85,24 @@ public static class RemoteFiles
         var done = append ? $"Appended {content.Length} chars to {path} on {host.Target}{how}."
                           : $"{(existed ? "Overwrote" : "Created")} {path} on {host.Target}{how} ({content.Length} chars).";
         return (done + (checkConfig ? await CheckAsync(host, path, ct).ConfigureAwait(false) : ""), false);
+    }
+
+    /// <summary>
+    /// The script that writes what it reads to a file. The content goes into a file of its own
+    /// first, and into the target only once all of it is there: written straight from the
+    /// connection ("cat > file"), a link that dropped or the minute running out left the file cut
+    /// short, a config under /etc among them. The target itself is written as before, so it keeps
+    /// its owner, mode and links. Where no temporary file can be made (Termux has no /tmp, only
+    /// $TMPDIR), it is written straight, as before.
+    /// </summary>
+    internal static string WriteScript(string path, int bytes, bool append)
+    {
+        var p = SshHost.Quote(path);
+        var into = append ? ">>" : ">";
+        return "d=${TMPDIR:-/tmp}; t=$(mktemp \"$d/.blackbox-write.XXXXXX\" 2>/dev/null) || { t=\"$d/.blackbox-write.$$\"; (umask 077; : > \"$t\") 2>/dev/null || t=; }; " +
+               $"if [ -z \"$t\" ]; then mkdir -p \"$(dirname {p})\" 2>/dev/null; cat {into} {p} 2>/dev/null || {{ echo BB-DENIED; exit 1; }}; exit 0; fi; " +
+               $"cat > \"$t\"; [ $(wc -c < \"$t\") -eq {bytes} ] || {{ rm -f \"$t\"; echo BB-CUT; exit 1; }}; " +
+               $"mkdir -p \"$(dirname {p})\" 2>/dev/null; cat \"$t\" {into} {p} 2>/dev/null || {{ rm -f \"$t\"; echo BB-DENIED; exit 1; }}; rm -f \"$t\"";
     }
 
     /// <summary>A line "[Checked after writing: ...]" for a config file, or nothing.</summary>
@@ -113,8 +124,8 @@ public static class RemoteFiles
         if (text.Contains('\0'))
             return ($"{path} on {host.Target} is not a text file; edit_file edits text only.", true);
         if (text.Contains('�'))
-            return ($"{path} on {host.Target} isn't UTF-8 (Latin-1, say), and edit_file would change each character in it that isn't. " +
-                    "Edit it with sed through ssh instead, which leaves the rest of the file as it is.", true);
+            return ($"{path} on {host.Target} isn't plain UTF-8 (it is Latin-1, say, or holds \"�\" already), and edit_file would turn each character " +
+                    "in it that isn't into \"�\". Edit it with sed through ssh instead, which leaves the rest of the file as it is.", true);
         var count = Count(text, oldText);
         if (count == 0 && text.Contains("\r\n") && oldText.Contains('\n') && !oldText.Contains('\r'))
         {
@@ -152,7 +163,8 @@ public static class RemoteFiles
     /// <summary>
     /// The script that lists a folder or searches it. BusyBox (Alpine, OpenWrt, many a NAS) has
     /// neither ls --time-style nor find -printf: the listing came back empty, without a word, and
-    /// the folder read as empty. Each is tried first, and plain ls and find do without.
+    /// the folder read as empty. Each is tried first, and plain ls and find do without. So is
+    /// timeout, which an older BusyBox writes "timeout -t 20" and macOS hasn't got.
     /// </summary>
     internal static string ListScript(string path, string? pattern)
     {
@@ -161,8 +173,9 @@ public static class RemoteFiles
             ? $"[ -d {p} ] || {{ echo BB-MISSING; exit 0; }}; [ -r {p} ] && [ -x {p} ] || {{ echo BB-DENIED; exit 0; }}; " +
               $"if ls -d --time-style=+%Y / >/dev/null 2>&1; then ls -la --time-style=+%Y-%m-%d.%H:%M {p}; else ls -la {p}; fi | head -501"
             : $"[ -d {p} ] || {{ echo BB-MISSING; exit 0; }}; " +
-              $"if find / -maxdepth 0 -printf '' >/dev/null 2>&1; then timeout 20 find {p} -name {SshHost.Quote(pattern)} -printf '%p  (%s bytes)\\n' 2>/dev/null; " +
-              $"else timeout 20 find {p} -name {SshHost.Quote(pattern)} 2>/dev/null; fi | head -501";
+              "if timeout 5 true 2>/dev/null; then T='timeout 20'; elif timeout -t 5 true 2>/dev/null; then T='timeout -t 20'; else T=; fi; " +
+              $"if find / -maxdepth 0 -printf '' >/dev/null 2>&1; then $T find {p} -name {SshHost.Quote(pattern)} -printf '%p  (%s bytes)\\n' 2>/dev/null; " +
+              $"else $T find {p} -name {SshHost.Quote(pattern)} 2>/dev/null; fi | head -501";
     }
 
     /// <summary>

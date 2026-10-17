@@ -424,6 +424,14 @@ public class SshIntegrationTests : IDisposable
         var late = await Assert.ThrowsAsync<IOException>(() => hosts.GetAsync(Host, Key, null, CancellationToken.None));
         Assert.Contains("The chat ended", late.Message);
         Assert.Empty(hosts.Connected);
+
+        // And one still being made when the chat ends: it is closed once it's there.
+        var others = new SshHosts(_knownHosts);
+        var logging = others.GetAsync(Host, Key, null, CancellationToken.None, newLogin: true);
+        others.Dispose();
+        var ended = await Assert.ThrowsAsync<IOException>(() => logging);
+        Assert.Contains("while logging in", ended.Message);
+        Assert.Empty(others.Connected);
     }
 
     [Fact]
@@ -663,10 +671,33 @@ public class SshIntegrationTests : IDisposable
             Assert.Contains("unrecognized", (await Ssh("( PATH=/tmp/bbx:$PATH; ls -d --time-style=+%Y / )")).Text);
             Assert.Contains(" sub", (await Ssh($"( PATH=/tmp/bbx:$PATH; {RemoteFiles.ListScript("/tmp/bb-list", null)} )")).Text);
             Assert.Contains("/tmp/bb-list/sub/notes.txt", (await Ssh($"( PATH=/tmp/bbx:$PATH; {RemoteFiles.ListScript("/tmp/bb-list", "*.txt")} )")).Text);
+            // An older BusyBox's timeout wants "-t 20", and some have none: the search came back empty.
+            await Ssh("printf '#!/bin/sh\\n[ \"$1\" = -t ] || { echo \"timeout: cannot execute $1\" >&2; exit 127; }\\ns=$2; shift 2; exec /usr/bin/timeout \"$s\" \"$@\"\\n' > /tmp/bbx/timeout && chmod +x /tmp/bbx/timeout");
+            Assert.Contains("/tmp/bb-list/sub/notes.txt", (await Ssh($"( PATH=/tmp/bbx:$PATH; {RemoteFiles.ListScript("/tmp/bb-list", "*.txt")} )")).Text);
+            await Ssh("printf '#!/bin/sh\\necho \"sh: timeout: not found\" >&2; exit 127\\n' > /tmp/bbx/timeout");
+            Assert.Contains("/tmp/bb-list/sub/notes.txt", (await Ssh($"( PATH=/tmp/bbx:$PATH; {RemoteFiles.ListScript("/tmp/bb-list", "*.txt")} )")).Text);
         }
         finally
         {
             await Ssh("rm -rf /tmp/bbx /tmp/bb-list");
+        }
+    }
+
+    [Fact]
+    public async Task A_file_is_written_where_no_temporary_file_can_be_made()
+    {
+        if (Host is null) return;
+        // Termux has no /tmp, only its own $TMPDIR: every write there said the connection broke.
+        try
+        {
+            await Ssh($"printf hello | ( TMPDIR=/nonexistent; export TMPDIR; {RemoteFiles.WriteScript("/tmp/bb-direct/a.txt", 5, append: false)} )");
+            Assert.Contains("SAME", (await Ssh("[ \"$(cat /tmp/bb-direct/a.txt)\" = hello ] && echo SAME")).Text);
+            await Ssh($"mkdir -p /tmp/bb-own && printf hello | ( TMPDIR=/tmp/bb-own; export TMPDIR; {RemoteFiles.WriteScript("/tmp/bb-direct/b.txt", 5, append: false)} )");
+            Assert.Contains("SAME", (await Ssh("[ \"$(cat /tmp/bb-direct/b.txt)\" = hello ] && [ -z \"$(ls -A /tmp/bb-own)\" ] && echo SAME")).Text);
+        }
+        finally
+        {
+            await Ssh("rm -rf /tmp/bb-direct /tmp/bb-own");
         }
     }
 
@@ -680,7 +711,7 @@ public class SshIntegrationTests : IDisposable
         {
             var latin1 = await new EditFileTool().ExecuteAsync(new JsonObject { ["path"] = "/tmp/bb-latin1.conf", ["old_text"] = "= 1", ["new_text"] = "= 2", ["host"] = Host }, _ctx, CancellationToken.None);
             Assert.True(latin1.IsError);
-            Assert.Contains("isn't UTF-8", latin1.Text);
+            Assert.Contains("isn't plain UTF-8", latin1.Text);
             Assert.Contains("63 61 66 e9 20 3d 20 31", (await Ssh("od -An -tx1 /tmp/bb-latin1.conf")).Text);
             var binary = await new EditFileTool().ExecuteAsync(new JsonObject { ["path"] = "/tmp/bb-binary", ["old_text"] = "a", ["new_text"] = "c", ["host"] = Host }, _ctx, CancellationToken.None);
             Assert.Contains("not a text file", binary.Text);
