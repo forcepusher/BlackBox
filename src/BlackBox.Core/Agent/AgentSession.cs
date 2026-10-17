@@ -122,6 +122,7 @@ public sealed partial class AgentSession(
                 History.Add(Interjection(input.ToMessage(toolContext.SeesImages)));
                 _interrupted = true;
             }
+            toolContext.UserPictures = UserInput.PicturesIn(History);
         }
     }
 
@@ -189,6 +190,8 @@ public sealed partial class AgentSession(
         _request = RequestOf(input);
         _interrupted = false;
         History.Add(input.ToMessage(toolContext.SeesImages));
+        // A picture given earlier in the chat (a reference sheet) is still the one to follow.
+        toolContext.UserPictures = UserInput.PicturesIn(History);
         toolContext.UserMessage = _arrived.Token;
         if (toolContext.Locate is null && FreshLook.Enabled)
         {

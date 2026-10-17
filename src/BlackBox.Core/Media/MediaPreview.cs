@@ -436,6 +436,43 @@ public static class MediaPreview
     }
 
     private static int Snap(double size) => Math.Max(32, (int)Math.Round(size / 32) * 32);
+
+    /// <summary>
+    /// A picture to follow on the left, a look at what was made (<paramref name="look"/>, a JPEG
+    /// from <see cref="ForFiles"/>) on the right, at the same height and labelled, as one JPEG
+    /// within the same pixel budget; null when the picture can't be read.
+    /// </summary>
+    /// <param name="label">What the picture on the left is: "The user's picture".</param>
+    public static byte[]? SideBySide(string reference, byte[] look, string label)
+    {
+        using var left = SKBitmap.Decode(reference);
+        using var right = SKBitmap.Decode(look);
+        if (left is null || right is null)
+            return null;
+        const int labelH = 30, gap = 8;
+        // Both at one height: the taller one's, or less to keep within 2048 pixels a side and the
+        // pixel budget, which (aspects * h + gap) * (h + labelH) <= MaxPixels gives.
+        var aspects = (double)left.Width / left.Height + (double)right.Width / right.Height;
+        var b = labelH * aspects + gap;
+        var byPixels = (-b + Math.Sqrt(b * b + 4 * aspects * (MaxPixels - (double)labelH * gap))) / (2 * aspects);
+        var height = (int)Math.Min(Math.Min(Math.Max(left.Height, right.Height), byPixels), Math.Min((2048 - gap) / aspects, 2048 - labelH));
+        var (leftW, rightW) = (left.Width * height / left.Height, right.Width * height / right.Height);
+        // Sides a multiple of 32, as the model's vision cuts pictures in 32-pixel patches.
+        var (outW, outH) = ((leftW + gap + rightW + 31) / 32 * 32, (labelH + height + 31) / 32 * 32);
+        using var surface = SKSurface.Create(new SKImageInfo(outW, outH, SKColorType.Rgba8888, SKAlphaType.Premul));
+        var canvas = surface.Canvas;
+        canvas.Clear(new SKColor(16, 16, 16));
+        using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true };
+        using var font = new SKFont(SKTypeface.Default, 20);
+        using var text = new SKPaint { Color = SKColors.White, IsAntialias = true };
+        canvas.DrawText(label + ": " + Path.GetFileName(reference), 8, 22, font, text);
+        canvas.DrawText("What was made", leftW + gap + 8, 22, font, text);
+        canvas.DrawBitmap(left, new SKRect(0, labelH, leftW, labelH + height), paint);
+        canvas.DrawBitmap(right, new SKRect(leftW + gap, labelH, leftW + gap + rightW, labelH + height), paint);
+        using var image = surface.Snapshot();
+        using var jpeg = image.Encode(SKEncodedImageFormat.Jpeg, 85);
+        return jpeg.ToArray();
+    }
 }
 
 /// <summary>How loud a sound is and where it is silent, in words the model can check against what was asked.</summary>

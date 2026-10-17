@@ -646,6 +646,7 @@ public sealed class ComfyTool : Tool
 
         // Files of the user's own: uploaded into ComfyUI's input folder, and named as it knows them.
         var uploaded = new HashSet<string>();
+        var inputPictures = new List<string>();
         foreach (var (id, input, path) in workflow.LocalFiles(library, ctx.ResolvePath))
         {
             if (!File.Exists(path))
@@ -653,6 +654,8 @@ public sealed class ComfyTool : Tool
             ctx.Progress?.Invoke($"Uploading {Path.GetFileName(path)}…");
             ((JsonObject)workflow.Nodes[id]!["inputs"]!)[input] = await api.UploadAsync(path, ct).ConfigureAwait(false);
             uploaded.Add(id + "." + input);
+            if (Picture.Handles(path))
+                inputPictures.Add(path);
         }
 
         var warnings = new List<string>();
@@ -680,7 +683,7 @@ public sealed class ComfyTool : Tool
             lock (_lastRuns) _lastRuns[templateName] = args["set"] is JsonObject done ? ComfyWorkflow.Changes(done) : [];
         _ranJobs = true;
         hub.RememberJob(promptId, clientId, workflow.All().ToDictionary(n => n.Id, n => ComfyWorkflow.TitleOf(n.Node) ?? ComfyWorkflow.ClassOf(n.Node)));
-        var result = await WaitForAsync(args, hub, api, promptId, ctx, ct).ConfigureAwait(false);
+        var result = await WaitForAsync(args, hub, api, promptId, ctx, ct, inputPictures).ConfigureAwait(false);
         var notes = refused.Select(r => "Left out: " + r).Concat(warnings.Select(w => "Note: " + w))
             .Concat(forgotten is null ? [] : ["Note: " + forgotten]).ToList();
         if (notes.Count > 0)
@@ -760,7 +763,9 @@ public sealed class ComfyTool : Tool
             ? ComfyWorkflow.FromApi(await ToApiAsync(hub, api, json, ct).ConfigureAwait(false))
             : ComfyWorkflow.FromApi(json);
 
-    private static async Task<ToolResult> WaitForAsync(JsonObject args, ComfyHub hub, ComfyApi api, string promptId, ToolContext ctx, CancellationToken ct)
+    /// <param name="inputs">The pictures the job's workflow loads (LoadImage), for when the user gave none to follow.</param>
+    private static async Task<ToolResult> WaitForAsync(JsonObject args, ComfyHub hub, ComfyApi api, string promptId, ToolContext ctx, CancellationToken ct,
+        IReadOnlyList<string>? inputs = null)
     {
         var wait = TimeSpan.FromMinutes(Math.Clamp(GetNumber(args, "wait_minutes") ?? 30, 0.1, 240));
         var (clientId, titles) = hub.JobClient(promptId);
@@ -807,11 +812,28 @@ public sealed class ComfyTool : Tool
             sb.AppendLine("(These are previews in ComfyUI's temp folder, which it empties when it restarts: add a save node, or copy them with save_to, to keep them.)");
         foreach (var text in job.Texts.Take(10))
             sb.AppendLine("Text it gave: " + text.Clip(2000));
-        if (preview.Image is not null)
+        var image = preview.Image;
+        var imageCaption = "What the job made:";
+        // Next to a picture to follow, so the result is judged against it rather than against the
+        // model's memory of it: asked for a bunny from the user's reference sheet, Nemotron called
+        // four results mature and close to the sheet's style while the user saw a chubby teenager.
+        var (reference, given) = ctx.UserPictures.FirstOrDefault(File.Exists) is { } picture ? (picture, true) : (inputs?.FirstOrDefault(File.Exists), false);
+        if (image is not null && job.Status == "success" && reference is not null &&
+            MediaPreview.SideBySide(reference, image, given ? "The user's picture" : "The picture it started from") is { } both)
+        {
+            image = both;
+            imageCaption = given ? "The user's picture, and what the job made:" : "The picture the job started from, and what it made:";
+            sb.Append(given
+                ? $"On the left is the picture the user gave you ({Path.GetFileName(reference)}); on the right, what the job made. " +
+                  "Compare them where the user asked the result to follow it (the character, its age and build, colours, style), " +
+                  "and say what differs. On the right: " + preview.Caption
+                : $"On the left is the picture the job started from ({Path.GetFileName(reference)}); on the right, what it made. " + preview.Caption);
+        }
+        else if (image is not null)
             sb.Append(preview.Caption);
         var resultText = sb.ToString().TrimEnd();
         return job.Status == "success"
-            ? new ToolResult(resultText, preview.Image, ImageCaption: preview.Image is null ? null : "What the job made:", Files: paths)
-            : new ToolResult(resultText, preview.Image, IsError: true, ImageCaption: preview.Image is null ? null : "What the job made before it stopped:", Files: paths);
+            ? new ToolResult(resultText, image, ImageCaption: image is null ? null : imageCaption, Files: paths)
+            : new ToolResult(resultText, image, IsError: true, ImageCaption: image is null ? null : "What the job made before it stopped:", Files: paths);
     }
 }

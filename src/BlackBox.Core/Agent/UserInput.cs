@@ -71,6 +71,38 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
         return extension.Length > 1 ? $"a {extension.ToLowerInvariant()} file, {size}" : $"a file, {size}";
     }
 
+    /// <summary>
+    /// The pictures of the user's latest message in <paramref name="history"/> that came with any,
+    /// read back from the list <see cref="ToMessage"/> writes ("- C:\x\a.png (a 2945x2160 picture,
+    /// …)"): only files that are still there. A path can hold " (" itself, so the longest one that
+    /// is a file is taken.
+    /// </summary>
+    public static IReadOnlyList<string> PicturesIn(IEnumerable<ChatMessage> history)
+    {
+        foreach (var m in history.Where(m => m.FromUser).Reverse())
+        {
+            var text = (m.Parts is { Count: > 0 } parts ? parts[0].Text : m.Content) ?? "";
+            var list = text.IndexOf("[The user attached ", StringComparison.Ordinal);
+            if (list < 0)
+                continue;
+            var pictures = new List<string>();
+            foreach (var line in text[list..].Split('\n').Where(l => l.StartsWith("- ", StringComparison.Ordinal)))
+            {
+                var entry = line[2..];
+                for (var at = entry.LastIndexOf(" (", StringComparison.Ordinal); at > 0; at = entry.LastIndexOf(" (", at - 1, StringComparison.Ordinal))
+                    if (File.Exists(entry[..at]))
+                    {
+                        if (Picture.Handles(entry[..at]))
+                            pictures.Add(entry[..at]);
+                        break;
+                    }
+            }
+            if (pictures.Count > 0)
+                return pictures;
+        }
+        return [];
+    }
+
     /// <summary>Several messages sent together, as one: their texts one after another, and all their files.</summary>
     public static UserInput Join(IEnumerable<UserInput> inputs)
     {

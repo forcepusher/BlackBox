@@ -127,6 +127,12 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   sheet) is where the result starts: the tool tells the model to start from it, image to image,
   and to crop or scale it inside the workflow. In that chat it described the reference sheet in
   words for four tries, then cropped it with PowerShell in four calls, two of which failed.
+- **The picture to follow next to each result.** The look at what a job made comes beside the
+  picture the user gave in the chat (the latest message that came with pictures, found again in
+  later runs), labelled, at the same height, so the model compares the two rather than the result
+  with its memory of the reference: Nemotron called four of those bunnies mature and true to the
+  sheet's style while the user saw a chubby teenager. With no picture from the user, the one the
+  job started from (its LoadImage) takes that place.
 - **Checked before it runs.** Every workflow is checked against the server's node types first, and
   every wrong name comes back at once with the closest real one: "no node type SaveImag; did you
   mean SaveImage?", "no input sampler; did you mean sampler_name?", a model file that isn't
