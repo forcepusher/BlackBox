@@ -222,7 +222,7 @@ public sealed class ComfyTool : Tool
         return new ToolResult(sb.ToString().TrimEnd());
     }
 
-    /// <summary>What ComfyUI runs on, said for model choices: "runs on …" when it runs, "would run on …" when it isn't installed yet.</summary>
+    /// <summary>What ComfyUI runs on, said for model choices: "runs on …" when it runs, "would run on …" when none has been used yet.</summary>
     private static async Task<(string Text, bool Cpu)> DeviceAsync(ComfyHub hub, CancellationToken ct)
     {
         if (await new ComfyApi(hub.Address).TrySystemStatsAsync(ct).ConfigureAwait(false) is { } stats)
@@ -232,7 +232,11 @@ public sealed class ComfyTool : Tool
         }
         var build = ComfyHardware.Pick(ComfyHardware.Cards(), ComfyInstaller.Arm64);
         var ram = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1073741824.0;
-        var installed = hub.SavedInstall is not null ? "isn't running; it runs" : "isn't installed yet (action=install); it would run";
+        // Not "isn't installed": a BlackBox that hasn't used one yet doesn't know. Asked for the
+        // month's most downloaded first thing in a fresh Data folder, qwen3.8 read that and ran
+        // action=install, which found the PC's own ComfyUI and started it.
+        var installed = hub.SavedInstall is not null ? "isn't running; it runs"
+            : "isn't running, and none has been used from this BlackBox yet (action=status finds the PC's own and starts it; action=install is for a PC without one); it would run";
         return ($"{installed} on {build.Device}, with {ram:0} GB of RAM", build.Cpu);
     }
 
