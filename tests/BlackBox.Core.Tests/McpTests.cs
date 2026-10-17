@@ -172,9 +172,16 @@ public class McpTests
         };
         var mapped = McpTool.ToToolResult(result);
         Assert.Equal("line one\nembedded text\nResource: file:///b.txt (b)\n(1 more image left out)", mapped.Text);
-        Assert.Equal(TestTools.Png, mapped.Image);
-        Assert.Equal("image/png", mapped.ImageMime);
+        // Sent as a screenshot is: JPEG, its sides on the vision patch grid.
+        Assert.Equal("image/jpeg", mapped.ImageMime);
+        using (var shown = SkiaSharp.SKBitmap.Decode(mapped.Image))
+            Assert.Equal((32, 32), (shown.Width, shown.Height));
         Assert.False(mapped.IsError);
+
+        // An image the model's server couldn't take, kept in the conversation, failed every request after it.
+        var svg = McpTool.ToToolResult(new CallToolResult { Content = [ImageContentBlock.FromBytes("<svg xmlns='http://www.w3.org/2000/svg'/>"u8.ToArray(), "image/svg+xml"), ImageContentBlock.FromBytes(TestTools.Png, "image/png")] });
+        Assert.Equal("(an image of type image/svg+xml left out: it isn't a picture the model can be shown)", svg.Text);
+        Assert.NotNull(svg.Image);
 
         var failed = McpTool.ToToolResult(new CallToolResult { IsError = true, Content = [new TextContentBlock { Text = "nope" }] });
         Assert.True(failed.IsError);
@@ -335,7 +342,8 @@ public class McpTests
         Assert.True(observer.Results[2].IsError);
         Assert.Equal("It broke.", observer.Results[2].Text);
         Assert.True(observer.Results[3].Image is not null, "no image; the tool said: " + observer.Results[3].Text);
-        Assert.Equal(TestTools.Png, observer.Results[3].Image);
+        using (var picture = SkiaSharp.SKBitmap.Decode(observer.Results[3].Image))
+            Assert.NotNull(picture);
 
         // The request offered the tool with its schema, and the picture reached the model as an image.
         var tools = model.Requests[0]["tools"]!.AsArray().Select(t => t!["function"]!).ToList();

@@ -123,7 +123,7 @@ public sealed partial class McpTool : Tools.Tool
     {
         var sb = new StringBuilder();
         byte[]? image = null;
-        var imageMime = "image/png";
+        var imageMime = "image/jpeg";
         var imagesLeftOut = 0;
 
         foreach (var block in result.Content ?? [])
@@ -178,8 +178,16 @@ public sealed partial class McpTool : Tools.Tool
         bool TakeImage(ReadOnlyMemory<byte> bytes, string? mime)
         {
             if (image is not null) return false;
-            image = bytes.ToArray();
-            if (!string.IsNullOrWhiteSpace(mime)) imageMime = mime;
+            // Scaled and sent as JPEG, as a screenshot is: a server's image may be of any size (a
+            // generated picture's full PNG) or kind (SVG, TIFF), and one the model's server can't
+            // take fails every request after it, since the conversation keeps it.
+            if (Tools.Picture.Load(bytes.ToArray()) is not { } shown)
+            {
+                Line($"(an image of type {mime ?? "unknown"} left out: it isn't a picture the model can be shown)");
+                return true;
+            }
+            image = shown.Jpeg;
+            imageMime = "image/jpeg";
             return true;
         }
     }
