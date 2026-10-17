@@ -880,6 +880,56 @@ public class ToolTests
         Assert.Equal(Path.GetFullPath(home), ctx.ResolvePath("~"));
         Assert.Equal(Path.Combine(Path.GetTempPath(), "~notes.txt"), ctx.ResolvePath("~notes.txt"));
     }
+
+    [Fact]
+    public void Long_output_keeps_its_beginning_and_its_end_and_long_lines_are_cut()
+    {
+        // npm or pip print pages of progress and then the error, which was the part cut off.
+        var output = new ShellTool.OutputCapture(30_000);
+        for (var i = 1; i <= 3000; i++)
+            output.Add($"progress line {i} of the install");
+        output.Add("ERROR: the build failed");
+        var text = output.ToString();
+        Assert.StartsWith("progress line 1 of the install\n", text);
+        Assert.EndsWith("ERROR: the build failed\n", text);
+        Assert.Contains("lines (", text);
+        Assert.True(text.Length < 31_000, $"{text.Length} characters");
+
+        // A minified file or a base64 dump on one line came back whole and filled the context.
+        var one = new ShellTool.OutputCapture(30_000);
+        one.Add(new string('x', 200_000));
+        Assert.True(one.ToString().Length < 5_000, $"{one.ToString().Length} characters");
+        Assert.Contains("characters of this line left out", one.ToString());
+    }
+
+    [Fact]
+    public async Task A_command_that_leaves_a_program_running_returns_and_leaves_it_running()
+    {
+#if !WINDOWS
+        Assert.Skip("Windows only");
+        IPlatformServices platform = new UnsupportedPlatform();
+#else
+        var platform = new BlackBox.Platform.Windows.WindowsPlatform();
+#endif
+        // Start-Process -NoNewWindow hands the output pipes on: the command waited out its timeout,
+        // said it had timed out, and killed the program it had started.
+        var marker = Path.Combine(Path.GetTempPath(), $"bb-left-running-{Guid.NewGuid():N}.txt");
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var result = await new ShellTool().ExecuteAsync(new JsonObject
+        {
+            ["command"] = "Start-Process powershell -NoNewWindow -ArgumentList '-NoProfile','-Command',\"Start-Sleep 12; Set-Content '" + marker + "' done\"; 'started'",
+            ["timeout_seconds"] = 10,
+        }, Ctx(platform), TestContext.Current.CancellationToken);
+
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(8), $"took {clock.Elapsed}");
+        Assert.Contains("started", result.Text);
+        Assert.DoesNotContain("Timed out", result.Text);
+        // What it started finishes its own work.
+        for (var i = 0; i < 30 && !File.Exists(marker); i++)
+            await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.True(File.Exists(marker), "the program the command started was killed");
+        File.Delete(marker);
+    }
 }
 
 public class OverlayInputTests
