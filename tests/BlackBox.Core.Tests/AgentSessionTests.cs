@@ -118,7 +118,8 @@ public class AgentSessionTests
         Assert.Equal(AgentStopReason.Cancelled, observer.StopReason);
         Assert.Single(server.Requests);
         Assert.False(File.Exists(Path.Combine(dir, "x.txt")));
-        Assert.Equal("Not run: the user stopped the agent.", session.History[^1].Content);
+        Assert.Equal("Not run: the user stopped the agent.", session.History[^2].Content);
+        Assert.Equal(AgentSession.StoppedNote, session.History[^1].Content);
         Assert.DoesNotContain(session.History, m => m.Content?.Contains("declined") == true);
     }
 
@@ -152,8 +153,9 @@ public class AgentSessionTests
         await session.RunAsync("wait", observer, cts.Token);
 
         Assert.Equal(AgentStopReason.Cancelled, observer.StopReason);
-        Assert.Equal(ChatRole.Tool, session.History[^1].Role);
-        Assert.Equal("t1", session.History[^1].ToolCallId);
+        Assert.Equal(ChatRole.Tool, session.History[^2].Role);
+        Assert.Equal("t1", session.History[^2].ToolCallId);
+        Assert.Equal(AgentSession.StoppedNote, session.History[^1].Content);
     }
 
     [Fact]
@@ -1035,6 +1037,34 @@ public class AgentSessionTests
         Assert.Contains("notes.txt", messages[3]!["content"]!.ToString());
         Assert.Equal(1, Images(server.Requests[1]));
         Assert.Contains(observer.Notices, n => n.StartsWith("Context reset"));
+    }
+
+    [Fact]
+    public async Task Where_the_user_stopped_a_task_is_said_in_the_conversation_and_kept_through_a_reset()
+    {
+        // Stopped in Paint and given a story to write next, the model wrote it and then "returned
+        // to the Paint task, which is still incomplete"; its handoff note carried Paint on after a reset.
+        var server = new ScriptedServer
+        {
+            Responder = req => LastText(req) == AgentSession.HandoffRequest ? Sse.Text("NOTE: the story is written.")
+                : LastText(req) == "Write a story" ? Sse.Text("Done.")
+                : Sse.ToolCall("w1", "wait", """{"seconds":30}"""),
+        };
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+
+        await session.RunAsync("Draw a circle in Paint", observer, stop.Token);
+        Assert.Equal(AgentStopReason.Cancelled, observer.StopReason);
+        Assert.Equal(AgentSession.StoppedNote, session.History[^1].Content);
+        Assert.Equal("Not run: the user stopped the agent.", session.History[^2].Content);
+
+        await session.RunAsync("Write a story", observer, TestContext.Current.CancellationToken);
+        var messages = server.Requests[^1]["messages"]!.AsArray();
+        Assert.Equal(AgentSession.StoppedNote, messages[^2]!["content"]!.ToString());
+        Assert.Equal("Write a story", messages[^1]!["content"]!.ToString());
+
+        await session.ResetContextAsync(observer, TestContext.Current.CancellationToken);
+        Assert.Equal(["Draw a circle in Paint", AgentSession.StoppedNote, "Write a story"], session.History.Take(3).Select(m => m.Content));
     }
 
     [Theory]

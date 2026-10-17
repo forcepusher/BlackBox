@@ -281,6 +281,9 @@ public sealed partial class AgentSession(
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            // Said in the conversation: stopped in Paint and given a story to write next, the model
+            // wrote it and then "returned to the Paint task, which is still incomplete".
+            History.Add(ChatMessage.User(StoppedNote));
             observer.OnFinished(AgentStopReason.Cancelled, null);
         }
         catch (Exception ex)
@@ -325,6 +328,9 @@ public sealed partial class AgentSession(
     // model asked again for a command the user had just declined twice.
     internal const string NudgeText =
         "[BlackBox] Continue with the task. If there is another step, call the tool for it now. If the task is finished, reply with a short summary of what you did.";
+
+    /// <summary>Where the user stopped a run (Stop, Pause/Break), so what they write next is read in that light (see <see cref="SystemPrompt"/>).</summary>
+    internal const string StoppedNote = "[BlackBox] The user stopped you here.";
 
     // Not "try another approach": told that after a declined listing command, the model asked for
     // it twice more in other words and then listed the folder with another tool.

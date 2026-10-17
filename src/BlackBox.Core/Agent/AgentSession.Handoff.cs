@@ -84,7 +84,9 @@ public sealed partial class AgentSession
         if (note.Length == 0)
             note = FallbackNote();
 
-        var userMessages = History.Where(m => m.FromUser).ToList();
+        // The user's messages, and where they stopped a task: without it the model took up a task
+        // the user had stopped again after the reset, from its own note's "not done yet".
+        var userMessages = History.Where(m => m.FromUser || m.Content == StoppedNote).ToList();
         var screen = History.LastOrDefault(m => m.Parts?.Any(p => p.IsImage) == true)?.Parts?.LastOrDefault(p => p.IsImage);
         History.Clear();
         History.AddRange(userMessages);
