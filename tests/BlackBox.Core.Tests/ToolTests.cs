@@ -933,6 +933,37 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task A_command_too_long_for_a_windows_command_line_runs_all_the_same()
+    {
+#if !WINDOWS
+        Assert.Skip("Windows only");
+        IPlatformServices platform = new UnsupportedPlatform();
+#else
+        var platform = new BlackBox.Platform.Windows.WindowsPlatform();
+#endif
+        // Encoded for -EncodedCommand, a script of 20,000 characters is over the 32,767 Windows
+        // takes on a command line: it failed with "The filename or extension is too long".
+        var filler = "$x = '" + new string('a', 20_000) + "'\n";
+        var before = Directory.GetFiles(Path.GetTempPath(), "blackbox-command-*.ps1").Length;
+        var result = await new ShellTool().ExecuteAsync(new JsonObject
+        {
+            ["command"] = filler + "Write-Output \"length $($x.Length), wörld\"; exit 3",
+        }, Ctx(platform), TestContext.Current.CancellationToken);
+        Assert.Contains("length 20000, wörld", result.Text);
+        Assert.Contains("Exit code 3", result.Text);
+        // Its last command failing fails it, as with -Command; the file it ran from is gone.
+        var failed = await new ShellTool().ExecuteAsync(new JsonObject
+        {
+            ["command"] = filler + "Get-Item 'C:\\no such folder here'",
+        }, Ctx(platform), TestContext.Current.CancellationToken);
+        Assert.True(failed.IsError, failed.Text);
+        Assert.Contains("Exit code 1", failed.Text);
+        var ok = await new ShellTool().ExecuteAsync(new JsonObject { ["command"] = filler + "'fine'" }, Ctx(platform), TestContext.Current.CancellationToken);
+        Assert.False(ok.IsError, ok.Text);
+        Assert.Equal(before, Directory.GetFiles(Path.GetTempPath(), "blackbox-command-*.ps1").Length);
+    }
+
+    [Fact]
     public void A_path_that_starts_with_a_tilde_is_in_the_home_folder()
     {
         // "~/Desktop/report.txt" made a folder named "~" in the working directory.
