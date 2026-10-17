@@ -471,6 +471,33 @@ public class McpTests
     }
 
     [Fact]
+    public async Task A_server_the_agent_removes_leaves_the_run_even_when_settings_cant_be_saved()
+    {
+        // The save threw before its tools left: the result was about the other entry, and the
+        // tools stayed, calling a server that had been stopped.
+        var servers = new InProcessServer();
+        await using var _ = servers;
+        await using var host = new McpHost { TransportFactory = c => servers.Start(c.Name) };
+        var file = Path.Combine(Directory.CreateTempSubdirectory("bb-mcp-").FullName, "mcp.json");
+        var setup = new McpSetup(host, file);
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(), Mcp = setup };
+        var registry = ToolRegistry.CreateDefault(includeScreenTools: false, extra: [new McpServersTool()]);
+        setup.Registry = registry;
+        var changes = 0;
+        setup.ToolsChanged = () => changes++;
+        var tool = new McpServersTool();
+        await tool.ExecuteAsync(new JsonObject { ["action"] = "add", ["name"] = "test", ["command"] = "uvx" }, ctx, TestContext.Current.CancellationToken);
+        File.WriteAllText(file, """{ "mcpServers": { "test": { "command": "uvx" }, "odd": { "command": "x", "type": "grpc" } } }""");
+
+        var removed = await tool.ExecuteAsync(new JsonObject { ["action"] = "remove", ["name"] = "test" }, ctx, TestContext.Current.CancellationToken);
+
+        Assert.False(removed.IsError);
+        Assert.Contains("could not be taken out of Settings", removed.Text);
+        Assert.Null(registry.Find("test__add"));
+        Assert.Equal(2, changes);
+    }
+
+    [Fact]
     public async Task Approval_follows_the_servers_read_only_annotation()
     {
         var (host, servers) = await ConnectAsync("test");

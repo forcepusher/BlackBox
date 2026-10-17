@@ -77,11 +77,23 @@ public sealed class McpServersTool : Tool
             {
                 var name = RequireString(args, "name").Trim();
                 var stopped = await mcp.Host.RemoveAsync(name).ConfigureAwait(false);
-                var text = McpConfig.WithoutServer(McpConfig.Load(mcp.ConfigFile), name);
-                if (text is not null) McpConfig.Save(mcp.ConfigFile, text);
+                // Its tools leave the run first, as on add: a save that failed left them there,
+                // calling a server that was stopped.
                 var dropped = mcp.Registry?.RemoveServer(name) == true;
                 if (stopped || dropped)
                     mcp.ToolsChanged?.Invoke();
+                string? text;
+                try
+                {
+                    text = McpConfig.WithoutServer(McpConfig.Load(mcp.ConfigFile), name);
+                    if (text is not null) McpConfig.Save(mcp.ConfigFile, text);
+                }
+                catch (Exception ex) when (ex is McpConfigException or IOException or UnauthorizedAccessException)
+                {
+                    return stopped
+                        ? new ToolResult($"Stopped the MCP server \"{name}\", but it could not be taken out of Settings ({ex.Message}), so it starts again with BlackBox.")
+                        : ToolResult.Error($"The MCP server \"{name}\" could not be taken out of Settings: {ex.Message}");
+                }
                 return stopped || text is not null ? new ToolResult($"Removed the MCP server \"{name}\".") : ToolResult.Error($"There is no MCP server \"{name}\". {List(mcp)}");
             }
             case "add":
