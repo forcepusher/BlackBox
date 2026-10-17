@@ -74,6 +74,44 @@ public class WebToolsTests
     }
 
     [Fact]
+    public async Task A_page_that_takes_too_long_to_take_apart_is_given_up()
+    {
+        // AngleSharp took five minutes over a page nested 200,000 deep; the limit is 30 seconds, here a fraction of one.
+        var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        probe.Start();
+        var port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        using var listener = new System.Net.HttpListener();
+        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        listener.Start();
+        var body = System.Text.Encoding.UTF8.GetBytes("<html><body>" + string.Concat(Enumerable.Repeat("<div>", 60_000)) + "deep</body></html>");
+        _ = Task.Run(async () =>
+        {
+            while (listener.IsListening)
+            {
+                var ctx = await listener.GetContextAsync();
+                ctx.Response.ContentType = "text/html; charset=utf-8";
+                await ctx.Response.OutputStream.WriteAsync(body);
+                ctx.Response.Close();
+            }
+        }, TestContext.Current.CancellationToken);
+        var limit = WebPage.ParseLimit;
+        WebPage.ParseLimit = TimeSpan.FromMilliseconds(300);
+        try
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var failed = await Assert.ThrowsAsync<WebPageException>(() => WebPage.ReadAsync($"http://127.0.0.1:{port}/deep", null, TestContext.Current.CancellationToken));
+            Assert.Contains("could not be taken apart", failed.Message);
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), $"took {clock.Elapsed}");
+        }
+        finally
+        {
+            WebPage.ParseLimit = limit;
+            listener.Stop();
+        }
+    }
+
+    [Fact]
     public void A_page_nested_thousands_deep_is_read_as_plain_text()
     {
         // The reading recursed once per level, and a page 2,000 elements deep overflowed the stack,

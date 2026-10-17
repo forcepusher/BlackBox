@@ -188,22 +188,34 @@ public static class WebPage
         return await ParseAsync(uri, r => r.Content(html), ct).ConfigureAwait(false);
     }
 
+    /// <summary>How long taking a page apart may take: AngleSharp took five minutes over a page nested 200,000 elements deep.</summary>
+    internal static TimeSpan ParseLimit { get; set; } = TimeSpan.FromSeconds(30);
+
     private static async Task<WebPageText> ParseAsync(Uri address, Action<AngleSharp.Io.VirtualResponse> response, CancellationToken ct)
     {
         var context = BrowsingContext.New(Configuration.Default);
-        var (title, text) = await ExtractAsync(keepNoscript: false).ConfigureAwait(false);
-        if (text.Length < ScriptShellChars)
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limit.CancelAfter(ParseLimit);
+        try
         {
-            // Extracting takes the document apart, so the second reading parses the page again.
-            var withNoscript = await ExtractAsync(keepNoscript: true).ConfigureAwait(false);
-            if (withNoscript.Text.Length > text.Length * 2)
-                text = withNoscript.Text;
+            var (title, text) = await ExtractAsync(keepNoscript: false).ConfigureAwait(false);
+            if (text.Length < ScriptShellChars)
+            {
+                // Extracting takes the document apart, so the second reading parses the page again.
+                var withNoscript = await ExtractAsync(keepNoscript: true).ConfigureAwait(false);
+                if (withNoscript.Text.Length > text.Length * 2)
+                    text = withNoscript.Text;
+            }
+            return new(address.ToString(), title, text);
         }
-        return new(address.ToString(), title, text);
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new WebPageException($"This page could not be taken apart in {ParseLimit.TotalSeconds:0} seconds (its HTML is nested unusually deep); try another result.");
+        }
 
         async Task<(string Title, string Text)> ExtractAsync(bool keepNoscript)
         {
-            using var document = await context.OpenAsync(r => response(r.Address(address)), ct).ConfigureAwait(false);
+            using var document = await context.OpenAsync(r => response(r.Address(address)), limit.Token).ConfigureAwait(false);
             return PageText.Extract(document, keepNoscript);
         }
     }
