@@ -337,7 +337,7 @@ internal static partial class MarkdownDocument
     [GeneratedRegex(@"^\s{0,3}>\s?(.*)$")]
     private static partial Regex Quote();
 
-    [GeneratedRegex(@"^(\s*)([-*+•]|\d{1,4}[.)])\s+(.*)$")]
+    [GeneratedRegex(@"^(\s*)([-*+•]|[0-9]{1,4}[.)])\s+(.*)$")]
     private static partial Regex ListItem();
 
     [GeneratedRegex(@"^\[([ xX])\]\s+")]

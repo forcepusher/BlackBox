@@ -198,8 +198,11 @@ internal static partial class XlsxWriter
         }
         if (Grouped().IsMatch(t))
             return (double.Parse(t.Replace(",", ""), CultureInfo.InvariantCulture), t.Contains('.') ? "#,##0.00" : "#,##0");
-        if (Plain().IsMatch(t) && !(t.TrimStart('-').StartsWith('0') && t.TrimStart('-').Length > 1 && !t.TrimStart('-').StartsWith("0.")) && t.Count(char.IsDigit) <= 15)
-            return (double.Parse(t, CultureInfo.InvariantCulture), null);
+        // 1e400 is past what a cell holds: as a number it was written as "Infinity", which Excel
+        // takes for a damaged file; it stays text.
+        if (Plain().IsMatch(t) && !(t.TrimStart('-').StartsWith('0') && t.TrimStart('-').Length > 1 && !t.TrimStart('-').StartsWith("0.")) && t.Count(char.IsDigit) <= 15
+            && double.Parse(t, CultureInfo.InvariantCulture) is var plain && double.IsFinite(plain))
+            return (plain, null);
         if (IsoDate().IsMatch(t) && DateTime.TryParseExact(t, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
             return ((date - new DateTime(1899, 12, 30)).TotalDays, "yyyy-mm-dd");
         return (text, null);
@@ -299,20 +302,20 @@ internal static partial class XlsxWriter
                 new XElement(S + "cellStyle", new XAttribute("name", "Normal"), new XAttribute("xfId", 0), new XAttribute("builtinId", 0)))));
     }
 
-    [GeneratedRegex(@"^(-?\d+(\.(\d+))?)\s?%$")]
+    [GeneratedRegex(@"^(-?[0-9]+(\.([0-9]+))?)\s?%$")]
     private static partial Regex Percent();
 
     // $1,200.50, -€12, (no parentheses), 12 €, 1.200 kr is left as text.
-    [GeneratedRegex(@"^(?<neg>-)?(?:(?<pre>[$€£¥₹])\s?(?<n>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)|(?<n>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s?(?<post>[€£¥₹]))$")]
+    [GeneratedRegex(@"^(?<neg>-)?(?:(?<pre>[$€£¥₹])\s?(?<n>[0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)|(?<n>[0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)\s?(?<post>[€£¥₹]))$")]
     private static partial Regex Money();
 
-    [GeneratedRegex(@"^-?\d{1,3}(,\d{3})+(\.\d+)?$")]
+    [GeneratedRegex(@"^-?[0-9]{1,3}(,[0-9]{3})+(\.[0-9]+)?$")]
     private static partial Regex Grouped();
 
-    [GeneratedRegex(@"^-?\d+(\.\d+)?([eE][-+]?\d+)?$")]
+    [GeneratedRegex(@"^-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?$")]
     private static partial Regex Plain();
 
-    [GeneratedRegex(@"^\d{4}-\d{2}-\d{2}$")]
+    [GeneratedRegex(@"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")]
     private static partial Regex IsoDate();
 
     [GeneratedRegex(@"[\[\]:*?/\\]")]

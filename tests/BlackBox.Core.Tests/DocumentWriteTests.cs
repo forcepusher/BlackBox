@@ -135,6 +135,31 @@ public class DocumentWriteTests : IDisposable
     }
 
     [Fact]
+    public async Task Documents_are_written_whatever_the_digits_characters_or_culture()
+    {
+        // Arabic-Indic and full-width digits matched \d and then failed int.Parse and double.Parse;
+        // a form feed or a terminal's escape code made the XML writer throw; and with a Finnish
+        // culture the document's date came out as 2026-10-17T12.34.56Z.
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("fi-FI");
+        try
+        {
+            Assert.False((await Write("arabic.docx", "١. البند الأول\n٢. البند الثاني\n\nPage\fbreak and \u001b[31mred\u001b[0m")).IsError);
+            Assert.False((await Write("numbers.xlsx", "| A | B |\n|---|---|\n| ١٢٣ | １２３ |\n| 1e400 | 5 |")).IsError);
+            var text = await Read("numbers.xlsx");
+            Assert.Contains("A2 ١٢٣", text);
+            Assert.Contains("A3 1e400", text);
+            using var zip = ZipFile.OpenRead(Path.Combine(_dir, "arabic.docx"));
+            var core = XDocument.Load(zip.GetEntry("docProps/core.xml")!.Open()).ToString();
+            Assert.Matches(@"<dcterms:created[^>]*>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z<", core);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
+    }
+
+    [Fact]
     public async Task A_workbook_of_plain_numbers_says_how_to_show_them_in_dollars()
     {
         // Asked for amounts in dollars, a model wrote plain numbers and then took the workbook apart.

@@ -42,7 +42,9 @@ internal sealed class OfficePackage
         XNamespace dc = "http://purl.org/dc/elements/1.1/";
         XNamespace dcterms = "http://purl.org/dc/terms/";
         XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
-        var now = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
+        // Invariant: with the PC's own culture a Finnish Windows wrote 12.34.56 for the time and a
+        // Thai one the Buddhist year, which aren't the dates the format wants.
+        var now = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture);
         Add("docProps/core.xml", new XDocument(new XElement(cp + "coreProperties",
             new XAttribute(XNamespace.Xmlns + "cp", cp), new XAttribute(XNamespace.Xmlns + "dc", dc),
             new XAttribute(XNamespace.Xmlns + "dcterms", dcterms), new XAttribute(XNamespace.Xmlns + "xsi", xsi),
@@ -87,12 +89,40 @@ internal sealed class OfficePackage
 
     public static byte[] Bytes(XDocument xml)
     {
+        // Characters XML can't hold (a form feed, the escape codes of a terminal's output pasted
+        // into a document) made the whole document fail to write; they are left out.
+        foreach (var text in xml.DescendantNodes().OfType<XText>().Where(t => !IsXml(t.Value)))
+            text.Value = XmlOnly(text.Value);
+        foreach (var attribute in xml.Descendants().Attributes().Where(a => !IsXml(a.Value)))
+            attribute.Value = XmlOnly(attribute.Value);
         using var buffer = new MemoryStream();
         using (var writer = XmlWriter.Create(buffer, new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = false }))
         {
             new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), xml.Root).Save(writer);
         }
         return buffer.ToArray();
+    }
+
+    private static bool IsXml(string s)
+    {
+        for (var i = 0; i < s.Length; i++)
+        {
+            if (XmlConvert.IsXmlChar(s[i])) continue;
+            if (i + 1 < s.Length && XmlConvert.IsXmlSurrogatePair(s[i + 1], s[i])) { i++; continue; }
+            return false;
+        }
+        return true;
+    }
+
+    private static string XmlOnly(string s)
+    {
+        var sb = new StringBuilder(s.Length);
+        for (var i = 0; i < s.Length; i++)
+        {
+            if (XmlConvert.IsXmlChar(s[i])) sb.Append(s[i]);
+            else if (i + 1 < s.Length && XmlConvert.IsXmlSurrogatePair(s[i + 1], s[i])) sb.Append(s[i]).Append(s[++i]);
+        }
+        return sb.ToString();
     }
 }
 

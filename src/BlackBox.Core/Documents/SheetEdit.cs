@@ -642,27 +642,27 @@ internal static partial class SheetEdit
                 yield return target;
     }
 
-    [GeneratedRegex(@"^#+\s*(?:Sheet\s+)?""?([^""(]+?)""?\s*(?:\([A-Z]+\d+(?::[A-Z]+\d+)?\))?\s*$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^#+\s*(?:Sheet\s+)?""?([^""(]+?)""?\s*(?:\([A-Z]+[0-9]+(?::[A-Z]+[0-9]+)?\))?\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex SheetHeader();
 
-    [GeneratedRegex(@"^(?:(?<sheet>'(?:[^']|'')+'|[^\s!'|""]+)!)?(?<ref>\$?[A-Za-z]{1,3}\$?[1-9]\d{0,6})(?:\s+(?<value>.*?))?\s*$")]
+    [GeneratedRegex(@"^(?:(?<sheet>'(?:[^']|'')+'|[^\s!'|""]+)!)?(?<ref>\$?[A-Za-z]{1,3}\$?[1-9][0-9]{0,6})(?:\s+(?<value>.*?))?\s*$")]
     private static partial Regex CellPattern();
 
-    [GeneratedRegex(@"\s+\|\s+(?=(?:(?:'[^']+'|[^\s!'|]+)!)?\$?[A-Za-z]{1,3}\$?\d+(?:\s|$))")]
+    [GeneratedRegex(@"\s+\|\s+(?=(?:(?:'[^']+'|[^\s!'|]+)!)?\$?[A-Za-z]{1,3}\$?[0-9]+(?:\s|$))")]
     private static partial Regex RowSplit();
 
-    [GeneratedRegex(@"^([A-Z]{1,3})(\d+)$")]
+    [GeneratedRegex(@"^([A-Z]{1,3})([0-9]+)$")]
     private static partial Regex Reference();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9_.])(\$?)([A-Z]{1,3})(\$?)(\d{1,7})(?![A-Za-z0-9_(])")]
+    [GeneratedRegex(@"(?<![A-Za-z0-9_.])(\$?)([A-Z]{1,3})(\$?)([0-9]{1,7})(?![A-Za-z0-9_(])")]
     private static partial Regex FormulaReference();
 
     // A cell or range, with the sheet it is on if named: B7, $B$2:$B$6, Budget!A1, 'My sheet'!C2:C9.
     // Not the 10 of LOG10( nor a name such as Total2026.
-    [GeneratedRegex(@"(?<![A-Za-z0-9_.$'])(?<sheet>(?:'(?:[^']|'')+'|[A-Za-z_\p{L}][\w.\p{L}]*)!)?(?<c1>\$?[A-Z]{1,3})(?<d1>\$?)(?<r1>\d{1,7})(?::(?<c2>\$?[A-Z]{1,3})(?<d2>\$?)(?<r2>\d{1,7}))?(?![A-Za-z0-9_(!])")]
+    [GeneratedRegex(@"(?<![A-Za-z0-9_.$'])(?<sheet>(?:'(?:[^']|'')+'|[A-Za-z_\p{L}][\w.\p{L}]*)!)?(?<c1>\$?[A-Z]{1,3})(?<d1>\$?)(?<r1>[0-9]{1,7})(?::(?<c2>\$?[A-Z]{1,3})(?<d2>\$?)(?<r2>[0-9]{1,7}))?(?![A-Za-z0-9_(!])")]
     private static partial Regex RangeReference();
 
     // "insert row 7", "Insert rows 3-4", "delete row 5 on Budget", "delete rows 2 to 3".
-    [GeneratedRegex(@"^(?<verb>insert|delete)\s+rows?\s+(?<from>\d{1,7})(?:\s*(?:-|–|to|through|:)\s*(?<to>\d{1,7}))?(?:\s+(?:on|in)\s+(?:sheet\s+)?(?<sheet>.+))?\.?$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?<verb>insert|delete)\s+rows?\s+(?<from>[0-9]{1,7})(?:\s*(?:-|–|to|through|:)\s*(?<to>[0-9]{1,7}))?(?:\s+(?:on|in)\s+(?:sheet\s+)?(?<sheet>.+))?\.?$", RegexOptions.IgnoreCase)]
     private static partial Regex RowLine();
 }
