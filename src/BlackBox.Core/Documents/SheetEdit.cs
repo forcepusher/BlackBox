@@ -122,12 +122,17 @@ internal static partial class SheetEdit
         }
         if (formats.Count > 0)
             parts.Changed("xl/styles.xml");
-        if (formulas || rows.Count > 0)
+        // A number changed under a total: without this, a workbook Excel saved last showed the old
+        // total, kept in the file, and read_file showed it too.
+        var others = !formulas && rows.Count == 0 && changes.Count > 0 && sheets.Any(s => parts.Get(s.Part).Descendants(S + "f").Any());
+        if (formulas || rows.Count > 0 || others)
             Recalculate(parts);
         if (changes.Count > 0)
             done.Add("set " + string.Join("; ", changes.GroupBy(c => c.Sheet.Name).Select(g => $"{string.Join(", ", g.Select(c => c.Cell))} on sheet \"{g.Key}\"")));
         var said = string.Join(", then ", done);
-        return char.ToUpperInvariant(said[0]) + said[1..] + (formulas || rows.Count > 0 ? ". Excel works the formulas out when it opens the file." : ".");
+        return char.ToUpperInvariant(said[0]) + said[1..] + (formulas || rows.Count > 0 || others
+            ? ". Excel works the formulas out when it opens the file; until then read_file shows the values they had."
+            : ".");
     }
 
     /// <summary>Excel's last row, and the most rows one line may insert.</summary>

@@ -408,6 +408,32 @@ public class DocumentWriteTests : IDisposable
     }
 
     [Fact]
+    public async Task A_number_changed_under_a_total_has_excel_work_the_total_out_again()
+    {
+        // In a workbook Excel saved last, the total it kept in the file was shown unchanged.
+        await Write("budget.xlsx", "# Budget\n\n| Item | Cost |\n|---|---|\n| Rent | 1200 |\n| Food | 850 |\n| **Total** | =SUM(B2:B3) |");
+        var path = Path.Combine(_dir, "budget.xlsx");
+        XNamespace s = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Update))
+        {
+            // As Excel leaves it: the total worked out, and no recalculation asked for.
+            var entry = zip.GetEntry("xl/workbook.xml")!;
+            XDocument workbook;
+            using (var stream = entry.Open()) workbook = XDocument.Load(stream);
+            workbook.Descendants(s + "calcPr").Attributes("fullCalcOnLoad").Remove();
+            entry.Delete();
+            using (var stream = zip.CreateEntry("xl/workbook.xml").Open()) workbook.Save(stream);
+        }
+
+        var result = await Edit("budget.xlsx", "", "B3 900");
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains("Excel works the formulas out when it opens the file", result.Text);
+        using var check = ZipFile.OpenRead(path);
+        Assert.Equal("1", (string?)XDocument.Load(check.GetEntry("xl/workbook.xml")!.Open()).Descendants(s + "calcPr").Single().Attribute("fullCalcOnLoad"));
+    }
+
+    [Fact]
     public async Task Rows_are_inserted_above_a_total_and_deleted_with_formulas_following()
     {
         await Write("budget.xlsx", "# Budget\n\n| Item | Cost |\n|---|---|\n| Rent | $1,200 |\n| Food | $850 |\n| **Total** | =SUM(B2:B3) |");
