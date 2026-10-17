@@ -1127,7 +1127,23 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     // ---- settings -------------------------------------------------------------------
 
-    public SettingsViewModel CreateSettingsViewModel() => new(_settings.Clone(), _paths, McpConfig.Load(_paths.McpConfigFile), _mcp.Statuses);
+    public SettingsViewModel CreateSettingsViewModel() => new(_settings.Clone(), _paths, LoadMcpConfig(), _mcp.Statuses);
+
+    /// <summary>
+    /// mcp.json as it is, read again a moment later when caught while the agent replaces it:
+    /// Settings didn't open then, and the window showed an error instead.
+    /// </summary>
+    private string LoadMcpConfig()
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try { return McpConfig.Load(_paths.McpConfigFile); }
+            catch (Exception ex) when (attempt < 5 && ex is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(50);
+            }
+        }
+    }
 
     /// <summary>Shows an open Settings dialog the MCP servers as they are now: one the agent added or removed, and how each one is doing.</summary>
     public void RefreshMcp(SettingsViewModel dialog)
