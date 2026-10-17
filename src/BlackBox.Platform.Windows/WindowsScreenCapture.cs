@@ -5,10 +5,20 @@ using static BlackBox.Platform.Windows.Native;
 
 namespace BlackBox.Platform.Windows;
 
-/// <summary>GDI screen capture. Works everywhere back to Windows 7 and needs no extra packages.</summary>
+/// <summary>
+/// GDI screen capture. Works everywhere back to Windows 7 and needs no extra packages.
+/// BlackBox's own windows (the main window, its dialogs, menus and tooltips) are left out of each capture,
+/// so the agent sees the desktop behind them, but only while it is taken: screen recorders and
+/// screen sharing show them the rest of the time. WDA_EXCLUDEFROMCAPTURE (Windows 10 2004+) takes
+/// effect at once for a GDI capture and can be set from any thread of the process; on older
+/// Windows it blacks the window out instead.
+/// </summary>
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsScreenCapture : IScreenCapture
 {
+    // One capture at a time: one that finishes must not show a window to another still taking its picture.
+    private static readonly object Gate = new();
+
     public IReadOnlyList<ScreenRect> GetScreens()
     {
         var monitors = new List<(ScreenRect Rect, bool Primary)>();
@@ -28,7 +38,45 @@ internal sealed class WindowsScreenCapture : IScreenCapture
         return monitors.OrderByDescending(m => m.Primary).ThenBy(m => m.Rect.X).ThenBy(m => m.Rect.Y).Select(m => m.Rect).ToList();
     }
 
-    public unsafe RawImage Capture(ScreenRect region, bool includeCursor)
+    public RawImage Capture(ScreenRect region, bool includeCursor)
+    {
+        lock (Gate)
+        {
+            var hidden = HideOwnWindows(region);
+            try
+            {
+                return CaptureNow(region, includeCursor);
+            }
+            finally
+            {
+                foreach (var hwnd in hidden)
+                    SetWindowDisplayAffinity(hwnd, WDA_NONE);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Leaves this process's visible windows over the region out of screen capture and returns
+    /// them. Windows that are left out already (the click log) are not touched.
+    /// </summary>
+    private static List<nint> HideOwnWindows(ScreenRect region)
+    {
+        var hidden = new List<nint>();
+        var process = (uint)Environment.ProcessId;
+        EnumWindows((hwnd, _) =>
+        {
+            if (GetWindowThreadProcessId(hwnd, out var owner) != 0 && owner == process && IsWindowVisible(hwnd) && !IsIconic(hwnd)
+                && GetWindowRect(hwnd, out var r) && r.Left < region.X + region.Width && r.Right > region.X && r.Top < region.Y + region.Height && r.Bottom > region.Y
+                && GetWindowDisplayAffinity(hwnd, out var affinity) && affinity == WDA_NONE
+                && SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE))
+                hidden.Add(hwnd);
+            return true;
+        }, 0);
+        return hidden;
+    }
+
+    /// <summary>The screen as any program captures it, with whatever windows are not left out of capture.</summary>
+    internal static unsafe RawImage CaptureNow(ScreenRect region, bool includeCursor)
     {
         var screenDc = GetDC(0);
         var memDc = CreateCompatibleDC(screenDc);

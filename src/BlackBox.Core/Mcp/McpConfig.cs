@@ -82,6 +82,45 @@ public sealed class McpConfig
         return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n";
     }
 
+    /// <summary>
+    /// The user's edit of the file (<paramref name="mine"/>, begun from <paramref name="original"/>)
+    /// with what changed in the file since carried over (<paramref name="current"/>: a server the
+    /// agent added, replaced or removed meanwhile), unless the user changed that same server too.
+    /// When nothing changed underneath, <paramref name="mine"/> comes back as typed.
+    /// </summary>
+    public static string Merge(string original, string current, string mine)
+    {
+        if (current == original)
+            return mine;
+        Dictionary<string, JsonNode?> before, now, edited;
+        try
+        {
+            (before, now, edited) = (Entries(original), Entries(current), Entries(mine));
+        }
+        catch (McpConfigException)
+        {
+            return mine;
+        }
+        var text = mine;
+        foreach (var name in before.Keys.Union(now.Keys, StringComparer.OrdinalIgnoreCase).ToList())
+        {
+            var was = before.GetValueOrDefault(name);
+            var isNow = now.GetValueOrDefault(name);
+            if (JsonNode.DeepEquals(was, isNow) || !JsonNode.DeepEquals(was, edited.GetValueOrDefault(name)))
+                continue;
+            text = isNow is JsonObject entry ? WithServer(text, name, (JsonObject)entry.DeepClone()) : WithoutServer(text, name) ?? text;
+        }
+        return text;
+    }
+
+    private static Dictionary<string, JsonNode?> Entries(string json)
+    {
+        var entries = new Dictionary<string, JsonNode?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, entry) in ServerMap(json).Servers)
+            entries.TryAdd(name, entry);
+        return entries;
+    }
+
     /// <summary>The parsed file and its map of servers, made when it has none.</summary>
     private static (JsonObject Root, JsonObject Servers) ServerMap(string json)
     {

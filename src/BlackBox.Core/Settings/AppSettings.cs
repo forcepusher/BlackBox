@@ -227,12 +227,6 @@ public sealed class AgentSettings
     public bool ScreenshotAfterActions { get; set; } = true;
 
     /// <summary>
-    /// Keep BlackBox's window out of screenshots so the agent sees the desktop behind it.
-    /// Side effect: screen recorders and screen sharing do not show the window either.
-    /// </summary>
-    public bool HideFromScreenshots { get; set; } = true;
-
-    /// <summary>
     /// How long each line of the log of the agent's inputs in the screen corner stays before it has
     /// faded out. The log, and the ring where it clicks, are always shown: no longer settings.
     /// </summary>

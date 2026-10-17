@@ -129,7 +129,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     public void AttachHostWindow(nint handle)
     {
-        _platform.HostWindow.Attach(handle, _settings.Agent.HideFromScreenshots);
+        _platform.HostWindow.Attach(handle);
         _platform.InputOverlay.Duration = TimeSpan.FromSeconds(AgentSettings.InputLogSeconds);
         _platform.InputOverlay.Enabled = true;
     }
@@ -1043,20 +1043,31 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     public SettingsViewModel CreateSettingsViewModel() => new(_settings.Clone(), _paths, McpConfig.Load(_paths.McpConfigFile), _mcp.Statuses);
 
-    public async Task ApplySettingsAsync(AppSettings updated, string mcpConfigText)
+    /// <summary>Shows an open Settings dialog the MCP servers as they are now: one the agent added or removed, and how each one is doing.</summary>
+    public void RefreshMcp(SettingsViewModel dialog)
     {
+        try { dialog.ShowCurrentMcp(McpConfig.Load(_paths.McpConfigFile), _mcp.Statuses); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* caught mid-save: next time */ }
+    }
+
+    public async Task ApplySettingsAsync(SettingsViewModel dialog)
+    {
+        var updated = dialog.Settings;
         // The server, key, model and context size live in the top bar, not in the dialog.
         updated.Server = _settings.Server;
         updated.Window = _settings.Window;
         _settings = updated;
         OnPropertyChanged(nameof(ApprovalNote));
         SaveSettings();
-        _platform.HostWindow.SetHiddenFromCapture(updated.Agent.HideFromScreenshots);
-        if (mcpConfigText != McpConfig.Load(_paths.McpConfigFile))
+        // Written only when the user changed the list: a dialog left open while the agent added a
+        // server would otherwise save the list without it.
+        if (dialog.McpConfigText != dialog.McpConfigBase)
         {
             try
             {
-                McpConfig.Save(_paths.McpConfigFile, mcpConfigText);
+                // What changed in the file meanwhile stays, unless the user changed the same server.
+                var text = McpConfig.Merge(dialog.McpConfigBase, McpConfig.Load(_paths.McpConfigFile), dialog.McpConfigText);
+                McpConfig.Save(_paths.McpConfigFile, text);
                 if (IsBusy) _mcpRestartPending = true;
                 else _mcpConnect = ConnectMcpAsync();
             }
@@ -1104,12 +1115,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         catch (Exception ex) when (ex is McpConfigException or IOException or UnauthorizedAccessException)
         {
-            AddNotice($"The MCP server list could not be read, so no MCP tools are available: {ex.Message} Fix it in Settings → Advanced.", isError: true);
+            AddNotice($"The MCP server list could not be read, so no MCP tools are available: {ex.Message} Fix it in Settings.", isError: true);
             servers = [];
         }
         await Task.Run(() => _mcp.ConnectAsync(servers, CancellationToken.None));
         foreach (var s in _mcp.Statuses.Where(s => s.State == McpServerState.Failed))
-            AddNotice($"MCP server \"{s.Name}\" is not available: {s.Error} (Settings → Advanced)", isError: true);
+            AddNotice($"MCP server \"{s.Name}\" is not available: {s.Error} (Settings)", isError: true);
     }
 
     private void AddNotice(string text, bool isError) => Items.Add(new NoticeItem(text, isError));

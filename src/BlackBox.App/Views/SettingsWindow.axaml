@@ -13,67 +13,47 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="0,0,12,0" />
     </Style>
-    <Style Selector="Grid.form > TextBox, Grid.form > ComboBox, Grid.form > CheckBox, Grid.form > StackPanel">
+    <Style Selector="Grid.form > ComboBox">
       <Setter Property="Margin" Value="0,4" />
     </Style>
   </Window.Styles>
 
   <DockPanel>
     <Border DockPanel.Dock="Bottom" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0" Padding="16,10">
+      <!-- The buttons first: a long folder path is cut short instead of pushing them out of the window. -->
       <DockPanel>
-        <TextBlock Classes="muted" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                   Text="{Binding Paths.SettingsFile, StringFormat='Saved to {0}'}" />
-        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0">
           <Button Classes="ghost" Content="Cancel" Click="OnCancel" />
           <Button Classes="primary" Content="Save" Click="OnSave" />
         </StackPanel>
+        <TextBlock Classes="muted" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                   Text="{Binding Paths.SettingsFile, StringFormat='Saved to {0}'}" ToolTip.Tip="{Binding Paths.SettingsFile}" />
       </DockPanel>
     </Border>
 
-    <TabControl x:Name="Tabs" Padding="16,8">
+    <ScrollViewer Margin="16,8">
+      <StackPanel Spacing="4" Margin="0,0,12,16">
+        <TextBlock Classes="h2" Text="Safety" />
+        <Grid Classes="form" ColumnDefinitions="140,*">
+          <TextBlock Classes="label" Text="Ask me first" />
+          <ComboBox Grid.Column="1" ItemsSource="{Binding ApprovalModes}" SelectedIndex="{Binding ApprovalIndex}" HorizontalAlignment="Stretch" />
+        </Grid>
 
-      <!-- ===================== General ===================== -->
-      <TabItem Header="General">
-        <ScrollViewer>
-          <StackPanel Spacing="4" Margin="0,0,12,16">
-            <TextBlock Classes="h2" Text="Safety" />
-            <Grid Classes="form" ColumnDefinitions="140,*" RowDefinitions="Auto,Auto">
-              <TextBlock Classes="label" Grid.Row="0" Text="Ask me first" />
-              <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding ApprovalModes}" SelectedIndex="{Binding ApprovalIndex}" HorizontalAlignment="Stretch" />
-              <StackPanel Grid.Row="1" Grid.Column="1">
-                <CheckBox Content="Hide BlackBox from the agent's screenshots" IsChecked="{Binding Agent.HideFromScreenshots}" />
-                <TextBlock Classes="muted" TextWrapping="Wrap" Margin="28,0,0,0"
-                           Text="The agent then sees the desktop behind this window. Screen recorders and screen sharing won't show it either; turn this off while recording." />
-              </StackPanel>
-            </Grid>
+        <TextBlock Classes="h2" Text="Things BlackBox should always know" />
+        <TextBox Text="{Binding Agent.CustomInstructions}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100"
+                 Watermark="For example: my documents are in D:\Docs. Use Firefox for browsing. Answer in German." />
 
-            <TextBlock Classes="h2" Text="Things BlackBox should always know" />
-            <TextBox Text="{Binding Agent.CustomInstructions}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100"
-                     Watermark="For example: my documents are in D:\Docs. Use Firefox for browsing. Answer in German." />
-          </StackPanel>
-        </ScrollViewer>
-      </TabItem>
-
-      <!-- ===================== Advanced ===================== -->
-      <TabItem Header="Advanced">
-        <ScrollViewer>
-          <StackPanel Spacing="4" Margin="0,0,12,16">
-            <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="How the model behaves (temperature, reply length, thinking) is configured on the server, in LM Studio per model." />
-
-            <TextBlock Classes="h2" Text="MCP servers" />
-            <TextBlock Classes="muted" TextWrapping="Wrap"
-                       Text="Extra tools for the agent from MCP servers. Paste the mcpServers block from a server's README; it is the same format Claude Desktop, LM Studio and Cursor use. Servers with a command are started with BlackBox, servers with a url are connected to. Their tools are offered to the model next to BlackBox's own, named server__tool, and run like any other tool. The agent adds a server here itself when a task needs one." />
-            <TextBox Text="{Binding McpConfigText}" Watermark="{Binding McpExample}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
-                     FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12" MinHeight="200" Margin="0,8,0,0"
-                     ScrollViewer.HorizontalScrollBarVisibility="Auto" />
-            <SelectableTextBlock Classes="muted error" TextWrapping="Wrap" Text="{Binding McpError}" IsVisible="{Binding HasMcpError}" />
-            <SelectableTextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
-            <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0"
-                       Text="{Binding Paths.McpConfigFile, StringFormat='Saved to {0}. The servers are started when you save and each time BlackBox starts; what each one reports shows above.'}" />
-          </StackPanel>
-        </ScrollViewer>
-      </TabItem>
-    </TabControl>
+        <TextBlock Classes="h2" Text="MCP servers" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Tools from other programs, like Blender. BlackBox adds what a task needs here by itself." />
+        <TextBox x:Name="McpBox" Text="{Binding McpConfigText}" Watermark="{Binding McpExample}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
+                 FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12" MinHeight="200" Margin="0,8,0,0"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                 ToolTip.Tip="You can paste a server's &quot;mcpServers&quot; block from its instructions here too: Claude Desktop, LM Studio and Cursor use the same format." />
+        <SelectableTextBlock Classes="muted error" TextWrapping="Wrap" Text="{Binding McpError}" IsVisible="{Binding HasMcpError}" />
+        <SelectableTextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="BlackBox starts these when you click Save and each time it opens."
+                   ToolTip.Tip="{Binding Paths.McpConfigFile, StringFormat='Kept in {0}'}" />
+      </StackPanel>
+    </ScrollViewer>
   </DockPanel>
 </Window>

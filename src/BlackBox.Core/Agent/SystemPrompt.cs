@@ -58,8 +58,10 @@ public static class SystemPrompt
         sb.AppendLine("- Make Word, Excel, PowerPoint and PDF files with write_file (Markdown becomes the real document) and change them with edit_file, " +
                       "which keeps their formatting; neither needs Office. Use the Office program only when the user wants to see it done there, " +
                       "or for what these can't do (a chart, a page layout, a PDF that looks exactly like a Word document).");
+        // The user wants every server the agent uses to show in Settings, not used once from a script and gone.
         sb.AppendLine("- A program that has an MCP server (Blender, a database, a browser…) is far better driven through it than through its window: " +
-                      "set up what it needs, add the server with mcp_servers and use its tools; " + (webSearch ? "look up how the server is set up with web_search." : "its README says how it is set up."));
+                      "set up what it needs, add the server with mcp_servers and use its tools; " + (webSearch ? "look up how the server is set up with web_search. " : "its README says how it is set up. ") +
+                      "Always go through mcp_servers, which saves the server in the user's Settings for later tasks, rather than running it or calling its tools from run_shell or a script of your own.");
         // qwen3.8 drove ComfyUI's HTTP API well but wrote wrong node, input and model names from memory.
         sb.AppendLine("- To make pictures, video, sound, music, speech or 3D models, use the comfyui tool (ComfyUI on this PC; it needs no MCP server; " +
                       "when the PC has none, action=install sets it up). " +
