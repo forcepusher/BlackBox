@@ -381,10 +381,35 @@ public sealed class ComfyHub(string stateDirectory)
             return;
         _closing = Task.Run(async () =>
         {
+            // Not while another BlackBox runs (a second window, the command line): it may be
+            // between two of its jobs, and each BlackBox counts only its own tasks.
+            if (OthersRunForTests?.Invoke() ?? OtherBlackBoxRuns())
+                return;
             var api = new ComfyApi(Address);
             if (OwnsForTests?.Invoke(api) ?? IsOurs(api))
                 await CloseWhenIdleAsync(api, wait.Token).ConfigureAwait(false);
         });
+    }
+
+    /// <summary>Stand-in for tests: whether another BlackBox runs.</summary>
+    internal Func<bool>? OthersRunForTests { get; set; }
+
+    private static bool OtherBlackBoxRuns()
+    {
+        var found = false;
+        foreach (var process in System.Diagnostics.Process.GetProcesses())
+        {
+            try
+            {
+                found |= process.Id != Environment.ProcessId && process.ProcessName.StartsWith("BlackBox", StringComparison.OrdinalIgnoreCase);
+            }
+            catch (InvalidOperationException) { } // ended meanwhile
+            finally
+            {
+                process.Dispose();
+            }
+        }
+        return found;
     }
 
     private async Task CloseWhenIdleAsync(ComfyApi api, CancellationToken ct)

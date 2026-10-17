@@ -672,6 +672,7 @@ public class ComfyToolTests : IDisposable
         var stops = 0;
         _hub.OwnsForTests = _ => stops == 0;
         _hub.StopForTests = (_, _) => { stops++; return Task.CompletedTask; };
+        _hub.OthersRunForTests = () => false;
         _server.QueueBusy = true;
         _hub.CloseLeftover();
         await Task.Delay(1000, TestContext.Current.CancellationToken);
@@ -681,6 +682,19 @@ public class ComfyToolTests : IDisposable
         _server.QueueBusy = false;
         await _hub.Closing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         Assert.Equal(1, stops);
+    }
+
+    [Fact]
+    public async Task A_comfyui_is_left_running_at_start_while_another_blackbox_runs()
+    {
+        // A second window, or the command line, may be between two of its jobs.
+        var stops = 0;
+        _hub.OwnsForTests = _ => true;
+        _hub.StopForTests = (_, _) => { stops++; return Task.CompletedTask; };
+        _hub.OthersRunForTests = () => true;
+        _hub.CloseLeftover();
+        await _hub.Closing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal(0, stops);
     }
 
     [Fact]
