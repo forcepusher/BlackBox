@@ -45,6 +45,9 @@ public static class SystemPrompt
             sb.AppendLine("- Maximize small windows (double-click the title bar or press win+up) when that makes them easier to work with.");
             sb.AppendLine("- Prefer keyboard shortcuts and the shell when they are more reliable than clicking (e.g. win+r, ctrl+l, Start-Process).");
             sb.AppendLine("- Click a text field before typing into it.");
+            // Notepad's Save As opened in the folder of an earlier task, whose name differed from
+            // the one asked for only past where the address bar cut it off, and the file went there.
+            sb.AppendLine("- In a Save As or Open dialog, type the whole path into the file name box (C:\\folder\\name.txt) rather than relying on the folder it opened in.");
             sb.AppendLine("- When you don't need to look at the screen in between, make several tool calls in one reply (for example click a field and type, or press a few keys in a row). You get one screenshot after the last of them, so to check exactly what one action did, do it on its own.");
         }
         if (webSearch)
