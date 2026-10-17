@@ -606,6 +606,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private readonly List<UserInput> _steerPending = [];
 
     /// <summary>
+    /// Messages sent in the chat on screen while the run of a chat just left (New chat, or another
+    /// one opened) was still ending: they start this chat's run once it has. Handed to the ending
+    /// run, they were thrown away with it, the bubble left in the chat and nothing run.
+    /// </summary>
+    private readonly List<UserInput> _forNextRun = [];
+
+    /// <summary>
     /// Sends what is in the box, with the files under it. With no run going it starts one; during a
     /// run it goes to the agent, which reads it before its next step (see <see cref="AgentSession.Steer(UserInput)"/>).
     /// </summary>
@@ -623,7 +630,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         Items.Add(new UserMessageItem(input.Text, input.Files));
         if (IsBusy)
         {
-            if (_session is { } running) running.Steer(input);
+            if (_runDetached) _forNextRun.Add(input);
+            else if (_session is { } running) running.Steer(input);
             else _steerPending.Add(input);
             SaveChat(SnapshotHistory());
             return;
@@ -817,7 +825,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             }
         }
 
-        if (late.Count == 0 || _runDetached)
+        if (_runDetached)
+        {
+            if (_forNextRun.Count == 0)
+                return null;
+            var next = UserInput.Join(_forNextRun);
+            _forNextRun.Clear();
+            return next;
+        }
+        if (late.Count == 0)
             return null;
         if (ct.IsCancellationRequested)
         {
@@ -899,6 +915,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         // The stopped run keeps its own list until it ends, so it can't write into the next chat.
         _history = [];
         _steerPending.Clear();
+        // Left before they could run: back in the box, with their files, to send again or not.
+        if (_forNextRun.Count > 0)
+        {
+            Input = string.Join("\n\n", _forNextRun.Select(m => m.Text).Append(Input).Where(t => t.Length > 0));
+            Attach(_forNextRun.SelectMany(m => m.Files));
+            _forNextRun.Clear();
+        }
         // Logins belong to the chat: the next one starts logged out (the stopped run's tools fail).
         // Logging out talks to the servers, so it happens off the UI thread.
         var ended = _ssh;
