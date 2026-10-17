@@ -731,6 +731,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _runDetached = false;
         IsBusy = true;
         HideContinue();
+        // A Pause/Break that came as the last run was ending stopped nothing, and its mark called
+        // this run's next stop with the Stop button "Stopped with Pause/Break".
+        _stoppedByKey = false;
         _runCts = new CancellationTokenSource();
         var ct = _runCts.Token;
         // This chat's conversation: picking another chat while the run starts up replaces _history.
