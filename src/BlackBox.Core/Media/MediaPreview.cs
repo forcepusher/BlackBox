@@ -362,7 +362,8 @@ public static class MediaPreview
 
     private static (string, SKBitmap?, string) LookAtModel(string path, string size, bool makeTile)
     {
-        var mesh = Mesh.Load(path);
+        // Its textures are native bitmaps the collector doesn't count, tens of megabytes each.
+        using var mesh = Mesh.Load(path);
         var line = mesh.Describe() + ", " + size;
         if (!makeTile || mesh.TriangleCount == 0)
             return (line, null, "");

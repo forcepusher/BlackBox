@@ -56,7 +56,28 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 
-    public virtual void Dispose() { }
+    /// <summary>Set once the preview has left the chat: what a load still under way brings then is let go at once.</summary>
+    protected bool Disposed { get; private set; }
+
+    public void Dispose()
+    {
+        Disposed = true;
+        Release();
+    }
+
+    /// <summary>Lets go of what the preview holds (decoded pictures, a player).</summary>
+    protected virtual void Release() { }
+
+    /// <summary>
+    /// Runs <paramref name="show"/> on the UI thread, unless the preview has left the chat by then:
+    /// then <paramref name="drop"/> lets go of what was loaded for it. A chat left while a GIF
+    /// loaded kept its frames, and their timer went on turning them for as long as BlackBox ran.
+    /// </summary>
+    protected void Show(Action show, Action? drop = null) => Dispatcher.UIThread.Post(() =>
+    {
+        if (Disposed) drop?.Invoke();
+        else show();
+    });
 
     /// <summary>The preview that suits a file, by its kind; it reads the file in the background.</summary>
     public static FilePreview For(string path, PreviewServices services)
@@ -120,10 +141,10 @@ public sealed partial class ImagePreview(string path) : FilePreview(path)
         var size = Size(Path);
         using var probe = SKCodec.Create(Path);
         var details = probe is null ? size : $"{probe.Info.Width}x{probe.Info.Height}, {size}";
-        Dispatcher.UIThread.Post(() => (Image, Details) = (bitmap, details));
+        Show(() => (Image, Details) = (bitmap, details), bitmap.Dispose);
     });
 
-    public override void Dispose()
+    protected override void Release()
     {
         Image?.Dispose();
         Image = null;
@@ -159,7 +180,7 @@ public sealed partial class AnimationPreview(string path) : FilePreview(path)
             frames.Add((ToBitmap(small), ms));
         }
         var details = codec.FrameCount > 1 ? $"{codec.Info.Width}x{codec.Info.Height}, {codec.FrameCount} frames ({total / 1000.0:0.0} s), {Size(Path)}" : Size(Path);
-        Dispatcher.UIThread.Post(() =>
+        Show(() =>
         {
             _frames.AddRange(frames);
             Details = details;
@@ -169,6 +190,9 @@ public sealed partial class AnimationPreview(string path) : FilePreview(path)
                 _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(_frames[0].Ms), DispatcherPriority.Background, (_, _) => Advance());
                 _timer.Start();
             }
+        }, () =>
+        {
+            foreach (var (frame, _) in frames) frame.Dispose();
         });
     });
 
@@ -179,7 +203,7 @@ public sealed partial class AnimationPreview(string path) : FilePreview(path)
         _timer!.Interval = TimeSpan.FromMilliseconds(_frames[_at].Ms);
     }
 
-    public override void Dispose()
+    protected override void Release()
     {
         _timer?.Stop();
         Image = null;
@@ -204,10 +228,10 @@ public sealed partial class ModelPreview(string path) : FilePreview(path)
     {
         var mesh = Mesh.Load(Path);
         var details = mesh.Describe().Replace("3D model: ", "") + ", " + Size(Path);
-        Dispatcher.UIThread.Post(() => (Mesh, Details) = (mesh, details));
+        Show(() => (Mesh, Details) = (mesh, details), mesh.Dispose);
     });
 
-    public override void Dispose()
+    protected override void Release()
     {
         Mesh?.Dispose();
         Mesh = null;
@@ -382,7 +406,7 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
     /// <summary>Shows the still at a point when the slider is moved while paused.</summary>
     protected virtual void ShowStill(TimeSpan at) { }
 
-    public override void Dispose() => Stop();
+    protected override void Release() => Stop();
 }
 
 /// <summary>A video: its first frame, then playing in place with its sound.</summary>
@@ -390,9 +414,9 @@ public sealed partial class VideoPreview(string path, PreviewServices services) 
 {
     private int _stillRequest;
 
-    public override void Dispose()
+    protected override void Release()
     {
-        base.Dispose();
+        base.Release();
         Frame?.Dispose();
         Frame = null;
     }
@@ -415,7 +439,7 @@ public sealed partial class VideoPreview(string path, PreviewServices services) 
         var first = reader?.Next();
         var details = $"{info.Width}x{info.Height}, {info.Duration.TotalSeconds:0.0} s" + (info.FrameRate > 0 ? $" at {info.FrameRate:0.##} fps" : "") +
                       (info.HasAudio ? ", with sound" : ", no sound") + ", " + Size(Path);
-        Dispatcher.UIThread.Post(() =>
+        Show(() =>
         {
             Details = details;
             Length = Math.Max(0.1, info.Duration.TotalSeconds);
@@ -424,7 +448,7 @@ public sealed partial class VideoPreview(string path, PreviewServices services) 
         });
     });
 
-    protected override void ShowFrame(RawImage frame) => Dispatcher.UIThread.Post(() => ShowFrameNow(frame));
+    protected override void ShowFrame(RawImage frame) => Show(() => ShowFrameNow(frame));
 
     /// <summary>A bitmap of its own for each frame (the Image redraws when its source changes); the one before is let go.</summary>
     private void ShowFrameNow(RawImage frame)
@@ -454,7 +478,7 @@ public sealed partial class VideoPreview(string path, PreviewServices services) 
             if (reader is null) return;
             reader.Seek(at);
             if (reader.Next() is { } f && request == _stillRequest)
-                Dispatcher.UIThread.Post(() => ShowFrameNow(f.Frame));
+                Show(() => ShowFrameNow(f.Frame));
         });
     }
 }
@@ -481,7 +505,7 @@ public sealed partial class AudioPreview(string path, PreviewServices services) 
         var bitmap = ToBitmap(wave);
         var channels = reader.Channels == 1 ? "mono" : reader.Channels == 2 ? "stereo" : $"{reader.Channels} channels";
         var details = $"{seconds:0.0} s, {rate / 1000.0:0.#} kHz {channels}, {Size(Path)}";
-        Dispatcher.UIThread.Post(() => (Waveform, Details, Length) = (bitmap, details, Math.Max(0.1, seconds)));
+        Show(() => (Waveform, Details, Length) = (bitmap, details, Math.Max(0.1, seconds)), bitmap.Dispose);
     });
 
     private static SKBitmap DrawWaveform(float[] mono)
@@ -508,9 +532,9 @@ public sealed partial class AudioPreview(string path, PreviewServices services) 
         return bitmap;
     }
 
-    public override void Dispose()
+    protected override void Release()
     {
-        base.Dispose();
+        base.Release();
         Waveform?.Dispose();
         Waveform = null;
     }
