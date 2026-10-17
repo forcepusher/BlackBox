@@ -261,9 +261,21 @@ internal sealed class Playback : IDisposable
                 if (services.Decoder?.OpenAudio(path) is { } sound)
                 {
                     sound.Seek(from);
-                    _output = services.NewAudioOutput();
-                    if (_output is null) sound.Dispose();
-                    else _output.Play(sound);
+                    var output = services.NewAudioOutput();
+                    if (output is null)
+                        sound.Dispose();
+                    else
+                        try
+                        {
+                            output.Play(sound); // the output has the sound from here on
+                            _output = output;
+                        }
+                        catch (Exception ex) when (ex is not OutOfMemoryException)
+                        {
+                            // No speakers to open (a remote session without sound, a headset just
+                            // unplugged): the video didn't play at all; its frames go by the clock now.
+                            output.Dispose();
+                        }
                 }
                 var clock = Stopwatch.StartNew();
                 TimeSpan Now() => _output is { } o ? o.Played : clock.Elapsed;
