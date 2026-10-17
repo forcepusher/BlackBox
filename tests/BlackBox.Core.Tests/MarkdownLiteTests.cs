@@ -82,6 +82,15 @@ public class MarkdownLiteTests
     }
 
     [Fact]
+    public void A_line_of_nothing_but_table_dashes_stays_as_written()
+    {
+        // A scale drawn in text, or a table that opens with its |---| line, as it streams in:
+        // measuring a table with no rows threw.
+        Assert.Equal(["|---|---|"], MarkdownLite.Render("|---|---|").Select(Text));
+        Assert.Equal(["scale", "|----|----|", "0    5    10"], MarkdownLite.Render("scale\n|----|----|\n0    5    10").Select(Text));
+    }
+
+    [Fact]
     public void Unfinished_markup_while_a_reply_streams_in_stays_as_written()
     {
         Assert.Equal("The total is **$2,1", Text(Assert.Single(MarkdownLite.Render("The total is **$2,1"))));
