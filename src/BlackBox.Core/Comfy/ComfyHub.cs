@@ -43,6 +43,9 @@ public sealed class ComfyHub(string stateDirectory)
 
     public ComfyFrontend Frontend { get; } = new(Path.Combine(stateDirectory, "browser"));
 
+    /// <summary>What Civitai says about the model files: how to prompt them, at what size, with which settings.</summary>
+    public ComfyModelCards Cards { get; } = new(stateDirectory);
+
     public string LogFile => Path.Combine(stateDirectory, "server.log");
 
     /// <summary>BlackBox's Data/tools, beside Data/comfyui: where it installs ComfyUI, and looks for it first.</summary>

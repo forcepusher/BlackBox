@@ -28,6 +28,11 @@ public sealed class ComfyTool : Tool
         "action=run runs a workflow (template, workflow_file, or workflow itself), changed by set {\"node id.input\": value}, e.g. " +
         "{\"6.text\": \"a red fox in snow\", \"3.seed\": 42}; it is checked first, then it waits until the job is done and gives you the files " +
         "with a look at them. For an input picture, sound or video, put its full local path where LoadImage/LoadAudio/LoadVideo name a file: it is uploaded. " +
+        "A picture the user gives you to follow (a character, a reference sheet, a style) is where the result starts, not something to describe in words: " +
+        "image to image from it (blackbox/image_to_image; denoise 0.5 to 0.7 keeps the character), or a reference or edit model's template when one is installed; " +
+        "crop or scale it inside the workflow (ImageCrop, ImageScaleToTotalPixels), not with a script. " +
+        "A checkpoint's or LoRA's card (with action=models and its name, a template's view, or after its first run) says how its maker uses it: " +
+        "the prompt style, size, sampler, CFG and negative prompt to start from. " +
         "Change the seed for a different result. A model a workflow lacks: action=download with its url (a template lists the links of its models); " +
         "action=find_models searches Civitai and Hugging Face for others (a style, a checkpoint the user named, a LoRA, an upscaler) with their sizes and links. " +
         "action=status shows the server, GPU and queue (with prompt_id: waits for that job); " +
@@ -343,7 +348,7 @@ public sealed class ComfyTool : Tool
         return new ToolResult(sb.ToString().TrimEnd());
     }
 
-    private static async Task<ToolResult> ModelsAsync(JsonObject args, ComfyHub hub, ComfyApi api, CancellationToken ct)
+    private async Task<ToolResult> ModelsAsync(JsonObject args, ComfyHub hub, ComfyApi api, CancellationToken ct)
     {
         var words = ComfyNodeLibrary.Words(GetString(args, "search") ?? "");
         // Asked for on purpose, often right after a download: never from the cache.
@@ -370,8 +375,60 @@ public sealed class ComfyTool : Tool
         }
         if (shown == 0)
             return new ToolResult(words.Count > 0 ? $"No installed model matches \"{GetString(args, "search")}\"." : "No models are installed.");
-        sb.Append("A model too big for the GPU still runs, slower: ComfyUI keeps part of it in RAM.");
+        sb.AppendLine("A model too big for the GPU still runs, slower: ComfyUI keeps part of it in RAM.");
+        // Looked for by name, a checkpoint or LoRA is about to be used: how to use it comes with it.
+        if (words.Count > 0)
+        {
+            var named = models.Where(kv => kv.Key is "checkpoints" or "loras")
+                .SelectMany(kv => kv.Value.Where(f => words.All(w => ComfyNodeLibrary.Squash(f).Contains(w))).Select(f => (Folder: kv.Key, File: f)))
+                .ToList();
+            if (named.Count is > 0 and <= 3)
+                foreach (var card in await CardsAsync(api, hub, named, ct).ConfigureAwait(false))
+                    sb.AppendLine().AppendLine(card);
+        }
         return new ToolResult(sb.ToString().TrimEnd());
+    }
+
+    /// <summary>The checkpoints and LoRAs whose card this task has seen: each comes once.</summary>
+    private readonly HashSet<string> _carded = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// What Civitai says about the checkpoints and LoRAs given that this task hasn't seen yet (three
+    /// at most): how to prompt them, at what size and with which settings their makers made their
+    /// pictures. For a file Civitai doesn't know, the size its base model is made for.
+    /// </summary>
+    private async Task<List<string>> CardsAsync(ComfyApi api, ComfyHub hub, IEnumerable<(string Folder, string File)> files, CancellationToken ct)
+    {
+        var cards = new List<string>();
+        var dirs = await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) ?? [];
+        foreach (var (folder, file) in files.Where(f => f.Folder is "checkpoints" or "loras").DistinctBy(f => f.File, StringComparer.OrdinalIgnoreCase).Take(3))
+        {
+            if (!dirs.TryGetValue("models:" + folder, out var dir) || Path.Combine(dir, file) is not { } path || !File.Exists(path))
+                continue;
+            lock (_carded)
+                if (!_carded.Add(file))
+                    continue;
+            if (await CardAsync(hub, path, ct).ConfigureAwait(false) is { } card)
+                cards.Add(ComfyModelCards.Format(file, card));
+            else if (ComfyModelCards.BaseFromFile(path) is { } made)
+                cards.Add($"{file} isn't on Civitai; it is {ComfyModelCards.Describe(made)}.");
+        }
+        return cards;
+    }
+
+    /// <summary>A model file's card, or null when Civitai doesn't know it or doesn't answer within half a minute.</summary>
+    private static async Task<ModelCard?> CardAsync(ComfyHub hub, string path, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            return await hub.Cards.LookUpAsync(path, timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return null;
+        }
     }
 
     private static async Task<Dictionary<string, long>> SizesAsync(ComfyApi api, string folder, CancellationToken ct)
@@ -390,7 +447,7 @@ public sealed class ComfyTool : Tool
 
     // ---- templates ------------------------------------------------------------------------
 
-    private static async Task<ToolResult> TemplatesAsync(JsonObject args, ComfyHub hub, ComfyApi api, ToolContext ctx, CancellationToken ct)
+    private async Task<ToolResult> TemplatesAsync(JsonObject args, ComfyHub hub, ComfyApi api, ToolContext ctx, CancellationToken ct)
     {
         var all = await hub.TemplatesAsync(api, ct).ConfigureAwait(false);
         var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
@@ -407,6 +464,8 @@ public sealed class ComfyTool : Tool
             AppendReadiness(sb, editor, workflow, library, models);
             if ((ComfyBuiltins.For(template)?.Notes ?? ComfyTemplates.Notes(editor, 1500)) is { Length: > 0 } notes)
                 sb.AppendLine("Its notes:").AppendLine(notes);
+            foreach (var card in await CardsAsync(api, hub, ModelFiles(workflow, models), ct).ConfigureAwait(false))
+                sb.AppendLine(card);
             sb.AppendLine($"As an API-format workflow ({workflow.Nodes.Count} nodes), also saved to {file}:");
             sb.AppendLine(workflow.Listing());
             var usual = workflow.UsualChanges(library);
@@ -624,7 +683,58 @@ public sealed class ComfyTool : Tool
         var result = await WaitForAsync(args, hub, api, promptId, ctx, ct).ConfigureAwait(false);
         var notes = refused.Select(r => "Left out: " + r).Concat(warnings.Select(w => "Note: " + w))
             .Concat(forgotten is null ? [] : ["Note: " + forgotten]).ToList();
-        return notes.Count > 0 ? result with { Text = string.Join("\n", notes) + "\n" + result.Text } : result;
+        if (notes.Count > 0)
+            result = result with { Text = string.Join("\n", notes) + "\n" + result.Text };
+        if (result.IsError)
+            return result;
+        // With the pictures in front of it: whether they were made at the checkpoint's size, and
+        // how the makers of the models it used make theirs, the first time it uses them.
+        var used = ModelFiles(workflow, await hub.ModelsAsync(api, ct).ConfigureAwait(false));
+        var after = new List<string>();
+        if (await SizeNoteAsync(api, hub, workflow, used, ct).ConfigureAwait(false) is { } sizeNote)
+            after.Add(sizeNote);
+        after.AddRange(await CardsAsync(api, hub, used, ct).ConfigureAwait(false));
+        return after.Count > 0 ? result with { Text = result.Text + "\n\n" + string.Join("\n\n", after) } : result;
+    }
+
+    /// <summary>The installed checkpoints and LoRAs a workflow's nodes are set to, with their folders.</summary>
+    private static List<(string Folder, string File)> ModelFiles(ComfyWorkflow workflow, Dictionary<string, HashSet<string>> models)
+    {
+        var found = new List<(string Folder, string File)>();
+        foreach (var (_, node) in workflow.All())
+            foreach (var (_, value) in node["inputs"] as JsonObject ?? [])
+                if (value is JsonValue v && v.TryGetValue<string>(out var name))
+                    foreach (var folder in new[] { "checkpoints", "loras" })
+                        if (models.TryGetValue(folder, out var files) && files.Contains(name))
+                            found.Add((folder, name));
+        return found;
+    }
+
+    /// <summary>
+    /// A note when a workflow makes its pictures at under half the size its checkpoint is made for:
+    /// the user's furry template ran an SDXL model at 512x760, and every picture came out soft.
+    /// </summary>
+    private static async Task<string?> SizeNoteAsync(ComfyApi api, ComfyHub hub, ComfyWorkflow workflow, List<(string Folder, string File)> used, CancellationToken ct)
+    {
+        if (used.FirstOrDefault(u => u.Folder == "checkpoints").File is not { } checkpoint ||
+            (await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false))?.GetValueOrDefault("models:checkpoints") is not { } dir)
+            return null;
+        var path = Path.Combine(dir, checkpoint);
+        if (!File.Exists(path) || ((await CardAsync(hub, path, ct).ConfigureAwait(false))?.Base ?? ComfyModelCards.BaseFromFile(path)) is not { } made ||
+            ComfyModelCards.NativeSide(made) is not { } side)
+            return null;
+        foreach (var (_, node) in workflow.All())
+        {
+            var type = ComfyWorkflow.ClassOf(node);
+            if (type.StartsWith("Empty", StringComparison.Ordinal) && type.Contains("Latent", StringComparison.Ordinal) &&
+                Number(node["inputs"]?["width"]) is { } w && Number(node["inputs"]?["height"]) is { } h && w * h < 0.55 * side * side)
+                return $"Note: it made its pictures at {w}x{h}, under half the size {checkpoint} is made for ({ComfyModelCards.Describe(made)}): " +
+                       "at that size it draws blurrier, with worse faces and anatomy. Make them at its size; to get them bigger still, upscale after.";
+        }
+        return null;
+
+        static double? Number(JsonNode? n) =>
+            n is JsonValue && double.TryParse(n.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
     }
 
     /// <summary>Files named in the text a job's nodes showed: full paths, or paths in ComfyUI's output folder, that exist.</summary>

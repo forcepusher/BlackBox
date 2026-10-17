@@ -111,6 +111,22 @@ from memory, and those were often wrong, so the model doesn't work from memory h
 - **Names looked up, not remembered.** `action=nodes` searches the server's node types or shows
   some in full (inputs, types, ranges, choices, outputs); `action=models` lists the installed model
   files with their sizes.
+- **Each model as its maker uses it.** Asked for a bunny with the user's Nova Furry XL, an
+  Illustrious model, Nemotron wrote its prompt in plain sentences and ran the template at 512x760;
+  the model's Civitai page asks for quality tags and tag-style prompts, and its maker's pictures
+  were made at 768x1344 with a hires pass. Four tries came out young, soft and off-style. Now a
+  checkpoint or LoRA comes with its card the first time a task meets it (`action=models` with its
+  name, a template's view, or after its first run): what its page says about settings and
+  prompts, its trigger words, the size its base model is made for, and how one of its maker's own
+  pictures was made (prompt, negative prompt, sampler as ComfyUI names it, CFG, steps, size, clip
+  skip, hires pass), with what AUTOMATIC1111's settings are in ComfyUI. The file is found on
+  Civitai by Civitai's AutoV1 hash (64 KB a megabyte into it, no time at all) and its size, and
+  the cards are kept in `Data/comfyui/model-cards.json`. A file Civitai doesn't know gets its base
+  model from its own tensor names. A run that makes its pictures at under half the size its
+  checkpoint is made for says so. And a picture the user gives to follow (a character, a reference
+  sheet) is where the result starts: the tool tells the model to start from it, image to image,
+  and to crop or scale it inside the workflow. In that chat it described the reference sheet in
+  words for four tries, then cropped it with PowerShell in four calls, two of which failed.
 - **Checked before it runs.** Every workflow is checked against the server's node types first, and
   every wrong name comes back at once with the closest real one: "no node type SaveImag; did you
   mean SaveImage?", "no input sampler; did you mean sampler_name?", a model file that isn't

@@ -124,7 +124,7 @@ public static partial class ComfyModelSearch
         }
     }
 
-    private static async Task<JsonNode?> GetJsonAsync(string url, CancellationToken ct)
+    internal static async Task<JsonNode?> GetJsonAsync(string url, CancellationToken ct)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));

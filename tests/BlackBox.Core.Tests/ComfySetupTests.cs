@@ -492,6 +492,7 @@ public class ComfyOnlineTests
 }
 
 /// <summary>The model search, the download action and BlackBox's own templates, against stand-ins for Civitai, Hugging Face and ComfyUI.</summary>
+[Collection(CivitaiStandIn.Name)]
 public class ComfyModelToolTests : IDisposable
 {
     private readonly FileServer _sites = new();
