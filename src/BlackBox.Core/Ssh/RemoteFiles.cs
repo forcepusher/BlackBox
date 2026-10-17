@@ -164,7 +164,8 @@ public static class RemoteFiles
     /// The script that lists a folder or searches it. BusyBox (Alpine, OpenWrt, many a NAS) has
     /// neither ls --time-style nor find -printf: the listing came back empty, without a word, and
     /// the folder read as empty. Each is tried first, and plain ls and find do without. So is
-    /// timeout, which an older BusyBox writes "timeout -t 20" and macOS hasn't got.
+    /// timeout, which an older BusyBox writes "timeout -t 20" and macOS hasn't got. It is kept in
+    /// "$@", not a variable: the script runs in the login shell, and zsh doesn't split one into words.
     /// </summary>
     internal static string ListScript(string path, string? pattern)
     {
@@ -173,9 +174,9 @@ public static class RemoteFiles
             ? $"[ -d {p} ] || {{ echo BB-MISSING; exit 0; }}; [ -r {p} ] && [ -x {p} ] || {{ echo BB-DENIED; exit 0; }}; " +
               $"if ls -d --time-style=+%Y / >/dev/null 2>&1; then ls -la --time-style=+%Y-%m-%d.%H:%M {p}; else ls -la {p}; fi | head -501"
             : $"[ -d {p} ] || {{ echo BB-MISSING; exit 0; }}; " +
-              "if timeout 5 true 2>/dev/null; then T='timeout 20'; elif timeout -t 5 true 2>/dev/null; then T='timeout -t 20'; else T=; fi; " +
-              $"if find / -maxdepth 0 -printf '' >/dev/null 2>&1; then $T find {p} -name {SshHost.Quote(pattern)} -printf '%p  (%s bytes)\\n' 2>/dev/null; " +
-              $"else $T find {p} -name {SshHost.Quote(pattern)} 2>/dev/null; fi | head -501";
+              "if timeout 5 true 2>/dev/null; then set -- timeout 20; elif timeout -t 5 true 2>/dev/null; then set -- timeout -t 20; else set --; fi; " +
+              $"if find / -maxdepth 0 -printf '' >/dev/null 2>&1; then \"$@\" find {p} -name {SshHost.Quote(pattern)} -printf '%p  (%s bytes)\\n' 2>/dev/null; " +
+              $"else \"$@\" find {p} -name {SshHost.Quote(pattern)} 2>/dev/null; fi | head -501";
     }
 
     /// <summary>

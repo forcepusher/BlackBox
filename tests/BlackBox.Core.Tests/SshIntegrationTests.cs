@@ -676,6 +676,9 @@ public class SshIntegrationTests : IDisposable
             Assert.Contains("/tmp/bb-list/sub/notes.txt", (await Ssh($"( PATH=/tmp/bbx:$PATH; {RemoteFiles.ListScript("/tmp/bb-list", "*.txt")} )")).Text);
             await Ssh("printf '#!/bin/sh\\necho \"sh: timeout: not found\" >&2; exit 127\\n' > /tmp/bbx/timeout");
             Assert.Contains("/tmp/bb-list/sub/notes.txt", (await Ssh($"( PATH=/tmp/bbx:$PATH; {RemoteFiles.ListScript("/tmp/bb-list", "*.txt")} )")).Text);
+            // The script runs in the login shell, and zsh doesn't split a variable into words.
+            if ((await Ssh("command -v zsh >/dev/null && echo HAVE-ZSH")).Text.Contains("HAVE-ZSH"))
+                Assert.Contains("/tmp/bb-list/sub/notes.txt", (await Ssh($"zsh -c {SshHost.Quote(RemoteFiles.ListScript("/tmp/bb-list", "*.txt"))}")).Text);
         }
         finally
         {
@@ -688,16 +691,21 @@ public class SshIntegrationTests : IDisposable
     {
         if (Host is null) return;
         // Termux has no /tmp, only its own $TMPDIR: every write there said the connection broke.
+        // An rm that does nothing leaves the temporary file where it was made, to be seen.
+        await Ssh("rm -rf /tmp/bb-direct /tmp/bb-own /tmp/bb-norm && mkdir -p /tmp/bb-direct /tmp/bb-own /tmp/bb-norm && " +
+                  "printf '#!/bin/sh\\nexit 0\\n' > /tmp/bb-norm/rm && chmod +x /tmp/bb-norm/rm");
         try
         {
-            await Ssh($"printf hello | ( TMPDIR=/nonexistent; export TMPDIR; {RemoteFiles.WriteScript("/tmp/bb-direct/a.txt", 5, append: false)} )");
-            Assert.Contains("SAME", (await Ssh("[ \"$(cat /tmp/bb-direct/a.txt)\" = hello ] && echo SAME")).Text);
-            await Ssh($"mkdir -p /tmp/bb-own && printf hello | ( TMPDIR=/tmp/bb-own; export TMPDIR; {RemoteFiles.WriteScript("/tmp/bb-direct/b.txt", 5, append: false)} )");
-            Assert.Contains("SAME", (await Ssh("[ \"$(cat /tmp/bb-direct/b.txt)\" = hello ] && [ -z \"$(ls -A /tmp/bb-own)\" ] && echo SAME")).Text);
+            await Ssh($"printf hello | ( TMPDIR=/tmp/bb-own; export TMPDIR; PATH=/tmp/bb-norm:$PATH; {RemoteFiles.WriteScript("/tmp/bb-direct/b.txt", 5, append: false)} )");
+            Assert.Contains("SAME", (await Ssh("[ \"$(cat /tmp/bb-direct/b.txt)\" = hello ] && ls -A /tmp/bb-own | grep -q blackbox-write && echo SAME")).Text);
+            // With none to be had, the file is written straight, as before: without the size
+            // check, so four bytes of five go in, and nothing is said.
+            await Ssh($"printf hell | ( TMPDIR=/nonexistent; export TMPDIR; {RemoteFiles.WriteScript("/tmp/bb-direct/a.txt", 5, append: false)} ) > /tmp/bb-direct/said");
+            Assert.Contains("SAME", (await Ssh("[ \"$(cat /tmp/bb-direct/a.txt)\" = hell ] && [ ! -s /tmp/bb-direct/said ] && echo SAME")).Text);
         }
         finally
         {
-            await Ssh("rm -rf /tmp/bb-direct /tmp/bb-own");
+            await Ssh("rm -rf /tmp/bb-direct /tmp/bb-own /tmp/bb-norm");
         }
     }
 
