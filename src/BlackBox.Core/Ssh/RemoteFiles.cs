@@ -76,8 +76,16 @@ public static class RemoteFiles
         var existed = state.Contains("exists");
         if (append && !existed)
             return ($"Cannot append: {path} does not exist on {host.Target}. Check the path, or create the file first with append=false.", true);
-        var script = $"mkdir -p \"$(dirname {p})\" 2>/dev/null; cat {(append ? ">>" : ">")} {p} 2>/dev/null || {{ echo BB-DENIED; exit 1; }}";
+        // The content goes into a file of its own first, and into the target only once all of it is
+        // there: written straight from the connection ("cat > file"), a link that dropped or the
+        // minute running out left the file cut short, a config under /etc among them. The target
+        // itself is written as before, so it keeps its owner, mode and links.
+        var script = "t=$(mktemp /tmp/.blackbox-write.XXXXXX 2>/dev/null) || t=/tmp/.blackbox-write.$$; (umask 077; cat > \"$t\"); " +
+                     $"[ $(wc -c < \"$t\") -eq {Encoding.UTF8.GetByteCount(content)} ] || {{ rm -f \"$t\"; echo BB-CUT; exit 1; }}; " +
+                     $"mkdir -p \"$(dirname {p})\" 2>/dev/null; cat \"$t\" {(append ? ">>" : ">")} {p} 2>/dev/null || {{ rm -f \"$t\"; echo BB-DENIED; exit 1; }}; rm -f \"$t\"";
         var (r, sudo) = await RunAsync(host, script, content, "BB-DENIED", ct).ConfigureAwait(false);
+        if (r.Output.Contains("BB-CUT"))
+            return ($"Could not write {path} on {host.Target}: only part of it arrived (the connection broke, or /tmp is full there); the file was left as it was.", true);
         if (r.Output.Contains("BB-DENIED") || r.ExitCode != 0)
             return (r.Output.Contains("BB-DENIED") ? Denied(host, path, "write") : $"Could not write {path} on {host.Target}: {r.Error.Trim()}", true);
         var how = sudo ? " with sudo" : "";
