@@ -31,6 +31,8 @@ public sealed class ComfyTool : Tool
         "A picture the user gives you to follow (a character, a reference sheet, a style) is where the result starts, not something to describe in words: " +
         "image to image from it (blackbox/image_to_image; denoise 0.5 to 0.7 keeps the character), or a reference or edit model's template when one is installed; " +
         "crop or scale it inside the workflow (ImageCrop, ImageScaleToTotalPixels), not with a script. " +
+        "To change a picture or restyle it (put a hat on, make a photo anime or a painting), an installed edit model's template (templates search \"edit\": " +
+        "Qwen-Image-Edit, Flux Kontext) does what is asked and keeps the subject; image to image keeps the photo's look at low denoise and loses the subject at high. " +
         "A checkpoint's or LoRA's card (with action=models search=its file name, a template's view, or after its first run) says how its maker uses it: " +
         "the prompt style, size, sampler, CFG and negative prompt to start from. " +
         "Change the seed for a different result. A model a workflow lacks: action=download with its url (a template lists the links of its models); " +
