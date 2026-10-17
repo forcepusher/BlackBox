@@ -825,6 +825,19 @@ public class MeshTests : IDisposable
     }
 
     [Fact]
+    public void A_gltf_whose_nodes_loop_back_is_read_in_a_moment()
+    {
+        // Each node its own two children: within the depth limit of 64, 2^64 visits.
+        var path = Write("loop.gltf", """
+            {"asset": {"version": "2.0"}, "nodes": [{"children": [0, 0, 7, -1]}], "meshes": []}
+            """);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        using var mesh = Mesh.Load(path);
+        Assert.Equal(0, mesh.TriangleCount);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), $"took {clock.Elapsed}");
+    }
+
+    [Fact]
     public void A_glb_is_read_with_its_node_transform_and_drawn_in_the_middle_of_the_picture()
     {
         // One triangle, moved 10 units along x by its node.

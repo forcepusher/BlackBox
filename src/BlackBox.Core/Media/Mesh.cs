@@ -137,6 +137,10 @@ public sealed class Mesh : IDisposable
             var scene = json["scenes"]?[(int?)json["scene"] ?? 0] as JsonObject;
             var roots = scene?["nodes"] is JsonArray r ? r.Select(n => (int?)n ?? -1).ToList()
                 : Enumerable.Range(0, (json["nodes"] as JsonArray)?.Count ?? 0).ToList();
+            // A node tree that loops back on itself, each node with two children, would be walked
+            // 2^64 times within the depth limit: the walk ends once it has seen every node a few times.
+            var visits = 0;
+            var maxVisits = Math.Max(100_000, 4 * ((json["nodes"] as JsonArray)?.Count ?? 0));
             if (json["nodes"] is null && json["meshes"] is JsonArray meshesOnly)
                 for (var m = 0; m < meshesOnly.Count; m++)
                     AddMesh(m, Matrix4x4.Identity);
@@ -147,7 +151,7 @@ public sealed class Mesh : IDisposable
 
             void Visit(int index, Matrix4x4 parent, int depth)
             {
-                if (depth > 64 || json["nodes"]?[index] is not JsonObject node)
+                if (depth > 64 || index < 0 || ++visits > maxVisits || json["nodes"] is not JsonArray nodes || index >= nodes.Count || nodes[index] is not JsonObject node)
                     return;
                 var world = LocalMatrix(node) * parent;
                 if ((int?)node["mesh"] is { } m)
