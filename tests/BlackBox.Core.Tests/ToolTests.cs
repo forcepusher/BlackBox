@@ -541,17 +541,21 @@ public class ToolTests
         // Windows PowerShell's Set-Content writes ANSI and Out-File UTF-16: read as UTF-8, é and €
         // turned into U+FFFD all through the file, and edit_file wrote that back.
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
-        var ansi = System.Text.Encoding.GetEncoding(1252);
+        // Set-Content writes the PC's own ANSI code page: 1252 on an English Windows, 1251 on a
+        // Russian one, which reads é as й. The first line is one that code page holds.
+        var ansi = System.Text.Encoding.GetEncoding(0);
+        var first = new[] { "Café 5 €", "Привет 5 €", "Γειά 5 €", "日本語 5" }.FirstOrDefault(s => ansi.GetString(ansi.GetBytes(s)) == s);
+        Assert.SkipWhen(first is null, $"None of the sample lines fits code page {ansi.CodePage}.");
         var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
         var ctx = Ctx(new FakePlatform(), dir);
         var notes = Path.Combine(dir, "notes.txt");
-        File.WriteAllBytes(notes, ansi.GetBytes("Café 5 €\r\nTotal 5\r\n"));
+        File.WriteAllBytes(notes, ansi.GetBytes(first + "\r\nTotal 5\r\n"));
 
-        Assert.Contains("Café 5 €", (await new ReadFileTool().ExecuteAsync(new JsonObject { ["path"] = notes }, ctx, CancellationToken.None)).Text);
+        Assert.Contains(first, (await new ReadFileTool().ExecuteAsync(new JsonObject { ["path"] = notes }, ctx, CancellationToken.None)).Text);
         var edit = await new EditFileTool().ExecuteAsync(new JsonObject { ["path"] = notes, ["old_text"] = "Total 5", ["new_text"] = "Total 6\nPaid" }, ctx, CancellationToken.None);
         Assert.False(edit.IsError, edit.Text);
         // Every other byte as it was, and the new line with the file's own line ending.
-        Assert.Equal(ansi.GetBytes("Café 5 €\r\nTotal 6\r\nPaid\r\n"), File.ReadAllBytes(notes));
+        Assert.Equal(ansi.GetBytes(first + "\r\nTotal 6\r\nPaid\r\n"), File.ReadAllBytes(notes));
 
         var list = Path.Combine(dir, "processes.txt");
         File.WriteAllText(list, "notepad\r\n", new System.Text.UnicodeEncoding(bigEndian: false, byteOrderMark: true));
