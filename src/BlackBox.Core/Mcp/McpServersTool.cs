@@ -109,6 +109,11 @@ public sealed class McpServersTool : Tool
             return ToolResult.Error($"The MCP server \"{name}\" did not start, so it wasn't kept: {status.Error} " +
                                     "Check the command and its arguments in the server's instructions; run it with run_shell to see what it says.");
 
+        // Its tools join the run first: when saving failed (another entry in mcp.json the file
+        // check refuses, a file held open), the result said they were usable, and every call to
+        // them was an unknown tool.
+        mcp.Registry?.RemoveServer(name);
+        mcp.Registry?.Add(tools);
         try
         {
             McpConfig.Save(mcp.ConfigFile, McpConfig.WithServer(McpConfig.Load(mcp.ConfigFile), name, entry));
@@ -117,8 +122,6 @@ public sealed class McpServersTool : Tool
         {
             return new ToolResult(Started(name, status, tools, saved: false) + $"\nIt could not be saved in Settings ({ex.Message}), so it runs only until BlackBox closes.");
         }
-        mcp.Registry?.RemoveServer(name);
-        mcp.Registry?.Add(tools);
         return new ToolResult(Started(name, status, tools, saved: true));
     }
 

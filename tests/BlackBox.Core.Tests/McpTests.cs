@@ -405,6 +405,27 @@ public class McpTests
     }
 
     [Fact]
+    public async Task A_server_the_agent_adds_is_usable_even_when_settings_cant_be_saved()
+    {
+        // Another entry in mcp.json the file check refuses: the result said the tools were usable,
+        // and every call to them was an unknown tool.
+        var servers = new InProcessServer();
+        await using var _ = servers;
+        await using var host = new McpHost { TransportFactory = c => servers.Start(c.Name) };
+        var file = Path.Combine(Directory.CreateTempSubdirectory("bb-mcp-").FullName, "mcp.json");
+        File.WriteAllText(file, """{ "mcpServers": { "odd": { "command": "x", "type": "grpc" } } }""");
+        var setup = new McpSetup(host, file);
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(), Mcp = setup };
+        var registry = ToolRegistry.CreateDefault(includeScreenTools: false, extra: [new McpServersTool()]);
+        setup.Registry = registry;
+
+        var added = await new McpServersTool().ExecuteAsync(new JsonObject { ["action"] = "add", ["name"] = "test", ["command"] = "uvx" }, ctx, TestContext.Current.CancellationToken);
+
+        Assert.Contains("could not be saved in Settings", added.Text);
+        Assert.NotNull(registry.Find("test__add"));
+    }
+
+    [Fact]
     public async Task Approval_follows_the_servers_read_only_annotation()
     {
         var (host, servers) = await ConnectAsync("test");
