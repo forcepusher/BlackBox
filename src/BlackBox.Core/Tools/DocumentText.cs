@@ -168,8 +168,28 @@ internal static class DocumentText
             }
             if (bold.Count > 0)
                 sb.Append("(bold: ").AppendJoin(", ", bold).AppendLine(")");
+            // What else a person sees on the sheet: a title across merged cells, its charts.
+            if (data.Element(S + "mergeCells")?.Elements(S + "mergeCell").Select(m => (string?)m.Attribute("ref")).OfType<string>().ToList() is { Count: > 0 } merged)
+                sb.Append("(merged: ").AppendJoin(", ", merged).AppendLine(")");
+            if (Charts(zip, target) is > 0 and var charts)
+                sb.AppendLine(charts == 1 ? "(1 chart)" : $"({charts} charts)");
         }
         return sb.ToString();
+    }
+
+    /// <summary>The charts drawn on a sheet.</summary>
+    private static int Charts(ZipArchive zip, string sheet)
+    {
+        var folder = sheet[..(sheet.LastIndexOf('/') + 1)];
+        var rels = $"{folder}_rels/{sheet[folder.Length..]}.rels";
+        if (zip.GetEntry(rels) is null)
+            return 0;
+        XNamespace c = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        return Load(zip, rels).Root!.Elements(Pr + "Relationship")
+            .Where(r => ((string?)r.Attribute("Type"))?.EndsWith("/drawing", StringComparison.Ordinal) == true && r.Attribute("Target") is not null)
+            .Select(r => Resolve(folder, (string)r.Attribute("Target")!))
+            .Where(d => zip.GetEntry(d) is not null)
+            .Sum(d => Load(zip, d).Descendants(c + "chart").Count());
     }
 
     private static string Cell(XElement c, List<string> shared, string? format)

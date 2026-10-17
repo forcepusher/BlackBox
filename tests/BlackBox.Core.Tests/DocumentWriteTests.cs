@@ -255,6 +255,35 @@ public class DocumentWriteTests : IDisposable
     }
 
     [Fact]
+    public async Task A_sheets_merged_cells_and_charts_are_said()
+    {
+        // A title across merged cells and a chart, as Excel keeps them; read_file said nothing of either.
+        Assert.False((await Write("book.xlsx", "# Budget\n| Item | Amount |\n|---|---|\n| Rent | 1200 |")).IsError);
+        using (var zip = System.IO.Compression.ZipFile.Open(Path.Combine(_dir, "book.xlsx"), System.IO.Compression.ZipArchiveMode.Update))
+        {
+            System.Xml.Linq.XNamespace s = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            System.Xml.Linq.XNamespace r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            var sheetEntry = zip.GetEntry("xl/worksheets/sheet1.xml")!;
+            System.Xml.Linq.XDocument sheet;
+            using (var read = sheetEntry.Open())
+                sheet = System.Xml.Linq.XDocument.Load(read);
+            sheet.Root!.Element(s + "sheetData")!.AddAfterSelf(
+                new System.Xml.Linq.XElement(s + "mergeCells", new System.Xml.Linq.XElement(s + "mergeCell", new System.Xml.Linq.XAttribute("ref", "A1:B1"))),
+                new System.Xml.Linq.XElement(s + "drawing", new System.Xml.Linq.XAttribute(r + "id", "rIdChart")));
+            sheetEntry.Delete();
+            using (var write = zip.CreateEntry("xl/worksheets/sheet1.xml").Open())
+                sheet.Save(write);
+            zip.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")?.Delete();
+            using (var rels = new StreamWriter(zip.CreateEntry("xl/worksheets/_rels/sheet1.xml.rels").Open()))
+                rels.Write("""<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdChart" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>""");
+            using (var drawing = new StreamWriter(zip.CreateEntry("xl/drawings/drawing1.xml").Open()))
+                drawing.Write("""<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:twoCellAnchor><xdr:graphicFrame><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart r:id="rId1"/></a:graphicData></a:graphic></xdr:graphicFrame></xdr:twoCellAnchor></xdr:wsDr>""");
+        }
+
+        Assert.Contains("(merged: A1:B1)\n(1 chart)\n", await Read("book.xlsx"));
+    }
+
+    [Fact]
     public async Task A_slides_speaker_notes_are_read_and_changed()
     {
         // read_file left them out, and edit_file couldn't reach them: asked to change the notes, the model had nothing to go on.
