@@ -255,6 +255,32 @@ public class DocumentWriteTests : IDisposable
     }
 
     [Fact]
+    public async Task A_documents_comments_are_read_with_the_text_they_are_on()
+    {
+        // Asked to go through a document's comments, the model saw none of them.
+        Assert.False((await Write("plan.docx", "# Plan\n\nOpen a third store before spring.\n\nHire two people.")).IsError);
+        using (var zip = System.IO.Compression.ZipFile.Open(Path.Combine(_dir, "plan.docx"), System.IO.Compression.ZipArchiveMode.Update))
+        {
+            System.Xml.Linq.XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+            var entry = zip.GetEntry("word/document.xml")!;
+            System.Xml.Linq.XDocument doc;
+            using (var read = entry.Open())
+                doc = System.Xml.Linq.XDocument.Load(read);
+            // As Word marks a comment: where its text starts and ends, around the runs of a paragraph.
+            var p = doc.Descendants(w + "p").First(x => string.Concat(x.Descendants(w + "t").Select(t => t.Value)).StartsWith("Open a third"));
+            p.Elements(w + "r").First().AddBeforeSelf(new System.Xml.Linq.XElement(w + "commentRangeStart", new System.Xml.Linq.XAttribute(w + "id", "0")));
+            p.Elements(w + "r").Last().AddAfterSelf(new System.Xml.Linq.XElement(w + "commentRangeEnd", new System.Xml.Linq.XAttribute(w + "id", "0")));
+            entry.Delete();
+            using (var write = zip.CreateEntry("word/document.xml").Open())
+                doc.Save(write);
+            using var comments = new StreamWriter(zip.CreateEntry("word/comments.xml").Open());
+            comments.Write("""<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:comment w:id="0" w:author="Ann"><w:p><w:r><w:t>Check the date with Finance.</w:t></w:r></w:p></w:comment></w:comments>""");
+        }
+
+        Assert.Contains("Hire two people.\nComments:\n- on \"Open a third store before spring.\": Check the date with Finance.\n", await Read("plan.docx"));
+    }
+
+    [Fact]
     public async Task A_sheets_merged_cells_and_charts_are_said()
     {
         // A title across merged cells and a chart, as Excel keeps them; read_file said nothing of either.

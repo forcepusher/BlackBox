@@ -91,7 +91,38 @@ internal static class DocumentText
                 foreach (var row in block.Elements(W + "tr"))
                     sb.Append("| ").AppendJoin(" | ", row.Elements(W + "tc").Select(c => string.Join(" ", c.Elements(W + "p").Select(Paragraph)).Trim())).AppendLine(" |");
         }
+        // The comments in the margin, with the text each is on: asked to go through a document's
+        // comments, the model saw none of them.
+        if (Comments(zip, body) is { Count: > 0 } comments)
+        {
+            sb.AppendLine("Comments:");
+            foreach (var (on, text) in comments)
+                sb.Append("- on \"").Append(on.Clip(100)).Append("\": ").AppendLine(text);
+        }
         return sb.ToString();
+    }
+
+    /// <summary>Each comment's text and the text it is on, in the document's order.</summary>
+    private static List<(string On, string Text)> Comments(ZipArchive zip, XElement body)
+    {
+        if (zip.GetEntry("word/comments.xml") is null)
+            return [];
+        var texts = Load(zip, "word/comments.xml").Root!.Elements(W + "comment")
+            .Where(c => c.Attribute(W + "id") is not null)
+            .ToDictionary(c => (string)c.Attribute(W + "id")!, c => string.Join(" ", c.Elements(W + "p").Select(p => string.Concat(p.Descendants(W + "t").Select(t => t.Value))).Where(t => t.Length > 0)));
+        var open = new Dictionary<string, StringBuilder>();
+        var found = new List<(string Id, StringBuilder On)>();
+        foreach (var e in body.Descendants())
+        {
+            if (e.Name == W + "commentRangeStart" && (string?)e.Attribute(W + "id") is { } start && !open.ContainsKey(start))
+                found.Add((start, open[start] = new StringBuilder()));
+            else if (e.Name == W + "commentRangeEnd" && (string?)e.Attribute(W + "id") is { } end)
+                open.Remove(end);
+            else if (e.Name == W + "t")
+                foreach (var on in open.Values)
+                    on.Append(e.Value);
+        }
+        return found.Where(f => texts.ContainsKey(f.Id)).Select(f => (f.On.ToString().Trim(), texts[f.Id])).ToList();
     }
 
     /// <summary>A paragraph's text: "# " for a heading, "- " for a list item, bold runs in **.</summary>
