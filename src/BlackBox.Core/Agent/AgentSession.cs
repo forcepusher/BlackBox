@@ -277,7 +277,7 @@ public sealed partial class AgentSession(
                     var result = await RunToolAsync(call, observer, ct).ConfigureAwait(false);
                     if (loops.Check(call, result) is { } warning)
                         result = result with { Text = result.Text + "\n" + warning };
-                    if (errors?.Check(call, result) is { } lookItUp)
+                    if (errors?.Check(result) is { } lookItUp)
                         result = result with { Text = result.Text + "\n" + lookItUp };
                     // A model that can't see gets no picture (an MCP tool's, say): its server
                     // refused that request and every one after it, since the conversation keeps it.

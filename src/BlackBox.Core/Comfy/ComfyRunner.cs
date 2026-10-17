@@ -58,8 +58,8 @@ public static class ComfyRunner
         try { answer = JsonNode.Parse(text); }
         catch (System.Text.Json.JsonException) { }
         if (status == HttpStatusCode.OK && (string?)answer?["prompt_id"] is { } id)
-            return (id, NodeErrors(answer?["node_errors"] as JsonObject, workflow));
-        var problems = NodeErrors(answer?["node_errors"] as JsonObject, workflow);
+            return (id, NodeErrors(answer?["node_errors"] as JsonObject));
+        var problems = NodeErrors(answer?["node_errors"] as JsonObject);
         if (answer?["error"] is JsonObject error)
         {
             var type = (string?)error["type"];
@@ -79,7 +79,7 @@ public static class ComfyRunner
     }
 
     /// <summary>ComfyUI's per-node complaints, one line each, with the node's type and title.</summary>
-    private static List<string> NodeErrors(JsonObject? nodeErrors, ComfyWorkflow workflow)
+    private static List<string> NodeErrors(JsonObject? nodeErrors)
     {
         var lines = new List<string>();
         foreach (var (id, entry) in nodeErrors ?? [])
@@ -135,7 +135,7 @@ public static class ComfyRunner
                     var (entry, answered, listed) = await HistoryAsync(api, promptId, ct).ConfigureAwait(false);
                     if (entry is not null)
                     {
-                        Collect(api, entry, job, events);
+                        Collect(entry, job, events);
                         job.Elapsed = clock.Elapsed;
                         return job;
                     }
@@ -232,7 +232,7 @@ public static class ComfyRunner
     }
 
     /// <summary>The outcome and the files of a finished job, from its history entry.</summary>
-    private static void Collect(ComfyApi api, JsonObject entry, ComfyJob job, JobEvents events)
+    private static void Collect(JsonObject entry, ComfyJob job, JobEvents events)
     {
         var status = entry["status"] as JsonObject;
         job.Status = (string?)status?["status_str"] == "success" ? "success" : "error";
@@ -361,7 +361,6 @@ public static class ComfyRunner
         public string? Error { get; private set; }
         private string? _node;
         private int _value, _max;
-        private int _cached;
         public TaskCompletionSource Changed { get; private set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public void ResetChanged()
@@ -386,7 +385,6 @@ public static class ComfyRunner
                         break;
                     case "execution_cached":
                         Started = true;
-                        _cached = (data["nodes"] as JsonArray)?.Count ?? 0;
                         break;
                     case "executing":
                         Started = true;

@@ -20,21 +20,19 @@ public class ErrorRepeatsTests
             + FullyQualifiedErrorId : MethodNotFound
         """);
 
-    private static readonly ToolCall Shell = new() { Id = "s", Name = "run_shell", Arguments = "{}" };
-
     [Fact]
     public void The_second_time_an_error_comes_up_the_model_is_pointed_to_web_search()
     {
         var errors = new ErrorRepeats();
 
-        Assert.Null(errors.Check(Shell, ChartError(41)));
-        Assert.Contains("web_search", errors.Check(Shell, ChartError(44)));
-        Assert.Null(errors.Check(Shell, ChartError(47))); // once is enough
+        Assert.Null(errors.Check(ChartError(41)));
+        Assert.Contains("web_search", errors.Check(ChartError(44)));
+        Assert.Null(errors.Check(ChartError(47))); // once is enough
 
         // Another error counts on its own; results that went fine never count.
-        Assert.Null(errors.Check(Shell, ToolResult.Error("File not found: C:\\x.txt")));
-        Assert.Null(errors.Check(Shell, new ToolResult("Exit code 0\nall good")));
-        Assert.NotNull(errors.Check(Shell, ToolResult.Error("File not found: C:\\x.txt")));
+        Assert.Null(errors.Check(ToolResult.Error("File not found: C:\\x.txt")));
+        Assert.Null(errors.Check(new ToolResult("Exit code 0\nall good")));
+        Assert.NotNull(errors.Check(ToolResult.Error("File not found: C:\\x.txt")));
     }
 
     [Fact]

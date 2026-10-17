@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using BlackBox.Core.Llm;
 using BlackBox.Core.Tools;
 
 namespace BlackBox.Core.Agent;
@@ -17,7 +16,7 @@ internal sealed partial class ErrorRepeats
     private readonly Dictionary<string, int> _seen = [];
 
     /// <summary>The note for the second time an error comes up, or null.</summary>
-    public string? Check(ToolCall call, ToolResult result)
+    public string? Check(ToolResult result)
     {
         if (Signature(result) is not { } signature)
             return null;
