@@ -483,6 +483,14 @@ JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…)
 arguments (`coordinate: [x, y]`) are all accepted, and a model that announces a step without taking
 it gets nudged to continue.
 
+Before it says a task is done, the model is asked to check the result itself, not just that its
+steps ran without errors (a look at it, the file it made, a run of what it built), and to say how
+it checked; a check that doesn't show what the user asked for means the task isn't finished.
+Building a geometry nodes graph in Blender, Nemotron twice said "done" with no cubes in the scene:
+every script had run, but the modifier's density was left at 0. Told only to check, it rendered
+the scene three times, saw it empty, and put that down to the lights. It is a guideline in the
+system prompt, not a request of BlackBox's after the answer, which read to the user as a bug.
+
 With several monitors the agent sees one at a time: screenshots show the screen it looked at last
 (the primary at first) and `screen=N` switches. All coordinates refer to the screen in the latest
 screenshot.

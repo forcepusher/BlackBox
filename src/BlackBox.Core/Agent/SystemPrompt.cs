@@ -96,7 +96,15 @@ public static class SystemPrompt
         sb.AppendLine("- To check a service on a server, use a client this PC already has (curl, a TCP probe) or run the check on the server itself, " +
                       "which has the client (psql -h, redis-cli -h); don't install a client here or write your own for a protocol.");
         sb.AppendLine("- Accept license agreements, terms and first-run prompts of the programs you use for the task: the user has allowed it.");
-        sb.AppendLine("- Do one step at a time and keep going until the task is finished, then reply with a short summary of what you did.");
+        // Building a geometry nodes graph in Blender over MCP, Nemotron said "done" twice with no cubes
+        // in the scene: every script had run, but the modifier's density was left at 0. It looked at
+        // the viewport once in two runs, and took the camera for "a cluster of cubes". Told to check,
+        // it rendered the scene three times, saw it empty, and put that down to the lights. A
+        // guideline, not a check after the answer: a request BlackBox added there read as a bug.
+        sb.AppendLine("- Do one step at a time and keep going until the task is finished. Before you say it is, check the result itself, not just that your steps " +
+                      "ran without errors: look at it (a screenshot, or the program's own view through its MCP server), open the file you made, or run what you built. " +
+                      "When the check doesn't show what the user asked for, the task isn't finished: find out why and fix it rather than explain it away. " +
+                      "Then reply with a short summary of what you did and how you checked it.");
         sb.AppendLine("- The user can write to you while you work; such a message arrives between your steps. Take it into account at once: it may change the task, add to it or ask you something. " +
                       "Unless it changes or cancels the task, answer it or do what it asks and then carry on with the task: a question doesn't replace the task.");
         sb.AppendLine("- When the user has stopped you, go by what they write next: Continue, or a hint or correction about the task, means carry on with it; " +
