@@ -280,6 +280,15 @@ public class ModelCardToolTests : IDisposable
         Assert.DoesNotContain("on Civitai", (await Call(tool, """{"action": "models", "search": "sdxl"}""")).Text);
     }
 
+    // qwen3.8 asked for the checkpoint it had just downloaded by name=, as templates are asked for.
+    [Fact]
+    public async Task A_checkpoint_asked_for_by_name_brings_its_card_too()
+    {
+        var listed = await Call(new ComfyTool(), """{"action": "models", "name": "sdxl.safetensors"}""");
+        Assert.Contains("sdxl.safetensors is Nova Furry XL (IL v17.0) on Civitai", listed.Text);
+        Assert.DoesNotContain("v1-5-pruned-emaonly-fp16.safetensors", listed.Text);
+    }
+
     [Fact]
     public async Task A_run_well_under_the_checkpoints_size_is_said_with_its_card()
     {

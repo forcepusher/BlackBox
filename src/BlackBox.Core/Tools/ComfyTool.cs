@@ -31,7 +31,7 @@ public sealed class ComfyTool : Tool
         "A picture the user gives you to follow (a character, a reference sheet, a style) is where the result starts, not something to describe in words: " +
         "image to image from it (blackbox/image_to_image; denoise 0.5 to 0.7 keeps the character), or a reference or edit model's template when one is installed; " +
         "crop or scale it inside the workflow (ImageCrop, ImageScaleToTotalPixels), not with a script. " +
-        "A checkpoint's or LoRA's card (with action=models and its name, a template's view, or after its first run) says how its maker uses it: " +
+        "A checkpoint's or LoRA's card (with action=models search=its file name, a template's view, or after its first run) says how its maker uses it: " +
         "the prompt style, size, sampler, CFG and negative prompt to start from. " +
         "Change the seed for a different result. A model a workflow lacks: action=download with its url (a template lists the links of its models); " +
         "action=find_models searches Civitai and Hugging Face for others (a style, a checkpoint the user named, a LoRA, an upscaler) with their sizes and links, " +
@@ -380,7 +380,9 @@ public sealed class ComfyTool : Tool
 
     private async Task<ToolResult> ModelsAsync(JsonObject args, ComfyHub hub, ComfyApi api, CancellationToken ct)
     {
-        var words = ComfyNodeLibrary.Words(GetString(args, "search") ?? "");
+        // A model file asked for by name= as a template is: qwen3.8 did so for the checkpoint it had
+        // just downloaded, got every model on the PC and no card, and read the file's header itself.
+        var words = ComfyNodeLibrary.Words(GetString(args, "search") ?? GetString(args, "name") ?? "");
         // Asked for on purpose, often right after a download: never from the cache.
         var models = await hub.ModelsAsync(api, ct, fresh: true).ConfigureAwait(false);
         var sb = new StringBuilder();
