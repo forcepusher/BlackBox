@@ -98,7 +98,7 @@ public class SshIntegrationTests : IDisposable
         // An answer that comes after the question went away isn't typed: bash would run it.
         var timed = await Ssh("read -t 8 -p 'Name? ' a; echo; echo timed-out");
         Assert.Contains("waits for input", timed.Text);
-        await Task.Delay(TimeSpan.FromSeconds(8));
+        await Task.Delay(TimeSpan.FromSeconds(8), TestContext.Current.CancellationToken);
         var late = await Ssh(input: "late-answer");
         Assert.Contains("nothing was typed", late.Text);
         Assert.Contains("timed-out", late.Text);
@@ -133,8 +133,8 @@ public class SshIntegrationTests : IDisposable
         Directory.CreateDirectory(Path.Combine(site, "img"));
         var image = new byte[200_000];
         new Random(5).NextBytes(image);
-        await File.WriteAllBytesAsync(Path.Combine(site, "img", "a.png"), image);
-        await File.WriteAllTextAsync(Path.Combine(site, "index.html"), "v2\n");
+        await File.WriteAllBytesAsync(Path.Combine(site, "img", "a.png"), image, TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(site, "index.html"), "v2\n", TestContext.Current.CancellationToken);
         try
         {
             await Ssh("sudo rm -rf /srv/bb-copy; sudo mkdir -p /srv/bb-copy");
@@ -147,12 +147,12 @@ public class SshIntegrationTests : IDisposable
             var back = Path.Combine(local, "back");
             var down = await new CopyTool().ExecuteAsync(new() { ["from"] = $"{Host}:/srv/bb-copy/site", ["to"] = back }, _ctx, CancellationToken.None);
             Assert.False(down.IsError, down.Text);
-            Assert.Equal(image, await File.ReadAllBytesAsync(Path.Combine(back, "img", "a.png")));
+            Assert.Equal(image, await File.ReadAllBytesAsync(Path.Combine(back, "img", "a.png"), TestContext.Current.CancellationToken));
 
             // A root-only file comes down with sudo.
             var shadow = await new CopyTool().ExecuteAsync(new() { ["from"] = $"{Host}:/etc/shadow", ["to"] = Path.Combine(local, "shadow") }, _ctx, CancellationToken.None);
             Assert.False(shadow.IsError, shadow.Text);
-            Assert.Contains("root:", await File.ReadAllTextAsync(Path.Combine(local, "shadow")));
+            Assert.Contains("root:", await File.ReadAllTextAsync(Path.Combine(local, "shadow"), TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -598,7 +598,7 @@ public class SshIntegrationTests : IDisposable
         if (Host is null || Environment.GetEnvironmentVariable("BB_SSH_TEST_REBOOT") != "1") return;
         await Ssh("cd /tmp");
         await Ssh("sudo systemctl reboot", wait: 20); // returns at once, or as the connection drops
-        await Task.Delay(TimeSpan.FromSeconds(10));
+        await Task.Delay(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         SshHosts.RetryFor = TimeSpan.FromMinutes(4); // software-emulated VMs boot slowly
         var back = await Ssh("pwd; uptime", wait: 30);
         Assert.Contains("The earlier connection was lost", back.Text);

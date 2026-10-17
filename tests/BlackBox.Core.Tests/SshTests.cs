@@ -205,8 +205,8 @@ public class SshTests
         var image = new byte[70000];
         new Random(3).NextBytes(image);
         image[1] = 0; image[2] = (byte)'\n';
-        await File.WriteAllBytesAsync(Path.Combine(src, "img", "logo.png"), image);
-        await File.WriteAllTextAsync(Path.Combine(src, "index.html"), "<h1>hi</h1>\n");
+        await File.WriteAllBytesAsync(Path.Combine(src, "img", "logo.png"), image, TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(src, "index.html"), "<h1>hi</h1>\n", TestContext.Current.CancellationToken);
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = root };
         try
         {
@@ -215,7 +215,7 @@ public class SshTests
             var r = await new CopyTool().ExecuteAsync(new() { ["from"] = src, ["to"] = Path.Combine(root, "www") }, ctx, CancellationToken.None);
             Assert.False(r.IsError, r.Text);
             Assert.Contains("Copied 2 files", r.Text);
-            Assert.Equal(image, await File.ReadAllBytesAsync(Path.Combine(root, "www", "site", "img", "logo.png")));
+            Assert.Equal(image, await File.ReadAllBytesAsync(Path.Combine(root, "www", "site", "img", "logo.png"), TestContext.Current.CancellationToken));
             // To a new name: the folder takes it. With /*: only what is in it.
             await new CopyTool().ExecuteAsync(new() { ["from"] = src, ["to"] = Path.Combine(root, "renamed") }, ctx, CancellationToken.None);
             Assert.True(File.Exists(Path.Combine(root, "renamed", "index.html")));
@@ -224,7 +224,7 @@ public class SshTests
             Assert.True(File.Exists(Path.Combine(root, "flat", "img", "logo.png")));
             // A single file to a new name.
             await new CopyTool().ExecuteAsync(new() { ["from"] = Path.Combine(src, "index.html"), ["to"] = Path.Combine(root, "home.html") }, ctx, CancellationToken.None);
-            Assert.Equal("<h1>hi</h1>\n", await File.ReadAllTextAsync(Path.Combine(root, "home.html")));
+            Assert.Equal("<h1>hi</h1>\n", await File.ReadAllTextAsync(Path.Combine(root, "home.html"), TestContext.Current.CancellationToken));
         }
         finally
         {

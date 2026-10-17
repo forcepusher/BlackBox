@@ -353,7 +353,7 @@ public class AgentSessionTests
         var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(true), ctx, "sys");
         var observer = new RecordingObserver();
 
-        await session.RunAsync("go", observer, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20));
+        await session.RunAsync("go", observer, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
         Assert.Single(server.Requests); // the one that got through
@@ -497,10 +497,10 @@ public class AgentSessionTests
         var server = new ScriptedServer(Sse.ToolCall("w1", "wait", """{"seconds":120}"""), Sse.Text("Okay, stopping the watch."), Sse.Text("Nothing else to do."));
         var (s, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
         session = s;
-        _ = Task.Delay(500).ContinueWith(_ => session.Steer("You can stop watching now"));
+        _ = Task.Delay(500, TestContext.Current.CancellationToken).ContinueWith(_ => session.Steer("You can stop watching now"), TestContext.Current.CancellationToken);
         var clock = System.Diagnostics.Stopwatch.StartNew();
 
-        await session.RunAsync("Watch the chat for two minutes", observer, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+        await session.RunAsync("Watch the chat for two minutes", observer, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
 
         Assert.True(clock.Elapsed < TimeSpan.FromSeconds(20), $"the wait went on for {clock.Elapsed}");
         Assert.Contains("the user sent you a message", observer.Results[0].Text);
