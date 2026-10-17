@@ -92,7 +92,7 @@ public sealed class ReadFileTool : Tool
             return ToolResult.Error($"{path} is not a text file ({new FileInfo(path).Length:N0} bytes); read_file reads text, PDF and Office documents, and pictures.");
 
         // Line by line, so a log of gigabytes doesn't have to fit in memory to read a part of it.
-        using var reader = new StreamReader(path, detectEncodingFromByteOrderMarks: true);
+        using var reader = TextFiles.OpenText(path);
         return await NumberedAsync(reader, offset, limit, ct).ConfigureAwait(false);
     }
 
@@ -137,7 +137,7 @@ public sealed class ReadFileTool : Tool
     {
         Span<byte> head = stackalloc byte[8000];
         int read;
-        using (var stream = File.OpenRead(path))
+        using (var stream = TextFiles.OpenRead(path))
             read = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
         head = head[..read];
         return !head.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xFE]) && !head.StartsWith((ReadOnlySpan<byte>)[0xFE, 0xFF]) && head.Contains((byte)0);
@@ -194,7 +194,7 @@ public sealed class WriteFileTool : Tool
             // Appending only continues a file; a typo in the path must not start a new one.
             if (!existed)
                 return ToolResult.Error($"Cannot append: {path} does not exist. Check the path, or create the file first with append=false.");
-            await File.AppendAllTextAsync(path, content, ct).ConfigureAwait(false);
+            await TextFiles.AppendAsync(path, content, ct).ConfigureAwait(false);
             return new ToolResult($"Appended {content.Length} chars to {path} (now {new FileInfo(path).Length} bytes).");
         }
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -251,23 +251,21 @@ public sealed class EditFileTool : Tool
         if (oldText.Length == 0)
             return ToolResult.Error("old_text must not be empty.");
 
-        // Read and written back in the file's own encoding: a UTF-8 signature or UTF-16 stays.
-        string text;
-        Encoding encoding;
-        using (var reader = new StreamReader(path, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: true))
-        {
-            text = await reader.ReadToEndAsync(ct).ConfigureAwait(false);
-            encoding = reader.CurrentEncoding;
-        }
+        // Read and written back in the file's own encoding: a UTF-8 signature, UTF-16 or the ANSI
+        // code page stays, and so does every character the edit doesn't touch.
+        var (text, encoding) = await TextFiles.ReadAllAsync(path, ct).ConfigureAwait(false);
 
         var count = Count(text, oldText);
+        var crlf = text.Contains("\r\n");
         // The model writes \n; in a file saved with Windows line endings that never matches.
-        if (count == 0 && text.Contains("\r\n") && oldText.Contains('\n') && !oldText.Contains('\r'))
+        if (count == 0 && crlf && oldText.Contains('\n') && !oldText.Contains('\r'))
         {
             oldText = oldText.Replace("\n", "\r\n");
-            newText = newText.ReplaceLineEndings("\r\n");
             count = Count(text, oldText);
         }
+        // New lines get the file's line endings, also where old_text had none to change.
+        if (crlf && newText.Contains('\n') && !newText.Contains('\r'))
+            newText = newText.ReplaceLineEndings("\r\n");
         if (count == 0)
             return ToolResult.Error("old_text was not found in the file. Read the file again and copy the text exactly.");
         var all = GetBool(args, "replace_all");

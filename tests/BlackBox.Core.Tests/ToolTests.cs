@@ -536,6 +536,46 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task Files_in_the_ansi_code_page_or_utf16_are_read_edited_and_appended_to_as_they_are()
+    {
+        // Windows PowerShell's Set-Content writes ANSI and Out-File UTF-16: read as UTF-8, é and €
+        // turned into U+FFFD all through the file, and edit_file wrote that back.
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+        var ansi = System.Text.Encoding.GetEncoding(1252);
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        var ctx = Ctx(new FakePlatform(), dir);
+        var notes = Path.Combine(dir, "notes.txt");
+        File.WriteAllBytes(notes, ansi.GetBytes("Café 5 €\r\nTotal 5\r\n"));
+
+        Assert.Contains("Café 5 €", (await new ReadFileTool().ExecuteAsync(new JsonObject { ["path"] = notes }, ctx, CancellationToken.None)).Text);
+        var edit = await new EditFileTool().ExecuteAsync(new JsonObject { ["path"] = notes, ["old_text"] = "Total 5", ["new_text"] = "Total 6\nPaid" }, ctx, CancellationToken.None);
+        Assert.False(edit.IsError, edit.Text);
+        // Every other byte as it was, and the new line with the file's own line ending.
+        Assert.Equal(ansi.GetBytes("Café 5 €\r\nTotal 6\r\nPaid\r\n"), File.ReadAllBytes(notes));
+
+        var list = Path.Combine(dir, "processes.txt");
+        File.WriteAllText(list, "notepad\r\n", new System.Text.UnicodeEncoding(bigEndian: false, byteOrderMark: true));
+        await new WriteFileTool().ExecuteAsync(new JsonObject { ["path"] = list, ["content"] = "calc\r\n", ["append"] = true }, ctx, CancellationToken.None);
+        Assert.Equal("notepad\r\ncalc\r\n", File.ReadAllText(list)); // one UTF-16 text, not UTF-8 bytes after UTF-16 ones
+    }
+
+    [Fact]
+    public async Task A_file_another_program_is_writing_can_still_be_read()
+    {
+        // A running server's log: Windows refuses a plain read while another handle can write.
+        var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
+        var log = Path.Combine(dir, "server.log");
+        await using var writer = new FileStream(log, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+        await writer.WriteAsync("started on port 5000\n"u8.ToArray(), TestContext.Current.CancellationToken);
+        await writer.FlushAsync(TestContext.Current.CancellationToken);
+
+        var result = await new ReadFileTool().ExecuteAsync(new JsonObject { ["path"] = log }, Ctx(new FakePlatform(), dir), CancellationToken.None);
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains("started on port 5000", result.Text);
+    }
+
+    [Fact]
     public async Task Edit_file_replaces_every_occurrence_when_asked()
     {
         var dir = Directory.CreateTempSubdirectory("bb-test-").FullName;
