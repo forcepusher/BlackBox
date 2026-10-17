@@ -23,6 +23,23 @@ public class ReadFileTests : IDisposable
     private Task<ToolResult> Read(string file, ToolContext? ctx = null, int? offset = null) =>
         new ReadFileTool().ExecuteAsync(offset is { } o ? new JsonObject { ["path"] = file, ["offset"] = o } : new JsonObject { ["path"] = file }, ctx ?? Ctx(), CancellationToken.None);
 
+    [Theory]
+    [InlineData(1200, "\"$\"#,##0.00", "$1,200.00")]
+    [InlineData(-1200.5, "\"$\"#,##0.00_);[Red](\"$\"#,##0.00)", "-$1,200.50")] // Excel's own currency format
+    [InlineData(1200, "#,##0.00 \"€\"", "1,200.00 €")]
+    [InlineData(1200, "#,##0", "1,200")]
+    [InlineData(0.285, "0.0%", "28.5%")]
+    [InlineData(46327, "m/d/yyyy", "2026-11-01")]
+    [InlineData(0.5, "h:mm", null)] // a time stays the number it is
+    [InlineData(1200, null, null)]
+    public void Workbook_numbers_read_as_excel_shows_them(double value, string? format, string? shown)
+    {
+        Assert.Equal(shown, DocumentText.Formatted(value, format));
+        // edit_file reads them back as the same number.
+        if (shown is not null)
+            Assert.Equal(value, (double)BlackBox.Core.Documents.XlsxWriter.Value(shown).Value, 6);
+    }
+
     [Fact]
     public async Task A_picture_is_shown_to_the_model_scaled_and_on_white()
     {

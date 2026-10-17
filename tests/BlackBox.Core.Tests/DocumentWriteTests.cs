@@ -117,9 +117,10 @@ public class DocumentWriteTests : IDisposable
 
         var text = await Read("budget.xlsx");
         Assert.Contains("# Sheet \"Budget\"", text);
-        Assert.Contains("B2 1200", text);
-        Assert.Contains("C2 0.4", text);
-        Assert.Contains("D2 46327", text); // 2026-11-01 as Excel's date number
+        // Numbers as Excel shows them, in a form edit_file reads back as the same value and format.
+        Assert.Contains("B2 $1,200.00", text);
+        Assert.Contains("C2 40%", text);
+        Assert.Contains("D2 2026-11-01", text); // not 46327, Excel's number for that day
         Assert.Contains("B4 007", text);   // leading zeros stay text
         Assert.Contains("B5 =SUM(B2:B4)", text);
         Assert.Contains("# Sheet \"Notes\"", text);
@@ -391,8 +392,9 @@ public class DocumentWriteTests : IDisposable
         Assert.False(result.IsError, result.Text);
         Assert.Contains(": Inserted row 4 on sheet \"Budget\", then set A4, B4, B5", result.Text);
         var text = await Read("budget.xlsx");
-        Assert.Contains("A4 Internet | B4 40", text);
+        Assert.Contains("A4 Internet | B4 $40", text); // in dollars, as the row above it
         Assert.Contains("A5 Total | B5 =SUM(B2:B4)", text);
+        Assert.Contains("(bold: A1, B1, A5)", text);
 
         // The new row looks like the one above it, the total row stays bold.
         XNamespace s = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -408,7 +410,7 @@ public class DocumentWriteTests : IDisposable
         // Deleting Food: the total's range loses that row and the total moves up.
         Assert.False((await Edit("budget.xlsx", "", "delete row 3")).IsError);
         text = await Read("budget.xlsx");
-        Assert.Contains("A3 Internet | B3 40", text);
+        Assert.Contains("A3 Internet | B3 $40", text);
         Assert.Contains("A4 Total | B4 =SUM(B2:B3)", text);
     }
 

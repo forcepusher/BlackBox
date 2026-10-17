@@ -122,12 +122,18 @@ internal static class DocumentText
     private static readonly XNamespace R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace Pr = "http://schemas.openxmlformats.org/package/2006/relationships";
 
-    /// <summary>Every sheet, every filled cell by its address ("B7 =SUM(B2:B6) → 2150"), a row per line.</summary>
+    /// <summary>
+    /// Every sheet, every filled cell by its address ("B7 =SUM(B2:B6) → $2,150.00"), a row per
+    /// line, numbers as Excel shows them (in dollars, as percentages, dates as 2026-11-01), and
+    /// which cells are bold. Without formats a model asked for amounts in dollars couldn't see
+    /// whether they were, and unzipped the workbook to look; a date read 46327.
+    /// </summary>
     private static string Xlsx(Stream file)
     {
         using var zip = new ZipArchive(file, ZipArchiveMode.Read, leaveOpen: true);
         var shared = zip.GetEntry("xl/sharedStrings.xml") is null ? []
             : Load(zip, "xl/sharedStrings.xml").Root!.Elements(S + "si").Select(si => string.Concat(si.Descendants(S + "t").Select(t => t.Value))).ToList();
+        var styles = CellFormats(zip);
         var targets = Relations(zip, "xl/_rels/workbook.xml.rels", "xl/");
         var sb = new StringBuilder();
         foreach (var sheet in Load(zip, "xl/workbook.xml").Root!.Element(S + "sheets")?.Elements(S + "sheet") ?? [])
@@ -140,17 +146,29 @@ internal static class DocumentText
             if ((string?)data.Element(S + "dimension")?.Attribute("ref") is { } range)
                 sb.Append(" (").Append(range).Append(')');
             sb.AppendLine();
+            var bold = new List<string>();
             foreach (var row in data.Element(S + "sheetData")?.Elements(S + "row") ?? [])
             {
-                var cells = row.Elements(S + "c").Select(c => Cell(c, shared)).Where(c => c.Length > 0).ToList();
+                var cells = new List<string>();
+                foreach (var c in row.Elements(S + "c"))
+                {
+                    var style = int.TryParse((string?)c.Attribute("s"), out var s) && s >= 0 && s < styles.Count ? styles[s] : default;
+                    if (Cell(c, shared, style.Format) is not { Length: > 0 } cell)
+                        continue;
+                    cells.Add(cell);
+                    if (style.Bold)
+                        bold.Add((string?)c.Attribute("r") ?? "");
+                }
                 if (cells.Count > 0)
                     sb.AppendJoin(" | ", cells).AppendLine();
             }
+            if (bold.Count > 0)
+                sb.Append("(bold: ").AppendJoin(", ", bold).AppendLine(")");
         }
         return sb.ToString();
     }
 
-    private static string Cell(XElement c, List<string> shared)
+    private static string Cell(XElement c, List<string> shared, string? format)
     {
         var at = (string?)c.Attribute("r") ?? "";
         var value = (string?)c.Element(S + "v");
@@ -159,15 +177,70 @@ internal static class DocumentText
             "s" when int.TryParse(value, out var i) && i < shared.Count => shared[i],
             "inlineStr" => string.Concat(c.Descendants(S + "t").Select(t => t.Value)),
             "b" => value == "1" ? "TRUE" : "FALSE",
-            // Numbers with the 15 digits Excel shows: the file has 512.29999999999995 for 512.3.
+            // Numbers as the format shows them, else with the 15 digits Excel shows: the file has
+            // 512.29999999999995 for 512.3.
             null or "n" when double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var n)
-                => n.ToString("G15", System.Globalization.CultureInfo.InvariantCulture),
+                => Formatted(n, format) ?? n.ToString("G15", System.Globalization.CultureInfo.InvariantCulture),
             _ => value ?? "",
         };
         if (c.Element(S + "f") is { } f)
             // A shared formula is written out only in its first cell; the others just point at it.
             shown = $"={(f.Value.Length > 0 ? f.Value : "(shared formula)")} → {shown}";
         return shown.Length == 0 ? "" : $"{at} {shown}";
+    }
+
+    /// <summary>Each cell style's number format code (null for General) and whether its font is bold, by style index.</summary>
+    private static List<(string? Format, bool Bold)> CellFormats(ZipArchive zip)
+    {
+        if (zip.GetEntry("xl/styles.xml") is null)
+            return [];
+        var styles = Load(zip, "xl/styles.xml").Root!;
+        var codes = styles.Element(S + "numFmts")?.Elements(S + "numFmt")
+            .Where(f => f.Attribute("numFmtId") is not null)
+            .GroupBy(f => (int)f.Attribute("numFmtId")!).ToDictionary(g => g.Key, g => (string?)g.First().Attribute("formatCode")) ?? [];
+        var bold = styles.Element(S + "fonts")?.Elements(S + "font").Select(f => f.Element(S + "b") is { } b && (string?)b.Attribute("val") is null or "1" or "true").ToList() ?? [];
+        return styles.Element(S + "cellXfs")?.Elements(S + "xf").Select(xf =>
+        {
+            var id = (int?)xf.Attribute("numFmtId") ?? 0;
+            var font = (int?)xf.Attribute("fontId") ?? 0;
+            return (codes.GetValueOrDefault(id) ?? BuiltInFormat(id), font >= 0 && font < bold.Count && bold[font]);
+        }).ToList() ?? [];
+    }
+
+    /// <summary>The number formats Excel has without writing them down, the ones that change how a number reads.</summary>
+    private static string? BuiltInFormat(int id) => id switch
+    {
+        3 => "#,##0",
+        4 => "#,##0.00",
+        9 => "0%",
+        10 => "0.00%",
+        >= 14 and <= 17 => "yyyy-mm-dd",
+        _ => null,
+    };
+
+    /// <summary>
+    /// A number as its format shows it, written so that edit_file reads it back as the same number
+    /// in the same format: $1,200.00, 1,200, 40%, 2026-11-01. Null for formats it doesn't know
+    /// (times, fractions, custom text), which show the number as it is.
+    /// </summary>
+    internal static string? Formatted(double n, string? format)
+    {
+        if (format is null || format.Contains('h') || format.Contains('s') && !format.Contains('#'))
+            return null;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var decimals = format.IndexOf('.') is var dot and >= 0 ? format[(dot + 1)..].TakeWhile(ch => ch == '0').Count() : 0;
+        if (format.Contains('%'))
+            return (n * 100).ToString("F" + decimals, inv) + "%";
+        if (format.Contains('y') && format.Contains('d'))
+            return n is >= 1 and < 2958466 ? DateTime.FromOADate(n).ToString("yyyy-MM-dd", inv) : null;
+        if (!format.Contains('0'))
+            return null;
+        var number = Math.Abs(n).ToString((format.Contains(",") ? "N" : "F") + decimals, inv);
+        var symbol = format.FirstOrDefault(ch => ch is '$' or '€' or '£' or '¥' or '₹');
+        var sign = n < 0 ? "-" : "";
+        if (symbol == default)
+            return sign + number;
+        return format.IndexOf(symbol) < format.IndexOf('0') ? $"{sign}{symbol}{number}" : $"{sign}{number} {symbol}";
     }
 
     // ---- PowerPoint ------------------------------------------------------------------------------
