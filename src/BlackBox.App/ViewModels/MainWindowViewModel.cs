@@ -150,6 +150,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         // A chat is saved at every step and when its run ends, so only one in progress needs it here.
         if (IsBusy) SaveChat(SnapshotHistory());
+        if (_settingsSave?.IsEnabled == true)
+        {
+            _settingsSave.Stop();
+            SaveSettings(); // what was typed just before closing
+        }
         _runCts?.Cancel();
         _stopKey?.Dispose();
         _ssh.Dispose();
@@ -163,7 +168,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private int _checkVersion;
     private bool _refreshingModels;
 
-    /// <summary>Server address typed in the top bar. Saved as you type; checked once typing pauses.</summary>
+    /// <summary>Server address typed in the top bar. Saved and checked once typing pauses.</summary>
     public string ServerAddress
     {
         get => _settings.Server.BaseUrl;
@@ -172,13 +177,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             value = value.Trim();
             if (value == _settings.Server.BaseUrl) return;
             _settings.Server.BaseUrl = value;
-            SaveSettings();
+            SaveSettingsSoon();
             OnPropertyChanged();
             _ = CheckAfterTypingAsync();
         }
     }
 
-    /// <summary>API key typed in the top bar, for servers that want one. Saved as you type; checked once typing pauses.</summary>
+    /// <summary>API key typed in the top bar, for servers that want one. Saved and checked once typing pauses.</summary>
     public string ApiKey
     {
         get => _settings.Server.ApiKey;
@@ -187,10 +192,27 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             value = value.Trim();
             if (value == _settings.Server.ApiKey) return;
             _settings.Server.ApiKey = value;
-            SaveSettings();
+            SaveSettingsSoon();
             OnPropertyChanged();
             _ = CheckAfterTypingAsync();
         }
+    }
+
+    private DispatcherTimer? _settingsSave;
+
+    /// <summary>
+    /// Saves the settings once typing pauses: written at every key press, each one waited on the
+    /// disk (and on an antivirus holding the file just written) on the UI thread, while typing.
+    /// </summary>
+    private void SaveSettingsSoon()
+    {
+        _settingsSave ??= new DispatcherTimer(TimeSpan.FromMilliseconds(700), DispatcherPriority.Background, (_, _) =>
+        {
+            _settingsSave!.Stop();
+            SaveSettings();
+        });
+        _settingsSave.Stop();
+        _settingsSave.Start();
     }
 
     /// <summary>The eye button next to the API key: shows the key instead of dots.</summary>
