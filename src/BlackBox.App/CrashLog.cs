@@ -103,8 +103,31 @@ internal static class CrashLog
     public static void ShowCouldNotStart(Exception ex)
     {
         Write("could not start", ex);
-        if (OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows())
+            return;
+        // Put in Program Files (or another folder Windows keeps users out of), it said only
+        // "UnauthorizedAccessException: Access to the path '…\Data\runtime' is denied."
+        if (ex is UnauthorizedAccessException && _paths is { } paths && !CanWrite(paths.DataDir))
+            MessageBoxW(0, $"BlackBox keeps its settings and chats in a Data folder next to BlackBox.exe, and Windows doesn't let it write in {paths.Root}.\n\n" +
+                           "Move BlackBox.exe to a folder of your own, such as Documents or the Desktop, and start it from there.", "BlackBox", 0x10 /* MB_ICONERROR */);
+        else
             MessageBoxW(0, $"BlackBox could not start.\n\n{Summary(ex)}" + (_paths is { } p ? $"\n\nDetails: {FileName(p)}" : ""), "BlackBox", 0x10 /* MB_ICONERROR */);
+    }
+
+    private static bool CanWrite(string dir)
+    {
+        try
+        {
+            Directory.CreateDirectory(dir);
+            var probe = Path.Combine(dir, $".write-test-{Environment.ProcessId}");
+            File.WriteAllText(probe, "");
+            File.Delete(probe);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]

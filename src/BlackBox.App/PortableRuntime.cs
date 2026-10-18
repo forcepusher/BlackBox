@@ -36,16 +36,34 @@ internal static class PortableRuntime
             if (payload is null)
                 return; // normal folder build: natives already sit next to the exe
 
-            var stamp = Path.Combine(dir, ".version");
-            var version = $"{Assembly.GetExecutingAssembly().ManifestModule.ModuleVersionId}:{payload.Length}";
-            if (!File.Exists(stamp) || File.ReadAllText(stamp) != version)
+            var moduleId = Assembly.GetExecutingAssembly().ManifestModule.ModuleVersionId;
+            var version = $"{moduleId}:{payload.Length}";
+            if (!Unpacked(dir, version))
             {
-                if (Directory.Exists(dir))
-                    Directory.Delete(dir, recursive: true);
-                Directory.CreateDirectory(dir);
-                using (var zip = new ZipArchive(payload, ZipArchiveMode.Read))
-                    zip.ExtractToDirectory(dir, overwriteFiles: true);
-                File.WriteAllText(stamp, version);
+                try
+                {
+                    Unpack(payload, dir, version);
+                }
+                // Another version of BlackBox runs from this folder (a newer download, "BlackBox (1).exe",
+                // started while the old one was open) and holds the libraries: "BlackBox could not
+                // start. UnauthorizedAccessException: Access to the path 'libSkiaSharp.dll' is denied."
+                // This one unpacks beside them; the next start alone goes back to Data/runtime.
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && File.Exists(Path.Combine(dir, "libSkiaSharp.dll")))
+                {
+                    dir = Path.Combine(paths.DataDir, $"runtime-{moduleId.ToString("N")[..8]}");
+                    if (!Unpacked(dir, version))
+                    {
+                        payload.Position = 0;
+                        Unpack(payload, dir, version);
+                    }
+                }
+            }
+            else
+            {
+                // Left by a start beside another version, once nothing holds them.
+                foreach (var old in Directory.EnumerateDirectories(paths.DataDir, "runtime-*"))
+                    try { Directory.Delete(old, recursive: true); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
             }
         }
 
@@ -55,6 +73,22 @@ internal static class PortableRuntime
         // even if another copy is on PATH (Git for Windows ships an incompatible libSkiaSharp).
         Resolve(typeof(SkiaSharp.SKColor).Assembly, dir, "libSkiaSharp");
         Resolve(typeof(HarfBuzzSharp.Blob).Assembly, dir, "libHarfBuzzSharp");
+    }
+
+    private static bool Unpacked(string dir, string version)
+    {
+        var stamp = Path.Combine(dir, ".version");
+        return File.Exists(stamp) && File.ReadAllText(stamp) == version;
+    }
+
+    private static void Unpack(Stream payload, string dir, string version)
+    {
+        if (Directory.Exists(dir))
+            Directory.Delete(dir, recursive: true);
+        Directory.CreateDirectory(dir);
+        using (var zip = new ZipArchive(payload, ZipArchiveMode.Read, leaveOpen: true))
+            zip.ExtractToDirectory(dir, overwriteFiles: true);
+        File.WriteAllText(Path.Combine(dir, ".version"), version);
     }
 
     private static void Resolve(Assembly assembly, string dir, string library)
