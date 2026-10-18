@@ -108,19 +108,35 @@ public partial class MainWindow : Window
         // before it reports being minimized.
         PositionChanged += (_, _) => Dispatcher.UIThread.Post(Remember);
         SizeChanged += (_, _) => Dispatcher.UIThread.Post(Remember);
+        if (Screens.Primary is { } primary)
+            FitTo(primary);
         if (placement is null || placement.Width < MinWidth || placement.Height < MinHeight)
             return;
         // Some of the title bar must be on a screen, or the window can't even be dragged back.
         var titleBar = new PixelRect(placement.X + 40, placement.Y + 4, 160, 24);
-        if (!Screens.All.Any(s => s.WorkingArea.Intersects(titleBar)))
+        if (Screens.All.FirstOrDefault(s => s.WorkingArea.Intersects(titleBar)) is not { } screen)
             return;
         WindowStartupLocation = WindowStartupLocation.Manual;
         Position = new PixelPoint(placement.X, placement.Y);
         Width = placement.Width;
         Height = placement.Height;
+        FitTo(screen);
         _normal = (Position, Width, Height);
         if (placement.Maximized)
             WindowState = WindowState.Maximized;
+    }
+
+    /// <summary>
+    /// No taller or wider than the screen's working area. The default 900x760 is more than a
+    /// 1920x1080 laptop screen at 150% has (688 of height above the taskbar): centred, the title
+    /// bar went above the screen and the message box under the taskbar.
+    /// </summary>
+    private void FitTo(Avalonia.Platform.Screen screen)
+    {
+        var area = screen.WorkingArea.Size.ToSize(screen.Scaling);
+        // Width and Height are the client area; the title bar and borders take about 40 more.
+        Width = Math.Max(MinWidth, Math.Min(Width, area.Width - 16));
+        Height = Math.Max(MinHeight, Math.Min(Height, area.Height - 40));
     }
 
     private void Remember()
