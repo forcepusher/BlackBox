@@ -272,6 +272,21 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_model_server_that_failed_on_a_request_is_asked_again_after_a_wait()
+    {
+        var server = new ScriptedServer("data: {\"error\":\"failed to process mtmd chunk\"}\n\n", Sse.Text("Made it."));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        await session.RunAsync("go", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count);
+        Assert.True(watch.Elapsed >= TimeSpan.FromSeconds(1.9), $"waited {watch.Elapsed}");
+        Assert.Equal(["The server broke off its answer: failed to process mtmd chunk Trying again in 2 s, attempt 1 of 12…"], observer.Notices);
+    }
+
+    [Fact]
     public async Task A_tool_call_the_length_limit_cut_short_is_not_run()
     {
         // Repaired by closing what was left open, it ran: write_file wrote half the file and said done.

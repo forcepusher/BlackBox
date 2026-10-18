@@ -61,6 +61,12 @@ public class ChatClientTests
         // OpenRouter and Kilo pass an upstream 429 on in the stream.
         sse = """data: {"error":{"message":"Daily limit reached for thinkingmachines/inkling-small:free","code":429}}""";
         await Assert.ThrowsAsync<RateLimitedException>(() => OpenAiChatClient.ReadStreamAsync(new StringReader(sse), null, CancellationToken.None));
+
+        // LM Studio's llama.cpp out of KV room while other requests ran: worth sending again after a while.
+        sse = """data: {"error":"failed to process mtmd chunk"}""";
+        var failed = await Assert.ThrowsAsync<ConnectionLostException>(() => OpenAiChatClient.ReadStreamAsync(new StringReader(sse), null, CancellationToken.None));
+        Assert.True(failed.ServerFailed);
+        Assert.False(failed.ReceivedTokens);
     }
 
     [Fact]

@@ -654,7 +654,13 @@ public sealed partial class AgentSession(
             }
             catch (ConnectionLostException ex) when (++drops <= MaxReconnects)
             {
-                observer.OnNotice($"Connection lost ({ex.Message}). Reconnecting, attempt {drops} of {MaxReconnects}…");
+                // The server's own failure is given time to pass: other requests filling its memory,
+                // its model reloading after a crash. Sent again at once, all twelve tries were gone in seconds.
+                var pause = ex.ServerFailed ? TimeSpan.FromTicks(Math.Min(RateLimitWaits[Math.Min(drops, RateLimitWaits.Length) - 1].Ticks, TimeSpan.TicksPerMinute))
+                    : drops > 1 ? TimeSpan.FromSeconds(Math.Min(drops - 1, 3)) : TimeSpan.Zero;
+                observer.OnNotice(ex.ServerFailed
+                    ? $"{ex.Message} Trying again in {Describe(pause)}, attempt {drops} of {MaxReconnects}…"
+                    : $"Connection lost ({ex.Message}). Reconnecting, attempt {drops} of {MaxReconnects}…");
                 // A model server that fails a request may have got stuck on how the prompt begins,
                 // as Kilo's free Nemotron did for half an hour: the request goes again a line lower.
                 if (ex.Upstream)
@@ -662,7 +668,7 @@ public sealed partial class AgentSession(
                 // Resending would only repeat a tool call too long to get through, so the model is
                 // asked to split it. The note stays in the history so later calls stay short too.
                 // If the smaller parts are still too long, it is told once more, with a firmer limit.
-                if (ex.ToolCallInProgress is not null && toolDefs.Count > 0 && request[^1].Content != StillTooLongNote)
+                if (!ex.ServerFailed && ex.ToolCallInProgress is not null && toolDefs.Count > 0 && request[^1].Content != StillTooLongNote)
                 {
                     var again = request[^1].Content == LongToolCallNote;
                     var note = ChatMessage.User(again ? StillTooLongNote : LongToolCallNote);
@@ -680,8 +686,8 @@ public sealed partial class AgentSession(
                 }
                 // The server keeps what it processed, so resending at once loses nothing; a short
                 // pause only after repeated drops, in case the link itself is down.
-                if (drops > 1)
-                    await Task.Delay(TimeSpan.FromSeconds(Math.Min(drops - 1, 3)), ct).ConfigureAwait(false);
+                if (pause > TimeSpan.Zero)
+                    await Task.Delay(pause, ct).ConfigureAwait(false);
             }
         }
     }

@@ -119,6 +119,13 @@ public sealed class ConnectionLostException(string message, bool receivedTokens,
     /// stalled ("Upstream idle timeout exceeded", "Upstream error from Nvidia: …").
     /// </summary>
     public bool Upstream { get; init; }
+
+    /// <summary>
+    /// The model server failed on the request rather than the link (see
+    /// <see cref="OpenAiChatClient.ServerFailedWords"/>): sent again after a growing wait, since
+    /// the requests that filled its memory, or its reloading model, take a while.
+    /// </summary>
+    public bool ServerFailed { get; init; }
 }
 
 /// <summary>
@@ -334,7 +341,8 @@ public sealed partial class OpenAiChatClient
 
             if (chunk?["error"] is JsonNode error)
             {
-                var errorText = (error as JsonObject)?["message"]?.ToString() ?? error.ToJsonString();
+                var errorText = (error as JsonObject)?["message"]?.ToString()
+                                ?? (error is JsonValue said && said.TryGetValue<string>(out var words) ? words : error.ToJsonString());
                 var code = (error as JsonObject)?["code"]?.ToString();
                 // OpenRouter and Kilo pass on an upstream 429 in the stream, under HTTP 200.
                 if (code == "429")
@@ -344,11 +352,12 @@ public sealed partial class OpenAiChatClient
                 // The model server behind a gateway failed or stalled mid-way: sent again like a
                 // server error answered with a status. It ended the run, every time for over half
                 // an hour while Kilo's free Nemotron was stuck on BlackBox's prompt (see ShiftPrompt).
-                if (Transient(code, errorText))
+                if (Transient(code, errorText) || ServerFailedWords().IsMatch(errorText))
                     throw new ConnectionLostException("The server broke off its answer: " + errorText.Clip(300),
                         content.Length > 0 || reasoning.Length > 0 || calls.Count > 0, toolCallInProgress: calls.Values.LastOrDefault().Name is { Length: > 0 } inProgress ? inProgress : null)
                     {
                         Upstream = errorText.Contains("upstream", StringComparison.OrdinalIgnoreCase),
+                        ServerFailed = ServerFailedWords().IsMatch(errorText),
                     };
                 throw new LlmException("Server error: " + errorText);
             }
@@ -612,6 +621,15 @@ public sealed partial class OpenAiChatClient
 
     [GeneratedRegex(@"time(d)?[ -]?out|overloaded|unavailable|internal server error|upstream|try again|temporar", RegexOptions.IgnoreCase)]
     private static partial Regex TransientWords();
+
+    /// <summary>
+    /// The model server itself failed on the request: llama.cpp out of room in its KV cache while
+    /// other requests ran ("failed to process mtmd chunk", "failed to find a memory slot"), or
+    /// LM Studio's model crashed or was unloaded, which the next request loads again. An hour of
+    /// 2048 ended on "Server error: failed to process mtmd chunk" from LM Studio.
+    /// </summary>
+    [GeneratedRegex(@"failed to process|failed to decode|memory slot|crashed|unloaded", RegexOptions.IgnoreCase)]
+    internal static partial Regex ServerFailedWords();
 
     /// <summary>
     /// Blank lines put in front of the system prompt sent to a server (see <see cref="ShiftPrompt"/>);
