@@ -152,8 +152,9 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   LoadVideo name a file is uploaded. It waits for the job while its card shows where it is
   ("SamplerCustomAdvanced, step 2 of 3 · 8:21"); Stop and Pause/Break cancel it in ComfyUI too, and a
   message from the user ends the wait while the job goes on (`action=status` with its id picks it
-  up again). The files come back with their paths, `save_to` copies them where the task wants them,
-  and the model gets a look at them (below) to check its work.
+  up again, `action=cancel` stops that one job when the message made it pointless). The files come
+  back with their paths, `save_to` copies them where the task wants them, and the model gets a look
+  at them (below) to check its work, with how much of a picture is transparent said in words.
 - **ComfyUI itself.** The user's own ComfyUI comes first, whatever kind it is. One that runs (at
   the address used last, or on ComfyUI's usual ports: the portable build's 8188, the Desktop app's
   8000) is used as it runs, and the first answer says which one it is. Otherwise BlackBox starts the
@@ -247,6 +248,50 @@ answering for a while during the speech task, git's progress on stderr, a checkp
 couldn't load, and a retry that left out the length and size of the first run (a rerun of a template
 without changes the last one made now comes with a note saying which). Three of the results went to
 `Data/scratch`; the prompt has since been told that what the user asked for never goes there.
+
+### A user's chat played again, and what model cards changed
+The chat that led to model cards: "Generate me a bunny picture using this as a reference sheet using
+furry nova model" with the user's sheet, then "A bit too young looking, make him mature", and "And
+more furry ofc" and "The style is off" typed 23 and 31 seconds into that run, played with the
+command-line runner's `--then` on qwen3.8 (each run in a Data folder of its own; the pictures were
+kept safe for work by a custom instruction):
+
+| Build | Time | Model calls · tool calls (errors) | What it did |
+| --- | --- | --- | --- |
+| develop before model cards | 11:32 | 16 · 17 (0) | a prompt in words with the user's template at 512x760, then upscaled; a flat cartoon |
+| model cards, as first written | 18:18 | 33 · 38 (3) | cut the clothed view out of the sheet (seven of thirteen minutes: the wrong figure three times), image to image with the card's quality tags, CFG 4.5 and clip skip 2 at 432x1216; close to the sheet's style |
+| with the fixes below | 14:28 | 14 · 16 (0) | the same view at 1 megapixel and a hires pass to 896x2520; mature, 2D |
+| with the fixes, Nemotron on Kilo | 7:40 | 12 · 12 (0) | a first try from the whole sheet, then the clothed views |
+| with all the fixes below, at the end of the day | 17:19 | 12 · 12 (0) | the clothed view at 704x1696, image to image; then mature, furrier and in the sheet's flat style at once. It stopped ComfyUI to drop the job the later messages made stale (action=cancel does that now) |
+
+37 more requests on this PC (styles, models found and downloaded, LoRAs, edits, the user's character
+in a new scene, video with and without sound, music, songs, voices, 3D) all made what was asked, and
+showed what the fixes are for: Civitai's quick AutoV1 hash gave Pony Diffusion V6 XL and Juggernaut
+XL other models' cards (they are found by SHA-256 now); qwen3.8 read places in pictures on its
+0-1000 grid as pixels (a crop test went from a wrong head to both crops right first time); Juggernaut's
+card left out its maker's Karras schedule, and DPM++ 2M SDE with the normal one speckled the sky; an
+SDXL LoRA went on Pony; restyling a photo by image to image stayed a painted photo where the installed
+Qwen-Image-Edit made it anime; an Anima "checkpoint" from Civitai was the diffusion model alone; and
+every ffmpeg call came back as "Exit code 1".
+
+31 requests after those (the user's character in new scenes and poses, a poster, panoramas, a
+talking video, 3D models, game sprites, a walk cycle, seamless textures and tiles, a character sheet,
+an icon, a cut-out, a new sky, colorizing, sound effects, a music loop, sound for a silent video) found
+the rest. A panorama painted through a mask met the photo with a hard edge until the model went
+through DifferentialDiffusion, and another run downloaded Flux Fill and its text encoder (32 GB) for
+what the installed Flux.1 Dev does as well in a minute. A 3D model of the user's character from its
+one picture was a relief on a wall (an hour, then stopped); its side and back views made with the
+multiple-angles template and given with the front to a multi-view template made a whole figure in 13
+minutes, and after the note it does that by itself. To cut the character out, qwen3.8 pip-installed
+rembg, onnxruntime and 18 other packages into the PC's own Python; ComfyUI's Python had rembg without
+the onnxruntime it needs (and there rembg exits ComfyUI's job thread, so the job hangs), and node
+search didn't look at inputs such as Trellis2's `remove_background`. Finding no pixel art template, it
+drew a knight by hand with Pixel Art XL installed; listed by the search, the LoRA made a far better
+one in half the time. A texture made seamless by cross-fading its edges tiled with doubled stones,
+where rolling it by half and repainting the seam cross tiles cleanly, if the light is even. A sprite
+sheet whose mask had gone the wrong way was all transparent and was described as four knights, since
+it looked blank on white; and told "more furry" while a picture was being made, qwen3.8 stopped
+ComfyUI to drop the stale job (`action=cancel` stops one job now).
 
 ### On a PC without a graphics card
 A laptop with Intel Iris Xe graphics (none ComfyUI can use), a 14-core i7-1280P and 16 GB of RAM,
