@@ -79,7 +79,7 @@ public static class ComfyRunner
     }
 
     /// <summary>ComfyUI's per-node complaints, one line each, with the node's id and type.</summary>
-    private static List<string> NodeErrors(JsonObject? nodeErrors)
+    internal static List<string> NodeErrors(JsonObject? nodeErrors)
     {
         var lines = new List<string>();
         foreach (var (id, entry) in nodeErrors ?? [])
@@ -89,6 +89,9 @@ public static class ComfyRunner
             {
                 var message = (string?)e["message"] ?? "";
                 var details = (string?)e["details"] ?? "";
+                // An input a chosen option brings is "format.quality" in the workflow, "quality" in the details.
+                if (e["extra_info"]?["input_name"] is JsonValue n && n.TryGetValue<string>(out var input) && input.Contains('.') && !details.Contains(input, StringComparison.Ordinal))
+                    details = details == input[(input.LastIndexOf('.') + 1)..] ? input : $"{input}: {details}";
                 lines.Add($"node {id} {cls}: {message}{(details.Length > 0 ? ": " + details.Clip(600) : "")}");
             }
         }

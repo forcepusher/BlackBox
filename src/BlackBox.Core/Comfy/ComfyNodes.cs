@@ -27,6 +27,32 @@ public sealed class ComfyInputDef
     /// <summary>A V3 input that stands for several (values.a, values.b…, or the inputs of a chosen option).</summary>
     public bool IsDynamic => Type is "COMFY_AUTOGROW_V3" or "COMFY_DYNAMICCOMBO_V3" or "COMFY_DYNAMICSLOT_V3";
 
+    /// <summary>
+    /// A dynamic combo's choices, each with the inputs it brings, named "choice input.its input" in a
+    /// workflow: SaveAudioAdvanced's format "mp3" brings format.quality. Empty for any other input.
+    /// </summary>
+    public IReadOnlyList<(string Key, IReadOnlyList<ComfyInputDef> Inputs)> Options => _options ??= ParseOptions();
+
+    private IReadOnlyList<(string Key, IReadOnlyList<ComfyInputDef> Inputs)>? _options;
+
+    private List<(string Key, IReadOnlyList<ComfyInputDef> Inputs)> ParseOptions()
+    {
+        var options = new List<(string, IReadOnlyList<ComfyInputDef>)>();
+        if (Type != "COMFY_DYNAMICCOMBO_V3" || Extra["options"] is not JsonArray all)
+            return options;
+        foreach (var option in all.OfType<JsonObject>())
+        {
+            var key = option["key"] is JsonValue k && k.TryGetValue<string>(out var s) ? s : option["key"]?.ToJsonString() ?? "";
+            var inputs = new List<ComfyInputDef>();
+            foreach (var section in new[] { "required", "optional" })
+                foreach (var (name, spec) in option["inputs"]?[section] as JsonObject ?? [])
+                    if (spec is JsonArray a)
+                        inputs.Add(ComfyNodeLibrary.ParseInput($"{Name}.{name}", section == "required", a));
+            options.Add((key, inputs));
+        }
+        return options;
+    }
+
     /// <summary>A file in ComfyUI's input folder (LoadImage, LoadAudio, LoadVideo): a local path given here is uploaded.</summary>
     public bool TakesInputFile => Choices is not null &&
         (Extra["image_upload"] is not null || Extra["audio_upload"] is not null || Extra["video_upload"] is not null || Extra["upload"] is not null ||
@@ -47,6 +73,12 @@ public sealed class ComfyInputDef
             sb.Append(string.Join(", ", Choices.Take(maxChoices)));
             if (Choices.Count > maxChoices)
                 sb.Append($" (and {Choices.Count - maxChoices} more)");
+        }
+        else if (Options.Count > 0)
+        {
+            sb.Append("one of ").Append(string.Join(", ", Options.Take(maxChoices).Select(o => o.Key)));
+            if (Options.Count > maxChoices)
+                sb.Append($" (and {Options.Count - maxChoices} more)");
         }
         else
         {
@@ -133,12 +165,32 @@ public sealed class ComfyNodeDef
         sb.AppendLine(Description.Length > 0 ? ": " + Description.ReplaceLineEndings(" ").Clip(400) : "");
         sb.AppendLine("Inputs:");
         foreach (var i in Inputs)
+        {
             sb.Append("  ").Append(i.Name).Append(i.Required ? "" : " (optional)").Append(": ").AppendLine(i.Describe());
+            sb.Append(Brought(i, "    "));
+        }
         if (Inputs.Count == 0)
             sb.AppendLine("  (none)");
         sb.Append("Outputs: ");
         sb.AppendLine(Outputs.Count == 0 ? "none" : string.Join(", ", Outputs.Select((o, n) => $"{n} {o.Name}" + (o.Name != o.Type ? $" ({o.Type})" : ""))));
         return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// The inputs a dynamic combo's options bring, a line each, under the options that bring it alike:
+    /// "format.quality (when format is mp3): one of V0, 128k, 320k", and those their own options bring below.
+    /// </summary>
+    private static string Brought(ComfyInputDef combo, string indent)
+    {
+        var sb = new StringBuilder();
+        var all = combo.Options.SelectMany(o => o.Inputs.Select(i => (o.Key, i.Name, i.Required, Text: i.Describe(12) + Environment.NewLine + Brought(i, indent + "  "))));
+        foreach (var group in all.GroupBy(x => (x.Name, x.Required, x.Text)))
+        {
+            var keys = group.Select(x => x.Key).ToList();
+            var when = keys.Count == combo.Options.Count && keys.Count > 1 ? $"whichever {combo.Name}" : $"when {combo.Name} is {string.Join(" or ", keys)}";
+            sb.Append(indent).Append(group.Key.Name).Append($" ({(group.Key.Required ? "" : "optional, ")}{when}): ").Append(group.Key.Text);
+        }
+        return sb.ToString();
     }
 }
 
@@ -200,7 +252,7 @@ public sealed class ComfyNodeLibrary
         _ => "*",
     };
 
-    private static ComfyInputDef ParseInput(string name, bool required, JsonArray spec)
+    internal static ComfyInputDef ParseInput(string name, bool required, JsonArray spec)
     {
         var extra = spec.Count > 1 && spec[1] is JsonObject e ? e : new JsonObject();
         List<string>? choices = null;

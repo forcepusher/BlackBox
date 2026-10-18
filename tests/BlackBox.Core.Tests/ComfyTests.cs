@@ -410,6 +410,116 @@ public class ComfyWorkflowTests
         Assert.DoesNotContain(wf.Validate(Library), p => p.Contains("values.a"));
     }
 
+    /// <summary>ComfyUI 0.41's SaveAudioAdvanced, and its SaveVideo cut down: choices whose options bring inputs of their own.</summary>
+    private static readonly ComfyNodeLibrary OptionLibrary = ComfyNodeLibrary.Parse(JsonNode.Parse("""
+        {
+          "LoadAudio": {"input": {"required": {"audio": [["a.wav"], {"audio_upload": true}]}}, "output": ["AUDIO"], "output_name": ["AUDIO"],
+            "name": "LoadAudio", "category": "audio", "python_module": "comfy_extras.nodes_audio", "output_node": false},
+          "SaveAudioAdvanced": {"input": {"required": {"audio": ["AUDIO", {}], "filename_prefix": ["STRING", {"default": "audio/ComfyUI"}],
+            "format": ["COMFY_DYNAMICCOMBO_V3", {"tooltip": "The file format in which to save the audio.", "options": [
+              {"key": "flac", "inputs": {"required": {}}},
+              {"key": "mp3", "inputs": {"required": {"quality": ["COMBO", {"default": "V0", "options": ["V0", "128k", "320k"]}]}}},
+              {"key": "opus", "inputs": {"required": {"quality": ["COMBO", {"default": "128k", "options": ["64k", "96k", "128k", "192k", "320k"]}]}}}]}]}},
+            "output": [], "output_name": [], "name": "SaveAudioAdvanced", "category": "audio", "python_module": "comfy_extras.nodes_audio", "output_node": true},
+          "LoadVideo": {"input": {"required": {"file": [["v.mp4"], {"video_upload": true}]}}, "output": ["VIDEO"], "output_name": ["VIDEO"],
+            "name": "LoadVideo", "category": "video", "python_module": "comfy_extras.nodes_video", "output_node": false},
+          "SaveVideo": {"input": {"required": {"video": ["VIDEO", {}], "format": ["COMFY_DYNAMICCOMBO_V3", {"options": [
+              {"key": "mp4", "inputs": {"required": {"codec": ["COMFY_DYNAMICCOMBO_V3", {"options": [
+                {"key": "auto", "inputs": {"required": {}}},
+                {"key": "h264", "inputs": {"required": {}, "optional": {"encoding": ["COMFY_DYNAMICCOMBO_V3", {"options": [
+                  {"key": "auto", "inputs": {"required": {}}},
+                  {"key": "re-encode", "inputs": {"required": {"crf": ["FLOAT", {"default": 18.0, "min": 0.0, "max": 51.0}]}}}]}]}}}]}]}}},
+              {"key": "webm", "inputs": {"required": {}}}]}]}},
+            "output": [], "output_name": [], "name": "SaveVideo", "category": "video", "python_module": "comfy_extras.nodes_video", "output_node": true}
+        }
+        """)!.AsObject());
+
+    [Fact]
+    public void A_chosen_option_brings_its_inputs_and_they_get_their_defaults()
+    {
+        // ComfyUI 0.41 refused SaveAudioAdvanced as mp3 without its quality, "format.quality".
+        var wf = Load("""
+            {"1": {"class_type": "LoadAudio", "inputs": {"audio": "a.wav"}},
+             "2": {"class_type": "SaveAudioAdvanced", "inputs": {"audio": ["1", 0], "filename_prefix": "x", "format": "mp3"}}}
+            """);
+        Assert.Contains("required input \"format.quality\" is missing (one of V0, 128k, 320k)", Assert.Single(wf.Validate(OptionLibrary)));
+        Assert.Equal(["2.format.quality = \"V0\""], wf.FillAdvancedDefaults(OptionLibrary));
+        Assert.Empty(wf.Validate(OptionLibrary));
+    }
+
+    [Fact]
+    public void A_chosen_options_inputs_are_checked_against_that_option()
+    {
+        const string wf = """
+            {"1": {"class_type": "LoadAudio", "inputs": {"audio": "a.wav"}},
+             "2": {"class_type": "SaveAudioAdvanced", "inputs": {"audio": ["1", 0], "filename_prefix": "x", "format": "FORMAT", "format.quality": "V0"}}}
+            """;
+        Assert.Empty(Load(wf.Replace("FORMAT", "mp3")).Validate(OptionLibrary));
+        // V0 is an mp3 quality only.
+        Assert.Contains("\"format.quality\" is \"V0\", which isn't one of its choices", Assert.Single(Load(wf.Replace("FORMAT", "opus")).Validate(OptionLibrary)));
+        // flac takes no quality, and ComfyUI leaves it out.
+        Assert.Empty(Load(wf.Replace("FORMAT", "flac")).Validate(OptionLibrary));
+        // ComfyUI drops a format that isn't one, and the node fails without it.
+        var wav = Assert.Single(Load(wf.Replace("FORMAT", "wav")).Validate(OptionLibrary));
+        Assert.Contains("\"format\" is \"wav\", which isn't one of its choices", wav);
+        Assert.EndsWith("Its choices: flac, mp3, opus.", wav);
+    }
+
+    [Fact]
+    public void Options_chosen_in_a_chosen_option_bring_theirs_too()
+    {
+        var wf = Load("""
+            {"1": {"class_type": "LoadVideo", "inputs": {"file": "v.mp4"}},
+             "2": {"class_type": "SaveVideo", "inputs": {"video": ["1", 0], "format": "mp4"}}}
+            """);
+        // As the editor shows it: the first codec until another is chosen; the optional encoding stays out.
+        Assert.Equal(["2.format.codec = \"auto\""], wf.FillAdvancedDefaults(OptionLibrary));
+        Assert.Empty(wf.Validate(OptionLibrary));
+        Assert.Empty(wf.Set(new JsonObject { ["2.format.codec"] = "h264", ["2.format.codec.encoding"] = "re-encode" }, OptionLibrary));
+        Assert.StartsWith("2.format.codec.encoding.crf = 18", Assert.Single(wf.FillAdvancedDefaults(OptionLibrary)));
+        Assert.Empty(wf.Validate(OptionLibrary));
+        wf.Set(new JsonObject { ["2.format.codec.encoding.crf"] = 60.0 }, OptionLibrary);
+        Assert.Contains("\"format.codec.encoding.crf\" is 60, above its greatest value 51", Assert.Single(wf.Validate(OptionLibrary)));
+    }
+
+    [Fact]
+    public void A_required_choice_with_options_left_out_is_missing()
+    {
+        var wf = Load("""
+            {"1": {"class_type": "LoadAudio", "inputs": {"audio": "a.wav"}},
+             "2": {"class_type": "SaveAudioAdvanced", "inputs": {"audio": ["1", 0], "filename_prefix": "x"}}}
+            """);
+        Assert.Contains("required input \"format\" is missing (one of flac, mp3, opus", Assert.Single(wf.Validate(OptionLibrary)));
+    }
+
+    [Fact]
+    public void A_nodes_details_list_the_inputs_each_option_brings()
+    {
+        var audio = OptionLibrary.Find("SaveAudioAdvanced")!.Details().ReplaceLineEndings("\n").Split('\n');
+        Assert.Contains("  format: one of flac, mp3, opus — The file format in which to save the audio.", audio);
+        Assert.Contains("    format.quality (when format is mp3): one of V0, 128k, 320k", audio);
+        Assert.Contains("    format.quality (when format is opus): one of 64k, 96k, 128k, 192k, 320k", audio);
+        var video = OptionLibrary.Find("SaveVideo")!.Details().ReplaceLineEndings("\n").Split('\n');
+        Assert.Contains("    format.codec (when format is mp4): one of auto, h264", video);
+        Assert.Contains("      format.codec.encoding (optional, when format.codec is h264): one of auto, re-encode", video);
+        Assert.Contains(video, l => l.StartsWith("        format.codec.encoding.crf (when format.codec.encoding is re-encode): FLOAT, default 18", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ComfyUIs_complaint_about_an_options_input_names_it_in_full()
+    {
+        var errors = JsonNode.Parse("""
+            {"28": {"class_type": "SaveAudioAdvanced", "errors": [
+              {"type": "required_input_missing", "message": "Required input is missing", "details": "quality", "extra_info": {"input_name": "format.quality"}},
+              {"type": "value_not_in_list", "message": "Value not in list", "details": "quality: 'V9' not in ['V0', '128k', '320k']", "extra_info": {"input_name": "format.quality"}},
+              {"type": "required_input_missing", "message": "Required input is missing", "details": "audio", "extra_info": {"input_name": "audio"}}]}}
+            """)!.AsObject();
+        Assert.Equal([
+            "node 28 SaveAudioAdvanced: Required input is missing: format.quality",
+            "node 28 SaveAudioAdvanced: Value not in list: format.quality: quality: 'V9' not in ['V0', '128k', '320k']",
+            "node 28 SaveAudioAdvanced: Required input is missing: audio"], ComfyRunner.NodeErrors(errors));
+    }
+
     [Fact]
     public void Changes_go_in_by_node_and_input_including_ids_with_colons()
     {
