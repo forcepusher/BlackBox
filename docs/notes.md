@@ -1,5 +1,6 @@
-# BlackBox
-Local AIO AI for doing any kind of work on your desktop.
+# BlackBox notes
+How each part of BlackBox works, why it works that way, and what was measured along the way. The
+short version for people is the [README](../README.md); this is the long one, kept for development.
 
 BlackBox is a portable desktop agent: you describe a task in the chat, and an AI model looks at the
 screen, moves the mouse, types, runs shell commands and edits files step by step until the task is
