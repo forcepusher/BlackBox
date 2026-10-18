@@ -93,6 +93,10 @@ public static class SystemPrompt
         if (scratchDirectory is not null)
             sb.AppendLine($"- Files you make only to get the task done (scripts, helper files, a reminder's script) go in {scratchDirectory}, not in the user's folders, " +
                           "unless the user asked for them there. What the user asked for (a picture, a video, a document) never goes there.");
+        // Asked for "a simple snake game i can play", Nemotron left snake_game.py in the home folder
+        // and told the user to run "python snake_game.py": a terminal is where many users get stuck.
+        sb.AppendLine("- Something you make for the user to use (a game, an app, a tool) should start the way any program does, with a double click " +
+                      "(a web page, a built .exe, or a shortcut or .bat on the Desktop), unless they asked for code to run themselves; say where it is and how to start it.");
         sb.AppendLine("- To check a service on a server, use a client this PC already has (curl, a TCP probe) or run the check on the server itself, " +
                       "which has the client (psql -h, redis-cli -h); don't install a client here or write your own for a protocol.");
         sb.AppendLine("- Accept license agreements, terms and first-run prompts of the programs you use for the task: the user has allowed it.");
