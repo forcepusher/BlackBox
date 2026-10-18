@@ -6,6 +6,15 @@ screen, moves the mouse, types, runs shell commands and edits files step by step
 done. The model runs on any OpenAI-compatible server: LM Studio (on this PC or another machine on
 your network), llama.cpp's llama-server, vLLM, or a hosted API.
 
+## Getting started
+1. Put `BlackBox.exe` in a folder of your own (Documents, the Desktop, a USB stick), not in
+   Program Files: it keeps its settings and chats in a `Data` folder next to itself.
+2. Double-click it. Windows may say "Windows protected your PC", as it does for any program it
+   doesn't know yet: click **More info**, then **Run anyway**.
+3. Type what you want done and press Enter. It works at once on Kilo's free online model, with no
+   account; for your own model server see [Connecting to a model](#connecting-to-a-model).
+4. Pause/Break stops it at any time, or the Stop button.
+
 ## Portable layout
 No installer, no registry, nothing in AppData or %TEMP%. Ship just `BlackBox.exe`: on first run it
 unpacks its native UI libraries into `Data/runtime` next to itself.
@@ -30,7 +39,12 @@ longer on a screen.
 An error no code caught goes into `Data/crash.log` with its stack trace. One in the window says so
 in the chat, and the window and a run in progress go on; one that ends BlackBox is shown in the
 chat at the next start, and one that keeps it from starting in a message box. Before, such an
-error closed the window and left no trace of why.
+error closed the window and left no trace of why. Put in a folder Windows doesn't let it write
+in (Program Files), it says to move `BlackBox.exe` to a folder of your own, rather than
+"Access to the path '…\Data\runtime' is denied". A newer version started from the folder where an
+older one is still open (`BlackBox (1).exe` downloaded next to `BlackBox.exe`) unpacks its
+libraries into `Data/runtime-<id>` beside the ones the old one holds; that failed to start before,
+and the folder goes once nothing uses it.
 
 ## Documents
 `read_file` reads more than text: PDFs (their text layer, page by page), Word, Excel and PowerPoint
@@ -393,7 +407,13 @@ your own, enter its address in the bar at the top of the main window (LM Studio'
 form of the address works: `host:1234`, with or without `/v1`, or a full endpoint link such as
 `.../v1/chat/completions`. Without `http://` or `https://`, BlackBox tries both and keeps the one
 that answers. An API key, if your server needs one, goes next to the address (the eye button
-shows it). For screen control the
+shows it). A server that answers but turns the key down (none given, a wrong one, an account out
+of credits: HTTP 401, 402, 403) says so, with the server's own words and what to change, rather
+than "Can't reach the server" and its JSON: a wrong OpenRouter key showed only `Chat request
+failed (401): {"error":{"message":"User not found.","code":401}}`. Nothing answering on LM
+Studio's port 1234 adds that its server has to be switched on in its Developer tab (and Serve on
+Local Network turned on for another PC), and on Ollama's 11434 that the Ollama app has to run.
+For screen control the
 model must accept images (for example Qwen3.5+ VL models or Gemma 4 with their vision projector);
 LM Studio reports this and BlackBox follows it, as it does what OpenRouter-style lists say of each
 model (OpenRouter, Kilo), what llama-server says of its vision projector and what Ollama lists among
@@ -444,7 +464,9 @@ command-line runner took 15 seconds on Nemotron 3 Super.
 Free use is 200 requests an hour per IP address: a step is one request, a click one more (its fresh
 look), so a long task can run into it. Kilo then answers 429 without saying for how long, and
 BlackBox waits and asks again (2 s, 10 s, 30 s, 1 min, 2 min, then every 5 min) until it gets
-through or you press Stop. Which models are free changes over time: if Nemotron 3.5 Super VL is
+through or you press Stop; the line in the chat says that the free allowance is hourly and that a
+Kilo key or a server of your own has none, since five-minute waits otherwise read as BlackBox
+being stuck. Which models are free changes over time: if Nemotron 3.5 Super VL is
 gone, the strongest free one is used, as on any server. With a Kilo key (and credits) all its
 models are listed.
 
@@ -461,6 +483,16 @@ request would grow toward 800k tokens and tens of megabytes. On Auto BlackBox us
 tooltip says so); untick Auto for more. A server that refuses a request for its size in bytes
 (HTTP 413: Kilo takes 20 MB) gets the same reset as a "too long" error, and the run goes on with a
 quarter less context.
+
+LM Studio loads a model on first use with the context its settings give it, and out of the box
+that is 4k: less than BlackBox's instructions and tools alone (about 9k tokens), so every request
+of a new LM Studio user failed as too long. When BlackBox's first request has LM Studio load the
+model with less than 32k, BlackBox loads it again through LM Studio's REST API
+(`/api/v1/models/unload`, `/api/v1/models/load` with `context_length`) with 64k, or 32k when LM
+Studio's memory guardrail refuses that, and the chat says so. A model you loaded yourself is left
+as it is, whatever its size; that, or any other server running the model with less than 32k
+(Ollama and llama-server start models with 4k unless told otherwise), gets a line in the chat at
+each task saying how to give it more.
 
 The **Context** slider in the top bar shows that size while **Auto** is ticked ("not loaded" until LM Studio has loaded
 the model, which your first message does; a `?` means the server doesn't say and it is the 100k guess). Untick Auto
