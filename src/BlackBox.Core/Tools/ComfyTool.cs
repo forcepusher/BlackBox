@@ -806,11 +806,39 @@ public sealed partial class ComfyTool : Tool
             _maskNoted = true;
             after.Add(maskNote);
         }
+        if (!_viewsNoted && inputPictures.Count == 1 && (result.Files ?? []).Any(f => Path.GetExtension(f).ToLowerInvariant() is ".glb" or ".gltf" or ".obj" or ".ply" or ".stl" or ".fbx"))
+        {
+            _viewsNoted = true;
+            after.Add(ViewsNote(await hub.TemplatesAsync(api, ct).ConfigureAwait(false)));
+        }
         after.AddRange(await CardsAsync(api, hub, used, ct).ConfigureAwait(false));
         return after.Count > 0 ? result with { Text = result.Text + "\n\n" + string.Join("\n\n", after) } : result;
     }
 
-    private bool _maskNoted;
+    private bool _maskNoted, _viewsNoted;
+
+    /// <summary>
+    /// A note after a 3D model made from one picture. From the front picture of the user's
+    /// character, Hunyuan3D 2.1 left out the head and the lower legs, and Trellis2 made a relief on a
+    /// wall the background became; qwen3.8 spent an hour cutting the wall off. Its side and back views
+    /// made with the multiple-angles template, and the four given to Hunyuan3D's multi-view
+    /// template, gave a whole figure in under 13 minutes.
+    /// </summary>
+    internal static string ViewsNote(IEnumerable<ComfyTemplate> templates)
+    {
+        var list = templates.ToList();
+        var multi = list.Where(t => MultiView().IsMatch(t.Name)).Select(t => t.Name).Take(2).ToList();
+        var angles = list.FirstOrDefault(t => t.Name.Contains("angles", StringComparison.OrdinalIgnoreCase)
+                                              && t.Name.Contains("character", StringComparison.OrdinalIgnoreCase))?.Name;
+        return "Note: a 3D model made from one picture guesses the sides it can't see, and a figure drawn from the front often comes out as a relief. " +
+               "When the views show that, build it from more sides: " +
+               (multi.Count > 0 ? $"a multi-view template ({string.Join(", ", multi)}) takes " : "a multi-view 3D workflow takes ") +
+               "pictures of the front, sides and back. Crop them from a reference sheet that shows them, or make them with an edit model first" +
+               (angles is not null ? $" ({angles} turns the camera; a prompt changed to 180 degrees gives the back)." : " (rotate the camera 90 degrees left and right, and 180 for the back).");
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"multi[-_ ]?view", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex MultiView();
 
     [System.Text.RegularExpressions.GeneratedRegex(@"outpaint|uncrop|panorama|\b(extend|expand|widen|wider)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex OutpaintWords();

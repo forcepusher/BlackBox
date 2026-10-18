@@ -934,6 +934,36 @@ public class ComfyToolTests : IDisposable
         Assert.Single(_server.Uploads);
         Assert.Equal("uploaded.png", (string?)_server.Prompts[0]["prompt"]!["1"]!["inputs"]!["image"]);
     }
+
+    [Fact]
+    public async Task A_3d_model_from_one_picture_comes_with_how_to_give_it_more_sides()
+    {
+        // From the front picture of the user's character Trellis2 made a relief on a wall; four views
+        // through Hunyuan3D's multi-view template made a whole figure.
+        var picture = Path.Combine(_home, "bunny.png");
+        File.WriteAllBytes(picture, [137, 80, 78, 71]);
+        Directory.CreateDirectory(Path.Combine(_server.OutputDir, "3D"));
+        File.WriteAllText(Path.Combine(_server.OutputDir, "3D", "bunny_00001_.obj"), "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+        _server.History = _ => JsonNode.Parse("""
+            {"status": {"status_str": "success", "completed": true, "messages": []}, "outputs": {"2": {"text": ["3D/bunny_00001_.obj"]}}}
+            """)!.AsObject();
+        var wf = """{"1": {"class_type": "LoadImage", "inputs": {"image": "PATH"}}, "2": {"class_type": "SaveImage", "inputs": {"images": ["1", 0], "filename_prefix": "x"}}}"""
+            .Replace("PATH", picture.Replace("\\", "\\\\"));
+        var run = new JsonObject { ["action"] = "run", ["workflow"] = JsonNode.Parse(wf) };
+        var tool = new ComfyTool();
+        var result = await tool.ExecuteAsync(run.DeepClone().AsObject(), _ctx, CancellationToken.None);
+        Assert.Contains("a 3D model made from one picture guesses the sides it can't see", result.Text);
+        // Once in a task.
+        Assert.DoesNotContain("guesses the sides", (await tool.ExecuteAsync(run.DeepClone().AsObject(), _ctx, CancellationToken.None)).Text);
+
+        var note = ComfyTool.ViewsNote([
+            new ComfyTemplate("workflows/Mesh/3d_hunyuan3d_multiview_to_model", "", "", "", "user", []),
+            new ComfyTemplate("workflows/ImageRotate/templates-1_click_multiple_character_angles-v1.0", "", "", "", "user", []),
+            new ComfyTemplate("workflows/Image/nova-furry-v17", "", "", "", "user", [])]);
+        Assert.Contains("a multi-view template (workflows/Mesh/3d_hunyuan3d_multiview_to_model)", note);
+        Assert.Contains("(workflows/ImageRotate/templates-1_click_multiple_character_angles-v1.0 turns the camera;", note);
+        Assert.Contains("rotate the camera 90 degrees left and right", ComfyTool.ViewsNote([]));
+    }
 }
 
 public class MediaTests
