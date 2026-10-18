@@ -439,9 +439,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         SetModels(probe.Models);
         OnPropertyChanged(nameof(ModelToolTip));
         var kilo = KiloGateway.Is(server.BaseUrl);
+        if (probe.KeyRefused)
+        {
+            SetStatus(ServerState.Failed, "Key refused", probe.Message + (kilo ? "" : " Or use Kilo's free online models, which need no account."));
+            return;
+        }
         if (!probe.Reachable)
         {
-            SetStatus(ServerState.Failed, "Offline", $"{probe.Message} Check the address at the top and that the server is running" +
+            SetStatus(ServerState.Failed, "Offline", $"{probe.Message}{ServerAppHint(server.BaseUrl)} Check the address at the top and that the server is running" +
                                                      (kilo ? "." : ", or use Kilo's free online models, which need no account."));
             return;
         }
@@ -494,6 +499,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 Models.RemoveAt(i);
         _refreshingModels = false;
     }
+
+    /// <summary>
+    /// For a server that doesn't answer on LM Studio's or Ollama's own port, how to turn it on:
+    /// LM Studio installed and a model downloaded, its server still stays off until switched on.
+    /// </summary>
+    private static string ServerAppHint(string address) =>
+        Core.Llm.ServerAddress.Candidates(address).FirstOrDefault() is { } url && Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            ? uri.Port switch
+            {
+                1234 => " If it is LM Studio, its server has to be switched on: in LM Studio's Developer tab, set Status to Running" +
+                        (uri.IsLoopback ? "." : ", and turn on Serve on Local Network for other PCs to reach it."),
+                11434 => " If it is Ollama, start the Ollama app.",
+                _ => "",
+            }
+            : "";
 
     private const string NotConnectedTitle = "BlackBox isn't connected to a model yet";
 

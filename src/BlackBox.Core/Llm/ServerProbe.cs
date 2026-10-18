@@ -13,8 +13,9 @@ namespace BlackBox.Core.Llm;
 /// <param name="AutoPicked">True when <paramref name="Model"/> was chosen here, because none was configured or the server doesn't offer it.</param>
 /// <param name="ModelDetails">For a model chosen here, its size, quantization and benchmark score ("27B, 6-bit, 79.8% on Terminal-Bench 2.1") as far as known.</param>
 /// <param name="ContextHosted"><paramref name="LoadedContext"/> is the most a hosted service takes for the model, not a size a server runs it with (see <see cref="ModelFacts.Hosted"/>).</param>
+/// <param name="KeyRefused">The server answered, but turned the API key down (see <see cref="KeyRefusedException"/>); <paramref name="Message"/> says what to change.</param>
 public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, int? LoadedContext, bool? Vision, string Message, bool? Loaded = null, string? BaseUrl = null,
-    string? Model = null, bool AutoPicked = false, string? ModelDetails = null, bool ContextHosted = false);
+    string? Model = null, bool AutoPicked = false, string? ModelDetails = null, bool ContextHosted = false, bool KeyRefused = false);
 
 /// <summary>What the server says about the model in use; nulls where it doesn't say.</summary>
 /// <param name="Hosted">
@@ -77,21 +78,28 @@ public static class ServerProbe
                 models.Count == 0 ? "Connected, but the server lists no models." : "Connected.", facts.Loaded, candidates[i],
                 found.Model.Length > 0 ? found.Model : null, auto, auto ? ModelChoice.Describe(catalog.First(m => m.Id == found.Model)) : null, facts.Hosted);
         }
+        // A server that answered but turned the key down is reachable all right: that is what to fix.
+        if (attempts.FirstOrDefault(a => a.Result.KeyRefused) is { } refused)
+            return new ProbeResult(false, [], null, null, refused.Result.Error!, KeyRefused: true);
         // The plain-http error reads better than a failed TLS handshake.
         var http0 = Math.Max(0, candidates.ToList().FindIndex(c => c.StartsWith("http://", StringComparison.OrdinalIgnoreCase)));
         return new ProbeResult(false, [], null, null, "Can't reach the server: " + attempts[http0].Result.Error);
     }
 
-    private static async Task<(IReadOnlyList<JsonObject>? Models, string? Error)> ListModelsAsync(HttpClient http, string baseUrl, string apiKey, CancellationToken ct)
+    private static async Task<(IReadOnlyList<JsonObject>? Models, string? Error, bool KeyRefused)> ListModelsAsync(HttpClient http, string baseUrl, string apiKey, CancellationToken ct)
     {
         try
         {
-            return (await new OpenAiChatClient(http, baseUrl, apiKey).ListModelEntriesAsync(ct).ConfigureAwait(false), null);
+            return (await new OpenAiChatClient(http, baseUrl, apiKey).ListModelEntriesAsync(ct).ConfigureAwait(false), null, false);
+        }
+        catch (KeyRefusedException ex)
+        {
+            return (null, ex.Message, true);
         }
         // Anything from a web page where the model list should be to a timeout: not this address.
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
-            return (null, ex is OperationCanceledException ? "it did not answer in time." : ex.Message);
+            return (null, ex is OperationCanceledException ? "it did not answer in time." : ex.Message, false);
         }
     }
 

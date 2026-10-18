@@ -210,6 +210,38 @@ public class ChatClientTests
         Assert.Null((await ServerProbe.TryContextAsync(page, new BlackBox.Core.Settings.ServerSettings { BaseUrl = "http://host:80", Model = "m" }, CancellationToken.None)).Context);
     }
 
+    [Fact]
+    public async Task A_refused_api_key_is_named_as_such_not_as_an_unreachable_server()
+    {
+        // A wrong OpenRouter key lists the models (that needs none) and fails at the first message.
+        var server = new ScriptedServer();
+        server.Failures.Enqueue((System.Net.HttpStatusCode.Unauthorized, """{"error":{"message":"User not found.","code":401}}"""));
+        server.Failures.Enqueue(((System.Net.HttpStatusCode)402, """{"error":{"message":"Insufficient credits","code":402}}"""));
+        var client = new OpenAiChatClient(new HttpClient(server), "http://test", "sk-or-v1-wrong");
+        Task<ChatMessage> Send() => client.CompleteAsync([ChatMessage.User("hi")], [], new ChatRequestOptions(), null, CancellationToken.None);
+        var wrongKey = await Assert.ThrowsAsync<KeyRefusedException>(Send);
+        Assert.Equal("The server turned down the API key (it says \"User not found.\"). Check the key next to the server address at the top.", wrongKey.Message);
+        Assert.Contains("run out of credits (it says \"Insufficient credits\")", (await Assert.ThrowsAsync<KeyRefusedException>(Send)).Message);
+
+        // OpenAI wants a key for its model list too: the server answered, so it isn't "Can't reach the server".
+        var noKey = await ServerProbe.CheckAsync(new HttpClient(new KeyServer()), new BlackBox.Core.Settings.ServerSettings { BaseUrl = "api.example.com/v1" }, CancellationToken.None);
+        Assert.False(noKey.Reachable);
+        Assert.True(noKey.KeyRefused);
+        Assert.Equal("The server wants an API key (it says \"Missing bearer authentication in header\"). Enter yours next to the server address at the top.", noKey.Message);
+    }
+
+    /// <summary>Answers 401 over https, as OpenAI does without a key; plain http doesn't connect.</summary>
+    private sealed class KeyServer : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            request.RequestUri!.Scheme == "https"
+                ? Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized)
+                {
+                    Content = new StringContent("{\n  \"error\": {\n    \"message\": \"Missing bearer authentication in header\",\n    \"type\": \"invalid_request_error\"\n  }\n}"),
+                })
+                : throw new HttpRequestException("No connection could be made because the target machine actively refused it.");
+    }
+
     private sealed class HtmlServer : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>

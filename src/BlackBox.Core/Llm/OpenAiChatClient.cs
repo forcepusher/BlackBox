@@ -67,6 +67,31 @@ public sealed class RateLimitedException(string message, TimeSpan? retryAfter) :
 }
 
 /// <summary>
+/// The server turned the request down for its API key (HTTP 401, 402, 403): none given, a wrong
+/// one, or an account without credits. The message says so and what to change at the top, in
+/// place of the server's JSON: a wrong OpenRouter key got only "Chat request failed (401):
+/// {"error":{"message":"User not found.","code":401}}", and OpenAI's "Can't reach the server",
+/// though both servers had answered.
+/// </summary>
+public sealed class KeyRefusedException(string message) : LlmException(message)
+{
+    internal static KeyRefusedException? For(int status, string body, bool keySent)
+    {
+        var said = OpenAiChatClient.ErrorText(body).ReplaceLineEndings(" ").Clip(300);
+        said = said.Length > 0 ? $" (it says \"{said}\")" : "";
+        return status switch
+        {
+            401 when keySent => new($"The server turned down the API key{said}. Check the key next to the server address at the top."),
+            401 => new($"The server wants an API key{said}. Enter yours next to the server address at the top."),
+            402 => new($"The account behind the API key has run out of credits{said}. Add credits there, or pick a free model at the top."),
+            403 when keySent => new($"The server refused access{said}: the API key may be wrong, or not allowed to use this model."),
+            403 => new($"The server refused access{said}: it may want an API key, next to the server address at the top."),
+            _ => null,
+        };
+    }
+}
+
+/// <summary>
 /// The connection broke before the reply was complete (network drop, proxy idle timeout).
 /// Safe to retry: the server keeps the prompt it already processed in its cache.
 /// </summary>
@@ -164,7 +189,8 @@ public sealed partial class OpenAiChatClient
         using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
         var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
-            throw new LlmException($"GET /models failed ({(int)resp.StatusCode}): {body.Clip(500)}");
+            throw KeyRefusedException.For((int)resp.StatusCode, body, _apiKey is not null)
+                  ?? new LlmException($"GET /models failed ({(int)resp.StatusCode}): {body.Clip(500)}");
 
         JsonNode? list;
         try { list = JsonNode.Parse(body); }
@@ -249,6 +275,8 @@ public sealed partial class OpenAiChatClient
                 // dropped connection, rather than ending a long run.
                 if (status is 408 or >= 500)
                     throw new ConnectionLostException($"{_baseUrl} answered {status}: {err.Clip(300)}", false);
+                if (KeyRefusedException.For(status, err, _apiKey is not null) is { } refused)
+                    throw refused;
                 throw new LlmException($"Chat request failed ({status}): {err.Clip(1000)}");
             }
 
@@ -529,7 +557,7 @@ public sealed partial class OpenAiChatClient
     }
 
     /// <summary>The message of a JSON error ({"error":{"message":…}} or {"error":"busy"}), else the answer as it is.</summary>
-    private static string ErrorText(string err)
+    internal static string ErrorText(string err)
     {
         try
         {
