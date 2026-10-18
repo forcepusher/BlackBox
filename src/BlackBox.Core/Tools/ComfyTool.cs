@@ -945,9 +945,17 @@ public sealed partial class ComfyTool : Tool
     internal static string? MaskNote(ComfyWorkflow workflow)
     {
         var types = workflow.All().Select(n => ComfyWorkflow.ClassOf(n.Node)).ToHashSet(StringComparer.Ordinal);
-        return types.Contains("SetLatentNoiseMask") && !types.Contains("DifferentialDiffusion")
+        var repaints = workflow.All().Any(n => ComfyWorkflow.ClassOf(n.Node) == "SetLatentNoiseMask" && !Edgeless(n.Node));
+        return repaints && !types.Contains("DifferentialDiffusion")
             ? "Note: " + MaskAdvice + " Look at where the new part meets the old in the result."
             : null;
+
+        // A mask of one value all over has no edge: LTX's picture-and-sound-to-video templates keep
+        // the given sound so, a SolidMask on the audio latent, and were told about edges.
+        bool Edgeless(JsonObject setMask) =>
+            setMask["inputs"] is JsonObject inputs &&
+            (workflow.SourceOf(inputs["mask"]) is { } mask && ComfyWorkflow.ClassOf(mask) == "SolidMask" ||
+             workflow.SourceOf(inputs["samples"]) is { } samples && ComfyWorkflow.ClassOf(samples).Contains("Audio", StringComparison.Ordinal));
     }
 
     /// <summary>The LoRAs and checkpoints whose fit this task has been told about.</summary>
@@ -1113,8 +1121,8 @@ public sealed partial class ComfyTool : Tool
                 files.Add(new ComfyOutput("", Path.GetFileName(path), "", "output", path));
         // Previews ComfyUI only keeps in its temp folder are shown, but only saved files are results.
         var saved = files.Where(f => f.Type == "output").ToList();
-        var shown = saved.Count > 0 ? saved : files;
-        var paths = shown.Select(f => f.LocalPath).OfType<string>().ToList();
+        var shown = (saved.Count > 0 ? saved : files).Where(f => f.LocalPath is not null).ToList();
+        var paths = shown.Select(f => f.LocalPath!).ToList();
         if (GetString(args, "save_to") is { Length: > 0 } saveTo && paths.Count > 0)
         {
             var target = ctx.ResolvePath(saveTo);
@@ -1134,8 +1142,18 @@ public sealed partial class ComfyTool : Tool
             sb.AppendLine((job.Status == "interrupted" ? "The job was stopped" : "The job failed") + $" after {ComfyRunner.Clock(job.Elapsed)}. {job.Error}" +
                           (paths.Count > 0 ? "\nIt made these before that:" : ""));
         var preview = MediaPreview.ForFiles(paths, ctx.Media, ctx.SeesImages);
-        foreach (var line in preview.Lines)
-            sb.Append("- ").AppendLine(line);
+        var sounds = preview.Lines.Select((line, i) => i < shown.Count && shown[i].Kind is "video" or "audio" && HasSound(line) ? NameInComfy(shown[i], dirs) : null).ToList();
+        var (model, heard) = job.Status == "success" && sounds.Any(s => s is not null)
+            ? await HearAsync(hub, api, sounds, ctx, ct).ConfigureAwait(false)
+            : (null, new Dictionary<int, string>());
+        for (var i = 0; i < preview.Lines.Count; i++)
+        {
+            sb.Append("- ").AppendLine(preview.Lines[i]);
+            if (heard.TryGetValue(i, out var words))
+                sb.AppendLine(words.Trim('(', ')', '.', ' ').Equals("no words", StringComparison.OrdinalIgnoreCase)
+                    ? $"  No words are said or sung in it ({model} listened to it)."
+                    : $"  Its words, as {model} heard them: \"{words.ReplaceLineEndings(" ").Clip(1500)}\" Check them against the words asked for.");
+        }
         // Asked for a video with the sound of wind, qwen3.8 searched ComfyUI's 600 GB folder for
         // ffmpeg.exe for three minutes to put a sound on it; another run looked for it too.
         if (job.Status == "success" && ctx.Media?.Ffmpeg is { } ffmpeg && paths.Any(p => MediaPreview.KindOf(p) is "video" or "audio"))
@@ -1167,5 +1185,101 @@ public sealed partial class ComfyTool : Tool
         return job.Status == "success"
             ? new ToolResult(resultText, image, ImageCaption: image is null ? null : imageCaption, Files: paths)
             : new ToolResult(resultText, image, IsError: true, ImageCaption: image is null ? null : "What the job made before it stopped:", Files: paths);
+    }
+
+    /// <summary>Whether a file's line from <see cref="MediaPreview"/> says it has sound, and sound that isn't silent all through.</summary>
+    internal static bool HasSound(string line) =>
+        !line.Contains("silent throughout", StringComparison.Ordinal) &&
+        (line.Contains(", with sound", StringComparison.Ordinal) || line.Contains(": sound ", StringComparison.Ordinal));
+
+    /// <summary>The name LoadAudio knows a made file by ("video/clip_00001_.mp4 [output]"), or null when it isn't in the output folder.</summary>
+    internal static string? NameInComfy(ComfyOutput file, IReadOnlyDictionary<string, string> dirs)
+    {
+        if (file.Type != "output")
+            return null;
+        if (file.NodeId.Length > 0)
+            return (file.Subfolder.Length > 0 ? file.Subfolder.Replace('\\', '/') + "/" : "") + file.Filename + " [output]";
+        // A file a node named in its text: where it is in the output folder, if it is in it.
+        if (file.LocalPath is null || !dirs.TryGetValue("output", out var output))
+            return null;
+        var relative = Path.GetRelativePath(output, file.LocalPath);
+        return relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative) ? null : relative.Replace('\\', '/') + " [output]";
+    }
+
+    /// <summary>
+    /// A small Gemma 4 (E2B or E4B) ComfyUI can load to hear sound with: its Generate Text node
+    /// takes audio, and LTX-2.5's templates bring gemma4_e2b along. Null when there is none.
+    /// </summary>
+    internal static string? HearingModel(ComfyNodeLibrary library)
+    {
+        if (library.Find("TextGenerate")?.Input("audio") is null || library.Find("LoadAudio") is null || library.Find("PreviewAny") is null)
+            return null;
+        return (library.Find("CLIPLoader")?.Input("clip_name")?.Choices ?? [])
+            .Where(c => HearingModelName().IsMatch(c))
+            .OrderBy(c => c.Contains("e2b", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .FirstOrDefault();
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"gemma[-_ ]?4[^/\\]*?e[24]b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex HearingModelName();
+
+    internal const string HearingPrompt =
+        "Write down word for word what is said or sung in this audio. Reply with those words only. If no words are said or sung, reply exactly: (no words)";
+
+    /// <summary>The workflow in which <paramref name="model"/> writes down what is said or sung in the sound LoadAudio knows by <paramref name="name"/>.</summary>
+    internal static ComfyWorkflow HearingWorkflow(ComfyNodeLibrary library, string model, string name)
+    {
+        var types = library.Find("CLIPLoader")?.Input("type")?.Choices ?? [];
+        return ComfyWorkflow.FromApi(new JsonObject
+        {
+            ["1"] = new JsonObject { ["class_type"] = "LoadAudio", ["inputs"] = new JsonObject { ["audio"] = name } },
+            // The type doesn't matter to a Gemma 4 (ComfyUI knows it by its weights); LTX's templates load it as ltxv.
+            ["2"] = new JsonObject { ["class_type"] = "CLIPLoader", ["inputs"] = new JsonObject { ["clip_name"] = model, ["type"] = types.Contains("ltxv") || types.Count == 0 ? "ltxv" : types[0] } },
+            ["3"] = new JsonObject
+            {
+                ["class_type"] = "TextGenerate",
+                ["inputs"] = new JsonObject
+                {
+                    ["clip"] = new JsonArray("2", 0), ["audio"] = new JsonArray("1", 0), ["prompt"] = HearingPrompt, ["max_length"] = 300, ["sampling_mode"] = "off",
+                },
+            },
+            ["4"] = new JsonObject { ["class_type"] = "PreviewAny", ["inputs"] = new JsonObject { ["source"] = new JsonArray("3", 0) } },
+        });
+    }
+
+    /// <summary>
+    /// What is said or sung in each made file that has sound, by its place in <paramref name="names"/>
+    /// (null for those not to hear), as a small Gemma 4 that ComfyUI has hears it; nothing when none
+    /// can. Asked for a fisherman saying one line, LTX-2.5 had him read out half the prompt after
+    /// it, and the model, which saw frames and loudness only, called the video right.
+    /// </summary>
+    private static async Task<(string? Model, Dictionary<int, string> Heard)> HearAsync(ComfyHub hub, ComfyApi api, IReadOnlyList<string?> names, ToolContext ctx, CancellationToken ct)
+    {
+        var heard = new Dictionary<int, string>();
+        var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
+        if (HearingModel(library) is not { } model)
+            return (null, heard);
+        for (var i = 0; i < names.Count && heard.Count < 4; i++)
+        {
+            if (names[i] is not { } name)
+                continue;
+            var workflow = HearingWorkflow(library, model, name);
+            workflow.FillAdvancedDefaults(library);
+            // A Generate Text node of another make than this one takes: no hearing then.
+            if (workflow.Validate(library).Count > 0)
+                break;
+            ctx.Progress?.Invoke($"Listening to {Path.GetFileName(name[..^" [output]".Length])}…");
+            var clientId = "blackbox-" + Guid.NewGuid().ToString("N")[..12];
+            var (promptId, _) = await ComfyRunner.QueueAsync(api, workflow, clientId, ct).ConfigureAwait(false);
+            if (promptId is null)
+                break;
+            var job = await ComfyRunner.WaitAsync(api, promptId, clientId, new Dictionary<string, string>(), TimeSpan.FromMinutes(3), null, ctx.UserMessage, ct).ConfigureAwait(false);
+            // Still going (a queue of the user's ahead of it, or the user wrote): the result goes without it.
+            if (job.Status != "success")
+                break;
+            if (job.Texts.FirstOrDefault(t => t.Trim().Length > 0) is { } words)
+                heard[i] = words.Trim();
+        }
+        return (model, heard);
     }
 }

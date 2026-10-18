@@ -410,6 +410,167 @@ public class ComfyWorkflowTests
         Assert.DoesNotContain(wf.Validate(Library), p => p.Contains("values.a"));
     }
 
+    /// <summary>ComfyUI 0.41's SaveAudioAdvanced, and its SaveVideo cut down: choices whose options bring inputs of their own.</summary>
+    private static readonly ComfyNodeLibrary OptionLibrary = ComfyNodeLibrary.Parse(JsonNode.Parse("""
+        {
+          "LoadAudio": {"input": {"required": {"audio": [["a.wav"], {"audio_upload": true}]}}, "output": ["AUDIO"], "output_name": ["AUDIO"],
+            "name": "LoadAudio", "category": "audio", "python_module": "comfy_extras.nodes_audio", "output_node": false},
+          "SaveAudioAdvanced": {"input": {"required": {"audio": ["AUDIO", {}], "filename_prefix": ["STRING", {"default": "audio/ComfyUI"}],
+            "format": ["COMFY_DYNAMICCOMBO_V3", {"tooltip": "The file format in which to save the audio.", "options": [
+              {"key": "flac", "inputs": {"required": {}}},
+              {"key": "mp3", "inputs": {"required": {"quality": ["COMBO", {"default": "V0", "options": ["V0", "128k", "320k"]}]}}},
+              {"key": "opus", "inputs": {"required": {"quality": ["COMBO", {"default": "128k", "options": ["64k", "96k", "128k", "192k", "320k"]}]}}}]}]}},
+            "output": [], "output_name": [], "name": "SaveAudioAdvanced", "category": "audio", "python_module": "comfy_extras.nodes_audio", "output_node": true},
+          "LoadVideo": {"input": {"required": {"file": [["v.mp4"], {"video_upload": true}]}}, "output": ["VIDEO"], "output_name": ["VIDEO"],
+            "name": "LoadVideo", "category": "video", "python_module": "comfy_extras.nodes_video", "output_node": false},
+          "SaveVideo": {"input": {"required": {"video": ["VIDEO", {}], "format": ["COMFY_DYNAMICCOMBO_V3", {"options": [
+              {"key": "mp4", "inputs": {"required": {"codec": ["COMFY_DYNAMICCOMBO_V3", {"options": [
+                {"key": "auto", "inputs": {"required": {}}},
+                {"key": "h264", "inputs": {"required": {}, "optional": {"encoding": ["COMFY_DYNAMICCOMBO_V3", {"options": [
+                  {"key": "auto", "inputs": {"required": {}}},
+                  {"key": "re-encode", "inputs": {"required": {"crf": ["FLOAT", {"default": 18.0, "min": 0.0, "max": 51.0}]}}}]}]}}}]}]}}},
+              {"key": "webm", "inputs": {"required": {}}}]}]}},
+            "output": [], "output_name": [], "name": "SaveVideo", "category": "video", "python_module": "comfy_extras.nodes_video", "output_node": true}
+        }
+        """)!.AsObject());
+
+    [Fact]
+    public void A_chosen_option_brings_its_inputs_and_they_get_their_defaults()
+    {
+        // ComfyUI 0.41 refused SaveAudioAdvanced as mp3 without its quality, "format.quality".
+        var wf = Load("""
+            {"1": {"class_type": "LoadAudio", "inputs": {"audio": "a.wav"}},
+             "2": {"class_type": "SaveAudioAdvanced", "inputs": {"audio": ["1", 0], "filename_prefix": "x", "format": "mp3"}}}
+            """);
+        Assert.Contains("required input \"format.quality\" is missing (one of V0, 128k, 320k)", Assert.Single(wf.Validate(OptionLibrary)));
+        Assert.Equal(["2.format.quality = \"V0\""], wf.FillAdvancedDefaults(OptionLibrary));
+        Assert.Empty(wf.Validate(OptionLibrary));
+    }
+
+    [Fact]
+    public void A_chosen_options_inputs_are_checked_against_that_option()
+    {
+        const string wf = """
+            {"1": {"class_type": "LoadAudio", "inputs": {"audio": "a.wav"}},
+             "2": {"class_type": "SaveAudioAdvanced", "inputs": {"audio": ["1", 0], "filename_prefix": "x", "format": "FORMAT", "format.quality": "V0"}}}
+            """;
+        Assert.Empty(Load(wf.Replace("FORMAT", "mp3")).Validate(OptionLibrary));
+        // V0 is an mp3 quality only.
+        Assert.Contains("\"format.quality\" is \"V0\", which isn't one of its choices", Assert.Single(Load(wf.Replace("FORMAT", "opus")).Validate(OptionLibrary)));
+        // flac takes no quality, and ComfyUI leaves it out.
+        Assert.Empty(Load(wf.Replace("FORMAT", "flac")).Validate(OptionLibrary));
+        // ComfyUI drops a format that isn't one, and the node fails without it.
+        var wav = Assert.Single(Load(wf.Replace("FORMAT", "wav")).Validate(OptionLibrary));
+        Assert.Contains("\"format\" is \"wav\", which isn't one of its choices", wav);
+        Assert.EndsWith("Its choices: flac, mp3, opus.", wav);
+    }
+
+    [Fact]
+    public void Options_chosen_in_a_chosen_option_bring_theirs_too()
+    {
+        var wf = Load("""
+            {"1": {"class_type": "LoadVideo", "inputs": {"file": "v.mp4"}},
+             "2": {"class_type": "SaveVideo", "inputs": {"video": ["1", 0], "format": "mp4"}}}
+            """);
+        // As the editor shows it: the first codec until another is chosen; the optional encoding stays out.
+        Assert.Equal(["2.format.codec = \"auto\""], wf.FillAdvancedDefaults(OptionLibrary));
+        Assert.Empty(wf.Validate(OptionLibrary));
+        Assert.Empty(wf.Set(new JsonObject { ["2.format.codec"] = "h264", ["2.format.codec.encoding"] = "re-encode" }, OptionLibrary));
+        Assert.StartsWith("2.format.codec.encoding.crf = 18", Assert.Single(wf.FillAdvancedDefaults(OptionLibrary)));
+        Assert.Empty(wf.Validate(OptionLibrary));
+        wf.Set(new JsonObject { ["2.format.codec.encoding.crf"] = 60 }, OptionLibrary);
+        Assert.Contains("\"format.codec.encoding.crf\" is 60, above its greatest value 51", Assert.Single(wf.Validate(OptionLibrary)));
+    }
+
+    [Fact]
+    public void A_required_choice_with_options_left_out_is_missing()
+    {
+        var wf = Load("""
+            {"1": {"class_type": "LoadAudio", "inputs": {"audio": "a.wav"}},
+             "2": {"class_type": "SaveAudioAdvanced", "inputs": {"audio": ["1", 0], "filename_prefix": "x"}}}
+            """);
+        Assert.Contains("required input \"format\" is missing (one of flac, mp3, opus", Assert.Single(wf.Validate(OptionLibrary)));
+    }
+
+    [Fact]
+    public void A_nodes_details_list_the_inputs_each_option_brings()
+    {
+        var audio = OptionLibrary.Find("SaveAudioAdvanced")!.Details().ReplaceLineEndings("\n").Split('\n');
+        Assert.Contains("  format: one of flac, mp3, opus — The file format in which to save the audio.", audio);
+        Assert.Contains("    format.quality (when format is mp3): one of V0, 128k, 320k", audio);
+        Assert.Contains("    format.quality (when format is opus): one of 64k, 96k, 128k, 192k, 320k", audio);
+        var video = OptionLibrary.Find("SaveVideo")!.Details().ReplaceLineEndings("\n").Split('\n');
+        Assert.Contains("    format.codec (when format is mp4): one of auto, h264", video);
+        Assert.Contains("      format.codec.encoding (optional, when format.codec is h264): one of auto, re-encode", video);
+        Assert.Contains(video, l => l.StartsWith("        format.codec.encoding.crf (when format.codec.encoding is re-encode): FLOAT, default 18", StringComparison.Ordinal));
+    }
+
+    /// <summary>ComfyUI 0.41's nodes for hearing a sound with a Gemma 4, cut down.</summary>
+    private static ComfyNodeLibrary HearingLibrary(string models, bool audio = true) => ComfyNodeLibrary.Parse(JsonNode.Parse("""
+        {
+          "LoadAudio": {"input": {"required": {"audio": [["a.wav"], {"audio_upload": true}]}}, "output": ["AUDIO"], "output_name": ["AUDIO"],
+            "name": "LoadAudio", "category": "audio", "python_module": "comfy_extras.nodes_audio", "output_node": false},
+          "CLIPLoader": {"input": {"required": {"clip_name": [[MODELS], {}], "type": [["stable_diffusion", "wan", "ltxv"], {}]}, "optional": {"device": [["default", "cpu"], {"advanced": true}]}},
+            "output": ["CLIP"], "output_name": ["CLIP"], "name": "CLIPLoader", "category": "loaders", "python_module": "nodes", "output_node": false},
+          "TextGenerate": {"input": {"required": {"clip": ["CLIP", {}], "prompt": ["STRING", {"multiline": true, "default": ""}], "max_length": ["INT", {"default": 512, "min": 1, "max": 32768}],
+              "sampling_mode": ["COMFY_DYNAMICCOMBO_V3", {"options": [{"key": "on", "inputs": {"required": {"temperature": ["FLOAT", {"default": 0.7, "min": 0.01, "max": 2.0}]}}}, {"key": "off", "inputs": {"required": {}}}]}]},
+              "optional": {"AUDIO": ["AUDIO", {}], "image": ["IMAGE", {}]}},
+            "output": ["STRING"], "output_name": ["generated_text"], "name": "TextGenerate", "category": "text", "python_module": "comfy_extras.nodes_textgen", "output_node": false},
+          "PreviewAny": {"input": {"required": {"source": ["*", {}]}}, "output": ["STRING"], "output_name": ["STRING"], "name": "PreviewAny", "category": "utilities", "python_module": "comfy_extras.nodes_preview_any", "output_node": true}
+        }
+        """.Replace("MODELS", models).Replace("\"AUDIO\": [\"AUDIO\"", audio ? "\"audio\": [\"AUDIO\"" : "\"sound_unused\": [\"AUDIO\""))!.AsObject());
+
+    [Fact]
+    public void A_small_gemma_4_that_comfyui_has_hears_the_sound_of_what_a_job_made()
+    {
+        // LTX-2.5's templates bring gemma4_e2b; its 12B text encoder with the LTX projection is no use for it.
+        var library = HearingLibrary("\"gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors\", \"gemma-4-E4B-it.safetensors\", \"gemma4_e2b_it_int8_convrot.safetensors\", \"t5xxl_fp16.safetensors\"");
+        var model = ComfyTool.HearingModel(library);
+        Assert.Equal("gemma4_e2b_it_int8_convrot.safetensors", model);
+        Assert.Equal("gemma-4-E4B-it.safetensors", ComfyTool.HearingModel(HearingLibrary("\"gemma-4-E4B-it.safetensors\", \"t5xxl_fp16.safetensors\"")));
+        Assert.Null(ComfyTool.HearingModel(HearingLibrary("\"gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors\", \"t5xxl_fp16.safetensors\"")));
+        Assert.Null(ComfyTool.HearingModel(HearingLibrary("\"gemma4_e2b_it_int8_convrot.safetensors\"", audio: false)));
+
+        var wf = ComfyTool.HearingWorkflow(library, model!, "video/fisherman_00001_.mp4 [output]");
+        Assert.Empty(wf.FillAdvancedDefaults(library));
+        Assert.Empty(wf.Validate(library));
+        Assert.Equal("ltxv", (string?)wf.Nodes["2"]!["inputs"]!["type"]);
+        Assert.Equal("video/fisherman_00001_.mp4 [output]", (string?)wf.Nodes["1"]!["inputs"]!["audio"]);
+    }
+
+    [Fact]
+    public void Only_files_with_sound_in_the_output_folder_are_heard()
+    {
+        // Lines as MediaPreview writes them.
+        Assert.True(ComfyTool.HasSound(@"C:\out\video\wave_00001_.mp4: video 704x1280, 121 frames at 24 fps (5.0 s), with sound (48 kHz stereo), 1.6 MB, its sound peak -4.8 dBFS, average -27 dBFS"));
+        Assert.True(ComfyTool.HasSound(@"C:\out\Anton_greeting_00001.flac: sound 1.9 s, 48 kHz mono, peak -3.3 dBFS, average -21 dBFS, 93 KB"));
+        Assert.False(ComfyTool.HasSound(@"C:\out\video\fox_00001_.mp4: video 832x480, 81 frames at 16 fps (5.1 s), no sound, 900 KB"));
+        Assert.False(ComfyTool.HasSound(@"C:\out\quiet_00001_.flac: sound 3.0 s, 44.1 kHz stereo, silent throughout, 20 KB"));
+
+        var dirs = new Dictionary<string, string> { ["output"] = @"C:\ComfyUI\output" };
+        Assert.Equal("video/wave_00001_.mp4 [output]", ComfyTool.NameInComfy(new ComfyOutput("75", "wave_00001_.mp4", "video", "output", @"C:\ComfyUI\output\video\wave_00001_.mp4"), dirs));
+        Assert.Equal("song.mp3 [output]", ComfyTool.NameInComfy(new ComfyOutput("9", "song.mp3", "", "output", @"C:\ComfyUI\output\song.mp3"), dirs));
+        Assert.Null(ComfyTool.NameInComfy(new ComfyOutput("9", "preview.flac", "", "temp", @"C:\ComfyUI\temp\preview.flac"), dirs));
+        // Files a node named in its text: by where they are.
+        Assert.Equal("sfx/rain.wav [output]", ComfyTool.NameInComfy(new ComfyOutput("", "rain.wav", "", "output", @"C:\ComfyUI\output\sfx\rain.wav"), dirs));
+        Assert.Null(ComfyTool.NameInComfy(new ComfyOutput("", "rain.wav", "", "output", @"D:\elsewhere\rain.wav"), dirs));
+    }
+
+    [Fact]
+    public void ComfyUIs_complaint_about_an_options_input_names_it_in_full()
+    {
+        var errors = JsonNode.Parse("""
+            {"28": {"class_type": "SaveAudioAdvanced", "errors": [
+              {"type": "required_input_missing", "message": "Required input is missing", "details": "quality", "extra_info": {"input_name": "format.quality"}},
+              {"type": "value_not_in_list", "message": "Value not in list", "details": "quality: 'V9' not in ['V0', '128k', '320k']", "extra_info": {"input_name": "format.quality"}},
+              {"type": "required_input_missing", "message": "Required input is missing", "details": "audio", "extra_info": {"input_name": "audio"}}]}}
+            """)!.AsObject();
+        Assert.Equal([
+            "node 28 SaveAudioAdvanced: Required input is missing: format.quality",
+            "node 28 SaveAudioAdvanced: Value not in list: format.quality: quality: 'V9' not in ['V0', '128k', '320k']",
+            "node 28 SaveAudioAdvanced: Required input is missing: audio"], ComfyRunner.NodeErrors(errors));
+    }
+
     [Fact]
     public void Changes_go_in_by_node_and_input_including_ids_with_colons()
     {
@@ -784,6 +945,13 @@ public class ComfyToolTests : IDisposable
         masked.Nodes["12"] = new JsonObject { ["class_type"] = "DifferentialDiffusion", ["inputs"] = new JsonObject { ["model"] = new JsonArray("1", 0) } };
         Assert.Null(ComfyTool.MaskNote(masked));
         Assert.Null(ComfyTool.MaskNote(Load(FakeComfyServer.ApiWorkflow)));
+        // LTX's picture-and-sound-to-video keeps the given sound through a mask of one value: no edge to tell of.
+        Assert.Null(ComfyTool.MaskNote(ComfyWorkflow.FromApi(ComfyWorkflow.ParseText("""
+            {"1": {"class_type": "LoadAudio", "inputs": {"audio": "voice.flac"}},
+             "2": {"class_type": "LTXVAudioVAEEncode", "inputs": {"audio": ["1", 0]}},
+             "3": {"class_type": "SolidMask", "inputs": {"value": 0, "width": 1024, "height": 1024}},
+             "4": {"class_type": "SetLatentNoiseMask", "inputs": {"samples": ["2", 0], "mask": ["3", 0]}}}
+            """))));
 
         // Asked about the nodes before the first run, it hears it then.
         var nodes = await Call("""{"action": "nodes", "names": ["ImagePadForOutpaint", "KSampler"]}""");

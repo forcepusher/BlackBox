@@ -84,6 +84,9 @@ public sealed class ComfyWorkflow
     private static int? LinkOutput(JsonArray a) => a[1] is JsonValue v && v.TryGetValue<int>(out var i) ? i
         : a[1] is JsonValue s && s.TryGetValue<string>(out var str) && int.TryParse(str, out var parsed) ? parsed : null;
 
+    /// <summary>The node a link comes from; null when the value isn't a link to a node in the workflow.</summary>
+    public JsonObject? SourceOf(JsonNode? value) => IsLink(value) ? Nodes[LinkSource((JsonArray)value!)!] as JsonObject : null;
+
     public IEnumerable<(string Id, JsonObject Node)> All() =>
         Nodes.Where(kv => kv.Value is JsonObject).Select(kv => (kv.Key, (JsonObject)kv.Value!));
 
@@ -171,6 +174,27 @@ public sealed class ComfyWorkflow
     }
 
     /// <summary>
+    /// The inputs the options chosen in a node's dynamic combos bring (format.quality when
+    /// SaveAudioAdvanced's format is mp3), and those of options chosen in them (SaveVideo's
+    /// format.codec.encoding). Read as it goes, so a combo set along the way counts.
+    /// </summary>
+    private static IEnumerable<ComfyInputDef> ChosenOptionInputs(ComfyNodeDef def, JsonObject inputs)
+    {
+        var combos = new Queue<ComfyInputDef>(def.Inputs.Where(i => i.Options.Count > 0));
+        while (combos.TryDequeue(out var combo))
+        {
+            if (inputs[combo.Name] is not JsonValue v || !v.TryGetValue<string>(out var key))
+                continue;
+            foreach (var brought in combo.Options.FirstOrDefault(o => o.Key == key).Inputs ?? [])
+            {
+                yield return brought;
+                if (brought.Options.Count > 0)
+                    combos.Enqueue(brought);
+            }
+        }
+    }
+
+    /// <summary>
     /// Checks the workflow against the server's node types before it is queued, so the model hears
     /// about every wrong name at once and with the right one next to it, rather than ComfyUI's
     /// first complaint only (it stops at the first unknown node, and ignores inputs it doesn't know).
@@ -202,9 +226,10 @@ public sealed class ComfyWorkflow
             }
             hasOutput |= def.IsOutput;
             var inputs = node["inputs"] as JsonObject ?? [];
+            var brought = ChosenOptionInputs(def, inputs).DistinctBy(i => i.Name).ToDictionary(i => i.Name);
             foreach (var (name, value) in inputs)
             {
-                var input = def.Input(name);
+                var input = def.Input(name) ?? brought.GetValueOrDefault(name);
                 if (input is null)
                 {
                     // ComfyUI ignores inputs a node doesn't have (and the editor adds some of its
@@ -240,6 +265,18 @@ public sealed class ComfyWorkflow
                         problems.Add($"{where}: input \"{name}\" needs {input.Type}, but output {output} of node {from} {sourceDef.Name} is {got}.");
                     continue;
                 }
+                // A choice that brings inputs of its own: ComfyUI drops the input, and the node fails, when it isn't one.
+                if (input.Options.Count > 0)
+                {
+                    var key = value is JsonValue kv && kv.TryGetValue<string>(out var k) ? k : value?.ToJsonString() ?? "null";
+                    if (input.Options.All(o => o.Key != key))
+                    {
+                        var near = ComfyNodeLibrary.Closest(key, input.Options.Select(o => o.Key), 3);
+                        problems.Add($"{where}: \"{name}\" is \"{key.Clip(120)}\", which isn't one of its choices" +
+                                     (near.Count > 0 ? $"; closest: {string.Join(", ", near)}." : ".") + $" Its choices: {string.Join(", ", input.Options.Select(o => o.Key))}.");
+                    }
+                    continue;
+                }
                 if (input.IsDynamic)
                     continue;
                 if (!input.IsWidget)
@@ -253,7 +290,7 @@ public sealed class ComfyWorkflow
                 if (CheckValue(input, value, uploaded?.Contains(id + "." + name) == true) is { } bad)
                     problems.Add($"{where}: {bad}");
             }
-            foreach (var missing in def.Inputs.Where(i => i.Required && !i.IsDynamic && inputs[i.Name] is null && !inputs.ContainsKey(i.Name)))
+            foreach (var missing in def.Inputs.Concat(brought.Values).Where(i => i.Required && (!i.IsDynamic || i.Options.Count > 0) && inputs[i.Name] is null && !inputs.ContainsKey(i.Name)))
                 problems.Add($"{where}: required input \"{missing.Name}\" is missing ({missing.Describe(12)}).");
         }
         if (!hasOutput && problems.Count == 0)
@@ -280,9 +317,25 @@ public sealed class ComfyWorkflow
                 inputs[input.Name] = input.Extra["default"]!.DeepClone();
                 filled.Add($"{id}.{input.Name} = {input.Extra["default"]!.ToJsonString()}");
             }
+            // The inputs a chosen option brings, as the editor shows them once it is chosen: format mp3
+            // brings format.quality, V0 unless set. ComfyUI 0.41 made SaveAudioAdvanced so, and a
+            // workflow that saved as mp3 the old way was refused for the missing quality.
+            foreach (var input in ChosenOptionInputs(def, inputs))
+            {
+                if (!input.Required || inputs.ContainsKey(input.Name) || DefaultOf(input) is not { } value)
+                    continue;
+                inputs[input.Name] = value;
+                filled.Add($"{id}.{input.Name} = {value.ToJsonString()}");
+            }
         }
         return filled;
     }
+
+    /// <summary>The value the editor gives a typed-in input until it is set: its default, else its first choice; null for a link.</summary>
+    private static JsonNode? DefaultOf(ComfyInputDef input) =>
+        input.Extra["default"]?.DeepClone() ??
+        (input.Choices is { Count: > 0 } choices && input.IsWidget ? JsonValue.Create(choices[0]) :
+         input.Options.Count > 0 ? JsonValue.Create(input.Options[0].Key) : null);
 
     /// <summary>Inputs the editor adds to the workflow it sends, which no node declares.</summary>
     private static readonly HashSet<string> EditorInputs = ["audioUI", "videoUI", "image", "upload", "previewMode", "preview_text", "preview_markdown", "camera_info"];
@@ -344,6 +397,9 @@ public sealed class ComfyWorkflow
             {
                 // ComfyUI converts what it can: true is 1, "20" is 20.
                 double? d = value is JsonValue v && v.TryGetValue<double>(out var x) ? x
+                    // A number put in from code (300, an int) rather than read from JSON.
+                    : value is JsonValue n && n.GetValueKind() == JsonValueKind.Number &&
+                      double.TryParse(n.ToJsonString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var number) ? number
                     : value is JsonValue b && b.GetValueKind() is JsonValueKind.True or JsonValueKind.False ? (b.GetValueKind() == JsonValueKind.True ? 1 : 0)
                     : value is JsonValue sv && sv.TryGetValue<string>(out var str) && double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
                 if (d is null)
