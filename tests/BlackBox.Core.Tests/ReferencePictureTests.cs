@@ -64,7 +64,7 @@ public class ReferencePictureTests : IDisposable
     public void How_much_of_a_picture_is_transparent_is_said_with_it()
     {
         var blank = Png("knight_walk.png", 64, 48, SKColors.Transparent);
-        Assert.Contains("a 64x48 picture, fully transparent: nothing in it shows (shown on white)", Picture.Read(blank).Text);
+        Assert.Contains("a 64x48 picture, shown at 64x64, fully transparent: nothing in it shows (shown on white)", Picture.Read(blank).Text);
         Assert.Contains("fully transparent: nothing in it shows", MediaPreview.Look(blank, null, makeTile: true).Line);
 
         var sprite = Path.Combine(_dir, "knight.png");

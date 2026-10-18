@@ -81,7 +81,7 @@ public sealed partial class ComfyTool : Tool
     }
 
     // Whether this task uses the server, and has run jobs on it.
-    private bool _usesServer, _ranJobs;
+    private bool _usesServer, _ranJobs, _pythonNoted;
 
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
@@ -117,6 +117,15 @@ public sealed partial class ComfyTool : Tool
                     return await DownloadAsync(args, hub, ctx, ct).ConfigureAwait(false);
             }
             var api = await hub.ConnectAsync(GetString(args, "folder"), notes, ctx.Progress, ct).ConfigureAwait(false);
+            // Once a task, with its first call that reaches ComfyUI, not only in the status: a run that
+            // never asked for it pip-installed Pillow into the PC's own Python to draw a sprite sheet.
+            if (!_pythonNoted)
+            {
+                _pythonNoted = true; // the status says it itself
+                if (action != "status" && await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) is { } dirs && dirs.TryGetValue("code", out var code) &&
+                    PythonNote(code) is { } python)
+                    notes.Add(python);
+            }
             var result = action switch
             {
                 "status" => await StatusAsync(args, hub, api, ctx, ct).ConfigureAwait(false),
@@ -340,23 +349,8 @@ public sealed partial class ComfyTool : Tool
             if (dirs.TryGetValue("code", out var code))
             {
                 sb.AppendLine($"Its folder: {code} (custom nodes in {Path.Combine(code, "custom_nodes")}).");
-                // Cropping a view out of a reference sheet took a guess at python\python.exe and a search
-                // of the disk first; ComfyUI can't run without Pillow and numpy, so its Python has them.
-                // And to cut a character out for a 3D model and look into the model it made, qwen3.8
-                // pip-installed rembg, onnxruntime and trimesh into the PC's own Python. ComfyUI's had
-                // trimesh, and rembg (Trellis2 needs it) without onnxruntime, which rembg can't run
-                // without ("No onnxruntime backend found", as a later run found).
-                if (ComfyInstall.FromFolder(code) is { Kind: ComfyInstallKind.Portable or ComfyInstallKind.Venv } own && File.Exists(own.Program))
-                {
-                    bool Has(string package) => own.SitePackages is { } site && Directory.Exists(Path.Combine(site, package));
-                    var has = new List<string> { "Pillow", "numpy" };
-                    if (Has("rembg"))
-                        has.Add(Has("onnxruntime") ? "rembg (cuts out a background)"
-                            : "rembg (cuts out a background once onnxruntime is installed into this Python; Trellis2's remove_background needs it too)");
-                    has.AddRange(new[] { ("cv2", "OpenCV"), ("trimesh", "trimesh (3D models)") }.Where(p => Has(p.Item1)).Select(p => p.Item2));
-                    sb.AppendLine($"Its Python has {string.Join(", ", has.SkipLast(1))} and {has[^1]}, " +
-                                  $"for working on the pictures and models it makes: {own.Program}.");
-                }
+                if (PythonNote(code) is { } python)
+                    sb.AppendLine(python);
             }
             if (dirs.TryGetValue("output", out var output)) sb.AppendLine($"Output folder: {output}.");
         }
@@ -364,6 +358,28 @@ public sealed partial class ComfyTool : Tool
         if (log.Length > 0)
             sb.AppendLine("The end of its log:").AppendLine(log);
         return new ToolResult(sb.ToString().TrimEnd());
+    }
+
+    /// <summary>
+    /// What ComfyUI's own Python has for working on pictures and models, and where it is; null for the
+    /// Desktop app and a ComfyUI run by the PC's own Python. Cropping a view out of a reference sheet
+    /// took a guess at python\python.exe and a search of the disk first; ComfyUI can't run without
+    /// Pillow and numpy, so its Python has them. To cut a character out and look into a 3D model,
+    /// qwen3.8 pip-installed rembg, onnxruntime and trimesh into the PC's own Python, and a walk cycle
+    /// run that never asked for the status, Pillow. ComfyUI's had trimesh, and rembg (Trellis2 needs
+    /// it) without onnxruntime, which rembg can't run without.
+    /// </summary>
+    internal static string? PythonNote(string code)
+    {
+        if (ComfyInstall.FromFolder(code) is not { Kind: ComfyInstallKind.Portable or ComfyInstallKind.Venv } own || !File.Exists(own.Program))
+            return null;
+        bool Has(string package) => own.SitePackages is { } site && Directory.Exists(Path.Combine(site, package));
+        var has = new List<string> { "Pillow", "numpy" };
+        if (Has("rembg"))
+            has.Add(Has("onnxruntime") ? "rembg (cuts out a background)"
+                : "rembg (cuts out a background once onnxruntime is installed into this Python; Trellis2's remove_background needs it too)");
+        has.AddRange(new[] { ("cv2", "OpenCV"), ("trimesh", "trimesh (3D models)") }.Where(p => Has(p.Item1)).Select(p => p.Item2));
+        return $"Its Python has {string.Join(", ", has.SkipLast(1))} and {has[^1]}, for working on the pictures and models it makes: {own.Program}.";
     }
 
     private static async Task<string> LogAsync(ComfyApi api, CancellationToken ct)

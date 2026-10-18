@@ -83,7 +83,7 @@ internal static class Picture
             return ToolResult.Error($"{path} could not be read as a picture (damaged, or not what its name says).");
         var size = picture.ShownWidth == picture.Width && picture.ShownHeight == picture.Height ? "" : $", shown at {picture.ShownWidth}x{picture.ShownHeight}";
         var clear = picture.Transparency is { } t ? $", {t} (shown on white)" : "";
-        return new ToolResult($"{path}: a {picture.Width}x{picture.Height} picture{clear}{size}{GridNote(picture, grid)}.", picture.Jpeg,
+        return new ToolResult($"{path}: a {picture.Width}x{picture.Height} picture{size}{clear}{GridNote(picture, grid)}.", picture.Jpeg,
             ImageCaption: $"The picture {Path.GetFileName(path)}:");
     }
 

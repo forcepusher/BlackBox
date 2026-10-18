@@ -837,6 +837,14 @@ public class ComfyToolTests : IDisposable
         Directory.CreateDirectory(Path.Combine(site, "onnxruntime"));
         result = await Call("""{"action": "status"}""");
         Assert.Contains("Its Python has Pillow, numpy, rembg (cuts out a background) and trimesh (3D models), for working", result.Text);
+
+        // A task that never asks for the status hears it with its first call, once: a walk cycle run
+        // pip-installed Pillow into the PC's own Python.
+        var tool = new ComfyTool();
+        var first = await tool.ExecuteAsync(JsonNode.Parse("""{"action": "templates", "search": "fox"}""")!.AsObject(), _ctx, CancellationToken.None);
+        Assert.Contains("Its Python has Pillow", first.Text);
+        var second = await tool.ExecuteAsync(JsonNode.Parse("""{"action": "templates", "search": "fox"}""")!.AsObject(), _ctx, CancellationToken.None);
+        Assert.DoesNotContain("Its Python has", second.Text);
     }
 
     [Fact]
