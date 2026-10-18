@@ -336,7 +336,14 @@ public sealed class ComfyTool : Tool
         sb.AppendLine($"{library.All.Count} node types; custom node packs: {(packs.Count == 0 ? "none" : string.Join(", ", packs))}.");
         if (await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) is { } dirs)
         {
-            if (dirs.TryGetValue("code", out var code)) sb.AppendLine($"Its folder: {code} (custom nodes in {Path.Combine(code, "custom_nodes")}).");
+            if (dirs.TryGetValue("code", out var code))
+            {
+                sb.AppendLine($"Its folder: {code} (custom nodes in {Path.Combine(code, "custom_nodes")}).");
+                // Cropping a view out of a reference sheet took a guess at python\python.exe and a search
+                // of the disk first; ComfyUI can't run without Pillow and numpy, so its Python has them.
+                if (ComfyInstall.FromFolder(code) is { Kind: ComfyInstallKind.Portable or ComfyInstallKind.Venv } own && File.Exists(own.Program))
+                    sb.AppendLine($"Its Python, with Pillow and numpy for cropping or changing a picture: {own.Program}.");
+            }
             if (dirs.TryGetValue("output", out var output)) sb.AppendLine($"Output folder: {output}.");
         }
         var log = await LogAsync(api, ct).ConfigureAwait(false);

@@ -739,6 +739,23 @@ public class ComfyToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Status_names_the_python_of_a_portable_comfyui_for_cropping_pictures()
+    {
+        // A crop of a reference sheet guessed at python\python.exe and searched the disk first.
+        var result = await Call("""{"action": "status"}""");
+        Assert.DoesNotContain("Its Python", result.Text);
+
+        File.WriteAllText(Path.Combine(_server.CodeDir, "main.py"), "");
+        File.WriteAllText(Path.Combine(_server.CodeDir, "nodes.py"), "");
+        Directory.CreateDirectory(Path.Combine(_server.CodeDir, "comfy"));
+        var python = Path.Combine(_server.Root, "python_embeded", "python.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(python)!);
+        File.WriteAllText(python, "");
+        result = await Call("""{"action": "status"}""");
+        Assert.Contains($"Its Python, with Pillow and numpy for cropping or changing a picture: {python}.", result.Text);
+    }
+
+    [Fact]
     public async Task A_comfyui_the_user_started_keeps_running_and_lets_go_only_of_models_a_job_loaded()
     {
         var stops = 0;
