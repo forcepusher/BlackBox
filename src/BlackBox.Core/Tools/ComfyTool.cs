@@ -860,7 +860,10 @@ public sealed partial class ComfyTool : Tool
     internal static string ViewsNote(IEnumerable<ComfyTemplate> templates)
     {
         var list = templates.ToList();
-        var multi = list.Where(t => MultiView().IsMatch(t.Name)).Select(t => t.Name).Take(2).ToList();
+        // One that textures the model first: Hunyuan3D's multi-view template makes the shape alone.
+        var multi = list.Where(t => MultiView().IsMatch(t.Name))
+            .OrderByDescending(t => (t.Name + " " + t.Description).Contains("textur", StringComparison.OrdinalIgnoreCase))
+            .Select(t => t.Name).Take(2).ToList();
         var angles = list.FirstOrDefault(t => t.Name.Contains("angles", StringComparison.OrdinalIgnoreCase)
                                               && t.Name.Contains("character", StringComparison.OrdinalIgnoreCase))?.Name;
         return "Note: a 3D model made from one picture guesses the sides it can't see, and a figure drawn from the front often comes out as a relief. " +
