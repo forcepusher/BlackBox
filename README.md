@@ -413,6 +413,10 @@ than "Can't reach the server" and its JSON: a wrong OpenRouter key showed only `
 failed (401): {"error":{"message":"User not found.","code":401}}`. Nothing answering on LM
 Studio's port 1234 adds that its server has to be switched on in its Developer tab (and Serve on
 Local Network turned on for another PC), and on Ollama's 11434 that the Ollama app has to run.
+A service's website typed for its API (`openrouter.ai`, `groq.com`, `openai.com`, `mistral.ai`,
+`deepseek.com`, `x.ai`, `together.ai`, `fireworks.ai`, `anthropic.com`, any page of them) has its API
+address tried first, so it just works; another website says it is one, rather than filling the
+banner with its 404 page's HTML. An API key pasted into the address box is named as one.
 For screen control the
 model must accept images (for example Qwen3.5+ VL models or Gemma 4 with their vision projector);
 LM Studio reports this and BlackBox follows it, as it does what OpenRouter-style lists say of each

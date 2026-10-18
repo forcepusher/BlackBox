@@ -190,7 +190,10 @@ public sealed partial class OpenAiChatClient
         var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
             throw KeyRefusedException.For((int)resp.StatusCode, body, _apiKey is not null)
-                  ?? new LlmException($"GET /models failed ({(int)resp.StatusCode}): {body.Clip(500)}");
+                  // A website's 404 page: its HTML filled the banner.
+                  ?? new LlmException(body.TrimStart().StartsWith('<')
+                      ? $"there is a website at this address ({(int)resp.StatusCode} for /models), not a model server's API. The service's documentation names its OpenAI-compatible API address, often ending in /v1."
+                      : $"GET /models failed ({(int)resp.StatusCode}): {body.Clip(500)}");
 
         JsonNode? list;
         try { list = JsonNode.Parse(body); }

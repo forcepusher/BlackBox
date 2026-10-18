@@ -183,6 +183,37 @@ public class ChatClientTests
     }
 
     [Fact]
+    public async Task A_services_website_or_key_in_the_address_box_is_taken_for_what_it_is()
+    {
+        // The website people know, any page of it: its API is tried first.
+        Assert.Equal("https://openrouter.ai/api/v1", ServerAddress.Candidates("openrouter.ai")[0]);
+        Assert.Equal("https://openrouter.ai/api/v1", ServerAddress.Candidates("https://openrouter.ai/settings/keys")[0]);
+        Assert.Equal("https://api.groq.com/openai/v1", ServerAddress.Candidates("www.groq.com")[0]);
+        Assert.Equal(["https://openrouter.ai/api/v1"], ServerAddress.Candidates("https://openrouter.ai/api/v1"));
+        Assert.True(KiloGateway.Is("kilo.ai"));
+
+        Assert.True(ServerAddress.LooksLikeKey("sk-or-v1-0123456789abcdef0123456789abcdef"));
+        Assert.True(ServerAddress.LooksLikeKey(" gsk_0123456789ABCDEFabcdef0123 "));
+        Assert.False(ServerAddress.LooksLikeKey("localhost:1234"));
+        Assert.False(ServerAddress.LooksLikeKey("my-gpu-box"));
+        Assert.False(ServerAddress.LooksLikeKey("forcepusher.ddns.net:1234/v1"));
+        var key = await ServerProbe.CheckAsync(new HttpClient(new HtmlServer()), new BlackBox.Core.Settings.ServerSettings { BaseUrl = "sk-or-v1-0123456789abcdef0123456789abcdef" }, CancellationToken.None);
+        Assert.False(key.Reachable);
+        Assert.StartsWith("That looks like an API key, not a server address", key.Message);
+
+        // Another website: what it is, not its 404 page's HTML.
+        var site = await ServerProbe.CheckAsync(new HttpClient(new PageNotFound()), new BlackBox.Core.Settings.ServerSettings { BaseUrl = "https://example.com" }, CancellationToken.None);
+        Assert.Equal("Can't reach the server: there is a website at this address (404 for /models), not a model server's API. " +
+                     "The service's documentation names its OpenAI-compatible API address, often ending in /v1.", site.Message);
+    }
+
+    private sealed class PageNotFound : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound) { Content = new StringContent("<!DOCTYPE html><html><head><title>404</title></head><body>Not found</body></html>") });
+    }
+
+    [Fact]
     public async Task The_probe_finds_the_protocol_that_answers()
     {
         var server = new BlackBox.Core.Settings.ServerSettings { BaseUrl = "host:1234", Model = "m" };

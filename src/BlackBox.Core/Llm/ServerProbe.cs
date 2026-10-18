@@ -54,6 +54,10 @@ public static class ServerProbe
     /// </summary>
     public static async Task<ProbeResult> CheckAsync(HttpClient http, ServerSettings server, CancellationToken ct)
     {
+        // Pasted into the wrong box, a key was looked up as a host name: "No such host is known. (sk-or-v1-…:80)".
+        if (ServerAddress.LooksLikeKey(server.BaseUrl))
+            return new ProbeResult(false, [], null, null, "That looks like an API key, not a server address: it goes in the API key box. " +
+                                                          "The Server box takes the address of the service's API, such as https://openrouter.ai/api/v1.");
         var candidates = ServerAddress.Candidates(server.BaseUrl);
         if (candidates.Count == 0)
             return new ProbeResult(false, [], null, null, server.BaseUrl.Trim().Length == 0 ? "No server address." : "That is not a server address.");
