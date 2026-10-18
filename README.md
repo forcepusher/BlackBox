@@ -34,7 +34,9 @@ The agent itself works across the whole PC; relative paths and shell commands st
 Files it makes only to get a task done (a script, the script a reminder runs) go in `Data/scratch`
 rather than among yours: a reminder used to leave its script in the home folder. `settings.json`
 also keeps the main window's size and place, and it opens there again unless that place is no
-longer on a screen.
+longer on a screen. It is never bigger than the screen it opens on: the default 900x760 is taller
+than a 1920x1080 laptop screen at 150% has room for, and the title bar opened above the screen
+with the message box under the taskbar.
 
 An error no code caught goes into `Data/crash.log` with its stack trace. One in the window says so
 in the chat, and the window and a run in progress go on; one that ends BlackBox is shown in the
