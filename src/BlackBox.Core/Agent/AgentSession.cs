@@ -633,7 +633,11 @@ public sealed partial class AgentSession(
                 // take 200 an hour), so the same request goes again after the wait it names, or a
                 // growing one. As many times as it takes: Stop ends the wait.
                 var wait = RateLimitWait(ex.RetryAfter, ++held);
-                observer.OnNotice($"{ex.Message} Trying again in {Describe(wait)} (Stop ends the wait)…");
+                // Kilo doesn't say for how long, and five-minute waits read as BlackBox being stuck.
+                var why = KiloGateway.Is(client.BaseUrl)
+                    ? " Kilo's free models take 200 requests an hour from each PC, so this can last until the hour is up; a Kilo key with credits, or a model server of your own, has no such limit."
+                    : "";
+                observer.OnNotice($"{ex.Message}{why} Trying again in {Describe(wait)} (Stop ends the wait)…");
                 await Task.Delay(wait, ct).ConfigureAwait(false);
             }
             catch (ConnectionLostException ex) when (ex.Unreachable)
