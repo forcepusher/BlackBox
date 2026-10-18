@@ -551,7 +551,9 @@ proxy in front of it) answers with a server error or "gave up waiting for the re
 retry continues where the last one stopped (up to 12 times per step). When the model server
 itself fails on the request (llama.cpp out of room in its KV cache while other requests run,
 "failed to process mtmd chunk"; LM Studio's model crashed or unloaded), it is asked again after
-growing waits from 2 seconds to a minute: an hour of 2048 on LM Studio ended on that error. A server that holds requests
+growing waits from 2 seconds to a minute: an hour of 2048 on LM Studio ended on that error. Still
+no room after three tries (another BlackBox on the same LM Studio keeps its cached prompt in the
+shared KV cache), the context is reset and from then on a quarter smaller than the conversation was. A server that holds requests
 back (HTTP 429: busy, or a free allowance used up) is asked again after the wait it names
 (Retry-After, OpenRouter's `X-RateLimit-Reset`, Gemini's "retry in 37s"), at most an hour at a time,
 or after growing waits from 2 seconds to 5 minutes, as often as it takes; Stop ends the wait. From
