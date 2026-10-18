@@ -579,7 +579,8 @@ public sealed partial class ComfyTool : Tool
                                     "pad the picture (ImagePadForOutpaint) and repaint the padding with an installed model for whole pictures through SetLatentNoiseMask; ";
         if (found.Count == 0)
             return new ToolResult($"No template matches \"{search}\" among {all.Count}. Try other words, or build the workflow from node types (action=nodes)." +
-                                  (outpaint ? $"\n{OutpaintHere}{MaskAdvice} An edit model leaves the padding grey. {OutpaintPrompt}" : ""));
+                                  (outpaint ? $"\n{OutpaintHere}{MaskAdvice} An edit model leaves the padding grey. {OutpaintPrompt}" : "") +
+                                  (MatchingModels(search, models) is { Count: > 0 } matching ? $"\nInstalled models whose names match: {string.Join(", ", matching)}." : ""));
         var lines = new StringBuilder();
         // On the CPU most templates are out of reach: said before the list, so the choice is made with it.
         var (device, cpu) = ComfyHardware.Device(await api.TrySystemStatsAsync(ct).ConfigureAwait(false));
@@ -607,6 +608,11 @@ public sealed partial class ComfyTool : Tool
         }
         if (outpaint)
             lines.AppendLine((outpaintReady ? "" : $"{OutpaintHere}{MaskAdvice} An edit model leaves the padding grey. ") + OutpaintPrompt);
+        // Templates are workflows; a style may be a LoRA or a checkpoint. Finding no pixel art
+        // template, qwen3.8 drew a 32x32 knight by hand, row by row, with Pixel Art XL installed.
+        if (MatchingModels(search, models) is { Count: > 0 } named)
+            lines.AppendLine($"Installed models whose names match: {string.Join(", ", named)}. A LoRA goes on a checkpoint of the base model it was made for " +
+                             "(action=models search=<its name> gives its card).");
         lines.Append("See one as a workflow with action=templates name=…, or run it directly with action=run name=… and set.");
         return new ToolResult(lines.ToString().TrimEnd());
     }
@@ -816,6 +822,29 @@ public sealed partial class ComfyTool : Tool
     }
 
     private bool _maskNoted, _viewsNoted;
+
+    private static readonly HashSet<string> Plain = new(StringComparer.Ordinal)
+    {
+        "the", "and", "for", "with", "from", "into", "this", "that", "make", "made", "picture", "pictures", "image", "images", "photo", "model", "models",
+        "style", "text", "video", "sound", "workflow", "template", "using", "high", "quality",
+    };
+
+    /// <summary>
+    /// The installed checkpoints and LoRAs whose file names hold a template search's words (two of
+    /// them, or one of five letters or more), as "loras/pixel-art-xl-v1.1.safetensors"; at most six.
+    /// </summary>
+    internal static List<string> MatchingModels(string search, Dictionary<string, HashSet<string>> models)
+    {
+        var words = ComfyNodeLibrary.Words(search).Where(w => w.Length >= 3 && !Plain.Contains(w)).ToList();
+        if (words.Count == 0)
+            return [];
+        return new[] { "checkpoints", "loras" }
+            .SelectMany(folder => (models.GetValueOrDefault(folder) ?? []).Select(file => (Folder: folder, File: file)))
+            .Select(m => (m.Folder, m.File, Hits: words.Where(w => ComfyNodeLibrary.Squash(m.File).Contains(w, StringComparison.Ordinal)).ToList()))
+            .Where(m => m.Hits.Count >= 2 || m.Hits.Any(w => w.Length >= 5))
+            .OrderByDescending(m => m.Hits.Count).ThenBy(m => m.File, StringComparer.OrdinalIgnoreCase)
+            .Take(6).Select(m => $"{m.Folder}/{m.File}").ToList();
+    }
 
     /// <summary>
     /// A note after a 3D model made from one picture. From the front picture of the user's

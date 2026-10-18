@@ -861,6 +861,26 @@ public class ComfyToolTests : IDisposable
     }
 
     [Fact]
+    public async Task A_template_search_names_the_installed_loras_and_checkpoints_that_match_it()
+    {
+        // Finding no pixel art template, qwen3.8 drew a 32x32 knight by hand with Pixel Art XL installed.
+        var models = new Dictionary<string, HashSet<string>>
+        {
+            ["checkpoints"] = ["juggernautXL_ragnarok.safetensors", "novaFurryXL_ilV170.safetensors"],
+            ["loras"] = ["pixel-art-xl-v1.1.safetensors", "Qwen-Edit-2509-Multiple-angles.safetensors", "animeflatLTX.2.3.safetensors"],
+            ["vae"] = ["pixel_vae.safetensors"],
+        };
+        Assert.Equal(["loras/pixel-art-xl-v1.1.safetensors"], ComfyTool.MatchingModels("pixel art sprite of a knight", models));
+        Assert.Equal(["loras/Qwen-Edit-2509-Multiple-angles.safetensors"], ComfyTool.MatchingModels("character angles", models));
+        Assert.Equal(["checkpoints/novaFurryXL_ilV170.safetensors"], ComfyTool.MatchingModels("furry picture", models));
+        Assert.Empty(ComfyTool.MatchingModels("make a picture with a model", models));
+
+        _server.Loras.Add("pixel-art-xl-v1.1.safetensors");
+        var list = await Call("""{"action": "templates", "search": "pixel art"}""");
+        Assert.Contains("Installed models whose names match: loras/pixel-art-xl-v1.1.safetensors.", list.Text);
+    }
+
+    [Fact]
     public async Task A_search_for_outpainting_with_no_ready_template_says_how_to_do_it_with_installed_models()
     {
         // One panorama run left seams, the next downloaded Flux Fill and its text encoder, 32 GB,
