@@ -14,7 +14,7 @@ namespace BlackBox.Core.Tools;
 /// to each wrong one. qwen3.8 drove ComfyUI's HTTP API well but wrote wrong node, input and model
 /// names from memory. A run waits for the job and hands back its files, with a look at them.
 /// </summary>
-public sealed class ComfyTool : Tool
+public sealed partial class ComfyTool : Tool
 {
     public override string Name => "comfyui";
 
@@ -569,14 +569,24 @@ public sealed class ComfyTool : Tool
 
         var search = GetString(args, "search") ?? "";
         var found = ComfyTemplates.Search(all, search, 12);
+        // Asked to extend a photo into a panorama, qwen3.8 once painted the sides itself with an
+        // installed model (and left seams), and once downloaded Flux Fill with its text encoder, 32 GB,
+        // to the same end; and two of its three panoramas got the photo's waterfall again on a side.
+        var outpaint = OutpaintWords().IsMatch(search);
+        const string OutpaintPrompt = "To extend a picture, describe in the prompt what the new parts should hold (more of the forest, the stream), " +
+                                      "not the picture's subject, or the subject is drawn again there.";
+        const string OutpaintHere = "No outpaint template here is ready. Without downloading one (a fill model with its text encoder can be 30 GB): " +
+                                    "pad the picture (ImagePadForOutpaint) and repaint the padding with an installed model for whole pictures through SetLatentNoiseMask; ";
         if (found.Count == 0)
-            return new ToolResult($"No template matches \"{search}\" among {all.Count}. Try other words, or build the workflow from node types (action=nodes).");
+            return new ToolResult($"No template matches \"{search}\" among {all.Count}. Try other words, or build the workflow from node types (action=nodes)." +
+                                  (outpaint ? $"\n{OutpaintHere}{MaskAdvice} An edit model leaves the padding grey. {OutpaintPrompt}" : ""));
         var lines = new StringBuilder();
         // On the CPU most templates are out of reach: said before the list, so the choice is made with it.
         var (device, cpu) = ComfyHardware.Device(await api.TrySystemStatsAsync(ct).ConfigureAwait(false));
         if (cpu)
             lines.AppendLine($"ComfyUI runs on {device}. {ComfyHardware.CpuAdvice}");
         lines.AppendLine(search.Length == 0 ? "The user's saved workflows, and BlackBox's own:" : $"Templates matching \"{search}\", best first (of {all.Count}; [ready] means its models and nodes are installed):");
+        var outpaintReady = false;
         foreach (var t in found)
         {
             var ready = "";
@@ -593,7 +603,10 @@ public sealed class ComfyTool : Tool
             catch (Exception ex) when (ex is ComfyApiException or ComfyWorkflowException or System.Text.Json.JsonException) { }
             lines.Append("- ").Append(t.Name).Append(t.Title != Path.GetFileName(t.Name) ? $" \"{t.Title}\"" : "")
                 .Append(t.Description.Length > 0 ? ": " + t.Description.Clip(240) : "").AppendLine(ready);
+            outpaintReady |= ready == " [ready]" && (t.Name + " " + t.Description).Contains("outpaint", StringComparison.OrdinalIgnoreCase);
         }
+        if (outpaint)
+            lines.AppendLine((outpaintReady ? "" : $"{OutpaintHere}{MaskAdvice} An edit model leaves the padding grey. ") + OutpaintPrompt);
         lines.Append("See one as a workflow with action=templates name=…, or run it directly with action=run name=… and set.");
         return new ToolResult(lines.ToString().TrimEnd());
     }
@@ -798,6 +811,9 @@ public sealed class ComfyTool : Tool
     }
 
     private bool _maskNoted;
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"outpaint|uncrop|panorama|\b(extend|expand|widen|wider)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex OutpaintWords();
 
     /// <summary>How a part repainted through a mask meets the rest of the picture without an edge.</summary>
     internal const string MaskAdvice =

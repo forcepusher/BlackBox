@@ -11,7 +11,7 @@ public sealed partial class ShellTool : Tool
     public override string Name => "run_shell";
     public override string Description =>
         // Five of 45 ComfyUI test runs lost a step to "cd … && python …": the token && doesn't exist there.
-        "Run a shell command and return its output (Windows PowerShell 5.1 on Windows, where && and || don't exist: chain commands with ; ; sh elsewhere). " +
+        "Run a shell command and return its output (Windows PowerShell 5.1 on Windows, where && and || don't exist, so chain commands with a semicolon; sh elsewhere). " +
         "Use for files, launching apps (e.g. Start-Process notepad), system info, scripts. No interactive commands. " +
         // Twice a reminder started as Start-Process powershell -ArgumentList '-Command','...("text")'
         // died at once: Windows PowerShell drops the quotes inside the arguments.

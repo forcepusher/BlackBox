@@ -861,6 +861,20 @@ public class ComfyToolTests : IDisposable
     }
 
     [Fact]
+    public async Task A_search_for_outpainting_with_no_ready_template_says_how_to_do_it_with_installed_models()
+    {
+        // One panorama run left seams, the next downloaded Flux Fill and its text encoder, 32 GB,
+        // and two of three drew the photo's waterfall again on a side.
+        var list = await Call("""{"action": "templates", "search": "outpaint extend image"}""");
+        Assert.Contains("No outpaint template here is ready.", list.Text);
+        Assert.Contains("pad the picture (ImagePadForOutpaint) and repaint the padding", list.Text);
+        Assert.Contains("DifferentialDiffusion", list.Text);
+        Assert.Contains("describe in the prompt what the new parts should hold", list.Text);
+        list = await Call("""{"action": "templates", "search": "fox"}""");
+        Assert.DoesNotContain("outpaint", list.Text);
+    }
+
+    [Fact]
     public async Task Templates_are_listed_with_the_users_notes_and_shown_as_a_workflow_saved_to_edit()
     {
         var list = await Call("""{"action": "templates", "search": "fox"}""");
