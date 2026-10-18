@@ -825,11 +825,16 @@ public class ComfyToolTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(python)!);
         File.WriteAllText(python, "");
         result = await Call("""{"action": "status"}""");
-        Assert.Contains($"Its Python has Pillow and numpy, for working on the pictures and models it makes without installing anything: {python}.", result.Text);
+        Assert.Contains($"Its Python has Pillow and numpy, for working on the pictures and models it makes: {python}.", result.Text);
 
         // To cut a character out for a 3D model, rembg was pip-installed into the PC's own Python, and trimesh to look into the model.
-        Directory.CreateDirectory(Path.Combine(_server.Root, "python_embeded", "Lib", "site-packages", "rembg"));
-        Directory.CreateDirectory(Path.Combine(_server.Root, "python_embeded", "Lib", "site-packages", "trimesh"));
+        var site = Path.Combine(_server.Root, "python_embeded", "Lib", "site-packages");
+        Directory.CreateDirectory(Path.Combine(site, "rembg"));
+        Directory.CreateDirectory(Path.Combine(site, "trimesh"));
+        result = await Call("""{"action": "status"}""");
+        // rembg can't run without onnxruntime, which this ComfyUI's Python hadn't got.
+        Assert.Contains("rembg (cuts out a background once onnxruntime is installed into this Python;", result.Text);
+        Directory.CreateDirectory(Path.Combine(site, "onnxruntime"));
         result = await Call("""{"action": "status"}""");
         Assert.Contains("Its Python has Pillow, numpy, rembg (cuts out a background) and trimesh (3D models), for working", result.Text);
     }
