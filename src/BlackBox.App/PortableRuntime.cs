@@ -58,13 +58,11 @@ internal static class PortableRuntime
                     }
                 }
             }
-            else
-            {
-                // Left by a start beside another version, once nothing holds them.
+            // Left by a start beside another version, once nothing holds them.
+            if (dir == paths.RuntimeDir)
                 foreach (var old in Directory.EnumerateDirectories(paths.DataDir, "runtime-*"))
                     try { Directory.Delete(old, recursive: true); }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-            }
         }
 
         if (OperatingSystem.IsWindows())
