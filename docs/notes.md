@@ -869,6 +869,19 @@ dotnet run --project src/BlackBox.Cli -- --yes --then "brighter" --then "@20 and
 ./scripts/comfy-test.ps1          # BlackBox makes a picture, a video, sounds, music, speech and a 3D model with this PC's ComfyUI
 ```
 
+### Several monitors
+`agent-tasks.ps1` has four tasks for a second monitor (skipped with one), each checking the end
+state itself: `mm-type` types into a Notepad on screen 2 that the request doesn't place, `mm-open`
+has Notepad open on screen 2 as programs do where they were last closed (its registry position is
+set for the task and put back after), `mm-click` finds and presses a button on a page on screen 2,
+and `mm-move` moves a window there and maximizes it. On 19 October 2026, with the two screens of
+the test PC side by side at 100%, all four passed on qwen3.8 (LM Studio) and on Kilo's free
+Nemotron 3.5 Super VL: both looked at screen 1, found nothing, and took screen 2's screenshot.
+Unit tests cover screens left of and above the primary (negative coordinates), and screens of
+different sizes and scaling side by side; `BB_DESKTOP_TESTS=1` checks the real mouse and
+screenshots across two monitors. Not tried on hardware: a screen left of or above the primary,
+and screens at different scaling, which need Windows' display settings changed.
+
 ### Sysadmin benchmark
 `sysadmin-test.ps1` gives BlackBox a fresh Debian 13 server per task, with only its address,
 a user name and a key, as a hired admin gets them, and a ticket in plain words: deploy the
