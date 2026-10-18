@@ -546,7 +546,10 @@ while a server processes a long prompt. BlackBox resends the identical request w
 drops (also while an error answer comes in), a reply stream stops early, or the server (or a
 proxy in front of it) answers with a server error or "gave up waiting for the request"
 (HTTP 5xx or 408); the server still has the already-processed prompt in its cache, so each
-retry continues where the last one stopped (up to 12 times per step). A server that holds requests
+retry continues where the last one stopped (up to 12 times per step). When the model server
+itself fails on the request (llama.cpp out of room in its KV cache while other requests run,
+"failed to process mtmd chunk"; LM Studio's model crashed or unloaded), it is asked again after
+growing waits from 2 seconds to a minute: an hour of 2048 on LM Studio ended on that error. A server that holds requests
 back (HTTP 429: busy, or a free allowance used up) is asked again after the wait it names
 (Retry-After, OpenRouter's `X-RateLimit-Reset`, Gemini's "retry in 37s"), at most an hour at a time,
 or after growing waits from 2 seconds to 5 minutes, as often as it takes; Stop ends the wait. From
