@@ -40,6 +40,8 @@ if (-not ("AgentTasks.Win" -as [type])) {
 [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
 [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
 [DllImport("user32.dll")] public static extern IntPtr MonitorFromPoint(POINT p, uint flags);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string title);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, System.Text.StringBuilder lParam);
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
 '@
@@ -64,14 +66,14 @@ function Screen-Of([IntPtr]$h) {
   for ($i = 0; $i -lt $screens.Count; $i++) { if ($screens[$i].Contains($cx, $cy)) { return $i + 1 } }
   0
 }
-function Notepad-Text([int]$processId) {
-  $cond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $processId)
-  $win = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $cond)
-  if (-not $win) { return $null }
-  $editCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ClassNameProperty, "Edit")
-  $edit = $win.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCond)
-  if (-not $edit) { return $null }
-  $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+function Notepad-Text([Diagnostics.Process]$p) {
+  # The text of Notepad's edit box, by WM_GETTEXT (its UI Automation element has no ValuePattern).
+  $p.Refresh()
+  $edit = [AgentTasks.Win]::FindWindowEx($p.MainWindowHandle, [IntPtr]::Zero, "Edit", $null)
+  if ($edit -eq [IntPtr]::Zero) { return $null }
+  $sb = New-Object System.Text.StringBuilder 65536
+  [AgentTasks.Win]::SendMessage($edit, 0x000D, [IntPtr]65536, $sb) | Out-Null  # WM_GETTEXT
+  $sb.ToString()
 }
 function Stop-EdgeProfile([string]$profile) {
   Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object { $_.CommandLine -like "*$profile*" } |
@@ -102,7 +104,7 @@ $all = [ordered]@{
     Prompt = "A Notepad window is open on one of my monitors. Type 'Hello from the other screen' into it, then tell me which monitor it is on."
     Setup = { $script:np = Start-Process notepad -PassThru; Place-Window (Wait-Window $script:np) $screens[1] }
     Check = {
-      $text = Notepad-Text $script:np.Id
+      $text = Notepad-Text $script:np
       if ($text -like "*Hello from the other screen*") { "PASS typed into the Notepad on screen 2" } else { "FAIL Notepad on screen 2 holds: $text" }
     }
     Cleanup = { Stop-Process -Id $script:np.Id -Force -ErrorAction SilentlyContinue }
@@ -123,6 +125,34 @@ $all = [ordered]@{
       if ($titles -match '^Pressed 1\b') { "PASS pressed once on screen 2" } elseif ($titles -match '^Pressed') { "FAIL pressed more than once: $titles" } else { "FAIL not pressed: $titles" }
     }
     Cleanup = { Stop-EdgeProfile $edgeProfile }
+  }
+  # A program that opens on the other screen, as programs do where they were last closed.
+  "mm-open" = @{
+    Screens = 2
+    Prompt = "Open Notepad and write 'opened on the other monitor' in it."
+    Setup = {
+      # Notepad opens where its registry values say; the user's values are put back afterwards.
+      $key = "HKCU:\Software\Microsoft\Notepad"
+      $script:npSaved = Get-ItemProperty $key -ErrorAction SilentlyContinue | Select-Object iWindowPosX, iWindowPosY, iWindowPosDX, iWindowPosDY
+      if (-not (Test-Path $key)) { New-Item $key -Force | Out-Null }
+      $s = $screens[1]
+      Set-ItemProperty $key iWindowPosX ($s.X + 200); Set-ItemProperty $key iWindowPosY ($s.Y + 150)
+      Set-ItemProperty $key iWindowPosDX 900; Set-ItemProperty $key iWindowPosDY 600
+      $script:started = Get-Date
+    }
+    Check = {
+      $mine = @(Get-Process notepad -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -ge $script:started })
+      $hit = $mine | Where-Object { (Notepad-Text $_) -like "*opened on the other monitor*" } | Select-Object -First 1
+      if ($hit) { "PASS wrote in the Notepad that opened on screen $(Screen-Of $hit.MainWindowHandle)" }
+      else { "FAIL $($mine.Count) Notepad(s) opened, none holds the text" }
+    }
+    Cleanup = {
+      Get-Process notepad -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -ge $script:started } | Stop-Process -Force
+      $key = "HKCU:\Software\Microsoft\Notepad"
+      foreach ($v in "iWindowPosX", "iWindowPosY", "iWindowPosDX", "iWindowPosDY") {
+        if ($script:npSaved -and $null -ne $script:npSaved.$v) { Set-ItemProperty $key $v $script:npSaved.$v } else { Remove-ItemProperty $key $v -ErrorAction SilentlyContinue }
+      }
+    }
   }
   # A window moved to the other screen and maximized there.
   "mm-move" = @{
