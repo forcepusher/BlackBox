@@ -182,11 +182,12 @@ public class ComfyFrontendTests
         var root = Directory.CreateTempSubdirectory("bb-frontend-").FullName;
         var log = Path.Combine(root + "-launches.txt");
         // Refuses headless as Edge does under that policy, and fails otherwise too, so no window opens.
+        // Windows' own find.exe: run from Git Bash, the PATH finds GNU find first.
         var launcher = root + "-refuses.cmd";
         await File.WriteAllTextAsync(launcher, $$"""
             @echo off
             echo %*>>"{{log}}"
-            echo %* | find "--headless" >nul && (echo Headless mode is disallowed by the system admin. 1>&2 & exit /b 0)
+            echo %* | "%SystemRoot%\System32\find.exe" "--headless" >nul && (echo Headless mode is disallowed by the system admin. 1>&2 & exit /b 0)
             exit /b 3
             """, ct);
         try
