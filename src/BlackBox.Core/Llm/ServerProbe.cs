@@ -210,7 +210,14 @@ public static class ServerProbe
     /// Makes sure the model is loaded (LM Studio loads models on first use) and returns what the
     /// server then says of it: the context length it runs with, if it reports one.
     /// </summary>
-    public static async Task<ModelFacts> EnsureLoadedAsync(HttpClient http, ServerSettings server, Action? onLoading, CancellationToken ct)
+    /// <remarks>
+    /// LM Studio loads a model on first use with the context its settings give it, and out of the
+    /// box that is 4k: less than BlackBox's instructions and tools alone (about 9k tokens), so
+    /// every request failed as too long. A model loaded that small for BlackBox's first request is
+    /// loaded again with <see cref="RoomyContext"/> (32k when the GPU can't hold that), and
+    /// <paramref name="onNote"/> says so. A model the user loaded themselves is left as it is.
+    /// </remarks>
+    public static async Task<ModelFacts> EnsureLoadedAsync(HttpClient http, ServerSettings server, Action? onLoading, CancellationToken ct, Action<string>? onNote = null)
     {
         var facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
         if (facts.Loaded != false)
@@ -227,7 +234,46 @@ public static class ServerProbe
         {
             return default; // the real request will report the problem
         }
-        return await TryContextAsync(http, server, ct).ConfigureAwait(false);
+        facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
+        if (facts.Context is { } small && small < MinimumContext && await ReloadRoomierAsync(http, server, small, ct).ConfigureAwait(false) is { } roomier)
+        {
+            onNote?.Invoke($"LM Studio loaded {server.ModelInUse} with a {small / 1024}k context, too small for BlackBox; it runs with {roomier / 1024}k now. " +
+                           "To choose the size yourself, load it in LM Studio with the context length you want.");
+            facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
+        }
+        return facts;
+    }
+
+    /// <summary>Less than this, and BlackBox's instructions and tools (about 9k tokens) leave room for a few steps at most.</summary>
+    public const int MinimumContext = 32 * 1024;
+
+    /// <summary>What a model LM Studio loaded too small for BlackBox is loaded again with, if the model takes it.</summary>
+    public const int RoomyContext = 64 * 1024;
+
+    /// <summary>
+    /// Loads the model in use again through LM Studio's REST API (/api/v1/models/unload and
+    /// /load) with <see cref="RoomyContext"/>, or <see cref="MinimumContext"/> when its memory
+    /// guardrail refuses that; the context it then runs with, or null if neither loaded.
+    /// </summary>
+    private static async Task<int?> ReloadRoomierAsync(HttpClient http, ServerSettings server, int current, CancellationToken ct)
+    {
+        var root = OpenAiChatClient.NormalizeBaseUrl(server.BaseUrl)[..^"/v1".Length];
+        if (await GetJsonAsync(http, server, $"{root}/api/v1/models", ct).ConfigureAwait(false) is not { } list
+            || (list["models"] as JsonArray)?.OfType<JsonObject>().FirstOrDefault(m => Str(m["key"]) == server.ModelInUse) is not { } entry
+            || entry["loaded_instances"] is not JsonArray { Count: > 0 } instances)
+            return null;
+        var most = Int(entry["max_context_length"]) ?? RoomyContext;
+        var sizes = new[] { RoomyContext, MinimumContext }.Select(s => Math.Min(s, most)).Where(s => s > current).Distinct().ToList();
+        if (sizes.Count == 0)
+            return null;
+        foreach (var instance in instances.OfType<JsonObject>().Select(i => Str(i["id"])).OfType<string>())
+            await GetJsonAsync(http, server, $"{root}/api/v1/models/unload", ct, new JsonObject { ["instance_id"] = instance }).ConfigureAwait(false);
+        foreach (var size in sizes)
+            if (await GetJsonAsync(http, server, $"{root}/api/v1/models/load", ct,
+                    new JsonObject { ["model"] = server.ModelInUse, ["context_length"] = size, ["echo_load_config"] = true }).ConfigureAwait(false) is { } loaded
+                && Str(loaded["status"]) == "loaded")
+                return Int(loaded["load_config"]?["context_length"]) ?? size;
+        return null; // unloaded: the next request loads it as LM Studio's settings say, as before
     }
 
     /// <summary>Context length, load state and image support of the model in use.</summary>

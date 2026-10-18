@@ -483,4 +483,72 @@ public class ContextDetectionTests
         Assert.Equal(4096, ContextOverflowException.ParseLimit("""{"error":{"code":400,"message":"the request exceeds the available context size, try increasing it","type":"exceed_context_size_error","n_prompt_tokens":5000,"n_ctx":4096}}"""));
         Assert.Null(ContextOverflowException.ParseLimit("The number of tokens to keep from the initial prompt is greater than the context length."));
     }
+
+    /// <summary>
+    /// LM Studio out of the box: a model loaded on first use gets a 4k context. Its memory
+    /// guardrail refuses 64k for this one, and takes 32k.
+    /// </summary>
+    private sealed class FreshLmStudio : HttpMessageHandler
+    {
+        public int? Context { get; private set; }
+        public List<string> Calls { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct);
+            Calls.Add($"{request.Method} {path} {body}".Trim());
+            string? answer = path switch
+            {
+                "/api/v0/models/m" => Context is { } c
+                    ? $$"""{"id":"m","type":"vlm","state":"loaded","loaded_context_length":{{c}}}"""
+                    : """{"id":"m","type":"vlm","state":"not-loaded","max_context_length":262144}""",
+                "/v1/chat/completions" => Load(4096),
+                "/api/v1/models" => Context is { } c
+                    ? $$$"""{"models":[{"key":"m","max_context_length":262144,"loaded_instances":[{"id":"m","config":{"context_length":{{{c}}}}}]}]}"""
+                    : """{"models":[{"key":"m","max_context_length":262144,"loaded_instances":[]}]}""",
+                "/api/v1/models/unload" => Unload(),
+                "/api/v1/models/load" when body.Contains("65536") => null,
+                "/api/v1/models/load" => Load(32768),
+                _ => null,
+            };
+            return answer is null
+                ? new HttpResponseMessage(System.Net.HttpStatusCode.BadRequest) { Content = new StringContent("""{"error":"model_load_failed"}""") }
+                : new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(answer) };
+        }
+
+        private string Load(int size)
+        {
+            if (Context is null || size != 4096)
+                Context = size;
+            return size == 4096
+                ? "data: {\"choices\":[{\"delta\":{\"content\":\"OK\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
+                : $$$"""{"instance_id":"m","status":"loaded","load_config":{"context_length":{{{size}}}}}""";
+        }
+
+        private string Unload()
+        {
+            Context = null;
+            return """{"instance_id":"m"}""";
+        }
+    }
+
+    [Fact]
+    public async Task A_model_LM_Studio_loads_with_its_4k_default_is_loaded_again_with_room_for_BlackBox()
+    {
+        var server = new FreshLmStudio();
+        var notes = new List<string>();
+        var settings = new BlackBox.Core.Settings.ServerSettings { BaseUrl = "http://host:1234/v1", Model = "m" };
+        var facts = await ServerProbe.EnsureLoadedAsync(new HttpClient(server), settings, null, CancellationToken.None, notes.Add);
+        Assert.Equal(32768, facts.Context);
+        Assert.Contains(server.Calls, c => c.StartsWith("POST /api/v1/models/unload") && c.Contains("\"instance_id\":\"m\""));
+        Assert.Equal("LM Studio loaded m with a 4k context, too small for BlackBox; it runs with 32k now. To choose the size yourself, load it in LM Studio with the context length you want.", Assert.Single(notes));
+
+        // Loaded by the user already, even small: left as it is.
+        server.Calls.Clear();
+        notes.Clear();
+        Assert.Equal(32768, (await ServerProbe.EnsureLoadedAsync(new HttpClient(server), settings, null, CancellationToken.None, notes.Add)).Context);
+        Assert.DoesNotContain(server.Calls, c => c.Contains("/load") || c.Contains("/unload"));
+        Assert.Empty(notes);
+    }
 }
