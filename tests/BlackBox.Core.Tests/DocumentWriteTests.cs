@@ -390,7 +390,10 @@ public class DocumentWriteTests : IDisposable
         File.WriteAllBytes(Path.Combine(_dir, "theirs.docx"), File.ReadAllBytes(await Make("seed.docx", "# Theirs")));
         var refused = await Write("theirs.docx", "# Mine");
         Assert.True(refused.IsError);
-        Assert.Contains("use edit_file", refused.Text);
+        Assert.Contains("with edit_file", refused.Text);
+        // A new name first: told to "delete it first", Nemotron deleted a document that was there without asking.
+        Assert.Contains("such as \"theirs (2).docx\"", refused.Text);
+        Assert.Contains("only when the user asked for that", refused.Text);
 
         Assert.False((await Write("notes.docx", "# Notes\n\nFirst part.")).IsError);
         var added = await Write("notes.docx", "Second part.", append: true);

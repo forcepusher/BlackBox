@@ -74,7 +74,9 @@ in Word, Excel, PowerPoint, Google Drive and any PDF reader:
   letters used.
 
 An existing document isn't overwritten, since that would lose its formatting; `append` adds to one
-made in the same task. `edit_file` changes Word and PowerPoint files in place: the text is matched
+made in the same task. The refusal says it may be the user's own, names a new name to write to
+(`letter (2).docx`), and to replace it only when the user asked: it used to say "delete it first",
+and Nemotron, asked for a cover letter on the Desktop, deleted the one already there without asking. `edit_file` changes Word and PowerPoint files in place: the text is matched
 across Word's runs and paragraphs (copied from `read_file` with its `# ` and `**` marks or without),
 curly quotes match straight ones, and only what differs is replaced, so the rest keeps its
 formatting. A line break in the new text starts a paragraph like the one it is in, `# ` at its
