@@ -223,8 +223,8 @@ public sealed class ComfyNodeLibrary
     }
 
     /// <summary>
-    /// The node types that best match some words (in their names, category, description, pack and
-    /// aliases), best first. Deprecated and paid API nodes come last.
+    /// The node types that best match some words (in their names, category, description, pack,
+    /// aliases and inputs), best first. Deprecated and paid API nodes come last.
     /// </summary>
     public IReadOnlyList<ComfyNodeDef> Search(string query, int max)
     {
@@ -248,6 +248,9 @@ public sealed class ComfyNodeLibrary
         var display = n.DisplayName.ToLowerInvariant();
         var rest = (n.Category + " " + n.Module + " " + string.Join(" ", n.Aliases)).ToLowerInvariant();
         var description = n.Description.ToLowerInvariant();
+        // What a node can do may be one of its inputs: Trellis2's preprocess has remove_background,
+        // and qwen3.8, finding only paid nodes for "background remove", pip-installed rembg.
+        var inputs = string.Join(" ", n.Inputs.Select(i => i.Name)).ToLowerInvariant();
         var all = 0;
         foreach (var w in words)
         {
@@ -256,7 +259,7 @@ public sealed class ComfyNodeLibrary
             else if (name.Contains(w)) hit = 4 + (name.StartsWith(w) ? 1 : 0);
             else if (display.Contains(w)) hit = 3;
             else if (rest.Contains(w)) hit = 2;
-            else if (description.Contains(w)) hit = 1;
+            else if (description.Contains(w) || inputs.Contains(w)) hit = 1;
             if (hit > 0) all++;
             score += hit;
         }

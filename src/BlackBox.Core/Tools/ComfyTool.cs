@@ -341,8 +341,16 @@ public sealed class ComfyTool : Tool
                 sb.AppendLine($"Its folder: {code} (custom nodes in {Path.Combine(code, "custom_nodes")}).");
                 // Cropping a view out of a reference sheet took a guess at python\python.exe and a search
                 // of the disk first; ComfyUI can't run without Pillow and numpy, so its Python has them.
+                // And to cut a character out for a 3D model, qwen3.8 pip-installed rembg into the PC's
+                // own Python, while ComfyUI's had it (Trellis2 needs it).
                 if (ComfyInstall.FromFolder(code) is { Kind: ComfyInstallKind.Portable or ComfyInstallKind.Venv } own && File.Exists(own.Program))
-                    sb.AppendLine($"Its Python, with Pillow and numpy for cropping or changing a picture: {own.Program}.");
+                {
+                    var has = new List<string> { "Pillow", "numpy" };
+                    has.AddRange(new[] { ("rembg", "rembg (cuts out a background)"), ("cv2", "OpenCV") }
+                        .Where(p => own.SitePackages is { } site && Directory.Exists(Path.Combine(site, p.Item1))).Select(p => p.Item2));
+                    sb.AppendLine($"Its Python has {string.Join(", ", has.SkipLast(1))} and {has[^1]}, " +
+                                  $"for cropping or changing a picture without installing anything: {own.Program}.");
+                }
             }
             if (dirs.TryGetValue("output", out var output)) sb.AppendLine($"Output folder: {output}.");
         }

@@ -452,6 +452,25 @@ public class ComfyWorkflowTests
         Assert.Contains("one of euler, euler_ancestral, dpmpp_2m", Library.Find("KSampler")!.Details());
         Assert.Contains("ComfyUI-VideoHelperSuite", Library.Find("VHS_VideoCombine")!.Signature());
     }
+
+    [Fact]
+    public void Node_search_finds_what_a_node_does_by_its_inputs()
+    {
+        // Finding only paid nodes for "background remove", qwen3.8 pip-installed rembg, while the
+        // Trellis2 node in the workflow it was running had remove_background.
+        var library = ComfyNodeLibrary.Parse(JsonNode.Parse("""
+            {"Trellis2PreProcessImage": {"display_name": "Trellis2 - PreProcess Image", "category": "Trellis2Wrapper", "python_module": "custom_nodes.ComfyUI-Trellis2",
+               "input": {"required": {"image": ["IMAGE"], "padding": ["INT", {"default": 0}], "remove_background": ["BOOLEAN", {"default": false}], "max_size": ["INT", {"default": 2048}]}},
+               "output": ["IMAGE"], "output_name": ["image"]},
+             "BriaRemoveImageBackground": {"display_name": "Bria Remove Image Background", "category": "api node/image/Bria", "api_node": true,
+               "input": {"required": {"image": ["IMAGE"], "seed": ["INT", {"default": 0}]}}, "output": ["IMAGE"], "output_name": ["IMAGE"]},
+             "LoadImage": {"display_name": "Load Image", "category": "image", "input": {"required": {"image": ["COMBO", {"options": []}]}}, "output": ["IMAGE", "MASK"], "output_name": ["IMAGE", "MASK"]}}
+            """)!.AsObject());
+        var found = library.Search("background remove", 5);
+        Assert.Equal("Trellis2PreProcessImage", found[0].Name);
+        Assert.Contains("remove_background", found[0].Signature());
+        Assert.Equal("LoadImage", library.Search("load image", 5)[0].Name);
+    }
 }
 
 public class ComfyTemplateTests
@@ -778,7 +797,12 @@ public class ComfyToolTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(python)!);
         File.WriteAllText(python, "");
         result = await Call("""{"action": "status"}""");
-        Assert.Contains($"Its Python, with Pillow and numpy for cropping or changing a picture: {python}.", result.Text);
+        Assert.Contains($"Its Python has Pillow and numpy, for cropping or changing a picture without installing anything: {python}.", result.Text);
+
+        // To cut a character out for a 3D model, rembg was pip-installed into the PC's own Python.
+        Directory.CreateDirectory(Path.Combine(_server.Root, "python_embeded", "Lib", "site-packages", "rembg"));
+        result = await Call("""{"action": "status"}""");
+        Assert.Contains("Its Python has Pillow, numpy and rembg (cuts out a background), for cropping", result.Text);
     }
 
     [Fact]
