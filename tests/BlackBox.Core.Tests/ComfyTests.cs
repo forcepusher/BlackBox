@@ -739,6 +739,32 @@ public class ComfyToolTests : IDisposable
     }
 
     [Fact]
+    public async Task A_masked_repaint_without_differential_diffusion_is_told_how_to_lose_the_edge()
+    {
+        // An outpainted panorama met the photo with a hard edge on both sides, and was called natural.
+        var masked = ComfyWorkflow.FromApi(ComfyWorkflow.ParseText("""
+            {"1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "flux1-dev-fp8.safetensors"}},
+             "2": {"class_type": "LoadImage", "inputs": {"image": "waterfall.jpg"}},
+             "3": {"class_type": "ImagePadForOutpaint", "inputs": {"image": ["2", 0], "left": 640, "top": 0, "right": 640, "bottom": 0, "feathering": 40}},
+             "4": {"class_type": "VAEEncode", "inputs": {"pixels": ["3", 0], "vae": ["1", 2]}},
+             "5": {"class_type": "SetLatentNoiseMask", "inputs": {"samples": ["4", 0], "mask": ["3", 1]}},
+             "9": {"class_type": "KSampler", "inputs": {"model": ["1", 0], "latent_image": ["5", 0]}}}
+            """));
+        Assert.Contains("DifferentialDiffusion", ComfyTool.MaskNote(masked));
+        masked.Nodes["12"] = new JsonObject { ["class_type"] = "DifferentialDiffusion", ["inputs"] = new JsonObject { ["model"] = new JsonArray("1", 0) } };
+        Assert.Null(ComfyTool.MaskNote(masked));
+        Assert.Null(ComfyTool.MaskNote(Load(FakeComfyServer.ApiWorkflow)));
+
+        // Asked about the nodes before the first run, it hears it then.
+        var nodes = await Call("""{"action": "nodes", "names": ["ImagePadForOutpaint", "KSampler"]}""");
+        Assert.Contains("unless the model goes through DifferentialDiffusion", nodes.Text);
+        nodes = await Call("""{"action": "nodes", "names": ["KSampler"]}""");
+        Assert.DoesNotContain("DifferentialDiffusion", nodes.Text);
+    }
+
+    private static ComfyWorkflow Load(string json) => ComfyWorkflow.FromApi(ComfyWorkflow.ParseText(json));
+
+    [Fact]
     public async Task Status_names_the_python_of_a_portable_comfyui_for_cropping_pictures()
     {
         // A crop of a reference sheet guessed at python\python.exe and searched the disk first.

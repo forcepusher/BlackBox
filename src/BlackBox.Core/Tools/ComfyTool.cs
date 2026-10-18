@@ -396,6 +396,9 @@ public sealed class ComfyTool : Tool
                     sb.AppendLine(def.Details());
                 sb.AppendLine();
             }
+            // Before the first run of an outpaint or inpaint workflow, not after a seamed one.
+            if (names.Any(n => n.Trim() is "SetLatentNoiseMask" or "ImagePadForOutpaint"))
+                sb.AppendLine(char.ToUpperInvariant(MaskAdvice[0]) + MaskAdvice[1..]);
             return new ToolResult(sb.ToString().TrimEnd());
         }
         var search = GetString(args, "search") ?? throw new ToolArgumentException("Give search (words) or names (node types) for action=nodes.");
@@ -777,8 +780,35 @@ public sealed class ComfyTool : Tool
         if (await SizeNoteAsync(api, hub, workflow, used, result.Files ?? [], ct).ConfigureAwait(false) is { } sizeNote)
             after.Add(sizeNote);
         after.AddRange(await LoraNotesAsync(api, hub, used, ct).ConfigureAwait(false));
+        if (!_maskNoted && MaskNote(workflow) is { } maskNote)
+        {
+            _maskNoted = true;
+            after.Add(maskNote);
+        }
         after.AddRange(await CardsAsync(api, hub, used, ct).ConfigureAwait(false));
         return after.Count > 0 ? result with { Text = result.Text + "\n\n" + string.Join("\n\n", after) } : result;
+    }
+
+    private bool _maskNoted;
+
+    /// <summary>How a part repainted through a mask meets the rest of the picture without an edge.</summary>
+    internal const string MaskAdvice =
+        "a part repainted through a mask (SetLatentNoiseMask, a picture padded with ImagePadForOutpaint) meets the rest with a hard edge, " +
+        "unless the model goes through DifferentialDiffusion on its way to the sampler; give the mask a soft edge too (ImagePadForOutpaint's feathering about 200).";
+
+    /// <summary>
+    /// A note when a workflow repaints part of a picture through a mask and its model doesn't go
+    /// through DifferentialDiffusion. Asked to extend a photo into a panorama, qwen3.8 padded it
+    /// (feathering 40) and had Flux.1 dev draw the sides: both times they met the photo with a hard
+    /// edge, and it called the second "natural". With the model through DifferentialDiffusion the
+    /// same seed joined without one; a 192-pixel feather alone still showed it.
+    /// </summary>
+    internal static string? MaskNote(ComfyWorkflow workflow)
+    {
+        var types = workflow.All().Select(n => ComfyWorkflow.ClassOf(n.Node)).ToHashSet(StringComparer.Ordinal);
+        return types.Contains("SetLatentNoiseMask") && !types.Contains("DifferentialDiffusion")
+            ? "Note: " + MaskAdvice + " Look at where the new part meets the old in the result."
+            : null;
     }
 
     /// <summary>The LoRAs and checkpoints whose fit this task has been told about.</summary>
