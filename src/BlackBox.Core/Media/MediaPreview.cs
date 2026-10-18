@@ -106,7 +106,10 @@ public static class MediaPreview
             if (!makeTile)
                 return ($"picture {w}x{h}, {size}", null, "");
             using var bitmap = SKBitmap.Decode(path) ?? throw new InvalidDataException("not a picture this can read");
-            return ($"picture {w}x{h}, {size}", Fit(bitmap, TileWidth, TileWidth), "the picture");
+            // Shown on white, an all-transparent picture looks blank, and a model may describe what
+            // it expected to see in it.
+            var clear = BlackBox.Core.Tools.Picture.Transparency(bitmap) is { } t ? $", {t} (shown on white)" : "";
+            return ($"picture {w}x{h}, {size}{clear}", Fit(bitmap, TileWidth, TileWidth), "the picture");
         }
         var info = codec.FrameInfo;
         var duration = TimeSpan.FromMilliseconds(info.Sum(f => Math.Max(f.Duration, 10)));

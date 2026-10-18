@@ -18,8 +18,28 @@ internal static class Picture
 
     public static bool Handles(string path) => Types.Contains(Path.GetExtension(path).ToLowerInvariant());
 
-    /// <summary>A picture as the model sees it: its own size, the size it is shown at, and the JPEG.</summary>
-    public sealed record Shown(int Width, int Height, int ShownWidth, int ShownHeight, byte[] Jpeg);
+    /// <summary>A picture as the model sees it: its own size, the size it is shown at, the JPEG, and how much of it is transparent.</summary>
+    public sealed record Shown(int Width, int Height, int ShownWidth, int ShownHeight, byte[] Jpeg, string? Transparency = null);
+
+    /// <summary>
+    /// How much of a picture is fully transparent, in words, or null when none of it is. Shown on
+    /// white, a picture that is all transparent looks blank: asked for a walk cycle sprite sheet on a
+    /// transparent background, qwen3.8 made one whose mask had gone the wrong way, every pixel
+    /// transparent, and described "a 4-frame walk cycle of a knight" in it.
+    /// </summary>
+    internal static string? Transparency(SKBitmap bitmap)
+    {
+        if (bitmap.AlphaType == SKAlphaType.Opaque || bitmap.BytesPerPixel != 4 || bitmap.ColorType is not (SKColorType.Rgba8888 or SKColorType.Bgra8888))
+            return null;
+        var pixels = bitmap.GetPixelSpan();
+        long clear = 0, all = (long)bitmap.Width * bitmap.Height;
+        for (var i = 3; i < pixels.Length; i += 4)
+            if (pixels[i] == 0) clear++;
+        if (clear == 0)
+            return null;
+        return clear == all ? "fully transparent: nothing in it shows"
+            : $"{Math.Max(1, (int)Math.Round(100.0 * clear / all))}% of it transparent";
+    }
 
     /// <summary>The picture scaled for the model; null when the file isn't a picture this can read.</summary>
     public static Shown? Load(string path)
@@ -53,7 +73,7 @@ internal static class Picture
             surface.Canvas.DrawBitmap(original, new SKRect(0, 0, width, height), paint);
         using var image = surface.Snapshot();
         using var jpeg = image.Encode(SKEncodedImageFormat.Jpeg, 85);
-        return new Shown(original.Width, original.Height, width, height, jpeg.ToArray());
+        return new Shown(original.Width, original.Height, width, height, jpeg.ToArray(), Transparency(original));
     }
 
     /// <param name="grid">The grid the model points on (1000), or null when it points in pixels.</param>
@@ -62,7 +82,8 @@ internal static class Picture
         if (Load(path) is not { } picture)
             return ToolResult.Error($"{path} could not be read as a picture (damaged, or not what its name says).");
         var size = picture.ShownWidth == picture.Width && picture.ShownHeight == picture.Height ? "" : $", shown at {picture.ShownWidth}x{picture.ShownHeight}";
-        return new ToolResult($"{path}: a {picture.Width}x{picture.Height} picture{size}{GridNote(picture, grid)}.", picture.Jpeg,
+        var clear = picture.Transparency is { } t ? $", {t} (shown on white)" : "";
+        return new ToolResult($"{path}: a {picture.Width}x{picture.Height} picture{clear}{size}{GridNote(picture, grid)}.", picture.Jpeg,
             ImageCaption: $"The picture {Path.GetFileName(path)}:");
     }
 

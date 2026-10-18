@@ -58,6 +58,30 @@ public class ReferencePictureTests : IDisposable
         Assert.Empty(UserInput.PicturesIn([new UserInput("hello").ToMessage(seesImages: true)]));
     }
 
+    // A walk cycle sheet "on a transparent background" came out with every pixel transparent, blank on
+    // white, and qwen3.8 described four knights in it.
+    [Fact]
+    public void How_much_of_a_picture_is_transparent_is_said_with_it()
+    {
+        var blank = Png("knight_walk.png", 64, 48, SKColors.Transparent);
+        Assert.Contains("a 64x48 picture, fully transparent: nothing in it shows (shown on white)", Picture.Read(blank).Text);
+        Assert.Contains("fully transparent: nothing in it shows", MediaPreview.Look(blank, null, makeTile: true).Line);
+
+        var sprite = Path.Combine(_dir, "knight.png");
+        using (var bitmap = new SKBitmap(new SKImageInfo(40, 40, SKColorType.Rgba8888, SKAlphaType.Premul)))
+        {
+            bitmap.Erase(SKColors.Transparent);
+            using (var canvas = new SKCanvas(bitmap))
+                canvas.DrawRect(0, 0, 20, 40, new SKPaint { Color = SKColors.SteelBlue });
+            using var data = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+            File.WriteAllBytes(sprite, data.ToArray());
+        }
+        Assert.Contains("50% of it transparent", Picture.Read(sprite).Text);
+
+        // An opaque one says nothing about it.
+        Assert.DoesNotContain("transparent", Picture.Read(Png("photo.png", 30, 20, SKColors.Gray)).Text);
+    }
+
     // Asked to crop the clothed figure from the sheet, qwen3.8 read its corner on its 0-1000 grid and
     // cropped at those numbers as pixels: three crops of the wrong figure.
     [Fact]
