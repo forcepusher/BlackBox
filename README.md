@@ -115,18 +115,26 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   Illustrious model, Nemotron wrote its prompt in plain sentences and ran the template at 512x760;
   the model's Civitai page asks for quality tags and tag-style prompts, and its maker's pictures
   were made at 768x1344 with a hires pass. Four tries came out young, soft and off-style. Now a
-  checkpoint or LoRA comes with its card the first time a task meets it (`action=models` with its
-  name, a template's view, or after its first run): what its page says about settings and
+  checkpoint or LoRA comes with its card the first time a task meets it (`action=models search=`
+  its file name, a template's view, or after its first run): what its page says about settings and
   prompts, its trigger words, the size its base model is made for, and how one of its maker's own
-  pictures was made (prompt, negative prompt, sampler as ComfyUI names it, CFG, steps, size, clip
-  skip, hires pass), with what AUTOMATIC1111's settings are in ComfyUI. The file is found on
-  Civitai by Civitai's AutoV1 hash (64 KB a megabyte into it, no time at all) and its size, and
-  the cards are kept in `Data/comfyui/model-cards.json`. A file Civitai doesn't know gets its base
-  model from its own tensor names. A run that makes its pictures at under half the size its
-  checkpoint is made for says so. And a picture the user gives to follow (a character, a reference
-  sheet) is where the result starts: the tool tells the model to start from it, image to image,
-  and to crop or scale it inside the workflow. In that chat it described the reference sheet in
-  words for four tries, then cropped it with PowerShell in four calls, two of which failed.
+  pictures was made (prompt, negative prompt, sampler and schedule as ComfyUI names them, CFG,
+  steps, size, clip skip, hires pass and its upscaler), with what AUTOMATIC1111's settings are in
+  ComfyUI. The file is found on Civitai by its SHA-256, worked out once in the background and kept
+  with the file's size and time in `Data/comfyui/model-hashes.json` (6.6 GB took 7 s); Civitai's
+  quick AutoV1 hash, tried first, gave this PC's Pony Diffusion V6 XL and Juggernaut XL the cards of
+  other models of the same size, fine-tunes that share those bytes. A card waits ten seconds at
+  most, so a 27 GB checkpoint's first hash finishes in the background and its card comes with a
+  later call. Cards are kept in `Data/comfyui/model-cards.json`; a file Civitai doesn't know gets
+  its base model from its own tensor names. A run that makes its pictures at under half the size
+  its checkpoint is made for says so, image to image too (judged by the picture it made, with how
+  to scale and pad the picture it starts from), and so does a LoRA on a checkpoint of another base
+  model (one for SD 1.5 on SDXL isn't applied at all; an SDXL one on Pony, weaker). And a picture
+  the user gives to follow (a character, a reference sheet) is where the result starts: the tool
+  tells the model to start from it, image to image, and to crop or scale it inside the workflow; to
+  change or restyle a picture (a hat on the cat, a photo made anime), an installed edit model such
+  as Qwen-Image-Edit. In that chat it described the reference sheet in words for four tries, then
+  cropped it with PowerShell in four calls, two of which failed.
 - **The picture to follow next to each result.** The look at what a job made comes beside the
   picture the user gave in the chat (the latest message that came with pictures, found again in
   later runs), labelled, at the same height, so the model compares the two rather than the result
@@ -144,8 +152,9 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   LoadVideo name a file is uploaded. It waits for the job while its card shows where it is
   ("SamplerCustomAdvanced, step 2 of 3 · 8:21"); Stop and Pause/Break cancel it in ComfyUI too, and a
   message from the user ends the wait while the job goes on (`action=status` with its id picks it
-  up again). The files come back with their paths, `save_to` copies them where the task wants them,
-  and the model gets a look at them (below) to check its work.
+  up again, `action=cancel` stops that one job when the message made it pointless). The files come
+  back with their paths, `save_to` copies them where the task wants them, and the model gets a look
+  at them (below) to check its work, with how much of a picture is transparent said in words.
 - **ComfyUI itself.** The user's own ComfyUI comes first, whatever kind it is. One that runs (at
   the address used last, or on ComfyUI's usual ports: the portable build's 8188, the Desktop app's
   8000) is used as it runs, and the first answer says which one it is. Otherwise BlackBox starts the
@@ -240,6 +249,50 @@ couldn't load, and a retry that left out the length and size of the first run (a
 without changes the last one made now comes with a note saying which). Three of the results went to
 `Data/scratch`; the prompt has since been told that what the user asked for never goes there.
 
+### A user's chat played again, and what model cards changed
+The chat that led to model cards: "Generate me a bunny picture using this as a reference sheet using
+furry nova model" with the user's sheet, then "A bit too young looking, make him mature", and "And
+more furry ofc" and "The style is off" typed 23 and 31 seconds into that run, played with the
+command-line runner's `--then` on qwen3.8 (each run in a Data folder of its own; the pictures were
+kept safe for work by a custom instruction):
+
+| Build | Time | Model calls · tool calls (errors) | What it did |
+| --- | --- | --- | --- |
+| develop before model cards | 11:32 | 16 · 17 (0) | a prompt in words with the user's template at 512x760, then upscaled; a flat cartoon |
+| model cards, as first written | 18:18 | 33 · 38 (3) | cut the clothed view out of the sheet (seven of thirteen minutes: the wrong figure three times), image to image with the card's quality tags, CFG 4.5 and clip skip 2 at 432x1216; close to the sheet's style |
+| with the fixes below | 14:28 | 14 · 16 (0) | the same view at 1 megapixel and a hires pass to 896x2520; mature, 2D |
+| with the fixes, Nemotron on Kilo | 7:40 | 12 · 12 (0) | a first try from the whole sheet, then the clothed views |
+| with all the fixes below, at the end of the day | 17:19 | 12 · 12 (0) | the clothed view at 704x1696, image to image; then mature, furrier and in the sheet's flat style at once. It stopped ComfyUI to drop the job the later messages made stale (action=cancel does that now) |
+
+37 more requests on this PC (styles, models found and downloaded, LoRAs, edits, the user's character
+in a new scene, video with and without sound, music, songs, voices, 3D) all made what was asked, and
+showed what the fixes are for: Civitai's quick AutoV1 hash gave Pony Diffusion V6 XL and Juggernaut
+XL other models' cards (they are found by SHA-256 now); qwen3.8 read places in pictures on its
+0-1000 grid as pixels (a crop test went from a wrong head to both crops right first time); Juggernaut's
+card left out its maker's Karras schedule, and DPM++ 2M SDE with the normal one speckled the sky; an
+SDXL LoRA went on Pony; restyling a photo by image to image stayed a painted photo where the installed
+Qwen-Image-Edit made it anime; an Anima "checkpoint" from Civitai was the diffusion model alone; and
+every ffmpeg call came back as "Exit code 1".
+
+31 requests after those (the user's character in new scenes and poses, a poster, panoramas, a
+talking video, 3D models, game sprites, a walk cycle, seamless textures and tiles, a character sheet,
+an icon, a cut-out, a new sky, colorizing, sound effects, a music loop, sound for a silent video) found
+the rest. A panorama painted through a mask met the photo with a hard edge until the model went
+through DifferentialDiffusion, and another run downloaded Flux Fill and its text encoder (32 GB) for
+what the installed Flux.1 Dev does as well in a minute. A 3D model of the user's character from its
+one picture was a relief on a wall (an hour, then stopped); its side and back views made with the
+multiple-angles template and given with the front to a multi-view template made a whole figure in 13
+minutes, and after the note it does that by itself. To cut the character out, qwen3.8 pip-installed
+rembg, onnxruntime and 18 other packages into the PC's own Python; ComfyUI's Python had rembg without
+the onnxruntime it needs (and there rembg exits ComfyUI's job thread, so the job hangs), and node
+search didn't look at inputs such as Trellis2's `remove_background`. Finding no pixel art template, it
+drew a knight by hand with Pixel Art XL installed; listed by the search, the LoRA made a far better
+one in half the time. A texture made seamless by cross-fading its edges tiled with doubled stones,
+where rolling it by half and repainting the seam cross tiles cleanly, if the light is even. A sprite
+sheet whose mask had gone the wrong way was all transparent and was described as four knights, since
+it looked blank on white; and told "more furry" while a picture was being made, qwen3.8 stopped
+ComfyUI to drop the stale job (`action=cancel` stops one job now).
+
 ### On a PC without a graphics card
 A laptop with Intel Iris Xe graphics (none ComfyUI can use), a 14-core i7-1280P and 16 GB of RAM,
 with no ComfyUI and no models on it at first, and the same qwen3.8 over a VPN, each request one
@@ -314,7 +367,10 @@ copied in a browser, files copied in Explorer), or pick them with the paperclip 
 They wait under the box, × takes one off, and they go with the next message; a message can be
 files alone. The agent gets each one's full path, to work on it with its tools (a picture to start
 a ComfyUI job from, a document to read, a folder to go through), and sees the pictures among them
-as `read_file` shows a picture; a model that can't see images gets the paths. A pasted picture is
+as `read_file` shows a picture; a model that can't see images gets the paths. A model that points
+on a 0-1000 grid (Qwen3 and later, Gemma 4, Nemotron) is told how its places in a picture become
+the picture's own pixels, for a crop: qwen3.8 took its grid numbers for pixels of the smaller view
+it was shown and cut the wrong figure from a reference sheet three times. A pasted picture is
 saved as a PNG in `Data/pasted` first and deleted with its chat; dropped files stay where they
 are. Text on the clipboard is pasted as text, also when a picture comes with it (cells copied from
 Excel bring one). The message's bubble shows its pictures and the names of its other files, and a
@@ -766,6 +822,7 @@ dotnet test                       # unit tests
 ./scripts/publish.ps1 -Folder     # classic self-contained folder in publish/BlackBox-win-x64
 dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   # headless run
 dotnet run --project src/BlackBox.Cli -- --yes --attach photo.jpg "make it a watercolor"   # with a file, as if dropped on the window
+dotnet run --project src/BlackBox.Cli -- --yes --then "brighter" --then "@20 and bigger" "make a lighthouse picture"   # a chat played again: each --then once the run before it ends, "@N" N seconds into it
 ./scripts/agent-tasks.ps1         # real desktop task suite (drives your mouse and keyboard)
 ./scripts/game2048-test.ps1       # long run: BlackBox writes, play-tests and fixes its own 2048
 ./scripts/sysadmin-vm.ps1         # once: the portable Debian lab VM (QEMU in .dev/sysadmin-lab, nothing installed)

@@ -635,6 +635,22 @@ public class ComfyModelToolTests : IDisposable
         Assert.Contains("is there already", (await Call(new ComfyTool(), $$"""{"action": "download", "url": "{{_sites.Base}}/files/style_lora.safetensors", "model_folder": "loras"}""")).Text);
     }
 
+    // Civitai lists MiaoMiao Harem, an Anima model, as a checkpoint, but it is the diffusion model alone:
+    // CheckpointLoaderSimple, which the download named, gives its MODEL and no text encoder or VAE.
+    [Fact]
+    public async Task A_checkpoint_that_is_the_diffusion_model_alone_says_where_its_text_encoder_and_vae_come_from()
+    {
+        var header = Encoding.UTF8.GetBytes("""{"net.blocks.0.weight": {"dtype": "F16", "shape": [1], "data_offsets": [0, 2]}}""");
+        _sites.File("/files/anima_tune.safetensors", [.. BitConverter.GetBytes((ulong)header.Length), .. header, 0, 0]);
+
+        var result = await Call(new ComfyTool(), $$"""{"action": "download", "url": "{{_sites.Base}}/files/anima_tune.safetensors", "model_folder": "checkpoints"}""");
+
+        Assert.False(result.IsError, result.Text);
+        Assert.True(File.Exists(Path.Combine(_comfy.CodeDir, "models", "checkpoints", "anima_tune.safetensors")));
+        Assert.Contains("It holds the diffusion model alone, no text encoder or VAE: CheckpointLoaderSimple (ckpt_name \"anima_tune.safetensors\") gives its MODEL only", result.Text);
+        Assert.Contains("is there already", (await Call(new ComfyTool(), $$"""{"action": "download", "url": "{{_sites.Base}}/files/anima_tune.safetensors", "model_folder": "checkpoints"}""")).Text);
+    }
+
     [Fact]
     public async Task A_model_page_link_is_turned_into_its_files_link()
     {

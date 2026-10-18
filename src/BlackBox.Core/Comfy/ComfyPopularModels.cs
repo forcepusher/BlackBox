@@ -83,10 +83,14 @@ public sealed class ComfyPopularModels(string stateDirectory)
     /// The ones of a <paramref name="kind"/> (checkpoint, LoRA; any when null) on a base (any when
     /// null) whose tags, name or base hold every word, checkpoints first, each in the month's
     /// order; when none holds them all, those that hold the most ("anime girl picture": no tag
-    /// says picture).
+    /// says picture). Words of one or two letters ("XL", "v6", "IL") don't count when there are
+    /// others: searched for "Juggernaut XL", which none of them is, the list offered the month's
+    /// SDXL models, "XL" being in each base model's name.
     /// </summary>
     public static List<PopularModel> Matching(IEnumerable<PopularModel> all, IReadOnlyList<string> words, string? kind, string? baseModel)
     {
+        if (words.Where(w => w.Length > 2).ToList() is { Count: > 0 } longer)
+            words = longer;
         var folder = ComfyModelSearch.KindOf(kind)?.Folder;
         var scored = all.Where(p => (folder is null || p.Model.Folder == folder) && (baseModel is null || ComfyModelSearch.SameBase(p.Model.Base, baseModel)))
             .Select(p =>

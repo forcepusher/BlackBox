@@ -22,6 +22,7 @@ internal sealed class FakeComfyServer : IDisposable
     public Uri Url { get; }
     public List<JsonObject> Prompts { get; } = [];
     public List<string> Uploads { get; } = [];
+    public List<string> Interrupts { get; } = [];
     public int Frees { get; private set; }
     public int NodeTypeFetches { get; private set; }
 
@@ -31,6 +32,9 @@ internal sealed class FakeComfyServer : IDisposable
     /// <summary>Whether it says it runs on the CPU, as on a PC without a graphics card ComfyUI can use.</summary>
     public bool OnCpu { get; set; }
     public List<string> Checkpoints { get; } = ["v1-5-pruned-emaonly-fp16.safetensors", "sdxl.safetensors"];
+
+    /// <summary>The LoRA files it lists (models/loras).</summary>
+    public List<string> Loras { get; } = [];
 
     /// <summary>What a finished job's history says; the default saves one picture.</summary>
     public Func<string, JsonObject>? History { get; set; }
@@ -59,6 +63,9 @@ internal sealed class FakeComfyServer : IDisposable
         "name": "VAEDecode", "display_name": "VAE Decode", "category": "latent", "python_module": "nodes", "output_node": false},
       "SaveImage": {"input": {"required": {"images": ["IMAGE", {}], "filename_prefix": ["STRING", {"default": "ComfyUI"}]}}, "output": [], "output_name": [],
         "name": "SaveImage", "display_name": "Save Image", "category": "image", "python_module": "nodes", "output_node": true},
+      "LoraLoader": {"input": {"required": {"model": ["MODEL", {}], "clip": ["CLIP", {}], "lora_name": [["pixel.safetensors"], {}],
+        "strength_model": ["FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0}], "strength_clip": ["FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0}]}},
+        "output": ["MODEL", "CLIP"], "output_name": ["MODEL", "CLIP"], "name": "LoraLoader", "display_name": "Load LoRA", "category": "loaders", "python_module": "nodes", "output_node": false},
       "LoadImage": {"input": {"required": {"image": [["example.png"], {"image_upload": true}]}}, "output": ["IMAGE", "MASK"], "output_name": ["IMAGE", "MASK"],
         "name": "LoadImage", "display_name": "Load Image", "category": "image", "python_module": "nodes", "output_node": false},
       "ImageScaleToTotalPixels": {"input": {"required": {"image": ["IMAGE", {}], "upscale_method": [["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], {}],
@@ -129,13 +136,14 @@ internal sealed class FakeComfyServer : IDisposable
                 Reply(ctx, 200, new JsonArray([.. Checkpoints.Select(c => JsonValue.Create(c))]).ToJsonString());
                 return;
             case "models/loras":
-                Reply(ctx, 200, "[]");
+                Reply(ctx, 200, new JsonArray([.. Loras.Select(l => JsonValue.Create(l))]).ToJsonString());
                 return;
             case "internal/folder_paths":
                 Reply(ctx, 200, new JsonObject
                 {
                     ["custom_nodes"] = new JsonArray(Path.Combine(CodeDir, "custom_nodes")),
                     ["checkpoints"] = new JsonArray(Path.Combine(CodeDir, "models", "checkpoints")),
+                    ["loras"] = new JsonArray(Path.Combine(CodeDir, "models", "loras")),
                 }.ToJsonString());
                 return;
             case "queue":
@@ -158,6 +166,7 @@ internal sealed class FakeComfyServer : IDisposable
                 Reply(ctx, 200, "");
                 return;
             case "interrupt":
+                Interrupts.Add(body);
                 Reply(ctx, 200, "");
                 return;
             case "userdata":
@@ -413,6 +422,15 @@ public class ComfyWorkflowTests
         Assert.Contains(problems, p => p.Contains("no node \"129:39\"") && p.Contains("129:93"));
         Assert.Contains(problems, p => p.Contains("no input \"txt\"") && p.Contains("\"text\""));
         Assert.Contains(problems, p => p.Contains("node id.input name"));
+
+        // A template's on/off switch set by its id alone: the node holds a single value.
+        var lightning = Load("""
+            {"433:443": {"class_type": "PrimitiveBoolean", "inputs": {"value": true}},
+             "3": {"class_type": "KSampler", "inputs": {"seed": 1, "steps": 20, "model": ["4", 0]}}}
+            """);
+        Assert.Empty(lightning.Set(new JsonObject { ["433:443"] = false }, Library));
+        Assert.False((bool)lightning.Nodes["433:443"]!["inputs"]!["value"]!);
+        Assert.Contains(lightning.Set(new JsonObject { ["3"] = 7 }, Library), p => p.Contains("node id.input name"));
     }
 
     [Fact]
@@ -444,6 +462,25 @@ public class ComfyWorkflowTests
         Assert.Contains("seed: INT, default 0", Library.Find("KSampler")!.Details());
         Assert.Contains("one of euler, euler_ancestral, dpmpp_2m", Library.Find("KSampler")!.Details());
         Assert.Contains("ComfyUI-VideoHelperSuite", Library.Find("VHS_VideoCombine")!.Signature());
+    }
+
+    [Fact]
+    public void Node_search_finds_what_a_node_does_by_its_inputs()
+    {
+        // Finding only paid nodes for "background remove", qwen3.8 pip-installed rembg, while the
+        // Trellis2 node in the workflow it was running had remove_background.
+        var library = ComfyNodeLibrary.Parse(JsonNode.Parse("""
+            {"Trellis2PreProcessImage": {"display_name": "Trellis2 - PreProcess Image", "category": "Trellis2Wrapper", "python_module": "custom_nodes.ComfyUI-Trellis2",
+               "input": {"required": {"image": ["IMAGE"], "padding": ["INT", {"default": 0}], "remove_background": ["BOOLEAN", {"default": false}], "max_size": ["INT", {"default": 2048}]}},
+               "output": ["IMAGE"], "output_name": ["image"]},
+             "BriaRemoveImageBackground": {"display_name": "Bria Remove Image Background", "category": "api node/image/Bria", "api_node": true,
+               "input": {"required": {"image": ["IMAGE"], "seed": ["INT", {"default": 0}]}}, "output": ["IMAGE"], "output_name": ["IMAGE"]},
+             "LoadImage": {"display_name": "Load Image", "category": "image", "input": {"required": {"image": ["COMBO", {"options": []}]}}, "output": ["IMAGE", "MASK"], "output_name": ["IMAGE", "MASK"]}}
+            """)!.AsObject());
+        var found = library.Search("background remove", 5);
+        Assert.Equal("Trellis2PreProcessImage", found[0].Name);
+        Assert.Contains("remove_background", found[0].Signature());
+        Assert.Equal("LoadImage", library.Search("load image", 5)[0].Name);
     }
 }
 
@@ -610,6 +647,40 @@ public class ComfyToolTests : IDisposable
         }
     }
 
+    // Asked for a video with the sound of wind, qwen3.8 searched ComfyUI's folder for ffmpeg.exe for three
+    // minutes to put the sound on it.
+    [Fact]
+    public async Task A_sound_or_video_made_comes_with_where_ffmpeg_is()
+    {
+        File.WriteAllBytes(Path.Combine(_server.OutputDir, "wind_00001_.mp3"), [0, 1, 2]);
+        _server.History = _ => JsonNode.Parse("""
+            {"status": {"status_str": "success", "completed": true, "messages": []},
+             "outputs": {"9": {"audio": [{"filename": "wind_00001_.mp3", "subfolder": "", "type": "output"}]}}}
+            """)!.AsObject();
+        var ctx = new ToolContext
+        {
+            Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = _home, Comfy = _hub,
+            ScratchDirectory = _ctx.ScratchDirectory, Media = new FfmpegOnly(@"C:	oolsfmpeg.exe"),
+        };
+
+        var sound = await new ComfyTool().ExecuteAsync(JsonNode.Parse("""{"action": "run", "name": "Mine/fox"}""")!.AsObject(), ctx, CancellationToken.None);
+
+        Assert.False(sound.IsError, sound.Text);
+        Assert.Contains(@"To cut, join or put a sound on these: C:	oolsfmpeg.exe", sound.Text);
+        // A picture needs no ffmpeg.
+        _server.History = null;
+        var picture = await new ComfyTool().ExecuteAsync(JsonNode.Parse("""{"action": "run", "name": "Mine/fox"}""")!.AsObject(), ctx, CancellationToken.None);
+        Assert.DoesNotContain("ffmpeg", picture.Text);
+    }
+
+    private sealed class FfmpegOnly(string program) : BlackBox.Core.Media.IMediaDecoder
+    {
+        public BlackBox.Core.Media.MediaInfo? Probe(string path) => null;
+        public BlackBox.Core.Media.IVideoReader? OpenVideo(string path, int maxSide) => null;
+        public BlackBox.Core.Media.IAudioReader? OpenAudio(string path) => null;
+        public string? Ffmpeg => program;
+    }
+
     [Fact]
     public async Task A_failed_job_says_where_and_why_with_a_hint_for_running_out_of_memory()
     {
@@ -698,6 +769,85 @@ public class ComfyToolTests : IDisposable
     }
 
     [Fact]
+    public async Task A_masked_repaint_without_differential_diffusion_is_told_how_to_lose_the_edge()
+    {
+        // An outpainted panorama met the photo with a hard edge on both sides, and was called natural.
+        var masked = ComfyWorkflow.FromApi(ComfyWorkflow.ParseText("""
+            {"1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "flux1-dev-fp8.safetensors"}},
+             "2": {"class_type": "LoadImage", "inputs": {"image": "waterfall.jpg"}},
+             "3": {"class_type": "ImagePadForOutpaint", "inputs": {"image": ["2", 0], "left": 640, "top": 0, "right": 640, "bottom": 0, "feathering": 40}},
+             "4": {"class_type": "VAEEncode", "inputs": {"pixels": ["3", 0], "vae": ["1", 2]}},
+             "5": {"class_type": "SetLatentNoiseMask", "inputs": {"samples": ["4", 0], "mask": ["3", 1]}},
+             "9": {"class_type": "KSampler", "inputs": {"model": ["1", 0], "latent_image": ["5", 0]}}}
+            """));
+        Assert.Contains("DifferentialDiffusion", ComfyTool.MaskNote(masked));
+        masked.Nodes["12"] = new JsonObject { ["class_type"] = "DifferentialDiffusion", ["inputs"] = new JsonObject { ["model"] = new JsonArray("1", 0) } };
+        Assert.Null(ComfyTool.MaskNote(masked));
+        Assert.Null(ComfyTool.MaskNote(Load(FakeComfyServer.ApiWorkflow)));
+
+        // Asked about the nodes before the first run, it hears it then.
+        var nodes = await Call("""{"action": "nodes", "names": ["ImagePadForOutpaint", "KSampler"]}""");
+        Assert.Contains("unless the model goes through DifferentialDiffusion", nodes.Text);
+        nodes = await Call("""{"action": "nodes", "names": ["KSampler"]}""");
+        Assert.DoesNotContain("DifferentialDiffusion", nodes.Text);
+    }
+
+    private static ComfyWorkflow Load(string json) => ComfyWorkflow.FromApi(ComfyWorkflow.ParseText(json));
+
+    [Fact]
+    public async Task A_job_the_users_message_made_pointless_is_cancelled_alone()
+    {
+        // Told "and more furry" while a picture was being made, qwen3.8 stopped the whole server.
+        var result = await Call("""{"action": "cancel", "prompt_id": "job7"}""");
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains("Job job7 is stopped and out of the queue. ComfyUI keeps running", result.Text);
+        Assert.Contains("\"job7\"", Assert.Single(_server.Interrupts));
+        await Assert.ThrowsAsync<ToolArgumentException>(() => Call("""{"action": "cancel"}"""));
+
+        // A run the user wrote during says how.
+        _ctx.UserMessage = new CancellationToken(true);
+        var going = await Call(new JsonObject { ["action"] = "run", ["workflow"] = JsonNode.Parse(FakeComfyServer.ApiWorkflow) }.ToJsonString());
+        Assert.Contains("The user wrote to you meanwhile", going.Text);
+        Assert.Contains("stop it with action=cancel prompt_id=job1 (not action=stop, which stops ComfyUI)", going.Text);
+    }
+
+    [Fact]
+    public async Task Status_names_the_python_of_a_portable_comfyui_for_cropping_pictures()
+    {
+        // A crop of a reference sheet guessed at python\python.exe and searched the disk first.
+        var result = await Call("""{"action": "status"}""");
+        Assert.DoesNotContain("Its Python", result.Text);
+
+        File.WriteAllText(Path.Combine(_server.CodeDir, "main.py"), "");
+        File.WriteAllText(Path.Combine(_server.CodeDir, "nodes.py"), "");
+        Directory.CreateDirectory(Path.Combine(_server.CodeDir, "comfy"));
+        var python = Path.Combine(_server.Root, "python_embeded", "python.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(python)!);
+        File.WriteAllText(python, "");
+        result = await Call("""{"action": "status"}""");
+        Assert.Contains($"Its Python has Pillow and numpy, for working on the pictures and models it makes: {python}.", result.Text);
+
+        // To cut a character out for a 3D model, rembg was pip-installed into the PC's own Python, and trimesh to look into the model.
+        var site = Path.Combine(_server.Root, "python_embeded", "Lib", "site-packages");
+        Directory.CreateDirectory(Path.Combine(site, "rembg"));
+        Directory.CreateDirectory(Path.Combine(site, "trimesh"));
+        result = await Call("""{"action": "status"}""");
+        // rembg can't run without onnxruntime, which this ComfyUI's Python hadn't got.
+        Assert.Contains("rembg (cuts out a background once onnxruntime is installed into this Python;", result.Text);
+        Directory.CreateDirectory(Path.Combine(site, "onnxruntime"));
+        result = await Call("""{"action": "status"}""");
+        Assert.Contains("Its Python has Pillow, numpy, rembg (cuts out a background) and trimesh (3D models), for working", result.Text);
+
+        // A task that never asks for the status hears it with its first call, once: a walk cycle run
+        // pip-installed Pillow into the PC's own Python.
+        var tool = new ComfyTool();
+        var first = await tool.ExecuteAsync(JsonNode.Parse("""{"action": "templates", "search": "fox"}""")!.AsObject(), _ctx, CancellationToken.None);
+        Assert.Contains("Its Python has Pillow", first.Text);
+        var second = await tool.ExecuteAsync(JsonNode.Parse("""{"action": "templates", "search": "fox"}""")!.AsObject(), _ctx, CancellationToken.None);
+        Assert.DoesNotContain("Its Python has", second.Text);
+    }
+
+    [Fact]
     public async Task A_comfyui_the_user_started_keeps_running_and_lets_go_only_of_models_a_job_loaded()
     {
         var stops = 0;
@@ -740,6 +890,59 @@ public class ComfyToolTests : IDisposable
 
         var third = await Run("""{"action": "run", "name": "Mine/fox", "set": {"6.text": "a fox", "3.seed": 3}}""");
         Assert.DoesNotContain("also set", third.Text);
+    }
+
+    [Fact]
+    public async Task A_template_search_names_the_installed_loras_and_checkpoints_that_match_it()
+    {
+        // Finding no pixel art template, qwen3.8 drew a 32x32 knight by hand with Pixel Art XL installed.
+        var models = new Dictionary<string, HashSet<string>>
+        {
+            ["checkpoints"] = ["juggernautXL_ragnarok.safetensors", "novaFurryXL_ilV170.safetensors"],
+            ["loras"] = ["pixel-art-xl-v1.1.safetensors", "Qwen-Edit-2509-Multiple-angles.safetensors", "animeflatLTX.2.3.safetensors"],
+            ["vae"] = ["pixel_vae.safetensors"],
+        };
+        Assert.Equal(["loras/pixel-art-xl-v1.1.safetensors"], ComfyTool.MatchingModels("pixel art sprite of a knight", models));
+        Assert.Equal(["loras/Qwen-Edit-2509-Multiple-angles.safetensors"], ComfyTool.MatchingModels("character angles", models));
+        Assert.Equal(["checkpoints/novaFurryXL_ilV170.safetensors"], ComfyTool.MatchingModels("furry picture", models));
+        Assert.Empty(ComfyTool.MatchingModels("make a picture with a model", models));
+
+        _server.Loras.Add("pixel-art-xl-v1.1.safetensors");
+        var list = await Call("""{"action": "templates", "search": "pixel art"}""");
+        Assert.Contains("Installed models whose names match: loras/pixel-art-xl-v1.1.safetensors.", list.Text);
+    }
+
+    [Fact]
+    public async Task A_search_for_a_seamless_texture_says_to_roll_it_and_repaint_the_seam_cross()
+    {
+        // A cross-fade of the edges tiled with doubled, blurred stones along the joins.
+        var list = await Call("""{"action": "templates", "search": "tileable texture seamless"}""");
+        Assert.Contains("roll it by half so its edges meet in a cross in the middle (numpy's roll in ComfyUI's Python", list.Text);
+        Assert.Contains("the model through DifferentialDiffusion, denoise about 0.75", list.Text);
+        // A tileset's grass came out lighter in the middle: a grid of light squares when tiled.
+        Assert.Contains("flat, even light with no vignette", list.Text);
+        Assert.DoesNotContain("roll it by half", (await Call("""{"action": "templates", "search": "fox"}""")).Text);
+
+        var withPack = ComfyNodeLibrary.Parse(JsonNode.Parse("""
+            {"TextureOffset": {"display_name": "Texture Offset", "category": "Texture Alchemist/Texture",
+               "input": {"required": {"image": ["IMAGE"], "offset_x": ["FLOAT", {"default": 0.0}], "offset_y": ["FLOAT", {"default": 0.0}]}},
+               "output": ["IMAGE", "IMAGE"], "output_name": ["image", "edge_mask"]}}
+            """)!.AsObject());
+        Assert.Contains("TextureOffset with offset_x and offset_y 0.5", ComfyTool.SeamlessAdvice(withPack));
+    }
+
+    [Fact]
+    public async Task A_search_for_outpainting_with_no_ready_template_says_how_to_do_it_with_installed_models()
+    {
+        // One panorama run left seams, the next downloaded Flux Fill and its text encoder, 32 GB,
+        // and two of three drew the photo's waterfall again on a side.
+        var list = await Call("""{"action": "templates", "search": "outpaint extend image"}""");
+        Assert.Contains("No outpaint template here is ready.", list.Text);
+        Assert.Contains("pad the picture (ImagePadForOutpaint) and repaint the padding", list.Text);
+        Assert.Contains("DifferentialDiffusion", list.Text);
+        Assert.Contains("describe in the prompt what the new parts should hold", list.Text);
+        list = await Call("""{"action": "templates", "search": "fox"}""");
+        Assert.DoesNotContain("outpaint", list.Text);
     }
 
     [Fact]
@@ -801,6 +1004,36 @@ public class ComfyToolTests : IDisposable
         Assert.False(result.IsError, result.Text);
         Assert.Single(_server.Uploads);
         Assert.Equal("uploaded.png", (string?)_server.Prompts[0]["prompt"]!["1"]!["inputs"]!["image"]);
+    }
+
+    [Fact]
+    public async Task A_3d_model_from_one_picture_comes_with_how_to_give_it_more_sides()
+    {
+        // From the front picture of the user's character Trellis2 made a relief on a wall; four views
+        // through Hunyuan3D's multi-view template made a whole figure.
+        var picture = Path.Combine(_home, "bunny.png");
+        File.WriteAllBytes(picture, [137, 80, 78, 71]);
+        Directory.CreateDirectory(Path.Combine(_server.OutputDir, "3D"));
+        File.WriteAllText(Path.Combine(_server.OutputDir, "3D", "bunny_00001_.obj"), "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+        _server.History = _ => JsonNode.Parse("""
+            {"status": {"status_str": "success", "completed": true, "messages": []}, "outputs": {"2": {"text": ["3D/bunny_00001_.obj"]}}}
+            """)!.AsObject();
+        var wf = """{"1": {"class_type": "LoadImage", "inputs": {"image": "PATH"}}, "2": {"class_type": "SaveImage", "inputs": {"images": ["1", 0], "filename_prefix": "x"}}}"""
+            .Replace("PATH", picture.Replace("\\", "\\\\"));
+        var run = new JsonObject { ["action"] = "run", ["workflow"] = JsonNode.Parse(wf) };
+        var tool = new ComfyTool();
+        var result = await tool.ExecuteAsync(run.DeepClone().AsObject(), _ctx, CancellationToken.None);
+        Assert.Contains("a 3D model made from one picture guesses the sides it can't see", result.Text);
+        // Once in a task.
+        Assert.DoesNotContain("guesses the sides", (await tool.ExecuteAsync(run.DeepClone().AsObject(), _ctx, CancellationToken.None)).Text);
+
+        var note = ComfyTool.ViewsNote([
+            new ComfyTemplate("workflows/Mesh/3d_hunyuan3d_multiview_to_model", "", "", "", "user", []),
+            new ComfyTemplate("workflows/ImageRotate/templates-1_click_multiple_character_angles-v1.0", "", "", "", "user", []),
+            new ComfyTemplate("workflows/Image/nova-furry-v17", "", "", "", "user", [])]);
+        Assert.Contains("a multi-view template (workflows/Mesh/3d_hunyuan3d_multiview_to_model)", note);
+        Assert.Contains("(workflows/ImageRotate/templates-1_click_multiple_character_angles-v1.0 turns the camera;", note);
+        Assert.Contains("rotate the camera 90 degrees left and right", ComfyTool.ViewsNote([]));
     }
 }
 

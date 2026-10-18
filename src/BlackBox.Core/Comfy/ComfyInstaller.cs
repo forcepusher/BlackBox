@@ -99,13 +99,7 @@ public static partial class ComfyHardware
     /// </summary>
     public static string? TorchBuild(ComfyInstall install)
     {
-        var sitePackages = install.Kind switch
-        {
-            ComfyInstallKind.Portable => Path.Combine(install.Root, "python_embeded", "Lib", "site-packages"),
-            ComfyInstallKind.Venv => Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(install.Program)!)!, "Lib", "site-packages"),
-            _ => null,
-        };
-        var version = sitePackages is null ? null : Path.Combine(sitePackages, "torch", "version.py");
+        var version = install.SitePackages is { } sitePackages ? Path.Combine(sitePackages, "torch", "version.py") : null;
         if (version is null || !File.Exists(version))
             return null;
         try

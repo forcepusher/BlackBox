@@ -26,8 +26,11 @@ public sealed record ModelCard(string Title, string Page, string? Base, IReadOnl
 /// prompt in plain sentences and ran it at 512x760 with the template's settings; the model's page
 /// asks for quality tags and booru-style tags, and its maker's own pictures were made at 768x1344
 /// with a 1.5x hires pass. The pictures came out young, soft and off-style, four times running. A
-/// file is found on Civitai by the hash of 64 KB a megabyte into it (Civitai's "AutoV1"), which
-/// takes no time, unlike hashing 6 GB; it is the file when its size matches too. Cards are kept in
+/// file is found on Civitai by its SHA-256, worked out once and kept with the file's size and time
+/// in Data/comfyui/model-hashes.json (6.9 GB took 7 s here). The quick hash of 64 KB a megabyte in
+/// (Civitai's "AutoV1") was tried first and gave this PC's Pony Diffusion V6 XL the card of
+/// "Incomplete anime pony", a fine-tune of it of the same size: models trained on one base with
+/// its text encoder left as it was share those bytes. Cards are kept in
 /// Data/comfyui/model-cards.json, and a file Civitai doesn't know is asked about again after a week.
 /// </summary>
 public sealed partial class ComfyModelCards(string stateDirectory)
@@ -36,59 +39,97 @@ public sealed partial class ComfyModelCards(string stateDirectory)
     private const int MaxAdvice = 1_200;
 
     private readonly ConcurrentDictionary<string, (ModelCard? Card, DateTime At)> _cards = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The SHA-256 of model files, by path, size and time (see <see cref="HashKey"/>).</summary>
+    private readonly ConcurrentDictionary<string, string> _hashes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Task<string?>> _hashing = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _gate = new();
     private bool _loaded;
 
     private string CacheFile => Path.Combine(stateDirectory, "model-cards.json");
+    private string HashFile => Path.Combine(stateDirectory, "model-hashes.json");
 
-    /// <summary>The card of the model file at <paramref name="path"/>, or null when Civitai doesn't know it or can't be asked.</summary>
+    /// <summary>
+    /// The card of the model file at <paramref name="path"/>, or null when Civitai doesn't know it.
+    /// Throws when Civitai can't be asked or <paramref name="ct"/> ends the wait, which a big file's
+    /// first hash can outlast: the hash goes on being worked out, for the next look.
+    /// </summary>
     public async Task<ModelCard?> LookUpAsync(string path, CancellationToken ct)
     {
-        if (QuickHash(path) is not { } hash)
+        if (await HashAsync(path).WaitAsync(ct).ConfigureAwait(false) is not { } hash)
             return null;
-        var key = $"{hash}:{new FileInfo(path).Length}";
         Load();
-        if (_cards.TryGetValue(key, out var known) && (known.Card is not null || DateTime.UtcNow - known.At < NotFoundLife))
+        if (_cards.TryGetValue(hash, out var known) && (known.Card is not null || DateTime.UtcNow - known.At < NotFoundLife))
             return known.Card;
-        ModelCard? card;
-        try
-        {
-            card = await FetchAsync(hash, new FileInfo(path).Length, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
-        {
-            // Offline, Civitai down, or an answer of another shape: no card, and asked again next
-            // time. A card is a help; it must never fail the call it comes with.
-            return null;
-        }
-        _cards[key] = (card, DateTime.UtcNow);
+        var card = await FetchAsync(hash, ct).ConfigureAwait(false);
+        _cards[hash] = (card, DateTime.UtcNow);
         Save();
         return card;
     }
 
-    /// <summary>
-    /// Civitai's AutoV1 of a file: the first 8 hex digits of the SHA-256 of the 64 KB that start a
-    /// megabyte into it. Null for a file too small to have them.
-    /// </summary>
-    internal static string? QuickHash(string path)
+    /// <summary>A file's place in the hash cache: its full path, size and time, so a changed file is hashed again.</summary>
+    private static string? HashKey(string path)
     {
         try
         {
-            using var file = File.OpenRead(path);
-            if (file.Length < 0x110000)
-                return null;
-            file.Position = 0x100000;
-            var block = new byte[0x10000];
-            file.ReadExactly(block);
-            return Convert.ToHexString(SHA256.HashData(block))[..8];
+            var file = new FileInfo(path);
+            return file.Exists ? $"{file.FullName}|{file.Length}|{file.LastWriteTimeUtc.Ticks}" : null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             return null;
         }
     }
 
-    internal static async Task<ModelCard?> FetchAsync(string hash, long length, CancellationToken ct)
+    /// <summary>
+    /// The SHA-256 of the file at <paramref name="path"/> (upper-case hex), as Civitai finds files by
+    /// it: the saved one, or worked out once in the background, where it goes on when a wait for it
+    /// ends. Null for a file that can't be read.
+    /// </summary>
+    internal Task<string?> HashAsync(string path)
+    {
+        if (HashKey(path) is not { } key)
+            return Task.FromResult<string?>(null);
+        Load();
+        if (_hashes.TryGetValue(key, out var saved))
+            return Task.FromResult<string?>(saved);
+        lock (_hashing)
+        {
+            if (_hashing.TryGetValue(key, out var running))
+                return running;
+            // Done between the look above and the lock.
+            if (_hashes.TryGetValue(key, out saved))
+                return Task.FromResult<string?>(saved);
+            var hashing = Task.Run(() =>
+            {
+                string? hash = null;
+                try
+                {
+                    using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 20, FileOptions.SequentialScan);
+                    hash = Convert.ToHexString(SHA256.HashData(file));
+                    _hashes[key] = hash;
+                    SaveHashes();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+                lock (_hashing)
+                    _hashing.Remove(key);
+                return hash;
+            });
+            _hashing[key] = hashing;
+            return hashing;
+        }
+    }
+
+    /// <summary>A file's SHA-256 known already (its download was checked against it), kept so its card needn't hash it again.</summary>
+    public void Remember(string path, string sha256)
+    {
+        if (HashKey(path) is not { } key)
+            return;
+        Load();
+        _hashes[key] = sha256.ToUpperInvariant();
+        SaveHashes();
+    }
+
+    internal static async Task<ModelCard?> FetchAsync(string hash, CancellationToken ct)
     {
         var site = ComfyModelSearch.CivitaiBase;
         JsonObject? version;
@@ -100,10 +141,7 @@ public sealed partial class ComfyModelCards(string stateDirectory)
         {
             return null;
         }
-        // The same 64 KB in another file of another size is a different model.
-        if (version is null || (long?)version["modelId"] is not { } modelId || !(version["files"] as JsonArray ?? []).OfType<JsonObject>().Any(f =>
-                string.Equals((string?)f["hashes"]?["AutoV1"], hash, StringComparison.OrdinalIgnoreCase) &&
-                (double?)f["sizeKB"] is { } kb && Math.Abs(kb * 1024 - length) <= Math.Max(4096, length / 200)))
+        if (version is null || (long?)version["modelId"] is not { } modelId)
             return null;
 
         var model = await ComfyModelSearch.GetJsonAsync($"{site}/api/v1/models/{modelId}", ct).ConfigureAwait(false) as JsonObject;
@@ -111,7 +149,11 @@ public sealed partial class ComfyModelCards(string stateDirectory)
         if ((string?)version["name"] is { Length: > 0 } versionName && !title.Contains(versionName, StringComparison.OrdinalIgnoreCase))
             title += $" ({versionName})";
         var words = (version["trainedWords"] as JsonArray ?? []).Select(w => ((string?)w)?.Trim()).OfType<string>().Where(w => w.Length > 0).Distinct().Take(12).ToList();
-        var advice = Advice((string?)model?["description"]) ?? Advice((string?)version["description"]);
+        // The version's own settings first, when it names any: MiaoMiao Harem's page only points to
+        // "About this version", where Euler with sgm_uniform and its CFG are. Most versions only list
+        // their changes ("Booru tags" in one), and the model's page has the settings.
+        var (modelText, versionText) = ((string?)model?["description"], (string?)version["description"]);
+        var advice = (NamesSettings(versionText) ? Advice(versionText) : null) ?? Advice(modelText) ?? Advice(versionText);
 
         var examples = new List<ModelExample>();
         if ((string?)model?["creator"]?["username"] is { Length: > 0 } maker && (long?)version["id"] is { } versionId)
@@ -138,10 +180,18 @@ public sealed partial class ComfyModelCards(string stateDirectory)
         width ??= Number(meta["width"]) is { } w ? (int)w : null;
         height ??= Number(meta["height"]) is { } h ? (int)h : null;
         var hires = Text(meta["Hires upscale"]) is { Length: > 0 } scale
-            ? $"then hires {scale}x" + (Text(meta["Denoising strength"]) is { Length: > 0 } d ? $" at denoise {d}" : "")
+            ? $"then hires {scale}x" + (Text(meta["Hires upscaler"]) is { Length: > 0 } upscaler && upscaler != "None" ? $" with {upscaler}" : "")
+              + (Text(meta["Denoising strength"]) is { Length: > 0 } d ? $" at denoise {d}" : "")
             : null;
         var clip = Number(meta["clipSkip"]) ?? Number(meta["Clip skip"]);
-        return new ModelExample(prompt, Text(meta["negativePrompt"]), Text(meta["sampler"]), Number(meta["cfgScale"]), Number(meta["steps"]) is { } s ? (int)s : null,
+        // Since AUTOMATIC1111 1.9 the schedule is a field of its own ("Schedule type: Karras"), no
+        // longer part of the sampler's name: Juggernaut XL's maker's "DPM++ 2M SDE" was Karras, and
+        // run with ComfyUI's normal schedule it sprinkled the sky with coloured specks.
+        var sampler = Text(meta["sampler"]);
+        if (sampler is { Length: > 0 } && (Text(meta["Schedule type"]) ?? Text(meta["scheduler"])) is { Length: > 0 } schedule &&
+            !schedule.Equals("Automatic", StringComparison.OrdinalIgnoreCase) && !sampler.EndsWith(schedule, StringComparison.OrdinalIgnoreCase))
+            sampler += " " + schedule;
+        return new ModelExample(prompt, Text(meta["negativePrompt"]), sampler, Number(meta["cfgScale"]), Number(meta["steps"]) is { } s ? (int)s : null,
             width, height, clip is { } c ? (int)c : null, hires,
             new[] { meta["civitaiResources"], meta["resources"] }.OfType<JsonArray>().SelectMany(a => a.OfType<JsonObject>())
                 .Any(r => ((string?)r["type"])?.ToLowerInvariant() is "embed" or "embedding" or "textualinversion") || meta["TI hashes"] is not null);
@@ -149,6 +199,10 @@ public sealed partial class ComfyModelCards(string stateDirectory)
         static string? Text(JsonNode? n) => n is JsonValue v ? v.ToString().Trim() : null;
         static double? Number(JsonNode? n) => n is JsonValue v && (v.TryGetValue<double>(out var d) || double.TryParse(v.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out d)) ? d : null;
     }
+
+    /// <summary>Whether a page names settings outright (recommended, sampler, steps, CFG…), not just tags or prompts.</summary>
+    internal static bool NamesSettings(string? html) =>
+        !string.IsNullOrWhiteSpace(html) && StrongSettingsWord().IsMatch(WebUtility.HtmlDecode(Tag().Replace(html, " ")));
 
     /// <summary>
     /// The part of a model's page that says how to use it: from its first line about settings
@@ -192,7 +246,8 @@ public sealed partial class ComfyModelCards(string stateDirectory)
             return null;
         var name = a1111.Trim().ToLowerInvariant();
         var scheduler = "normal";
-        foreach (var (suffix, comfy) in new[] { (" karras", "karras"), (" exponential", "exponential"), (" sgm uniform", "sgm_uniform"), (" simple", "simple"), (" beta", "beta") })
+        foreach (var (suffix, comfy) in new[] { (" karras", "karras"), (" exponential", "exponential"), (" sgm uniform", "sgm_uniform"), (" simple", "simple"), (" beta", "beta"),
+                     (" normal", "normal"), (" kl optimal", "kl_optimal"), (" linear quadratic", "linear_quadratic"), (" ddim", "ddim_uniform") })
             if (name.EndsWith(suffix, StringComparison.Ordinal))
                 (name, scheduler) = (name[..^suffix.Length], comfy);
         var sampler = name switch
@@ -225,6 +280,42 @@ public sealed partial class ComfyModelCards(string stateDirectory)
         SdVersion().Match(baseModel) is { Success: true } m ? (m.Groups[1].Value == "1" ? 512 : m.Groups[1].Value == "2" ? 768 : 1024)
         : PictureModel().IsMatch(baseModel) ? 1024 : null;
 
+    /// <summary>How a LoRA made for one base model fits a checkpoint of another.</summary>
+    public enum Fit
+    {
+        /// <summary>The same base, or one the LoRA is as good on, or one this can't tell.</summary>
+        Fits,
+        /// <summary>The same kind of model but another line of it (SDXL, Pony, Illustrious): it applies, but weaker or off-style.</summary>
+        OtherLine,
+        /// <summary>Another kind of model (SD 1.5 and SDXL, SDXL and Flux): ComfyUI can't apply it at all.</summary>
+        OtherKind,
+    }
+
+    /// <summary>
+    /// How a LoRA for <paramref name="loraBase"/> fits a checkpoint of <paramref name="checkpointBase"/>,
+    /// as Civitai names base models ("SD 1.5", "SDXL 1.0", "Pony", "Illustrious", "Flux.1 D").
+    /// </summary>
+    public static Fit FitOf(string loraBase, string checkpointBase)
+    {
+        if (Kind(loraBase) is not { } lora || Kind(checkpointBase) is not { } checkpoint)
+            return Fit.Fits;
+        if (lora != checkpoint)
+            return Fit.OtherKind;
+        return lora == "SDXL" && Line(loraBase) != Line(checkpointBase) ? Fit.OtherLine : Fit.Fits;
+
+        static string? Kind(string b) =>
+            b.Contains("flux", StringComparison.OrdinalIgnoreCase) ? "Flux"
+            : SdxlFamily().IsMatch(b) ? "SDXL"
+            : SdVersion().Match(b) is { Success: true } m ? "SD " + m.Groups[1].Value
+            : null;
+
+        // NoobAI is trained on Illustrious, and their LoRAs are used on both.
+        static string Line(string b) =>
+            b.Contains("pony", StringComparison.OrdinalIgnoreCase) ? "Pony"
+            : b.Contains("illustrious", StringComparison.OrdinalIgnoreCase) || b.Contains("noob", StringComparison.OrdinalIgnoreCase) ? "Illustrious"
+            : "SDXL";
+    }
+
     /// <summary>What a base model is, said for the sizes it makes: "Illustrious, an SDXL model, made for about 1 megapixel".</summary>
     public static string Describe(string baseModel)
     {
@@ -245,6 +336,28 @@ public sealed partial class ComfyModelCards(string stateDirectory)
     /// </summary>
     public static string? BaseFromFile(string path)
     {
+        if (Header(path) is not var (keys, metadata))
+            return null;
+        string? said = null;
+        foreach (var name in new[] { "modelspec.architecture", "ss_base_model_version" })
+            if (metadata.TryGetValue(name, out var value))
+                said ??= BaseFromName(value);
+        return said ?? BaseFromTensors(keys);
+    }
+
+    /// <summary>
+    /// Whether a model file holds a VAE, as a whole checkpoint does; false for one that holds the
+    /// diffusion model alone, null when its header can't be read. Civitai lists both as
+    /// checkpoints: MiaoMiao Harem, an Anima model, is the diffusion model alone ("net." tensors),
+    /// which ComfyUI loads with UNETLoader from models/diffusion_models, with its base model's text
+    /// encoder and VAE.
+    /// </summary>
+    public static bool? HoldsVae(string path) =>
+        Header(path) is var (keys, _) ? keys.Any(k => k.StartsWith("first_stage_model.", StringComparison.Ordinal) || k.StartsWith("vae.", StringComparison.Ordinal)) : null;
+
+    /// <summary>The tensor names and the string metadata in a .safetensors file's header; null for another file or one that can't be read.</summary>
+    private static (List<string> Keys, Dictionary<string, string> Metadata)? Header(string path)
+    {
         if (!path.EndsWith(".safetensors", StringComparison.OrdinalIgnoreCase))
             return null;
         try
@@ -258,20 +371,17 @@ public sealed partial class ComfyModelCards(string stateDirectory)
             var header = new byte[length];
             file.ReadExactly(header);
             using var doc = JsonDocument.Parse(header);
-            string? said = null;
             var keys = new List<string>();
+            var metadata = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var p in doc.RootElement.EnumerateObject())
             {
-                if (p.Name == "__metadata__" && p.Value.ValueKind == JsonValueKind.Object)
-                {
-                    foreach (var name in new[] { "modelspec.architecture", "ss_base_model_version" })
-                        if (p.Value.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String)
-                            said ??= BaseFromName(v.GetString()!);
-                }
-                else
+                if (p.Name != "__metadata__")
                     keys.Add(p.Name);
+                else if (p.Value.ValueKind == JsonValueKind.Object)
+                    foreach (var m in p.Value.EnumerateObject().Where(m => m.Value.ValueKind == JsonValueKind.String))
+                        metadata[m.Name] = m.Value.GetString()!;
             }
-            return said ?? BaseFromTensors(keys);
+            return (keys, metadata);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or EndOfStreamException)
         {
@@ -355,6 +465,26 @@ public sealed partial class ComfyModelCards(string stateDirectory)
                         _cards[key] = (entry.Card, entry.At);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { }
+            try
+            {
+                if (File.Exists(HashFile) && JsonSerializer.Deserialize(File.ReadAllText(HashFile), ModelCardJson.Default.DictionaryStringString) is { } hashes)
+                    foreach (var (key, hash) in hashes)
+                        _hashes[key] = hash;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { }
+        }
+    }
+
+    private void SaveHashes()
+    {
+        lock (_gate)
+        {
+            try
+            {
+                Directory.CreateDirectory(stateDirectory);
+                AtomicFile.Write(HashFile, JsonSerializer.Serialize(new Dictionary<string, string>(_hashes, StringComparer.OrdinalIgnoreCase), ModelCardJson.Default.DictionaryStringString));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
     }
 
@@ -405,4 +535,5 @@ public sealed record CachedCard(ModelCard? Card, DateTime At);
 
 [System.Text.Json.Serialization.JsonSourceGenerationOptions(PropertyNamingPolicy = System.Text.Json.Serialization.JsonKnownNamingPolicy.CamelCase, WriteIndented = true)]
 [System.Text.Json.Serialization.JsonSerializable(typeof(Dictionary<string, CachedCard>))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(Dictionary<string, string>))]
 internal sealed partial class ModelCardJson : System.Text.Json.Serialization.JsonSerializerContext;

@@ -14,7 +14,7 @@ namespace BlackBox.Core.Tools;
 /// to each wrong one. qwen3.8 drove ComfyUI's HTTP API well but wrote wrong node, input and model
 /// names from memory. A run waits for the job and hands back its files, with a look at them.
 /// </summary>
-public sealed class ComfyTool : Tool
+public sealed partial class ComfyTool : Tool
 {
     public override string Name => "comfyui";
 
@@ -31,19 +31,22 @@ public sealed class ComfyTool : Tool
         "A picture the user gives you to follow (a character, a reference sheet, a style) is where the result starts, not something to describe in words: " +
         "image to image from it (blackbox/image_to_image; denoise 0.5 to 0.7 keeps the character), or a reference or edit model's template when one is installed; " +
         "crop or scale it inside the workflow (ImageCrop, ImageScaleToTotalPixels), not with a script. " +
-        "A checkpoint's or LoRA's card (with action=models and its name, a template's view, or after its first run) says how its maker uses it: " +
+        "To change a picture or restyle it (put a hat on, make a photo anime or a painting), or to draw the character it shows in a new scene or pose, " +
+        "an installed edit model's template (templates search \"edit\": Qwen-Image-Edit, Flux Kontext) does what is asked and keeps the subject, with no download; " +
+        "image to image keeps the photo's look at low denoise and loses the subject at high. " +
+        "A checkpoint's or LoRA's card (with action=models search=its file name, a template's view, or after its first run) says how its maker uses it: " +
         "the prompt style, size, sampler, CFG and negative prompt to start from. " +
         "Change the seed for a different result. A model a workflow lacks: action=download with its url (a template lists the links of its models); " +
         "action=find_models searches Civitai and Hugging Face for others (a style, a checkpoint the user named, a LoRA, an upscaler) with their sizes and links, " +
         "and what the month's most downloaded on Civitai are for those words; without search it lists this month's most downloaded checkpoints " +
         "(kind=lora: LoRAs) and the base models they are on, so you know what is current before you pick one. " +
-        "action=status shows the server, GPU and queue (with prompt_id: waits for that job); " +
+        "action=status shows the server, GPU and queue (with prompt_id: waits for that job); action=cancel with prompt_id stops that job only; " +
         "action=free unloads its models to free the GPU; action=restart restarts it (after installing custom nodes into its custom_nodes folder); action=stop stops it.";
 
     public override ToolRisk Risk => ToolRisk.Risky;
 
     public override JsonObject Parameters => Schema(
-        ("action", Str("What to do", "templates", "nodes", "models", "run", "status", "install", "find_models", "download", "free", "restart", "stop"), true),
+        ("action", Str("What to do", "templates", "nodes", "models", "run", "status", "cancel", "install", "find_models", "download", "free", "restart", "stop"), true),
         ("search", Str("Words to look for: in templates (\"video from image\"), node types (\"wan video\"), installed model files (\"lora\"), or models online (find_models: \"furry\", \"watercolor\", \"DreamShaper\"; none for this month's most downloaded)"), false),
         ("name", Str("A template's name as action=templates lists it: to see it (templates) or run it (run)"), false),
         ("names", StrArray("Node types to show in full: inputs, their types and choices, outputs (nodes)"), false),
@@ -52,7 +55,7 @@ public sealed class ComfyTool : Tool
         ("set", new JsonObject { ["type"] = "object", ["description"] = "Changes before the run: {\"node id.input\": value}, e.g. {\"6.text\": \"a cat\", \"129:98.length\": 49}" }, false),
         ("save_to", Str("A folder the user named to copy the files the run makes into; without it they stay in ComfyUI's output folder"), false),
         ("wait_minutes", Num("How long to wait for the job (default 30); it keeps running after that, and action=status with its prompt_id waits again"), false),
-        ("prompt_id", Str("A job's id, from an earlier run that was still going (status)"), false),
+        ("prompt_id", Str("A job's id, from an earlier run that was still going (status waits for it, cancel stops it)"), false),
         ("kind", Str("find_models: the kind of model (checkpoint, lora, vae, upscaler, controlnet, embedding); any kind without it"), false),
         ("base", Str("find_models: the model it should be made for, e.g. \"SD 1.5\", \"SDXL\", \"Flux\""), false),
         ("url", Str("download: the model file's link, as find_models or a template gives it (a Civitai or Hugging Face page works too)"), false),
@@ -78,7 +81,7 @@ public sealed class ComfyTool : Tool
     }
 
     // Whether this task uses the server, and has run jobs on it.
-    private bool _usesServer, _ranJobs;
+    private bool _usesServer, _ranJobs, _pythonNoted;
 
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
@@ -114,15 +117,25 @@ public sealed class ComfyTool : Tool
                     return await DownloadAsync(args, hub, ctx, ct).ConfigureAwait(false);
             }
             var api = await hub.ConnectAsync(GetString(args, "folder"), notes, ctx.Progress, ct).ConfigureAwait(false);
+            // Once a task, with its first call that reaches ComfyUI, not only in the status: a run that
+            // never asked for it pip-installed Pillow into the PC's own Python to draw a sprite sheet.
+            if (!_pythonNoted)
+            {
+                _pythonNoted = true; // the status says it itself
+                if (action != "status" && await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) is { } dirs && dirs.TryGetValue("code", out var code) &&
+                    PythonNote(code) is { } python)
+                    notes.Add(python);
+            }
             var result = action switch
             {
                 "status" => await StatusAsync(args, hub, api, ctx, ct).ConfigureAwait(false),
                 "free" => await FreeAsync(api, ct).ConfigureAwait(false),
+                "cancel" => await CancelAsync(args, api, ct).ConfigureAwait(false),
                 "nodes" => await NodesAsync(args, hub, api, ct).ConfigureAwait(false),
                 "models" => await ModelsAsync(args, hub, api, ct).ConfigureAwait(false),
                 "templates" => await TemplatesAsync(args, hub, api, ctx, ct).ConfigureAwait(false),
                 "run" => await RunAsync(args, hub, api, ctx, ct).ConfigureAwait(false),
-                _ => throw new ToolArgumentException("action must be templates, nodes, models, run, status, install, find_models, download, free, restart or stop."),
+                _ => throw new ToolArgumentException("action must be templates, nodes, models, run, status, cancel, install, find_models, download, free, restart or stop."),
             };
             return notes.Count == 0 ? result : result with { Text = string.Join("\n", notes) + "\n" + result.Text };
         }
@@ -220,7 +233,7 @@ public sealed class ComfyTool : Tool
         return new ToolResult(sb.ToString().TrimEnd());
     }
 
-    /// <summary>What ComfyUI runs on, said for model choices: "runs on …" when it runs, "would run on …" when it isn't installed yet.</summary>
+    /// <summary>What ComfyUI runs on, said for model choices: "runs on …" when it runs, "would run on …" when none has been used yet.</summary>
     private static async Task<(string Text, bool Cpu)> DeviceAsync(ComfyHub hub, CancellationToken ct)
     {
         if (await new ComfyApi(hub.Address).TrySystemStatsAsync(ct).ConfigureAwait(false) is { } stats)
@@ -230,7 +243,11 @@ public sealed class ComfyTool : Tool
         }
         var build = ComfyHardware.Pick(ComfyHardware.Cards(), ComfyInstaller.Arm64);
         var ram = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 1073741824.0;
-        var installed = hub.SavedInstall is not null ? "isn't running; it runs" : "isn't installed yet (action=install); it would run";
+        // Not "isn't installed": a BlackBox that hasn't used one yet doesn't know. Asked for the
+        // month's most downloaded first thing in a fresh Data folder, qwen3.8 read that and ran
+        // action=install, which found the PC's own ComfyUI and started it.
+        var installed = hub.SavedInstall is not null ? "isn't running; it runs"
+            : "isn't running, and none has been used from this BlackBox yet (action=status finds the PC's own and starts it; action=install is for a PC without one); it would run";
         return ($"{installed} on {build.Device}, with {ram:0} GB of RAM", build.Cpu);
     }
 
@@ -255,18 +272,34 @@ public sealed class ComfyTool : Tool
                   ?? throw new ComfyApiException("ComfyUI isn't installed yet, so there is no models folder to download into: install it first with action=install.");
         var target = Path.Combine(dir, name);
         if (File.Exists(target) && await IsWholeAsync(target, size, known?.Sha256, ct).ConfigureAwait(false))
-            return new ToolResult($"{name} is there already, in {dir}. {ComfyModelFolders.Use(folder, name)}");
+            return new ToolResult($"{name} is there already, in {dir}. {DiffusionModelAlone(folder, target) ?? ComfyModelFolders.Use(folder, name)}");
 
         var started = DateTime.UtcNow;
         await Web.Downloader.DownloadAsync(url, target, known?.Sha256, ctx.Progress, ct).ConfigureAwait(false);
         var took = DateTime.UtcNow - started;
+        var length = new FileInfo(target).Length;
+        if (known?.Sha256 is { Length: > 0 } sha)
+            hub.Cards.Remember(target, sha);
+        var use = DiffusionModelAlone(folder, target) ?? ComfyModelFolders.Use(folder, name);
         // The new file is a choice in its loader node from now on.
         var api = new ComfyApi(hub.Address);
         if (await api.TrySystemStatsAsync(ct).ConfigureAwait(false) is not null)
             await hub.ModelsAsync(api, ct, fresh: true).ConfigureAwait(false);
         var checkedNote = known?.Sha256 is { Length: > 0 } ? ", its SHA-256 checked" : "";
-        return new ToolResult($"Downloaded {name} ({Size(new FileInfo(target).Length)} in {ComfyRunner.Clock(took)}{checkedNote}) into {dir}. {ComfyModelFolders.Use(folder, name)}");
+        return new ToolResult($"Downloaded {name} ({Size(length)} in {ComfyRunner.Clock(took)}{checkedNote}) into {dir}. {use}");
     }
+
+    /// <summary>
+    /// How to load a file in models/checkpoints that holds the diffusion model alone (no VAE), as the
+    /// Anima, Krea and Z-Image models Civitai lists as checkpoints do; null for a whole checkpoint.
+    /// The download said "Load it with CheckpointLoaderSimple" of MiaoMiao Harem, an Anima model,
+    /// which gives such a file's MODEL and nothing else: qwen3.8 had to find its text encoder and VAE.
+    /// </summary>
+    internal static string? DiffusionModelAlone(string folder, string path) =>
+        folder == "checkpoints" && ComfyModelCards.HoldsVae(path) == false
+            ? $"It holds the diffusion model alone, no text encoder or VAE: CheckpointLoaderSimple (ckpt_name \"{Path.GetFileName(path)}\") gives its MODEL only, " +
+              "so load the text encoder and VAE as a template of its base model does (CLIPLoader, VAELoader), or load it with UNETLoader from models/diffusion_models as such a template does."
+            : null;
 
     private static string Size(long bytes) =>
         bytes >= 1L << 30 ? $"{bytes / 1073741824.0:0.0} GB" : bytes >= 1L << 20 ? $"{bytes / 1048576.0:0} MB" : $"{Math.Max(1, bytes / 1024)} KB";
@@ -313,13 +346,40 @@ public sealed class ComfyTool : Tool
         sb.AppendLine($"{library.All.Count} node types; custom node packs: {(packs.Count == 0 ? "none" : string.Join(", ", packs))}.");
         if (await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) is { } dirs)
         {
-            if (dirs.TryGetValue("code", out var code)) sb.AppendLine($"Its folder: {code} (custom nodes in {Path.Combine(code, "custom_nodes")}).");
+            if (dirs.TryGetValue("code", out var code))
+            {
+                sb.AppendLine($"Its folder: {code} (custom nodes in {Path.Combine(code, "custom_nodes")}).");
+                if (PythonNote(code) is { } python)
+                    sb.AppendLine(python);
+            }
             if (dirs.TryGetValue("output", out var output)) sb.AppendLine($"Output folder: {output}.");
         }
         var log = await LogAsync(api, ct).ConfigureAwait(false);
         if (log.Length > 0)
             sb.AppendLine("The end of its log:").AppendLine(log);
         return new ToolResult(sb.ToString().TrimEnd());
+    }
+
+    /// <summary>
+    /// What ComfyUI's own Python has for working on pictures and models, and where it is; null for the
+    /// Desktop app and a ComfyUI run by the PC's own Python. Cropping a view out of a reference sheet
+    /// took a guess at python\python.exe and a search of the disk first; ComfyUI can't run without
+    /// Pillow and numpy, so its Python has them. To cut a character out and look into a 3D model,
+    /// qwen3.8 pip-installed rembg, onnxruntime and trimesh into the PC's own Python, and a walk cycle
+    /// run that never asked for the status, Pillow. ComfyUI's had trimesh, and rembg (Trellis2 needs
+    /// it) without onnxruntime, which rembg can't run without.
+    /// </summary>
+    internal static string? PythonNote(string code)
+    {
+        if (ComfyInstall.FromFolder(code) is not { Kind: ComfyInstallKind.Portable or ComfyInstallKind.Venv } own || !File.Exists(own.Program))
+            return null;
+        bool Has(string package) => own.SitePackages is { } site && Directory.Exists(Path.Combine(site, package));
+        var has = new List<string> { "Pillow", "numpy" };
+        if (Has("rembg"))
+            has.Add(Has("onnxruntime") ? "rembg (cuts out a background)"
+                : "rembg (cuts out a background once onnxruntime is installed into this Python; Trellis2's remove_background needs it too)");
+        has.AddRange(new[] { ("cv2", "OpenCV"), ("trimesh", "trimesh (3D models)") }.Where(p => Has(p.Item1)).Select(p => p.Item2));
+        return $"Its Python has {string.Join(", ", has.SkipLast(1))} and {has[^1]}, for working on the pictures and models it makes: {own.Program}.";
     }
 
     private static async Task<string> LogAsync(ComfyApi api, CancellationToken ct)
@@ -339,6 +399,19 @@ public sealed class ComfyTool : Tool
     }
 
     private static string Gb(long? bytes) => bytes is { } b ? $"{b / 1073741824.0:0.0} GB" : "?";
+
+    /// <summary>
+    /// Stops one job and takes it out of the queue, ComfyUI left running. Told "and more furry" and
+    /// "the style is off" while a picture was being made, qwen3.8 stopped the whole server to drop
+    /// the job those made pointless, and the next run waited 49 seconds for it to start again.
+    /// </summary>
+    private static async Task<ToolResult> CancelAsync(JsonObject args, ComfyApi api, CancellationToken ct)
+    {
+        var promptId = GetString(args, "prompt_id")?.Trim() is { Length: > 0 } id ? id
+            : throw new ToolArgumentException("Give the job's prompt_id for action=cancel (a run that was still going names it).");
+        await api.CancelAsync(promptId, ct).ConfigureAwait(false);
+        return new ToolResult($"Job {promptId} is stopped and out of the queue. ComfyUI keeps running, with its models loaded for the next run.");
+    }
 
     private static async Task<ToolResult> FreeAsync(ComfyApi api, CancellationToken ct)
     {
@@ -366,6 +439,9 @@ public sealed class ComfyTool : Tool
                     sb.AppendLine(def.Details());
                 sb.AppendLine();
             }
+            // Before the first run of an outpaint or inpaint workflow, not after a seamed one.
+            if (names.Any(n => n.Trim() is "SetLatentNoiseMask" or "ImagePadForOutpaint"))
+                sb.AppendLine(char.ToUpperInvariant(MaskAdvice[0]) + MaskAdvice[1..]);
             return new ToolResult(sb.ToString().TrimEnd());
         }
         var search = GetString(args, "search") ?? throw new ToolArgumentException("Give search (words) or names (node types) for action=nodes.");
@@ -380,7 +456,9 @@ public sealed class ComfyTool : Tool
 
     private async Task<ToolResult> ModelsAsync(JsonObject args, ComfyHub hub, ComfyApi api, CancellationToken ct)
     {
-        var words = ComfyNodeLibrary.Words(GetString(args, "search") ?? "");
+        // A model file asked for by name= as a template is: qwen3.8 did so for the checkpoint it had
+        // just downloaded, got every model on the PC and no card, and read the file's header itself.
+        var words = ComfyNodeLibrary.Words(GetString(args, "search") ?? GetString(args, "name") ?? "");
         // Asked for on purpose, often right after a download: never from the cache.
         var models = await hub.ModelsAsync(api, ct, fresh: true).ConfigureAwait(false);
         var sb = new StringBuilder();
@@ -429,8 +507,8 @@ public sealed class ComfyTool : Tool
     /// </summary>
     private async Task<List<string>> CardsAsync(ComfyApi api, ComfyHub hub, IEnumerable<(string Folder, string File)> files, CancellationToken ct)
     {
-        var cards = new List<string>();
         var dirs = await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) ?? [];
+        var wanted = new List<(string File, string Path, string Folder)>();
         foreach (var (folder, file) in files.Where(f => f.Folder is "checkpoints" or "loras").DistinctBy(f => f.File, StringComparer.OrdinalIgnoreCase).Take(3))
         {
             if (!dirs.TryGetValue("models:" + folder, out var dir) || Path.Combine(dir, file) is not { } path || !File.Exists(path))
@@ -438,26 +516,44 @@ public sealed class ComfyTool : Tool
             lock (_carded)
                 if (!_carded.Add(file))
                     continue;
-            if (await CardAsync(hub, path, ct).ConfigureAwait(false) is { } card)
+            wanted.Add((file, path, folder));
+        }
+        // All at once: a template of LTX 2.3 names two 27 GB checkpoints, whose first hashes take a while each.
+        var looked = await Task.WhenAll(wanted.Select(w => CardAsync(hub, w.Path, ct))).ConfigureAwait(false);
+        var cards = new List<string>();
+        foreach (var ((file, path, folder), (card, answered)) in wanted.Zip(looked))
+        {
+            if (card is not null)
                 cards.Add(ComfyModelCards.Format(file, card));
+            else if (!answered)
+                lock (_carded) // Looked up again next time, not called unknown.
+                    _carded.Remove(file);
             else if (ComfyModelCards.BaseFromFile(path) is { } made)
                 cards.Add($"{file} isn't on Civitai; it is {ComfyModelCards.Describe(made)}.");
+            if (DiffusionModelAlone(folder, path) is { } alone)
+                cards.Add($"{file}: {alone}");
         }
         return cards;
     }
 
-    /// <summary>A model file's card, or null when Civitai doesn't know it or doesn't answer within half a minute.</summary>
-    private static async Task<ModelCard?> CardAsync(ComfyHub hub, string path, CancellationToken ct)
+    /// <summary>
+    /// A model file's card, or none: Civitai doesn't know the file (answered), or it couldn't be
+    /// asked within ten seconds (not answered). A big file's first hash takes longer (a 27 GB LTX
+    /// checkpoint held a template's view up half a minute): it goes on, and the card comes with a
+    /// later call, after the run at the latest. A card is a help; it must never hold up or fail the
+    /// call it comes with.
+    /// </summary>
+    private static async Task<(ModelCard? Card, bool Answered)> CardAsync(ComfyHub hub, string path, CancellationToken ct)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
         try
         {
-            return await hub.Cards.LookUpAsync(path, timeout.Token).ConfigureAwait(false);
+            return (await hub.Cards.LookUpAsync(path, timeout.Token).ConfigureAwait(false), true);
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (Exception) when (!ct.IsCancellationRequested)
         {
-            return null;
+            return (null, false);
         }
     }
 
@@ -508,14 +604,27 @@ public sealed class ComfyTool : Tool
 
         var search = GetString(args, "search") ?? "";
         var found = ComfyTemplates.Search(all, search, 12);
+        // Asked to extend a photo into a panorama, qwen3.8 once painted the sides itself with an
+        // installed model (and left seams), and once downloaded Flux Fill with its text encoder, 32 GB,
+        // to the same end; and two of its three panoramas got the photo's waterfall again on a side.
+        var outpaint = OutpaintWords().IsMatch(search);
+        const string OutpaintPrompt = "To extend a picture, describe in the prompt what the new parts should hold (more of the forest, the stream), " +
+                                      "not the picture's subject, or the subject is drawn again there.";
+        const string OutpaintHere = "No outpaint template here is ready. Without downloading one (a fill model with its text encoder can be 30 GB): " +
+                                    "pad the picture (ImagePadForOutpaint) and repaint the padding with an installed model for whole pictures through SetLatentNoiseMask; ";
+        var seamless = SeamlessWords().IsMatch(search) ? SeamlessAdvice(library) : null;
         if (found.Count == 0)
-            return new ToolResult($"No template matches \"{search}\" among {all.Count}. Try other words, or build the workflow from node types (action=nodes).");
+            return new ToolResult($"No template matches \"{search}\" among {all.Count}. Try other words, or build the workflow from node types (action=nodes)." +
+                                  (outpaint ? $"\n{OutpaintHere}{MaskAdvice} An edit model leaves the padding grey. {OutpaintPrompt}" : "") +
+                                  (seamless is null ? "" : "\n" + seamless) +
+                                  (MatchingModels(search, models) is { Count: > 0 } matching ? $"\nInstalled models whose names match: {string.Join(", ", matching)}." : ""));
         var lines = new StringBuilder();
         // On the CPU most templates are out of reach: said before the list, so the choice is made with it.
         var (device, cpu) = ComfyHardware.Device(await api.TrySystemStatsAsync(ct).ConfigureAwait(false));
         if (cpu)
             lines.AppendLine($"ComfyUI runs on {device}. {ComfyHardware.CpuAdvice}");
         lines.AppendLine(search.Length == 0 ? "The user's saved workflows, and BlackBox's own:" : $"Templates matching \"{search}\", best first (of {all.Count}; [ready] means its models and nodes are installed):");
+        var outpaintReady = false;
         foreach (var t in found)
         {
             var ready = "";
@@ -532,7 +641,17 @@ public sealed class ComfyTool : Tool
             catch (Exception ex) when (ex is ComfyApiException or ComfyWorkflowException or System.Text.Json.JsonException) { }
             lines.Append("- ").Append(t.Name).Append(t.Title != Path.GetFileName(t.Name) ? $" \"{t.Title}\"" : "")
                 .Append(t.Description.Length > 0 ? ": " + t.Description.Clip(240) : "").AppendLine(ready);
+            outpaintReady |= ready == " [ready]" && (t.Name + " " + t.Description).Contains("outpaint", StringComparison.OrdinalIgnoreCase);
         }
+        if (outpaint)
+            lines.AppendLine((outpaintReady ? "" : $"{OutpaintHere}{MaskAdvice} An edit model leaves the padding grey. ") + OutpaintPrompt);
+        if (seamless is not null)
+            lines.AppendLine(seamless);
+        // Templates are workflows; a style may be a LoRA or a checkpoint. Finding no pixel art
+        // template, qwen3.8 drew a 32x32 knight by hand, row by row, with Pixel Art XL installed.
+        if (MatchingModels(search, models) is { Count: > 0 } named)
+            lines.AppendLine($"Installed models whose names match: {string.Join(", ", named)}. A LoRA goes on a checkpoint of the base model it was made for " +
+                             "(action=models search=<its name> gives its card).");
         lines.Append("See one as a workflow with action=templates name=…, or run it directly with action=run name=… and set.");
         return new ToolResult(lines.ToString().TrimEnd());
     }
@@ -724,10 +843,160 @@ public sealed class ComfyTool : Tool
         // how the makers of the models it used make theirs, the first time it uses them.
         var used = ModelFiles(workflow, await hub.ModelsAsync(api, ct).ConfigureAwait(false));
         var after = new List<string>();
-        if (await SizeNoteAsync(api, hub, workflow, used, ct).ConfigureAwait(false) is { } sizeNote)
+        if (await SizeNoteAsync(api, hub, workflow, used, result.Files ?? [], ct).ConfigureAwait(false) is { } sizeNote)
             after.Add(sizeNote);
+        after.AddRange(await LoraNotesAsync(api, hub, used, ct).ConfigureAwait(false));
+        if (!_maskNoted && MaskNote(workflow) is { } maskNote)
+        {
+            _maskNoted = true;
+            after.Add(maskNote);
+        }
+        if (!_viewsNoted && inputPictures.Count == 1 && (result.Files ?? []).Any(f => Path.GetExtension(f).ToLowerInvariant() is ".glb" or ".gltf" or ".obj" or ".ply" or ".stl" or ".fbx"))
+        {
+            _viewsNoted = true;
+            after.Add(ViewsNote(await hub.TemplatesAsync(api, ct).ConfigureAwait(false)));
+        }
         after.AddRange(await CardsAsync(api, hub, used, ct).ConfigureAwait(false));
         return after.Count > 0 ? result with { Text = result.Text + "\n\n" + string.Join("\n\n", after) } : result;
+    }
+
+    private bool _maskNoted, _viewsNoted;
+
+    private static readonly HashSet<string> Plain = new(StringComparer.Ordinal)
+    {
+        "the", "and", "for", "with", "from", "into", "this", "that", "make", "made", "picture", "pictures", "image", "images", "photo", "model", "models",
+        "style", "text", "video", "sound", "workflow", "template", "using", "high", "quality",
+    };
+
+    /// <summary>
+    /// The installed checkpoints and LoRAs whose file names hold a template search's words (two of
+    /// them, or one of five letters or more), as "loras/pixel-art-xl-v1.1.safetensors"; at most six.
+    /// </summary>
+    internal static List<string> MatchingModels(string search, Dictionary<string, HashSet<string>> models)
+    {
+        var words = ComfyNodeLibrary.Words(search).Where(w => w.Length >= 3 && !Plain.Contains(w)).ToList();
+        if (words.Count == 0)
+            return [];
+        return new[] { "checkpoints", "loras" }
+            .SelectMany(folder => (models.GetValueOrDefault(folder) ?? []).Select(file => (Folder: folder, File: file)))
+            .Select(m => (m.Folder, m.File, Hits: words.Where(w => ComfyNodeLibrary.Squash(m.File).Contains(w, StringComparison.Ordinal)).ToList()))
+            .Where(m => m.Hits.Count >= 2 || m.Hits.Any(w => w.Length >= 5))
+            .OrderByDescending(m => m.Hits.Count).ThenBy(m => m.File, StringComparer.OrdinalIgnoreCase)
+            .Take(6).Select(m => $"{m.Folder}/{m.File}").ToList();
+    }
+
+    /// <summary>
+    /// A note after a 3D model made from one picture. From the front picture of the user's
+    /// character, Hunyuan3D 2.1 left out the head and the lower legs, and Trellis2 made a relief on a
+    /// wall the background became; qwen3.8 spent an hour cutting the wall off. Its side and back views
+    /// made with the multiple-angles template, and the four given to Hunyuan3D's multi-view
+    /// template, gave a whole figure in under 13 minutes.
+    /// </summary>
+    internal static string ViewsNote(IEnumerable<ComfyTemplate> templates)
+    {
+        var list = templates.ToList();
+        var multi = list.Where(t => MultiView().IsMatch(t.Name)).Select(t => t.Name).Take(2).ToList();
+        var angles = list.FirstOrDefault(t => t.Name.Contains("angles", StringComparison.OrdinalIgnoreCase)
+                                              && t.Name.Contains("character", StringComparison.OrdinalIgnoreCase))?.Name;
+        return "Note: a 3D model made from one picture guesses the sides it can't see, and a figure drawn from the front often comes out as a relief. " +
+               "When the views show that, build it from more sides: " +
+               (multi.Count > 0 ? $"a multi-view template ({string.Join(", ", multi)}) takes " : "a multi-view 3D workflow takes ") +
+               "pictures of the front, sides and back. Crop them from a reference sheet that shows them, or make them with an edit model first" +
+               (angles is not null ? $" ({angles} turns the camera; a prompt changed to 180 degrees gives the back)." : " (rotate the camera 90 degrees left and right, and 180 for the back).");
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"multi[-_ ]?view", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex MultiView();
+
+    /// <summary>
+    /// How to make a texture tile without a seam. Asked for a seamless mossy stone floor, qwen3.8
+    /// cross-faded the picture's edges (TextureAlchemy's SeamlessTiling, blend_edges): tiled, the
+    /// joins showed doubled, blurred stones. Rolled by half and the seam cross repainted through
+    /// DifferentialDiffusion, the same picture tiled cleanly, in 18 seconds.
+    /// </summary>
+    internal static string SeamlessAdvice(ComfyNodeLibrary library) =>
+        "For a seamless texture, make the picture first, then roll it by half so its edges meet in a cross in the middle (" +
+        (library.Find("TextureOffset") is not null
+            ? "TextureOffset with offset_x and offset_y 0.5 and wrap_mode repeat does it, and gives the cross as its edge_mask, a picture that ImageToMask turns into a mask"
+            : "numpy's roll in ComfyUI's Python does it; make a mask of the cross, a band about a tenth of the picture wide, and load it with LoadImageMask") +
+        "), and repaint the cross through that mask: SetLatentNoiseMask, the model through DifferentialDiffusion, denoise about 0.75. " +
+        "It then tiles without a seam, where a cross-fade of the edges (blend_edges, mirror) leaves doubled, blurred shapes along them. " +
+        // A tileset's grass and water came out lighter in the middle: tiled, a grid of light squares.
+        "Ask for flat, even light with no vignette: a lighter middle or darker corners show as a grid of squares when tiled, whatever the seams.";
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"seamless|tileable|tileset|tiling", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex SeamlessWords();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"outpaint|uncrop|panorama|\b(extend|expand|widen|wider)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex OutpaintWords();
+
+    /// <summary>How a part repainted through a mask meets the rest of the picture without an edge.</summary>
+    internal const string MaskAdvice =
+        "a part repainted through a mask (SetLatentNoiseMask, a picture padded with ImagePadForOutpaint) meets the rest with a hard edge, " +
+        "unless the model goes through DifferentialDiffusion on its way to the sampler; give the mask a soft edge too (ImagePadForOutpaint's feathering about 200).";
+
+    /// <summary>
+    /// A note when a workflow repaints part of a picture through a mask and its model doesn't go
+    /// through DifferentialDiffusion. Asked to extend a photo into a panorama, qwen3.8 padded it
+    /// (feathering 40) and had Flux.1 dev draw the sides: both times they met the photo with a hard
+    /// edge, and it called the second "natural". With the model through DifferentialDiffusion the
+    /// same seed joined without one; a 192-pixel feather alone still showed it.
+    /// </summary>
+    internal static string? MaskNote(ComfyWorkflow workflow)
+    {
+        var types = workflow.All().Select(n => ComfyWorkflow.ClassOf(n.Node)).ToHashSet(StringComparer.Ordinal);
+        return types.Contains("SetLatentNoiseMask") && !types.Contains("DifferentialDiffusion")
+            ? "Note: " + MaskAdvice + " Look at where the new part meets the old in the result."
+            : null;
+    }
+
+    /// <summary>The LoRAs and checkpoints whose fit this task has been told about.</summary>
+    private readonly HashSet<(string Lora, string Checkpoint)> _paired = [];
+
+    /// <summary>
+    /// A note for each LoRA a workflow put on a checkpoint of another base model. Asked for a pixel
+    /// art tavern, qwen3.8 put Pixel Art XL, made for SDXL 1.0, on Pony Diffusion V6 and got a
+    /// washed-out picture twice, while a Pony one was in the list it chose from; and a LoRA of
+    /// another kind of model (SD 1.5 on SDXL) isn't applied at all: ComfyUI only logs "lora key not
+    /// loaded" and goes on. A line of SDXL (Pony, Illustrious) is told only from Civitai's cards.
+    /// Each pair is said once in a task.
+    /// </summary>
+    private async Task<List<string>> LoraNotesAsync(ComfyApi api, ComfyHub hub, List<(string Folder, string File)> used, CancellationToken ct)
+    {
+        var notes = new List<string>();
+        if (used.FirstOrDefault(u => u.Folder == "checkpoints").File is not { } checkpoint || !used.Any(u => u.Folder == "loras"))
+            return notes;
+        var dirs = await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) ?? [];
+        if (await BaseAsync("checkpoints", checkpoint) is not { } made)
+            return notes;
+        foreach (var lora in used.Where(u => u.Folder == "loras").Select(u => u.File).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            lock (_paired)
+                if (_paired.Contains((lora, checkpoint)))
+                    continue;
+            if (await BaseAsync("loras", lora) is not { } own)
+                continue;
+            lock (_paired)
+                _paired.Add((lora, checkpoint));
+            var fit = ComfyModelCards.FitOf(own.Base, made.Base);
+            if (fit == ComfyModelCards.Fit.OtherKind)
+                notes.Add($"Note: {lora} is a LoRA for {own.Base}, but the base model of {checkpoint} is {made.Base}: a LoRA only fits the kind of model it was made for, " +
+                          $"so ComfyUI couldn't apply it (its log says \"lora key not loaded\"). Use a LoRA made for {made.Base} " +
+                          $"(action=find_models kind=lora base=\"{made.Base}\"), or a checkpoint for {own.Base}.");
+            else if (fit == ComfyModelCards.Fit.OtherLine && own.FromCard && made.FromCard)
+                notes.Add($"Note: {lora} was made for {own.Base}, and the base model of {checkpoint} is {made.Base}: it applies, but weaker or off-style; " +
+                          $"a LoRA made for {made.Base} fits better (action=find_models kind=lora base=\"{made.Base}\").");
+        }
+        return notes;
+
+        async Task<(string Base, bool FromCard)?> BaseAsync(string folder, string file)
+        {
+            if (!dirs.TryGetValue("models:" + folder, out var dir) || Path.Combine(dir, file) is not { } path || !File.Exists(path))
+                return null;
+            if ((await CardAsync(hub, path, ct).ConfigureAwait(false)).Card?.Base is { Length: > 0 } fromCard)
+                return (fromCard, true);
+            return ComfyModelCards.BaseFromFile(path) is { } fromFile ? (fromFile, false) : null;
+        }
     }
 
     /// <summary>The installed checkpoints and LoRAs a workflow's nodes are set to, with their folders.</summary>
@@ -746,25 +1015,53 @@ public sealed class ComfyTool : Tool
     /// <summary>
     /// A note when a workflow makes its pictures at under half the size its checkpoint is made for:
     /// the user's furry template ran an SDXL model at 512x760, and every picture came out soft.
+    /// Image to image works at the size of the picture it starts from, so there the pictures made
+    /// say it: qwen3.8 repainted a figure cropped from the user's reference sheet at 432x1216.
     /// </summary>
-    private static async Task<string?> SizeNoteAsync(ComfyApi api, ComfyHub hub, ComfyWorkflow workflow, List<(string Folder, string File)> used, CancellationToken ct)
+    /// <param name="files">The files the job made.</param>
+    private static async Task<string?> SizeNoteAsync(ComfyApi api, ComfyHub hub, ComfyWorkflow workflow, List<(string Folder, string File)> used,
+        IReadOnlyList<string> files, CancellationToken ct)
     {
         if (used.FirstOrDefault(u => u.Folder == "checkpoints").File is not { } checkpoint ||
             (await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false))?.GetValueOrDefault("models:checkpoints") is not { } dir)
             return null;
         var path = Path.Combine(dir, checkpoint);
-        if (!File.Exists(path) || ((await CardAsync(hub, path, ct).ConfigureAwait(false))?.Base ?? ComfyModelCards.BaseFromFile(path)) is not { } made ||
+        if (!File.Exists(path) || ((await CardAsync(hub, path, ct).ConfigureAwait(false)).Card?.Base ?? ComfyModelCards.BaseFromFile(path)) is not { } made ||
             ComfyModelCards.NativeSide(made) is not { } side)
             return null;
+        var empty = false;
         foreach (var (_, node) in workflow.All())
         {
             var type = ComfyWorkflow.ClassOf(node);
-            if (type.StartsWith("Empty", StringComparison.Ordinal) && type.Contains("Latent", StringComparison.Ordinal) &&
-                Number(node["inputs"]?["width"]) is { } w && Number(node["inputs"]?["height"]) is { } h && w * h < 0.55 * side * side)
+            if (!type.StartsWith("Empty", StringComparison.Ordinal) || !type.Contains("Latent", StringComparison.Ordinal))
+                continue;
+            empty = true;
+            if (Number(node["inputs"]?["width"]) is { } w && Number(node["inputs"]?["height"]) is { } h && w * h < 0.55 * side * side)
                 return $"Note: it made its pictures at {w}x{h}, under half the size {checkpoint} is made for ({ComfyModelCards.Describe(made)}): " +
                        "at that size it draws blurrier, with worse faces and anatomy. Make them at its size; to get them bigger still, upscale after.";
         }
-        return null;
+        if (empty || !workflow.All().Any(n => ComfyWorkflow.ClassOf(n.Node) == "VAEEncode"))
+            return null;
+        var biggest = files.Where(Picture.Handles).Select(PictureSize).OfType<(int Width, int Height)>().DefaultIfEmpty().MaxBy(s => (long)s.Width * s.Height);
+        if (biggest.Width == 0 || (long)biggest.Width * biggest.Height >= 0.55 * side * side)
+            return null;
+        return $"Note: it made its picture at {biggest.Width}x{biggest.Height}, under half the size {checkpoint} is made for ({ComfyModelCards.Describe(made)}): " +
+               "image to image works at the size of the picture it starts from, and at this size it draws blurrier, with worse faces and anatomy. " +
+               FormattableString.Invariant($"Scale that picture to the checkpoint's size before it is encoded (ImageScaleToTotalPixels, megapixels {side * side / 1048576.0:0.##}); ") +
+               "a tall or wide crop can be padded to a usual shape first (ImagePadForOutpaint, which pads with grey), so the figure keeps its proportions.";
+
+        static (int Width, int Height)? PictureSize(string file)
+        {
+            try
+            {
+                using var codec = SkiaSharp.SKCodec.Create(file);
+                return codec is null ? null : (codec.Info.Width, codec.Info.Height);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
 
         static double? Number(JsonNode? n) =>
             n is JsonValue && double.TryParse(n.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
@@ -804,7 +1101,8 @@ public sealed class ComfyTool : Tool
             return new ToolResult($"The job (prompt_id {promptId}) is still {(job.Status == "queued" ? "waiting" : "running")} after {ComfyRunner.Clock(job.Elapsed)}" +
                                   (job.Progress is { } p ? $": {p}" : "") + ". " +
                                   (ctx.UserMessage.IsCancellationRequested ? "The user wrote to you meanwhile; read that first. " : "") +
-                                  $"It goes on in ComfyUI; wait for it with action=status prompt_id={promptId}.");
+                                  $"It goes on in ComfyUI; wait for it with action=status prompt_id={promptId}" +
+                                  (ctx.UserMessage.IsCancellationRequested ? $", or, if what the user wrote changes it, stop it with action=cancel prompt_id={promptId} (not action=stop, which stops ComfyUI)." : "."));
 
         var dirs = await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) ?? [];
         var files = await ComfyRunner.LocateAsync(api, job.Files, dirs, Path.Combine(ctx.ScratchDirectory ?? Path.GetTempPath(), "comfyui", "outputs"), ct).ConfigureAwait(false);
@@ -838,6 +1136,10 @@ public sealed class ComfyTool : Tool
         var preview = MediaPreview.ForFiles(paths, ctx.Media, ctx.SeesImages);
         foreach (var line in preview.Lines)
             sb.Append("- ").AppendLine(line);
+        // Asked for a video with the sound of wind, qwen3.8 searched ComfyUI's 600 GB folder for
+        // ffmpeg.exe for three minutes to put a sound on it; another run looked for it too.
+        if (job.Status == "success" && ctx.Media?.Ffmpeg is { } ffmpeg && paths.Any(p => MediaPreview.KindOf(p) is "video" or "audio"))
+            sb.AppendLine($"To cut, join or put a sound on these: {ffmpeg}");
         if (saved.Count == 0 && files.Count > 0 && job.Status == "success")
             sb.AppendLine("(These are previews in ComfyUI's temp folder, which it empties when it restarts: add a save node, or copy them with save_to, to keep them.)");
         foreach (var text in job.Texts.Take(10))

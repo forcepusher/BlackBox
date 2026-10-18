@@ -68,6 +68,9 @@ public interface IMediaDecoder
 
     /// <summary>Its sound; null when it has none or can't be read.</summary>
     IAudioReader? OpenAudio(string path);
+
+    /// <summary>The ffmpeg program a decoder reads with, when it uses one: also the agent's, to cut or join media.</summary>
+    string? Ffmpeg => null;
 }
 
 /// <summary>Plays a sound through the PC's speakers, for the chat's audio and video players.</summary>
@@ -94,6 +97,8 @@ public sealed class FallbackDecoder(params IMediaDecoder[] decoders) : IMediaDec
     public IVideoReader? OpenVideo(string path, int maxSide) => decoders.Select(d => Try(() => d.OpenVideo(path, maxSide))).FirstOrDefault(r => r is not null);
 
     public IAudioReader? OpenAudio(string path) => decoders.Select(d => Try(() => d.OpenAudio(path))).FirstOrDefault(r => r is not null);
+
+    public string? Ffmpeg => decoders.Select(d => d.Ffmpeg).FirstOrDefault(f => f is not null);
 
     private static T? Try<T>(Func<T?> read) where T : class
     {

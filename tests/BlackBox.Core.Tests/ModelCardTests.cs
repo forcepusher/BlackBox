@@ -45,21 +45,21 @@ public class ModelCardTests : IDisposable
           "username": "Crody", "baseModel": "Illustrious"}]}
         """;
 
-    /// <summary>A model file of <paramref name="size"/> bytes whose 64 KB a megabyte in are <paramref name="seed"/>'s, and its AutoV1.</summary>
+    /// <summary>A model file of <paramref name="size"/> bytes made from <paramref name="seed"/>, and its SHA-256.</summary>
     private (string Path, string Hash) ModelFile(string name, int size = 0x120000, byte seed = 7)
     {
         var bytes = new byte[size];
         new Random(seed).NextBytes(bytes);
         var path = Path.Combine(_dir, name);
         File.WriteAllBytes(path, bytes);
-        return (path, size >= 0x110000 ? Convert.ToHexString(SHA256.HashData(bytes.AsSpan(0x100000, 0x10000)))[..8] : "");
+        return (path, Convert.ToHexString(SHA256.HashData(bytes)));
     }
 
     private void Civitai(string hash, long size, string baseModel = "Illustrious")
     {
         _civitai.Json($"/api/v1/model-versions/by-hash/{hash}", $$$"""
             {"id": 2792241, "modelId": 503815, "name": "IL v17.0", "baseModel": "{{{baseModel}}}", "trainedWords": [],
-             "files": [{"name": "novaFurryXL_ilV170.safetensors", "sizeKB": {{{size / 1024.0}}}, "hashes": {"AutoV1": "{{{hash}}}"}}]}
+             "files": [{"name": "novaFurryXL_ilV170.safetensors", "sizeKB": {{{size / 1024.0}}}, "hashes": {"SHA256": "{{{hash}}}"}}]}
             """);
         _civitai.Json("/api/v1/models/503815", new JsonObject
         {
@@ -70,7 +70,7 @@ public class ModelCardTests : IDisposable
     }
 
     [Fact]
-    public async Task A_checkpoint_found_by_its_quick_hash_comes_with_its_pages_settings_and_its_makers_recipe()
+    public async Task A_checkpoint_found_by_its_hash_comes_with_its_pages_settings_and_its_makers_recipe()
     {
         var (path, hash) = ModelFile("novaFurryXL_ilV170.safetensors");
         Civitai(hash, new FileInfo(path).Length);
@@ -102,12 +102,23 @@ public class ModelCardTests : IDisposable
         Assert.Equal(asked, _civitai.Requests.Count);
     }
 
+    // This PC's Pony Diffusion V6 XL got the card of "Incomplete anime pony", a fine-tune of it of the
+    // same size: the 64 KB a megabyte in that Civitai's quick hash (AutoV1) reads were the same in both.
     [Fact]
-    public async Task A_file_of_another_size_with_the_same_quick_hash_is_another_model()
+    public async Task A_file_is_looked_up_by_its_whole_hash_not_the_quick_one_its_fine_tunes_share()
     {
-        var (path, hash) = ModelFile("other.safetensors");
-        Civitai(hash, new FileInfo(path).Length * 3);
-        Assert.Null(await new ComfyModelCards(_dir).LookUpAsync(path, TestContext.Current.CancellationToken));
+        var (path, hash) = ModelFile("ponyDiffusionV6XL_v6StartWithThisOne.safetensors");
+        var bytes = File.ReadAllBytes(path);
+        var quick = Convert.ToHexString(SHA256.HashData(bytes.AsSpan(0x100000, 0x10000)))[..8];
+        _civitai.Json($"/api/v1/model-versions/by-hash/{quick}", """{"id": 1, "modelId": 336883, "name": "v1.0", "baseModel": "Pony", "files": []}""");
+        _civitai.Json("/api/v1/models/336883", """{"id": 336883, "name": "Incomplete anime pony"}""");
+        _civitai.Json($"/api/v1/model-versions/by-hash/{hash}", """{"id": 290640, "modelId": 257749, "name": "V6 (start with this one)", "baseModel": "Pony", "files": []}""");
+        _civitai.Json("/api/v1/models/257749", """{"id": 257749, "name": "Pony Diffusion V6 XL"}""");
+
+        var card = await new ComfyModelCards(_dir).LookUpAsync(path, TestContext.Current.CancellationToken);
+
+        Assert.Equal("Pony Diffusion V6 XL (V6 (start with this one))", card?.Title);
+        Assert.DoesNotContain(_civitai.Requests, r => r.Contains(quick, StringComparison.Ordinal));
 
         // Civitai doesn't know it: not asked again for a while.
         var (unknown, _) = ModelFile("mine.safetensors", seed: 9);
@@ -116,6 +127,45 @@ public class ModelCardTests : IDisposable
         var asked = _civitai.Requests.Count;
         Assert.Null(await cards.LookUpAsync(unknown, TestContext.Current.CancellationToken));
         Assert.Equal(asked, _civitai.Requests.Count);
+    }
+
+    // MiaoMiao Harem's page points to "About this version", where its settings are; Juggernaut XL's
+    // version only says what it was trained on ("Booru tags"), and its page has the settings.
+    [Theory]
+    [InlineData("<p>Recommended Settings</p><p>Sampler / Scheduler: Euler + sgm-uniform</p><p>CFG: 4</p>",
+                "<p>Please refer to the About this version section for the recommended settings.</p>", "Recommended Settings\nSampler / Scheduler: Euler + sgm-uniform\nCFG: 4")]
+    [InlineData("<p>Trained another set on SDXL (using Booru tags).</p>",
+                "<p>Recommended Settings:</p><p>Sampler: DPM++ 2M SDE</p>", "Recommended Settings:\nSampler: DPM++ 2M SDE")]
+    public async Task A_versions_own_settings_come_before_its_models_page(string versionText, string modelText, string advice)
+    {
+        var (path, hash) = ModelFile("m.safetensors");
+        _civitai.Json($"/api/v1/model-versions/by-hash/{hash}", new JsonObject
+        {
+            ["id"] = 7, ["modelId"] = 70, ["name"] = "v1", ["baseModel"] = "Anima", ["description"] = versionText, ["files"] = new JsonArray(),
+        }.ToJsonString());
+        _civitai.Json("/api/v1/models/70", new JsonObject { ["id"] = 70, ["name"] = "M", ["description"] = modelText }.ToJsonString());
+
+        var card = await new ComfyModelCards(_dir).LookUpAsync(path, TestContext.Current.CancellationToken);
+
+        Assert.Equal(advice, card?.Advice);
+    }
+
+    [Fact]
+    public async Task A_files_hash_is_worked_out_once_and_again_when_the_file_changes()
+    {
+        var (path, hash) = ModelFile("x.safetensors");
+        Assert.Equal(hash, await new ComfyModelCards(_dir).HashAsync(path));
+        Assert.Contains(hash, File.ReadAllText(Path.Combine(_dir, "model-hashes.json")));
+
+        // Kept with the file's size and time: a new start of BlackBox reads it back.
+        File.WriteAllText(Path.Combine(_dir, "model-hashes.json"), File.ReadAllText(Path.Combine(_dir, "model-hashes.json")).Replace(hash, "SAVED"));
+        Assert.Equal("SAVED", await new ComfyModelCards(_dir).HashAsync(path));
+
+        // A file changed since is hashed again.
+        var (_, changed) = ModelFile("x.safetensors", seed: 8);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(1));
+        Assert.Equal(changed, await new ComfyModelCards(_dir).HashAsync(path));
+        Assert.Null(await new ComfyModelCards(_dir).HashAsync(Path.Combine(_dir, "gone.safetensors")));
     }
 
     [Fact]
@@ -135,12 +185,22 @@ public class ModelCardTests : IDisposable
         Assert.Contains("embedding:Name", text);
     }
 
+    // Juggernaut XL's maker's pictures: "DPM++ 2M SDE" with its schedule in a field of its own, as
+    // AUTOMATIC1111 writes it since 1.9. Run with ComfyUI's normal schedule, the sky came out speckled.
     [Fact]
-    public void The_quick_hash_is_civitais_autov1()
+    public void A_schedule_given_on_its_own_and_the_hires_upscaler_are_in_the_recipe()
     {
-        var (path, hash) = ModelFile("x.safetensors");
-        Assert.Equal(hash, ComfyModelCards.QuickHash(path));
-        Assert.Null(ComfyModelCards.QuickHash(ModelFile("small.safetensors", size: 4096).Path));
+        var image = JsonNode.Parse("""
+            {"meta": {"Size": "896x1152", "steps": 30, "prompt": "a lighthouse at sunset", "sampler": "DPM++ 2M SDE", "Schedule type": "Karras", "cfgScale": 5,
+                      "Hires upscale": "1.5", "Hires upscaler": "4x_NMKD-Siax_200k", "Denoising strength": "0.33"}}
+            """)!.AsObject();
+        var text = ComfyModelCards.Format("juggernautXL_ragnarok.safetensors",
+            new ModelCard("Juggernaut XL (Ragnarok)", "https://civitai.com/models/133005", "SDXL 1.0", [], null, [ComfyModelCards.Example(image)!]));
+        Assert.Contains("DPM++ 2M SDE Karras (sampler_name dpmpp_2m_sde, scheduler karras), CFG 5, 30 steps, 896x1152, then hires 1.5x with 4x_NMKD-Siax_200k at denoise 0.33", text);
+
+        // "Automatic" says nothing about the schedule.
+        image["meta"]!["Schedule type"] = "Automatic";
+        Assert.Equal("DPM++ 2M SDE", ComfyModelCards.Example(image)!.Sampler);
     }
 
     [Theory]
@@ -163,6 +223,36 @@ public class ModelCardTests : IDisposable
     [InlineData("Wan Video 14B t2v", null)]
     public void Each_base_model_has_the_size_it_is_made_for(string baseModel, int? side) =>
         Assert.Equal(side, ComfyModelCards.NativeSide(baseModel));
+
+    [Theory]
+    [InlineData("SD 1.5", "SDXL 1.0", ComfyModelCards.Fit.OtherKind)]
+    [InlineData("Flux.1 D", "Illustrious", ComfyModelCards.Fit.OtherKind)]
+    [InlineData("SDXL 1.0", "Pony", ComfyModelCards.Fit.OtherLine)]
+    [InlineData("Pony", "Illustrious", ComfyModelCards.Fit.OtherLine)]
+    [InlineData("Illustrious", "NoobAI", ComfyModelCards.Fit.Fits)]
+    [InlineData("Pony", "Pony", ComfyModelCards.Fit.Fits)]
+    [InlineData("SD 1.4", "SD 1.5", ComfyModelCards.Fit.Fits)]
+    [InlineData("LTXV", "SDXL 1.0", ComfyModelCards.Fit.Fits)]
+    public void A_lora_fits_checkpoints_of_its_own_base(string lora, string checkpoint, ComfyModelCards.Fit fit) =>
+        Assert.Equal(fit, ComfyModelCards.FitOf(lora, checkpoint));
+
+    [Fact]
+    public void A_whole_checkpoint_holds_a_vae_and_a_diffusion_model_alone_none()
+    {
+        string File1(string name, string keys)
+        {
+            var header = Encoding.UTF8.GetBytes("{" + keys + "}");
+            var path = Path.Combine(_dir, name);
+            File.WriteAllBytes(path, [.. BitConverter.GetBytes((ulong)header.Length), .. header, 0, 0]);
+            return path;
+        }
+        const string Tensor = """{"dtype": "F16", "shape": [1], "data_offsets": [0, 2]}""";
+        Assert.True(ComfyModelCards.HoldsVae(File1("sdxl.safetensors", $"\"first_stage_model.decoder.conv_in.weight\": {Tensor}, \"model.diffusion_model.out.0.bias\": {Tensor}")));
+        Assert.True(ComfyModelCards.HoldsVae(File1("ltx.safetensors", $"\"vae.decoder.conv_in.weight\": {Tensor}, \"model.diffusion_model.x\": {Tensor}")));
+        Assert.False(ComfyModelCards.HoldsVae(File1("anima.safetensors", $"\"net.blocks.0.weight\": {Tensor}")));
+        Assert.Null(ComfyModelCards.HoldsVae(ModelFile("noise.safetensors").Path));
+        Assert.Null(ComfyModelCards.HoldsVae(Path.Combine(_dir, "model.gguf")));
+    }
 
     [Fact]
     public void A_files_own_tensors_and_metadata_say_its_base_model()
@@ -212,10 +302,10 @@ public class ModelCardToolTests : IDisposable
         var bytes = new byte[0x120000];
         new Random(3).NextBytes(bytes);
         File.WriteAllBytes(Path.Combine(checkpoints, "sdxl.safetensors"), bytes);
-        var hash = Convert.ToHexString(SHA256.HashData(bytes.AsSpan(0x100000, 0x10000)))[..8];
+        var hash = Convert.ToHexString(SHA256.HashData(bytes));
         _civitai.Json($"/api/v1/model-versions/by-hash/{hash}", $$$"""
             {"id": 2792241, "modelId": 503815, "name": "IL v17.0", "baseModel": "Illustrious", "trainedWords": [],
-             "files": [{"name": "sdxl.safetensors", "sizeKB": {{{bytes.Length / 1024.0}}}, "hashes": {"AutoV1": "{{{hash}}}"}}]}
+             "files": [{"name": "sdxl.safetensors", "sizeKB": {{{bytes.Length / 1024.0}}}, "hashes": {"SHA256": "{{{hash}}}"}}]}
             """);
         _civitai.Json("/api/v1/models/503815", new JsonObject
         {
@@ -247,6 +337,15 @@ public class ModelCardToolTests : IDisposable
         Assert.DoesNotContain("on Civitai", (await Call(tool, """{"action": "models", "search": "sdxl"}""")).Text);
     }
 
+    // qwen3.8 asked for the checkpoint it had just downloaded by name=, as templates are asked for.
+    [Fact]
+    public async Task A_checkpoint_asked_for_by_name_brings_its_card_too()
+    {
+        var listed = await Call(new ComfyTool(), """{"action": "models", "name": "sdxl.safetensors"}""");
+        Assert.Contains("sdxl.safetensors is Nova Furry XL (IL v17.0) on Civitai", listed.Text);
+        Assert.DoesNotContain("v1-5-pruned-emaonly-fp16.safetensors", listed.Text);
+    }
+
     [Fact]
     public async Task A_run_well_under_the_checkpoints_size_is_said_with_its_card()
     {
@@ -272,6 +371,60 @@ public class ModelCardToolTests : IDisposable
         var again = await Call(tool, new JsonObject { ["action"] = "run", ["workflow"] = workflow.Replace("512", "832").Replace("760", "1216") }.ToJsonString());
         Assert.DoesNotContain("under half the size", again.Text);
         Assert.DoesNotContain("on Civitai", again.Text);
+    }
+
+    // A LoRA for another kind of model isn't applied at all: ComfyUI only logs "lora key not loaded".
+    [Fact]
+    public async Task A_lora_for_another_kind_of_model_than_the_checkpoint_is_said_once()
+    {
+        var loras = Path.Combine(_comfy.CodeDir, "models", "loras");
+        Directory.CreateDirectory(loras);
+        var header = Encoding.UTF8.GetBytes("""{"lora_te_text_model_encoder_layers_0_mlp_fc1.alpha": {"dtype": "F16", "shape": [], "data_offsets": [0, 2]}}""");
+        File.WriteAllBytes(Path.Combine(loras, "pixel.safetensors"), [.. BitConverter.GetBytes((ulong)header.Length), .. header, 0, 0]);
+        _comfy.Loras.Add("pixel.safetensors");
+        var workflow = """
+            {"1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "sdxl.safetensors"}},
+             "8": {"class_type": "LoraLoader", "inputs": {"model": ["1", 0], "clip": ["1", 1], "lora_name": "pixel.safetensors", "strength_model": 1, "strength_clip": 1}},
+             "2": {"class_type": "CLIPTextEncode", "inputs": {"text": "a tavern", "clip": ["8", 1]}},
+             "3": {"class_type": "CLIPTextEncode", "inputs": {"text": "", "clip": ["8", 1]}},
+             "4": {"class_type": "EmptyLatentImage", "inputs": {"width": 1216, "height": 832, "batch_size": 1}},
+             "5": {"class_type": "KSampler", "inputs": {"model": ["8", 0], "positive": ["2", 0], "negative": ["3", 0], "latent_image": ["4", 0],
+                   "seed": 1, "steps": 20, "cfg": 4, "sampler_name": "euler_ancestral", "scheduler": "normal", "denoise": 1}},
+             "6": {"class_type": "VAEDecode", "inputs": {"samples": ["5", 0], "vae": ["1", 2]}},
+             "7": {"class_type": "SaveImage", "inputs": {"images": ["6", 0], "filename_prefix": "tavern"}}}
+            """;
+        var tool = new ComfyTool();
+
+        var ran = await Call(tool, new JsonObject { ["action"] = "run", ["workflow"] = workflow }.ToJsonString());
+
+        Assert.False(ran.IsError, ran.Text);
+        Assert.Contains("Note: pixel.safetensors is a LoRA for SD 1.5, but the base model of sdxl.safetensors is Illustrious", ran.Text);
+        Assert.Contains("find_models kind=lora base=\"Illustrious\"", ran.Text);
+        Assert.DoesNotContain("lora key not loaded", (await Call(tool, new JsonObject { ["action"] = "run", ["workflow"] = workflow }.ToJsonString())).Text);
+    }
+
+    // qwen3.8 repainted a figure cropped from the user's reference sheet at the crop's 432x1216.
+    [Fact]
+    public async Task Image_to_image_well_under_the_checkpoints_size_is_said_by_the_picture_it_made()
+    {
+        var workflow = """
+            {"1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "sdxl.safetensors"}},
+             "2": {"class_type": "CLIPTextEncode", "inputs": {"text": "a bunny", "clip": ["1", 1]}},
+             "3": {"class_type": "CLIPTextEncode", "inputs": {"text": "", "clip": ["1", 1]}},
+             "4": {"class_type": "LoadImage", "inputs": {"image": "example.png"}},
+             "5": {"class_type": "VAEEncode", "inputs": {"pixels": ["4", 0], "vae": ["1", 2]}},
+             "6": {"class_type": "KSampler", "inputs": {"model": ["1", 0], "positive": ["2", 0], "negative": ["3", 0], "latent_image": ["5", 0],
+                   "seed": 1, "steps": 20, "cfg": 4, "sampler_name": "euler_ancestral", "scheduler": "normal", "denoise": 0.6}},
+             "8": {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["1", 2]}},
+             "9": {"class_type": "SaveImage", "inputs": {"images": ["8", 0], "filename_prefix": "bunny"}}}
+            """;
+
+        var ran = await Call(new ComfyTool(), new JsonObject { ["action"] = "run", ["workflow"] = workflow }.ToJsonString());
+
+        // The stand-in ComfyUI makes a 64x48 picture.
+        Assert.False(ran.IsError, ran.Text);
+        Assert.Contains("Note: it made its picture at 64x48, under half the size sdxl.safetensors is made for (Illustrious, an SDXL model", ran.Text);
+        Assert.Contains("ImageScaleToTotalPixels, megapixels 1)", ran.Text);
     }
 }
 

@@ -5,14 +5,18 @@ using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
 
-// Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] [--attach FILE]... "task"
+// Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] [--full-results] [--attach FILE]... [--then TEXT]... "task"
 //   --root        portable folder (default: BLACKBOX_HOME, else .dev/ when run from the repository, else the exe folder);
 //                 its Data/mcp.json lists the MCP servers to start, as in the app
 //   --url/--model override the server address and model saved in Data/settings.json; with no model, or one the
 //                 server doesn't offer, the strongest model it offers is used
 //   --yes         approve risky tools without asking
 //   --save-shots  write every screenshot the model sees to DIR
-//   --attach      send a file with the task, as one dropped on the app's window (once per file)
+//   --full-results  log each tool result whole, not just its start and end
+//   --attach     send a file with the task, as one dropped on the app's window (once per file)
+//   --then        a later message of the same chat, sent when the run before it is over (once per message, in
+//                 order); "@N text" is typed N seconds into that run instead, as a message sent while the agent
+//                 works, so a recorded chat can be played again
 
 // UTF-8 also when redirected to a log file, so scripts can show the log as it is written.
 Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -32,13 +36,17 @@ var shotsDir = Take("--save-shots");
 var urlOverride = Take("--url");
 var modelOverride = Take("--model");
 var autoYes = Flag("--yes");
+var fullResults = Flag("--full-results");
 var attached = new List<string>();
 while (Take("--attach") is { } file)
     attached.Add(Path.GetFullPath(file));
+var followUps = new Queue<string>();
+while (Take("--then") is { } later)
+    followUps.Enqueue(later);
 var task = string.Join(' ', argsList);
 if (string.IsNullOrWhiteSpace(task))
 {
-    Console.Error.WriteLine("Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] [--attach FILE]... \"task\"");
+    Console.Error.WriteLine("Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] [--attach FILE]... [--then TEXT]... \"task\"");
     return 2;
 }
 if (attached.FirstOrDefault(f => !File.Exists(f) && !Directory.Exists(f)) is { } missing)
@@ -138,12 +146,49 @@ catch (OperationCanceledException)
 
 using var ssh = new BlackBox.Core.Ssh.SshHosts(paths.KnownHostsFile);
 var session = AgentSetup.Create(BackendConnection.Create(http, settings.Server), platform, agent, paths, mcp, ssh);
-var observer = new ConsoleObserver(autoYes, shotsDir);
+var observer = new ConsoleObserver(autoYes, shotsDir, fullResults);
 
 var t0 = DateTime.UtcNow;
 if (attached.Count > 0)
     Console.WriteLine($"[attach] {string.Join(" | ", attached)}");
-await session.RunAsync(new UserInput(task, attached), observer, cts.Token);
+var input = new UserInput(task, attached);
+for (var turn = 1; ; turn++)
+{
+    // The messages typed while this run goes on ("@N text"), each N seconds in. One the run ends
+    // before is sent after it, as the app sends a message that came too late for the run.
+    using var runEnded = new CancellationTokenSource();
+    var typedMeanwhile = new List<Task<UserInput?>>();
+    while (followUps.TryPeek(out var next) && next.StartsWith('@') && next.IndexOf(' ') is > 1 and var space
+        && int.TryParse(next[1..space], out var seconds))
+    {
+        followUps.Dequeue();
+        var text = next[(space + 1)..];
+        typedMeanwhile.Add(Task.Run(async () =>
+        {
+            try { await Task.Delay(TimeSpan.FromSeconds(seconds), runEnded.Token); }
+            catch (OperationCanceledException) { return new UserInput(text); }
+            Console.WriteLine($"\n[user] {DateTime.Now:HH:mm:ss} (while the agent works) {text}");
+            session.Steer(text);
+            return (UserInput?)null;
+        }));
+    }
+    var turnStart = DateTime.UtcNow;
+    await session.RunAsync(input, observer, cts.Token);
+    runEnded.Cancel();
+    var notTyped = (await Task.WhenAll(typedMeanwhile)).OfType<UserInput>();
+    var late = session.TakeUndelivered();
+    late.AddRange(notTyped);
+    Console.WriteLine($"\n[turn {turn}] {observer.Reason} in {(DateTime.UtcNow - turnStart).TotalSeconds:0}s");
+    if (cts.IsCancellationRequested || observer.Reason != AgentStopReason.Completed)
+        break;
+    if (late.Count > 0)
+        input = UserInput.Join(late);
+    else if (followUps.TryDequeue(out var then))
+        input = new UserInput(then);
+    else
+        break;
+    Console.WriteLine($"\n[user] {DateTime.Now:HH:mm:ss} {input.Text}");
+}
 Console.WriteLine($"\n[done] {observer.Reason} in {(DateTime.UtcNow - t0).TotalSeconds:0}s, {observer.Steps} model calls, {observer.ToolCalls} tool calls, {observer.ToolErrors} tool errors");
 if (observer.Detail is { } d) Console.WriteLine("[done] " + d);
 // A ComfyUI the task started is closed after its jobs, which may still be running.
@@ -159,7 +204,7 @@ return observer.Reason == AgentStopReason.Completed ? 0 : 1;
 /// Prints the run as it happens. Every line carries the time, so a log
 /// shows where the seconds go between steps: waiting for the server, writing the reply, tools.
 /// </summary>
-internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentObserver
+internal sealed class ConsoleObserver(bool autoYes, string? shotsDir, bool fullResults) : IAgentObserver
 {
     private StreamChannel? _channel;
     private int _shot;
@@ -177,7 +222,7 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
 
     public void OnStepStarted(int step)
     {
-        if (step > 0) Steps = step;
+        if (step > 0) Steps++; // over all the runs of a chat played with --then
         _channel = null;
         _requestStart = DateTime.Now;
         _firstToken = null;
@@ -239,7 +284,9 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
     /// <summary>A long call's progress, every 15 seconds or when it moves on to another stage.</summary>
     public void OnToolProgress(ToolCall call, string text)
     {
-        var stage = text.Split(" · ")[0].Split(", step")[0];
+        // Without its numbers: a download's "4.19 of 16.06 GB, 13.8 MB/s" changes every second and
+        // wrote a line each time, a thousand lines for a 16 GB model.
+        var stage = System.Text.RegularExpressions.Regex.Replace(text.Split(" · ")[0].Split(", step")[0], @"[\d.:]+", "#");
         if (DateTime.Now - _lastProgress < TimeSpan.FromSeconds(15) && stage == _progressStage)
             return;
         (_lastProgress, _progressStage) = (DateTime.Now, stage);
@@ -250,7 +297,7 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir) : IAgentOb
     {
         if (result.IsError) ToolErrors++;
         // The start and the end: an error or an exit code is usually at the end.
-        var text = result.Text.Length > 1600 ? result.Text[..500] + " … " + result.Text[^1100..] : result.Text;
+        var text = result.Text.Length > 1600 && !fullResults ? result.Text[..500] + " … " + result.Text[^1100..] : result.Text;
         Console.ForegroundColor = result.IsError ? ConsoleColor.Red : ConsoleColor.DarkCyan;
         Console.WriteLine($"[result] {Now} after {(DateTime.Now - _toolStart).TotalSeconds:0.0}s: {text.TrimEnd()}");
         Console.ResetColor();

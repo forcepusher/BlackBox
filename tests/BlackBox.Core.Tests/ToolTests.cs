@@ -967,6 +967,33 @@ public class ToolTests
         Assert.True(binary.Text.Length < 1_000, binary.Text);
     }
 
+    // ffmpeg writes its progress to stderr: taken in with 2>&1, Windows PowerShell 5.1 counted it as an
+    // error, and every ffmpeg call that worked came back as "Exit code 1".
+    [Fact]
+    public async Task A_programs_messages_on_stderr_are_no_failure_and_its_own_exit_code_comes_back()
+    {
+#if !WINDOWS
+        Assert.Skip("Windows only");
+        IPlatformServices platform = new UnsupportedPlatform();
+#else
+        var platform = new BlackBox.Platform.Windows.WindowsPlatform();
+#endif
+        async Task<ToolResult> Run(string command) =>
+            await new ShellTool().ExecuteAsync(new JsonObject { ["command"] = command }, Ctx(platform), TestContext.Current.CancellationToken);
+
+        var progress = await Run("cmd /c \"echo frame=120 speed=74x 1>&2\" 2>&1 | Select-Object -Last 1");
+        Assert.False(progress.IsError, progress.Text);
+        Assert.Contains("Exit code 0", progress.Text);
+        Assert.Contains("frame=120", progress.Text);
+
+        // A program that failed gives its own code; a cmdlet that failed, 1 as before.
+        Assert.Contains("Exit code 5", (await Run("cmd /c \"echo bad input 1>&2 & exit 5\" 2>&1 | Select-Object -Last 1")).Text);
+        Assert.Contains("Exit code 128", (await Run("cmd /c exit 128")).Text);
+        var cmdlet = await Run("cmd /c \"echo fine 1>&2\" 2>&1; Get-Item 'C:\\no such folder here'");
+        Assert.True(cmdlet.IsError, cmdlet.Text);
+        Assert.Contains("Exit code 1", cmdlet.Text);
+    }
+
     [Fact]
     public async Task A_powershell_script_written_with_write_file_runs_in_windows_powershell()
     {

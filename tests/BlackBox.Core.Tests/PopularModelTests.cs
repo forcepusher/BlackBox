@@ -38,7 +38,9 @@ public class PopularModelTests : IDisposable
               {"id": 4, "name": "ReKemono", "type": "Checkpoint", "nsfw": false, "tags": ["furry", "kemono"],
                "modelVersions": [{"id": 41, "name": "v11", "baseModel": "Illustrious", "files": [{"name": "rekemono.safetensors", "sizeKB": 6800000, "primary": true, "downloadUrl": "https://x/4"}]}]},
               {"id": 5, "name": "Landscapes", "type": "Checkpoint", "nsfw": false, "tags": ["landscape", "photography"],
-               "modelVersions": [{"id": 51, "name": "1", "baseModel": "Krea 2", "files": [{"name": "land.safetensors", "sizeKB": 12000000, "primary": true, "downloadUrl": "https://x/5"}]}]}
+               "modelVersions": [{"id": 51, "name": "1", "baseModel": "Krea 2", "files": [{"name": "land.safetensors", "sizeKB": 12000000, "primary": true, "downloadUrl": "https://x/5"}]}]},
+              {"id": 6, "name": "HuslyoRealismXL", "type": "Checkpoint", "nsfw": false, "tags": ["photorealistic", "realistic"],
+               "modelVersions": [{"id": 61, "name": "V3", "baseModel": "SDXL 1.0", "files": [{"name": "huslyo.safetensors", "sizeKB": 6800000, "primary": true, "downloadUrl": "https://x/6"}]}]}
             ]}
             """);
     }
@@ -70,6 +72,9 @@ public class PopularModelTests : IDisposable
         Assert.Equal(["MiaoMiao Harem (2.9B)", "Nova Furry AM (v4.0)"],
             ComfyPopularModels.Matching(snapshot.Models, ComfyNodeLibrary.Words("anime picture"), null, null).Select(p => p.Model.Title).Distinct());
         Assert.StartsWith("Anima 2, ", ComfyPopularModels.Bases(snapshot.Models, "checkpoints"));
+        // A model named by name, which isn't among them: "XL" alone doesn't make an SDXL model one.
+        Assert.Empty(ComfyPopularModels.Matching(snapshot.Models, ComfyNodeLibrary.Words("Juggernaut XL"), "checkpoint", null));
+        Assert.Equal(["HuslyoRealismXL (V3)"], ComfyPopularModels.Matching(snapshot.Models, ComfyNodeLibrary.Words("realistic XL"), null, null).Select(p => p.Model.Title));
 
         // Kept for a week, also for a new start of BlackBox; then fetched again.
         var asked = _civitai.Requests.Count;
@@ -89,6 +94,9 @@ public class PopularModelTests : IDisposable
         Assert.False(result.IsError, result.Text);
         Assert.Contains("Civitai's most downloaded checkpoints this month", result.Text);
         Assert.Contains("The month's most downloaded are on these base models: Anima 2, ", result.Text);
+        // No ComfyUI runs and none has been used from this Data folder: that isn't "not installed".
+        Assert.Contains("none has been used from this BlackBox yet (action=status finds the PC's own", result.Text);
+        Assert.DoesNotContain("isn't installed", result.Text);
         Assert.Contains("1. MiaoMiao Harem (2.9B): checkpoint for Anima, 4.8 GB, #1 this month (Civitai,", result.Text);
         Assert.Contains("miao.safetensors: url=https://x/1 model_folder=checkpoints", result.Text);
     }

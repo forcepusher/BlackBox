@@ -23,6 +23,14 @@ public enum ComfyInstallKind
 /// <param name="Program">The Python that runs it (the Desktop app: its exe).</param>
 public sealed record ComfyInstall(string Root, string CodeDir, string Program, ComfyInstallKind Kind)
 {
+    /// <summary>Where its own Python keeps its packages; null for the Desktop app and the system's Python.</summary>
+    public string? SitePackages => Kind switch
+    {
+        ComfyInstallKind.Portable => Path.Combine(Root, "python_embeded", "Lib", "site-packages"),
+        ComfyInstallKind.Venv => Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(Program)!)!, "Lib", "site-packages"),
+        _ => null,
+    };
+
     /// <summary>The installation a folder belongs to: the portable folder, the ComfyUI folder or anything with ComfyUI\main.py in it.</summary>
     public static ComfyInstall? FromFolder(string folder)
     {

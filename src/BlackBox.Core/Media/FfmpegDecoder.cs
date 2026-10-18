@@ -29,6 +29,8 @@ public sealed partial class FfmpegDecoder(Func<IEnumerable<string>> searchFolder
         }
     }
 
+    public string? Ffmpeg => Program;
+
     private static string? Find(IEnumerable<string> folders)
     {
         var exe = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
