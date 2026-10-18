@@ -488,12 +488,15 @@ quarter less context.
 LM Studio loads a model on first use with the context its settings give it, and out of the box
 that is 4k: less than BlackBox's instructions and tools alone (about 9k tokens), so every request
 of a new LM Studio user failed as too long. When BlackBox's first request has LM Studio load the
-model with less than 32k, BlackBox loads it again through LM Studio's REST API
-(`/api/v1/models/unload`, `/api/v1/models/load` with `context_length`) with 64k, or 32k when LM
-Studio's memory guardrail refuses that, and the chat says so. A model you loaded yourself is left
-as it is, whatever its size; that, or any other server running the model with less than 32k
-(Ollama and llama-server start models with 4k unless told otherwise), gets a line in the chat at
-each task saying how to give it more.
+model with less than 16k (its out-of-the-box 4k or 8k), BlackBox loads it again through LM
+Studio's REST API (`/api/v1/models/unload`, `/api/v1/models/load` with `context_length`) with 32k,
+or 16k when LM Studio's memory guardrail refuses that, and the chat says so. A size the user set
+for the model is kept: on the test server, gemma-4-12b-it-qat set to 32000 was loaded again at 64k
+beside qwen3.8 and crashed at its first answer ("The model has crashed without additional
+information", then "Model reloaded.", both now sent again like other server failures). A model you
+loaded yourself is left as it is, whatever its size; that, or any other server running the model
+with less than 24k (Ollama and llama-server start models with 4k unless told otherwise), gets a
+line in the chat at each task saying how to give it more.
 
 The **Context** slider in the top bar shows that size while **Auto** is ticked ("not loaded" until LM Studio has loaded
 the model, which your first message does; a `?` means the server doesn't say and it is the 100k guess). Untick Auto

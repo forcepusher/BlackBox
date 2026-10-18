@@ -523,10 +523,12 @@ public class ContextDetectionTests
 
     /// <summary>
     /// LM Studio out of the box: a model loaded on first use gets a 4k context. Its memory
-    /// guardrail refuses 64k for this one, and takes 32k.
+    /// guardrail refuses 32k for this one, and takes 16k.
     /// </summary>
     private sealed class FreshLmStudio : HttpMessageHandler
     {
+        /// <summary>The context a model gets on first use: LM Studio's 4k, or what the user set for it.</summary>
+        public int Default { get; init; } = 4096;
         public int? Context { get; private set; }
         public List<string> Calls { get; } = [];
 
@@ -540,13 +542,13 @@ public class ContextDetectionTests
                 "/api/v0/models/m" => Context is { } c
                     ? $$"""{"id":"m","type":"vlm","state":"loaded","loaded_context_length":{{c}}}"""
                     : """{"id":"m","type":"vlm","state":"not-loaded","max_context_length":262144}""",
-                "/v1/chat/completions" => Load(4096),
+                "/v1/chat/completions" => Load(Default),
                 "/api/v1/models" => Context is { } c
                     ? $$$"""{"models":[{"key":"m","max_context_length":262144,"loaded_instances":[{"id":"m","config":{"context_length":{{{c}}}}}]}]}"""
                     : """{"models":[{"key":"m","max_context_length":262144,"loaded_instances":[]}]}""",
                 "/api/v1/models/unload" => Unload(),
-                "/api/v1/models/load" when body.Contains("65536") => null,
-                "/api/v1/models/load" => Load(32768),
+                "/api/v1/models/load" when body.Contains("32768") => null,
+                "/api/v1/models/load" => Load(16384),
                 _ => null,
             };
             return answer is null
@@ -556,9 +558,9 @@ public class ContextDetectionTests
 
         private string Load(int size)
         {
-            if (Context is null || size != 4096)
+            if (Context is null || size != Default)
                 Context = size;
-            return size == 4096
+            return size == Default
                 ? "data: {\"choices\":[{\"delta\":{\"content\":\"OK\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
                 : $$$"""{"instance_id":"m","status":"loaded","load_config":{"context_length":{{{size}}}}}""";
         }
@@ -577,15 +579,22 @@ public class ContextDetectionTests
         var notes = new List<string>();
         var settings = new BlackBox.Core.Settings.ServerSettings { BaseUrl = "http://host:1234/v1", Model = "m" };
         var facts = await ServerProbe.EnsureLoadedAsync(new HttpClient(server), settings, null, CancellationToken.None, notes.Add);
-        Assert.Equal(32768, facts.Context);
+        Assert.Equal(16384, facts.Context);
         Assert.Contains(server.Calls, c => c.StartsWith("POST /api/v1/models/unload") && c.Contains("\"instance_id\":\"m\""));
-        Assert.Equal("LM Studio loaded m with a 4k context, too small for BlackBox; it runs with 32k now. To choose the size yourself, load it in LM Studio with the context length you want.", Assert.Single(notes));
+        Assert.Equal("LM Studio loaded m with a 4k context, too small for BlackBox; it runs with 16k now. To choose the size yourself, load it in LM Studio with the context length you want.", Assert.Single(notes));
 
         // Loaded by the user already, even small: left as it is.
         server.Calls.Clear();
         notes.Clear();
-        Assert.Equal(32768, (await ServerProbe.EnsureLoadedAsync(new HttpClient(server), settings, null, CancellationToken.None, notes.Add)).Context);
+        Assert.Equal(16384, (await ServerProbe.EnsureLoadedAsync(new HttpClient(server), settings, null, CancellationToken.None, notes.Add)).Context);
         Assert.DoesNotContain(server.Calls, c => c.Contains("/load") || c.Contains("/unload"));
+        Assert.Empty(notes);
+
+        // A size the user set for the model (LM Studio's 32000) is theirs: loaded again at 64k beside
+        // another model, one such crashed at its first answer.
+        var theirs = new FreshLmStudio { Default = 32000 };
+        Assert.Equal(32000, (await ServerProbe.EnsureLoadedAsync(new HttpClient(theirs), settings, null, CancellationToken.None, notes.Add)).Context);
+        Assert.DoesNotContain(theirs.Calls, c => c.Contains("/load") || c.Contains("/unload"));
         Assert.Empty(notes);
     }
 }

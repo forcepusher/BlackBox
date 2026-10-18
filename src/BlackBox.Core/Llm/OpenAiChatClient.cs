@@ -628,7 +628,9 @@ public sealed partial class OpenAiChatClient
     /// LM Studio's model crashed or was unloaded, which the next request loads again. An hour of
     /// 2048 ended on "Server error: failed to process mtmd chunk" from LM Studio.
     /// </summary>
-    [GeneratedRegex(@"failed to process|failed to decode|memory slot|crashed|unloaded", RegexOptions.IgnoreCase)]
+    // After "The model has crashed without additional information", LM Studio's next answer was
+    // "Model reloaded.": the model was back, and the run had ended on it.
+    [GeneratedRegex(@"failed to process|failed to decode|memory slot|crashed|unloaded|reloaded", RegexOptions.IgnoreCase)]
     internal static partial Regex ServerFailedWords();
 
     /// <summary>Of <see cref="ServerFailedWords"/>, those saying llama.cpp had no room in its KV cache for the request.</summary>

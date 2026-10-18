@@ -217,9 +217,11 @@ public static class ServerProbe
     /// <remarks>
     /// LM Studio loads a model on first use with the context its settings give it, and out of the
     /// box that is 4k: less than BlackBox's instructions and tools alone (about 9k tokens), so
-    /// every request failed as too long. A model loaded that small for BlackBox's first request is
-    /// loaded again with <see cref="RoomyContext"/> (32k when the GPU can't hold that), and
-    /// <paramref name="onNote"/> says so. A model the user loaded themselves is left as it is.
+    /// every request failed as too long. A model loaded under <see cref="ReloadBelow"/> for
+    /// BlackBox's first request is loaded again with <see cref="MinimumContext"/> (16k when the GPU
+    /// can't hold that), and <paramref name="onNote"/> says so. A size the user chose above that is
+    /// kept: a model set to 31k, loaded again at 64k beside another one, crashed at its first
+    /// answer. A model the user loaded themselves is left as it is.
     /// </remarks>
     public static async Task<ModelFacts> EnsureLoadedAsync(HttpClient http, ServerSettings server, Action? onLoading, CancellationToken ct, Action<string>? onNote = null)
     {
@@ -239,7 +241,7 @@ public static class ServerProbe
             return default; // the real request will report the problem
         }
         facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
-        if (facts.Context is { } small && small < MinimumContext && await ReloadRoomierAsync(http, server, small, ct).ConfigureAwait(false) is { } roomier)
+        if (facts.Context is { } small && small < ReloadBelow && await ReloadRoomierAsync(http, server, small, ct).ConfigureAwait(false) is { } roomier)
         {
             onNote?.Invoke($"LM Studio loaded {server.ModelInUse} with a {small / 1024}k context, too small for BlackBox; it runs with {roomier / 1024}k now. " +
                            "To choose the size yourself, load it in LM Studio with the context length you want.");
@@ -251,12 +253,12 @@ public static class ServerProbe
     /// <summary>Less than this, and BlackBox's instructions and tools (about 9k tokens) leave room for a few steps at most.</summary>
     public const int MinimumContext = 32 * 1024;
 
-    /// <summary>What a model LM Studio loaded too small for BlackBox is loaded again with, if the model takes it.</summary>
-    public const int RoomyContext = 64 * 1024;
+    /// <summary>A context LM Studio gave a model on first use under this is its out-of-the-box 4k or 8k, not the user's choice.</summary>
+    public const int ReloadBelow = 16 * 1024;
 
     /// <summary>
     /// Loads the model in use again through LM Studio's REST API (/api/v1/models/unload and
-    /// /load) with <see cref="RoomyContext"/>, or <see cref="MinimumContext"/> when its memory
+    /// /load) with <see cref="MinimumContext"/>, or <see cref="ReloadBelow"/> when its memory
     /// guardrail refuses that; the context it then runs with, or null if neither loaded.
     /// </summary>
     private static async Task<int?> ReloadRoomierAsync(HttpClient http, ServerSettings server, int current, CancellationToken ct)
@@ -266,8 +268,8 @@ public static class ServerProbe
             || (list["models"] as JsonArray)?.OfType<JsonObject>().FirstOrDefault(m => Str(m["key"]) == server.ModelInUse) is not { } entry
             || entry["loaded_instances"] is not JsonArray { Count: > 0 } instances)
             return null;
-        var most = Int(entry["max_context_length"]) ?? RoomyContext;
-        var sizes = new[] { RoomyContext, MinimumContext }.Select(s => Math.Min(s, most)).Where(s => s > current).Distinct().ToList();
+        var most = Int(entry["max_context_length"]) ?? MinimumContext;
+        var sizes = new[] { MinimumContext, ReloadBelow }.Select(s => Math.Min(s, most)).Where(s => s > current).Distinct().ToList();
         if (sizes.Count == 0)
             return null;
         foreach (var instance in instances.OfType<JsonObject>().Select(i => Str(i["id"])).OfType<string>())

@@ -807,9 +807,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                     _modelNotLoaded = false;
                     OnContextChanged();
                     // Ollama and llama-server start models with 4k unless told otherwise; the run
-                    // then resets after every step, or fails as too long.
-                    if (context < ServerProbe.MinimumContext && !facts.Hosted)
-                        AddNotice($"The server runs {server.ModelInUse} with a {context / 1024}k context, and BlackBox needs at least {ServerProbe.MinimumContext / 1024}k: " +
+                    // then resets after every step, or fails as too long. Not for a size near 32k
+                    // (LM Studio's 32000 is 31k), which works.
+                    if (context < ServerProbe.MinimumContext * 3 / 4 && !facts.Hosted)
+                        AddNotice($"The server runs {server.ModelInUse} with a {context / 1024}k context, and BlackBox needs about {ServerProbe.MinimumContext / 1024}k: " +
                                   "its instructions and tools alone take about 9k tokens, and each screenshot about 3k. Load the model with a larger context on the server " +
                                   "(LM Studio: Context Length when you load it; Ollama: the Context length setting; llama-server: -c).", isError: false);
                 }
