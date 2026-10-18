@@ -510,20 +510,17 @@
 
           <!-- How to stop it comes first: it is what someone needs once BlackBox has the mouse. Next to
                it, how to set it straight without stopping it, which the user counts among the things
-               that make BlackBox special: a key of its own, not a side note. The texts line up. -->
+               that make BlackBox special: in plain text, not grey. It is a sentence, not a key cap,
+               as Enter only sends a message: Pause/Break is the one key that works in any window. -->
           <Border Classes="card">
             <StackPanel Spacing="6">
-              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" RowSpacing="6">
-                <Border Classes="key" Margin="0,0,8,0" HorizontalAlignment="Left">
+              <DockPanel>
+                <Border Classes="key" Margin="0,0,8,0">
                   <TextBlock Text="Pause/Break" />
                 </Border>
-                <TextBlock Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center" Text="stops me at any time, in any window." />
-                <Border Grid.Row="1" Classes="key" Margin="0,0,8,0" HorizontalAlignment="Left">
-                  <TextBlock Text="Enter" />
-                </Border>
-                <TextBlock Grid.Row="1" Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center"
-                           Text="sends me corrections and hints as I work: tell me when I go wrong." />
-              </Grid>
+                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Text="stops me at any time, in any window." />
+              </DockPanel>
+              <TextBlock TextWrapping="Wrap" Text="Type corrections and hints below as I work: tell me when I go wrong." />
               <TextBlock Classes="muted" TextWrapping="Wrap" Text="While I work I use your mouse and keyboard, but I pause while you type." />
               <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding ApprovalNote}" />
             </StackPanel>
