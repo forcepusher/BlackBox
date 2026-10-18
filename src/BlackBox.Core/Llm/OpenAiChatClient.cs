@@ -631,6 +631,10 @@ public sealed partial class OpenAiChatClient
     [GeneratedRegex(@"failed to process|failed to decode|memory slot|crashed|unloaded", RegexOptions.IgnoreCase)]
     internal static partial Regex ServerFailedWords();
 
+    /// <summary>Of <see cref="ServerFailedWords"/>, those saying llama.cpp had no room in its KV cache for the request.</summary>
+    [GeneratedRegex(@"failed to process|failed to decode|memory slot", RegexOptions.IgnoreCase)]
+    internal static partial Regex OutOfRoomWords();
+
     /// <summary>
     /// Blank lines put in front of the system prompt sent to a server (see <see cref="ShiftPrompt"/>);
     /// for as long as BlackBox runs, so the requests after it begin the same way again.

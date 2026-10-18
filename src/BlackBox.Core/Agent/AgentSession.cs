@@ -654,6 +654,20 @@ public sealed partial class AgentSession(
             }
             catch (ConnectionLostException ex) when (++drops <= MaxReconnects)
             {
+                // Still no room in llama.cpp's KV cache after three tries: what other requests hold
+                // (another BlackBox on the same LM Studio keeps its cached prompt there) leaves too
+                // little for this conversation. 2048 waited out all twelve tries that way. A fresh,
+                // shorter conversation fits, and a smaller context keeps it fitting.
+                if (ex.ServerFailed && drops > 3 && OpenAiChatClient.OutOfRoomWords().IsMatch(ex.Message) && TokensInUse() > 16_384)
+                {
+                    var smaller = Math.Max(16_384, TokensInUse() * 3 / 4);
+                    if (contextTokens == 0 || smaller < contextTokens)
+                    {
+                        observer.OnNotice($"The server has no room for {TokensInUse() / 1000}k tokens of conversation right now; working with {smaller / 1000}k tokens of context from now on.");
+                        contextTokens = smaller;
+                    }
+                    throw new ContextOverflowException("the server has no room left for it (" + ex.Message + ")");
+                }
                 // The server's own failure is given time to pass: other requests filling its memory,
                 // its model reloading after a crash. Sent again at once, all twelve tries were gone in seconds.
                 var pause = ex.ServerFailed ? TimeSpan.FromTicks(Math.Min(RateLimitWaits[Math.Min(drops, RateLimitWaits.Length) - 1].Ticks, TimeSpan.TicksPerMinute))
