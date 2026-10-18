@@ -22,6 +22,7 @@ internal sealed class FakeComfyServer : IDisposable
     public Uri Url { get; }
     public List<JsonObject> Prompts { get; } = [];
     public List<string> Uploads { get; } = [];
+    public List<string> Interrupts { get; } = [];
     public int Frees { get; private set; }
     public int NodeTypeFetches { get; private set; }
 
@@ -165,6 +166,7 @@ internal sealed class FakeComfyServer : IDisposable
                 Reply(ctx, 200, "");
                 return;
             case "interrupt":
+                Interrupts.Add(body);
                 Reply(ctx, 200, "");
                 return;
             case "userdata":
@@ -791,6 +793,23 @@ public class ComfyToolTests : IDisposable
     }
 
     private static ComfyWorkflow Load(string json) => ComfyWorkflow.FromApi(ComfyWorkflow.ParseText(json));
+
+    [Fact]
+    public async Task A_job_the_users_message_made_pointless_is_cancelled_alone()
+    {
+        // Told "and more furry" while a picture was being made, qwen3.8 stopped the whole server.
+        var result = await Call("""{"action": "cancel", "prompt_id": "job7"}""");
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains("Job job7 is stopped and out of the queue. ComfyUI keeps running", result.Text);
+        Assert.Contains("\"job7\"", Assert.Single(_server.Interrupts));
+        await Assert.ThrowsAsync<ToolArgumentException>(() => Call("""{"action": "cancel"}"""));
+
+        // A run the user wrote during says how.
+        _ctx.UserMessage = new CancellationToken(true);
+        var going = await Call(new JsonObject { ["action"] = "run", ["workflow"] = JsonNode.Parse(FakeComfyServer.ApiWorkflow) }.ToJsonString());
+        Assert.Contains("The user wrote to you meanwhile", going.Text);
+        Assert.Contains("stop it with action=cancel prompt_id=job1 (not action=stop, which stops ComfyUI)", going.Text);
+    }
 
     [Fact]
     public async Task Status_names_the_python_of_a_portable_comfyui_for_cropping_pictures()

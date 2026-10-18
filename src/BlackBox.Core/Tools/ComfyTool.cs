@@ -40,13 +40,13 @@ public sealed partial class ComfyTool : Tool
         "action=find_models searches Civitai and Hugging Face for others (a style, a checkpoint the user named, a LoRA, an upscaler) with their sizes and links, " +
         "and what the month's most downloaded on Civitai are for those words; without search it lists this month's most downloaded checkpoints " +
         "(kind=lora: LoRAs) and the base models they are on, so you know what is current before you pick one. " +
-        "action=status shows the server, GPU and queue (with prompt_id: waits for that job); " +
+        "action=status shows the server, GPU and queue (with prompt_id: waits for that job); action=cancel with prompt_id stops that job only; " +
         "action=free unloads its models to free the GPU; action=restart restarts it (after installing custom nodes into its custom_nodes folder); action=stop stops it.";
 
     public override ToolRisk Risk => ToolRisk.Risky;
 
     public override JsonObject Parameters => Schema(
-        ("action", Str("What to do", "templates", "nodes", "models", "run", "status", "install", "find_models", "download", "free", "restart", "stop"), true),
+        ("action", Str("What to do", "templates", "nodes", "models", "run", "status", "cancel", "install", "find_models", "download", "free", "restart", "stop"), true),
         ("search", Str("Words to look for: in templates (\"video from image\"), node types (\"wan video\"), installed model files (\"lora\"), or models online (find_models: \"furry\", \"watercolor\", \"DreamShaper\"; none for this month's most downloaded)"), false),
         ("name", Str("A template's name as action=templates lists it: to see it (templates) or run it (run)"), false),
         ("names", StrArray("Node types to show in full: inputs, their types and choices, outputs (nodes)"), false),
@@ -55,7 +55,7 @@ public sealed partial class ComfyTool : Tool
         ("set", new JsonObject { ["type"] = "object", ["description"] = "Changes before the run: {\"node id.input\": value}, e.g. {\"6.text\": \"a cat\", \"129:98.length\": 49}" }, false),
         ("save_to", Str("A folder the user named to copy the files the run makes into; without it they stay in ComfyUI's output folder"), false),
         ("wait_minutes", Num("How long to wait for the job (default 30); it keeps running after that, and action=status with its prompt_id waits again"), false),
-        ("prompt_id", Str("A job's id, from an earlier run that was still going (status)"), false),
+        ("prompt_id", Str("A job's id, from an earlier run that was still going (status waits for it, cancel stops it)"), false),
         ("kind", Str("find_models: the kind of model (checkpoint, lora, vae, upscaler, controlnet, embedding); any kind without it"), false),
         ("base", Str("find_models: the model it should be made for, e.g. \"SD 1.5\", \"SDXL\", \"Flux\""), false),
         ("url", Str("download: the model file's link, as find_models or a template gives it (a Civitai or Hugging Face page works too)"), false),
@@ -121,11 +121,12 @@ public sealed partial class ComfyTool : Tool
             {
                 "status" => await StatusAsync(args, hub, api, ctx, ct).ConfigureAwait(false),
                 "free" => await FreeAsync(api, ct).ConfigureAwait(false),
+                "cancel" => await CancelAsync(args, api, ct).ConfigureAwait(false),
                 "nodes" => await NodesAsync(args, hub, api, ct).ConfigureAwait(false),
                 "models" => await ModelsAsync(args, hub, api, ct).ConfigureAwait(false),
                 "templates" => await TemplatesAsync(args, hub, api, ctx, ct).ConfigureAwait(false),
                 "run" => await RunAsync(args, hub, api, ctx, ct).ConfigureAwait(false),
-                _ => throw new ToolArgumentException("action must be templates, nodes, models, run, status, install, find_models, download, free, restart or stop."),
+                _ => throw new ToolArgumentException("action must be templates, nodes, models, run, status, cancel, install, find_models, download, free, restart or stop."),
             };
             return notes.Count == 0 ? result : result with { Text = string.Join("\n", notes) + "\n" + result.Text };
         }
@@ -377,6 +378,19 @@ public sealed partial class ComfyTool : Tool
     }
 
     private static string Gb(long? bytes) => bytes is { } b ? $"{b / 1073741824.0:0.0} GB" : "?";
+
+    /// <summary>
+    /// Stops one job and takes it out of the queue, ComfyUI left running. Told "and more furry" and
+    /// "the style is off" while a picture was being made, qwen3.8 stopped the whole server to drop
+    /// the job those made pointless, and the next run waited 49 seconds for it to start again.
+    /// </summary>
+    private static async Task<ToolResult> CancelAsync(JsonObject args, ComfyApi api, CancellationToken ct)
+    {
+        var promptId = GetString(args, "prompt_id")?.Trim() is { Length: > 0 } id ? id
+            : throw new ToolArgumentException("Give the job's prompt_id for action=cancel (a run that was still going names it).");
+        await api.CancelAsync(promptId, ct).ConfigureAwait(false);
+        return new ToolResult($"Job {promptId} is stopped and out of the queue. ComfyUI keeps running, with its models loaded for the next run.");
+    }
 
     private static async Task<ToolResult> FreeAsync(ComfyApi api, CancellationToken ct)
     {
@@ -1067,7 +1081,8 @@ public sealed partial class ComfyTool : Tool
             return new ToolResult($"The job (prompt_id {promptId}) is still {(job.Status == "queued" ? "waiting" : "running")} after {ComfyRunner.Clock(job.Elapsed)}" +
                                   (job.Progress is { } p ? $": {p}" : "") + ". " +
                                   (ctx.UserMessage.IsCancellationRequested ? "The user wrote to you meanwhile; read that first. " : "") +
-                                  $"It goes on in ComfyUI; wait for it with action=status prompt_id={promptId}.");
+                                  $"It goes on in ComfyUI; wait for it with action=status prompt_id={promptId}" +
+                                  (ctx.UserMessage.IsCancellationRequested ? $", or, if what the user wrote changes it, stop it with action=cancel prompt_id={promptId} (not action=stop, which stops ComfyUI)." : "."));
 
         var dirs = await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) ?? [];
         var files = await ComfyRunner.LocateAsync(api, job.Files, dirs, Path.Combine(ctx.ScratchDirectory ?? Path.GetTempPath(), "comfyui", "outputs"), ct).ConfigureAwait(false);
