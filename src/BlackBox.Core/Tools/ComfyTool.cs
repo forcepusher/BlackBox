@@ -959,6 +959,10 @@ public sealed class ComfyTool : Tool
         var preview = MediaPreview.ForFiles(paths, ctx.Media, ctx.SeesImages);
         foreach (var line in preview.Lines)
             sb.Append("- ").AppendLine(line);
+        // Asked for a video with the sound of wind, qwen3.8 searched ComfyUI's 600 GB folder for
+        // ffmpeg.exe for three minutes to put a sound on it; another run looked for it too.
+        if (job.Status == "success" && ctx.Media?.Ffmpeg is { } ffmpeg && paths.Any(p => MediaPreview.KindOf(p) is "video" or "audio"))
+            sb.AppendLine($"To cut, join or put a sound on these: {ffmpeg}");
         if (saved.Count == 0 && files.Count > 0 && job.Status == "success")
             sb.AppendLine("(These are previews in ComfyUI's temp folder, which it empties when it restarts: add a save node, or copy them with save_to, to keep them.)");
         foreach (var text in job.Texts.Take(10))

@@ -617,6 +617,40 @@ public class ComfyToolTests : IDisposable
         }
     }
 
+    // Asked for a video with the sound of wind, qwen3.8 searched ComfyUI's folder for ffmpeg.exe for three
+    // minutes to put the sound on it.
+    [Fact]
+    public async Task A_sound_or_video_made_comes_with_where_ffmpeg_is()
+    {
+        File.WriteAllBytes(Path.Combine(_server.OutputDir, "wind_00001_.mp3"), [0, 1, 2]);
+        _server.History = _ => JsonNode.Parse("""
+            {"status": {"status_str": "success", "completed": true, "messages": []},
+             "outputs": {"9": {"audio": [{"filename": "wind_00001_.mp3", "subfolder": "", "type": "output"}]}}}
+            """)!.AsObject();
+        var ctx = new ToolContext
+        {
+            Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = _home, Comfy = _hub,
+            ScratchDirectory = _ctx.ScratchDirectory, Media = new FfmpegOnly(@"C:	oolsfmpeg.exe"),
+        };
+
+        var sound = await new ComfyTool().ExecuteAsync(JsonNode.Parse("""{"action": "run", "name": "Mine/fox"}""")!.AsObject(), ctx, CancellationToken.None);
+
+        Assert.False(sound.IsError, sound.Text);
+        Assert.Contains(@"To cut, join or put a sound on these: C:	oolsfmpeg.exe", sound.Text);
+        // A picture needs no ffmpeg.
+        _server.History = null;
+        var picture = await new ComfyTool().ExecuteAsync(JsonNode.Parse("""{"action": "run", "name": "Mine/fox"}""")!.AsObject(), ctx, CancellationToken.None);
+        Assert.DoesNotContain("ffmpeg", picture.Text);
+    }
+
+    private sealed class FfmpegOnly(string program) : BlackBox.Core.Media.IMediaDecoder
+    {
+        public BlackBox.Core.Media.MediaInfo? Probe(string path) => null;
+        public BlackBox.Core.Media.IVideoReader? OpenVideo(string path, int maxSide) => null;
+        public BlackBox.Core.Media.IAudioReader? OpenAudio(string path) => null;
+        public string? Ffmpeg => program;
+    }
+
     [Fact]
     public async Task A_failed_job_says_where_and_why_with_a_hint_for_running_out_of_memory()
     {
