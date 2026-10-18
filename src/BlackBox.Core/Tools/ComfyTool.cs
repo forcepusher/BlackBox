@@ -904,7 +904,9 @@ public sealed partial class ComfyTool : Tool
             ? "TextureOffset with offset_x and offset_y 0.5 and wrap_mode repeat does it, and gives the cross as its edge_mask, a picture that ImageToMask turns into a mask"
             : "numpy's roll in ComfyUI's Python does it; make a mask of the cross, a band about a tenth of the picture wide, and load it with LoadImageMask") +
         "), and repaint the cross through that mask: SetLatentNoiseMask, the model through DifferentialDiffusion, denoise about 0.75. " +
-        "It then tiles without a seam, where a cross-fade of the edges (blend_edges, mirror) leaves doubled, blurred shapes along them.";
+        "It then tiles without a seam, where a cross-fade of the edges (blend_edges, mirror) leaves doubled, blurred shapes along them. " +
+        // A tileset's grass and water came out lighter in the middle: tiled, a grid of light squares.
+        "Ask for flat, even light with no vignette: a lighter middle or darker corners show as a grid of squares when tiled, whatever the seams.";
 
     [System.Text.RegularExpressions.GeneratedRegex(@"seamless|tileable|tileset|tiling", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex SeamlessWords();

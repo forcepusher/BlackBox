@@ -911,6 +911,8 @@ public class ComfyToolTests : IDisposable
         var list = await Call("""{"action": "templates", "search": "tileable texture seamless"}""");
         Assert.Contains("roll it by half so its edges meet in a cross in the middle (numpy's roll in ComfyUI's Python", list.Text);
         Assert.Contains("the model through DifferentialDiffusion, denoise about 0.75", list.Text);
+        // A tileset's grass came out lighter in the middle: a grid of light squares when tiled.
+        Assert.Contains("flat, even light with no vignette", list.Text);
         Assert.DoesNotContain("roll it by half", (await Call("""{"action": "templates", "search": "fox"}""")).Text);
 
         var withPack = ComfyNodeLibrary.Parse(JsonNode.Parse("""
