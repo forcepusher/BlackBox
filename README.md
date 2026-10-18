@@ -41,6 +41,8 @@ for LM Studio, and an API key next to it if the server needs one. Any OpenAI-com
 LM Studio, llama.cpp, Ollama, vLLM, OpenRouter and other online APIs. BlackBox picks the strongest
 model the server has, or you pick one from the list.
 
+- In LM Studio, switch its server on in the Developer tab, and turn on "Serve on Local Network"
+  if BlackBox runs on another PC.
 - To use the screen, the model has to see images (Qwen3.5 VL or later, Gemma 4 with its vision
   projector). Most testing was done with Qwen3.8 27B.
 - Give the model at least 32k of context.
