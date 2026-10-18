@@ -262,6 +262,13 @@ public class AgentSessionTests
         var (onKilo, kiloObserver) = CreateSession(kilo, Path.GetTempPath(), new FakePlatform(), baseUrl: KiloGateway.Address);
         await onKilo.RunAsync("go", kiloObserver, CancellationToken.None);
         Assert.Single(kiloObserver.Notices, n => n.Contains("Kilo's free models take 200 requests an hour from each PC") && n.EndsWith("(Stop ends the wait)…"));
+
+        // A model's daily allowance, shared by everyone, isn't back within the hour.
+        var daily = new ScriptedServer(Sse.Text("Made it.")) { RetryAfter = TimeSpan.FromSeconds(1) };
+        daily.Failures.Enqueue(((HttpStatusCode)429, """{"error":{"message":"Daily limit reached for thinkingmachines/inkling-small:free","code":429}}"""));
+        var (dailyLimited, dailyObserver) = CreateSession(daily, Path.GetTempPath(), new FakePlatform(), baseUrl: KiloGateway.Address);
+        await dailyLimited.RunAsync("go", dailyObserver, CancellationToken.None);
+        Assert.Single(dailyObserver.Notices, n => n.Contains("until tomorrow: pick another free model at the top"));
     }
 
     [Fact]

@@ -470,7 +470,8 @@ look), so a long task can run into it. Kilo then answers 429 without saying for 
 BlackBox waits and asks again (2 s, 10 s, 30 s, 1 min, 2 min, then every 5 min) until it gets
 through or you press Stop; the line in the chat says that the free allowance is hourly and that a
 Kilo key or a server of your own has none, since five-minute waits otherwise read as BlackBox
-being stuck. Which models are free changes over time: if Nemotron 3.5 Super VL is
+being stuck. When Kilo says a free model's daily allowance, which all its users share, is used up,
+the line says it can last until tomorrow and to pick another free model. Which models are free changes over time: if Nemotron 3.5 Super VL is
 gone, the strongest free one is used, as on any server. With a Kilo key (and credits) all its
 models are listed.
 

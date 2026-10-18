@@ -634,9 +634,11 @@ public sealed partial class AgentSession(
                 // growing one. As many times as it takes: Stop ends the wait.
                 var wait = RateLimitWait(ex.RetryAfter, ++held);
                 // Kilo doesn't say for how long, and five-minute waits read as BlackBox being stuck.
-                var why = KiloGateway.Is(client.BaseUrl)
-                    ? " Kilo's free models take 200 requests an hour from each PC, so this can last until the hour is up; a Kilo key with credits, or a model server of your own, has no such limit."
-                    : "";
+                // A free model's daily allowance, which Kilo shares among all its users, comes back no sooner.
+                var why = !KiloGateway.Is(client.BaseUrl) ? ""
+                    : ex.Message.Contains("daily", StringComparison.OrdinalIgnoreCase)
+                        ? " Kilo shares a free model's daily allowance among all its users, so this can last until tomorrow: pick another free model at the top, or use a Kilo key with credits or a model server of your own."
+                        : " Kilo's free models take 200 requests an hour from each PC, so this can last until the hour is up; a Kilo key with credits, or a model server of your own, has no such limit.";
                 observer.OnNotice($"{ex.Message}{why} Trying again in {Describe(wait)} (Stop ends the wait)…");
                 await Task.Delay(wait, ct).ConfigureAwait(false);
             }
