@@ -420,6 +420,15 @@ public class ComfyWorkflowTests
         Assert.Contains(problems, p => p.Contains("no node \"129:39\"") && p.Contains("129:93"));
         Assert.Contains(problems, p => p.Contains("no input \"txt\"") && p.Contains("\"text\""));
         Assert.Contains(problems, p => p.Contains("node id.input name"));
+
+        // A template's on/off switch set by its id alone: the node holds a single value.
+        var lightning = Load("""
+            {"433:443": {"class_type": "PrimitiveBoolean", "inputs": {"value": true}},
+             "3": {"class_type": "KSampler", "inputs": {"seed": 1, "steps": 20, "model": ["4", 0]}}}
+            """);
+        Assert.Empty(lightning.Set(new JsonObject { ["433:443"] = false }, Library));
+        Assert.False((bool)lightning.Nodes["433:443"]!["inputs"]!["value"]!);
+        Assert.Contains(lightning.Set(new JsonObject { ["3"] = 7 }, Library), p => p.Contains("node id.input name"));
     }
 
     [Fact]

@@ -109,6 +109,13 @@ public sealed class ComfyWorkflow
                 continue;
             }
             var dot = key.IndexOf('.');
+            // {"433:443": false} for a template's "Enable Lightning LoRA" switch, a PrimitiveBoolean:
+            // a node holding a single value is set by its id alone (qwen3.8 wrote it so in two runs).
+            if (dot < 0 && Nodes[key]?["inputs"] is JsonObject own && own.Where(kv => kv.Value is not JsonArray).ToList() is [var only])
+            {
+                own[only.Key] = value?.DeepClone();
+                continue;
+            }
             if (dot <= 0 || dot == key.Length - 1)
             {
                 problems.Add($"set \"{key}\": write it as \"node id.input name\", e.g. \"6.text\".");
