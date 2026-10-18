@@ -881,6 +881,23 @@ public class ComfyToolTests : IDisposable
     }
 
     [Fact]
+    public async Task A_search_for_a_seamless_texture_says_to_roll_it_and_repaint_the_seam_cross()
+    {
+        // A cross-fade of the edges tiled with doubled, blurred stones along the joins.
+        var list = await Call("""{"action": "templates", "search": "tileable texture seamless"}""");
+        Assert.Contains("roll it by half so its edges meet in a cross in the middle (numpy's roll in ComfyUI's Python", list.Text);
+        Assert.Contains("the model through DifferentialDiffusion, denoise about 0.75", list.Text);
+        Assert.DoesNotContain("roll it by half", (await Call("""{"action": "templates", "search": "fox"}""")).Text);
+
+        var withPack = ComfyNodeLibrary.Parse(JsonNode.Parse("""
+            {"TextureOffset": {"display_name": "Texture Offset", "category": "Texture Alchemist/Texture",
+               "input": {"required": {"image": ["IMAGE"], "offset_x": ["FLOAT", {"default": 0.0}], "offset_y": ["FLOAT", {"default": 0.0}]}},
+               "output": ["IMAGE", "IMAGE"], "output_name": ["image", "edge_mask"]}}
+            """)!.AsObject());
+        Assert.Contains("TextureOffset with offset_x and offset_y 0.5", ComfyTool.SeamlessAdvice(withPack));
+    }
+
+    [Fact]
     public async Task A_search_for_outpainting_with_no_ready_template_says_how_to_do_it_with_installed_models()
     {
         // One panorama run left seams, the next downloaded Flux Fill and its text encoder, 32 GB,

@@ -577,9 +577,11 @@ public sealed partial class ComfyTool : Tool
                                       "not the picture's subject, or the subject is drawn again there.";
         const string OutpaintHere = "No outpaint template here is ready. Without downloading one (a fill model with its text encoder can be 30 GB): " +
                                     "pad the picture (ImagePadForOutpaint) and repaint the padding with an installed model for whole pictures through SetLatentNoiseMask; ";
+        var seamless = SeamlessWords().IsMatch(search) ? SeamlessAdvice(library) : null;
         if (found.Count == 0)
             return new ToolResult($"No template matches \"{search}\" among {all.Count}. Try other words, or build the workflow from node types (action=nodes)." +
                                   (outpaint ? $"\n{OutpaintHere}{MaskAdvice} An edit model leaves the padding grey. {OutpaintPrompt}" : "") +
+                                  (seamless is null ? "" : "\n" + seamless) +
                                   (MatchingModels(search, models) is { Count: > 0 } matching ? $"\nInstalled models whose names match: {string.Join(", ", matching)}." : ""));
         var lines = new StringBuilder();
         // On the CPU most templates are out of reach: said before the list, so the choice is made with it.
@@ -608,6 +610,8 @@ public sealed partial class ComfyTool : Tool
         }
         if (outpaint)
             lines.AppendLine((outpaintReady ? "" : $"{OutpaintHere}{MaskAdvice} An edit model leaves the padding grey. ") + OutpaintPrompt);
+        if (seamless is not null)
+            lines.AppendLine(seamless);
         // Templates are workflows; a style may be a LoRA or a checkpoint. Finding no pixel art
         // template, qwen3.8 drew a 32x32 knight by hand, row by row, with Pixel Art XL installed.
         if (MatchingModels(search, models) is { Count: > 0 } named)
@@ -868,6 +872,23 @@ public sealed partial class ComfyTool : Tool
 
     [System.Text.RegularExpressions.GeneratedRegex(@"multi[-_ ]?view", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex MultiView();
+
+    /// <summary>
+    /// How to make a texture tile without a seam. Asked for a seamless mossy stone floor, qwen3.8
+    /// cross-faded the picture's edges (TextureAlchemy's SeamlessTiling, blend_edges): tiled, the
+    /// joins showed doubled, blurred stones. Rolled by half and the seam cross repainted through
+    /// DifferentialDiffusion, the same picture tiled cleanly, in 18 seconds.
+    /// </summary>
+    internal static string SeamlessAdvice(ComfyNodeLibrary library) =>
+        "For a seamless texture, make the picture first, then roll it by half so its edges meet in a cross in the middle (" +
+        (library.Find("TextureOffset") is not null
+            ? "TextureOffset with offset_x and offset_y 0.5 and wrap_mode repeat does it, and gives the cross as its edge_mask, a picture that ImageToMask turns into a mask"
+            : "numpy's roll in ComfyUI's Python does it; make a mask of the cross, a band about a tenth of the picture wide, and load it with LoadImageMask") +
+        "), and repaint the cross through that mask: SetLatentNoiseMask, the model through DifferentialDiffusion, denoise about 0.75. " +
+        "It then tiles without a seam, where a cross-fade of the edges (blend_edges, mirror) leaves doubled, blurred shapes along them.";
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"seamless|tileable|tileset|tiling", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex SeamlessWords();
 
     [System.Text.RegularExpressions.GeneratedRegex(@"outpaint|uncrop|panorama|\b(extend|expand|widen|wider)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex OutpaintWords();
