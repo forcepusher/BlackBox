@@ -103,7 +103,10 @@ foreach ($name in $Tasks) {
         if ($t.Sound) { $checks += if ($about -match 'with sound' -and $about -notmatch 'silent throughout') { 'with sound' } else { 'FAIL: no sound in the video' } }
         if ($t.Kind -eq 'audio' -and $about -match 'silent throughout') { $checks += 'FAIL: silent' }
         if ($t.Folder) {
-            $inFolder = $files | Where-Object { $_.StartsWith($t.Folder, [StringComparison]::OrdinalIgnoreCase) }
+            # Saved there by the comfyui tool (save_to), or copied there another way (Copy-Item in run_shell).
+            $inFolder = @($files | Where-Object { $_.StartsWith($t.Folder, [StringComparison]::OrdinalIgnoreCase) }) +
+                @(Get-ChildItem $t.Folder -File -ErrorAction SilentlyContinue |
+                    Where-Object { $_.LastWriteTime -ge $start.AddSeconds(-5) -and $kinds[$_.Extension.ToLowerInvariant()] -eq $t.Kind } | ForEach-Object FullName)
             $checks += if ($inFolder) { "saved in $($t.Folder)" } else { "FAIL: not saved in $($t.Folder)" }
         }
         if ($t.Like) {
