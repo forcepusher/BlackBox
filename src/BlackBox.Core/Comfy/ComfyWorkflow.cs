@@ -397,6 +397,9 @@ public sealed class ComfyWorkflow
             {
                 // ComfyUI converts what it can: true is 1, "20" is 20.
                 double? d = value is JsonValue v && v.TryGetValue<double>(out var x) ? x
+                    // A number put in from code (300, an int) rather than read from JSON.
+                    : value is JsonValue n && n.GetValueKind() == JsonValueKind.Number &&
+                      double.TryParse(n.ToJsonString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var number) ? number
                     : value is JsonValue b && b.GetValueKind() is JsonValueKind.True or JsonValueKind.False ? (b.GetValueKind() == JsonValueKind.True ? 1 : 0)
                     : value is JsonValue sv && sv.TryGetValue<string>(out var str) && double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
                 if (d is null)

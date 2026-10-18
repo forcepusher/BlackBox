@@ -478,7 +478,7 @@ public class ComfyWorkflowTests
         Assert.Empty(wf.Set(new JsonObject { ["2.format.codec"] = "h264", ["2.format.codec.encoding"] = "re-encode" }, OptionLibrary));
         Assert.StartsWith("2.format.codec.encoding.crf = 18", Assert.Single(wf.FillAdvancedDefaults(OptionLibrary)));
         Assert.Empty(wf.Validate(OptionLibrary));
-        wf.Set(new JsonObject { ["2.format.codec.encoding.crf"] = 60.0 }, OptionLibrary);
+        wf.Set(new JsonObject { ["2.format.codec.encoding.crf"] = 60 }, OptionLibrary);
         Assert.Contains("\"format.codec.encoding.crf\" is 60, above its greatest value 51", Assert.Single(wf.Validate(OptionLibrary)));
     }
 
@@ -503,6 +503,57 @@ public class ComfyWorkflowTests
         Assert.Contains("    format.codec (when format is mp4): one of auto, h264", video);
         Assert.Contains("      format.codec.encoding (optional, when format.codec is h264): one of auto, re-encode", video);
         Assert.Contains(video, l => l.StartsWith("        format.codec.encoding.crf (when format.codec.encoding is re-encode): FLOAT, default 18", StringComparison.Ordinal));
+    }
+
+    /// <summary>ComfyUI 0.41's nodes for hearing a sound with a Gemma 4, cut down.</summary>
+    private static ComfyNodeLibrary HearingLibrary(string models, bool audio = true) => ComfyNodeLibrary.Parse(JsonNode.Parse("""
+        {
+          "LoadAudio": {"input": {"required": {"audio": [["a.wav"], {"audio_upload": true}]}}, "output": ["AUDIO"], "output_name": ["AUDIO"],
+            "name": "LoadAudio", "category": "audio", "python_module": "comfy_extras.nodes_audio", "output_node": false},
+          "CLIPLoader": {"input": {"required": {"clip_name": [[MODELS], {}], "type": [["stable_diffusion", "wan", "ltxv"], {}]}, "optional": {"device": [["default", "cpu"], {"advanced": true}]}},
+            "output": ["CLIP"], "output_name": ["CLIP"], "name": "CLIPLoader", "category": "loaders", "python_module": "nodes", "output_node": false},
+          "TextGenerate": {"input": {"required": {"clip": ["CLIP", {}], "prompt": ["STRING", {"multiline": true, "default": ""}], "max_length": ["INT", {"default": 512, "min": 1, "max": 32768}],
+              "sampling_mode": ["COMFY_DYNAMICCOMBO_V3", {"options": [{"key": "on", "inputs": {"required": {"temperature": ["FLOAT", {"default": 0.7, "min": 0.01, "max": 2.0}]}}}, {"key": "off", "inputs": {"required": {}}}]}]},
+              "optional": {"AUDIO": ["AUDIO", {}], "image": ["IMAGE", {}]}},
+            "output": ["STRING"], "output_name": ["generated_text"], "name": "TextGenerate", "category": "text", "python_module": "comfy_extras.nodes_textgen", "output_node": false},
+          "PreviewAny": {"input": {"required": {"source": ["*", {}]}}, "output": ["STRING"], "output_name": ["STRING"], "name": "PreviewAny", "category": "utilities", "python_module": "comfy_extras.nodes_preview_any", "output_node": true}
+        }
+        """.Replace("MODELS", models).Replace("\"AUDIO\": [\"AUDIO\"", audio ? "\"audio\": [\"AUDIO\"" : "\"sound_unused\": [\"AUDIO\""))!.AsObject());
+
+    [Fact]
+    public void A_small_gemma_4_that_comfyui_has_hears_the_sound_of_what_a_job_made()
+    {
+        // LTX-2.5's templates bring gemma4_e2b; its 12B text encoder with the LTX projection is no use for it.
+        var library = HearingLibrary("\"gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors\", \"gemma-4-E4B-it.safetensors\", \"gemma4_e2b_it_int8_convrot.safetensors\", \"t5xxl_fp16.safetensors\"");
+        var model = ComfyTool.HearingModel(library);
+        Assert.Equal("gemma4_e2b_it_int8_convrot.safetensors", model);
+        Assert.Equal("gemma-4-E4B-it.safetensors", ComfyTool.HearingModel(HearingLibrary("\"gemma-4-E4B-it.safetensors\", \"t5xxl_fp16.safetensors\"")));
+        Assert.Null(ComfyTool.HearingModel(HearingLibrary("\"gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors\", \"t5xxl_fp16.safetensors\"")));
+        Assert.Null(ComfyTool.HearingModel(HearingLibrary("\"gemma4_e2b_it_int8_convrot.safetensors\"", audio: false)));
+
+        var wf = ComfyTool.HearingWorkflow(library, model!, "video/fisherman_00001_.mp4 [output]");
+        Assert.Empty(wf.FillAdvancedDefaults(library));
+        Assert.Empty(wf.Validate(library));
+        Assert.Equal("ltxv", (string?)wf.Nodes["2"]!["inputs"]!["type"]);
+        Assert.Equal("video/fisherman_00001_.mp4 [output]", (string?)wf.Nodes["1"]!["inputs"]!["audio"]);
+    }
+
+    [Fact]
+    public void Only_files_with_sound_in_the_output_folder_are_heard()
+    {
+        // Lines as MediaPreview writes them.
+        Assert.True(ComfyTool.HasSound(@"C:\out\video\wave_00001_.mp4: video 704x1280, 121 frames at 24 fps (5.0 s), with sound (48 kHz stereo), 1.6 MB, its sound peak -4.8 dBFS, average -27 dBFS"));
+        Assert.True(ComfyTool.HasSound(@"C:\out\Anton_greeting_00001.flac: sound 1.9 s, 48 kHz mono, peak -3.3 dBFS, average -21 dBFS, 93 KB"));
+        Assert.False(ComfyTool.HasSound(@"C:\out\video\fox_00001_.mp4: video 832x480, 81 frames at 16 fps (5.1 s), no sound, 900 KB"));
+        Assert.False(ComfyTool.HasSound(@"C:\out\quiet_00001_.flac: sound 3.0 s, 44.1 kHz stereo, silent throughout, 20 KB"));
+
+        var dirs = new Dictionary<string, string> { ["output"] = @"C:\ComfyUI\output" };
+        Assert.Equal("video/wave_00001_.mp4 [output]", ComfyTool.NameInComfy(new ComfyOutput("75", "wave_00001_.mp4", "video", "output", @"C:\ComfyUI\output\video\wave_00001_.mp4"), dirs));
+        Assert.Equal("song.mp3 [output]", ComfyTool.NameInComfy(new ComfyOutput("9", "song.mp3", "", "output", @"C:\ComfyUI\output\song.mp3"), dirs));
+        Assert.Null(ComfyTool.NameInComfy(new ComfyOutput("9", "preview.flac", "", "temp", @"C:\ComfyUI\temp\preview.flac"), dirs));
+        // Files a node named in its text: by where they are.
+        Assert.Equal("sfx/rain.wav [output]", ComfyTool.NameInComfy(new ComfyOutput("", "rain.wav", "", "output", @"C:\ComfyUI\output\sfx\rain.wav"), dirs));
+        Assert.Null(ComfyTool.NameInComfy(new ComfyOutput("", "rain.wav", "", "output", @"D:\elsewhere\rain.wav"), dirs));
     }
 
     [Fact]
