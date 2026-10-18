@@ -355,6 +355,62 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task Screens_left_of_and_above_the_primary_are_seen_and_clicked_where_they_are()
+    {
+        // Windows gives a screen left of or above the primary negative coordinates.
+        var left = new ScreenRect(-160, 0, 160, 100);
+        var above = new ScreenRect(0, -100, 200, 100);
+        var platform = new FakePlatform { Screens = [new ScreenRect(0, 0, 200, 100), left, above] };
+        var ctx = Ctx(platform);
+
+        var shot = await new ScreenshotTool().ExecuteAsync(new JsonObject { ["screen"] = 2 }, ctx, CancellationToken.None);
+        Assert.Equal(left, platform.Captures[^1]);
+        Assert.Contains("screen 2 of 3", shot.Text);
+        Assert.Contains("Mouse cursor is on screen 1", shot.Text);
+        await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 10, ["y"] = 20 }, ctx, CancellationToken.None);
+        Assert.Contains("move -150,21", platform.Actions); // 160x100 is sent as 160x96
+        Assert.Equal(1, ctx.ScreenAt(-150, 21));
+        // A fresh look around a click near the screen's far edge stays on that screen.
+        var around = ctx.GetScreenSpace().Around(-155, 95);
+        Assert.True(around.X >= left.X && around.X + around.Width <= left.X + left.Width && around.Y >= left.Y && around.Y + around.Height <= left.Y + left.Height, $"{around}");
+
+        await new ScreenshotTool().ExecuteAsync(new JsonObject { ["screen"] = 3 }, ctx, CancellationToken.None);
+        Assert.Equal(above, platform.Captures[^1]);
+        await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 10, ["y"] = 20 }, ctx, CancellationToken.None);
+        Assert.Contains("move 10,-79", platform.Actions); // 200x100 is sent as 192x96
+
+        var prompt = BlackBox.Core.Agent.SystemPrompt.Build("Test OS", ctx.ScreenSpaces(), "C:\\", "");
+        Assert.Contains("2 (left of screen 1, 160x100", prompt);
+        Assert.Contains("3 (above screen 1, 200x100", prompt);
+    }
+
+    [Fact]
+    public async Task Screens_of_different_sizes_and_scaling_each_map_on_their_own()
+    {
+        // A 4K laptop panel at 150% beside a 1080p monitor at 100%, lower down: BlackBox is per-monitor
+        // DPI aware, so both come in physical pixels, and each screen's x/y map to its own pixels.
+        var platform = new FakePlatform { Screens = [new ScreenRect(0, 0, 3840, 2160), new ScreenRect(3840, 600, 1920, 1080)] };
+        var ctx = new ToolContext
+        {
+            Platform = platform,
+            Settings = new AgentSettings { ScreenshotAfterActions = false },
+            WorkingDirectory = Path.GetTempPath(),
+            CoordinateGrid = 1000,
+        };
+
+        await new ScreenshotTool().ExecuteAsync(new JsonObject { ["screen"] = 2 }, ctx, CancellationToken.None);
+        await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 500, ["y"] = 500 }, ctx, CancellationToken.None);
+        Assert.Contains("move 4800,1140", platform.Actions);
+        await new ScreenshotTool().ExecuteAsync(new JsonObject { ["screen"] = 1 }, ctx, CancellationToken.None);
+        await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 500, ["y"] = 500 }, ctx, CancellationToken.None);
+        Assert.Contains("move 1920,1080", platform.Actions);
+
+        var prompt = BlackBox.Core.Agent.SystemPrompt.Build("Test OS", ctx.ScreenSpaces(), "C:\\", "");
+        Assert.Contains("1 (primary, 3840x2160)", prompt);
+        Assert.Contains("2 (right of screen 1, 1920x1080)", prompt);
+    }
+
+    [Fact]
     public void The_system_prompt_lists_the_screens_and_where_they_are()
     {
         var spaces = new List<ScreenSpace>
