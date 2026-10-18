@@ -894,6 +894,13 @@ public class ComfyToolTests : IDisposable
         masked.Nodes["12"] = new JsonObject { ["class_type"] = "DifferentialDiffusion", ["inputs"] = new JsonObject { ["model"] = new JsonArray("1", 0) } };
         Assert.Null(ComfyTool.MaskNote(masked));
         Assert.Null(ComfyTool.MaskNote(Load(FakeComfyServer.ApiWorkflow)));
+        // LTX's picture-and-sound-to-video keeps the given sound through a mask of one value: no edge to tell of.
+        Assert.Null(ComfyTool.MaskNote(ComfyWorkflow.FromApi(ComfyWorkflow.ParseText("""
+            {"1": {"class_type": "LoadAudio", "inputs": {"audio": "voice.flac"}},
+             "2": {"class_type": "LTXVAudioVAEEncode", "inputs": {"audio": ["1", 0]}},
+             "3": {"class_type": "SolidMask", "inputs": {"value": 0, "width": 1024, "height": 1024}},
+             "4": {"class_type": "SetLatentNoiseMask", "inputs": {"samples": ["2", 0], "mask": ["3", 0]}}}
+            """))));
 
         // Asked about the nodes before the first run, it hears it then.
         var nodes = await Call("""{"action": "nodes", "names": ["ImagePadForOutpaint", "KSampler"]}""");

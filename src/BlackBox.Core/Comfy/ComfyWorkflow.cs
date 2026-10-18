@@ -84,6 +84,9 @@ public sealed class ComfyWorkflow
     private static int? LinkOutput(JsonArray a) => a[1] is JsonValue v && v.TryGetValue<int>(out var i) ? i
         : a[1] is JsonValue s && s.TryGetValue<string>(out var str) && int.TryParse(str, out var parsed) ? parsed : null;
 
+    /// <summary>The node a link comes from; null when the value isn't a link to a node in the workflow.</summary>
+    public JsonObject? SourceOf(JsonNode? value) => IsLink(value) ? Nodes[LinkSource((JsonArray)value!)!] as JsonObject : null;
+
     public IEnumerable<(string Id, JsonObject Node)> All() =>
         Nodes.Where(kv => kv.Value is JsonObject).Select(kv => (kv.Key, (JsonObject)kv.Value!));
 

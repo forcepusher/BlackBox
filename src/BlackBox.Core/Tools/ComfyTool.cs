@@ -945,9 +945,17 @@ public sealed partial class ComfyTool : Tool
     internal static string? MaskNote(ComfyWorkflow workflow)
     {
         var types = workflow.All().Select(n => ComfyWorkflow.ClassOf(n.Node)).ToHashSet(StringComparer.Ordinal);
-        return types.Contains("SetLatentNoiseMask") && !types.Contains("DifferentialDiffusion")
+        var repaints = workflow.All().Any(n => ComfyWorkflow.ClassOf(n.Node) == "SetLatentNoiseMask" && !Edgeless(n.Node));
+        return repaints && !types.Contains("DifferentialDiffusion")
             ? "Note: " + MaskAdvice + " Look at where the new part meets the old in the result."
             : null;
+
+        // A mask of one value all over has no edge: LTX's picture-and-sound-to-video templates keep
+        // the given sound so, a SolidMask on the audio latent, and were told about edges.
+        bool Edgeless(JsonObject setMask) =>
+            setMask["inputs"] is JsonObject inputs &&
+            (workflow.SourceOf(inputs["mask"]) is { } mask && ComfyWorkflow.ClassOf(mask) == "SolidMask" ||
+             workflow.SourceOf(inputs["samples"]) is { } samples && ComfyWorkflow.ClassOf(samples).Contains("Audio", StringComparison.Ordinal));
     }
 
     /// <summary>The LoRAs and checkpoints whose fit this task has been told about.</summary>
