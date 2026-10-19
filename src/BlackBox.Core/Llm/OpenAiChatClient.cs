@@ -67,6 +67,31 @@ public sealed class RateLimitedException(string message, TimeSpan? retryAfter) :
 }
 
 /// <summary>
+/// The server turned the request down for its API key (HTTP 401, 402, 403): none given, a wrong
+/// one, or an account without credits. The message says so and what to change at the top, in
+/// place of the server's JSON: a wrong OpenRouter key got only "Chat request failed (401):
+/// {"error":{"message":"User not found.","code":401}}", and OpenAI's "Can't reach the server",
+/// though both servers had answered.
+/// </summary>
+public sealed class KeyRefusedException(string message) : LlmException(message)
+{
+    internal static KeyRefusedException? For(int status, string body, bool keySent)
+    {
+        var said = OpenAiChatClient.ErrorText(body).ReplaceLineEndings(" ").Clip(300);
+        said = said.Length > 0 ? $" (it says \"{said}\")" : "";
+        return status switch
+        {
+            401 when keySent => new($"The server turned down the API key{said}. Check the key next to the server address at the top."),
+            401 => new($"The server wants an API key{said}. Enter yours next to the server address at the top."),
+            402 => new($"The account behind the API key has run out of credits{said}. Add credits there, or pick a free model at the top."),
+            403 when keySent => new($"The server refused access{said}: the API key may be wrong, or not allowed to use this model."),
+            403 => new($"The server refused access{said}: it may want an API key, next to the server address at the top."),
+            _ => null,
+        };
+    }
+}
+
+/// <summary>
 /// The connection broke before the reply was complete (network drop, proxy idle timeout).
 /// Safe to retry: the server keeps the prompt it already processed in its cache.
 /// </summary>
@@ -94,6 +119,13 @@ public sealed class ConnectionLostException(string message, bool receivedTokens,
     /// stalled ("Upstream idle timeout exceeded", "Upstream error from Nvidia: …").
     /// </summary>
     public bool Upstream { get; init; }
+
+    /// <summary>
+    /// The model server failed on the request rather than the link (see
+    /// <see cref="OpenAiChatClient.ServerFailedWords"/>): sent again after a growing wait, since
+    /// the requests that filled its memory, or its reloading model, take a while.
+    /// </summary>
+    public bool ServerFailed { get; init; }
 }
 
 /// <summary>
@@ -164,7 +196,11 @@ public sealed partial class OpenAiChatClient
         using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
         var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
-            throw new LlmException($"GET /models failed ({(int)resp.StatusCode}): {body.Clip(500)}");
+            throw KeyRefusedException.For((int)resp.StatusCode, body, _apiKey is not null)
+                  // A website's 404 page: its HTML filled the banner.
+                  ?? new LlmException(body.TrimStart().StartsWith('<')
+                      ? $"there is a website at this address ({(int)resp.StatusCode} for /models), not a model server's API. The service's documentation names its OpenAI-compatible API address, often ending in /v1."
+                      : $"GET /models failed ({(int)resp.StatusCode}): {body.Clip(500)}");
 
         JsonNode? list;
         try { list = JsonNode.Parse(body); }
@@ -249,6 +285,8 @@ public sealed partial class OpenAiChatClient
                 // dropped connection, rather than ending a long run.
                 if (status is 408 or >= 500)
                     throw new ConnectionLostException($"{_baseUrl} answered {status}: {err.Clip(300)}", false);
+                if (KeyRefusedException.For(status, err, _apiKey is not null) is { } refused)
+                    throw refused;
                 throw new LlmException($"Chat request failed ({status}): {err.Clip(1000)}");
             }
 
@@ -303,7 +341,8 @@ public sealed partial class OpenAiChatClient
 
             if (chunk?["error"] is JsonNode error)
             {
-                var errorText = (error as JsonObject)?["message"]?.ToString() ?? error.ToJsonString();
+                var errorText = (error as JsonObject)?["message"]?.ToString()
+                                ?? (error is JsonValue said && said.TryGetValue<string>(out var words) ? words : error.ToJsonString());
                 var code = (error as JsonObject)?["code"]?.ToString();
                 // OpenRouter and Kilo pass on an upstream 429 in the stream, under HTTP 200.
                 if (code == "429")
@@ -313,11 +352,12 @@ public sealed partial class OpenAiChatClient
                 // The model server behind a gateway failed or stalled mid-way: sent again like a
                 // server error answered with a status. It ended the run, every time for over half
                 // an hour while Kilo's free Nemotron was stuck on BlackBox's prompt (see ShiftPrompt).
-                if (Transient(code, errorText))
+                if (Transient(code, errorText) || ServerFailedWords().IsMatch(errorText))
                     throw new ConnectionLostException("The server broke off its answer: " + errorText.Clip(300),
                         content.Length > 0 || reasoning.Length > 0 || calls.Count > 0, toolCallInProgress: calls.Values.LastOrDefault().Name is { Length: > 0 } inProgress ? inProgress : null)
                     {
                         Upstream = errorText.Contains("upstream", StringComparison.OrdinalIgnoreCase),
+                        ServerFailed = ServerFailedWords().IsMatch(errorText),
                     };
                 throw new LlmException("Server error: " + errorText);
             }
@@ -529,7 +569,7 @@ public sealed partial class OpenAiChatClient
     }
 
     /// <summary>The message of a JSON error ({"error":{"message":…}} or {"error":"busy"}), else the answer as it is.</summary>
-    private static string ErrorText(string err)
+    internal static string ErrorText(string err)
     {
         try
         {
@@ -581,6 +621,21 @@ public sealed partial class OpenAiChatClient
 
     [GeneratedRegex(@"time(d)?[ -]?out|overloaded|unavailable|internal server error|upstream|try again|temporar", RegexOptions.IgnoreCase)]
     private static partial Regex TransientWords();
+
+    /// <summary>
+    /// The model server itself failed on the request: llama.cpp out of room in its KV cache while
+    /// other requests ran ("failed to process mtmd chunk", "failed to find a memory slot"), or
+    /// LM Studio's model crashed or was unloaded, which the next request loads again. An hour of
+    /// 2048 ended on "Server error: failed to process mtmd chunk" from LM Studio.
+    /// </summary>
+    // After "The model has crashed without additional information", LM Studio's next answer was
+    // "Model reloaded.": the model was back, and the run had ended on it.
+    [GeneratedRegex(@"failed to process|failed to decode|memory slot|crashed|unloaded|reloaded", RegexOptions.IgnoreCase)]
+    internal static partial Regex ServerFailedWords();
+
+    /// <summary>Of <see cref="ServerFailedWords"/>, those saying llama.cpp had no room in its KV cache for the request.</summary>
+    [GeneratedRegex(@"failed to process|failed to decode|memory slot", RegexOptions.IgnoreCase)]
+    internal static partial Regex OutOfRoomWords();
 
     /// <summary>
     /// Blank lines put in front of the system prompt sent to a server (see <see cref="ShiftPrompt"/>);

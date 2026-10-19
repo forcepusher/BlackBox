@@ -254,6 +254,36 @@ public class AgentSessionTests
         Assert.True(watch.Elapsed >= TimeSpan.FromSeconds(0.9), $"waited {watch.Elapsed}");
         Assert.Single(observer.Notices, n => n.Contains("Rate limit exceeded for free models") && n.Contains("Trying again in 1 s"));
         Assert.DoesNotContain(observer.Notices, n => n.Contains("Reconnecting")); // not a dropped connection, nor counted as one
+        Assert.DoesNotContain(observer.Notices, n => n.Contains("Kilo"));
+
+        // Kilo names no wait, and its free allowance is hourly: the line says so.
+        var kilo = new ScriptedServer(Sse.Text("Made it.")) { RetryAfter = TimeSpan.FromSeconds(1) };
+        kilo.Failures.Enqueue(((HttpStatusCode)429, limited));
+        var (onKilo, kiloObserver) = CreateSession(kilo, Path.GetTempPath(), new FakePlatform(), baseUrl: KiloGateway.Address);
+        await onKilo.RunAsync("go", kiloObserver, CancellationToken.None);
+        Assert.Single(kiloObserver.Notices, n => n.Contains("Kilo's free models take 200 requests an hour from each PC") && n.EndsWith("(Stop ends the wait)…"));
+
+        // A model's daily allowance, shared by everyone, isn't back within the hour.
+        var daily = new ScriptedServer(Sse.Text("Made it.")) { RetryAfter = TimeSpan.FromSeconds(1) };
+        daily.Failures.Enqueue(((HttpStatusCode)429, """{"error":{"message":"Daily limit reached for thinkingmachines/inkling-small:free","code":429}}"""));
+        var (dailyLimited, dailyObserver) = CreateSession(daily, Path.GetTempPath(), new FakePlatform(), baseUrl: KiloGateway.Address);
+        await dailyLimited.RunAsync("go", dailyObserver, CancellationToken.None);
+        Assert.Single(dailyObserver.Notices, n => n.Contains("until tomorrow: pick another free model at the top"));
+    }
+
+    [Fact]
+    public async Task A_model_server_that_failed_on_a_request_is_asked_again_after_a_wait()
+    {
+        var server = new ScriptedServer("data: {\"error\":\"failed to process mtmd chunk\"}\n\n", Sse.Text("Made it."));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        await session.RunAsync("go", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count);
+        Assert.True(watch.Elapsed >= TimeSpan.FromSeconds(1.9), $"waited {watch.Elapsed}");
+        Assert.Equal(["The server broke off its answer: failed to process mtmd chunk Trying again in 2 s, attempt 1 of 12…"], observer.Notices);
     }
 
     [Fact]
@@ -1359,11 +1389,11 @@ public class AgentSessionTests
         Assert.NotNull(session.History[^1].Reasoning);
     }
 
-    private static (AgentSession, RecordingObserver) CreateSession(ScriptedServer server, string dir, IPlatformServices platform, int contextTokens = 0)
+    private static (AgentSession, RecordingObserver) CreateSession(ScriptedServer server, string dir, IPlatformServices platform, int contextTokens = 0, string baseUrl = "http://test")
     {
         var settings = new AgentSettings { ScreenshotAfterActions = false, Approval = ApprovalMode.AskRisky };
         var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = dir };
-        var client = new OpenAiChatClient(new HttpClient(server), "http://test", null);
+        var client = new OpenAiChatClient(new HttpClient(server), baseUrl, null);
         var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(includeScreenTools: true), ctx, "system prompt", contextTokens: contextTokens);
         return (session, new RecordingObserver());
     }

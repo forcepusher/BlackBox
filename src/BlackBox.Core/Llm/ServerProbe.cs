@@ -13,8 +13,9 @@ namespace BlackBox.Core.Llm;
 /// <param name="AutoPicked">True when <paramref name="Model"/> was chosen here, because none was configured or the server doesn't offer it.</param>
 /// <param name="ModelDetails">For a model chosen here, its size, quantization and benchmark score ("27B, 6-bit, 79.8% on Terminal-Bench 2.1") as far as known.</param>
 /// <param name="ContextHosted"><paramref name="LoadedContext"/> is the most a hosted service takes for the model, not a size a server runs it with (see <see cref="ModelFacts.Hosted"/>).</param>
+/// <param name="KeyRefused">The server answered, but turned the API key down (see <see cref="KeyRefusedException"/>); <paramref name="Message"/> says what to change.</param>
 public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, int? LoadedContext, bool? Vision, string Message, bool? Loaded = null, string? BaseUrl = null,
-    string? Model = null, bool AutoPicked = false, string? ModelDetails = null, bool ContextHosted = false);
+    string? Model = null, bool AutoPicked = false, string? ModelDetails = null, bool ContextHosted = false, bool KeyRefused = false);
 
 /// <summary>What the server says about the model in use; nulls where it doesn't say.</summary>
 /// <param name="Hosted">
@@ -53,6 +54,10 @@ public static class ServerProbe
     /// </summary>
     public static async Task<ProbeResult> CheckAsync(HttpClient http, ServerSettings server, CancellationToken ct)
     {
+        // Pasted into the wrong box, a key was looked up as a host name: "No such host is known. (sk-or-v1-…:80)".
+        if (ServerAddress.LooksLikeKey(server.BaseUrl))
+            return new ProbeResult(false, [], null, null, "That looks like an API key, not a server address: it goes in the API key box. " +
+                                                          "The Server box takes the address of the service's API, such as https://openrouter.ai/api/v1.");
         var candidates = ServerAddress.Candidates(server.BaseUrl);
         if (candidates.Count == 0)
             return new ProbeResult(false, [], null, null, server.BaseUrl.Trim().Length == 0 ? "No server address." : "That is not a server address.");
@@ -77,21 +82,28 @@ public static class ServerProbe
                 models.Count == 0 ? "Connected, but the server lists no models." : "Connected.", facts.Loaded, candidates[i],
                 found.Model.Length > 0 ? found.Model : null, auto, auto ? ModelChoice.Describe(catalog.First(m => m.Id == found.Model)) : null, facts.Hosted);
         }
+        // A server that answered but turned the key down is reachable all right: that is what to fix.
+        if (attempts.FirstOrDefault(a => a.Result.KeyRefused) is { } refused)
+            return new ProbeResult(false, [], null, null, refused.Result.Error!, KeyRefused: true);
         // The plain-http error reads better than a failed TLS handshake.
         var http0 = Math.Max(0, candidates.ToList().FindIndex(c => c.StartsWith("http://", StringComparison.OrdinalIgnoreCase)));
         return new ProbeResult(false, [], null, null, "Can't reach the server: " + attempts[http0].Result.Error);
     }
 
-    private static async Task<(IReadOnlyList<JsonObject>? Models, string? Error)> ListModelsAsync(HttpClient http, string baseUrl, string apiKey, CancellationToken ct)
+    private static async Task<(IReadOnlyList<JsonObject>? Models, string? Error, bool KeyRefused)> ListModelsAsync(HttpClient http, string baseUrl, string apiKey, CancellationToken ct)
     {
         try
         {
-            return (await new OpenAiChatClient(http, baseUrl, apiKey).ListModelEntriesAsync(ct).ConfigureAwait(false), null);
+            return (await new OpenAiChatClient(http, baseUrl, apiKey).ListModelEntriesAsync(ct).ConfigureAwait(false), null, false);
+        }
+        catch (KeyRefusedException ex)
+        {
+            return (null, ex.Message, true);
         }
         // Anything from a web page where the model list should be to a timeout: not this address.
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
-            return (null, ex is OperationCanceledException ? "it did not answer in time." : ex.Message);
+            return (null, ex is OperationCanceledException ? "it did not answer in time." : ex.Message, false);
         }
     }
 
@@ -202,7 +214,16 @@ public static class ServerProbe
     /// Makes sure the model is loaded (LM Studio loads models on first use) and returns what the
     /// server then says of it: the context length it runs with, if it reports one.
     /// </summary>
-    public static async Task<ModelFacts> EnsureLoadedAsync(HttpClient http, ServerSettings server, Action? onLoading, CancellationToken ct)
+    /// <remarks>
+    /// LM Studio loads a model on first use with the context its settings give it, and out of the
+    /// box that is 4k: less than BlackBox's instructions and tools alone (about 9k tokens), so
+    /// every request failed as too long. A model loaded under <see cref="ReloadBelow"/> for
+    /// BlackBox's first request is loaded again with <see cref="MinimumContext"/> (16k when the GPU
+    /// can't hold that), and <paramref name="onNote"/> says so. A size the user chose above that is
+    /// kept: a model set to 31k, loaded again at 64k beside another one, crashed at its first
+    /// answer. A model the user loaded themselves is left as it is.
+    /// </remarks>
+    public static async Task<ModelFacts> EnsureLoadedAsync(HttpClient http, ServerSettings server, Action? onLoading, CancellationToken ct, Action<string>? onNote = null)
     {
         var facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
         if (facts.Loaded != false)
@@ -219,7 +240,46 @@ public static class ServerProbe
         {
             return default; // the real request will report the problem
         }
-        return await TryContextAsync(http, server, ct).ConfigureAwait(false);
+        facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
+        if (facts.Context is { } small && small < ReloadBelow && await ReloadRoomierAsync(http, server, small, ct).ConfigureAwait(false) is { } roomier)
+        {
+            onNote?.Invoke($"LM Studio loaded {server.ModelInUse} with a {small / 1024}k context, too small for BlackBox; it runs with {roomier / 1024}k now. " +
+                           "To choose the size yourself, load it in LM Studio with the context length you want.");
+            facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
+        }
+        return facts;
+    }
+
+    /// <summary>Less than this, and BlackBox's instructions and tools (about 9k tokens) leave room for a few steps at most.</summary>
+    public const int MinimumContext = 32 * 1024;
+
+    /// <summary>A context LM Studio gave a model on first use under this is its out-of-the-box 4k or 8k, not the user's choice.</summary>
+    public const int ReloadBelow = 16 * 1024;
+
+    /// <summary>
+    /// Loads the model in use again through LM Studio's REST API (/api/v1/models/unload and
+    /// /load) with <see cref="MinimumContext"/>, or <see cref="ReloadBelow"/> when its memory
+    /// guardrail refuses that; the context it then runs with, or null if neither loaded.
+    /// </summary>
+    private static async Task<int?> ReloadRoomierAsync(HttpClient http, ServerSettings server, int current, CancellationToken ct)
+    {
+        var root = OpenAiChatClient.NormalizeBaseUrl(server.BaseUrl)[..^"/v1".Length];
+        if (await GetJsonAsync(http, server, $"{root}/api/v1/models", ct).ConfigureAwait(false) is not { } list
+            || (list["models"] as JsonArray)?.OfType<JsonObject>().FirstOrDefault(m => Str(m["key"]) == server.ModelInUse) is not { } entry
+            || entry["loaded_instances"] is not JsonArray { Count: > 0 } instances)
+            return null;
+        var most = Int(entry["max_context_length"]) ?? MinimumContext;
+        var sizes = new[] { MinimumContext, ReloadBelow }.Select(s => Math.Min(s, most)).Where(s => s > current).Distinct().ToList();
+        if (sizes.Count == 0)
+            return null;
+        foreach (var instance in instances.OfType<JsonObject>().Select(i => Str(i["id"])).OfType<string>())
+            await GetJsonAsync(http, server, $"{root}/api/v1/models/unload", ct, new JsonObject { ["instance_id"] = instance }).ConfigureAwait(false);
+        foreach (var size in sizes)
+            if (await GetJsonAsync(http, server, $"{root}/api/v1/models/load", ct,
+                    new JsonObject { ["model"] = server.ModelInUse, ["context_length"] = size, ["echo_load_config"] = true }).ConfigureAwait(false) is { } loaded
+                && Str(loaded["status"]) == "loaded")
+                return Int(loaded["load_config"]?["context_length"]) ?? size;
+        return null; // unloaded: the next request loads it as LM Studio's settings say, as before
     }
 
     /// <summary>Context length, load state and image support of the model in use.</summary>

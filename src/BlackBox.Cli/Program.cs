@@ -109,7 +109,8 @@ try
                 : $"[server] no model picked: using {probe.Model}{details}, the strongest the server offers");
     }
     settings.Server.SupportsVision = probe.Vision ?? true;
-    var facts = await ServerProbe.EnsureLoadedAsync(probeHttp, settings.Server, () => Console.WriteLine("[server] loading the model…"), cts.Token);
+    var facts = await ServerProbe.EnsureLoadedAsync(probeHttp, settings.Server, () => Console.WriteLine("[server] loading the model…"), cts.Token,
+        note => Console.WriteLine("[server] " + note));
     if (facts.Context is { } c)
         settings.Server.SetDetectedContext(c, facts.Hosted);
     Console.WriteLine($"[server] {settings.Server.BaseUrl} · {settings.Server.ModelInUse} · {ContextSizes.Format(settings.Server.ContextSize)} context"

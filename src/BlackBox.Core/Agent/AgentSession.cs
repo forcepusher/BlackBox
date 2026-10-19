@@ -633,7 +633,13 @@ public sealed partial class AgentSession(
                 // take 200 an hour), so the same request goes again after the wait it names, or a
                 // growing one. As many times as it takes: Stop ends the wait.
                 var wait = RateLimitWait(ex.RetryAfter, ++held);
-                observer.OnNotice($"{ex.Message} Trying again in {Describe(wait)} (Stop ends the wait)…");
+                // Kilo doesn't say for how long, and five-minute waits read as BlackBox being stuck.
+                // A free model's daily allowance, which Kilo shares among all its users, comes back no sooner.
+                var why = !KiloGateway.Is(client.BaseUrl) ? ""
+                    : ex.Message.Contains("daily", StringComparison.OrdinalIgnoreCase)
+                        ? " Kilo shares a free model's daily allowance among all its users, so this can last until tomorrow: pick another free model at the top, or use a Kilo key with credits or a model server of your own."
+                        : " Kilo's free models take 200 requests an hour from each PC, so this can last until the hour is up; a Kilo key with credits, or a model server of your own, has no such limit.";
+                observer.OnNotice($"{ex.Message}{why} Trying again in {Describe(wait)} (Stop ends the wait)…");
                 await Task.Delay(wait, ct).ConfigureAwait(false);
             }
             catch (ConnectionLostException ex) when (ex.Unreachable)
@@ -648,7 +654,27 @@ public sealed partial class AgentSession(
             }
             catch (ConnectionLostException ex) when (++drops <= MaxReconnects)
             {
-                observer.OnNotice($"Connection lost ({ex.Message}). Reconnecting, attempt {drops} of {MaxReconnects}…");
+                // Still no room in llama.cpp's KV cache after three tries: what other requests hold
+                // (another BlackBox on the same LM Studio keeps its cached prompt there) leaves too
+                // little for this conversation. 2048 waited out all twelve tries that way. A fresh,
+                // shorter conversation fits, and a smaller context keeps it fitting.
+                if (ex.ServerFailed && drops > 3 && OpenAiChatClient.OutOfRoomWords().IsMatch(ex.Message) && TokensInUse() > 16_384)
+                {
+                    var smaller = Math.Max(16_384, TokensInUse() * 3 / 4);
+                    if (contextTokens == 0 || smaller < contextTokens)
+                    {
+                        observer.OnNotice($"The server has no room for {TokensInUse() / 1000}k tokens of conversation right now; working with {smaller / 1000}k tokens of context from now on.");
+                        contextTokens = smaller;
+                    }
+                    throw new ContextOverflowException("the server has no room left for it (" + ex.Message + ")");
+                }
+                // The server's own failure is given time to pass: other requests filling its memory,
+                // its model reloading after a crash. Sent again at once, all twelve tries were gone in seconds.
+                var pause = ex.ServerFailed ? TimeSpan.FromTicks(Math.Min(RateLimitWaits[Math.Min(drops, RateLimitWaits.Length) - 1].Ticks, TimeSpan.TicksPerMinute))
+                    : drops > 1 ? TimeSpan.FromSeconds(Math.Min(drops - 1, 3)) : TimeSpan.Zero;
+                observer.OnNotice(ex.ServerFailed
+                    ? $"{ex.Message} Trying again in {Describe(pause)}, attempt {drops} of {MaxReconnects}…"
+                    : $"Connection lost ({ex.Message}). Reconnecting, attempt {drops} of {MaxReconnects}…");
                 // A model server that fails a request may have got stuck on how the prompt begins,
                 // as Kilo's free Nemotron did for half an hour: the request goes again a line lower.
                 if (ex.Upstream)
@@ -656,7 +682,7 @@ public sealed partial class AgentSession(
                 // Resending would only repeat a tool call too long to get through, so the model is
                 // asked to split it. The note stays in the history so later calls stay short too.
                 // If the smaller parts are still too long, it is told once more, with a firmer limit.
-                if (ex.ToolCallInProgress is not null && toolDefs.Count > 0 && request[^1].Content != StillTooLongNote)
+                if (!ex.ServerFailed && ex.ToolCallInProgress is not null && toolDefs.Count > 0 && request[^1].Content != StillTooLongNote)
                 {
                     var again = request[^1].Content == LongToolCallNote;
                     var note = ChatMessage.User(again ? StillTooLongNote : LongToolCallNote);
@@ -674,8 +700,8 @@ public sealed partial class AgentSession(
                 }
                 // The server keeps what it processed, so resending at once loses nothing; a short
                 // pause only after repeated drops, in case the link itself is down.
-                if (drops > 1)
-                    await Task.Delay(TimeSpan.FromSeconds(Math.Min(drops - 1, 3)), ct).ConfigureAwait(false);
+                if (pause > TimeSpan.Zero)
+                    await Task.Delay(pause, ct).ConfigureAwait(false);
             }
         }
     }

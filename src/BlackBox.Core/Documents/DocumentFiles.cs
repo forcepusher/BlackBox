@@ -60,10 +60,14 @@ internal static partial class DocumentFiles
                     (kind == "pdf" ? "write it again whole." : "use edit_file: old_text its last paragraph, new_text that paragraph and what comes after it."));
             markdown = made.Markdown.TrimEnd() + "\n\n" + markdown;
         }
+        // "Delete it first" was read as the way to go: asked for a cover letter on the Desktop,
+        // Nemotron deleted the one already there, which another task had made, without asking.
         else if (existed && !ours)
-            throw new InvalidOperationException($"{name} already exists, and writing it would replace it whole, its formatting with it. " +
-                (kind == "pdf" ? "" : "To change something in it, use edit_file, which keeps the rest as it is. ") +
-                "To replace it anyway, delete it first, or write to a new name.");
+            throw new InvalidOperationException($"{name} already exists, and it isn't one you wrote in this task, so it may be the user's own: " +
+                "writing it would replace it whole, its formatting with it. " +
+                $"Write to a new name, such as \"{Path.GetFileNameWithoutExtension(path)} (2){Path.GetExtension(path)}\"" +
+                (kind == "pdf" ? "" : ", or change what needs changing in it with edit_file, which keeps the rest as it is") +
+                ". Replace or delete it only when the user asked for that.");
 
         var blocks = MarkdownDocument.Parse(markdown);
         var notes = new List<string>();

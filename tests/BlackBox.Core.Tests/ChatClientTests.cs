@@ -61,6 +61,12 @@ public class ChatClientTests
         // OpenRouter and Kilo pass an upstream 429 on in the stream.
         sse = """data: {"error":{"message":"Daily limit reached for thinkingmachines/inkling-small:free","code":429}}""";
         await Assert.ThrowsAsync<RateLimitedException>(() => OpenAiChatClient.ReadStreamAsync(new StringReader(sse), null, CancellationToken.None));
+
+        // LM Studio's llama.cpp out of KV room while other requests ran: worth sending again after a while.
+        sse = """data: {"error":"failed to process mtmd chunk"}""";
+        var failed = await Assert.ThrowsAsync<ConnectionLostException>(() => OpenAiChatClient.ReadStreamAsync(new StringReader(sse), null, CancellationToken.None));
+        Assert.True(failed.ServerFailed);
+        Assert.False(failed.ReceivedTokens);
     }
 
     [Fact]
@@ -183,6 +189,37 @@ public class ChatClientTests
     }
 
     [Fact]
+    public async Task A_services_website_or_key_in_the_address_box_is_taken_for_what_it_is()
+    {
+        // The website people know, any page of it: its API is tried first.
+        Assert.Equal("https://openrouter.ai/api/v1", ServerAddress.Candidates("openrouter.ai")[0]);
+        Assert.Equal("https://openrouter.ai/api/v1", ServerAddress.Candidates("https://openrouter.ai/settings/keys")[0]);
+        Assert.Equal("https://api.groq.com/openai/v1", ServerAddress.Candidates("www.groq.com")[0]);
+        Assert.Equal(["https://openrouter.ai/api/v1"], ServerAddress.Candidates("https://openrouter.ai/api/v1"));
+        Assert.True(KiloGateway.Is("kilo.ai"));
+
+        Assert.True(ServerAddress.LooksLikeKey("sk-or-v1-0123456789abcdef0123456789abcdef"));
+        Assert.True(ServerAddress.LooksLikeKey(" gsk_0123456789ABCDEFabcdef0123 "));
+        Assert.False(ServerAddress.LooksLikeKey("localhost:1234"));
+        Assert.False(ServerAddress.LooksLikeKey("my-gpu-box"));
+        Assert.False(ServerAddress.LooksLikeKey("forcepusher.ddns.net:1234/v1"));
+        var key = await ServerProbe.CheckAsync(new HttpClient(new HtmlServer()), new BlackBox.Core.Settings.ServerSettings { BaseUrl = "sk-or-v1-0123456789abcdef0123456789abcdef" }, CancellationToken.None);
+        Assert.False(key.Reachable);
+        Assert.StartsWith("That looks like an API key, not a server address", key.Message);
+
+        // Another website: what it is, not its 404 page's HTML.
+        var site = await ServerProbe.CheckAsync(new HttpClient(new PageNotFound()), new BlackBox.Core.Settings.ServerSettings { BaseUrl = "https://example.com" }, CancellationToken.None);
+        Assert.Equal("Can't reach the server: there is a website at this address (404 for /models), not a model server's API. " +
+                     "The service's documentation names its OpenAI-compatible API address, often ending in /v1.", site.Message);
+    }
+
+    private sealed class PageNotFound : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound) { Content = new StringContent("<!DOCTYPE html><html><head><title>404</title></head><body>Not found</body></html>") });
+    }
+
+    [Fact]
     public async Task The_probe_finds_the_protocol_that_answers()
     {
         var server = new BlackBox.Core.Settings.ServerSettings { BaseUrl = "host:1234", Model = "m" };
@@ -208,6 +245,38 @@ public class ChatClientTests
         Assert.False(probe.Reachable);
         Assert.Contains("not a model list", probe.Message);
         Assert.Null((await ServerProbe.TryContextAsync(page, new BlackBox.Core.Settings.ServerSettings { BaseUrl = "http://host:80", Model = "m" }, CancellationToken.None)).Context);
+    }
+
+    [Fact]
+    public async Task A_refused_api_key_is_named_as_such_not_as_an_unreachable_server()
+    {
+        // A wrong OpenRouter key lists the models (that needs none) and fails at the first message.
+        var server = new ScriptedServer();
+        server.Failures.Enqueue((System.Net.HttpStatusCode.Unauthorized, """{"error":{"message":"User not found.","code":401}}"""));
+        server.Failures.Enqueue(((System.Net.HttpStatusCode)402, """{"error":{"message":"Insufficient credits","code":402}}"""));
+        var client = new OpenAiChatClient(new HttpClient(server), "http://test", "sk-or-v1-wrong");
+        Task<ChatMessage> Send() => client.CompleteAsync([ChatMessage.User("hi")], [], new ChatRequestOptions(), null, CancellationToken.None);
+        var wrongKey = await Assert.ThrowsAsync<KeyRefusedException>(Send);
+        Assert.Equal("The server turned down the API key (it says \"User not found.\"). Check the key next to the server address at the top.", wrongKey.Message);
+        Assert.Contains("run out of credits (it says \"Insufficient credits\")", (await Assert.ThrowsAsync<KeyRefusedException>(Send)).Message);
+
+        // OpenAI wants a key for its model list too: the server answered, so it isn't "Can't reach the server".
+        var noKey = await ServerProbe.CheckAsync(new HttpClient(new KeyServer()), new BlackBox.Core.Settings.ServerSettings { BaseUrl = "api.example.com/v1" }, CancellationToken.None);
+        Assert.False(noKey.Reachable);
+        Assert.True(noKey.KeyRefused);
+        Assert.Equal("The server wants an API key (it says \"Missing bearer authentication in header\"). Enter yours next to the server address at the top.", noKey.Message);
+    }
+
+    /// <summary>Answers 401 over https, as OpenAI does without a key; plain http doesn't connect.</summary>
+    private sealed class KeyServer : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            request.RequestUri!.Scheme == "https"
+                ? Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized)
+                {
+                    Content = new StringContent("{\n  \"error\": {\n    \"message\": \"Missing bearer authentication in header\",\n    \"type\": \"invalid_request_error\"\n  }\n}"),
+                })
+                : throw new HttpRequestException("No connection could be made because the target machine actively refused it.");
     }
 
     private sealed class HtmlServer : HttpMessageHandler
@@ -450,5 +519,82 @@ public class ContextDetectionTests
         Assert.Equal(8192, ContextOverflowException.ParseLimit("This model's maximum context length is 8192 tokens. However, your messages resulted in 9100 tokens."));
         Assert.Equal(4096, ContextOverflowException.ParseLimit("""{"error":{"code":400,"message":"the request exceeds the available context size, try increasing it","type":"exceed_context_size_error","n_prompt_tokens":5000,"n_ctx":4096}}"""));
         Assert.Null(ContextOverflowException.ParseLimit("The number of tokens to keep from the initial prompt is greater than the context length."));
+    }
+
+    /// <summary>
+    /// LM Studio out of the box: a model loaded on first use gets a 4k context. Its memory
+    /// guardrail refuses 32k for this one, and takes 16k.
+    /// </summary>
+    private sealed class FreshLmStudio : HttpMessageHandler
+    {
+        /// <summary>The context a model gets on first use: LM Studio's 4k, or what the user set for it.</summary>
+        public int Default { get; init; } = 4096;
+        public int? Context { get; private set; }
+        public List<string> Calls { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct);
+            Calls.Add($"{request.Method} {path} {body}".Trim());
+            string? answer = path switch
+            {
+                "/api/v0/models/m" => Context is { } c
+                    ? $$"""{"id":"m","type":"vlm","state":"loaded","loaded_context_length":{{c}}}"""
+                    : """{"id":"m","type":"vlm","state":"not-loaded","max_context_length":262144}""",
+                "/v1/chat/completions" => Load(Default),
+                "/api/v1/models" => Context is { } c
+                    ? $$$"""{"models":[{"key":"m","max_context_length":262144,"loaded_instances":[{"id":"m","config":{"context_length":{{{c}}}}}]}]}"""
+                    : """{"models":[{"key":"m","max_context_length":262144,"loaded_instances":[]}]}""",
+                "/api/v1/models/unload" => Unload(),
+                "/api/v1/models/load" when body.Contains("32768") => null,
+                "/api/v1/models/load" => Load(16384),
+                _ => null,
+            };
+            return answer is null
+                ? new HttpResponseMessage(System.Net.HttpStatusCode.BadRequest) { Content = new StringContent("""{"error":"model_load_failed"}""") }
+                : new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(answer) };
+        }
+
+        private string Load(int size)
+        {
+            if (Context is null || size != Default)
+                Context = size;
+            return size == Default
+                ? "data: {\"choices\":[{\"delta\":{\"content\":\"OK\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
+                : $$$"""{"instance_id":"m","status":"loaded","load_config":{"context_length":{{{size}}}}}""";
+        }
+
+        private string Unload()
+        {
+            Context = null;
+            return """{"instance_id":"m"}""";
+        }
+    }
+
+    [Fact]
+    public async Task A_model_LM_Studio_loads_with_its_4k_default_is_loaded_again_with_room_for_BlackBox()
+    {
+        var server = new FreshLmStudio();
+        var notes = new List<string>();
+        var settings = new BlackBox.Core.Settings.ServerSettings { BaseUrl = "http://host:1234/v1", Model = "m" };
+        var facts = await ServerProbe.EnsureLoadedAsync(new HttpClient(server), settings, null, CancellationToken.None, notes.Add);
+        Assert.Equal(16384, facts.Context);
+        Assert.Contains(server.Calls, c => c.StartsWith("POST /api/v1/models/unload") && c.Contains("\"instance_id\":\"m\""));
+        Assert.Equal("LM Studio loaded m with a 4k context, too small for BlackBox; it runs with 16k now. To choose the size yourself, load it in LM Studio with the context length you want.", Assert.Single(notes));
+
+        // Loaded by the user already, even small: left as it is.
+        server.Calls.Clear();
+        notes.Clear();
+        Assert.Equal(16384, (await ServerProbe.EnsureLoadedAsync(new HttpClient(server), settings, null, CancellationToken.None, notes.Add)).Context);
+        Assert.DoesNotContain(server.Calls, c => c.Contains("/load") || c.Contains("/unload"));
+        Assert.Empty(notes);
+
+        // A size the user set for the model (LM Studio's 32000) is theirs: loaded again at 64k beside
+        // another model, one such crashed at its first answer.
+        var theirs = new FreshLmStudio { Default = 32000 };
+        Assert.Equal(32000, (await ServerProbe.EnsureLoadedAsync(new HttpClient(theirs), settings, null, CancellationToken.None, notes.Add)).Context);
+        Assert.DoesNotContain(theirs.Calls, c => c.Contains("/load") || c.Contains("/unload"));
+        Assert.Empty(notes);
     }
 }
