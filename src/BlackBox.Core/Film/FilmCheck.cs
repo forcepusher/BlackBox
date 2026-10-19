@@ -93,7 +93,9 @@ public static partial class FilmCheck
               (first is not null ? "the frame the shot should start on" : "") + (first is not null && last is not null ? " (left) and " : "") +
               (last is not null ? "the frame it should end on" : "") + (first is not null && last is not null ? " (right)" : "") +
               ". Under it are frames of the clip that was made, in order, with their times.");
-        if (shot.LipSync)
+        if (Storyboard.Speaks(shot))
+            sb.AppendLine($"The person speaking in it says \"{shot.Line.Trim()}\": their mouth should move with the words, and they should look like they say them.");
+        else if (shot.LipSync)
             sb.AppendLine("The people in it should sing or speak along with the soundtrack, their mouths moving.");
         sb.AppendLine("Say briefly and concretely:");
         sb.AppendLine("1. Does what should happen happen, clearly?");

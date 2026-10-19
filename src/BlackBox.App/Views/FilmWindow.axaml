@@ -208,6 +208,11 @@
           <TextBox Text="{Binding Camera}" Watermark="still, slow push in, pans left, follows her, a close-up" />
         </StackPanel>
         <StackPanel Spacing="3">
+          <TextBlock Classes="label" Text="What is said in it (lip-synced, in the voice set under Soundtrack)" TextWrapping="Wrap" />
+          <TextBox Text="{Binding Line}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44"
+                   Watermark="Nothing: the shot keeps quiet, or sings the soundtrack's part with lip sync ticked" />
+        </StackPanel>
+        <StackPanel Spacing="3">
           <TextBlock Classes="label" Text="Length in seconds" />
           <NumericUpDown Value="{Binding Seconds}" Minimum="0.5" Maximum="60" Increment="0.5" FormatString="0.#" Width="140" HorizontalAlignment="Left" />
         </StackPanel>
@@ -226,7 +231,7 @@
           <TextBlock Text="Ends on a frame of its own (without one, it goes where the prompt takes it)" TextWrapping="Wrap" />
         </CheckBox>
         <CheckBox IsChecked="{Binding LipSync}">
-          <TextBlock Text="The people in it sing or speak the soundtrack's part under it (lip sync, from its first frame)" TextWrapping="Wrap" />
+          <TextBlock Text="Lip-synced, from its first frame: the people in it say its line, or sing the soundtrack's part under it" TextWrapping="Wrap" />
         </CheckBox>
         <StackPanel Spacing="3">
           <TextBlock Classes="label" Text="Seed: the same frames, prompt and seed make the same clip again" TextWrapping="Wrap" />
@@ -292,6 +297,10 @@
           <TextBlock Classes="muted" Classes.error="{Binding IsError}" Text="{Binding State}" TextWrapping="Wrap" />
         </StackPanel>
         <ContentControl Content="{Binding Player}" MaxWidth="560" HorizontalAlignment="Left" />
+        <StackPanel Spacing="3">
+          <TextBlock Classes="label" Text="The voice the shots' lines are said in" />
+          <TextBox Text="{Binding Voice}" Watermark="A man in his forties, warm and a little hoarse, deadpan" />
+        </StackPanel>
       </StackPanel>
     </DataTemplate>
   </Window.DataTemplates>

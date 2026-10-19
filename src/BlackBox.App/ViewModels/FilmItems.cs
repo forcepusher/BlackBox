@@ -252,6 +252,24 @@ public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : Observ
         }
     }
 
+    /// <summary>What is said in it, lip-synced in the film's voice; a line makes the shot lip-synced.</summary>
+    public string Line
+    {
+        get => Shot.Line;
+        set
+        {
+            if (Shot.Line == value) return;
+            Shot.Line = value;
+            if (value.Trim().Length > 0 && !Shot.LipSync)
+            {
+                Shot.LipSync = true;
+                OnPropertyChanged(nameof(LipSync));
+            }
+            OnPropertyChanged();
+            film.Changed(this);
+        }
+    }
+
     public static IReadOnlyList<string> Transitions { get; } = ["Cut", "Dissolve", "Fade through black"];
 
     public int TransitionIndex
@@ -423,6 +441,19 @@ public sealed partial class SoundItem(FilmViewModel film, FilmSound sound) : Obs
         {
             if (Sound.Lyrics == value) return;
             Sound.Lyrics = value;
+            OnPropertyChanged();
+            film.Changed(this);
+        }
+    }
+
+    /// <summary>Who says the shots' lines.</summary>
+    public string Voice
+    {
+        get => Sound.Voice;
+        set
+        {
+            if (Sound.Voice == value) return;
+            Sound.Voice = value;
             OnPropertyChanged();
             film.Changed(this);
         }

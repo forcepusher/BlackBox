@@ -68,8 +68,16 @@ public sealed class Storyboard
 
     public string ShotWorkflow(FilmShot shot) => Path.Combine(Folder, "shots", Safe(shot.Id) + ".json");
 
-    /// <summary>The part of the soundtrack a lip-synced shot is made with.</summary>
+    /// <summary>The sound a lip-synced shot is made with: its line, or the part of the soundtrack under it, as long as the shot.</summary>
     public string ShotAudio(FilmShot shot) => Path.Combine(Folder, "shots", Safe(shot.Id) + ".wav");
+
+    /// <summary>A shot's line as the voice model said it, and the workflow that said it.</summary>
+    public string ShotLine(FilmShot shot) => Path.Combine(Folder, "shots", Safe(shot.Id) + ".line.flac");
+
+    public string ShotLineWorkflow(FilmShot shot) => Path.Combine(Folder, "shots", Safe(shot.Id) + ".line.json");
+
+    /// <summary>Whether a shot is lip-synced to a line of its own (rather than the soundtrack).</summary>
+    public static bool Speaks(FilmShot shot) => shot.LipSync && shot.Line.Trim().Length > 0;
 
     public string SongFile => Path.Combine(Folder, "sound", "song.mp3");
 
@@ -243,6 +251,10 @@ public sealed class Storyboard
             s.Seconds = s.Seconds <= 0 ? 5 : Math.Clamp(s.Seconds, 0.5, 60);
             s.Prompt ??= "";
             s.Camera ??= "";
+            s.Line ??= "";
+            // A line is said lip-synced: a shot given one is.
+            if (s.Line.Trim().Length > 0)
+                s.LipSync = true;
             s.Transition = s.Transition?.Trim().ToLowerInvariant() switch
             {
                 FilmShot.Dissolve or "crossfade" or "cross-fade" or "mix" => FilmShot.Dissolve,
@@ -254,6 +266,9 @@ public sealed class Storyboard
         }
         if (Sound.Seed <= 0)
             Sound.Seed = NewSeed();
+        Sound.Voice ??= "";
+        Sound.Tags ??= "";
+        Sound.Lyrics ??= "";
         Sound.Source = Sound.Source?.Trim().ToLowerInvariant() switch
         {
             FilmSound.FromFile or "audio" => FilmSound.FromFile,
@@ -421,8 +436,14 @@ public sealed class FilmShot
 
     public long Seed { get; set; }
 
-    /// <summary>Made with the soundtrack's part under it, so the people in it sing or speak it.</summary>
+    /// <summary>
+    /// Lip-synced: made with a sound under it, so the people in it say or sing it: its own line when
+    /// it has one, else the soundtrack's part under it.
+    /// </summary>
     public bool LipSync { get; set; }
+
+    /// <summary>What is said in it, in the film's voice (<see cref="FilmSound.Voice"/>), lip-synced.</summary>
+    public string Line { get; set; } = "";
 
     /// <summary>How it follows the shot before: cut, dissolve or fade (through black).</summary>
     public string Transition { get; set; } = Cut;
@@ -445,6 +466,9 @@ public sealed class FilmSound
 
     /// <summary>The words sung; none makes an instrumental.</summary>
     public string Lyrics { get; set; } = "";
+
+    /// <summary>The voice the shots' lines are said in ("a man in his forties, warm and a little hoarse, deadpan").</summary>
+    public string Voice { get; set; } = "";
 
     public long Seed { get; set; }
 

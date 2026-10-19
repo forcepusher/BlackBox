@@ -42,6 +42,15 @@ public static class FilmMontage
             args.AddRange(["-i", board.ShotVideo(shot)]);
         if (soundtrack is not null)
             args.AddRange(["-i", soundtrack]);
+        // A shot's line is heard as the voice model said it, clean, not as the video model gave it back.
+        var lines = new Dictionary<int, int>();
+        var next = board.Shots.Count + (soundtrack is null ? 0 : 1);
+        for (var i = 0; i < board.Shots.Count; i++)
+            if (Storyboard.Speaks(board.Shots[i]) && File.Exists(board.ShotAudio(board.Shots[i])))
+            {
+                args.AddRange(["-i", board.ShotAudio(board.Shots[i])]);
+                lines[i] = next++;
+            }
 
         var f = new StringBuilder();
         string N(double d) => d.ToString("0.###", CultureInfo.InvariantCulture);
@@ -52,6 +61,11 @@ public static class FilmMontage
             // A clip shorter than its shot holds its last frame; a longer one is cut.
             f.Append($"[{i}:v]tpad=stop_mode=clone:stop_duration={N(s)},trim=duration={N(s)},setpts=PTS-STARTPTS,")
              .Append($"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1,fps={fps},format=yuv420p[v{i}];");
+            if (lines.TryGetValue(i, out var line))
+            {
+                f.Append($"[{line}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur={N(s)},atrim=duration={N(s)},asetpts=PTS-STARTPTS[a{i}];");
+                continue;
+            }
             // A lip-synced shot's sound is the soundtrack's own part again: under the soundtrack it is left out.
             var volume = shot.LipSync && soundtrack is not null ? 0 : shotVolume;
             if (hasSound(board.ShotVideo(shot)) && volume > 0)
@@ -84,7 +98,11 @@ public static class FilmMontage
         if (soundtrack is not null)
         {
             var k = board.Shots.Count;
-            f.Append($"[{k}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur={N(length)},atrim=duration={N(length)},asetpts=PTS-STARTPTS,volume={N(board.SoundVolume)}[music];")
+            // Quieter while someone speaks, so the line is heard over it.
+            var (starts, _) = board.Timing();
+            var speaking = lines.Keys.Select(i => $"between(t,{N(starts[i])},{N(starts[i] + board.Shots[i].Seconds)})").ToList();
+            var duck = speaking.Count == 0 ? "" : $",volume='if({string.Join("+", speaking)},0.35,1)':eval=frame";
+            f.Append($"[{k}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur={N(length)},atrim=duration={N(length)},asetpts=PTS-STARTPTS,volume={N(board.SoundVolume)}{duck}[music];")
              .Append($"[{audio}][music]amix=inputs=2:duration=first:normalize=0[mixed];");
             audio = "mixed";
         }

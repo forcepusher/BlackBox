@@ -299,6 +299,25 @@ public sealed class FilmMontageTests : IDisposable
     }
 
     [Fact]
+    public void A_shots_line_is_heard_clean_and_the_song_goes_quieter_under_it()
+    {
+        var song = Path.Combine(_dir, "song.mp3");
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(song, "");
+        var sound = new JsonObject { ["source"] = "file", ["file"] = song }.ToJsonString();
+        var board = Film("""
+            {"shots": [{"id": "s1", "seconds": 3}, {"id": "s2", "seconds": 4, "line": "We're working on it."}], "sound": SOUND}
+            """.Replace("SOUND", sound));
+        Assert.True(board.Shots[1].LipSync); // a line is said lip-synced
+        File.WriteAllText(board.ShotAudio(board.Shots[1]), "");
+        var (args, _, _) = FilmMontage.Plan(board, _ => true, "out.mp4");
+        var graph = args[args.IndexOf("-filter_complex") + 1];
+        Assert.Equal(board.ShotAudio(board.Shots[1]), args[args.LastIndexOf("-i") + 1]);
+        Assert.Contains("[3:a]aresample=48000", graph); // the line, after the two clips and the song
+        Assert.Contains("volume='if(between(t,3,7),0.35,1)'", graph);
+    }
+
+    [Fact]
     public void Shots_without_a_clip_are_named()
     {
         var board = Film("""{"shots": [{"id": "s1"}, {"id": "s2"}]}""");

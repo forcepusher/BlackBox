@@ -26,8 +26,9 @@ public sealed class FilmTool : Tool
         "to an optional last frame in so many seconds, the pictures they start and end on, and the soundtrack. " +
         "action=storyboard shows it (path: the film's folder), or makes or changes it with storyboard={...}: title, story, style (the look, added to every prompt), " +
         "width, height, fps, frames:[{id, prompt, seed, from: [ids of frames it is made from, to keep people and places the same], file (a picture of the user's), name, reference: true for a character or place sheet}], " +
-        "shots:[{id, first, last (frame ids), seconds, prompt (what happens), camera, transition: cut|dissolve|fade, lipSync (sings or speaks the soundtrack's part under it), seed}], " +
-        "sound:{source: none|file|song, file, tags (the song's style), lyrics, seed}. Frames and shots are matched by id; {\"id\": …, \"delete\": true} removes one. " +
+        "shots:[{id, first, last (frame ids), seconds, prompt (what happens), camera, transition: cut|dissolve|fade, " +
+        "line (what is said in it, lip-synced, in the voice sound.voice describes; it starts 0.4 s in, so leave time for it), lipSync (without a line: sings the soundtrack's part under it), seed}], " +
+        "sound:{source: none|file|song, file, tags (the song's style), lyrics, voice (who says the lines: age, voice, manner), seed}. Frames and shots are matched by id; {\"id\": …, \"delete\": true} removes one. " +
         "Without path a new film goes into a folder of its own in BlackBox's Data\\films, where the Filmmaking window finds it; its frames, clips and the film are made there too " +
         "(BlackBox is portable: what it makes stays next to it). " +
         "A shot that starts on the last frame of the one before goes on with the same camera; " +
@@ -224,7 +225,9 @@ public sealed class FilmTool : Tool
             var made = File.Exists(board.ShotVideo(s));
             var current = FilmMaker.IsCurrent(board, s);
             sb.AppendLine($"  {s.Id} ({N(starts[i])}–{N(starts[i] + s.Seconds)} s, {N(s.Seconds)} s{join}): {frames}. \"{s.Prompt.Trim().ReplaceLineEndings(" ").Clip(300)}\"" +
-                          (s.Camera.Length > 0 ? $" Camera: {s.Camera}." : "") + $" Seed {s.Seed}. " +
+                          (s.Camera.Length > 0 ? $" Camera: {s.Camera}." : "") +
+                          (Storyboard.Speaks(s) ? $" Says: \"{s.Line.Trim().ReplaceLineEndings(" ")}\"" + (FilmMaker.LineIsCurrent(board, s) ? " (said)." : " (not said yet).") : "") +
+                          $" Seed {s.Seed}. " +
                           (!made ? "Not made." : current ? $"Made: {board.ShotVideo(s)}" : $"Made, but out of date: {board.ShotVideo(s)}"));
             if (!current)
                 todo.Add($"shot {s.Id}");
@@ -246,6 +249,8 @@ public sealed class FilmTool : Tool
                 sb.AppendLine("Soundtrack: none (each shot's own sound).");
                 break;
         }
+        if (board.Shots.Any(Storyboard.Speaks))
+            sb.AppendLine("The lines' voice: " + (sound.Voice.Trim().Length > 0 ? sound.Voice.Trim() : "not described (sound.voice): the voice model picks one") + ".");
         var chosen = new List<string>();
         foreach (var job in Enum.GetValues<FilmJob>())
             if (FilmTemplates.Chosen(board.Workflows, job) is { } name)

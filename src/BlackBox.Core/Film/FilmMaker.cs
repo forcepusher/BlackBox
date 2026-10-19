@@ -137,12 +137,24 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         {
             if (firstPicture is null)
                 throw new FilmException($"Shot {shot.Id} is lip-synced, which needs its first frame to show who sings or speaks: give it one.");
-            var soundtrack = board.SoundtrackFile ?? throw new FilmException($"Shot {shot.Id} is lip-synced to the soundtrack, and there is none yet: " +
-                                                                             (board.Sound.Source == FilmSound.Song ? "make the song first." : "give the film a soundtrack first."));
-            var (starts, _) = board.Timing();
-            var start = starts[board.Shots.IndexOf(shot)];
             audio = board.ShotAudio(shot);
-            await Task.Run(() => CutSound(soundtrack, start, shot.Seconds, audio), ct).ConfigureAwait(false);
+            if (Storyboard.Speaks(shot))
+            {
+                // Its own line, said a moment after the shot starts (a head turns to the camera first).
+                if (!LineIsCurrent(board, shot))
+                    notes.AddRange((await MakeLineAsync(board, shot, progress, userMessage, ct).ConfigureAwait(false)).Notes);
+                var said = await Task.Run(() => PlaceSound(board.ShotLine(shot), LineLead, shot.Seconds, audio), ct).ConfigureAwait(false);
+                if (said + LineLead > shot.Seconds + 0.05)
+                    notes.Add($"Its line takes {said:0.0} s, and with the {LineLead:0.0} s before it the shot is {shot.Seconds:0.#} s: the end of the line is cut. Make the shot longer or the line shorter.");
+            }
+            else
+            {
+                var soundtrack = board.SoundtrackFile ?? throw new FilmException($"Shot {shot.Id} is lip-synced to the soundtrack, and there is none yet: " +
+                                                                                 (board.Sound.Source == FilmSound.Song ? "make the song first." : "give it a line, or give the film a soundtrack first."));
+                var (starts, _) = board.Timing();
+                var start = starts[board.Shots.IndexOf(shot)];
+                await Task.Run(() => CutSound(soundtrack, start, shot.Seconds, audio), ct).ConfigureAwait(false);
+            }
             job = FilmJob.LipSync;
             if (lastPicture is not null)
                 notes.Add($"A lip-synced shot is made from its first frame only, so it doesn't end on {last!.Label}.");
@@ -170,6 +182,113 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         File.Copy(run.Output, target, overwrite: true);
         return new FilmMade(target, workflow, run.Template, run.Took, [.. notes, .. run.Notes]);
+    }
+
+    // ---- lines -------------------------------------------------------------------------------------
+
+    /// <summary>How long into a speaking shot its line starts: a moment to turn to the camera, or to breathe.</summary>
+    public const double LineLead = 0.4;
+
+    /// <summary>
+    /// Says a shot's line in the film's voice with VoxCPM2, ComfyUI's text-to-speech model here. The
+    /// first speaking shot's line is said from the voice's description; the others clone that
+    /// line's voice, so every line sounds like the same person.
+    /// </summary>
+    public async Task<FilmMade> MakeLineAsync(Storyboard board, FilmShot shot, Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
+    {
+        if (!Storyboard.Speaks(shot))
+            throw new FilmException($"Shot {shot.Id} has no line to say.");
+        var firstSpeaker = board.Shots.First(Storyboard.Speaks);
+        string? reference = null;
+        if (firstSpeaker != shot)
+        {
+            if (!LineIsCurrent(board, firstSpeaker))
+                await MakeLineAsync(board, firstSpeaker, progress, userMessage, ct).ConfigureAwait(false);
+            reference = board.ShotLine(firstSpeaker);
+        }
+        Use();
+        var notes = new List<string>();
+        var api = await hub.ConnectAsync(null, notes, progress, ct).ConfigureAwait(false);
+        var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
+        var workflow = SpeechWorkflow(library, shot.Line.Trim(), board.Sound.Voice.Trim(), board.Sound.Seed, reference, firstSpeaker.Line.Trim(), Prefix(board, shot.Id + "-line"))
+                       ?? throw new FilmException("Saying a line needs VoxCPM2's nodes in ComfyUI (the ComfyUI-VoxCPM custom node pack), and they aren't installed: " +
+                                                  "install the pack (it downloads its model on first use), or give the film a soundtrack of its own to lip-sync to.");
+        workflow.FillAdvancedDefaults(library);
+        var stamp = LineStamp(board, shot);
+        var run = await RunWorkflowAsync(api, library, workflow, board.ShotLineWorkflow(shot), stamp, "VoxCPM2", "audio", progress, userMessage, ct).ConfigureAwait(false);
+        Directory.CreateDirectory(Path.GetDirectoryName(board.ShotLine(shot))!);
+        File.Copy(run.Output, board.ShotLine(shot), overwrite: true);
+        return new FilmMade(board.ShotLine(shot), board.ShotLineWorkflow(shot), "VoxCPM2", run.Took, [.. notes, .. run.Notes]);
+    }
+
+    /// <summary>
+    /// VoxCPM2 saying <paramref name="text"/>: from a description of the voice, or cloning the voice
+    /// of <paramref name="reference"/> (which says <paramref name="referenceText"/>). Null when its nodes aren't installed.
+    /// </summary>
+    internal static ComfyWorkflow? SpeechWorkflow(ComfyNodeLibrary library, string text, string voice, long seed, string? reference, string referenceText, string prefix)
+    {
+        var node = reference is null ? "VoxCPM2_TTS" : "VoxCPM2_Clone";
+        if (library.Find(node) is not { } def || library.Find("SaveAudio") is null)
+            return null;
+        var model = def.Input("model_name")?.Choices?.FirstOrDefault(c => c.Contains("VoxCPM2", StringComparison.OrdinalIgnoreCase)) ?? def.Input("model_name")?.Choices?.FirstOrDefault() ?? "VoxCPM2";
+        var inputs = new JsonObject
+        {
+            ["model_name"] = model,
+            ["lora_name"] = "None",
+            ["voice_description"] = voice,
+            ["text"] = text,
+            ["seed"] = seed % (1L << 31),
+        };
+        var nodes = new JsonObject
+        {
+            ["1"] = new JsonObject { ["class_type"] = node, ["inputs"] = inputs, ["_meta"] = new JsonObject { ["title"] = "Say the line" } },
+            ["2"] = new JsonObject { ["class_type"] = "SaveAudio", ["inputs"] = new JsonObject { ["audio"] = new JsonArray("1", 0), ["filename_prefix"] = prefix } },
+        };
+        if (reference is not null)
+        {
+            // The first line, and what it says, give the voice to clone.
+            nodes["3"] = new JsonObject { ["class_type"] = "LoadAudio", ["inputs"] = new JsonObject { ["audio"] = reference }, ["_meta"] = new JsonObject { ["title"] = "The voice to keep" } };
+            inputs["reference_audio"] = new JsonArray("3", 0);
+            inputs["prompt_text"] = referenceText;
+            // A description here steers the delivery, not the voice; the same one keeps the tone.
+        }
+        foreach (var input in def.Inputs.Where(i => i.Required && !inputs.ContainsKey(i.Name) && i.IsWidget && i.Extra["default"] is not null))
+            inputs[input.Name] = input.Extra["default"]!.DeepClone();
+        return ComfyWorkflow.FromApi(nodes);
+    }
+
+    public static bool LineIsCurrent(Storyboard board, FilmShot shot) =>
+        File.Exists(board.ShotLine(shot)) && MadeStamp(board.ShotLineWorkflow(shot)) is { } made && made == LineStamp(board, shot);
+
+    public static string LineStamp(Storyboard board, FilmShot shot)
+    {
+        var first = board.Shots.FirstOrDefault(Storyboard.Speaks);
+        var reference = first is null || first == shot ? "" : $"{first.Line.Trim()}|{FileStamp(board.ShotLine(first))}";
+        return Hash($"{shot.Line.Trim()}|{board.Sound.Voice.Trim()}|{board.Sound.Seed}|{reference}");
+    }
+
+    /// <summary>
+    /// A sound placed <paramref name="at"/> seconds into a WAV <paramref name="seconds"/> long, silence
+    /// around it (cut where it runs past the end); returns how long the sound is.
+    /// </summary>
+    public double PlaceSound(string sound, double at, double seconds, string target)
+    {
+        using var reader = media?.OpenAudio(sound) ?? throw new FilmException($"{sound} can't be read on this PC (ffmpeg in BlackBox's Data\\tools would).");
+        var (rate, channels) = (reader.SampleRate, Math.Max(1, reader.Channels));
+        var samples = new float[(long)Math.Round(seconds * rate) * channels];
+        var offset = (long)Math.Round(at * rate) * channels;
+        var buffer = new float[8192 * channels];
+        long read = 0;
+        int got;
+        while ((got = reader.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            for (var i = 0; i < got && offset + read + i < samples.Length; i++)
+                samples[offset + read + i] = buffer[i];
+            read += got;
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        WriteWav(target, samples, rate, channels);
+        return read / (double)channels / rate;
     }
 
     // ---- the song -----------------------------------------------------------------------------------
@@ -280,19 +399,6 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         var notes = new List<string>();
         var api = await hub.ConnectAsync(null, notes, progress, ct).ConfigureAwait(false);
         var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-
-        // The same job asked for again while it still runs (the wait for it ended when the user wrote): wait for it.
-        if (Running.TryGetValue(workflowFile, out var pending))
-        {
-            if (pending.Stamp == stamp && pending.Server == api.BaseUrl.ToString())
-                return await FinishAsync(api, pending, kind, workflowFile, notes, progress, userMessage, ct).ConfigureAwait(false);
-            // Asked for with other settings since: the old one is of no use.
-            Running.TryRemove(workflowFile, out _);
-            try { await api.CancelAsync(pending.PromptId, ct).ConfigureAwait(false); }
-            catch (ComfyApiException) { }
-        }
-
         progress?.Invoke("Getting the workflow ready…");
         var template = await FilmTemplates.PickAsync(hub, api, board.Workflows, job, ct).ConfigureAwait(false)
                        ?? throw new FilmException($"No ComfyUI template for {FilmTemplates.Describe(job)} is ready on this PC: " +
@@ -313,7 +419,30 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         if (extra is { Count: > 0 } && workflow.Set(extra, library) is { Count: > 0 } wrong)
             throw new FilmException($"These changes don't fit the template {template.Template.Name}:\n- " + string.Join("\n- ", wrong));
         workflow.FillAdvancedDefaults(library);
-        WriteStamp(workflowFile, stamp, template.Template.Name, workflow);
+        var run = await RunWorkflowAsync(api, library, workflow, workflowFile, stamp, template.Template.Name, kind, progress, userMessage, ct).ConfigureAwait(false);
+        return run with { Notes = [.. notes, .. run.Notes] };
+    }
+
+    /// <summary>
+    /// Runs a workflow ready to go, its workflow file written first (with the files it loads by
+    /// their full paths): waits for it, and finds what it made of the kind wanted.
+    /// </summary>
+    private async Task<Run> RunWorkflowAsync(ComfyApi api, ComfyNodeLibrary library, ComfyWorkflow workflow, string workflowFile, string stamp, string templateName, string kind,
+        Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var notes = new List<string>();
+        // The same job asked for again while it still runs (the wait for it ended when the user wrote): wait for it.
+        if (Running.TryGetValue(workflowFile, out var pending))
+        {
+            if (pending.Stamp == stamp && pending.Server == api.BaseUrl.ToString())
+                return await FinishAsync(api, pending, kind, workflowFile, notes, progress, userMessage, ct).ConfigureAwait(false);
+            // Asked for with other settings since: the old one is of no use.
+            Running.TryRemove(workflowFile, out _);
+            try { await api.CancelAsync(pending.PromptId, ct).ConfigureAwait(false); }
+            catch (ComfyApiException) { }
+        }
+        WriteStamp(workflowFile, stamp, templateName, workflow);
 
         // The files it loads go into ComfyUI's input folder.
         var uploaded = new HashSet<string>();
@@ -327,15 +456,15 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         }
         var problems = workflow.Validate(library, uploaded);
         if (problems.Count > 0)
-            throw new FilmException($"The workflow from {template.Template.Name} can't run:\n- " + string.Join("\n- ", problems.Take(12)));
+            throw new FilmException($"The workflow from {templateName} can't run:\n- " + string.Join("\n- ", problems.Take(12)));
         var clientId = "blackbox-" + Guid.NewGuid().ToString("N")[..12];
         var (promptId, refused) = await ComfyRunner.QueueAsync(api, workflow, clientId, ct).ConfigureAwait(false);
         if (promptId is null)
-            throw new FilmException($"ComfyUI refused the workflow from {template.Template.Name}:\n- " + string.Join("\n- ", refused));
+            throw new FilmException($"ComfyUI refused the workflow from {templateName}:\n- " + string.Join("\n- ", refused));
         RanJobs = true;
         var titles = workflow.All().ToDictionary(n => n.Id, n => ComfyWorkflow.TitleOf(n.Node) ?? ComfyWorkflow.ClassOf(n.Node));
         hub.RememberJob(promptId, clientId, titles);
-        var queued = new Pending(promptId, clientId, stamp, api.BaseUrl.ToString(), titles, template.Template.Name, DateTime.UtcNow);
+        var queued = new Pending(promptId, clientId, stamp, api.BaseUrl.ToString(), titles, templateName, DateTime.UtcNow);
         Running[workflowFile] = queued;
         var run = await FinishAsync(api, queued, kind, workflowFile, notes, progress, userMessage, ct).ConfigureAwait(false);
         return run with { Took = clock.Elapsed };
@@ -402,7 +531,9 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             sb.Append('|').Append(board.Frame(id) is { } frame ? FileStamp(board.FramePicture(frame)) : "none");
         var job = shot.LipSync ? FilmJob.LipSync : shot.First is null ? FilmJob.ShotFromText : shot.Last is null ? FilmJob.ShotFromFirst : FilmJob.Shot;
         sb.Append('|').Append(FilmTemplates.Chosen(board.Workflows, job));
-        if (shot.LipSync)
+        if (Storyboard.Speaks(shot))
+            sb.Append("|line ").Append(LineStamp(board, shot)).Append(' ').Append(LineLead);
+        else if (shot.LipSync)
         {
             var (starts, _) = board.Timing();
             sb.Append("|sound ").Append(board.SoundtrackFile is { } s ? FileStamp(s) : "").Append(' ').Append(starts[Math.Max(0, board.Shots.IndexOf(shot))]);
