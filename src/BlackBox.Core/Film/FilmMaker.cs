@@ -115,6 +115,7 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         var job = pictures.Count > 0 ? FilmJob.Edit : FilmJob.Frame;
         var run = await RunAsync(board, job, ModelOf(board, frame), inputs, frame.Set, board.FrameWorkflow(frame), FrameStamp(board, frame), "image", progress, userMessage, ct).ConfigureAwait(false);
         await Task.Run(() => SaveFrame(run.Output, target, board.Width, board.Height), ct).ConfigureAwait(false);
+        FilmTakes.Remember(board.FrameWorkflow(frame), FilmPiece.Of(frame).Settings(board));
         return new FilmMade(target, board.FrameWorkflow(frame), run.Template, run.Took, run.Notes);
     }
 
@@ -188,6 +189,7 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         var run = await RunAsync(board, job, ModelOf(board, shot), inputs, shot.Set, workflow, ShotStamp(board, shot), "video", progress, userMessage, ct).ConfigureAwait(false);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         File.Copy(run.Output, target, overwrite: true);
+        FilmTakes.Remember(workflow, FilmPiece.Of(shot).Settings(board));
         return new FilmMade(target, workflow, run.Template, run.Took, [.. notes, .. run.Notes]);
     }
 
@@ -375,6 +377,7 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             notes.Insert(0, $"Kept song {made.IndexOf(best) + 1} of {made.Count} (seed {best.Seed}); musicality of each: " +
                             string.Join(", ", made.Select(m => scores?.GetValueOrDefault(m.File) is { } s ? s.Musicality.ToString("0.0", CultureInfo.InvariantCulture) : "?")) + ".");
         }
+        FilmTakes.Remember(board.SongWorkflow, FilmPiece.Song.Settings(board));
         return new FilmMade(board.SongFile, board.SongWorkflow, best.Run.Template, clock.Elapsed, notes) { Score = scores?.GetValueOrDefault(best.File) };
     }
 

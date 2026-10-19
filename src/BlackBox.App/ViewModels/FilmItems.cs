@@ -3,122 +3,44 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using BlackBox.Core.Film;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 
 namespace BlackBox.App.ViewModels;
 
-/// <summary>A frame, shot or song made with a model the user names in words ("furry nova xl"), or the best installed one.</summary>
-public interface IMadeWith
+/// <summary>A piece the user picks on the timeline and talks to BlackBox about: a frame, a shot or the song.</summary>
+public interface IFilmPiece
 {
-    /// <summary>The user's words, or a template's name; empty for the best installed one.</summary>
-    string Model { get; set; }
+    FilmPiece Piece { get; }
 
-    /// <summary>The kind of job, which decides what can make it.</summary>
-    FilmJob Job { get; }
+    /// <summary>"Shot 3", "Marco", "Start of shot 2", "The song".</summary>
+    string Title { get; }
 
-    /// <summary>What the words were found to mean among what is installed, or why they weren't.</summary>
-    string ModelUse { get; set; }
+    /// <summary>"Not made yet", "Made · checked", "Making it: KSampler 40%".</summary>
+    string State { get; set; }
+
+    bool IsError { get; set; }
+    bool IsWorking { get; set; }
+    bool IsSelected { get; set; }
+
+    /// <summary>Says how a job is getting on, or what went wrong, from any thread.</summary>
+    void Report(string state, bool error = false);
 }
 
 /// <summary>A picture of the film: a frame a shot starts or ends on, or a reference (a character, a place) others are made from.</summary>
-public sealed partial class FrameItem(FilmViewModel film, FilmFrame frame) : ObservableObject, IMadeWith
+public sealed partial class FrameItem(FilmViewModel film, FilmFrame frame) : ObservableObject, IFilmPiece
 {
     public FilmFrame Frame { get; } = frame;
     public string Id => Frame.Id;
+    public FilmPiece Piece => FilmPiece.Of(Frame);
 
     /// <summary>"Start of shot 2", "End of shot 1, start of shot 2", or a reference's name.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Title))]
     private string _label = frame.Label;
 
-    public string Prompt
-    {
-        get => Frame.Prompt;
-        set
-        {
-            if (Frame.Prompt == value) return;
-            Frame.Prompt = value;
-            OnPropertyChanged();
-            film.Changed(this);
-        }
-    }
+    public string Title => Label;
 
-    /// <summary>What it is made with, in the user's words; only this frame is made again when it changes.</summary>
-    public string Model
-    {
-        get => Frame.Model ?? "";
-        set
-        {
-            var model = value.Trim().Length == 0 ? null : value;
-            if (Frame.Model == model) return;
-            Frame.Model = model;
-            OnPropertyChanged();
-            film.Changed(this);
-            film.ModelChanged(this);
-        }
-    }
-
-    public FilmJob Job => FilmMaker.JobOf(Frame);
-
-    [ObservableProperty]
-    private string _modelUse = "";
-
-    public string Name
-    {
-        get => Frame.Name ?? "";
-        set
-        {
-            Frame.Name = value.Trim().Length == 0 ? null : value;
-            OnPropertyChanged();
-            film.Changed(this);
-            film.Relabel();
-        }
-    }
-
-    public decimal? Seed
-    {
-        get => Frame.Seed;
-        set
-        {
-            if (value is not { } v || (long)v == Frame.Seed) return;
-            Frame.Seed = Math.Max(1, (long)v);
-            OnPropertyChanged();
-            film.Changed(this);
-        }
-    }
-
-    /// <summary>Whether the picture is one of the user's own instead of one made from the prompt.</summary>
-    public bool UsesOwnPicture
-    {
-        get => Frame.File is not null;
-        set
-        {
-            if (value == UsesOwnPicture) return;
-            Frame.File = value ? "" : null;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(MakesPicture));
-            OnPropertyChanged(nameof(OwnPicture));
-            film.Changed(this);
-        }
-    }
-
-    public bool MakesPicture
-    {
-        get => !UsesOwnPicture;
-        set => UsesOwnPicture = !value;
-    }
-
-    public string OwnPicture => Frame.File ?? "";
-
-    /// <summary>The user picked a picture of their own for this frame: it is taken at once, cut to the film's frame.</summary>
-    public void TakeOwnPicture(string path)
-    {
-        Frame.File = path;
-        OnPropertyChanged(nameof(UsesOwnPicture));
-        OnPropertyChanged(nameof(MakesPicture));
-        OnPropertyChanged(nameof(OwnPicture));
-        film.Changed(this);
-        Generate();
-    }
+    /// <summary>What it shows, as BlackBox asked for it: for a tooltip, not to edit.</summary>
+    public string Prompt => Frame.Prompt;
 
     [ObservableProperty]
     private Bitmap? _thumbnail;
@@ -126,7 +48,6 @@ public sealed partial class FrameItem(FilmViewModel film, FilmFrame frame) : Obs
     [ObservableProperty]
     private Bitmap? _picture;
 
-    /// <summary>"Not made yet", "Made", "Changed since it was made", or how a job is getting on.</summary>
     [ObservableProperty]
     private string _state = "";
 
@@ -134,243 +55,84 @@ public sealed partial class FrameItem(FilmViewModel film, FilmFrame frame) : Obs
     private bool _isError;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(MakeLabel))]
     private bool _isWorking;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(MakeLabel))]
     private bool _isMade;
 
     [ObservableProperty]
     private bool _isSelected;
 
-    public string MakeLabel => IsWorking ? "Stop" : UsesOwnPicture ? "Take it" : IsMade ? "Make again" : "Make it";
-
-    /// <summary>The other frames this one can be made from, ticked when it is.</summary>
-    public ObservableCollection<FromChoice> FromChoices { get; } = [];
-
-    public bool HasFromChoices => FromChoices.Count > 0;
-
-    public void RefreshChoices(IEnumerable<FrameItem> others)
+    /// <summary>The user picked a picture of their own for this frame: it is taken at once, cut to the film's frame.</summary>
+    public void TakeOwnPicture(string path)
     {
-        FromChoices.Clear();
-        foreach (var other in others.Where(o => o != this))
-            FromChoices.Add(new FromChoice(other, Frame.From.Contains(other.Id, StringComparer.OrdinalIgnoreCase), ticked =>
-            {
-                Frame.From.RemoveAll(f => f.Equals(other.Id, StringComparison.OrdinalIgnoreCase));
-                if (ticked)
-                    Frame.From.Add(other.Id);
-                film.Changed(this);
-                // Made from others it is an edit, which another kind of model makes.
-                film.ModelChanged(this);
-            }));
-        OnPropertyChanged(nameof(HasFromChoices));
+        Frame.File = path;
+        film.Changed(this);
     }
-
-    private CancellationTokenSource? _job;
-
-    [RelayCommand]
-    private void Generate()
-    {
-        if (IsWorking)
-        {
-            _job?.Cancel();
-            return;
-        }
-        _job = new CancellationTokenSource();
-        _ = film.RunFrameAsync(this, _job.Token);
-    }
-
-    [RelayCommand]
-    private void NewSeed() => Seed = Storyboard.NewSeed();
-
-    [RelayCommand]
-    private void Select() => film.Select(this);
-
-    [RelayCommand]
-    private void Delete() => film.DeleteReference(this);
 
     public void Report(string state, bool error = false) => Dispatcher.UIThread.Post(() => (State, IsError) = (state, error));
 }
 
-/// <summary>Another frame, ticked when a frame is made from it.</summary>
-public sealed partial class FromChoice(FrameItem frame, bool ticked, Action<bool> changed) : ObservableObject
-{
-    public FrameItem Frame { get; } = frame;
-
-    [ObservableProperty]
-    private bool _isChecked = ticked;
-
-    partial void OnIsCheckedChanged(bool value) => changed(value);
-}
-
-/// <summary>A shot: from its first frame to its last in so many seconds, with what happens and what the camera does.</summary>
-public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : ObservableObject, IMadeWith
+/// <summary>A shot: a block on the timeline from where it starts for as long as it lasts, its clip's frames inside once made.</summary>
+public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : ObservableObject, IFilmPiece
 {
     public FilmShot Shot { get; } = shot;
     public string Id => Shot.Id;
-
-    /// <summary>What its clip is made with, in the user's words; only this shot is made again when it changes.</summary>
-    public string Model
-    {
-        get => Shot.Model ?? "";
-        set
-        {
-            var model = value.Trim().Length == 0 ? null : value;
-            if (Shot.Model == model) return;
-            Shot.Model = model;
-            OnPropertyChanged();
-            film.Changed(this);
-            film.ModelChanged(this);
-        }
-    }
-
-    public FilmJob Job => FilmMaker.JobOf(Shot);
+    public FilmPiece Piece => FilmPiece.Of(Shot);
 
     [ObservableProperty]
-    private string _modelUse = "";
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Title), nameof(IsFirst), nameof(StartsAfterText))]
+    [NotifyPropertyChangedFor(nameof(Title), nameof(Number))]
     private int _index;
 
     public string Title => $"Shot {Index + 1}";
-    public bool IsFirst => Index == 0;
-    public string StartsAfterText => Index == 0 ? "" : $"the end of shot {Index}, the camera going on";
+    public string Number => (Index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>What the camera does, as a name for the block ("static close-up"), else the start of what happens.</summary>
+    public string Name => Shot.Camera.Trim() is { Length: > 0 } camera ? camera : Shot.Prompt.Trim() is { Length: > 0 } p ? p : "a new shot";
+
+    /// <summary>What happens in it, as BlackBox asked for it.</summary>
+    public string Summary => Shot.Prompt.Trim() is { Length: > 0 } p ? p : "Nothing said yet: pick it and say what happens in it.";
+
+    public string LengthText => $"{Shot.Seconds:0.#} s";
 
     [ObservableProperty]
     private FrameItem? _first;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EndsOnFrame))]
     private FrameItem? _last;
 
-    public decimal? Seconds
+    /// <summary>Whether it ends on a frame of its own: a lip-synced shot is made from its first frame alone.</summary>
+    public bool EndsOnFrame => Last is not null && !Shot.LipSync;
+
+    // ---- where it sits on the timeline ----------------------------------------------------------------
+
+    [ObservableProperty]
+    private double _x;
+
+    [ObservableProperty]
+    private double _blockWidth;
+
+    /// <summary>Its clip as a row of frames, once made.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStrip))]
+    private Bitmap? _strip;
+
+    public bool HasStrip => Strip is not null;
+
+    /// <summary>Its length changed by dragging its edge: the storyboard follows, and the timeline is laid out again.</summary>
+    public void Stretch(double seconds)
     {
-        get => (decimal)Shot.Seconds;
-        set
-        {
-            if (value is not { } v || (double)v == Shot.Seconds) return;
-            Shot.Seconds = Math.Clamp((double)v, 0.5, 60);
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(LengthText));
-            film.Changed(this);
-        }
+        seconds = Math.Clamp(Math.Round(seconds * 2) / 2, 0.5, 60);
+        if (seconds == Shot.Seconds)
+            return;
+        Shot.Seconds = seconds;
+        OnPropertyChanged(nameof(LengthText));
+        film.Relayout();
     }
 
-    public string LengthText => $"{Shot.Seconds:0.#} s";
-
-    public string Prompt
-    {
-        get => Shot.Prompt;
-        set
-        {
-            if (Shot.Prompt == value) return;
-            Shot.Prompt = value;
-            OnPropertyChanged();
-            film.Changed(this);
-        }
-    }
-
-    public string Camera
-    {
-        get => Shot.Camera;
-        set
-        {
-            if (Shot.Camera == value) return;
-            Shot.Camera = value;
-            OnPropertyChanged();
-            film.Changed(this);
-        }
-    }
-
-    public decimal? Seed
-    {
-        get => Shot.Seed;
-        set
-        {
-            if (value is not { } v || (long)v == Shot.Seed) return;
-            Shot.Seed = Math.Max(1, (long)v);
-            OnPropertyChanged();
-            film.Changed(this);
-        }
-    }
-
-    public bool LipSync
-    {
-        get => Shot.LipSync;
-        set
-        {
-            if (Shot.LipSync == value) return;
-            Shot.LipSync = value;
-            OnPropertyChanged();
-            film.Changed(this);
-        }
-    }
-
-    /// <summary>
-    /// What is said in it, lip-synced in the film's voice; a line makes the shot lip-synced, and
-    /// taking the line out takes the lip sync with it (else the shot would be lip-synced to the song).
-    /// </summary>
-    public string Line
-    {
-        get => Shot.Line;
-        set
-        {
-            if (Shot.Line == value) return;
-            var had = Shot.Line.Trim().Length > 0;
-            Shot.Line = value;
-            var has = value.Trim().Length > 0;
-            if (has != had && Shot.LipSync != has)
-            {
-                Shot.LipSync = has;
-                OnPropertyChanged(nameof(LipSync));
-            }
-            OnPropertyChanged();
-            film.Changed(this);
-        }
-    }
-
-    public static IReadOnlyList<string> Transitions { get; } = ["Cut", "Dissolve", "Fade through black"];
-
-    public int TransitionIndex
-    {
-        get => Shot.Transition switch { FilmShot.Dissolve => 1, FilmShot.Fade => 2, _ => 0 };
-        set
-        {
-            Shot.Transition = value switch { 1 => FilmShot.Dissolve, 2 => FilmShot.Fade, _ => FilmShot.Cut };
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(JoinText));
-            film.Changed(this);
-        }
-    }
-
-    /// <summary>Whether it starts on the frame the shot before ends on: the same camera going on, rather than a cut.</summary>
-    public bool Continues
-    {
-        get => film.ContinuesFromBefore(this);
-        set => film.SetContinues(this, value);
-    }
-
-    public bool StartsNew
-    {
-        get => !Continues;
-        set => Continues = !value;
-    }
-
-    public bool HasLastFrame
-    {
-        get => Shot.Last is not null;
-        set => film.SetLastFrame(this, value);
-    }
-
-    /// <summary>What lies between it and the shot before, on the storyboard.</summary>
-    public string JoinText => Index == 0 ? "" : Continues ? "goes on" : Shot.Transition switch { FilmShot.Dissolve => "dissolve", FilmShot.Fade => "fade", _ => "cut" };
-
-    public void Refresh(params string[] properties)
-    {
-        foreach (var p in properties.Length > 0 ? properties : [nameof(Continues), nameof(StartsNew), nameof(HasLastFrame), nameof(JoinText), nameof(TransitionIndex)])
-            OnPropertyChanged(p);
-    }
+    /// <summary>The drag ended: the new length is saved.</summary>
+    public void Stretched() => film.Changed(this);
 
     [ObservableProperty]
     private FilePreview? _clip;
@@ -382,173 +144,34 @@ public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : Observ
     private bool _isError;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(MakeLabel))]
     private bool _isWorking;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(MakeLabel))]
     private bool _isMade;
 
     [ObservableProperty]
     private bool _isSelected;
 
-    public string MakeLabel => IsWorking ? "Stop" : IsMade ? "Make the clip again" : "Make the clip";
-
-    private CancellationTokenSource? _job;
-
-    [RelayCommand]
-    private void MakeClip()
-    {
-        if (IsWorking)
-        {
-            _job?.Cancel();
-            return;
-        }
-        _job = new CancellationTokenSource();
-        _ = film.RunShotAsync(this, _job.Token);
-    }
-
-    [RelayCommand]
-    private void NewSeed() => Seed = Storyboard.NewSeed();
-
-    [RelayCommand]
-    private void Select() => film.Select(this);
-
-    [RelayCommand]
-    private void SelectFirst()
-    {
-        if (First is { } f) film.Select(f);
-    }
-
-    [RelayCommand]
-    private void SelectLast()
-    {
-        if (Last is { } l) film.Select(l);
-    }
-
-    [RelayCommand]
-    private void MoveLeft() => film.Move(this, -1);
-
-    [RelayCommand]
-    private void MoveRight() => film.Move(this, 1);
-
-    [RelayCommand]
-    private void Delete() => film.DeleteShot(this);
+    public void Refresh() =>
+        OnPropertyChanged(string.Empty);
 
     public void Report(string state, bool error = false) => Dispatcher.UIThread.Post(() => (State, IsError) = (state, error));
 }
 
 /// <summary>The film's soundtrack: none, a file of the user's, or a song made for it.</summary>
-public sealed partial class SoundItem(FilmViewModel film, FilmSound sound) : ObservableObject, IMadeWith
+public sealed partial class SoundItem(FilmViewModel film, FilmSound sound) : ObservableObject, IFilmPiece
 {
     public FilmSound Sound { get; } = sound;
+    public FilmPiece Piece => FilmPiece.Song;
+    public string Title => Sound.Source == FilmSound.FromFile ? "The sound file" : "The song";
 
-    /// <summary>What the song is made with, in the user's words.</summary>
-    public string Model
+    /// <summary>The user picked a sound file of their own as the soundtrack.</summary>
+    public void TakeOwnSound(string path)
     {
-        get => Sound.Model ?? "";
-        set
-        {
-            var model = value.Trim().Length == 0 ? null : value;
-            if (Sound.Model == model) return;
-            Sound.Model = model;
-            OnPropertyChanged();
-            film.Changed(this);
-            film.ModelChanged(this);
-        }
-    }
-
-    public FilmJob Job => FilmJob.Song;
-
-    [ObservableProperty]
-    private string _modelUse = "";
-
-    public bool IsNone
-    {
-        get => Sound.Source == FilmSound.None;
-        set { if (value) SetSource(FilmSound.None); }
-    }
-
-    public bool IsFile
-    {
-        get => Sound.Source == FilmSound.FromFile;
-        set { if (value) SetSource(FilmSound.FromFile); }
-    }
-
-    public bool IsSong
-    {
-        get => Sound.Source == FilmSound.Song;
-        set { if (value) SetSource(FilmSound.Song); }
-    }
-
-    private void SetSource(string source)
-    {
-        if (Sound.Source == source) return;
-        Sound.Source = source;
-        OnPropertyChanged(nameof(IsNone));
-        OnPropertyChanged(nameof(IsFile));
-        OnPropertyChanged(nameof(IsSong));
+        Sound.Source = FilmSound.FromFile;
+        Sound.File = path;
+        OnPropertyChanged(string.Empty);
         film.Changed(this);
-    }
-
-    public string File
-    {
-        get => Sound.File ?? "";
-        set
-        {
-            Sound.File = value.Trim().Length == 0 ? null : value.Trim();
-            OnPropertyChanged();
-            film.Changed(this);
-        }
-    }
-
-    public string Tags
-    {
-        get => Sound.Tags;
-        set
-        {
-            if (Sound.Tags == value) return;
-            Sound.Tags = value;
-            OnPropertyChanged();
-            film.Changed(this);
-        }
-    }
-
-    public string Lyrics
-    {
-        get => Sound.Lyrics;
-        set
-        {
-            if (Sound.Lyrics == value) return;
-            Sound.Lyrics = value;
-            OnPropertyChanged();
-            film.Changed(this);
-        }
-    }
-
-    /// <summary>Who says the shots' lines.</summary>
-    public string Voice
-    {
-        get => Sound.Voice;
-        set
-        {
-            if (Sound.Voice == value) return;
-            Sound.Voice = value;
-            OnPropertyChanged();
-            film.Changed(this);
-        }
-    }
-
-    public decimal? Seed
-    {
-        get => Sound.Seed;
-        set
-        {
-            if (value is not { } v || (long)v == Sound.Seed) return;
-            Sound.Seed = Math.Max(1, (long)v);
-            OnPropertyChanged();
-            film.Changed(this);
-        }
     }
 
     [ObservableProperty]
@@ -561,45 +184,38 @@ public sealed partial class SoundItem(FilmViewModel film, FilmSound sound) : Obs
     private bool _isError;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(MakeLabel))]
     private bool _isWorking;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(MakeLabel))]
     private bool _isMade;
 
-    public string MakeLabel => IsWorking ? "Stop" : IsMade ? "Make the song again" : "Make the song";
-
-    /// <summary>The seed changed elsewhere (the best of several songs was kept).</summary>
-    public void Refresh() => OnPropertyChanged(nameof(Seed));
-
-    private CancellationTokenSource? _job;
-
-    [RelayCommand]
-    private void MakeSong()
-    {
-        if (IsWorking)
-        {
-            _job?.Cancel();
-            return;
-        }
-        _job = new CancellationTokenSource();
-        _ = film.RunSongAsync(this, _job.Token);
-    }
-
-    [RelayCommand]
-    private void NewSeed() => Seed = Storyboard.NewSeed();
+    [ObservableProperty]
+    private bool _isSelected;
 
     public void Report(string state, bool error = false) => Dispatcher.UIThread.Post(() => (State, IsError) = (state, error));
 }
 
-/// <summary>A shot on the film's strip: where it starts in the film and how long it lasts.</summary>
-public sealed record StripShot(string Label, double Start, double Seconds, bool LipSync, bool Made);
+/// <summary>A reference's row on the timeline: its picture and name, and a bar under each run of shots made from it.</summary>
+public sealed class RefLane(FrameItem frame)
+{
+    public FrameItem Frame { get; } = frame;
+    public ObservableCollection<RefSegment> Segments { get; } = [];
+}
 
-/// <summary>What the strip under the shots shows (see <see cref="Views.FilmStrip"/>).</summary>
-/// <param name="Peaks">The soundtrack's loudness from start to end, 0 to 1; null without one.</param>
-/// <param name="SoundLabel">What to say where there is no waveform.</param>
-public sealed record FilmStripModel(IReadOnlyList<StripShot> Shots, double Length, float[]? Peaks, double SoundSeconds, string? SoundLabel);
+/// <summary>A run of shots a reference is in, on its row of the timeline.</summary>
+public sealed record RefSegment(FrameItem Frame, double X, double Width, string Text);
+
+/// <summary>A line said in a shot, where it is heard on the timeline.</summary>
+public sealed record LineItem(ShotItem Shot, double X, double Width, string Text);
+
+/// <summary>One thing said in the panel, by the user or by BlackBox.</summary>
+public sealed record TalkItem(string Text, bool Mine, bool Working);
+
+/// <summary>A take of the piece picked: one kept from before, or the one in the film.</summary>
+public sealed record TakeItem(FilmTake? Take, string Label, Bitmap? Thumbnail, bool InFilm);
+
+/// <summary>A picture the viewer shows: a frame, or what stands in for a piece not made yet.</summary>
+public sealed record PictureView(Bitmap? Picture, string Caption, string? Missing);
 
 /// <summary>A film in the list at the top of the window: its title, and where it is.</summary>
 public sealed record FilmChoice(string Folder, string Title)
@@ -607,7 +223,7 @@ public sealed record FilmChoice(string Folder, string Title)
     public override string ToString() => Title;
 }
 
-/// <summary>The joined film, shown in the details while selected.</summary>
+/// <summary>The joined film, in the viewer while picked.</summary>
 public sealed partial class JoinedFilm(string path) : ObservableObject
 {
     public string Path { get; } = path;

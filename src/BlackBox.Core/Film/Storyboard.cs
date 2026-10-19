@@ -632,4 +632,7 @@ public sealed class FilmException(string message) : Exception(message);
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault, IgnoreReadOnlyProperties = true, AllowTrailingCommas = true,
     ReadCommentHandling = JsonCommentHandling.Skip, NumberHandling = JsonNumberHandling.AllowReadingFromString)]
 [JsonSerializable(typeof(Storyboard))]
+[JsonSerializable(typeof(FilmFrame))]
+[JsonSerializable(typeof(FilmShot))]
+[JsonSerializable(typeof(FilmSound))]
 internal sealed partial class StoryboardJson : JsonSerializerContext;

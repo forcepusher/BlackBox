@@ -379,6 +379,70 @@ public static partial class FilmCheck
         return bitmap;
     }
 
+    /// <summary>
+    /// A clip as a row of its frames, one a second, each <paramref name="frameHeight"/> high: what
+    /// a shot's block on the timeline shows. Null when the clip can't be read.
+    /// </summary>
+    public static byte[]? Strip(string clip, IMediaDecoder decoder, int frameHeight)
+    {
+        using var reader = decoder.OpenVideo(clip, Math.Max(64, frameHeight * 2));
+        if (reader is null)
+            return null;
+        var seconds = Math.Max(0.5, reader.Duration.TotalSeconds);
+        var count = Math.Clamp((int)Math.Ceiling(seconds), 1, 60);
+        var frameWidth = (int)Math.Round(frameHeight * 16 / 9.0);
+        using var strip = new SKBitmap(frameWidth * count, frameHeight);
+        using (var canvas = new SKCanvas(strip))
+        {
+            canvas.Clear(new SKColor(20, 20, 20));
+            using var paint = new SKPaint { FilterQuality = SKFilterQuality.Medium };
+            for (var i = 0; i < count; i++)
+            {
+                if (FrameAt(reader, Math.Min(seconds - 0.05, i + 0.5), first: i == 0) is not { } frame)
+                    continue;
+                using var bitmap = frame.Frame;
+                var scale = Math.Max(frameWidth / (double)bitmap.Width, frameHeight / (double)bitmap.Height);
+                var (w, h) = ((float)(bitmap.Width * scale), (float)(bitmap.Height * scale));
+                var x = i * frameWidth;
+                canvas.Save();
+                canvas.ClipRect(new SKRect(x, 0, x + frameWidth, frameHeight));
+                canvas.DrawBitmap(bitmap, new SKRect(x + (frameWidth - w) / 2, (frameHeight - h) / 2, x + (frameWidth + w) / 2, (frameHeight + h) / 2), paint);
+                canvas.Restore();
+            }
+        }
+        return Jpeg(strip);
+    }
+
+    /// <summary>A frame from the middle of a clip as a JPEG no bigger than <paramref name="maxSide"/>; null when it can't be read.</summary>
+    public static byte[]? Poster(string clip, IMediaDecoder decoder, int maxSide)
+    {
+        using var reader = decoder.OpenVideo(clip, maxSide);
+        if (reader is null || FrameAt(reader, reader.Duration.TotalSeconds / 2) is not { } frame)
+            return null;
+        using var bitmap = frame.Frame;
+        return Jpeg(bitmap);
+    }
+
+    /// <summary>A picture file as a JPEG no bigger than <paramref name="maxSide"/>, to show a model; null when it can't be read.</summary>
+    public static byte[]? Picture(string file, int maxSide)
+    {
+        try
+        {
+            using var bitmap = SKBitmap.Decode(file);
+            if (bitmap is null)
+                return null;
+            var scale = Math.Min(1, maxSide / (double)Math.Max(bitmap.Width, bitmap.Height));
+            if (scale >= 1)
+                return Jpeg(bitmap);
+            using var small = bitmap.Resize(new SKImageInfo((int)(bitmap.Width * scale), (int)(bitmap.Height * scale)), SKFilterQuality.High);
+            return small is null ? null : Jpeg(small);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
     private static byte[] Jpeg(SKBitmap bitmap)
     {
         using var data = bitmap.Encode(SKEncodedImageFormat.Jpeg, 85);

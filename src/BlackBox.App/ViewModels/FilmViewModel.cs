@@ -11,12 +11,12 @@ using CommunityToolkit.Mvvm.Input;
 namespace BlackBox.App.ViewModels;
 
 /// <summary>
-/// The Filmmaking window: a film's storyboard to plan and make. Each shot goes from a first frame to
-/// a last one in so many seconds; frames are made from a prompt with a fixed seed (or taken from the
-/// user's own pictures), from earlier frames to keep people and places the same; shots, the song and
-/// the joined film are made here or by the agent, which also checks each shot and fixes what is
-/// wrong ("Make the film"). Everything is kept in the film folder's storyboard.json as it is typed,
-/// and what the agent changes there shows here.
+/// The Filmmaking window: a film on one timeline (its references, its shots, its sound) under one
+/// horizontal scroll, a viewer, and a panel to tell BlackBox in plain words what to make or change
+/// in the piece picked, or in the whole film. BlackBox writes the prompts and picks the models
+/// (<see cref="FilmDirector"/>); each piece is made on its own, looked at, and kept as a take when
+/// it is made again. Everything is kept in the film folder's storyboard.json and talk.json, and what
+/// the agent changes there shows here.
 /// </summary>
 public sealed partial class FilmViewModel : ObservableObject, IDisposable
 {
@@ -25,6 +25,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     private readonly FilmMaker _maker;
     private readonly ComfyHub _hub;
     private Storyboard _board = new();
+    private FilmTalk _talk = FilmTalk.Load("");
     private readonly Dictionary<string, FrameItem> _frames = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer _saveTimer;
     private readonly DispatcherTimer _refreshTimer;
@@ -35,15 +36,14 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     /// <summary>Where films go, a folder each: BlackBox's Data\films, next to the exe like the rest of its data.</summary>
     private readonly string _filmsRoot;
 
-    /// <summary>Asks the chat model a question of its own (what the user's words for a model mean), or null without one.</summary>
-    private readonly Func<string, CancellationToken, Task<string?>>? _ask;
+    /// <summary>Asks the chat model: what the user's words mean for a piece, and how a piece came out.</summary>
+    private readonly FilmAsk? _ask;
 
     /// <param name="filmsRoot">Where films go (BlackBox's Data\films).</param>
     /// <param name="toolsDir">BlackBox's Data\tools, where the song judge is set up.</param>
     /// <param name="folder">The film to open; the latest changed one when null.</param>
-    /// <param name="ask">Asks the chat model what words for a model mean when they name nothing installed outright.</param>
-    public FilmViewModel(PreviewServices previews, ComfyHub hub, Action<string> sendToChat, string filmsRoot, string toolsDir, string? folder,
-        Func<string, CancellationToken, Task<string?>>? ask = null)
+    /// <param name="ask">Asks the chat model; without it the panel can only make what is there.</param>
+    public FilmViewModel(PreviewServices previews, ComfyHub hub, Action<string> sendToChat, string filmsRoot, string toolsDir, string? folder, FilmAsk? ask = null)
     {
         _filmsRoot = filmsRoot;
         _previews = previews;
@@ -51,7 +51,6 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         _ask = ask;
         _maker = new FilmMaker(hub, previews.Decoder) { Judge = new SongJudge(Path.Combine(toolsDir, "songeval")) };
         _hub = hub;
-        _modelTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(900), DispatcherPriority.Background, (_, _) => OnModelTyped());
         _saveTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(400), DispatcherPriority.Background, (_, _) => SaveNow());
         _refreshTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) =>
         {
@@ -113,15 +112,17 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             Status = $"That film can't be opened: {ex.Message}";
             return;
         }
+        _talk = FilmTalk.Load(_board.Folder);
         Watch();
         Rebuild();
         RefreshFilms();
         OnPropertyChanged(nameof(Folder));
+        Select(null);
     }
 
     /// <summary>
-    /// A new film in BlackBox's Data\films, with one shot of two frames to start from. Its folder is
-    /// made with the first change: opening the window to look leaves nothing behind.
+    /// A new film in BlackBox's Data\films. Its folder is made with the first change: opening the
+    /// window to look leaves nothing behind. The user says what it is to be in the panel.
     /// </summary>
     [RelayCommand]
     private void NewFilm()
@@ -132,12 +133,14 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         for (var n = 2; Directory.Exists(Path.Combine(root, name)); n++)
             name = $"New film {n}";
         _board = Storyboard.New(Path.Combine(root, name), name);
+        _talk = FilmTalk.Load("");
         _ownWrite = default;
         _watcher?.Dispose();
         _watcher = null;
         Rebuild();
         RefreshFilms();
         OnPropertyChanged(nameof(Folder));
+        Select(null);
     }
 
     [RelayCommand]
@@ -223,35 +226,161 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         }
     }
 
-    // ---- the strip: the shots against the soundtrack --------------------------------------------------
+    /// <summary>How long the film is, and in how many shots.</summary>
+    public string LengthText
+    {
+        get
+        {
+            var (_, length) = _board.Timing();
+            var made = _board.Shots.Count(s => FilmMaker.IsCurrent(_board, s));
+            return $"{_board.Width} × {_board.Height} · {_board.Fps} fps · {length:0.#} s in {_board.Shots.Count} shot{(_board.Shots.Count == 1 ? "" : "s")}" +
+                   (_board.Shots.Count == 0 ? "" : made == _board.Shots.Count ? " · all made" : $" · {made} made");
+        }
+    }
+
+    // ---- the timeline ------------------------------------------------------------------------------------
+
+    /// <summary>Where the film's time starts on each row, in pixels.</summary>
+    public const double Lead = 12;
+
+    /// <summary>How many pixels a second takes on the timeline: the zoom.</summary>
+    [ObservableProperty]
+    private double _pps = 64;
+
+    partial void OnPpsChanged(double value) => Relayout();
+
+    public ObservableCollection<ShotItem> Shots { get; } = [];
+    public ObservableCollection<RefLane> RefLanes { get; } = [];
+    public ObservableCollection<LineItem> Lines { get; } = [];
+
+    /// <summary>How wide the rows are: the film, the song where it runs past it, and room to make the last shot longer.</summary>
+    [ObservableProperty]
+    private double _timelineWidth = 800;
 
     [ObservableProperty]
-    private FilmStripModel? _strip;
+    private double _length;
 
-    /// <summary>The soundtrack's waveform, and the file and time it was read from.</summary>
-    private (string? File, DateTime Stamp, float[]? Peaks, double Seconds) _sound;
+    /// <summary>Where the lines are heard, for the song's row to show it quieter there.</summary>
+    [ObservableProperty]
+    private IReadOnlyList<(double X, double Width)> _ducks = [];
 
-    private bool _readingSound;
+    public double PlayheadX => Lead + Math.Max(0, PlayPosition) * Pps;
 
-    /// <summary>Lays the shots out along the film's time, the soundtrack under them (read in the background when it changed).</summary>
-    private void RefreshStrip()
+    /// <summary>Lays the timeline out again: each shot where it starts, each reference's runs, each line, the width.</summary>
+    public void Relayout()
     {
         var (starts, length) = _board.Timing();
-        var shots = _board.Shots.Select((s, i) => new StripShot($"Shot {i + 1}", starts[i], s.Seconds, s.LipSync, File.Exists(_board.ShotVideo(s)))).ToList();
+        Length = length;
+        for (var i = 0; i < Shots.Count && i < starts.Count; i++)
+        {
+            Shots[i].X = Lead + starts[i] * Pps;
+            Shots[i].BlockWidth = Math.Max(8, Shots[i].Shot.Seconds * Pps - 2);
+        }
+        foreach (var lane in RefLanes)
+        {
+            lane.Segments.Clear();
+            var runs = new List<(int From, int To)>();
+            for (var i = 0; i < _board.Shots.Count; i++)
+                if (Uses(_board.Shots[i], lane.Frame.Id))
+                {
+                    if (runs.Count > 0 && runs[^1].To == i - 1)
+                        runs[^1] = (runs[^1].From, i);
+                    else
+                        runs.Add((i, i));
+                }
+            foreach (var (from, to) in runs)
+            {
+                var x = Lead + starts[from] * Pps;
+                var end = Lead + (starts[to] + _board.Shots[to].Seconds) * Pps;
+                lane.Segments.Add(new RefSegment(lane.Frame, x, Math.Max(8, end - x - 2), $"{lane.Frame.Label} · " + (from == to ? $"shot {from + 1}" : $"shots {from + 1} to {to + 1}")));
+            }
+        }
+        Lines.Clear();
+        var ducks = new List<(double, double)>();
+        for (var i = 0; i < Shots.Count && i < starts.Count; i++)
+        {
+            var shot = Shots[i].Shot;
+            if (!Storyboard.Speaks(shot))
+                continue;
+            var seconds = Math.Min(LineSeconds(shot), Math.Max(0.3, shot.Seconds - FilmMaker.LineLead));
+            var x = Lead + (starts[i] + FilmMaker.LineLead) * Pps;
+            Lines.Add(new LineItem(Shots[i], x, Math.Max(12, seconds * Pps), $"“{shot.Line.Trim()}”"));
+            ducks.Add((x, seconds * Pps));
+        }
+        Ducks = ducks;
+        TimelineWidth = Lead + Math.Max(length, Math.Min(_sound.Seconds, length + 10)) * Pps + 240;
+        OnPropertyChanged(nameof(PlayheadX));
+        OnPropertyChanged(nameof(LengthText));
+    }
+
+    /// <summary>Whether a shot shows a reference: a frame it is made from is the reference, or is made from it.</summary>
+    private bool Uses(FilmShot shot, string reference)
+    {
+        foreach (var id in new[] { shot.First, shot.LipSync ? null : shot.Last }.OfType<string>())
+            if (MadeFrom(id, reference, 0))
+                return true;
+        return false;
+
+        bool MadeFrom(string id, string target, int depth) =>
+            id.Equals(target, StringComparison.OrdinalIgnoreCase) ||
+            depth < 6 && _board.Frame(id) is { } f && f.From.Any(from => MadeFrom(from, target, depth + 1));
+    }
+
+    /// <summary>How long a line takes: as said, when it is; else about 2.5 words a second.</summary>
+    private double LineSeconds(FilmShot shot)
+    {
+        var file = _board.ShotLine(shot);
+        if (File.Exists(file))
+        {
+            var stamp = File.GetLastWriteTimeUtc(file);
+            if (_lineLengths.TryGetValue(file, out var known) && known.Stamp == stamp)
+                return known.Seconds;
+            if (_previews.Decoder?.Probe(file) is { Duration.TotalSeconds: > 0 } info)
+            {
+                _lineLengths[file] = (stamp, info.Duration.TotalSeconds);
+                return info.Duration.TotalSeconds;
+            }
+        }
+        return Math.Max(0.8, shot.Line.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length / 2.5);
+    }
+
+    private readonly Dictionary<string, (DateTime Stamp, double Seconds)> _lineLengths = new(StringComparer.OrdinalIgnoreCase);
+
+    [RelayCommand]
+    private void ZoomIn() => Pps = Math.Min(240, Pps * 1.25);
+
+    [RelayCommand]
+    private void ZoomOut() => Pps = Math.Max(12, Pps / 1.25);
+
+    // ---- the song under the shots ---------------------------------------------------------------------------
+
+    /// <summary>The soundtrack's waveform (0 to 1 from start to end), and how long it is.</summary>
+    [ObservableProperty]
+    private float[]? _peaks;
+
+    /// <summary>What the song's row says.</summary>
+    [ObservableProperty]
+    private string _soundLabel = "";
+
+    private (string? File, DateTime Stamp, float[]? Peaks, double Seconds) _sound;
+    private bool _readingSound;
+
+    private void RefreshSound()
+    {
         var file = _board.SoundtrackFile;
         var stamp = file is not null && File.Exists(file) ? File.GetLastWriteTimeUtc(file) : DateTime.MinValue;
         if (stamp == DateTime.MinValue)
             _sound = (null, DateTime.MinValue, null, 0);
         else if (!string.Equals(_sound.File, file, StringComparison.OrdinalIgnoreCase) || _sound.Stamp != stamp)
             ReadSound(file!, stamp);
-        var unreadable = stamp != DateTime.MinValue && string.Equals(_sound.File, file, StringComparison.OrdinalIgnoreCase) && _sound.Peaks is null && !_readingSound;
-        var label = unreadable ? "The soundtrack can't be read on this PC." : _board.Sound.Source switch
+        Peaks = _sound.Peaks;
+        SoundLabel = _board.Sound.Source switch
         {
-            FilmSound.Song => File.Exists(_board.SongFile) ? "Reading the song…" : "The song isn't made yet.",
-            FilmSound.FromFile => file is null ? "No sound file picked yet." : stamp == DateTime.MinValue ? "The sound file isn't there." : "Reading the sound file…",
-            _ => null,
+            FilmSound.Song => (File.Exists(_board.SongFile) ? "Song" : "Song · not made yet") + (_board.Sound.Tags.Trim() is { Length: > 0 } tags ? $" · {tags}" : "") +
+                              (Ducks.Count > 0 ? " · quieter under the lines" : ""),
+            FilmSound.FromFile => file is null ? "A sound file of yours · none picked yet" : $"Your sound file · {Path.GetFileName(file)}",
+            _ => "No soundtrack: each shot keeps its own sound. Pick this row and say what music you want.",
         };
-        Strip = new FilmStripModel(shots, length, _sound.Peaks, _sound.Seconds, label);
     }
 
     private void ReadSound(string file, DateTime stamp)
@@ -270,7 +399,8 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
                 {
                     var (mono, rate) = MediaPreview.ReadMono(reader, TimeSpan.FromMinutes(20));
                     seconds = mono.Length / (double)Math.Max(1, rate);
-                    peaks = new float[Math.Min(800, Math.Max(1, mono.Length))];
+                    // A peak each tenth of a second, so the row is drawn the same at any zoom.
+                    peaks = new float[Math.Max(1, (int)Math.Ceiling(seconds * 10))];
                     var per = Math.Max(1, mono.Length / peaks.Length);
                     for (var i = 0; i < peaks.Length; i++)
                     {
@@ -290,23 +420,31 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             {
                 _readingSound = false;
                 _sound = (file, stamp, peaks, seconds);
-                RefreshStrip();
+                SoundSeconds = seconds;
+                RefreshSound();
+                Relayout();
             });
         });
     }
 
-    // ---- playing the storyboard: the soundtrack with each shot's frame ---------------------------------------
-
-    /// <summary>Where the preview is, in seconds from the film's start; -1 before it plays.</summary>
     [ObservableProperty]
-    private double _playPosition = -1;
+    private double _soundSeconds;
 
-    /// <summary>The storyboard frame under the playhead: a shot's first frame, its last for the second half.</summary>
+    // ---- playing the storyboard: the soundtrack with each shot's frames ---------------------------------------
+
+    /// <summary>Where the playhead is, in seconds from the film's start.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PlayheadX), nameof(PlayTime))]
+    private double _playPosition;
+
+    public string PlayTime => $"{TimeSpan.FromSeconds(Math.Max(0, PlayPosition)):m\\:ss\\.f}";
+
+    /// <summary>The storyboard frame under the playhead: a shot's clip frame or first frame, its last for the second half.</summary>
     [ObservableProperty]
     private Bitmap? _playFrame;
 
     [ObservableProperty]
-    private string _playLabel = "Play the soundtrack with the storyboard's frames";
+    private string _playLabel = "";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PlayIcon))]
@@ -335,15 +473,15 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         StartPlaying(PlayPosition >= 0 && PlayPosition < length - 0.05 ? PlayPosition : 0);
     }
 
-    /// <summary>The strip was clicked: the playhead goes there (and plays on from there if it was playing).</summary>
+    /// <summary>The timeline was clicked: the playhead goes there (and plays on from there if it was playing).</summary>
     public void SeekStrip(double seconds)
     {
         var playing = IsPlaying;
         StopPlaying();
-        PlayPosition = seconds;
-        ShowFrameAt(seconds);
+        PlayPosition = Math.Clamp(seconds, 0, Math.Max(0, Length));
+        ShowFrameAt(PlayPosition);
         if (playing)
-            StartPlaying(seconds);
+            StartPlaying(PlayPosition);
     }
 
     private void StartPlaying(double from)
@@ -412,64 +550,20 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             return;
         }
         var shot = Shots[at];
-        var late = seconds - starts[at] >= shot.Shot.Seconds / 2 && shot.Last is not null;
+        var late = seconds - starts[at] >= shot.Shot.Seconds / 2 && shot.Last is not null && !shot.Shot.LipSync;
         var frame = late ? shot.Last : shot.First ?? shot.Last;
         PlayFrame = frame?.Thumbnail;
         PlayLabel = $"{shot.Title}, {(late ? "end" : "start")} · {seconds:0.0} s";
     }
 
-    /// <summary>How long the film is, and in how many shots.</summary>
-    public string LengthText
-    {
-        get
-        {
-            var (_, length) = _board.Timing();
-            return $"{length:0.#} s in {_board.Shots.Count} shot{(_board.Shots.Count == 1 ? "" : "s")}";
-        }
-    }
-
-    // ---- the storyboard -----------------------------------------------------------------------------------
-
-    public ObservableCollection<ShotItem> Shots { get; } = [];
-
-    /// <summary>Characters, places and things other frames are made from, and frames no shot uses.</summary>
-    public ObservableCollection<FrameItem> References { get; } = [];
+    // ---- the pieces --------------------------------------------------------------------------------------------
 
     public SoundItem Sound { get; private set; } = null!;
 
-    /// <summary>What the details panel shows: a frame, a shot, the soundtrack or the joined film.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SelectedFrame), nameof(SelectedShot), nameof(SelectedFilmFile), nameof(NothingSelected))]
-    private object? _selected;
-
-    public FrameItem? SelectedFrame => Selected as FrameItem;
-    public ShotItem? SelectedShot => Selected as ShotItem;
-    public JoinedFilm? SelectedFilmFile => Selected as JoinedFilm;
-    public bool NothingSelected => Selected is null;
-
-    public void Select(object? item)
-    {
-        if (Selected is FrameItem oldFrame) oldFrame.IsSelected = false;
-        if (Selected is ShotItem oldShot) oldShot.IsSelected = false;
-        if (item is FrameItem frame)
-        {
-            frame.IsSelected = true;
-            frame.RefreshChoices(AllFrames().Where(f => f != frame));
-            LoadPicture(frame);
-        }
-        if (item is ShotItem shot)
-            shot.IsSelected = true;
-        Selected = item;
-    }
-
-    /// <summary>The frames in the order the storyboard shows them: references, then each shot's.</summary>
-    private IEnumerable<FrameItem> AllFrames() =>
-        References.Concat(Shots.SelectMany(s => new[] { s.First, s.Last })).OfType<FrameItem>().Distinct();
-
-    /// <summary>Builds the items from the storyboard, keeping what was selected.</summary>
+    /// <summary>Builds the items from the storyboard, keeping what was picked.</summary>
     private void Rebuild()
     {
-        var selected = Selected switch { FrameItem f => "f:" + f.Id, ShotItem s => "s:" + s.Id, _ => null };
+        var picked = Selected switch { FrameItem f => "f:" + f.Id, ShotItem s => "s:" + s.Id, SoundItem => "song", _ => null };
         _loading = true;
         foreach (var shot in Shots)
             shot.Clip?.Dispose();
@@ -483,8 +577,9 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         }
         _frames.Clear();
         _thumbStamps.Clear();
+        _clipStamps.Clear();
         Shots.Clear();
-        References.Clear();
+        RefLanes.Clear();
         foreach (var frame in _board.Frames)
             _frames[frame.Id] = new FrameItem(this, frame);
         for (var i = 0; i < _board.Shots.Count; i++)
@@ -497,122 +592,26 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
                 Last = shot.Last is { } last ? _frames.GetValueOrDefault(last) : null,
             });
         }
-        var inShots = _board.Shots.SelectMany(s => new[] { s.First, s.Last }).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var frame in _board.Frames.Where(f => f.Reference || !inShots.Contains(f.Id)))
-            References.Add(_frames[frame.Id]);
+        // A row for each reference (a frame left over in no shot isn't shown: nothing uses it).
+        foreach (var frame in _board.Frames.Where(f => f.Reference))
+            RefLanes.Add(new RefLane(_frames[frame.Id]));
         Sound = new SoundItem(this, _board.Sound);
         _loading = false;
         Relabel();
+        Relayout();
         RefreshStates();
-        foreach (var p in new[] { nameof(Title), nameof(FrameWidth), nameof(FrameHeight), nameof(Fps),
-                                  nameof(SoundVolume), nameof(ShotVolume), nameof(Sound), nameof(LengthText), nameof(HasFilm) })
+        foreach (var p in new[] { nameof(Title), nameof(FrameWidth), nameof(FrameHeight), nameof(Fps), nameof(SoundVolume), nameof(ShotVolume), nameof(Sound), nameof(LengthText), nameof(HasFilm) })
             OnPropertyChanged(p);
-        Select(selected switch
+        Select(picked switch
         {
             ['f', ':', .. var id] => _frames.GetValueOrDefault(id),
             ['s', ':', .. var id] => Shots.FirstOrDefault(s => s.Id == id),
-            _ => Shots.FirstOrDefault(),
+            "song" => Sound,
+            _ => null,
         });
     }
 
-    // ---- what each part is made with, in the user's words ------------------------------------------------
-
-    private readonly DispatcherTimer _modelTimer;
-    private IMadeWith? _modelTyped;
-
-    /// <summary>The words for what a frame, shot or song is made with changed: they are looked up once the typing stops.</summary>
-    public void ModelChanged(IMadeWith item)
-    {
-        if (_loading)
-            return;
-        if (item.Model.Trim().Length == 0)
-        {
-            item.ModelUse = "";
-            return;
-        }
-        if (_modelTyped is { } other && other != item)
-            _ = ShowModelAsync(other);
-        _modelTyped = item;
-        _modelTimer.Stop();
-        _modelTimer.Start();
-    }
-
-    private void OnModelTyped()
-    {
-        _modelTimer.Stop();
-        if (Interlocked.Exchange(ref _modelTyped, null) is { } item)
-            _ = ShowModelAsync(item);
-    }
-
-    /// <summary>
-    /// Finds what the words name among everything ComfyUI has installed for that kind of job (it is
-    /// started if it isn't running), and says it under them. Words that name nothing outright are
-    /// read by the chat model, and replaced by the name of what it picked, so they mean the same the
-    /// next time.
-    /// </summary>
-    public async Task ShowModelAsync(IMadeWith item)
-    {
-        var words = item.Model.Trim();
-        var job = item.Job;
-        if (words.Length == 0)
-            return;
-        item.ModelUse = "Looking among what ComfyUI has installed…";
-        _maker.Use();
-        try
-        {
-            var options = await Task.Run(async () =>
-            {
-                var api = await _hub.ConnectAsync(null, [], s => Dispatcher.UIThread.Post(() => item.ModelUse = s), CancellationToken.None);
-                return await FilmTemplates.OptionsAsync(_hub, api, job, CancellationToken.None);
-            });
-            // Typed on since: the newer words are looked up instead.
-            bool Stale() => item.Model.Trim() != words;
-            if (Stale())
-                return;
-            if (FilmTemplates.Match(options, words) is { } match)
-            {
-                item.ModelUse = $"Made with {match.Label}.";
-                return;
-            }
-            if (words.StartsWith(FilmTemplates.CheckpointPrefix, StringComparison.OrdinalIgnoreCase) || words.Contains('/'))
-            {
-                item.ModelUse = $"Made with the template {words}.";
-                return;
-            }
-            if (_ask is not null && options.Count > 0)
-            {
-                item.ModelUse = "Asking the chat model what you mean…";
-                var meant = await FilmTemplates.InterpretAsync(options, words, job, _ask, CancellationToken.None);
-                if (Stale())
-                    return;
-                if (meant is not null)
-                {
-                    // The title when only it has it, so the box reads well; else the name, which is unique.
-                    item.Model = options.Count(o => o.Title.Equals(meant.Title, StringComparison.OrdinalIgnoreCase)) == 1 ? meant.Title : meant.Name;
-                    _modelTimer.Stop();
-                    _modelTyped = null;
-                    item.ModelUse = $"Read \"{words}\" as {meant.Label}.";
-                    return;
-                }
-            }
-            item.ModelUse = options.Count == 0
-                ? $"Nothing installed makes {FilmTemplates.Describe(job)}."
-                : $"Nothing installed matches. Installed for this: {string.Join("; ", options.Take(15).Select(o => o.Title))}" + (options.Count > 15 ? $" and {options.Count - 15} more." : ".");
-        }
-        catch (Exception ex) when (ex is ComfyApiException or IOException or FilmException or ComfyWorkflowException)
-        {
-            item.ModelUse = ex.Message;
-        }
-    }
-
-    /// <summary>
-    /// What a new frame is made with: what the frames of the shot it comes after are made with, so a
-    /// new frame looks like the ones before it until it is changed.
-    /// </summary>
-    private string? FrameModelNear(FilmShot? shot) =>
-        _board.Frame(shot?.Last)?.Model ?? _board.Frame(shot?.First)?.Model ?? _board.Frames.LastOrDefault(f => f.Model is not null && !f.Reference)?.Model;
-
-    /// <summary>Names each frame by where it is used: "Start of shot 2", "End of shot 1, start of shot 2".</summary>
+    /// <summary>Names each frame by where it is used: "Start of shot 2", "End of shot 1, start of shot 2", or its name.</summary>
     public void Relabel()
     {
         foreach (var (id, item) in _frames)
@@ -623,11 +622,788 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
                 if (string.Equals(_board.Shots[i].First, id, StringComparison.OrdinalIgnoreCase)) uses.Add($"start of shot {i + 1}");
                 if (string.Equals(_board.Shots[i].Last, id, StringComparison.OrdinalIgnoreCase)) uses.Add($"end of shot {i + 1}");
             }
-            var where = string.Join(", ", uses.OrderBy(u => u.StartsWith("end", StringComparison.Ordinal) ? 0 : 1));
-            item.Label = item.Frame.Name is { Length: > 0 } name ? name + (where.Length > 0 ? $" ({where})" : "")
-                : where.Length > 0 ? char.ToUpperInvariant(where[0]) + where[1..] : "A picture no shot uses";
+            item.Label = item.Frame.Name is { Length: > 0 } name ? name : uses.Count > 0 ? Capital(string.Join(", ", uses)) : item.Frame.Reference ? $"Reference {id}" : $"Frame {id}";
         }
     }
+
+    /// <summary>A new shot after the last one, going on from where it ends; the user then says what happens in it.</summary>
+    [RelayCommand]
+    private void AddShot()
+    {
+        SaveNow();
+        var before = _board.Shots.LastOrDefault();
+        // New frames and the shot are made with what the ones before are: a copy, so changing one changes only it.
+        var model = FrameModelNear(before);
+        string first;
+        if (before?.Last is { } end)
+            first = end;
+        else
+        {
+            first = _board.NewId("f");
+            _board.Frames.Add(new FilmFrame { Id = first, Seed = Storyboard.NewSeed(), Model = model, From = FromNear(before) });
+        }
+        var last = _board.NewId("f");
+        _board.Frames.Add(new FilmFrame { Id = last, Seed = Storyboard.NewSeed(), Model = model, From = FromNear(before) });
+        var shot = new FilmShot { Id = _board.NewId("s"), First = first, Last = last, Seconds = 5, Seed = Storyboard.NewSeed(), Model = before?.Model };
+        _board.Shots.Add(shot);
+        SaveNow(force: true);
+        Rebuild();
+        Select(Shots.FirstOrDefault(s => s.Id == shot.Id));
+    }
+
+    /// <summary>A new reference (a character, a place, a thing); the user then says what it is.</summary>
+    [RelayCommand]
+    private void AddReference()
+    {
+        SaveNow();
+        var frame = new FilmFrame
+        {
+            Id = _board.NewId("f"), Reference = true, Name = $"Reference {RefLanes.Count(r => r.Frame.Frame.Reference) + 1}", Seed = Storyboard.NewSeed(),
+            Model = _board.Frames.LastOrDefault(f => f.Reference && f.Model is not null)?.Model ?? FrameModelNear(null),
+        };
+        _board.Frames.Add(frame);
+        SaveNow(force: true);
+        Rebuild();
+        Select(_frames.GetValueOrDefault(frame.Id));
+    }
+
+    /// <summary>What a new frame is made with: what the frames of the shot it comes after are made with.</summary>
+    private string? FrameModelNear(FilmShot? shot) =>
+        _board.Frame(shot?.Last)?.Model ?? _board.Frame(shot?.First)?.Model ?? _board.Frames.LastOrDefault(f => f.Model is not null && !f.Reference)?.Model;
+
+    /// <summary>What a new frame is made from: what the frames of the shot it comes after are made from, so the same people stay the same.</summary>
+    private List<string> FromNear(FilmShot? shot) =>
+        [.. (_board.Frame(shot?.Last) ?? _board.Frame(shot?.First))?.From ?? []];
+
+    private bool Used(string id) =>
+        _board.Shots.Any(s => string.Equals(s.First, id, StringComparison.OrdinalIgnoreCase) || string.Equals(s.Last, id, StringComparison.OrdinalIgnoreCase)) ||
+        _board.Frames.Any(f => f.From.Contains(id, StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>Takes the picked shot or reference out of the film (a shot's frames go with it unless something else uses them).</summary>
+    [RelayCommand]
+    private void DeletePicked()
+    {
+        SaveNow();
+        switch (Selected)
+        {
+            case ShotItem item:
+                var at = _board.Shots.IndexOf(item.Shot);
+                _board.Shots.Remove(item.Shot);
+                foreach (var id in new[] { item.Shot.First, item.Shot.Last }.OfType<string>())
+                    if (!Used(id))
+                        _board.Frames.RemoveAll(f => f.Id.Equals(id, StringComparison.OrdinalIgnoreCase) && !f.Reference);
+                SaveNow(force: true);
+                Rebuild();
+                Select(Shots.ElementAtOrDefault(Math.Min(at, Shots.Count - 1)));
+                break;
+            case FrameItem { Frame.Reference: true } reference:
+                _board.Frames.Remove(reference.Frame);
+                foreach (var f in _board.Frames)
+                    f.From.RemoveAll(id => id.Equals(reference.Id, StringComparison.OrdinalIgnoreCase));
+                SaveNow(force: true);
+                Rebuild();
+                Select(null);
+                break;
+        }
+    }
+
+    /// <summary>Moves the picked shot one place earlier or later.</summary>
+    public void Move(int by)
+    {
+        if (Selected is not ShotItem item)
+            return;
+        var at = _board.Shots.IndexOf(item.Shot);
+        var to = at + by;
+        if (at < 0 || to < 0 || to >= _board.Shots.Count)
+            return;
+        SaveNow();
+        _board.Shots.RemoveAt(at);
+        _board.Shots.Insert(to, item.Shot);
+        SaveNow(force: true);
+        Rebuild();
+        Select(Shots.FirstOrDefault(s => s.Id == item.Id));
+    }
+
+    [RelayCommand]
+    private void MoveEarlier() => Move(-1);
+
+    [RelayCommand]
+    private void MoveLater() => Move(1);
+
+    // ---- what is picked, and the panel to talk about it ---------------------------------------------------------
+
+    /// <summary>What is picked: a frame, a shot, the song, the joined film, or nothing (the whole film).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFilmPicked), nameof(IsShotPicked), nameof(IsFramePicked), nameof(IsSongPicked), nameof(PickedShot), nameof(PickedFrame),
+        nameof(PanelTitle), nameof(PanelSubtitle), nameof(AskLabel), nameof(AskHint), nameof(CanDelete), nameof(Viewer), nameof(DetailsVisible))]
+    private object? _selected;
+
+    public bool IsFilmPicked => Selected is null or JoinedFilm;
+    public bool IsShotPicked => Selected is ShotItem;
+    public bool IsFramePicked => Selected is FrameItem;
+    public bool IsSongPicked => Selected is SoundItem;
+    public ShotItem? PickedShot => Selected as ShotItem;
+    public FrameItem? PickedFrame => Selected as FrameItem;
+    public bool CanDelete => Selected is ShotItem or FrameItem { Frame.Reference: true };
+
+    public string PanelTitle => Selected is IFilmPiece piece ? piece.Title : "Whole film";
+
+    public string PanelSubtitle => Selected switch
+    {
+        ShotItem s => $"{Cut(s.Name, 48)} · {s.LengthText}" + (s.Index == 0 ? "" : s.Shot.First is not null && s.Shot.First == _board.Shots[s.Index - 1].Last ? $" · goes on from shot {s.Index}" : $" · {s.Shot.Transition} from shot {s.Index}"),
+        FrameItem { Frame.Reference: true } f => "a reference · " + (_board.Shots.Where(s => Uses(s, f.Id)).Select(s => $"{_board.Shots.IndexOf(s) + 1}").ToList() is { Count: > 0 } used ? $"in shots {string.Join(", ", used)}" : "in no shot yet"),
+        FrameItem f => f.Frame.From.Count > 0 ? $"made from {string.Join(", ", f.Frame.From.Select(id => _frames.GetValueOrDefault(id)?.Label ?? id))}" : "a picture",
+        SoundItem => _board.Sound.Source == FilmSound.Song ? "made a minute long; the film uses its start" : "",
+        _ => "nothing picked: what you say is about the film",
+    };
+
+    public string AskLabel => Selected is IFilmPiece piece ? $"Tell BlackBox what to change in {Lower(piece.Title)}" : "Tell BlackBox about the whole film";
+
+    public string AskHint => Selected switch
+    {
+        ShotItem => "Slower, and he should smile at the end",
+        FrameItem { Frame.Reference: true } => "Make him a little older, with grey in his stubble",
+        FrameItem => "Closer on her face, and the street wet with rain",
+        SoundItem => "Softer, just piano, and a little faster",
+        _ => _board.Shots.All(s => s.Prompt.Trim().Length == 0)
+            ? "A 20 second clip: a fox chases the moon's reflection across a frozen lake, gentle piano"
+            : "Make it 30 seconds, and add a waiter who looks shocked",
+    };
+
+    /// <summary>Picks a piece (null: the whole film): the viewer shows it and the panel what was said about it.</summary>
+    public void Select(object? item)
+    {
+        if (Selected is IFilmPiece old)
+            old.IsSelected = false;
+        if (item is IFilmPiece piece)
+            piece.IsSelected = true;
+        if (item is FrameItem frame)
+            LoadPicture(frame);
+        if (item is ShotItem shot && shot.First is { } first)
+            LoadPicture(first);
+        Selected = item;
+        RefreshTalk();
+        RefreshTakes();
+        RefreshDetails();
+    }
+
+    [RelayCommand]
+    private void PickFilm() => Select(null);
+
+    [RelayCommand]
+    private void PickSong() => Select(Sound);
+
+    /// <summary>What the viewer shows: the piece picked (a frame's picture, a shot's clip, the song), else the film.</summary>
+    public object? Viewer => Selected switch
+    {
+        null when HasFilm => _filmView ??= new JoinedFilm(_board.FilmFile) { Player = FilePreview.For(_board.FilmFile, _previews) },
+        null => new PictureView(null, "Whole film", _board.Shots.All(s => s.Prompt.Trim().Length == 0)
+            ? "Say what film you want in the panel: BlackBox lays out its shots, references and sound on the timeline. Nothing is made until you make it."
+            : "Pick a piece on the timeline to see it and make it, or press Make what's missing."),
+        _ => Selected,
+    };
+
+    private JoinedFilm? _filmView;
+
+    /// <summary>What was said about the piece picked, oldest first.</summary>
+    public ObservableCollection<TalkItem> Talk { get; } = [];
+
+    private string TalkKey => (Selected as IFilmPiece)?.Piece.Id ?? FilmTalk.Film;
+
+    /// <summary>Nothing was said about the piece picked yet: the panel says what to do.</summary>
+    public bool NoTalk => Talk.Count == 0;
+
+    private void RefreshTalk()
+    {
+        Talk.Clear();
+        foreach (var line in _talk.About(TalkKey))
+            Talk.Add(new TalkItem(line.Text, line.Who == FilmTalk.You, false));
+        if (_jobKey == TalkKey && Talk.Count > 0 && !Talk[^1].Mine)
+            Talk[^1] = Talk[^1] with { Working = true };
+        OnPropertyChanged(nameof(NoTalk));
+    }
+
+    private void Say(string key, string text, bool replace = false)
+    {
+        if (replace)
+            _talk.ReplaceLast(key, text);
+        else
+            _talk.Add(key, FilmTalk.BlackBox, text);
+        if (key == TalkKey)
+            RefreshTalk();
+    }
+
+    private void SaveTalk()
+    {
+        try
+        {
+            if (_board.Folder.Length > 0 && Directory.Exists(_board.Folder))
+                _talk.Save(_board.Folder);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    /// <summary>The takes of the piece picked: those kept from before, and the one in the film.</summary>
+    public ObservableCollection<TakeItem> Takes { get; } = [];
+
+    [ObservableProperty]
+    private bool _hasTakes;
+
+    private void RefreshTakes()
+    {
+        foreach (var take in Takes)
+            take.Thumbnail?.Dispose();
+        Takes.Clear();
+        if (Selected is IFilmPiece { Piece: var piece } && piece.File(_board) is { } file && _board.Folder.Length > 0)
+        {
+            foreach (var take in FilmTakes.List(_board, piece))
+                Takes.Add(new TakeItem(take, $"{take.Number}", Small(piece, take.File), false));
+            if (File.Exists(file) && Takes.Count > 0)
+                Takes.Add(new TakeItem(null, $"{Takes.Count + 1} · in the film", Small(piece, file), true));
+        }
+        HasTakes = Takes.Count > 1;
+
+        // A frame as it is, a clip by a frame from its middle; a song has no picture.
+        Bitmap? Small(FilmPiece piece, string path)
+        {
+            try
+            {
+                if (piece.Kind == FilmPieceKind.Frame)
+                {
+                    using var stream = File.OpenRead(path);
+                    return Bitmap.DecodeToWidth(stream, 160, BitmapInterpolationMode.MediumQuality);
+                }
+                if (piece.Kind == FilmPieceKind.Shot && _previews.Decoder is { } decoder && FilmCheck.Poster(path, decoder, 160) is { } jpeg)
+                {
+                    using var stream = new MemoryStream(jpeg);
+                    return new Bitmap(stream);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { }
+            return null;
+        }
+    }
+
+    /// <summary>Puts an earlier take back in the film, with the settings it was made with.</summary>
+    [RelayCommand]
+    private void UseTake(TakeItem? take)
+    {
+        if (take?.Take is not { } kept || Selected is not IFilmPiece { Piece: var piece } || IsWorking)
+            return;
+        SaveNow(force: true);
+        try
+        {
+            _board = FilmTakes.Use(_board, piece, kept);
+            _ownWrite = File.GetLastWriteTimeUtc(_board.FilePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException)
+        {
+            Status = $"That take couldn't be put back: {ex.Message}";
+            return;
+        }
+        _talk.Add(piece.Id, FilmTalk.BlackBox, $"Put take {kept.Number} back in the film; the one before it is a take now.");
+        SaveTalk();
+        Rebuild();
+    }
+
+    /// <summary>"How BlackBox asked for it": the prompt and settings it wrote for the piece, and what made it.</summary>
+    [ObservableProperty]
+    private string _details = "";
+
+    /// <summary>Whether the panel shows how BlackBox asked for the piece.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DetailsVisible))]
+    private bool _showDetails;
+
+    public bool DetailsVisible => ShowDetails && Selected is IFilmPiece;
+
+    [RelayCommand]
+    private void ToggleDetails() => ShowDetails = !ShowDetails;
+
+    [ObservableProperty]
+    private string _madeWith = "";
+
+    private void RefreshDetails()
+    {
+        var lines = new List<string>();
+        switch (Selected)
+        {
+            case FrameItem { Frame: var f }:
+                if (f.File is { Length: > 0 } file)
+                    lines.Add($"Your picture: {file}");
+                else
+                {
+                    lines.Add($"Prompt: {(f.Prompt.Trim().Length > 0 ? f.Prompt.Trim() : "(none yet)")}");
+                    if (f.From.Count > 0) lines.Add($"Made from: {string.Join(", ", f.From.Select(id => _frames.GetValueOrDefault(id)?.Label ?? id))}");
+                    lines.Add($"Seed: {f.Seed}");
+                }
+                break;
+            case ShotItem { Shot: var s }:
+                lines.Add($"Prompt: {(s.Prompt.Trim().Length > 0 ? s.Prompt.Trim() : "(none yet)")}");
+                if (s.Camera.Trim().Length > 0) lines.Add($"Camera: {s.Camera.Trim()}");
+                if (Storyboard.Speaks(s)) lines.Add($"Says: {s.Line.Trim()} (in the voice: {(_board.Sound.Voice.Trim() is { Length: > 0 } v ? v : "picked by the voice model")})");
+                else if (s.LipSync) lines.Add("Sings the song's part under it");
+                lines.Add($"{s.Seconds:0.#} s · seed {s.Seed}");
+                break;
+            case SoundItem:
+                var sound = _board.Sound;
+                if (sound.Source == FilmSound.FromFile) lines.Add($"Your sound file: {sound.File}");
+                else
+                {
+                    lines.Add($"Style: {(sound.Tags.Trim().Length > 0 ? sound.Tags.Trim() : "(none yet)")}");
+                    lines.Add($"Lyrics: {(sound.Lyrics.Trim().Length > 0 ? sound.Lyrics.Trim().ReplaceLineEndings(" / ") : "none (an instrumental)")}");
+                    lines.Add($"Seed: {sound.Seed}");
+                }
+                if (sound.Voice.Trim().Length > 0) lines.Add($"The lines' voice: {sound.Voice.Trim()}");
+                break;
+        }
+        Details = string.Join("\n", lines);
+        MadeWith = Selected is IFilmPiece { Piece: var piece } && Template(piece) is { } template
+            ? $"Made with {template}" + (ModelWords(piece) is { } words ? $", for \"{words}\"" : ", picked by BlackBox")
+            : "";
+    }
+
+    /// <summary>The template a piece was made with, from its workflow file, shortened to its name.</summary>
+    private string? Template(FilmPiece piece)
+    {
+        try
+        {
+            return piece.Workflow(_board) is { } wf && File.Exists(wf) && System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(wf))?["blackbox"]?["template"]?.GetValue<string>() is { Length: > 0 } t
+                ? t.StartsWith(FilmTemplates.CheckpointPrefix, StringComparison.OrdinalIgnoreCase) ? Path.GetFileNameWithoutExtension(t) + " (checkpoint)" : Path.GetFileName(t)
+                : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private string? ModelWords(FilmPiece piece) => piece.Kind switch
+    {
+        FilmPieceKind.Frame => _board.Frame(piece.Id)?.Model,
+        FilmPieceKind.Shot => _board.Shot(piece.Id)?.Model,
+        _ => _board.Sound.Model,
+    };
+
+    // ---- telling BlackBox what to do ----------------------------------------------------------------------------
+
+    /// <summary>What the user is typing to BlackBox about the piece picked.</summary>
+    [ObservableProperty]
+    private string _request = "";
+
+    /// <summary>Sends what the user typed: BlackBox changes the piece (or the film) and makes what it should.</summary>
+    [RelayCommand]
+    private async Task Send()
+    {
+        var text = Request.Trim();
+        if (text.Length == 0)
+            return;
+        if (IsWorking)
+        {
+            Status = "BlackBox is still busy with the last thing: wait for it, or stop it.";
+            return;
+        }
+        if (_ask is null)
+        {
+            Status = "BlackBox's chat model isn't set up, so it can't be asked: set a server in the main window first.";
+            return;
+        }
+        var ask = _ask;
+        Request = "";
+        var picked = Selected as IFilmPiece;
+        var piece = picked?.Piece;
+        var key = piece?.Id ?? FilmTalk.Film;
+        _talk.Add(key, FilmTalk.You, text);
+        Say(key, "Thinking it over…");
+        SaveNow(force: true);
+        SaveTalk();
+        await RunJobAsync(key, picked, async (progress, ct) =>
+        {
+            IReadOnlyList<FilmOption> installed = [];
+            if (piece is not null)
+            {
+                progress("Looking at what ComfyUI has installed…");
+                installed = await InstalledAsync(piece, progress, ct);
+            }
+            var picture = await Task.Run(() => PictureOf(piece), ct);
+            progress("Thinking it over…");
+            var direction = await FilmDirector.DirectAsync(_board, piece, text, _talk, installed, picture, ask, ct);
+            var changed = direction.Board != _board;
+            if (changed)
+            {
+                var title = _board.Title;
+                _board = direction.Board;
+                _dirty = true;
+                SaveNow(force: true);
+                Rebuild();
+                if (_board.Title != title)
+                    RefreshFilms();
+            }
+            var reply = direction.Reply + (direction.Notes.Count > 0 ? " " + string.Join(" ", direction.Notes.Distinct()) : "");
+            if (piece is null && changed && Missing() is not null)
+                reply += " Pick a piece to make it, or press Make what's missing.";
+            Say(key, reply, replace: true);
+            SaveTalk();
+            foreach (var next in direction.Make)
+                await MakePieceAsync(next, key, ct);
+        });
+    }
+
+    /// <summary>Makes the piece picked as it is (no change asked for), or again.</summary>
+    [RelayCommand]
+    private async Task MakePicked()
+    {
+        if (Selected is not IFilmPiece picked || IsWorking)
+            return;
+        await RunJobAsync(picked.Piece.Id, picked, (_, ct) => MakePieceAsync(picked.Piece, picked.Piece.Id, ct));
+    }
+
+    /// <summary>Another take of the piece picked: the same settings with a new seed.</summary>
+    [RelayCommand]
+    private async Task AnotherTake()
+    {
+        if (Selected is not IFilmPiece picked || IsWorking)
+            return;
+        switch (picked)
+        {
+            case FrameItem f: f.Frame.Seed = Storyboard.NewSeed(); break;
+            case ShotItem s: s.Shot.Seed = Storyboard.NewSeed(); break;
+            case SoundItem: _board.Sound.Seed = Storyboard.NewSeed(); break;
+        }
+        _talk.Add(picked.Piece.Id, FilmTalk.You, "Another take, please.");
+        SaveNow(force: true);
+        await RunJobAsync(picked.Piece.Id, picked, (_, ct) => MakePieceAsync(picked.Piece, picked.Piece.Id, ct));
+    }
+
+    /// <summary>The user picked a picture of their own for the frame picked: it is taken at once, cut to the film's frame.</summary>
+    public async Task UseOwnPicture(string path)
+    {
+        if (Selected is not FrameItem frame || IsWorking)
+            return;
+        frame.TakeOwnPicture(path);
+        _talk.Add(frame.Id, FilmTalk.You, $"Use my picture {Path.GetFileName(path)}.");
+        SaveNow(force: true);
+        await RunJobAsync(frame.Id, frame, (_, ct) => MakePieceAsync(frame.Piece, frame.Id, ct));
+    }
+
+    /// <summary>The user picked a sound file of their own as the film's soundtrack.</summary>
+    public void UseOwnSound(string path)
+    {
+        Sound.TakeOwnSound(path);
+        _talk.Add(FilmTalk.Song, FilmTalk.You, $"Use my sound file {Path.GetFileName(path)}.");
+        SaveNow(force: true);
+        SaveTalk();
+        RefreshStates();
+        RefreshTalk();
+        RefreshDetails();
+    }
+
+    /// <summary>Looks at the piece picked again, as it is.</summary>
+    [RelayCommand]
+    private async Task CheckAgain()
+    {
+        if (Selected is not IFilmPiece picked || IsWorking || _ask is null)
+            return;
+        var key = picked.Piece.Id;
+        Say(key, "Looking at it…");
+        await RunJobAsync(key, picked, async (_, ct) =>
+        {
+            var check = await FilmDirector.CheckAsync(_board, picked.Piece, _previews.Decoder, _ask, ct);
+            if (check is { } c && picked.Piece.Workflow(_board) is { } wf)
+                FilmTakes.RememberLook(wf, c.Verdict, c.Said);
+            Say(key, check?.Said ?? "It couldn't be looked at: it isn't made yet, or the chat model doesn't see pictures.", replace: true);
+            SaveTalk();
+        });
+    }
+
+    /// <summary>
+    /// Makes a piece: the one there kept as a take, the new one made as the storyboard says, and a
+    /// fresh look at it, all said in the piece's talk (and <paramref name="key"/>'s, where the request was).
+    /// </summary>
+    private async Task MakePieceAsync(FilmPiece piece, string key, CancellationToken ct)
+    {
+        var item = ItemOf(piece);
+        var label = Lower(item?.Title ?? piece.Id);
+        if (item is not null)
+            item.IsWorking = true;
+        try
+        {
+            FilmTakes.Keep(_board, piece);
+            Say(key, $"Making {label}…");
+            var clock = Stopwatch.StartNew();
+            void Progress(string s) => Dispatcher.UIThread.Post(() =>
+            {
+                if (item is not null)
+                    item.State = s;
+                _talk.ReplaceLast(key, $"Making {label}: {s}");
+                if (key == TalkKey && Talk.Count > 0)
+                    Talk[^1] = new TalkItem($"Making {label}: {s} · {FilePreview.Clock(clock.Elapsed)}", false, true);
+            });
+            FilmMade made = piece.Kind switch
+            {
+                FilmPieceKind.Frame => await _maker.MakeFrameAsync(_board, _board.Frame(piece.Id)!, Progress, CancellationToken.None, ct),
+                FilmPieceKind.Shot => await _maker.MakeShotAsync(_board, _board.Shot(piece.Id)!, Progress, CancellationToken.None, ct),
+                _ => await _maker.MakeSongAsync(_board, Progress, CancellationToken.None, ct, takes: 3),
+            };
+            if (piece.Kind == FilmPieceKind.Song)
+            {
+                _songScore = (made.File, File.GetLastWriteTimeUtc(made.File), made.Score);
+                _dirty = true;
+                SaveNow(force: true); // the seed of the song kept
+            }
+            var said = $"Made {label} in {FilePreview.Clock(made.Took)}" + (made.Template is { } t ? $" with {Short(t)}" : "") + "." +
+                       (made.Score is { } score ? $" {Capital(score.Describe())}." : "") +
+                       string.Concat(made.Notes.Where(Worth).Take(3).Select(n => " " + n));
+            Say(key, said, replace: true);
+            if (_ask is not null && piece.Kind != FilmPieceKind.Song)
+            {
+                Say(key, said + " Looking at it…", replace: true);
+                if (item is not null)
+                    item.State = "Looking at it…";
+                var check = await FilmDirector.CheckAsync(_board, piece, _previews.Decoder, _ask, ct);
+                if (check is { } c)
+                {
+                    if (piece.Workflow(_board) is { } wf)
+                        FilmTakes.RememberLook(wf, c.Verdict, c.Said);
+                    Say(key, said + " " + c.Said, replace: true);
+                }
+                else
+                    Say(key, said, replace: true);
+            }
+            if (key != piece.Id)
+                _talk.Add(piece.Id, FilmTalk.BlackBox, _talk.About(key)[^1].Text);
+        }
+        finally
+        {
+            if (item is not null)
+                item.IsWorking = false;
+            SaveTalk();
+            RefreshStates();
+            if (Selected is IFilmPiece { Piece: var picked } && picked == piece)
+            {
+                RefreshTakes();
+                RefreshDetails();
+            }
+        }
+    }
+
+    /// <summary>A note from making a piece worth telling the user: not what is so by design (a lip-synced shot made from its first frame alone).</summary>
+    private static bool Worth(string note) =>
+        !note.Contains("no place for the size", StringComparison.Ordinal) && !note.Contains("made from its first frame only", StringComparison.Ordinal) &&
+        !note.StartsWith("Using the ComfyUI", StringComparison.Ordinal);
+
+    /// <summary>The next piece not made or out of date, in the order they have to be made: references, frames, the song, shots.</summary>
+    private FilmPiece? Missing()
+    {
+        bool Stale(FilmFrame f) => !FilmMaker.IsCurrent(_board, f);
+        var needed = _board.Shots.SelectMany(s => new[] { s.First, s.LipSync ? null : s.Last }).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // The frames shots need, and what those are made from, a reference before what is made from it.
+        var frames = new List<FilmFrame>();
+        void Need(string id, int depth)
+        {
+            if (depth > 6 || _board.Frame(id) is not { } f || frames.Contains(f))
+                return;
+            foreach (var from in f.From)
+                Need(from, depth + 1);
+            frames.Add(f);
+        }
+        foreach (var id in needed)
+            Need(id, 0);
+        foreach (var f in _board.Frames.Where(f => f.Reference))
+            Need(f.Id, 0);
+        if (frames.FirstOrDefault(f => Stale(f) && (f.File is { Length: > 0 } || f.Prompt.Trim().Length > 0) && f.From.All(id => _board.Frame(id) is not { } src || !Stale(src))) is { } frame)
+            return FilmPiece.Of(frame);
+        if (_board.Sound.Source == FilmSound.Song && _board.Sound.Tags.Trim().Length > 0 && !FilmMaker.SongIsCurrent(_board))
+            return FilmPiece.Song;
+        return _board.Shots.FirstOrDefault(s => !FilmMaker.IsCurrent(_board, s) && s.Prompt.Trim().Length > 0 &&
+                                                new[] { s.First, s.LipSync ? null : s.Last }.OfType<string>().All(id => _board.Frame(id) is not { } f || !Stale(f))) is { } shot
+            ? FilmPiece.Of(shot) : null;
+    }
+
+    /// <summary>Makes every piece not made or out of date, one after another, each looked at, then joins the film.</summary>
+    [RelayCommand]
+    private async Task MakeMissing()
+    {
+        if (IsWorking)
+            return;
+        if (Missing() is null)
+        {
+            Status = _board.Shots.Any(s => s.Prompt.Trim().Length == 0)
+                ? "Some shots don't say what happens in them yet: pick them and say it."
+                : "Everything is made. Join the clips to see the film.";
+            return;
+        }
+        Say(FilmTalk.Film, "Making what's missing, one piece after another…");
+        await RunJobAsync(FilmTalk.Film, null, async (_, ct) =>
+        {
+            var made = 0;
+            var tried = new HashSet<FilmPiece>();
+            while (Missing() is { } next && tried.Add(next))
+            {
+                Say(FilmTalk.Film, $"Making what's missing: {Lower(ItemOf(next)?.Title ?? next.Id)} now ({made} made so far). Pick it to watch it being made.", replace: true);
+                await MakePieceAsync(next, next.Id, ct);
+                made++;
+            }
+            Say(FilmTalk.Film, $"Made {made} piece{(made == 1 ? "" : "s")}." + (Missing() is { } left ? $" {Capital(Lower(ItemOf(left)?.Title ?? left.Id))} couldn't be made: pick it to see why." : " Joining the film…"), replace: true);
+            if (Missing() is null)
+                await JoinAsync(ct);
+            SaveTalk();
+        });
+    }
+
+    /// <summary>What is installed for the kinds of job a piece can be, for the model to name.</summary>
+    private async Task<IReadOnlyList<FilmOption>> InstalledAsync(FilmPiece piece, Action<string> progress, CancellationToken ct)
+    {
+        try
+        {
+            _maker.Use();
+            var api = await _hub.ConnectAsync(null, [], progress, ct);
+            var jobs = piece.Kind switch
+            {
+                FilmPieceKind.Frame => new[] { FilmJob.Frame, FilmJob.Edit },
+                FilmPieceKind.Song => [FilmJob.Song],
+                _ => [FilmJob.Shot, FilmJob.ShotFromFirst, FilmJob.ShotFromText, FilmJob.LipSync],
+            };
+            var all = new List<FilmOption>();
+            foreach (var job in jobs)
+                all.AddRange((await FilmTemplates.OptionsAsync(_hub, api, job, ct)).Where(o => all.All(a => a.Name != o.Name)));
+            return all;
+        }
+        catch (Exception ex) when (ex is ComfyApiException or IOException or FilmException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>The piece as it is, for the model to see: a frame's picture, a shot's sheet (or its first frame).</summary>
+    private byte[]? PictureOf(FilmPiece? piece)
+    {
+        try
+        {
+            switch (piece?.Kind)
+            {
+                case FilmPieceKind.Frame when _board.Frame(piece.Id) is { } f && File.Exists(_board.FramePicture(f)):
+                    return FilmCheck.Picture(_board.FramePicture(f), 768);
+                case FilmPieceKind.Shot when _board.Shot(piece.Id) is { } s:
+                    if (File.Exists(_board.ShotVideo(s)) && _previews.Decoder is { } decoder)
+                        return FilmCheck.Shot(_board, s, _board.ShotVideo(s), decoder).Sheet;
+                    return _board.Frame(s.First) is { } first && File.Exists(_board.FramePicture(first)) ? FilmCheck.Picture(_board.FramePicture(first), 768) : null;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException or InvalidOperationException) { }
+        return null;
+    }
+
+    private IFilmPiece? ItemOf(FilmPiece piece) => piece.Kind switch
+    {
+        FilmPieceKind.Frame => _frames.GetValueOrDefault(piece.Id),
+        FilmPieceKind.Shot => Shots.FirstOrDefault(s => s.Id == piece.Id),
+        _ => Sound,
+    };
+
+    private static string Short(string template) =>
+        template.StartsWith(FilmTemplates.CheckpointPrefix, StringComparison.OrdinalIgnoreCase) ? Path.GetFileNameWithoutExtension(template) : Path.GetFileName(template);
+
+    // ---- jobs ------------------------------------------------------------------------------------------------
+
+    /// <summary>What the bottom line says: what the window is doing, what went wrong.</summary>
+    [ObservableProperty]
+    private string _status = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWorking))]
+    private int _working;
+
+    public bool IsWorking => Working > 0;
+
+    private CancellationTokenSource? _job;
+
+    /// <summary>The talk the running job writes to, so the panel shows it working.</summary>
+    private string? _jobKey;
+
+    /// <summary>Runs one job at a time: what BlackBox does for a request, or a piece being made; what goes wrong is said in the talk.</summary>
+    private async Task RunJobAsync(string key, IFilmPiece? item, Func<Action<string>, CancellationToken, Task> job)
+    {
+        SaveNow(force: true);
+        using var cts = new CancellationTokenSource();
+        _job = cts;
+        _jobKey = key;
+        Working++;
+        RefreshTalk();
+        void Progress(string s) => Dispatcher.UIThread.Post(() =>
+        {
+            Status = s;
+            if (key == TalkKey && Talk.Count > 0 && !Talk[^1].Mine)
+                Talk[^1] = Talk[^1] with { Text = s, Working = true };
+        });
+        try
+        {
+            await job(Progress, cts.Token);
+            Status = "";
+        }
+        catch (OperationCanceledException)
+        {
+            Say(key, "Stopped.", replace: true);
+        }
+        catch (Exception ex) when (ex is FilmException or FilmStillRunningException or ComfyApiException or ComfyWorkflowException or IOException or UnauthorizedAccessException)
+        {
+            Say(key, ex.Message, replace: true);
+            if (item is not null)
+                item.Report(ex.Message, true);
+        }
+        finally
+        {
+            Working--;
+            _job = null;
+            _jobKey = null;
+            SaveTalk();
+            RefreshTalk();
+            RefreshStates();
+        }
+    }
+
+    [RelayCommand]
+    private void Stop() => _job?.Cancel();
+
+    public bool HasFilm => File.Exists(_board.FilmFile);
+
+    /// <summary>Joins the shots made so far, with the soundtrack, into the film, and shows it.</summary>
+    [RelayCommand]
+    private async Task Join()
+    {
+        if (IsWorking)
+            return;
+        await RunJobAsync(FilmTalk.Film, null, (_, ct) => JoinAsync(ct));
+    }
+
+    private async Task JoinAsync(CancellationToken ct)
+    {
+        Say(FilmTalk.Film, "Joining the clips…");
+        var made = await FilmMontage.JoinAsync(_board, _previews.Decoder?.Ffmpeg, _previews.Decoder, s => Dispatcher.UIThread.Post(() => Status = s), ct);
+        Say(FilmTalk.Film, $"Joined the film ({Path.GetFileName(made.File)}): it plays in the viewer, and it is in the film's folder." +
+                           (made.Notes.Count > 0 ? " " + string.Join(" ", made.Notes) : ""), replace: true);
+        SaveTalk();
+        _filmView?.Player?.Dispose();
+        _filmView = null;
+        OnPropertyChanged(nameof(HasFilm));
+        Select(null);
+    }
+
+    /// <summary>
+    /// Hands the storyboard to the agent in the chat: it makes what isn't made yet, checks each shot
+    /// against what it should show, fixes what is wrong, joins the film and checks it.
+    /// </summary>
+    [RelayCommand]
+    private void MakeFilm()
+    {
+        SaveNow(force: true);
+        _sendToChat($"Make the film from my storyboard: {_board.FilePath}\n" +
+                    "Make what isn't made yet or is out of date (frames, the song, each shot's clip), check every shot and fix the ones that don't show what they should, " +
+                    "then join them and check the whole film.");
+        Status = "BlackBox is making the film in the chat; what it makes shows here as it goes.";
+    }
+
+    // ---- saving --------------------------------------------------------------------------------------------
 
     /// <summary>Something was changed in the window: saved a moment later, and what it changes shown.</summary>
     public void Changed(object source)
@@ -638,7 +1414,6 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         _saveTimer.Stop();
         _saveTimer.Start();
         OnPropertyChanged(nameof(LengthText));
-        RefreshStrip();
         // What the change makes out of date shows once it is saved (the stamps are computed from the files).
         _refreshTimer.Stop();
         _refreshTimer.Start();
@@ -667,290 +1442,21 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         }
     }
 
-    // ---- shots and frames -----------------------------------------------------------------------------------
-
-    [RelayCommand]
-    private void AddShot()
-    {
-        SaveNow();
-        var before = _board.Shots.LastOrDefault();
-        // New frames and the shot are made with what the ones before are: a copy, so changing one changes only it.
-        var model = FrameModelNear(before);
-        // A new shot goes on from the last one's end when it has one, the usual way a scene goes on.
-        string first;
-        if (before?.Last is { } end)
-            first = end;
-        else
-        {
-            first = _board.NewId("f");
-            _board.Frames.Add(new FilmFrame { Id = first, Seed = Storyboard.NewSeed(), Model = model });
-        }
-        var last = _board.NewId("f");
-        _board.Frames.Add(new FilmFrame { Id = last, Seed = Storyboard.NewSeed(), Model = model });
-        var shot = new FilmShot { Id = _board.NewId("s"), First = first, Last = last, Seconds = 5, Seed = Storyboard.NewSeed(), Model = before?.Model };
-        _board.Shots.Add(shot);
-        SaveNow(force: true);
-        Rebuild();
-        Select(Shots.FirstOrDefault(s => s.Id == shot.Id));
-    }
-
-    [RelayCommand]
-    private void AddReference()
-    {
-        SaveNow();
-        var frame = new FilmFrame
-        {
-            Id = _board.NewId("f"), Reference = true, Name = $"Reference {References.Count(r => r.Frame.Reference) + 1}", Seed = Storyboard.NewSeed(),
-            Model = _board.Frames.LastOrDefault(f => f.Reference && f.Model is not null)?.Model ?? FrameModelNear(null),
-        };
-        _board.Frames.Add(frame);
-        SaveNow(force: true);
-        Rebuild();
-        Select(_frames.GetValueOrDefault(frame.Id));
-    }
-
-    public void DeleteReference(FrameItem item)
-    {
-        SaveNow();
-        _board.Frames.Remove(item.Frame);
-        foreach (var f in _board.Frames)
-            f.From.RemoveAll(id => id.Equals(item.Id, StringComparison.OrdinalIgnoreCase));
-        SaveNow(force: true);
-        Rebuild();
-    }
-
-    public void DeleteShot(ShotItem item)
-    {
-        SaveNow();
-        var at = _board.Shots.IndexOf(item.Shot);
-        _board.Shots.Remove(item.Shot);
-        // Its frames go with it, unless another shot starts or ends on them, or others are made from them.
-        foreach (var id in new[] { item.Shot.First, item.Shot.Last }.OfType<string>())
-            if (!Used(id))
-                _board.Frames.RemoveAll(f => f.Id.Equals(id, StringComparison.OrdinalIgnoreCase) && !f.Reference);
-        SaveNow(force: true);
-        Rebuild();
-        Select(Shots.ElementAtOrDefault(Math.Min(at, Shots.Count - 1)));
-    }
-
-    private bool Used(string id) =>
-        _board.Shots.Any(s => string.Equals(s.First, id, StringComparison.OrdinalIgnoreCase) || string.Equals(s.Last, id, StringComparison.OrdinalIgnoreCase)) ||
-        _board.Frames.Any(f => f.From.Contains(id, StringComparer.OrdinalIgnoreCase));
-
-    public void Move(ShotItem item, int by)
-    {
-        var at = _board.Shots.IndexOf(item.Shot);
-        var to = at + by;
-        if (at < 0 || to < 0 || to >= _board.Shots.Count)
-            return;
-        SaveNow();
-        _board.Shots.RemoveAt(at);
-        _board.Shots.Insert(to, item.Shot);
-        SaveNow(force: true);
-        Rebuild();
-        Select(Shots.FirstOrDefault(s => s.Id == item.Id));
-    }
-
-    public bool ContinuesFromBefore(ShotItem item)
-    {
-        var at = _board.Shots.IndexOf(item.Shot);
-        return at > 0 && item.Shot.First is { } first && string.Equals(_board.Shots[at - 1].Last, first, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Starts the shot on the frame the one before ends on (the camera goes on), or on a frame of its
-    /// own (a cut to another scene or angle). The one before is given a last frame if it has none.
-    /// </summary>
-    public void SetContinues(ShotItem item, bool continues)
-    {
-        var at = _board.Shots.IndexOf(item.Shot);
-        if (at <= 0 || continues == ContinuesFromBefore(item))
-            return;
-        SaveNow();
-        var old = item.Shot.First;
-        if (continues)
-        {
-            var before = _board.Shots[at - 1];
-            if (before.Last is null)
-            {
-                before.Last = _board.NewId("f");
-                _board.Frames.Add(new FilmFrame { Id = before.Last, Seed = Storyboard.NewSeed(), Model = FrameModelNear(before) });
-            }
-            item.Shot.First = before.Last;
-            item.Shot.Transition = FilmShot.Cut;
-        }
-        else
-        {
-            var model = FrameModelNear(item.Shot);
-            item.Shot.First = _board.NewId("f");
-            _board.Frames.Add(new FilmFrame { Id = item.Shot.First, Seed = Storyboard.NewSeed(), Model = model });
-        }
-        if (old is not null && !Used(old))
-            _board.Frames.RemoveAll(f => f.Id.Equals(old, StringComparison.OrdinalIgnoreCase) && !f.Reference);
-        SaveNow(force: true);
-        Rebuild();
-    }
-
-    /// <summary>Gives the shot a frame to end on, or lets it go where its prompt takes it.</summary>
-    public void SetLastFrame(ShotItem item, bool has)
-    {
-        if (has == (item.Shot.Last is not null))
-            return;
-        SaveNow();
-        if (has)
-        {
-            var model = FrameModelNear(item.Shot);
-            item.Shot.Last = _board.NewId("f");
-            _board.Frames.Add(new FilmFrame { Id = item.Shot.Last, Seed = Storyboard.NewSeed(), Model = model });
-        }
-        else
-        {
-            var old = item.Shot.Last!;
-            item.Shot.Last = null;
-            // The next shot going on from it now starts on a frame of its own.
-            if (!Used(old))
-                _board.Frames.RemoveAll(f => f.Id.Equals(old, StringComparison.OrdinalIgnoreCase) && !f.Reference);
-        }
-        SaveNow(force: true);
-        Rebuild();
-    }
-
-    // ---- making -------------------------------------------------------------------------------------------
-
-    /// <summary>What the bottom line says: a job's progress, what was made, what went wrong.</summary>
-    [ObservableProperty]
-    private string _status = "";
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsWorking))]
-    private int _working;
-
-    public bool IsWorking => Working > 0;
-
-    private readonly List<CancellationTokenSource> _jobs = [];
-
-    private async Task<FilmMade?> RunAsync(Func<Action<string>, CancellationToken, Task<FilmMade>> job, Action<string, bool> report, CancellationToken ct)
-    {
-        SaveNow(force: true);
-        using var both = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        lock (_jobs) _jobs.Add(both);
-        Working++;
-        try
-        {
-            var made = await Task.Run(() => job(s => report(s, false), both.Token), both.Token);
-            report($"Made in {FilePreview.Clock(made.Took)}" + (made.Template is { } t ? $" with {t}" : "") + (made.Notes.Count > 0 ? ". " + string.Join(" ", made.Notes) : ""), false);
-            return made;
-        }
-        catch (OperationCanceledException)
-        {
-            report("Stopped.", false);
-        }
-        catch (Exception ex) when (ex is FilmException or FilmStillRunningException or ComfyApiException or ComfyWorkflowException or IOException or UnauthorizedAccessException)
-        {
-            report(ex.Message, true);
-        }
-        finally
-        {
-            lock (_jobs) _jobs.Remove(both);
-            Working--;
-        }
-        return null;
-    }
-
-    public async Task RunFrameAsync(FrameItem item, CancellationToken ct)
-    {
-        item.IsWorking = true;
-        try
-        {
-            await RunAsync((progress, token) => _maker.MakeFrameAsync(_board, item.Frame, progress, CancellationToken.None, token), (s, e) => item.Report(s, e), ct);
-        }
-        finally
-        {
-            item.IsWorking = false;
-            RefreshStates();
-        }
-    }
-
-    public async Task RunShotAsync(ShotItem item, CancellationToken ct)
-    {
-        item.IsWorking = true;
-        try
-        {
-            await RunAsync((progress, token) => _maker.MakeShotAsync(_board, item.Shot, progress, CancellationToken.None, token), (s, e) => item.Report(s, e), ct);
-        }
-        finally
-        {
-            item.IsWorking = false;
-            RefreshStates();
-        }
-    }
-
-    public async Task RunSongAsync(SoundItem item, CancellationToken ct)
-    {
-        item.IsWorking = true;
-        try
-        {
-            // Three songs, the best kept by how it sounds to the judge: the seed alone moved one from 3.3 to 4.2 of 5.
-            var made = await RunAsync((progress, token) => _maker.MakeSongAsync(_board, progress, CancellationToken.None, token, takes: 3), (s, e) => item.Report(s, e), ct);
-            if (made is not null)
-            {
-                _songScore = (made.File, File.GetLastWriteTimeUtc(made.File), made.Score);
-                // The seed of the song kept.
-                item.Refresh();
-                Changed(item);
-            }
-        }
-        finally
-        {
-            item.IsWorking = false;
-            RefreshStates();
-        }
-    }
-
-    public bool HasFilm => File.Exists(_board.FilmFile);
-
-    /// <summary>Joins the shots made so far, with the soundtrack, into the film.</summary>
-    [RelayCommand]
-    private async Task Join()
-    {
-        var made = await RunAsync((progress, token) => FilmMontage.JoinAsync(_board, _previews.Decoder?.Ffmpeg, _previews.Decoder, progress, token),
-            (s, error) => Dispatcher.UIThread.Post(() => Status = s), CancellationToken.None);
-        if (made is not null)
-        {
-            Status = $"Joined: {made.File}" + (made.Notes.Count > 0 ? " " + string.Join(" ", made.Notes) : "");
-            OnPropertyChanged(nameof(HasFilm));
-            ShowFilm();
-        }
-    }
-
-    [RelayCommand]
-    private void ShowFilm()
-    {
-        if (!File.Exists(_board.FilmFile))
-            return;
-        var film = new JoinedFilm(_board.FilmFile) { Player = FilePreview.For(_board.FilmFile, _previews) };
-        if (Selected is JoinedFilm old)
-            old.Player?.Dispose();
-        Select(film);
-    }
-
-    /// <summary>
-    /// Hands the storyboard to the agent in the chat: it makes what isn't made yet, checks each shot
-    /// against what it should show, fixes what is wrong, joins the film and checks it.
-    /// </summary>
-    [RelayCommand]
-    private void MakeFilm()
-    {
-        SaveNow(force: true);
-        _sendToChat($"Make the film from my storyboard: {_board.FilePath}\n" +
-                    "Make what isn't made yet or is out of date (frames, the song, each shot's clip), check every shot and fix the ones that don't show what they should, " +
-                    "then join them and check the whole film.");
-        Status = "BlackBox is making the film in the chat; what it makes shows here as it goes.";
-    }
-
     // ---- what is made --------------------------------------------------------------------------------------
 
-    /// <summary>Thumbnails, players and each item's state, from the files in the film's folder.</summary>
+
+    private string StateOf(IFilmPiece item, bool made, bool current)
+    {
+        if (!made)
+            return item is ShotItem s && s.Shot.Prompt.Trim().Length == 0 ? "Say what happens in it" : "Not made yet";
+        if (!current)
+            return "Changed: make it again";
+        return FilmTakes.LookIn(item.Piece.Workflow(_board)) is { } look
+            ? look.Verdict == "redo" ? "Made · the look found a problem" : "Made · looked at"
+            : "Made";
+    }
+
+    /// <summary>Thumbnails, clips, strips and each piece's state, from the files in the film's folder.</summary>
     public void RefreshStates()
     {
         foreach (var frame in _frames.Values)
@@ -958,10 +1464,10 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             var path = _board.FramePicture(frame.Frame);
             var made = File.Exists(path);
             frame.IsMade = made;
-            if (!frame.IsWorking && !frame.IsError)
-                frame.State = !made ? "Not made yet." : FilmMaker.IsCurrent(_board, frame.Frame) ? "Made." : "Changed since it was made: make it again.";
+            if (!frame.IsWorking)
+                (frame.State, frame.IsError) = (StateOf(frame, made, FilmMaker.IsCurrent(_board, frame.Frame)), false);
             LoadThumbnail(frame, path);
-            if (frame == SelectedFrame)
+            if (frame == Selected || Selected is ShotItem { First: var first } && first == frame)
                 LoadPicture(frame);
         }
         foreach (var shot in Shots)
@@ -969,32 +1475,33 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             var path = _board.ShotVideo(shot.Shot);
             var made = File.Exists(path);
             shot.IsMade = made;
-            if (!shot.IsWorking && !shot.IsError)
-                shot.State = !made ? "No clip yet." : FilmMaker.IsCurrent(_board, shot.Shot) ? "Clip made." : "Changed since the clip was made: make it again.";
+            if (!shot.IsWorking)
+                (shot.State, shot.IsError) = (StateOf(shot, made, FilmMaker.IsCurrent(_board, shot.Shot)), false);
             var stamp = made ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
             if (made && (shot.Clip is null || shot.Clip.Path != path || _clipStamps.GetValueOrDefault(shot.Id) != stamp))
             {
                 shot.Clip?.Dispose();
                 shot.Clip = FilePreview.For(path, _previews);
                 _clipStamps[shot.Id] = stamp;
+                LoadStrip(shot, path, stamp);
             }
             else if (!made && shot.Clip is not null)
             {
                 shot.Clip.Dispose();
                 shot.Clip = null;
+                shot.Strip = null;
             }
-            shot.Refresh();
         }
         var song = _board.Sound.Source switch { FilmSound.Song => _board.SongFile, FilmSound.FromFile => _board.Sound.File, _ => null };
         var songMade = song is not null && File.Exists(song);
-        Sound.IsMade = _board.Sound.Source == FilmSound.Song && songMade;
-        var heard = songMade && _songScore.File == song && _songScore.Stamp == File.GetLastWriteTimeUtc(song!) && _songScore.Score is { } s ? " " + Capital(s.Describe()) + "." : "";
-        if (!Sound.IsWorking && !Sound.IsError)
+        Sound.IsMade = songMade;
+        var heard = songMade && _songScore.File == song && _songScore.Stamp == File.GetLastWriteTimeUtc(song!) && _songScore.Score is { } s ? " · " + s.Describe() : "";
+        if (!Sound.IsWorking)
             Sound.State = _board.Sound.Source switch
             {
-                FilmSound.Song => !songMade ? "Not made yet." : FilmMaker.SongIsCurrent(_board) ? "Made." + heard : "Changed since it was made (or the film's length did): make it again.",
-                FilmSound.FromFile => song is null ? "Pick a sound file." : songMade ? "" : "The file isn't there.",
-                _ => "",
+                FilmSound.Song => !songMade ? "Not made yet" : FilmMaker.SongIsCurrent(_board) ? "Made" + heard : "Changed: make it again",
+                FilmSound.FromFile => song is null ? "Pick a sound file" : songMade ? "Your file" : "The file isn't there",
+                _ => "No soundtrack",
             };
         var songStamp = songMade ? File.GetLastWriteTimeUtc(song!) : DateTime.MinValue;
         if (songMade && (Sound.Player is null || Sound.Player.Path != song || _clipStamps.GetValueOrDefault("\nsong") != songStamp))
@@ -1008,15 +1515,32 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             Sound.Player.Dispose();
             Sound.Player = null;
         }
+        if (_filmView is not null && (!HasFilm || _filmStamp != File.GetLastWriteTimeUtc(_board.FilmFile)))
+        {
+            _filmView.Player?.Dispose();
+            _filmView = null;
+        }
+        _filmStamp = HasFilm ? File.GetLastWriteTimeUtc(_board.FilmFile) : default;
         OnPropertyChanged(nameof(HasFilm));
         OnPropertyChanged(nameof(ShotVolume));
-        RefreshStrip();
+        OnPropertyChanged(nameof(LengthText));
+        OnPropertyChanged(nameof(Viewer));
+        RefreshSound();
+        Relayout();
     }
+
+    private DateTime _filmStamp;
 
     /// <summary>How the song made last sounded to the judge, while it is the song in the folder.</summary>
     private (string? File, DateTime Stamp, SongScore? Score) _songScore;
 
     private static string Capital(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
+
+    /// <summary>A title in a sentence: "shot 3", "the song", "start of shot 2"; a name ("Marco") as it is.</summary>
+    private static string Lower(string s) =>
+        new[] { "Shot ", "The ", "Start of", "End of", "Frame ", "Reference ", "A " }.Any(p => s.StartsWith(p, StringComparison.Ordinal)) ? char.ToLowerInvariant(s[0]) + s[1..] : s;
+
+    private static string Cut(string s, int max) => s.Length <= max ? s : s[..max].TrimEnd() + "…";
 
     private readonly Dictionary<string, DateTime> _clipStamps = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<FrameItem, DateTime> _thumbStamps = [];
@@ -1049,7 +1573,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         });
     }
 
-    /// <summary>The selected frame's picture, bigger than its thumbnail.</summary>
+    /// <summary>A frame's picture, bigger than its thumbnail, for the viewer.</summary>
     private void LoadPicture(FrameItem frame)
     {
         var path = _board.FramePicture(frame.Frame);
@@ -1063,7 +1587,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             try
             {
                 using var stream = File.OpenRead(path);
-                var bitmap = Bitmap.DecodeToWidth(stream, 720, BitmapInterpolationMode.HighQuality);
+                var bitmap = Bitmap.DecodeToWidth(stream, 1280, BitmapInterpolationMode.HighQuality);
                 Dispatcher.UIThread.Post(() =>
                 {
                     var old = frame.Picture;
@@ -1072,6 +1596,34 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
                 });
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { }
+        });
+    }
+
+    /// <summary>A shot's clip as a row of frames, for its block on the timeline.</summary>
+    private void LoadStrip(ShotItem shot, string path, DateTime stamp)
+    {
+        if (_previews.Decoder is not { } decoder)
+            return;
+        _ = Task.Run(() =>
+        {
+            byte[]? jpeg = null;
+            try { jpeg = FilmCheck.Strip(path, decoder, 64); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or FilmException) { }
+            if (jpeg is null)
+                return;
+            using var stream = new MemoryStream(jpeg);
+            var bitmap = new Bitmap(stream);
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_clipStamps.GetValueOrDefault(shot.Id) != stamp)
+                {
+                    bitmap.Dispose();
+                    return;
+                }
+                var old = shot.Strip;
+                shot.Strip = bitmap;
+                old?.Dispose();
+            });
         });
     }
 
@@ -1108,7 +1660,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         try
         {
             var written = File.GetLastWriteTimeUtc(_board.FilePath);
-            if (written != _ownWrite && !_saveTimer.IsEnabled && File.Exists(_board.FilePath))
+            if (written != _ownWrite && !_saveTimer.IsEnabled && !IsWorking && File.Exists(_board.FilePath))
             {
                 var fresh = Storyboard.Load(_board.Folder);
                 if (fresh.ToJson() != _board.ToJson())
@@ -1129,15 +1681,18 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     {
         StopPlaying();
         SaveNow();
+        SaveTalk();
         _watcher?.Dispose();
-        lock (_jobs)
-            foreach (var job in _jobs)
-                job.Cancel();
+        _job?.Cancel();
         foreach (var shot in Shots)
+        {
             shot.Clip?.Dispose();
+            shot.Strip?.Dispose();
+        }
         Sound?.Player?.Dispose();
-        if (Selected is JoinedFilm film)
-            film.Player?.Dispose();
+        _filmView?.Player?.Dispose();
+        foreach (var take in Takes)
+            take.Thumbnail?.Dispose();
         _ = _maker.ReleaseAsync();
     }
 }

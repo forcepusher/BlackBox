@@ -121,19 +121,39 @@ internal sealed partial class FreshLook(OpenAiChatClient client, ChatRequestOpti
     }
 
     /// <summary>A question without a picture, in a conversation of its own; only the answer comes back, or null when the request failed.</summary>
-    public async Task<string?> AskTextAsync(string question, CancellationToken ct)
+    public Task<string?> AskTextAsync(string question, CancellationToken ct) =>
+        AskAsync("You answer exactly what is asked, briefly.", question, null, 4096, TimeSpan.FromMinutes(2), ct);
+
+    /// <summary>
+    /// A question in a conversation of its own, with its own instructions and a picture or none:
+    /// only the answer comes back (the thinking before it left out), or null when the request failed.
+    /// </summary>
+    /// <param name="think">False: a Qwen 3+ model answers without thinking first (its reply begun with an empty think block), much sooner.</param>
+    public async Task<string?> AskAsync(string system, string question, byte[]? picture, int maxTokens, TimeSpan limit, CancellationToken ct, bool think = true)
     {
-        List<ChatMessage> request = [ChatMessage.System("You answer exactly what is asked, briefly."), ChatMessage.User(question)];
+        List<ChatMessage> request =
+        [
+            ChatMessage.System(system),
+            picture is null ? ChatMessage.User(question) : new() { Role = ChatRole.User, Parts = [ContentPart.FromImage(picture, "image/jpeg"), ContentPart.FromText(question)] },
+        ];
+        var prefill = !think && !_prefillRejected && ThinksInQwenTags(options.Model);
+        if (prefill)
+            request.Add(new ChatMessage { Role = ChatRole.Assistant, Content = NoThinking });
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromMinutes(2));
+        timeout.CancelAfter(limit);
         try
         {
-            var reply = await client.CompleteAsync(request, [], new ChatRequestOptions { Model = options.Model, Extra = options.Extra, MaxTokens = 4096 }, null, timeout.Token)
+            var reply = await client.CompleteAsync(request, [], new ChatRequestOptions { Model = options.Model, Extra = options.Extra, MaxTokens = maxTokens }, null, timeout.Token)
                 .ConfigureAwait(false);
             var text = reply.Content ?? "";
             if (text.LastIndexOf("</think>", StringComparison.Ordinal) is var end and >= 0)
                 text = text[(end + "</think>".Length)..];
             return text.Trim() is { Length: > 0 } answer ? answer : null;
+        }
+        catch (LlmException ex) when (prefill && ex is not (ConnectionLostException or RateLimitedException or ContextOverflowException))
+        {
+            _prefillRejected = true;
+            return await AskAsync(system, question, picture, maxTokens, limit, ct, think).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is LlmException or HttpRequestException or IOException || (ex is OperationCanceledException && !ct.IsCancellationRequested))
         {

@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using BlackBox.Core.Agent;
@@ -577,7 +577,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             _ = SendAsync(new UserInput(text));
             sent?.Invoke();
         }), _paths.FilmsDir, _paths.ToolsDir, null,
-        (question, ct) => Core.Agent.ModelQuestion.AskAsync(Core.Llm.BackendConnection.Create(_http, _settings.Server), question, ct));
+        // The model in use, asked in requests of its own: what the user's words mean for a piece, how a piece came out.
+        (system, question, picture, think, ct) => Core.Agent.ModelQuestion.AskAsync(Core.Llm.BackendConnection.Create(_http, _settings.Server),
+            system, question, picture, 16000, TimeSpan.FromMinutes(6), ct, think));
 
     // ---- files going with the next message ------------------------------------------
 

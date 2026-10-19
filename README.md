@@ -11,9 +11,10 @@ whatever it downloads stay in a `Data` folder next to the exe.
 ## What it can do
 - **Use any app.** It sees the screen and uses the mouse and keyboard, in any program.
 - **Pictures, video and sound.** It makes them with ComfyUI, installing ComfyUI and the models if needed.
-- **Films.** Plan one shot by shot with the **Filmmaking** button (the frames each shot starts and
-  ends on, how long it lasts, what happens, the soundtrack), or just ask for one. It makes every
-  piece, checks each shot and redoes the ones that are wrong, then puts the film together.
+- **Films.** The **Filmmaking** button opens a film on a timeline: its characters and places, its
+  shots and its sound. Say what you want in plain words, for the whole film or for the shot or
+  picture you pick, and BlackBox writes the prompts, picks the models, makes that piece and looks at
+  it; earlier takes are kept. Or just ask for a film in the chat.
 - **Game development.** It makes games in any engine (Unity, Unreal, Godot) and play-tests them.
 - **Documents.** It writes and edits Word, Excel, PowerPoint and PDF files, no Office needed.
 - **Servers.** It logs in over SSH to set servers up or fix them.

@@ -489,17 +489,51 @@ saw as a chubby teenager). `tries=N` makes up to N takes with new seeds until on
 the best. The whole film is checked from a frame of each shot side by side and the joins where the
 camera should go on.
 
-The window shows the shots two to a row, the rows going down (a long row scrolling sideways was
-in the way, the user found), and under them a strip of the film on one line: each shot as long as
-it lasts, overlapping the one before for a dissolve or fade, the soundtrack's waveform on the same
-scale, and where the film ends. It is there to read, not to edit; a timeline to trim and move
-shots on is for later. Its play button plays the soundtrack from the playhead (a click on the strip
-moves it) with each shot's storyboard frame beside it, the first frame for the first half of the
-shot and the last for the second, so the frames can be seen switching with the music. In the window, frames, clips and the song are made directly (no model involved), each with a Stop;
-**Make the film** hands the storyboard to the agent in the chat, which makes what isn't made, checks
-every shot, fixes what is wrong, joins the film and checks it. The window shows what the agent
-changes and makes as it goes, from the film's folder. A ComfyUI BlackBox started for the window is
-closed once the window is.
+**The window is a timeline**, the user's design (it replaced a grid of shots two to a row with
+prompt boxes, and a read-only strip): one horizontal scroll for three kinds of row, the names
+staying put at the left. **References** have a row each, with a bar under every run of shots made
+from them (directly or through frames made from frames). **Video** has a block per shot from where
+it starts for as long as it lasts, its clip's frames inside once made (else its frames and what
+happens in it), its state under it; dragging a shot's right edge makes it longer or shorter, in
+half seconds. **Sound** has the lines where they are said and the soundtrack's waveform, darker
+where it is turned down under the lines. A ruler on top moves the playhead (click or drag), and the
+play button plays the soundtrack from it with each shot's frame in the viewer. The wheel scrolls
+sideways, Ctrl+wheel zooms. Above the timeline are a viewer (the piece picked: a frame, a clip, the
+song; with nothing picked, the joined film) and a panel.
+
+**The user never writes a prompt** (their rule): there are no prompt fields. They pick a piece (a
+reference, a shot or one of its frames, the sound) or nothing (the whole film), and say in the
+panel what they want; `FilmDirector` asks the chat model, in a request of its own, with the film's
+storyboard, what was said about that piece before, what is installed for its kind of job and a
+picture of it as it is (a frame, or the sheet of a clip), to answer with a JSON change to the
+storyboard, a reply, and what to make now. A piece's request may change only that piece (a shot,
+its frames too, and the lines' voice); a change it would make elsewhere is left and said. A whole
+film's request may lay the film out or change anything, and makes nothing: each piece is made when
+the user makes it (Make it, Another take) or with **Make what's missing**, which makes every piece
+not made or out of date in the order they need (references, frames, the song, shots), each looked
+at, then joins the film. The model writes prompts as the brief in `FilmDirector` says: who is in a
+frame (repeating what makes each person look like themselves), where, framing, light, and the
+film's look in the same words in every prompt; a shot's action in order in the present tense; lines
+that fit their shot; a model named only when the user names or describes one. A piece's request is
+answered without thinking (11 to 30 s with qwen3.8, against three minutes thinking, and as good on
+the meme); a whole film is laid out with thinking. Each piece made is looked at by a fresh look (a
+frame against its prompt, a shot with FilmCheck's sheet and numbers), and what it found is kept in
+the piece's workflow file (`"look"`) so the state shows it. What was said about each piece is in
+`talk.json` beside the storyboard.
+
+**Takes**: before a piece is made again, the one there is kept beside it (`frames/f2.v1.png` and
+`.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it was made with
+(`"settings"`). Picking an earlier take puts it back in the film with those settings (so it is up
+to date again), and the one it replaces becomes a take.
+
+From one sentence ("a little red fox in a snowy pine forest at night looks up at the full moon,
+then howls at it, gentle piano") the window laid out two references, four frames made from them,
+two shots and a song in about two minutes, and Make what's missing made all nine pieces and joined
+them in 14 minutes; two of the looks found faults worth a retake (a reference with one pose, not a
+sheet; a frame not as close as asked). On the meme, "make him look more surprised when he turns to
+the camera" on shot 3 rewrote its prompt in 15 s and made it again in two minutes. **Make the whole
+film** still hands the storyboard to the agent in the chat. A ComfyUI BlackBox started for the
+window is closed once the window is.
 
 ### How films did
 On this PC (RTX 5070 Ti 16 GB, ComfyUI 0.41.3), at 1280x720 and 24 fps: a frame from words took
