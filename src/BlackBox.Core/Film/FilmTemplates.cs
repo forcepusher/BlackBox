@@ -165,7 +165,9 @@ public static class FilmTemplates
         var tags = string.Join(" ", t.Tags).ToLowerInvariant() + " " + t.Name.ToLowerInvariant();
         return job switch
         {
-            FilmJob.Frame or FilmJob.Edit => tags.Contains("image") && !tags.Contains("video"),
+            // A picture from words alone: not one that starts from a picture (an edit, a control image, layers to split).
+            FilmJob.Frame => tags.Contains("image") && !tags.Contains("video") && !new[] { "edit", "controlnet", "layer", "upscale", "pose" }.Any(tags.Contains),
+            FilmJob.Edit => tags.Contains("image") && !tags.Contains("video"),
             FilmJob.Song => tags.Contains("audio") || tags.Contains("music"),
             _ => tags.Contains("video"),
         };

@@ -28,7 +28,8 @@ public sealed class FilmTool : Tool
         "width, height, fps, frames:[{id, prompt, seed, from: [ids of frames it is made from, to keep people and places the same], file (a picture of the user's), name, reference: true for a character or place sheet}], " +
         "shots:[{id, first, last (frame ids), seconds, prompt (what happens), camera, transition: cut|dissolve|fade, lipSync (sings or speaks the soundtrack's part under it), seed}], " +
         "sound:{source: none|file|song, file, tags (the song's style), lyrics, seed}. Frames and shots are matched by id; {\"id\": …, \"delete\": true} removes one. " +
-        "Without path a new film goes into Videos\\BlackBox films\\<title>. A shot that starts on the last frame of the one before goes on with the same camera; " +
+        $"Without path a new film goes into {Storyboard.DefaultRoot}\\<title>, where the Filmmaking window finds it; its film is made there too. " +
+        "A shot that starts on the last frame of the one before goes on with the same camera; " +
         "a new first frame is a cut to another scene or angle. Keep one clear action per shot, 3 to 8 seconds. " +
         "action=frame id= makes a frame's picture; action=sound makes the song; action=shot id= makes a shot's clip and checks it (does it start and end on its frames, " +
         "how it moves, and a fresh look at what happens, faults and whether people stay the same); tries=N makes up to N takes with new seeds until one passes. " +
