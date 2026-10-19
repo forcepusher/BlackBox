@@ -455,6 +455,19 @@ first two frames with the woods, made the leap again (its second take passed), j
 check passed, saying the moon changes sides at the cut. Every frame and clip kept its first frame
 0.98 alike to the storyboard's.
 
+"Make a short music video, about 20 seconds: a paper boat sails down a rainy city street gutter at
+dusk, slips under a bridge of fallen leaves, and comes out into a big puddle that reflects the city
+lights. Add a gentle song with lyrics about small journeys." in the chat: qwen3.8 wrote a storyboard
+of three frames, each made from the one before, and three shots going on from each other, with a
+song with lyrics; done in 30 minutes, 16 model calls, 15 tool calls, no errors, 20 s. The first shot
+failed five takes the same way (the boat stays put while the leaves fade in: its two frames had the
+boat in the same place), and the agent first tried to make the boat small in the first frame (the
+image model kept drawing it big), then had the camera glide forward with the boat in the middle,
+which passed, and wrote the next shot the same way. Not having seen the films folder named, it
+copied the film into Videos\BlackBox films as well; the tool's description now names the folder.
+A song's words are heard after it is made: ACE-Step's 10 s song for two lines of lyrics came back
+as "I see it's cold now I keep telling", which the model is told to check against the lyrics.
+
 ## Chat history
 Every chat is saved on its own in `Data/chats/` from its first message on, after every step, and
 named after that message. **History** next to **New chat** lists them, the latest first: pick one to
@@ -686,6 +699,7 @@ prints the traceback and exits with 0.
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures, videos, sounds and 3D models to the model; `write_file` makes documents from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
 | `comfyui` | Pictures, video, sound, music, speech and 3D models with ComfyUI on this PC, which it installs when there is none: templates, node and model look-ups, models found online and downloaded, checked runs that hand back the files (see Pictures, video and sound) |
+| `film` | Films from a storyboard (the Filmmaking window's): plans or changes it, makes its frames, song and shots with ComfyUI, checks each shot against what it should show, joins them with ffmpeg (see Films) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
 | `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |
