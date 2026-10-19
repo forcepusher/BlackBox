@@ -459,7 +459,11 @@ On BlackBox's click benchmark (fake screens, below) Nemotron 3.5 Super VL hit 12
 two runs on the 0-1000 grid it points on, every miss within 16 px of a small link or button;
 Dots3-Note Preview hit 0 of 4 and Nemotron 3 Nano Omni 1 of 4, and Inkling Small had used up the
 daily allowance Kilo shares among all its users. A file task through the
-command-line runner took 15 seconds on Nemotron 3 Super.
+command-line runner took 15 seconds on Nemotron 3 Super. On 19 October 2026 Nemotron 3.5 Super VL
+did nine everyday tasks a new user tries (disk space, weather, Excel, Word, a reminder, a picture,
+a game, a request in Russian) and the four second-monitor tasks, but its 2048 run said it was done
+after 23 minutes with a game that broke four of the checker's ten rules (tiles outside the board,
+wrong moves and score, no game over), where qwen3.8 passed all ten: long jobs want a stronger model.
 
 Free use is 200 requests an hour per IP address: a step is one request, a click one more (its fresh
 look), so a long task can run into it. Kilo then answers 429 without saying for how long, and
