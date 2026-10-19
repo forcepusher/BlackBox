@@ -508,6 +508,21 @@ now names where films go.
 A song's words are heard after it is made: ACE-Step's 10 s song for two lines of lyrics came back
 as "I see it's cold now I keep telling", which the model is told to check against the lyrics.
 
+"Spaghetti Days", a 22 s meme asked for in one chat message (an original man eating spaghetti
+messily at a restaurant, several angles, turning to the camera between bites to say deadpan lines
+about AI video, Italian music under it): qwen3.8 wrote a character sheet, four frames made from it,
+four lip-synced shots with lines and an instrumental song; done in 70 minutes, 31 tool calls, no
+errors. What it learned on the way: a lip-synced shot whose first frame has spaghetti in the mouth
+doesn't move the mouth (it made new frames with the mouth free); a shot that eats and then talks
+had the line over the eating (it split eating and talking into shots of their own); a frame added
+later from words alone drew another man each time, and the film check caught only one of three.
+Two more messages fixed it: "make him the same man" (it remade those frames from the sheet, 36
+minutes) and "turn his head to the camera before he talks" (a first frame looking down at the plate,
+19 minutes). It also tripped on things now fixed: taking a shot's line out left the shot
+lip-synced to the song; remaking a frame didn't put the shots on it on the list; the fade in from
+black looked like a fault; and a new task looking for a film by name searched the whole user
+folder. The frame tool now says when a frame is made from words alone in a film with a sheet.
+
 ## Chat history
 Every chat is saved on its own in `Data/chats/` from its first message on, after every step, and
 named after that message. **History** next to **New chat** lists them, the latest first: pick one to
