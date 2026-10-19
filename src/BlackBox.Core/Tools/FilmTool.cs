@@ -289,6 +289,11 @@ public sealed class FilmTool : Tool
         if (made.Workflow is { } wf) sb.AppendLine($"Its workflow (fixed seed {frame.Seed}): {wf}");
         foreach (var note in made.Notes.Where(n => !n.Contains("no place for the size", StringComparison.Ordinal)))
             sb.AppendLine("Note: " + note);
+        // A frame made from its prompt alone draws its people anew; in a film with a character sheet that drifts.
+        var sheets = board.Frames.Where(f => f.Reference && f != frame).Select(f => f.Name is { Length: > 0 } n ? $"{f.Id} (\"{n}\")" : f.Id).ToList();
+        if (frame.From.Count == 0 && frame.File is not { Length: > 0 } && !frame.Reference && sheets.Count > 0)
+            sb.AppendLine($"It is made from its prompt alone, so whoever is in it is drawn anew; if it shows someone or somewhere of {string.Join(", ", sheets)}, " +
+                          $"make it again with from=[{string.Join(", ", board.Frames.Where(f => f.Reference && f != frame).Select(f => f.Id))}] to keep them the same.");
         sb.Append("Look at it: does it show what its prompt says, in the film's look, with the same people and places as the frames it is made from? " +
                   "If not, change the prompt or the seed and make it again.");
         return new ToolResult(sb.ToString(), preview.Image, ImageCaption: preview.Image is null ? null : $"Frame {frame.Id}:", Files: [made.File]);
