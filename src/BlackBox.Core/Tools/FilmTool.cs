@@ -226,7 +226,8 @@ public sealed class FilmTool : Tool
             var current = FilmMaker.IsCurrent(board, s);
             sb.AppendLine($"  {s.Id} ({N(starts[i])}–{N(starts[i] + s.Seconds)} s, {N(s.Seconds)} s{join}): {frames}. \"{s.Prompt.Trim().ReplaceLineEndings(" ").Clip(300)}\"" +
                           (s.Camera.Length > 0 ? $" Camera: {s.Camera}." : "") +
-                          (Storyboard.Speaks(s) ? $" Says: \"{s.Line.Trim().ReplaceLineEndings(" ")}\"" + (FilmMaker.LineIsCurrent(board, s) ? " (said)." : " (not said yet).") : "") +
+                          (Storyboard.Speaks(s) ? $" Says: \"{s.Line.Trim().ReplaceLineEndings(" ")}\"" + (FilmMaker.LineIsCurrent(board, s) ? " (said)." : " (not said yet).") :
+                           s.LipSync ? " Sings the soundtrack's part under it (lipSync without a line)." : "") +
                           $" Seed {s.Seed}. " +
                           (!made ? "Not made." : current ? $"Made: {board.ShotVideo(s)}" : $"Made, but out of date: {board.ShotVideo(s)}"));
             if (!current)

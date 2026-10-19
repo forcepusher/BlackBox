@@ -375,11 +375,18 @@ public sealed class Storyboard
                     list.Add(added);
                     continue;
                 }
+                var hadLine = Said(list[at]["line"]);
                 foreach (var (k, v) in item)
                     list[at][JsonKey(k)] = v?.DeepClone();
+                // A shot whose line is taken out stops being lip-synced (else it would be lip-synced
+                // to the song under it), unless the change says it stays so.
+                if (hadLine && !Said(list[at]["line"]) && !item.Any(p => JsonKey(p.Key) == "lipSync"))
+                    list[at]["lipSync"] = false;
             }
             return new JsonArray(list.Cast<JsonNode>().ToArray());
         }
+
+        static bool Said(JsonNode? line) => line is JsonValue v && v.TryGetValue<string>(out var s) && s.Trim().Length > 0;
 
         // Written as the file has them (camelCase), whatever case the change used.
         static string JsonKey(string key) => key.Length == 0 ? key : char.ToLowerInvariant(key[0]) + key[1..];

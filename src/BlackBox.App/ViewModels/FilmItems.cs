@@ -252,17 +252,22 @@ public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : Observ
         }
     }
 
-    /// <summary>What is said in it, lip-synced in the film's voice; a line makes the shot lip-synced.</summary>
+    /// <summary>
+    /// What is said in it, lip-synced in the film's voice; a line makes the shot lip-synced, and
+    /// taking the line out takes the lip sync with it (else the shot would be lip-synced to the song).
+    /// </summary>
     public string Line
     {
         get => Shot.Line;
         set
         {
             if (Shot.Line == value) return;
+            var had = Shot.Line.Trim().Length > 0;
             Shot.Line = value;
-            if (value.Trim().Length > 0 && !Shot.LipSync)
+            var has = value.Trim().Length > 0;
+            if (has != had && Shot.LipSync != has)
             {
-                Shot.LipSync = true;
+                Shot.LipSync = has;
                 OnPropertyChanged(nameof(LipSync));
             }
             OnPropertyChanged();

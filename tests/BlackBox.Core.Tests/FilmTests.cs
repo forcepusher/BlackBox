@@ -61,6 +61,20 @@ public sealed class StoryboardTests : IDisposable
     }
 
     [Fact]
+    public void Taking_a_line_out_stops_the_lip_sync_unless_kept()
+    {
+        var board = Storyboard.Parse("""
+            {"shots": [{"id": "a", "line": "Hello."}, {"id": "b", "line": "Bye."}, {"id": "c", "lipSync": true}]}
+            """);
+        var merged = Storyboard.Merge(board, (JsonObject)JsonNode.Parse("""
+            {"shots": [{"id": "a", "line": ""}, {"id": "b", "line": " ", "lipSync": true}, {"id": "c", "line": ""}]}
+            """)!);
+        Assert.False(merged.Shots[0].LipSync); // it would sing the song under it otherwise
+        Assert.True(merged.Shots[1].LipSync);
+        Assert.True(merged.Shots[2].LipSync); // sang the song before and still does
+    }
+
+    [Fact]
     public void A_new_film_is_saved_only_when_asked_and_loads_back_the_same()
     {
         var board = Storyboard.New(_dir, "Keeper");
