@@ -380,9 +380,16 @@ the PC's Videos folder). The window's **Show folder** opens it:
 - **The film's look** (`style`), added to every frame's and shot's prompt, and its frame size and
   frame rate (1280x720 at 24 fps unless changed).
 - **The soundtrack**: none (each shot keeps the sound it was made with), a sound file of the
-  user's, or a song made for the film from a style and lyrics, as long as the film. A shot can be
-  **lip-synced**: the soundtrack's part under it is cut out as a WAV and given to LTX's picture
-  and sound to video template with its first frame, so the people in it sing or speak it.
+  user's, or a song made for the film from a style and lyrics. A shot can be **lip-synced**: the
+  soundtrack's part under it is cut out as a WAV and given to LTX's picture and sound to video
+  template with its first frame, so the people in it sing or speak it.
+- **Lines**: what is said in a shot, in the film's voice (a description: "a man in his forties,
+  warm, deadpan"). VoxCPM2 says the first speaking shot's line from the description and clones
+  that line's voice for the others, so every line is the same person; the line is placed 0.4 s into
+  the shot (time to turn to the camera) and the shot is lip-synced to it. In the film the line is
+  heard as VoxCPM2 said it, not as LTX gives it back, and the soundtrack drops to 35% under it. A
+  line longer than its shot is said to be cut. A small Gemma 4 hears each line back in the check:
+  "Honestly? It used to be a lot worse." came back word for word.
 
 Only decisions are kept in the storyboard. What is made sits at fixed places beside it, each with
 the workflow that made it: `frames/<id>.png` and `frames/<id>.json`, `shots/<id>.mp4` and
