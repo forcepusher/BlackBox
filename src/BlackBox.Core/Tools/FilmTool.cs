@@ -296,7 +296,8 @@ public sealed class FilmTool : Tool
         sb.AppendLine(string.Join("\n", preview.Lines));
         if (made.Score is { } score)
             sb.AppendLine($"How it sounds to SongEval, a judge trained on musicians' ratings, for the part the film uses: {score.Describe()}." +
-                          (score.Musicality < SongScore.Good ? " Make it again (more tries, another style or simpler lyrics) before the shots that use it." : ""));
+                          (score.Musicality < SongScore.Good ? " Make it again (more tries, another style or simpler lyrics) before the shots that use it." : "") +
+                          (board.Sound.Lyrics.Trim().Length == 0 ? " SongEval is trained on songs with singing: an instrumental scored 2.5 to 3.3 in every style tried, so here it is a rough guide." : ""));
         if (board.Sound.Lyrics.Trim().Length > 0 && await HearAsync(ctx, made.File, ct).ConfigureAwait(false) is { } heard)
             sb.AppendLine(heard.Words is null ? $"{heard.Model} heard no words in it." : $"Its words, as {heard.Model} heard them: \"{heard.Words.ReplaceLineEndings(" ").Clip(1500)}\" Check them against the lyrics.");
         foreach (var note in made.Notes)

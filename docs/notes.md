@@ -415,9 +415,33 @@ bars through the whole clip.
 
 **Joining** is ffmpeg: each clip held on its last frame or cut to its shot's length, scaled and
 cut to the film's frame and frame rate, joined with concat (a cut) or xfade (a dissolve or a fade,
-which overlap the shot before by half a second or a second), its own sound under the soundtrack
-(30% unless set; a lip-synced shot's own sound is the soundtrack again and is left out), a short
-fade in and a fade out at the end. Without ffmpeg the error says where to put a portable one.
+which overlap the shot before by half a second or a second), the soundtrack under it (the shots'
+own sound left out under one unless its volume is raised: LTX's is a muddy wash that took the
+Paper Boat song from 3.1 to 2.7 on SongEval at 30%), a short fade in, a fade out at the end, longer
+for the song, which is cut there. Without ffmpeg the error says where to put a portable one.
+
+**The song** is made a minute long at least and the film uses its start: ACE-Step 1.5 falls apart
+when asked for a short song. For the Paper Boat's style and lyrics, 21 s songs scored 2.4 to 2.9 of
+5 on SongEval (the user called the films' sound garbage), 30 s 3.2, 45 to 90 s 3.8 to 4.4; the
+Turbo template beat SFT (3.3) and base (2.6); a tempo the style names ("70 BPM") is ACE-Step's own
+setting, which the templates otherwise fix at 95 or 120. Three songs are made with new seeds and the
+one that sounds best for the part the film uses is kept (the same settings scored 3.3 to 4.2 by the
+seed alone), its seed saved in the storyboard.
+
+**Listening** is what no one should have to do for every take, so a song, and the film's sound, are
+judged by [SongEval](https://github.com/ASLP-lab/SongEval): a scorer trained on 2,400 songs rated
+by musicians, over the MuQ music model, scoring coherence, musicality, memorability, structure and
+natural vocals from 1 to 5. Meta's Audiobox Aesthetics was tried first and rated the two songs the
+user called garbage 8.2 of 10 for production quality: it hears how clean a recording is, not
+whether it is music. SongEval gave them 2.4 and 2.7, a released song 3.9 to 4.3 (10 to 30 s
+excerpts of it too, its intro 3.2), and the Paper Boat film made again 4.1. It is trained on songs
+with singing: instrumentals scored 2.5 to 3.3 in every style tried (a soft hummed lullaby 3.7), so
+for an instrumental it is a rough guide. It runs with ComfyUI's own Python (which has PyTorch),
+set up once in `Data/tools/songeval`: MuQ and nnAudio by pip into that folder (ComfyUI's own
+packages left alone; MuQ's MuLan half, which needs x_clip, stubbed out), SongEval's 100 MB head from
+GitHub with its SHA-256 checked, MuQ's 1.3 GB model from Hugging Face with `HF_HOME` in that folder.
+torchaudio can't load files in ComfyUI 0.41's Python (its torchcodec lacks FFmpeg's libraries), so
+the script reads a WAV ffmpeg made. MuQ's weights are CC BY-NC 4.0.
 
 **Checking** a shot compares its clip with the storyboard: whether its first and last frames are
 the frames it should start and end on (pictures shrunk to 48 pixels across, brightness pattern
@@ -436,7 +460,9 @@ The window shows the shots two to a row, the rows going down (a long row scrolli
 in the way, the user found), and under them a strip of the film on one line: each shot as long as
 it lasts, overlapping the one before for a dissolve or fade, the soundtrack's waveform on the same
 scale, and where the film ends. It is there to read, not to edit; a timeline to trim and move
-shots on is for later. In the window, frames, clips and the song are made directly (no model involved), each with a Stop;
+shots on is for later. Its play button plays the soundtrack from the playhead (a click on the strip
+moves it) with each shot's storyboard frame beside it, the first frame for the first half of the
+shot and the last for the second, so the frames can be seen switching with the music. In the window, frames, clips and the song are made directly (no model involved), each with a Stop;
 **Make the film** hands the storyboard to the agent in the chat, which makes what isn't made, checks
 every shot, fixes what is wrong, joins the film and checks it. The window shows what the agent
 changes and makes as it goes, from the film's folder. A ComfyUI BlackBox started for the window is
