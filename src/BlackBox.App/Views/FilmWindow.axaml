@@ -25,7 +25,6 @@
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="8" />
       <Setter Property="Padding" Value="10" />
-      <Setter Property="Width" Value="300" />
     </Style>
     <Style Selector="Border.shot.selected">
       <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
@@ -402,34 +401,29 @@
             <TextBlock Classes="muted" TextWrapping="Wrap"
                        Text="Each shot goes from its first frame to its last in so many seconds. A shot that starts where the one before ends goes on with the same camera; one that starts on a frame of its own is a cut to another scene or angle." />
           </StackPanel>
-          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Padding="0,0,0,12">
-            <StackPanel Orientation="Horizontal">
-              <ItemsControl ItemsSource="{Binding Shots}">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:ShotItem">
-                    <StackPanel Orientation="Horizontal">
-                      <!-- How it follows the shot before. -->
-                      <StackPanel Width="64" VerticalAlignment="Center" Spacing="2" IsVisible="{Binding !IsFirst}">
-                        <PathIcon Data="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" Width="16" Height="16" Foreground="{StaticResource BbMuted}" HorizontalAlignment="Center" />
-                        <TextBlock Classes="muted" Text="{Binding JoinText}" HorizontalAlignment="Center" />
-                      </StackPanel>
-                      <Border Classes="shot" Classes.selected="{Binding IsSelected}">
+          <!-- Two shots a row, the rows going down: no sideways scrolling until there is a real timeline. -->
+          <ItemsControl ItemsSource="{Binding Shots}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="2" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ShotItem">
+                      <Border Classes="shot" Classes.selected="{Binding IsSelected}" Margin="0,0,12,12">
                         <StackPanel Spacing="8">
                           <Button Classes="flat" Command="{Binding SelectCommand}" AutomationProperties.Name="{Binding Title}">
                             <DockPanel>
                               <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding LengthText}" VerticalAlignment="Center" />
+                              <!-- How it follows the shot before: goes on from it, or a cut, dissolve or fade. -->
+                              <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding JoinText}" IsVisible="{Binding !IsFirst}" VerticalAlignment="Center" Margin="0,0,10,0" />
                               <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
                             </DockPanel>
                           </Button>
                           <Grid ColumnDefinitions="*,8,*">
-                            <Button Classes="thumb" Command="{Binding SelectFirstCommand}" ToolTip.Tip="{Binding First.Prompt}" AutomationProperties.Name="First frame">
+                            <Button Classes="thumb" Command="{Binding SelectFirstCommand}" ToolTip.Tip="{Binding First.Prompt}" AutomationProperties.Name="First frame" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                               <StackPanel Spacing="2">
-                                <Border Classes="thumb" Classes.selected="{Binding First.IsSelected}" Height="78">
+                                <Border Classes="thumb" Classes.selected="{Binding First.IsSelected}" Height="104">
                                   <Panel>
                                     <Image Source="{Binding First.Thumbnail}" Stretch="UniformToFill" />
                                     <TextBlock Classes="muted" Text="No first frame" IsVisible="{Binding First, Converter={x:Static ObjectConverters.IsNull}}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" />
@@ -439,9 +433,9 @@
                                 <TextBlock Classes="muted" Text="Start" />
                               </StackPanel>
                             </Button>
-                            <Button Grid.Column="2" Classes="thumb" Command="{Binding SelectLastCommand}" ToolTip.Tip="{Binding Last.Prompt}" AutomationProperties.Name="Last frame">
+                            <Button Grid.Column="2" Classes="thumb" Command="{Binding SelectLastCommand}" ToolTip.Tip="{Binding Last.Prompt}" AutomationProperties.Name="Last frame" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                               <StackPanel Spacing="2">
-                                <Border Classes="thumb" Classes.selected="{Binding Last.IsSelected}" Height="78">
+                                <Border Classes="thumb" Classes.selected="{Binding Last.IsSelected}" Height="104">
                                   <Panel>
                                     <Image Source="{Binding Last.Thumbnail}" Stretch="UniformToFill" />
                                     <TextBlock Classes="muted" Text="Goes where the prompt takes it" IsVisible="{Binding Last, Converter={x:Static ObjectConverters.IsNull}}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" Margin="6,0" />
@@ -458,16 +452,19 @@
                           <TextBlock Classes="muted" Classes.error="{Binding IsError}" Text="{Binding State}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                       </Border>
-                    </StackPanel>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-              <Button Classes="addCard" Width="120" Margin="16,0,0,0" VerticalAlignment="Stretch" Command="{Binding AddShotCommand}"
-                      ToolTip.Tip="A shot after the last one, going on from where it ends">
-                <TextBlock Text="+ Add a shot" />
-              </Button>
-            </StackPanel>
-          </ScrollViewer>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Button Classes="addCard" Height="44" HorizontalAlignment="Stretch" Margin="0,-4,12,0" Command="{Binding AddShotCommand}"
+                  ToolTip.Tip="A shot after the last one, going on from where it ends">
+            <TextBlock Text="+ Add a shot" />
+          </Button>
+
+          <!-- How the shots line up with the soundtrack: to read, not to edit (a real timeline is for later). -->
+          <StackPanel Spacing="4">
+            <TextBlock Classes="label" Text="The shots against the soundtrack" />
+            <views:FilmStrip Strip="{Binding Strip}" Height="108" HorizontalAlignment="Stretch" Margin="0,0,12,0" />
+          </StackPanel>
 
           <!-- The film's sound. -->
           <TextBlock Classes="h2" Text="Soundtrack" />

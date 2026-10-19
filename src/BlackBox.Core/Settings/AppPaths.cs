@@ -14,6 +14,7 @@ namespace BlackBox.Core.Settings;
 ///   Data/tools/    (portable programs the agent downloaded for its tasks)
 ///   Data/scratch/  (helper files the agent made for its tasks: scripts and the like)
 ///   Data/pasted/   (pictures pasted into the chat from the clipboard)
+///   Data/films/    (one folder per film: its storyboard, frames, shots, song and the film)
 /// </code>
 /// </summary>
 public sealed class AppPaths(string root)
@@ -48,6 +49,13 @@ public sealed class AppPaths(string root)
     /// can work on them like any other; files dropped on the window stay where they are.
     /// </summary>
     public string PastedDir => Path.Combine(DataDir, "pasted");
+
+    /// <summary>
+    /// The films planned in the Filmmaking window or asked for in the chat, a folder each (see
+    /// <see cref="Film.Storyboard"/>): portable, like everything else of BlackBox's (the user's
+    /// choice), rather than in the PC's Videos folder.
+    /// </summary>
+    public string FilmsDir => Path.Combine(DataDir, "films");
 
     /// <summary>ComfyUI's address and folder as last used, the log of a server BlackBox started, and the browser profile its page is loaded in (see <see cref="Comfy.ComfyHub"/>).</summary>
     public string ComfyDir => Path.Combine(DataDir, "comfyui");

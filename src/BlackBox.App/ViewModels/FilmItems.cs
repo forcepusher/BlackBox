@@ -521,6 +521,14 @@ public sealed partial class WorkflowChoice : ObservableObject
     }
 }
 
+/// <summary>A shot on the film's strip: where it starts in the film and how long it lasts.</summary>
+public sealed record StripShot(string Label, double Start, double Seconds, bool LipSync, bool Made);
+
+/// <summary>What the strip under the shots shows (see <see cref="Views.FilmStrip"/>).</summary>
+/// <param name="Peaks">The soundtrack's loudness from start to end, 0 to 1; null without one.</param>
+/// <param name="SoundLabel">What to say where there is no waveform.</param>
+public sealed record FilmStripModel(IReadOnlyList<StripShot> Shots, double Length, float[]? Peaks, double SoundSeconds, string? SoundLabel);
+
 /// <summary>A film in the list at the top of the window: its title, and where it is.</summary>
 public sealed record FilmChoice(string Folder, string Title)
 {

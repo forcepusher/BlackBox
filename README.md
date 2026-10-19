@@ -5,8 +5,8 @@ until the job is done.
 
 ![BlackBox's start screen](docs/screenshot.png)
 
-It is a single portable `BlackBox.exe`. Nothing gets installed: its settings, chats and whatever it
-downloads stay in a `Data` folder next to the exe.
+It is a single portable `BlackBox.exe`. Nothing gets installed: its settings, chats, films and
+whatever it downloads stay in a `Data` folder next to the exe.
 
 ## What it can do
 - **Use any app.** It sees the screen and uses the mouse and keyboard, in any program.

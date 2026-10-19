@@ -28,7 +28,8 @@ public sealed class FilmTool : Tool
         "width, height, fps, frames:[{id, prompt, seed, from: [ids of frames it is made from, to keep people and places the same], file (a picture of the user's), name, reference: true for a character or place sheet}], " +
         "shots:[{id, first, last (frame ids), seconds, prompt (what happens), camera, transition: cut|dissolve|fade, lipSync (sings or speaks the soundtrack's part under it), seed}], " +
         "sound:{source: none|file|song, file, tags (the song's style), lyrics, seed}. Frames and shots are matched by id; {\"id\": …, \"delete\": true} removes one. " +
-        $"Without path a new film goes into {Storyboard.DefaultRoot}\\<title>, where the Filmmaking window finds it; its film is made there too. " +
+        "Without path a new film goes into a folder of its own in BlackBox's Data\\films, where the Filmmaking window finds it; its frames, clips and the film are made there too " +
+        "(BlackBox is portable: what it makes stays next to it). " +
         "A shot that starts on the last frame of the one before goes on with the same camera; " +
         "a new first frame is a cut to another scene or angle. Keep one clear action per shot, 3 to 8 seconds. " +
         "action=frame id= makes a frame's picture; action=sound makes the song; action=shot id= makes a shot's clip and checks it (does it start and end on its frames, " +
@@ -128,7 +129,11 @@ public sealed class FilmTool : Tool
                 ? "Which film? Give path: the film's folder (the one with its storyboard.json), or make a new one with action=storyboard and storyboard={…}."
                 : $"There is no storyboard in {given}. Make one with action=storyboard and storyboard={{…}} (path is where it goes).");
         var title = (string?)change["title"] ?? "Untitled film";
-        var folder = given ?? Path.Combine(Storyboard.DefaultRoot, Storyboard.Safe(title));
+        var root = ctx.FilmsDirectory ?? Path.Combine(ctx.ScratchDirectory ?? Path.GetTempPath(), "films");
+        var folder = given ?? Path.Combine(root, Storyboard.Safe(title));
+        // Another film of the same title is another film: it isn't written over.
+        for (var n = 2; given is null && File.Exists(Path.Combine(folder, Storyboard.FileName)); n++)
+            folder = Path.Combine(root, Storyboard.Safe($"{title} {n}"));
         if (given is not null && Path.GetFileName(given).Equals(Storyboard.FileName, StringComparison.OrdinalIgnoreCase))
             folder = Path.GetDirectoryName(given)!;
         Directory.CreateDirectory(folder);

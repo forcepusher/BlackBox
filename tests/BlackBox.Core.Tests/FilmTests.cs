@@ -269,10 +269,10 @@ public sealed class FilmMontageTests : IDisposable
     }
 
     [Fact]
-    public void Without_ffmpeg_joining_says_how_to_get_it()
+    public async Task Without_ffmpeg_joining_says_how_to_get_it()
     {
         var board = Film("""{"shots": [{"id": "s1"}]}""");
-        var ex = Assert.ThrowsAsync<FilmException>(() => FilmMontage.JoinAsync(board, null, null, null, CancellationToken.None)).Result;
+        var ex = await Assert.ThrowsAsync<FilmException>(() => FilmMontage.JoinAsync(board, null, null, null, CancellationToken.None));
         Assert.Contains("Data\\tools", ex.Message);
     }
 }
@@ -356,6 +356,23 @@ public sealed class FilmToolTests : IDisposable
         Assert.Contains("To make: frame f1, frame f2, the song (action=sound), shot s1, shot s2, then join.", text);
         Assert.Contains("s2 (5–10 s, 5 s, goes on from s1)", text);
         Assert.Contains("(lip-synced, first frame only)", text);
+    }
+
+    [Fact]
+    public async Task Without_a_path_a_new_film_goes_into_the_films_folder_and_never_over_another()
+    {
+        var tool = new FilmTool();
+        var films = Path.Combine(_dir, "Data", "films");
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, FilmsDirectory = films };
+        JsonObject Call() => new()
+        {
+            ["action"] = "storyboard",
+            ["storyboard"] = JsonNode.Parse("""{"title": "Paper Boat", "shots": [{"id": "s1", "prompt": "it sails"}]}"""),
+        };
+        Assert.False((await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).IsError);
+        Assert.False((await new FilmTool().ExecuteAsync(Call(), ctx, CancellationToken.None)).IsError);
+        Assert.True(File.Exists(Path.Combine(films, "Paper Boat", "storyboard.json")));
+        Assert.True(File.Exists(Path.Combine(films, "Paper Boat 2", "storyboard.json")));
     }
 
     [Fact]

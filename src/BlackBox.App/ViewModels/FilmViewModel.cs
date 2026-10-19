@@ -32,8 +32,14 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     private DateTime _ownWrite;
     private bool _loading;
 
-    public FilmViewModel(PreviewServices previews, ComfyHub hub, Action<string> sendToChat, string? folder)
+    /// <summary>Where films go, a folder each: BlackBox's Data\films, next to the exe like the rest of its data.</summary>
+    private readonly string _filmsRoot;
+
+    /// <param name="filmsRoot">Where films go (BlackBox's Data\films).</param>
+    /// <param name="folder">The film to open; the latest changed one when null.</param>
+    public FilmViewModel(PreviewServices previews, ComfyHub hub, Action<string> sendToChat, string filmsRoot, string? folder)
     {
+        _filmsRoot = filmsRoot;
         _previews = previews;
         _sendToChat = sendToChat;
         _maker = new FilmMaker(hub, previews.Decoder);
@@ -67,7 +73,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
 
     private void RefreshFilms()
     {
-        var films = Storyboard.Recent().ToList();
+        var films = Storyboard.Recent(_filmsRoot).ToList();
         if (_board.Folder.Length > 0 && !films.Contains(_board.Folder, StringComparer.OrdinalIgnoreCase))
             films.Insert(0, _board.Folder);
         _loading = true;
@@ -106,14 +112,14 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// A new film in Videos\BlackBox films, with one shot of two frames to start from. Its folder is
+    /// A new film in BlackBox's Data\films, with one shot of two frames to start from. Its folder is
     /// made with the first change: opening the window to look leaves nothing behind.
     /// </summary>
     [RelayCommand]
     private void NewFilm()
     {
         SaveNow();
-        var root = Storyboard.DefaultRoot;
+        var root = _filmsRoot;
         var name = "New film";
         for (var n = 2; Directory.Exists(Path.Combine(root, name)); n++)
             name = $"New film {n}";
@@ -231,6 +237,78 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             OnPropertyChanged();
             Changed(this);
         }
+    }
+
+    // ---- the strip: the shots against the soundtrack --------------------------------------------------
+
+    [ObservableProperty]
+    private FilmStripModel? _strip;
+
+    /// <summary>The soundtrack's waveform, and the file and time it was read from.</summary>
+    private (string? File, DateTime Stamp, float[]? Peaks, double Seconds) _sound;
+
+    private bool _readingSound;
+
+    /// <summary>Lays the shots out along the film's time, the soundtrack under them (read in the background when it changed).</summary>
+    private void RefreshStrip()
+    {
+        var (starts, length) = _board.Timing();
+        var shots = _board.Shots.Select((s, i) => new StripShot($"Shot {i + 1}", starts[i], s.Seconds, s.LipSync, File.Exists(_board.ShotVideo(s)))).ToList();
+        var file = _board.SoundtrackFile;
+        var stamp = file is not null && File.Exists(file) ? File.GetLastWriteTimeUtc(file) : DateTime.MinValue;
+        if (stamp == DateTime.MinValue)
+            _sound = (null, DateTime.MinValue, null, 0);
+        else if (!string.Equals(_sound.File, file, StringComparison.OrdinalIgnoreCase) || _sound.Stamp != stamp)
+            ReadSound(file!, stamp);
+        var unreadable = stamp != DateTime.MinValue && string.Equals(_sound.File, file, StringComparison.OrdinalIgnoreCase) && _sound.Peaks is null && !_readingSound;
+        var label = unreadable ? "The soundtrack can't be read on this PC." : _board.Sound.Source switch
+        {
+            FilmSound.Song => File.Exists(_board.SongFile) ? "Reading the song…" : "The song isn't made yet.",
+            FilmSound.FromFile => file is null ? "No sound file picked yet." : stamp == DateTime.MinValue ? "The sound file isn't there." : "Reading the sound file…",
+            _ => null,
+        };
+        Strip = new FilmStripModel(shots, length, _sound.Peaks, _sound.Seconds, label);
+    }
+
+    private void ReadSound(string file, DateTime stamp)
+    {
+        if (_readingSound || _previews.Decoder is not { } decoder)
+            return;
+        _readingSound = true;
+        _ = Task.Run(() =>
+        {
+            float[]? peaks = null;
+            double seconds = 0;
+            try
+            {
+                using var reader = decoder.OpenAudio(file);
+                if (reader is not null)
+                {
+                    var (mono, rate) = MediaPreview.ReadMono(reader, TimeSpan.FromMinutes(20));
+                    seconds = mono.Length / (double)Math.Max(1, rate);
+                    peaks = new float[Math.Min(800, Math.Max(1, mono.Length))];
+                    var per = Math.Max(1, mono.Length / peaks.Length);
+                    for (var i = 0; i < peaks.Length; i++)
+                    {
+                        var peak = 0f;
+                        for (var j = i * per; j < Math.Min(mono.Length, (i + 1) * per); j++)
+                            peak = Math.Max(peak, Math.Abs(mono[j]));
+                        peaks[i] = peak;
+                    }
+                    var top = peaks.DefaultIfEmpty(0).Max();
+                    if (top > 0)
+                        for (var i = 0; i < peaks.Length; i++)
+                            peaks[i] /= top;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException) { }
+            Dispatcher.UIThread.Post(() =>
+            {
+                _readingSound = false;
+                _sound = (file, stamp, peaks, seconds);
+                RefreshStrip();
+            });
+        });
     }
 
     /// <summary>How long the film is, and in how many shots.</summary>
@@ -407,6 +485,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         _saveTimer.Stop();
         _saveTimer.Start();
         OnPropertyChanged(nameof(LengthText));
+        RefreshStrip();
         // What the change makes out of date shows once it is saved (the stamps are computed from the files).
         _refreshTimer.Stop();
         _refreshTimer.Start();
@@ -761,6 +840,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         }
         OnPropertyChanged(nameof(HasFilm));
         OnPropertyChanged(nameof(ShotVolume));
+        RefreshStrip();
     }
 
     private readonly Dictionary<string, DateTime> _clipStamps = new(StringComparer.OrdinalIgnoreCase);

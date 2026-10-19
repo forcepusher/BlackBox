@@ -18,6 +18,7 @@ BlackBox/
                tools/ (portable programs the agent downloaded), scratch/ (helper files it made for a task),
                comfyui/ (ComfyUI's address and folder, the log of a server BlackBox started, see Pictures, video and sound),
                pasted/ (pictures pasted into the chat, see Files in a message),
+               films/ (a folder per film: storyboard, frames, shots, song and the film, see Films),
                crash.log (errors no code caught, see below)
 ```
 
@@ -362,8 +363,9 @@ a few seconds, and not every film is one continuous camera shot. The **Filmmakin
 window for it beside the chat, and the agent's `film` tool reads and writes the same storyboard,
 so a film can start in either and go on in the other.
 
-A storyboard is the `storyboard.json` in the film's folder (`Videos\BlackBox films\<title>`;
-`BLACKBOX_FILMS` moves that folder, for tests):
+A storyboard is the `storyboard.json` in the film's folder, `Data/films/<title>` next to the exe
+like the rest of BlackBox's data (the user's choice: it is portable; the first build put films in
+the PC's Videos folder). The window's **Show folder** opens it:
 
 - **Shots** in order, each going from its **first frame** to its **last frame** in so many seconds,
   with what happens in it, what the camera does, and how it follows the shot before (a cut, a
@@ -430,7 +432,11 @@ saw as a chubby teenager). `tries=N` makes up to N takes with new seeds until on
 the best. The whole film is checked from a frame of each shot side by side and the joins where the
 camera should go on.
 
-In the window, frames, clips and the song are made directly (no model involved), each with a Stop;
+The window shows the shots two to a row, the rows going down (a long row scrolling sideways was
+in the way, the user found), and under them a strip of the film on one line: each shot as long as
+it lasts, overlapping the one before for a dissolve or fade, the soundtrack's waveform on the same
+scale, and where the film ends. It is there to read, not to edit; a timeline to trim and move
+shots on is for later. In the window, frames, clips and the song are made directly (no model involved), each with a Stop;
 **Make the film** hands the storyboard to the agent in the chat, which makes what isn't made, checks
 every shot, fixes what is wrong, joins the film and checks it. The window shows what the agent
 changes and makes as it goes, from the film's folder. A ComfyUI BlackBox started for the window is
@@ -463,8 +469,9 @@ song with lyrics; done in 30 minutes, 16 model calls, 15 tool calls, no errors, 
 failed five takes the same way (the boat stays put while the leaves fade in: its two frames had the
 boat in the same place), and the agent first tried to make the boat small in the first frame (the
 image model kept drawing it big), then had the camera glide forward with the boat in the middle,
-which passed, and wrote the next shot the same way. Not having seen the films folder named, it
-copied the film into Videos\BlackBox films as well; the tool's description now names the folder.
+which passed, and wrote the next shot the same way. Its film was made in a test folder while the
+tool's description named the Videos folder, so it copied the film there as well; the description
+now names where films go.
 A song's words are heard after it is made: ACE-Step's 10 s song for two lines of lyrics came back
 as "I see it's cold now I keep telling", which the model is told to check against the lyrics.
 

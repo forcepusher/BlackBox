@@ -300,19 +300,13 @@ public sealed class Storyboard
         return board;
     }
 
-    /// <summary>Where films go unless the user picks another place: Videos\BlackBox films (BLACKBOX_FILMS for tests).</summary>
-    public static string DefaultRoot =>
-        Environment.GetEnvironmentVariable("BLACKBOX_FILMS") is { Length: > 0 } root ? root :
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos) is { Length: > 0 } videos ? videos
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Videos"), "BlackBox films");
-
-    /// <summary>The films in <see cref="DefaultRoot"/>, the latest changed first.</summary>
-    public static IReadOnlyList<string> Recent()
+    /// <summary>The films in <paramref name="root"/> (BlackBox's Data\films), the latest changed first.</summary>
+    public static IReadOnlyList<string> Recent(string root)
     {
         try
         {
-            return Directory.Exists(DefaultRoot)
-                ? new DirectoryInfo(DefaultRoot).EnumerateFiles(FileName, new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 2, IgnoreInaccessible = true })
+            return Directory.Exists(root)
+                ? new DirectoryInfo(root).EnumerateFiles(FileName, new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 2, IgnoreInaccessible = true })
                     .OrderByDescending(f => f.LastWriteTimeUtc).Select(f => f.DirectoryName!).ToList()
                 : [];
         }
