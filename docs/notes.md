@@ -905,7 +905,10 @@ calls and 26 failed tool calls; the ssh tools took about 28 minutes, 93 calls an
 The lab then moved to Debian 13, whose cloud image has no cron, logrotate, ufw, nft or lsof:
 16 of 17 tickets passed on their first Debian run (139 of 140 checks, game-server counted from
 its rerun after a timing bug in its check was fixed), installing what was missing as they went;
-rogue-service missed root's crontab, then passed when run again.
+rogue-service missed root's crontab, then passed when run again. On 19 October 2026 (develop with
+the new-user fixes, sharing LM Studio with other runs) 15 of 17 passed in full, 145 of 147 checks:
+disk-full and disk-ghost each missed their log-rotation check, and postgres spent an hour writing
+its own PostgreSQL client to prove a login from this PC before it passed.
 
 The VM is QEMU (from qemu.weilnetz.de, unpacked, not installed) running Debian's cloud image in
 software emulation: portable, no admin rights or Windows features, everything in
@@ -947,7 +950,9 @@ Slack, Outlook and others, or a web version of one in a browser window's title).
 On 14–15 October 2026, with qwen3.8-27b (q6_k_xl) on LM Studio over a VPN, the first run passed
 71 of 75 checks, and the last full run with all the changes below 93 of 95 (support, inbox,
 haggle, social and the 45-minute evening watch in full); the away watch then passed 21 of 21
-with the last prompt change. What the runs showed and what changed:
+with the last prompt change. On 19 October 2026 every scenario passed in full, 95 of 95; the
+evening watch took 52 minutes, so a scenario now gets 60 (`-Minutes`), where 40 always cut it off.
+What the runs showed and what changed:
 
 - Asked by a colleague "is this an auto-reply or actually you?", it answered "it's me". The system
   prompt now says to say it is the user's assistant when asked sincerely, never to claim to be the
