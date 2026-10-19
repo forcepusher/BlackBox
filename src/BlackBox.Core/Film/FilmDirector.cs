@@ -287,12 +287,16 @@ public static class FilmDirector
             case FilmPieceKind.Frame when board.Frame(piece.Id) is { } frame && File.Exists(board.FramePicture(frame)):
                 if (await Task.Run(() => FilmCheck.Picture(board.FramePicture(frame), 1024), ct).ConfigureAwait(false) is not { } picture)
                     return null;
+                var (before, beside) = Before(board, frame);
+                var other = before is null ? null : await Task.Run(() => FilmCheck.Picture(board.FramePicture(before), 768), ct).ConfigureAwait(false);
                 var question = $"This picture is {(frame.Reference ? "a reference sheet" : "a frame")} of a film, made from the prompt: \"{frame.Prompt.Trim()}\"" +
                                (frame.From.Count > 0 ? $" It was made from other pictures ({string.Join(", ", frame.From.Select(id => board.Frame(id)?.Label ?? id))}) so the same people and places look the same." : "") +
+                               (other is null ? "" : "\n" + beside) +
                                "\nSay briefly and concretely: does it show what the prompt says? Faults a viewer would notice: warped faces or hands, extra fingers or limbs, " +
-                               "things that couldn't be (food coming out of a head, a body merged with a chair), garbled text, black bars, a person who doesn't match the prompt. " +
+                               "things that couldn't be (food coming out of a head, a body merged with a chair), garbled text, black bars, a person who doesn't match the prompt, " +
+                               "a camera much closer or farther than the prompt says (a wide view where it says close-up)" + (other is null ? "" : ", and what doesn't agree with the second picture") + ". " +
                                "Mark each SEVERE (a viewer would notice it and it spoils the picture) or MINOR.\nThen end with exactly one line: VERDICT: good, or VERDICT: redo: and the main reason. Redo for any SEVERE problem.";
-                answer = await ask(Eyes, question, [picture], true, ct).ConfigureAwait(false);
+                answer = await ask(Eyes, question, other is null ? [picture] : [picture, other], true, ct).ConfigureAwait(false);
                 break;
             case FilmPieceKind.Shot when media is not null && board.Shot(piece.Id) is { } shot && File.Exists(board.ShotVideo(shot)):
                 var look = await Task.Run(() => FilmCheck.Shot(board, shot, board.ShotVideo(shot), media), ct).ConfigureAwait(false);
@@ -311,6 +315,33 @@ public static class FilmDirector
             ? $"Checked: {reason}."
             : faults.Count > 0 ? $"Checked: it looks right, though {string.Join("; ", faults)}." : "Checked: it looks right.";
         return (verdict, said, reason);
+    }
+
+    /// <summary>
+    /// The frame a viewer sees just before this one, and what to compare: the frame its shot starts on
+    /// (the shot moves from one to the other, so what differs slides: the fox film's moon in "the upper
+    /// left" and then "directly above" wandered across the sky), or the last frame of the shot before
+    /// (the film cuts from one to the other: the fox film's second shot was made an open clearing with
+    /// the moon on the other side, a jump only the look at the whole film saw, two shots later).
+    /// </summary>
+    private static (FilmFrame? Frame, string Text) Before(Storyboard board, FilmFrame frame)
+    {
+        if (frame.Reference)
+            return (null, "");
+        for (var i = 0; i < board.Shots.Count; i++)
+        {
+            var shot = board.Shots[i];
+            if (!shot.LipSync && shot.Last == frame.Id && board.Frame(shot.First) is { } first && first.Id != frame.Id && File.Exists(board.FramePicture(first)))
+                return (first, $"The second picture is {first.Label}, the frame its shot starts on: the shot moves from that picture to this one" +
+                               (shot.Camera.Trim().Length > 0 ? $" (the camera: {shot.Camera.Trim().TrimEnd('.')})" : "") + ". So what stays put (the moon or sun, the horizon, trees, buildings, " +
+                               "furniture, where people stand) must be in the same place and the same size in both, the camera at the same angle and distance unless the shot moves it; " +
+                               "only what the shot is for may change. Something that should stay put but sits elsewhere or is another size is SEVERE: the video would slide it across the screen.");
+            if (i > 0 && shot.First == frame.Id && board.Shots[i - 1] is { LipSync: false, Last: { } end } && end != frame.Id && board.Frame(end) is { } last && File.Exists(board.FramePicture(last)))
+                return (last, $"The second picture is {last.Label}, the last frame of the shot before: the film cuts from it to this one. Unless this prompt moves the story to another place " +
+                              "or time, a viewer must take this as the same place a moment later: the same kind of place (not a forest turned into a clearing, not another room), the moon or sun " +
+                              "on the same side and about the same size unless the camera turned around, the same light and weather, the same people looking the same. A jump like that is SEVERE.");
+        }
+        return (null, "");
     }
 
     private static string N(double d) => d.ToString("0.##", CultureInfo.InvariantCulture);

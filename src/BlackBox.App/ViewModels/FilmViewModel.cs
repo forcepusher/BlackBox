@@ -1119,6 +1119,24 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         });
     }
 
+    /// <summary>Looks at the joined film again (its shots side by side and each cut) and fixes what the looks find.</summary>
+    [RelayCommand]
+    private async Task LookAtFilm()
+    {
+        if (IsWorking || _ask is null)
+            return;
+        if (!HasFilm)
+        {
+            Status = "The film isn't joined yet: Make what's missing makes and joins it.";
+            return;
+        }
+        await RunJobAsync(FilmTalk.Film, null, async (_, ct) =>
+        {
+            await LookAtFilmAsync(ct);
+            SaveTalk();
+        });
+    }
+
     /// <summary>How many times a piece the look finds wrong is fixed and made again before the user is told what is left.</summary>
     private const int Fixes = 2;
 
@@ -1205,12 +1223,13 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     /// What the look found wrong with a piece, handed to BlackBox to change what it is made from
     /// (its prompt, its frames, a new seed), then made again and looked at again.
     /// </summary>
-    private async Task FixAsync(FilmPiece piece, string key, string found, CancellationToken ct, int round)
+    /// <param name="seen">What the look saw it on, when not the piece alone (the film's cuts), and what that picture is.</param>
+    private async Task FixAsync(FilmPiece piece, string key, string found, CancellationToken ct, int round, (byte[] Picture, string Text)? seen = null)
     {
         if (_ask is not { } ask)
             return;
         var installed = await InstalledAsync(piece, _ => { }, ct);
-        var picture = await Task.Run(() => PictureOf(piece), ct);
+        var picture = seen?.Picture ?? await Task.Run(() => PictureOf(piece), ct);
         // A shot between two frames that disagree on what stays put moves it: the fox film's frames put
         // the moon "in the upper left" and "directly above", and three takes of rewording the action
         // couldn't hold it still.
@@ -1220,7 +1239,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
               $"that is the cause: change the last frame ({last.Id}) to agree with the first, keeping only the change the shot is for."
             : "";
         var direction = await FilmDirector.DirectAsync(_board, piece,
-            $"A fresh look at it as just made found this wrong: {found}. Change what it is made from so that it doesn't happen again, keeping what was asked for." + frames +
+            $"A fresh look at it as just made found this wrong: {found}. Change what it is made from so that it doesn't happen again, keeping what was asked for." + (seen is { Text: var text } ? " " + text : "") + frames +
             " Otherwise write the action so a video model can't get it wrong, or only give it a new seed if nothing else would help. Keep the model it is made with unless the user asked for another.",
             _talk, installed, picture, ask, ct, think: true);
         var board = direction.Board;
@@ -1283,14 +1302,17 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     {
         if (IsWorking)
             return;
-        if (Missing() is null)
+        if (_board.Shots.Any(s => s.Prompt.Trim().Length == 0))
         {
-            Status = _board.Shots.Any(s => s.Prompt.Trim().Length == 0)
-                ? "Some shots don't say what happens in them yet: pick them and say it."
-                : "Everything is made. Join the clips to see the film.";
+            Status = "Some shots don't say what happens in them yet: pick them and say it.";
             return;
         }
-        Say(FilmTalk.Film, "Making what's missing, one piece after another…");
+        if (Missing() is null && Joined())
+        {
+            Status = "Everything is made and joined.";
+            return;
+        }
+        Say(FilmTalk.Film, Missing() is null ? "Everything is made: joining the film and looking at it…" : "Making what's missing, one piece after another…");
         await RunJobAsync(FilmTalk.Film, null, async (_, ct) =>
         {
             var made = 0;
@@ -1303,9 +1325,66 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             }
             Say(FilmTalk.Film, $"Made {made} piece{(made == 1 ? "" : "s")}." + (Missing() is { } left ? $" {Capital(Lower(ItemOf(left)?.Title ?? left.Id))} couldn't be made: pick it to see why." : " Joining the film…"), replace: true);
             if (Missing() is null)
+            {
                 await JoinAsync(ct);
+                await LookAtFilmAsync(ct);
+            }
             SaveTalk();
         });
+    }
+
+    /// <summary>Whether the film is joined from the clips and soundtrack there are now.</summary>
+    private bool Joined()
+    {
+        if (!HasFilm)
+            return false;
+        var newest = _board.Shots.Select(s => _board.ShotVideo(s)).Append(_board.SoundtrackFile).Where(p => p is not null && File.Exists(p))
+            .Select(p => File.GetLastWriteTimeUtc(p!)).DefaultIfEmpty(DateTime.MinValue).Max();
+        return File.GetLastWriteTimeUtc(_board.FilmFile) >= newest;
+    }
+
+    /// <summary>
+    /// Fresh looks at the joined film: a frame from each shot side by side, and each cut, the frame
+    /// before beside the frame after. They see what no look at one shot can: a fix that moved shot 2
+    /// of the fox film to an open clearing with the moon on the other side passed all of shot 2's own
+    /// looks. The shots they name are fixed and made again and the film joined again, once; then
+    /// looked at again, to say what is left.
+    /// </summary>
+    private async Task LookAtFilmAsync(CancellationToken ct, bool fix = true)
+    {
+        if (_ask is not { } ask || _previews.Decoder is not { } decoder || !HasFilm)
+            return;
+        Say(FilmTalk.Film, fix ? "Looking at the whole film…" : "Looking at the whole film again…");
+        var look = await Task.Run(() => FilmCheck.Film(_board, _board.FilmFile, decoder), ct);
+        var verdict = await FilmCheck.JudgeFilmAsync(_board, look,
+            (pictures, question, c) => ask("You look at pictures carefully and say plainly what you see, faults included. You don't praise what isn't good.", question, pictures, true, c), ct);
+        if (verdict is not { Reason: { } reason })
+        {
+            Say(FilmTalk.Film, verdict is null ? "The whole film couldn't be looked at."
+                : "Looked at the whole film: the same people and places all through and across every cut, and each shot shows what it should.", replace: true);
+            return;
+        }
+        var named = verdict.Redo.Select(_board.Shot).OfType<FilmShot>().Select(FilmPiece.Of).ToList();
+        if (named.Count == 0 || !fix)
+        {
+            Say(FilmTalk.Film, $"The look at the whole film found: {reason}." + (fix ? " Say what to change." : $" It still isn't right after fixing: say what to change, or pick a shot and say it."), replace: true);
+            return;
+        }
+        Say(FilmTalk.Film, $"The look at the whole film found: {reason}. Fixing {string.Join(", ", named.Select(p => Lower(ItemOf(p)?.Title ?? p.Id)))}…", replace: true);
+        foreach (var piece in named)
+        {
+            var at = _board.Shots.FindIndex(s => s.Id == piece.Id);
+            var cut = look.Cuts?.FirstOrDefault(c => c.At == at) ?? look.Cuts?.FirstOrDefault(c => c.At == at + 1);
+            await FixAsync(piece, piece.Id, $"(seen with the other shots of the film) {reason}", ct, 0, cut is null ? null : (cut.Picture,
+                "The picture shows a cut of the film: on top the last frame of the shot before, below it the first frame of the shot after. " +
+                $"Make {piece.Id}'s frames agree with the shots next to it unless the story moves on: the same kind of place, the moon, sun or light on the same side and the same size, " +
+                "the same time and weather, the same people looking the same, framed as the story needs; and keep its last frame made from its first, so the shot stays put."));
+        }
+        if (Missing() is null)
+        {
+            await JoinAsync(ct);
+            await LookAtFilmAsync(ct, fix: false);
+        }
     }
 
     /// <summary>What is installed for the kinds of job a piece can be, for the model to name.</summary>

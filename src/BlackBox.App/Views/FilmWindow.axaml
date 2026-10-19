@@ -504,6 +504,7 @@
                 <Button Classes="chip" Margin="0,0,6,6" Content="Delete it" Command="{Binding DeletePickedCommand}" IsVisible="{Binding CanDelete}" />
                 <Button Classes="chip" Margin="0,0,6,6" Content="Make what's missing" Command="{Binding MakeMissingCommand}" IsVisible="{Binding IsFilmPicked}" />
                 <Button Classes="chip" Margin="0,0,6,6" Content="Join the clips" Command="{Binding JoinCommand}" IsVisible="{Binding IsFilmPicked}" ToolTip.Tip="Puts the clips made so far together with the soundtrack" />
+                <Button Classes="chip" Margin="0,0,6,6" Content="Look at the film" Command="{Binding LookAtFilmCommand}" IsVisible="{Binding IsFilmPicked}" ToolTip.Tip="Looks at the joined film's shots side by side and at each cut, and fixes what it finds" />
               </WrapPanel>
               <Expander Header="The film's size, frame rate and sound levels" IsVisible="{Binding IsFilmPicked}" HorizontalAlignment="Stretch" Padding="0,6,0,0">
                 <StackPanel Spacing="8">

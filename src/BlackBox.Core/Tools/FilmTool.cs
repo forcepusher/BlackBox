@@ -451,8 +451,8 @@ public sealed class FilmTool : Tool
                 text.AppendLine("Its sound couldn't be judged: " + ex.Message);
             }
         }
-        if (check.Sheet is { } sheet && ctx.Ask is { } ask && await ask([sheet], FilmCheck.JudgeFilm(board), ct).ConfigureAwait(false) is { Length: > 0 } judged)
-            text.AppendLine("A fresh look at the shots side by side: " + judged.Trim());
+        if (ctx.Ask is { } ask && await FilmCheck.JudgeFilmAsync(board, check, ask, ct).ConfigureAwait(false) is { } judged)
+            text.AppendLine("Fresh looks at the shots side by side and at each cut: " + judged.Answer.Trim());
         if (check.Faults.Count > 0)
             text.AppendLine("To fix: " + string.Join("; ", check.Faults) + ".");
         text.Append("Fix what a viewer would notice (a frame first when a person or place differs, then its shots), then join again. " +

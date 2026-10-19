@@ -516,10 +516,45 @@ frame (repeating what makes each person look like themselves), where, framing, l
 film's look in the same words in every prompt; a shot's action in order in the present tense; lines
 that fit their shot; a model named only when the user names or describes one. A piece's request is
 answered without thinking (11 to 30 s with qwen3.8, against three minutes thinking, and as good on
-the meme); a whole film is laid out with thinking. Each piece made is looked at by a fresh look (a
-frame against its prompt, a shot with FilmCheck's sheet and numbers), and what it found is kept in
-the piece's workflow file (`"look"`) so the state shows it. What was said about each piece is in
-`talk.json` beside the storyboard.
+the meme); a whole film is laid out with thinking. Each piece made is looked at by fresh looks (see
+below), and what they found is kept in the piece's workflow file (`"look"`) so the state shows it.
+What was said about each piece is in `talk.json` beside the storyboard.
+
+**Looks that don't let slop through.** The user found the judging dismissive: the fox film passed
+with the fox floating up the screen at the cut at 5 s. One question per kind of fault catches more
+than one big question, so a shot gets three, each a request of its own with thinking: physics and
+bodies (the sheet, and a closer look: twelve frames from the ~0.9 s where the most changes, cropped
+to where things move), behaviour over time (frozen or held poses), and whether the world stays put
+(where the moon, horizon and trees are in each frame, how big the moon is as a share of the width,
+whether anyone slides or floats). A frame is looked at beside the frame a viewer sees before it:
+its shot's first frame (what differs between the two, the shot slides across the screen: the fox
+film's moon was "in the upper left" in one and "directly above" in the other) or the last frame of
+the shot before (a cut to another kind of place); and against the shot size its prompt names. What a
+look finds wrong goes back to `FilmDirector` (with thinking, and the two end frames' prompts to
+compare), which changes what the piece is made from; it is made and looked at again, up to twice,
+then the user is told what is left. After Make what's missing joins the film, the whole film gets
+two looks: a frame from the middle of each shot side by side (the same people, the story in order),
+and the cuts, each a picture of the last frame of the shot before above the first of the shot after
+(from the clips, so a fade isn't half through), with the references both shots are made from. The
+shots they name are fixed once, the film joined again and looked at again to say what is left; the
+**Look at the film** chip does the same for a film already joined.
+
+The two frames of a cut are one above the other: side by side, qwen3.8 measured where the moon was
+across the whole picture and found a moon that hadn't moved jumping from 0.13 to 0.6 of the width
+(4 runs of 4). Shot prompts that say the camera is locked made the cut look ask for the same framing
+across a cut, so it is told that holds inside a shot only.
+
+On the fox film the old looks passed both shots. The steadiness look found shot 1's moon wandering
+and shot 2's moon growing from a dot to a full disc (the floating: the camera rising on the fox in
+shot 2's first second); the fixes made each shot's last frame from its first and shot 1 then passed
+all three looks. Shot 2 was rebuilt as an open clearing with the moon on the other side, which all
+of its own looks and the side-by-side look passed ("intended framing changes"). The cut look caught
+that cut 4 runs of 4 and the user's original cut (the moon shrinking to a dot) 4 of 4; asked from
+the window, it fixed shot 2 by making its first frame from shot 1's last (the same forest and moon)
+in 17 minutes. On the fixed cut it said good 3 runs of 4 (once it found the fox's face different);
+on the spaghetti film's four cuts good 3 of 4 (once it found the man slimmer from s2 to s3, a face
+drift the side-by-side look had missed before). A look with thinking takes qwen3.8 30 to 100 s, so
+a shot's three looks about 2 to 4 minutes.
 
 **Takes**: before a piece is made again, the one there is kept beside it (`frames/f2.v1.png` and
 `.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it was made with

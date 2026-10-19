@@ -261,6 +261,29 @@ public sealed class FilmDirectorTests : IDisposable
     }
 
     [Fact]
+    public async Task A_film_is_looked_at_shot_by_shot_and_cut_by_cut_and_the_shots_named_are_redone()
+    {
+        var board = Storyboard.Parse("""
+            {"frames": [{"id": "r1", "reference": true, "prompt": "a snowy pine forest at night"}, {"id": "f1", "prompt": "a fox", "from": ["r1"]}, {"id": "f2", "prompt": "the fox howls", "from": ["f1"]}],
+             "shots": [{"id": "s1", "first": "f1", "prompt": "the fox looks up"}, {"id": "s2", "first": "f2", "prompt": "the fox howls"}]}
+            """);
+        var look = new FilmLook("", [1], [], Cuts: [new FilmCut([2], 1)]);
+        var asked = new List<string>();
+        Task<string?> Ask(IReadOnlyList<byte[]> pictures, string question, CancellationToken ct)
+        {
+            asked.Add(question);
+            return Task.FromResult<string?>(pictures[0][0] == 2 ? "Left: a dense forest. Right: an open clearing.\nVERDICT: redo shots s2: the forest becomes a clearing, breaking with s1" : "Fine.\nVERDICT: good");
+        }
+        var verdict = await FilmCheck.JudgeFilmAsync(board, look, Ask, CancellationToken.None);
+        Assert.Equal(2, asked.Count);
+        Assert.Contains("s1 to s2, a cut; both are made from the same reference pictures (r1: \"a snowy pine forest at night\")", asked[1]);
+        Assert.Equal(["s2"], verdict!.Redo);
+        Assert.Equal("the forest becomes a clearing, breaking with s1", verdict.Reason);
+        Assert.Equal("redo", FilmCheck.Verdict(verdict.Answer));
+        Assert.Null((await FilmCheck.JudgeFilmAsync(board, look, (_, _, _) => Task.FromResult<string?>("VERDICT: good"), CancellationToken.None))!.Reason);
+    }
+
+    [Fact]
     public void Takes_are_kept_and_put_back_with_their_settings()
     {
         var board = Board();

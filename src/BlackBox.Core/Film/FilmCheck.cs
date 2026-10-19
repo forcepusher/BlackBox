@@ -10,7 +10,15 @@ namespace BlackBox.Core.Film;
 /// <param name="Sheet">A JPEG: the storyboard's frames above the clip's (or each shot of the film), with their times.</param>
 /// <param name="Faults">What is surely wrong (a clip that doesn't start on its frame, a black or frozen clip), to fix before anything else.</param>
 /// <param name="Closer">A JPEG: twelve frames close together from the stretch of a shot where the most changes, cropped to where things move.</param>
-public sealed record FilmLook(string Text, byte[]? Sheet, IReadOnlyList<string> Faults, byte[]? Closer = null);
+/// <param name="Cuts">For a film: its cuts.</param>
+public sealed record FilmLook(string Text, byte[]? Sheet, IReadOnlyList<string> Faults, byte[]? Closer = null, IReadOnlyList<FilmCut>? Cuts = null);
+
+/// <summary>A cut as a JPEG: the last frame of the shot before above the first frame of the shot after.</summary>
+/// <param name="At">The index of the shot after the cut.</param>
+public sealed record FilmCut(byte[] Picture, int At);
+
+/// <summary>What the fresh looks at a whole film found: the shots to make again, and why; no reason when it is good.</summary>
+public sealed record FilmVerdict(string Answer, IReadOnlyList<string> Redo, string? Reason);
 
 /// <summary>
 /// Looks at what was made against the storyboard: whether a clip starts and ends on its frames, how
@@ -387,7 +395,7 @@ public static partial class FilmCheck
                 text.AppendLine("It has no sound.");
             var labels = board.Shots.Select((s, i) => $"{s.Id} at {N(starts[i] + s.Seconds / 2)} s").ToList();
             var sheet = middles.Count == 0 ? null : Grid(middles.Select((m, i) => (i < labels.Count ? labels[i] : "", m.Frame)).ToList(), reader.Width, reader.Height);
-            return new FilmLook(text.ToString().TrimEnd(), sheet, faults);
+            return new FilmLook(text.ToString().TrimEnd(), sheet, faults, Cuts: Cuts(board, decoder));
         }
         finally
         {
@@ -410,6 +418,151 @@ public static partial class FilmCheck
                       "a shot that doesn't show its action. A part of someone out of frame in a close-up, or small differences in pose and framing, are no reason to redo a shot.");
         sb.Append("Then end with exactly one line: VERDICT: good, or VERDICT: redo shots s1, s2…: and the main reason.");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// The second fresh look at a film: its cuts, each the frame before above the frame after. From
+    /// one frame in the middle of each shot, qwen3.8 found the fox film the same place all through,
+    /// where its second shot had become an open clearing with the moon on the other side of the sky
+    /// and the fox facing the other way: frames side by side read as "a snowy forest at night" each.
+    /// The two frames of a cut are one above the other, not side by side: side by side, qwen3.8
+    /// measured where the moon was across the whole picture, and found a moon that hadn't moved
+    /// (at 0.27 of each frame's width) jumping from 0.13 to 0.6, in 4 runs of 4.
+    /// </summary>
+    /// <param name="at">The index of the shot after each cut, one for each picture.</param>
+    public static string JudgeCuts(Storyboard board, IReadOnlyList<int> at)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"You judge the cuts of an AI-made film{Title(board)} for ONE thing only: whether the world stays the same across each cut. Each shot's frames are made " +
+                      "on their own, so the shot after a cut often lands somewhere else: a dense forest becomes an open clearing, a kitchen another kitchen, the moon or sun jumps " +
+                      "to the other side of the sky or changes size, day turns to dusk, someone's clothes, hair or fur change, while the story has the same place and moment.");
+        sb.AppendLine("The shots should show:");
+        foreach (var s in board.Shots)
+            sb.AppendLine($"- {s.Id}: {s.Prompt.Trim().ReplaceLineEndings(" ")}");
+        sb.AppendLine($"You get {(at.Count == 1 ? "one picture" : $"{at.Count} pictures, one per cut")}: on top the last frame of the shot before, below it the first frame of the shot after, " +
+                      "each labelled, the same size and lined up, so what stays in the same place is straight above itself. The cuts:");
+        foreach (var i in at)
+        {
+            var (before, after) = (board.Shots[i - 1], board.Shots[i]);
+            var shared = Refs(board, before).Intersect(Refs(board, after), StringComparer.OrdinalIgnoreCase).Select(board.Frame).OfType<FilmFrame>().ToList();
+            sb.AppendLine($"- {before.Id} to {after.Id}, a {after.Transition}" + (shared.Count > 0
+                ? $"; both are made from the same reference pictures ({string.Join("; ", shared.Select(f => $"{f.Id}: \"{Gist(f)}\""))}), so what those show should look the same."
+                : "."));
+        }
+        sb.AppendLine("1. For each cut, describe each of its two frames in a few words: the place (what is right behind the people or animals, the ground, how close and dense the trees, " +
+                      "buildings or furniture are), the light (the moon, sun or brightest light: how far across its own frame its centre is, from 0 at the frame's left edge to 1 at its right, " +
+                      "and how wide it is as a share of the frame's width), the time of day and weather, each person or animal (how they look, which way they face), " +
+                      "and how close the camera is (wide, medium or close-up).");
+        sb.AppendLine("2. Compare: would a viewer take the frame after the cut as the same place a moment later, unless the story moves on? A new angle may show another part of the same place, " +
+                      "but not another kind of place; the moon or sun stays on the same side (its centre within about a quarter of the width) and about the same size unless the camera turned around; " +
+                      "the same people look the same. What the shots say about the camera (still, locked) holds inside each shot, not across a cut: after a cut the camera may stand a little " +
+                      "elsewhere or closer, so the moon, trees or furniture a little higher, lower or bigger, or another part of the same forest or room in view, are MINOR. " +
+                      "Judge what the frames show: words in the storyboard that put the moon somewhere else don't make a jump less jarring. Where the story does move to another place or time, " +
+                      "say whether the frame after shows the one it should.");
+        sb.AppendLine("Mark each problem SEVERE (a viewer would notice it at the cut) or MINOR (a small difference in pose, framing or a detail).");
+        sb.Append("End with exactly one line: VERDICT: good, or VERDICT: redo shots s2, s5…: and the main reason, naming the shot that breaks with the others: " +
+                  "usually the one after the cut, or the one before it if that is the odd one out. Redo for any SEVERE problem.");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The fresh looks at a whole film: the shots side by side (<see cref="JudgeFilm"/>), then its
+    /// cuts (<see cref="JudgeCuts"/>), up to four at a time. Null when none could be had.
+    /// </summary>
+    public static async Task<FilmVerdict?> JudgeFilmAsync(Storyboard board, FilmLook look,
+        Func<IReadOnlyList<byte[]>, string, CancellationToken, Task<string?>> ask, CancellationToken ct)
+    {
+        var looks = new List<(string Name, string? Answer)>();
+        if (look.Sheet is { } sheet)
+            looks.Add(("The shots side by side", await ask([sheet], JudgeFilm(board), ct).ConfigureAwait(false)));
+        foreach (var cuts in (look.Cuts ?? []).Chunk(4))
+            looks.Add(("The cuts", await ask(cuts.Select(c => c.Picture).ToList(), JudgeCuts(board, cuts.Select(c => c.At).ToList()), ct).ConfigureAwait(false)));
+        if (looks.All(l => l.Answer is null))
+            return null;
+        var (redo, reasons) = (new List<string>(), new List<string>());
+        foreach (var answer in looks.Select(l => l.Answer).OfType<string>().Where(a => Verdict(a) == "redo"))
+        {
+            // The shots it names before its reason ("redo shots s2: … breaking with s1" is s2's).
+            var said = Reason(answer);
+            var rest = WithoutShots(board, said);
+            var shots = rest != said ? said[..^rest.Length] : said;
+            redo.AddRange(board.Shots.Select(s => s.Id).Where(id => !redo.Contains(id) && Regex.IsMatch(shots, $@"\b{Regex.Escape(id)}\b", RegexOptions.IgnoreCase)));
+            reasons.Add(rest);
+        }
+        var sb = new StringBuilder();
+        foreach (var (name, answer) in looks.Where(l => l.Answer is not null))
+            sb.AppendLine($"{name}: {answer!.Trim()}").AppendLine();
+        var reason = reasons.Count == 0 ? null : string.Join("; ", reasons);
+        sb.Append(reason is null ? "VERDICT: good" : $"VERDICT: redo{(redo.Count > 0 ? " shots " + string.Join(", ", redo) : "")}: {reason}");
+        return new FilmVerdict(sb.ToString(), redo, reason);
+    }
+
+    /// <summary>A redo's reason without the shots it names first ("shots s2, s3: the place changes").</summary>
+    private static string WithoutShots(Storyboard board, string reason)
+    {
+        var colon = reason.IndexOf(':');
+        if (colon <= 0 || colon > 80)
+            return reason;
+        var words = reason[..colon].Split([' ', ',', '&'], StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => !w.Equals("shot", StringComparison.OrdinalIgnoreCase) && !w.Equals("shots", StringComparison.OrdinalIgnoreCase) && !w.Equals("and", StringComparison.OrdinalIgnoreCase)).ToList();
+        return words.Count > 0 && words.All(w => board.Shot(w.Trim('*', '.')) is not null) && reason[(colon + 1)..].Trim() is { Length: > 0 } rest ? rest : reason;
+    }
+
+    /// <summary>The reference pictures a shot's frames are made from, however far back.</summary>
+    private static HashSet<string> Refs(Storyboard board, FilmShot shot)
+    {
+        var refs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Walk(string? id)
+        {
+            if (id is null || !seen.Add(id) || board.Frame(id) is not { } frame)
+                return;
+            if (frame.Reference)
+                refs.Add(frame.Id);
+            else
+                foreach (var from in frame.From)
+                    Walk(from);
+        }
+        Walk(shot.First);
+        Walk(shot.LipSync ? null : shot.Last);
+        return refs;
+    }
+
+    /// <summary>A reference by its name, or the first words of its prompt.</summary>
+    private static string Gist(FilmFrame frame)
+    {
+        if (frame.Name is { Length: > 0 } name)
+            return name;
+        var words = frame.Prompt.Trim().ReplaceLineEndings(" ").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Join(' ', words.Take(14)).TrimEnd(',', '.') + (words.Length > 14 ? "…" : "");
+    }
+
+    /// <summary>
+    /// The cuts of a film from its shots' clips (not the joined film, where a fade would be half
+    /// through): the last frame of the shot before above the first of the shot after, a picture each.
+    /// </summary>
+    private static List<FilmCut> Cuts(Storyboard board, IMediaDecoder decoder)
+    {
+        var cuts = new List<FilmCut>();
+        for (var i = 1; i < board.Shots.Count; i++)
+        {
+            var (before, after) = (board.Shots[i - 1], board.Shots[i]);
+            using var end = Edge(board.ShotVideo(before), last: true);
+            using var start = end is null ? null : Edge(board.ShotVideo(after), last: false);
+            if (end is null || start is null)
+                continue;
+            using var picture = GridBitmap([($"{before.Id} ends", end), ($"{after.Id} starts", start)], board.Width, board.Height, columns: 1, sheetWidth: 768);
+            cuts.Add(new FilmCut(Jpeg(picture), i));
+        }
+        return cuts;
+
+        SKBitmap? Edge(string clip, bool last)
+        {
+            if (!File.Exists(clip))
+                return null;
+            using var reader = decoder.OpenVideo(clip, 512);
+            return reader is null ? null : FrameAt(reader, last ? reader.Duration.TotalSeconds - 0.1 : 0, first: !last)?.Frame;
+        }
     }
 
     /// <summary>The verdict at the end of a fresh look's answer: good, redo, or null when it gave none.</summary>
@@ -581,14 +734,14 @@ public static partial class FilmCheck
         return Jpeg(grid);
     }
 
-    /// <summary>Pictures in a grid, each with its label in a corner, <see cref="SheetWidth"/> wide.</summary>
-    private static SKBitmap GridBitmap(IReadOnlyList<(string Label, SKBitmap Frame)> cells, int width, int height, int columns)
+    /// <summary>Pictures in a grid, each with its label in a corner, <see cref="SheetWidth"/> wide unless said.</summary>
+    private static SKBitmap GridBitmap(IReadOnlyList<(string Label, SKBitmap Frame)> cells, int width, int height, int columns, int sheetWidth = SheetWidth)
     {
         columns = Math.Clamp(columns, 1, Math.Max(1, cells.Count));
         var rows = (cells.Count + columns - 1) / columns;
-        var cellW = (SheetWidth - (columns - 1) * 4) / columns;
+        var cellW = (sheetWidth - (columns - 1) * 4) / columns;
         var cellH = Math.Max(16, (int)Math.Round(cellW * (double)height / Math.Max(1, width)));
-        var bitmap = new SKBitmap(SheetWidth, rows * cellH + (rows - 1) * 4);
+        var bitmap = new SKBitmap(sheetWidth, rows * cellH + (rows - 1) * 4);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(new SKColor(20, 20, 20));
         using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true };
