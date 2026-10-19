@@ -488,6 +488,7 @@ public sealed class FilmTool : Tool
         var sb = new StringBuilder();
         sb.AppendLine($"Joined the film in {Clock(made.Took)}: {made.File}");
         sb.AppendLine(string.Join("\n", preview.Lines));
+        sb.AppendLine($"It fades in from black over its first {N(FilmMontage.FadeIn)} s and out over its last {N(FilmMontage.FadeOut)} s on purpose, so a dark first or last frame is that, not a fault.");
         foreach (var note in made.Notes)
             sb.AppendLine("Note: " + note);
         if (stale.Count > 0)

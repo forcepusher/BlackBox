@@ -13,7 +13,7 @@ namespace BlackBox.Core.Film;
 public static class FilmMontage
 {
     /// <summary>How the film begins and ends: a short fade in from black, a longer one out.</summary>
-    private const double FadeIn = 0.4, FadeOut = 1.0;
+    internal const double FadeIn = 0.4, FadeOut = 1.0;
 
     /// <summary>The ffmpeg command line that joins the film, and how long the film is.</summary>
     /// <param name="hasSound">Whether a file has a sound track (shots made without one get silence).</param>
