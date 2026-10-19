@@ -7,8 +7,21 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BlackBox.App.ViewModels;
 
+/// <summary>A frame, shot or song made with a model the user names in words ("furry nova xl"), or the best installed one.</summary>
+public interface IMadeWith
+{
+    /// <summary>The user's words, or a template's name; empty for the best installed one.</summary>
+    string Model { get; set; }
+
+    /// <summary>The kind of job, which decides what can make it.</summary>
+    FilmJob Job { get; }
+
+    /// <summary>What the words were found to mean among what is installed, or why they weren't.</summary>
+    string ModelUse { get; set; }
+}
+
 /// <summary>A picture of the film: a frame a shot starts or ends on, or a reference (a character, a place) others are made from.</summary>
-public sealed partial class FrameItem(FilmViewModel film, FilmFrame frame) : ObservableObject
+public sealed partial class FrameItem(FilmViewModel film, FilmFrame frame) : ObservableObject, IMadeWith
 {
     public FilmFrame Frame { get; } = frame;
     public string Id => Frame.Id;
@@ -28,6 +41,26 @@ public sealed partial class FrameItem(FilmViewModel film, FilmFrame frame) : Obs
             film.Changed(this);
         }
     }
+
+    /// <summary>What it is made with, in the user's words; only this frame is made again when it changes.</summary>
+    public string Model
+    {
+        get => Frame.Model ?? "";
+        set
+        {
+            var model = value.Trim().Length == 0 ? null : value;
+            if (Frame.Model == model) return;
+            Frame.Model = model;
+            OnPropertyChanged();
+            film.Changed(this);
+            film.ModelChanged(this);
+        }
+    }
+
+    public FilmJob Job => FilmMaker.JobOf(Frame);
+
+    [ObservableProperty]
+    private string _modelUse = "";
 
     public string Name
     {
@@ -128,6 +161,8 @@ public sealed partial class FrameItem(FilmViewModel film, FilmFrame frame) : Obs
                 if (ticked)
                     Frame.From.Add(other.Id);
                 film.Changed(this);
+                // Made from others it is an edit, which another kind of model makes.
+                film.ModelChanged(this);
             }));
         OnPropertyChanged(nameof(HasFromChoices));
     }
@@ -170,10 +205,30 @@ public sealed partial class FromChoice(FrameItem frame, bool ticked, Action<bool
 }
 
 /// <summary>A shot: from its first frame to its last in so many seconds, with what happens and what the camera does.</summary>
-public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : ObservableObject
+public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : ObservableObject, IMadeWith
 {
     public FilmShot Shot { get; } = shot;
     public string Id => Shot.Id;
+
+    /// <summary>What its clip is made with, in the user's words; only this shot is made again when it changes.</summary>
+    public string Model
+    {
+        get => Shot.Model ?? "";
+        set
+        {
+            var model = value.Trim().Length == 0 ? null : value;
+            if (Shot.Model == model) return;
+            Shot.Model = model;
+            OnPropertyChanged();
+            film.Changed(this);
+            film.ModelChanged(this);
+        }
+    }
+
+    public FilmJob Job => FilmMaker.JobOf(Shot);
+
+    [ObservableProperty]
+    private string _modelUse = "";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Title), nameof(IsFirst), nameof(StartsAfterText))]
@@ -384,9 +439,29 @@ public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : Observ
 }
 
 /// <summary>The film's soundtrack: none, a file of the user's, or a song made for it.</summary>
-public sealed partial class SoundItem(FilmViewModel film, FilmSound sound) : ObservableObject
+public sealed partial class SoundItem(FilmViewModel film, FilmSound sound) : ObservableObject, IMadeWith
 {
     public FilmSound Sound { get; } = sound;
+
+    /// <summary>What the song is made with, in the user's words.</summary>
+    public string Model
+    {
+        get => Sound.Model ?? "";
+        set
+        {
+            var model = value.Trim().Length == 0 ? null : value;
+            if (Sound.Model == model) return;
+            Sound.Model = model;
+            OnPropertyChanged();
+            film.Changed(this);
+            film.ModelChanged(this);
+        }
+    }
+
+    public FilmJob Job => FilmJob.Song;
+
+    [ObservableProperty]
+    private string _modelUse = "";
 
     public bool IsNone
     {
@@ -516,48 +591,6 @@ public sealed partial class SoundItem(FilmViewModel film, FilmSound sound) : Obs
     private void NewSeed() => Seed = Storyboard.NewSeed();
 
     public void Report(string state, bool error = false) => Dispatcher.UIThread.Post(() => (State, IsError) = (state, error));
-}
-
-/// <summary>Which ComfyUI template makes one kind of job: picked from what is installed, or one the user chose.</summary>
-public sealed partial class WorkflowChoice : ObservableObject
-{
-    public const string Automatic = "Picked from what is installed";
-
-    private readonly FilmViewModel _film;
-    private readonly FilmWorkflows _workflows;
-
-    public WorkflowChoice(FilmViewModel film, FilmWorkflows workflows, FilmJob job, string label)
-    {
-        (_film, _workflows, Job, Label) = (film, workflows, job, label);
-        Options.Add(Automatic);
-        if (FilmTemplates.Chosen(workflows, job) is { } chosen)
-            Options.Add(chosen);
-        _selected = FilmTemplates.Chosen(workflows, job) ?? Automatic;
-    }
-
-    public FilmJob Job { get; }
-    public string Label { get; }
-    public ObservableCollection<string> Options { get; } = [];
-
-    [ObservableProperty]
-    private string _selected;
-
-    partial void OnSelectedChanged(string value)
-    {
-        if (value is null)
-            return;
-        FilmTemplates.Choose(_workflows, Job, value == Automatic ? null : value);
-        _film.Changed(this);
-    }
-
-    /// <summary>The templates that can do the job, the ones known to do it well first.</summary>
-    public void Offer(IEnumerable<string> names)
-    {
-        var keep = Selected;
-        foreach (var name in names.Where(n => !Options.Contains(n)))
-            Options.Add(name);
-        Selected = keep;
-    }
 }
 
 /// <summary>A shot on the film's strip: where it starts in the film and how long it lasts.</summary>

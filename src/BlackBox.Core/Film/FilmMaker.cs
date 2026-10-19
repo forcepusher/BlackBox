@@ -54,21 +54,28 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
 
     // ---- frames ----------------------------------------------------------------------------------
 
-    /// <summary>The prompt a frame is made with: its own words and the film's style.</summary>
-    public static string FramePrompt(Storyboard board, FilmFrame frame) => Join(frame.Prompt, board.Style);
+    /// <summary>The prompt a frame is made with: its own (and an old storyboard's film-wide look, until it is upgraded).</summary>
+    public static string FramePrompt(Storyboard board, FilmFrame frame) => Join(frame.Prompt, board.Style ?? "");
 
-    /// <summary>The prompt a shot is made with: what happens, what the camera does, and the film's style.</summary>
+    /// <summary>The prompt a shot is made with: what happens and what the camera does (and an old storyboard's look).</summary>
     public static string ShotPrompt(Storyboard board, FilmShot shot) =>
-        Join(Join(shot.Prompt, shot.Camera.Length > 0 ? "Camera: " + shot.Camera.TrimEnd('.') : ""), board.Style.Length > 0 ? "Style: " + board.Style.TrimEnd('.') : "");
+        Join(Join(shot.Prompt, shot.Camera.Length > 0 ? "Camera: " + shot.Camera.TrimEnd('.') : ""), board.Style is { Length: > 0 } style ? "Style: " + style.TrimEnd('.') : "");
 
-    private static string Join(string a, string b)
-    {
-        a = a.Trim();
-        b = b.Trim();
-        if (a.Length == 0) return b;
-        if (b.Length == 0) return a;
-        return a.EndsWith('.') || a.EndsWith('!') || a.EndsWith('?') ? $"{a} {b}" : $"{a}. {b}";
-    }
+    private static string Join(string a, string b) => Storyboard.JoinText(a, b);
+
+    /// <summary>The kind of job a frame is: made from words, or from other frames.</summary>
+    public static FilmJob JobOf(FilmFrame frame) => frame.From.Count > 0 ? FilmJob.Edit : FilmJob.Frame;
+
+    /// <summary>The kind of job a shot is, by its frames and lip sync.</summary>
+    public static FilmJob JobOf(FilmShot shot) =>
+        shot.LipSync ? FilmJob.LipSync : shot.First is null ? FilmJob.ShotFromText : shot.Last is null ? FilmJob.ShotFromFirst : FilmJob.Shot;
+
+    /// <summary>What a frame is made with: its own words, or an old storyboard's template for the job.</summary>
+    public static string? ModelOf(Storyboard board, FilmFrame frame) => frame.Model ?? (board.Workflows is { } w ? FilmTemplates.Chosen(w, JobOf(frame)) : null);
+
+    public static string? ModelOf(Storyboard board, FilmShot shot) => shot.Model ?? (board.Workflows is { } w ? FilmTemplates.Chosen(w, JobOf(shot)) : null);
+
+    public static string? SongModelOf(Storyboard board) => board.Sound.Model ?? board.Workflows?.Song;
 
     /// <summary>Makes a frame's picture: taken from the user's file, else made from words, or from the frames it is based on.</summary>
     public async Task<FilmMade> MakeFrameAsync(Storyboard board, FilmFrame frame, Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
@@ -106,7 +113,7 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             Prefix = Prefix(board, frame.Id),
         };
         var job = pictures.Count > 0 ? FilmJob.Edit : FilmJob.Frame;
-        var run = await RunAsync(board, job, inputs, frame.Set, board.FrameWorkflow(frame), FrameStamp(board, frame), "image", progress, userMessage, ct).ConfigureAwait(false);
+        var run = await RunAsync(board, job, ModelOf(board, frame), inputs, frame.Set, board.FrameWorkflow(frame), FrameStamp(board, frame), "image", progress, userMessage, ct).ConfigureAwait(false);
         await Task.Run(() => SaveFrame(run.Output, target, board.Width, board.Height), ct).ConfigureAwait(false);
         return new FilmMade(target, board.FrameWorkflow(frame), run.Template, run.Took, run.Notes);
     }
@@ -178,7 +185,7 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         };
         var target = take ?? board.ShotVideo(shot);
         var workflow = take is null ? board.ShotWorkflow(shot) : Path.ChangeExtension(take, ".json");
-        var run = await RunAsync(board, job, inputs, shot.Set, workflow, ShotStamp(board, shot), "video", progress, userMessage, ct).ConfigureAwait(false);
+        var run = await RunAsync(board, job, ModelOf(board, shot), inputs, shot.Set, workflow, ShotStamp(board, shot), "video", progress, userMessage, ct).ConfigureAwait(false);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         File.Copy(run.Output, target, overwrite: true);
         return new FilmMade(target, workflow, run.Template, run.Took, [.. notes, .. run.Notes]);
@@ -338,7 +345,7 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             };
             var (file, workflow) = takes <= 1 ? (board.SongFile, board.SongWorkflow)
                 : (Path.Combine(board.Folder, "sound", $"song.take{take}.mp3"), Path.Combine(board.Folder, "sound", $"song.take{take}.json"));
-            var run = await RunAsync(board, FilmJob.Song, inputs, sound.Set, workflow, SongStamp(board), "audio",
+            var run = await RunAsync(board, FilmJob.Song, SongModelOf(board), inputs, sound.Set, workflow, SongStamp(board), "audio",
                 takes <= 1 ? progress : s => progress?.Invoke($"Song {take} of {takes}: {s}"), userMessage, ct).ConfigureAwait(false);
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
             File.Copy(run.Output, file, overwrite: true);
@@ -392,17 +399,21 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     /// Runs the template for a job with the inputs set, and saves the workflow as it ran beside the
     /// result (with the files it loads by their full paths, so the comfyui tool can run it again).
     /// </summary>
-    private async Task<Run> RunAsync(Storyboard board, FilmJob job, FilmInputs inputs, JsonObject? extra, string workflowFile, string stamp, string kind,
+    /// <param name="model">What it is to be made with, in words or by name (<see cref="FilmFrame.Model"/>); null: the best installed.</param>
+    private async Task<Run> RunAsync(Storyboard board, FilmJob job, string? model, FilmInputs inputs, JsonObject? extra, string workflowFile, string stamp, string kind,
         Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
     {
         Use();
         var notes = new List<string>();
         var api = await hub.ConnectAsync(null, notes, progress, ct).ConfigureAwait(false);
         var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
-        progress?.Invoke("Getting the workflow ready…");
-        var template = await FilmTemplates.PickAsync(hub, api, board.Workflows, job, ct).ConfigureAwait(false)
-                       ?? throw new FilmException($"No ComfyUI template for {FilmTemplates.Describe(job)} is ready on this PC: " +
-                                                  "every one this needs a model or node that isn't installed. The comfyui tool finds templates (action=templates) and downloads what they need.");
+        progress?.Invoke(model is null ? "Getting the workflow ready…" : $"Finding \"{model}\" among what is installed…");
+        var (template, note) = await FilmTemplates.PickAsync(hub, api, model, job, ct).ConfigureAwait(false);
+        if (note is not null)
+            notes.Add(note);
+        if (template is null)
+            throw new FilmException($"No ComfyUI template for {FilmTemplates.Describe(job)} is ready on this PC: " +
+                                    "every one this needs a model or node that isn't installed. The comfyui tool finds templates (action=templates) and downloads what they need.");
         if (!template.Ready)
             throw new FilmException($"The template {template.Template.Name} needs {string.Join(", ", template.Missing.Take(6))}, which isn't installed: " +
                                     "download it (the comfyui tool's action=templates with its name gives the links), or pick another template for this.");
@@ -502,9 +513,10 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     // ---- what each piece was made from ----------------------------------------------------------------
 
     /// <summary>
-    /// What a frame's picture comes from, as a short hash: its prompt, the style, seed, size and
-    /// template, its user's file, the pictures it is based on. A frame whose stamp differs from the
-    /// one it was made with is out of date.
+    /// What a frame's picture comes from, as a short hash: its prompt, seed, size and what it is made
+    /// with, its user's file, the pictures it is based on. A frame whose stamp differs from the one it
+    /// was made with is out of date. Only the frame's own settings and the film's size go in: a
+    /// change to one frame leaves the others made.
     /// </summary>
     public static string FrameStamp(Storyboard board, FilmFrame frame)
     {
@@ -514,7 +526,7 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         else
         {
             sb.Append(FramePrompt(board, frame)).Append('|').Append(frame.Seed).Append('|')
-              .Append(FilmTemplates.Chosen(board.Workflows, frame.From.Count > 0 ? FilmJob.Edit : FilmJob.Frame)).Append('|').Append(frame.Set?.ToJsonString());
+              .Append(ModelOf(board, frame)).Append('|').Append(frame.Set?.ToJsonString());
             foreach (var id in frame.From)
                 sb.Append("|from ").Append(id).Append(' ').Append(board.Frame(id) is { } from ? FileStamp(board.FramePicture(from)) : "");
         }
@@ -529,8 +541,7 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
           .Append(board.Width).Append('x').Append(board.Height).Append('|').Append(shot.LipSync).Append('|').Append(shot.Set?.ToJsonString());
         foreach (var id in new[] { shot.First, shot.LipSync ? null : shot.Last })
             sb.Append('|').Append(board.Frame(id) is { } frame ? FileStamp(board.FramePicture(frame)) : "none");
-        var job = shot.LipSync ? FilmJob.LipSync : shot.First is null ? FilmJob.ShotFromText : shot.Last is null ? FilmJob.ShotFromFirst : FilmJob.Shot;
-        sb.Append('|').Append(FilmTemplates.Chosen(board.Workflows, job));
+        sb.Append('|').Append(ModelOf(board, shot));
         if (Storyboard.Speaks(shot))
             sb.Append("|line ").Append(LineStamp(board, shot)).Append(' ').Append(LineLead);
         else if (shot.LipSync)
@@ -542,7 +553,44 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     }
 
     public static string SongStamp(Storyboard board) =>
-        Hash($"{board.Sound.Tags}|{board.Sound.Lyrics}|{board.Sound.Seed}|{SongSeconds(board)}|{board.Workflows.Song}|{board.Sound.Set?.ToJsonString()}");
+        Hash($"{board.Sound.Tags}|{board.Sound.Lyrics}|{board.Sound.Seed}|{SongSeconds(board)}|{SongModelOf(board)}|{board.Sound.Set?.ToJsonString()}");
+
+    /// <summary>
+    /// Upgrades a storyboard from before frames and shots had all of their own look and model
+    /// (<see cref="Storyboard.Upgrade"/>), and saves it: what was made and up to date before stays so,
+    /// its stamp written again for its settings' new place.
+    /// </summary>
+    public static void Upgrade(Storyboard board)
+    {
+        var frames = board.Frames.Where(f => IsCurrent(board, f)).ToList();
+        var shots = board.Shots.Where(s => IsCurrent(board, s)).ToList();
+        var song = SongIsCurrent(board);
+        board.Upgrade();
+        foreach (var f in frames)
+            Restamp(board.FrameWorkflow(f), FrameStamp(board, f));
+        foreach (var s in shots)
+            Restamp(board.ShotWorkflow(s), ShotStamp(board, s));
+        if (song)
+            Restamp(board.SongWorkflow, SongStamp(board));
+        try
+        {
+            board.Save();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    /// <summary>Gives a made piece's workflow file a new stamp (when it differs).</summary>
+    private static void Restamp(string workflowFile, string stamp)
+    {
+        try
+        {
+            if (MadeStamp(workflowFile) == stamp || JsonNode.Parse(File.ReadAllText(workflowFile)) is not JsonObject json || json["blackbox"] is not JsonObject head)
+                return;
+            head["stamp"] = stamp;
+            Settings.AtomicFile.Write(workflowFile, json.ToJsonString(ComfyWorkflow.Indented));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { }
+    }
 
     private static string FileStamp(string path)
     {

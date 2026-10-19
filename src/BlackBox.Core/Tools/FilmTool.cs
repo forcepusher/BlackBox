@@ -24,11 +24,14 @@ public sealed class FilmTool : Tool
         "Make a film (a music video, a short story, an ad: anything longer than one shot) from a storyboard, with ComfyUI on this PC. " +
         "The storyboard is the film's storyboard.json, which the user also edits in BlackBox's Filmmaking window: shots in order, each going from a first frame " +
         "to an optional last frame in so many seconds, the pictures they start and end on, and the soundtrack. " +
-        "action=storyboard shows it (path: the film's folder), or makes or changes it with storyboard={...}: title, story, style (the look, added to every prompt), " +
-        "width, height, fps, frames:[{id, prompt, seed, from: [ids of frames it is made from, to keep people and places the same], file (a picture of the user's), name, reference: true for a character or place sheet}], " +
-        "shots:[{id, first, last (frame ids), seconds, prompt (what happens), camera, transition: cut|dissolve|fade, " +
+        "action=storyboard shows it (path: the film's folder), or makes or changes it with storyboard={...}: title, " +
+        "width, height, fps, frames:[{id, prompt (what it shows and its look), model, seed, from: [ids of frames it is made from, to keep people and places the same], file (a picture of the user's), name, reference: true for a character or place sheet}], " +
+        "shots:[{id, first, last (frame ids), seconds, prompt (what happens, and its look), camera, model, transition: cut|dissolve|fade, " +
         "line (what is said in it, lip-synced, in the voice sound.voice describes; it starts 0.4 s in, so leave time for it), lipSync (without a line: sings the soundtrack's part under it), seed}], " +
-        "sound:{source: none|file|song, file, tags (the song's style), lyrics, voice (who says the lines: age, voice, manner), seed}. Frames and shots are matched by id; {\"id\": …, \"delete\": true} removes one. " +
+        "sound:{source: none|file|song, file, tags (the song's style), lyrics, voice (who says the lines: age, voice, manner), model, seed}. Frames and shots are matched by id; {\"id\": …, \"delete\": true} removes one. " +
+        "Nothing is film-wide, so a change remakes only what it changes: write the film's look into every frame's and shot's prompt. " +
+        "model is what one is made with: a model or workflow in words (\"z image turbo\", \"juggernaut xl\", \"my pony workflow\"), matched against what ComfyUI has installed, " +
+        "or none for the best installed one; action=models lists what is installed for each kind of picture, video and song. " +
         "Without path a new film goes into a folder of its own in BlackBox's Data\\films, where the Filmmaking window finds it; its frames, clips and the film are made there too " +
         "(BlackBox is portable: what it makes stays next to it). " +
         "A shot that starts on the last frame of the one before goes on with the same camera; " +
@@ -39,12 +42,12 @@ public sealed class FilmTool : Tool
         "Fix a shot the check finds wrong: a plainer prompt, another seed, frames closer to each other, or a new frame. " +
         "action=join puts the shots and the soundtrack together into the film; action=check looks at a shot (id) or, without id, the whole film. " +
         "Order: frames (those others are made from first), the song when a shot is lip-synced, the shots, then join and check the film. " +
-        "prompt, camera, seconds, seed and from given with action=frame or shot change the storyboard before it is made.";
+        "prompt, camera, seconds, seed, model and from given with action=frame or shot change the storyboard before it is made.";
 
     public override ToolRisk Risk => ToolRisk.Risky;
 
     public override JsonObject Parameters => Schema(
-        ("action", Str("What to do", "storyboard", "frame", "shot", "sound", "join", "check"), true),
+        ("action", Str("What to do", "storyboard", "frame", "shot", "sound", "join", "check", "models"), true),
         ("path", Str("The film's folder (or its storyboard.json, or the name of a film in the films folder); a new film's folder for action=storyboard"), false),
         ("id", Str("A frame's id (action=frame) or a shot's (action=shot, check)"), false),
         ("storyboard", new JsonObject { ["type"] = "object", ["description"] = "action=storyboard: the storyboard, or the parts of it to change (frames and shots by id)" }, false),
@@ -52,6 +55,7 @@ public sealed class FilmTool : Tool
         ("camera", Str("action=shot: what the camera does"), false),
         ("seconds", Num("action=shot: how long it lasts"), false),
         ("seed", Int("action=frame or shot: a new seed (another result from the same prompt)"), false),
+        ("model", Str("action=frame or shot: what it is made with, a model or workflow in words or by name (\"\" for the best installed)"), false),
         ("from", StrArray("action=frame: the frames it is made from"), false),
         ("tries", Int("action=shot: up to this many takes, each with a new seed, until the check passes (default 1); action=sound: songs to make, the best kept (default 3)"), false));
 
@@ -67,6 +71,7 @@ public sealed class FilmTool : Tool
             "sound" => "Make the film's song",
             "join" => "Join the film",
             "check" => id is null ? "Check the film" : $"Check shot {id}",
+            "models" => "List the installed models for films",
             _ => "film " + action,
         };
     }
@@ -81,6 +86,8 @@ public sealed class FilmTool : Tool
         var action = RequireString(args, "action").Trim().ToLowerInvariant();
         try
         {
+            if (action is "models" or "workflows" or "templates")
+                return await ModelsAsync(ctx, ct).ConfigureAwait(false);
             var board = LoadOrCreate(args, ctx, create: action == "storyboard");
             _lastFolder = board.Folder;
             if (action != "storyboard" && Changes(args, action) is { Count: > 0 } changes)
@@ -96,7 +103,7 @@ public sealed class FilmTool : Tool
                 "sound" or "song" => await SoundAsync(board, (int)Math.Clamp(GetNumber(args, "tries") ?? 3, 1, 8), ctx, ct).ConfigureAwait(false),
                 "join" or "montage" => await JoinAsync(board, ctx, ct).ConfigureAwait(false),
                 "check" => await CheckAsync(board, GetString(args, "id"), ctx, ct).ConfigureAwait(false),
-                _ => throw new ToolArgumentException("action must be storyboard, frame, shot, sound, join or check."),
+                _ => throw new ToolArgumentException("action must be storyboard, frame, shot, sound, join, check or models."),
             };
         }
         catch (FilmStillRunningException ex)
@@ -163,6 +170,7 @@ public sealed class FilmTool : Tool
         var item = new JsonObject { ["id"] = id };
         if (GetString(args, "prompt") is { } prompt) item["prompt"] = prompt;
         if (GetNumber(args, "seed") is { } seed) item["seed"] = (long)seed;
+        if (GetString(args, "model") is { } model) item["model"] = model;
         if (action == "shot")
         {
             if (GetString(args, "camera") is { } camera) item["camera"] = camera;
@@ -207,8 +215,6 @@ public sealed class FilmTool : Tool
         var sb = new StringBuilder();
         var (starts, length) = board.Timing();
         sb.AppendLine($"Film \"{board.Title}\" in {board.Folder}: {board.Width}x{board.Height} at {board.Fps} fps, {N(length)} s in {board.Shots.Count} shot(s).");
-        if (board.Story.Length > 0) sb.AppendLine("Story: " + board.Story.Trim());
-        if (board.Style.Length > 0) sb.AppendLine("Style: " + board.Style.Trim());
         sb.AppendLine("Frames:");
         if (board.Frames.Count == 0) sb.AppendLine("  (none)");
         var todo = new List<string>();
@@ -222,7 +228,8 @@ public sealed class FilmTool : Tool
             var current = !stale.Contains(f.Id);
             var state = !made ? "not made" : current ? "made" : FilmMaker.IsCurrent(board, f) ? $"made, but to be made again after {string.Join(", ", f.From.Where(stale.Contains))}" : "made, but out of date (changed since)";
             var source = f.File is { Length: > 0 } file ? $"the user's picture {file}" : $"\"{f.Prompt.Trim().ReplaceLineEndings(" ").Clip(300)}\" seed {f.Seed}" +
-                                                                                      (f.From.Count > 0 ? $", made from {string.Join(", ", f.From)}" : "");
+                                                                                      (f.From.Count > 0 ? $", made from {string.Join(", ", f.From)}" : "") +
+                                                                                      (f.Model is { } fm ? $", made with \"{fm}\"" : "");
             var used = board.Shots.Where(s => s.First == f.Id || s.Last == f.Id).Select(s => s.Id).ToList();
             sb.AppendLine($"  {f.Id}{(f.Name is { Length: > 0 } n ? $" \"{n}\"" : "")}{(f.Reference ? " (a reference)" : used.Count > 0 ? $" (in {string.Join(", ", used)})" : " (not in a shot)")}: {source}. {state}" +
                           (made ? $": {board.FramePicture(f)}" : ""));
@@ -242,6 +249,7 @@ public sealed class FilmTool : Tool
             var current = FilmMaker.IsCurrent(board, s) && staleFrames.Count == 0;
             sb.AppendLine($"  {s.Id} ({N(starts[i])}–{N(starts[i] + s.Seconds)} s, {N(s.Seconds)} s{join}): {frames}. \"{s.Prompt.Trim().ReplaceLineEndings(" ").Clip(300)}\"" +
                           (s.Camera.Length > 0 ? $" Camera: {s.Camera}." : "") +
+                          (s.Model is { } sm ? $" Made with \"{sm}\"." : "") +
                           (Storyboard.Speaks(s) ? $" Says: \"{s.Line.Trim().ReplaceLineEndings(" ")}\"" + (FilmMaker.LineIsCurrent(board, s) ? " (said)." : " (not said yet).") :
                            s.LipSync ? " Sings the soundtrack's part under it (lipSync without a line)." : "") +
                           $" Seed {s.Seed}. " +
@@ -259,7 +267,7 @@ public sealed class FilmTool : Tool
             case FilmSound.Song:
                 var songCurrent = FilmMaker.SongIsCurrent(board);
                 sb.AppendLine($"Soundtrack: a song, \"{sound.Tags.Trim()}\", " + (sound.Lyrics.Trim().Length > 0 ? $"lyrics: \"{sound.Lyrics.Trim().ReplaceLineEndings(" / ").Clip(400)}\"" : "instrumental") +
-                              $", seed {sound.Seed}. " + (!File.Exists(board.SongFile) ? "Not made." : songCurrent ? $"Made: {board.SongFile}" : $"Made, but out of date (the film's length or the song changed): {board.SongFile}"));
+                              (sound.Model is { } model ? $", made with \"{model}\"" : "") + $", seed {sound.Seed}. " + (!File.Exists(board.SongFile) ? "Not made." : songCurrent ? $"Made: {board.SongFile}" : $"Made, but out of date (the film's length or the song changed): {board.SongFile}"));
                 if (!songCurrent)
                     todo.Insert(todo.FindIndex(t => t.StartsWith("shot", StringComparison.Ordinal)) is var at and >= 0 ? at : todo.Count, "the song (action=sound)");
                 break;
@@ -269,11 +277,6 @@ public sealed class FilmTool : Tool
         }
         if (board.Shots.Any(Storyboard.Speaks))
             sb.AppendLine("The lines' voice: " + (sound.Voice.Trim().Length > 0 ? sound.Voice.Trim() : "not described (sound.voice): the voice model picks one") + ".");
-        var chosen = new List<string>();
-        foreach (var job in Enum.GetValues<FilmJob>())
-            if (FilmTemplates.Chosen(board.Workflows, job) is { } name)
-                chosen.Add($"{job}: {name}");
-        sb.AppendLine("Templates: " + (chosen.Count == 0 ? "picked from what is installed" : string.Join("; ", chosen)) + ".");
         var film = board.FilmFile;
         var newest = board.Shots.Select(s => board.ShotVideo(s)).Append(board.SoundtrackFile).Where(p => p is not null && File.Exists(p))
             .Select(p => File.GetLastWriteTimeUtc(p!)).DefaultIfEmpty(DateTime.MinValue).Max();
@@ -286,6 +289,30 @@ public sealed class FilmTool : Tool
         else
             sb.Append("Everything is made and joined.");
         return sb.ToString();
+    }
+
+    /// <summary>What is installed for each kind of job, to name in a frame's, shot's or the song's model.</summary>
+    private async Task<ToolResult> ModelsAsync(ToolContext ctx, CancellationToken ct)
+    {
+        Maker(ctx); // ComfyUI started here is closed with the task
+        var hub = ctx.Comfy!;
+        var notes = new List<string>();
+        var api = await hub.ConnectAsync(null, notes, ctx.Progress, ct).ConfigureAwait(false);
+        var sb = new StringBuilder();
+        sb.AppendLine("Installed in ComfyUI, for a frame's, shot's or the song's model (name one in words; none picks the first of each):");
+        foreach (var job in Enum.GetValues<FilmJob>())
+        {
+            ctx.Progress?.Invoke($"Looking at what makes {FilmTemplates.Describe(job)}…");
+            var options = await FilmTemplates.OptionsAsync(hub, api, job, ct).ConfigureAwait(false);
+            sb.AppendLine($"{FilmTemplates.Describe(job)}:" + (options.Count == 0 ? " nothing installed." : ""));
+            foreach (var o in options.Take(40))
+                sb.AppendLine("  " + o.Label);
+            if (options.Count > 40)
+                sb.AppendLine($"  …and {options.Count - 40} more.");
+        }
+        foreach (var note in notes)
+            sb.AppendLine("Note: " + note);
+        return new ToolResult(sb.ToString().TrimEnd());
     }
 
     // ---- making ----------------------------------------------------------------------------------------

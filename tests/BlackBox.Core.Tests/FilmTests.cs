@@ -43,11 +43,10 @@ public sealed class StoryboardTests : IDisposable
         var board = Storyboard.New(_dir, "Keeper");
         board.Shots[0].Prompt = "he waves";
         var merged = Storyboard.Merge(board, (JsonObject)JsonNode.Parse("""
-            {"style": "35mm", "frames": [{"id": "f2", "prompt": "a close-up"}, {"id": "f3", "prompt": "the sea", "reference": true}, {"id": "f1", "delete": true}],
+            {"frames": [{"id": "f2", "prompt": "a close-up"}, {"id": "f3", "prompt": "the sea", "reference": true}, {"id": "f1", "delete": true}],
              "shots": [{"id": "s1", "seconds": 3}], "sound": {"source": "song", "tags": "folk"}}
             """)!);
         Assert.Equal("Keeper", merged.Title);
-        Assert.Equal("35mm", merged.Style);
         Assert.Equal(["f2", "f3"], merged.Frames.Select(f => f.Id));
         Assert.Equal("a close-up", merged.Frame("f2")!.Prompt);
         Assert.True(merged.Frame("f3")!.Reference);
@@ -58,6 +57,79 @@ public sealed class StoryboardTests : IDisposable
         Assert.Equal("folk", merged.Sound.Tags);
         Assert.Equal(board.Sound.Seed, merged.Sound.Seed);
         Assert.Equal(_dir, merged.Folder);
+    }
+
+    /// <summary>A storyboard as BlackBox wrote them before nothing was film-wide.</summary>
+    private const string Old = """
+        {"title": "Keeper", "story": "An old keeper", "style": "warm light, 35mm",
+         "frames": [{"id": "f1", "prompt": "a keeper at the door", "seed": 11}, {"id": "f2", "prompt": "closer", "from": ["f1"], "seed": 12}],
+         "shots": [{"id": "s1", "first": "f1", "last": "f2", "prompt": "he waves", "camera": "still", "seed": 13}],
+         "sound": {"source": "song", "tags": "folk", "seed": 14},
+         "workflows": {"frame": "templates/image_z_image_turbo", "shot": "templates/video_ltx2_5_flf2v", "song": "audio_ace_step1_5_xl_turbo"}}
+        """;
+
+    [Fact]
+    public void An_old_film_wide_look_and_templates_go_into_each_frame_and_shot()
+    {
+        var board = Storyboard.Parse(Old);
+        Assert.Equal("a keeper at the door. warm light, 35mm", board.Frames[0].Prompt);
+        Assert.Equal("he waves. warm light, 35mm", board.Shots[0].Prompt);
+        Assert.Equal("templates/image_z_image_turbo", board.Frames[0].Model);
+        Assert.Null(board.Frames[1].Model); // made from f1: an edit, and no edit template was named
+        Assert.Equal("templates/video_ltx2_5_flf2v", board.Shots[0].Model);
+        Assert.Equal("audio_ace_step1_5_xl_turbo", board.Sound.Model);
+        Assert.False(board.IsOld);
+        var json = board.ToJson();
+        Assert.DoesNotContain("\"style\"", json);
+        Assert.DoesNotContain("\"story\"", json);
+        Assert.DoesNotContain("\"workflows\"", json);
+    }
+
+    [Fact]
+    public void Upgrading_an_old_film_keeps_what_was_made_made()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(Path.Combine(_dir, Storyboard.FileName), Old);
+        var old = Storyboard.Load(_dir, upgrade: false);
+        Assert.True(old.IsOld);
+        void Made(string file, string workflow, string stamp)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.WriteAllText(file, file);
+            File.WriteAllText(workflow, new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = stamp } }.ToJsonString());
+        }
+        foreach (var f in old.Frames)
+            Made(old.FramePicture(f), old.FrameWorkflow(f), FilmMaker.FrameStamp(old, f));
+        Made(old.ShotVideo(old.Shots[0]), old.ShotWorkflow(old.Shots[0]), FilmMaker.ShotStamp(old, old.Shots[0]));
+        Made(old.SongFile, old.SongWorkflow, FilmMaker.SongStamp(old));
+        Assert.True(FilmMaker.IsCurrent(old, old.Shots[0]));
+
+        var board = Storyboard.Load(_dir);
+        Assert.False(board.IsOld);
+        Assert.All(board.Frames, f => Assert.True(FilmMaker.IsCurrent(board, f)));
+        Assert.True(FilmMaker.IsCurrent(board, board.Shots[0]));
+        Assert.True(FilmMaker.SongIsCurrent(board));
+        Assert.DoesNotContain("\"style\"", File.ReadAllText(board.FilePath)); // saved upgraded
+
+        // From now on a change to one frame leaves the others made.
+        board.Frames[1].Prompt = "closer still";
+        Assert.True(FilmMaker.IsCurrent(board, board.Frames[0]));
+        Assert.False(FilmMaker.IsCurrent(board, board.Frames[1]));
+    }
+
+    [Fact]
+    public void A_look_given_with_a_change_goes_only_into_what_the_change_gives()
+    {
+        var board = Storyboard.Parse("""{"frames": [{"id": "f1", "prompt": "a keeper"}], "shots": [{"id": "s1", "first": "f1", "prompt": "he waves"}]}""");
+        var merged = Storyboard.Merge(board, (JsonObject)JsonNode.Parse("""
+            {"style": "film noir", "story": "x", "frames": [{"id": "f2", "prompt": "the sea"}], "workflows": {"frame": "juggernaut"}}
+            """)!);
+        Assert.Equal("a keeper", merged.Frame("f1")!.Prompt);
+        Assert.Null(merged.Frame("f1")!.Model);
+        Assert.Equal("the sea. film noir", merged.Frame("f2")!.Prompt);
+        Assert.Equal("juggernaut", merged.Frame("f2")!.Model);
+        Assert.Equal("he waves", merged.Shots[0].Prompt);
+        Assert.False(merged.IsOld);
     }
 
     [Fact]
@@ -94,6 +166,98 @@ public sealed class StoryboardTests : IDisposable
         var (starts, length) = board.Timing();
         Assert.Equal([0, 4.5, 8.5, 10.5], starts);
         Assert.Equal(12.5, length);
+    }
+}
+
+public sealed class FilmTemplatesTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-filmtpl-" + Guid.NewGuid().ToString("N")[..8]);
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_dir, recursive: true); }
+        catch (IOException) { }
+    }
+
+    /// <summary>An editor-format workflow of these node types (a muted one with mode 4).</summary>
+    private static JsonNode Editor(params string[] types) => new JsonObject
+    {
+        ["nodes"] = new JsonArray(types.Select((t, i) => (JsonNode)new JsonObject
+        {
+            ["id"] = i + 1,
+            ["type"] = t.TrimEnd('!'),
+            ["mode"] = t.EndsWith('!') ? 4 : 0,
+        }).ToArray()),
+        ["links"] = new JsonArray(),
+    };
+
+    [Fact]
+    public void What_a_workflow_makes_is_told_by_its_nodes()
+    {
+        var text2image = Editor("CheckpointLoaderSimple", "CLIPTextEncode", "KSampler", "VAEDecode", "SaveImage");
+        Assert.True(FilmTemplates.Fits(text2image, FilmJob.Frame));
+        Assert.False(FilmTemplates.Fits(text2image, FilmJob.Edit));
+        var edit = Editor("LoadImage", "TextEncodeQwenImageEditPlus", "KSampler", "SaveImage");
+        Assert.True(FilmTemplates.Fits(edit, FilmJob.Edit));
+        Assert.False(FilmTemplates.Fits(edit, FilmJob.Frame));
+        // A control picture loader that is muted doesn't count.
+        Assert.True(FilmTemplates.Fits(Editor("LoadImage!", "CLIPTextEncode", "SaveImage"), FilmJob.Frame));
+        var flf = Editor("LoadImage", "LoadImage", "CLIPTextEncode", "CreateVideo", "SaveVideo");
+        Assert.True(FilmTemplates.Fits(flf, FilmJob.Shot));
+        Assert.False(FilmTemplates.Fits(flf, FilmJob.ShotFromFirst));
+        Assert.True(FilmTemplates.Fits(Editor("LoadImage", "LoadAudio", "CLIPTextEncode", "SaveVideo"), FilmJob.LipSync));
+        Assert.True(FilmTemplates.Fits(Editor("TextEncodeAceStepAudio1.5", "SaveAudioMP3"), FilmJob.Song));
+        // No prompt (an upscaler), or a 3D model: no job of a film's.
+        Assert.False(FilmTemplates.Fits(Editor("LoadImage", "ImageUpscaleWithModel", "SaveImage"), FilmJob.Edit));
+        Assert.False(FilmTemplates.Fits(Editor("CLIPTextEncode", "SaveImage", "SaveGLB"), FilmJob.Frame));
+    }
+
+    private static readonly FilmOption[] Installed =
+    [
+        new("workflows/WorkflowCollection/Templates/Image/Custom/FurryNovaIllustrious/nova-furry-v17", "nova-furry-v17", FilmOption.Yours, "", ["novaFurryXL_ilV170.safetensors"]),
+        new("workflows/WorkflowCollection/Templates/Image/Custom/PonyDiffusion/ponydiffusion-v6", "ponydiffusion-v6", FilmOption.Yours, "", ["ponyDiffusionV6XL_v6StartWithThisOne.safetensors"]),
+        new("templates/image_z_image_turbo", "Z-Image-Turbo Text to Image", FilmOption.Template, "", ["z_image_turbo_bf16.safetensors"]),
+        new("checkpoints/novaFurryXL_ilV170.safetensors", "novaFurryXL_ilV170", FilmOption.Checkpoint, "An SDXL checkpoint", ["novaFurryXL_ilV170.safetensors"]),
+        new("checkpoints/juggernautXL_ragnarok.safetensors", "juggernautXL_ragnarok", FilmOption.Checkpoint, "An SDXL checkpoint", ["juggernautXL_ragnarok.safetensors"]),
+    ];
+
+    [Theory]
+    [InlineData("furry nova xl", "nova-furry-v17")] // the user's workflow before the bare checkpoint
+    [InlineData("the Furry Nova XL checkpoint", "novaFurryXL_ilV170")]
+    [InlineData("zimage turbo", "Z-Image-Turbo Text to Image")]
+    [InlineData("my pony workflow", "ponydiffusion-v6")]
+    [InlineData("Juggernaut", "juggernautXL_ragnarok")]
+    [InlineData("nova-furry-v17", "nova-furry-v17")]
+    public void Words_name_what_is_installed(string words, string title) =>
+        Assert.Equal(title, FilmTemplates.Match(Installed, words)?.Title);
+
+    [Theory]
+    [InlineData("something for anime")]
+    [InlineData("flux")]
+    [InlineData("the model")]
+    [InlineData("ltx 2.5")] // numbers alone are in many model files
+    [InlineData("ace step")]
+    public void Words_that_name_nothing_installed_match_nothing(string words) =>
+        Assert.Null(FilmTemplates.Match(Installed, words));
+
+    [Fact]
+    public void A_checkpoint_is_told_by_its_tensors()
+    {
+        Directory.CreateDirectory(_dir);
+        string Fake(string name, params string[] keys)
+        {
+            var head = System.Text.Encoding.UTF8.GetBytes(new JsonObject(keys.Select(k => KeyValuePair.Create(k, (JsonNode?)new JsonObject()))).ToJsonString());
+            var path = Path.Combine(_dir, name);
+            using var file = File.Create(path);
+            file.Write(BitConverter.GetBytes((long)head.Length));
+            file.Write(head);
+            return path;
+        }
+        Assert.Equal("SDXL", FilmTemplates.CheckpointKind(Fake("xl.safetensors", "model.diffusion_model.input_blocks.0.0.weight", "conditioner.embedders.0.x", "conditioner.embedders.1.y", "first_stage_model.decoder.z")));
+        Assert.Equal("SD 1.5", FilmTemplates.CheckpointKind(Fake("sd15.safetensors", "model.diffusion_model.input_blocks.0.0.weight", "cond_stage_model.transformer.text_model.a", "first_stage_model.b")));
+        // A video model, and a pose model without a text encoder: not for the plain workflow.
+        Assert.Null(FilmTemplates.CheckpointKind(Fake("ltx.safetensors", "model.diffusion_model.transformer_blocks.0.a", "vae.decoder.b", "vocoder.c")));
+        Assert.Null(FilmTemplates.CheckpointKind(Fake("pose.safetensors", "model.diffusion_model.input_blocks.0.0.weight", "first_stage_model.b", "model.diffusion_model.heatmap_head.c")));
     }
 }
 

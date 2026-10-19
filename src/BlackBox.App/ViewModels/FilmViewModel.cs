@@ -35,16 +35,23 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     /// <summary>Where films go, a folder each: BlackBox's Data\films, next to the exe like the rest of its data.</summary>
     private readonly string _filmsRoot;
 
+    /// <summary>Asks the chat model a question of its own (what the user's words for a model mean), or null without one.</summary>
+    private readonly Func<string, CancellationToken, Task<string?>>? _ask;
+
     /// <param name="filmsRoot">Where films go (BlackBox's Data\films).</param>
     /// <param name="toolsDir">BlackBox's Data\tools, where the song judge is set up.</param>
     /// <param name="folder">The film to open; the latest changed one when null.</param>
-    public FilmViewModel(PreviewServices previews, ComfyHub hub, Action<string> sendToChat, string filmsRoot, string toolsDir, string? folder)
+    /// <param name="ask">Asks the chat model what words for a model mean when they name nothing installed outright.</param>
+    public FilmViewModel(PreviewServices previews, ComfyHub hub, Action<string> sendToChat, string filmsRoot, string toolsDir, string? folder,
+        Func<string, CancellationToken, Task<string?>>? ask = null)
     {
         _filmsRoot = filmsRoot;
         _previews = previews;
         _sendToChat = sendToChat;
+        _ask = ask;
         _maker = new FilmMaker(hub, previews.Decoder) { Judge = new SongJudge(Path.Combine(toolsDir, "songeval")) };
         _hub = hub;
+        _modelTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(900), DispatcherPriority.Background, (_, _) => OnModelTyped());
         _saveTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(400), DispatcherPriority.Background, (_, _) => SaveNow());
         _refreshTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) =>
         {
@@ -86,7 +93,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
 
         static string TitleOf(string folder)
         {
-            try { return Storyboard.Load(folder).Title is { Length: > 0 } t ? t : Path.GetFileName(folder); }
+            try { return Storyboard.Load(folder, upgrade: false).Title is { Length: > 0 } t ? t : Path.GetFileName(folder); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException) { return Path.GetFileName(folder); }
         }
     }
@@ -151,30 +158,6 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         {
             if (_board.Title == value) return;
             _board.Title = value;
-            OnPropertyChanged();
-            Changed(this);
-        }
-    }
-
-    public string Story
-    {
-        get => _board.Story;
-        set
-        {
-            if (_board.Story == value) return;
-            _board.Story = value;
-            OnPropertyChanged();
-            Changed(this);
-        }
-    }
-
-    public string Style
-    {
-        get => _board.Style;
-        set
-        {
-            if (_board.Style == value) return;
-            _board.Style = value;
             OnPropertyChanged();
             Changed(this);
         }
@@ -518,13 +501,10 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         foreach (var frame in _board.Frames.Where(f => f.Reference || !inShots.Contains(f.Id)))
             References.Add(_frames[frame.Id]);
         Sound = new SoundItem(this, _board.Sound);
-        Workflows.Clear();
-        foreach (var (job, label) in WorkflowLabels)
-            Workflows.Add(new WorkflowChoice(this, _board.Workflows, job, label));
         _loading = false;
         Relabel();
         RefreshStates();
-        foreach (var p in new[] { nameof(Title), nameof(Story), nameof(Style), nameof(FrameWidth), nameof(FrameHeight), nameof(Fps),
+        foreach (var p in new[] { nameof(Title), nameof(FrameWidth), nameof(FrameHeight), nameof(Fps),
                                   nameof(SoundVolume), nameof(ShotVolume), nameof(Sound), nameof(LengthText), nameof(HasFilm) })
             OnPropertyChanged(p);
         Select(selected switch
@@ -535,53 +515,102 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         });
     }
 
-    // ---- the ComfyUI templates it is made with ------------------------------------------------------------
+    // ---- what each part is made with, in the user's words ------------------------------------------------
 
-    private static readonly (FilmJob Job, string Label)[] WorkflowLabels =
-    [
-        (FilmJob.Frame, "Frames from a prompt"),
-        (FilmJob.Edit, "Frames made from others"),
-        (FilmJob.Shot, "Shots from a first and a last frame"),
-        (FilmJob.ShotFromFirst, "Shots from a first frame"),
-        (FilmJob.ShotFromText, "Shots from words alone"),
-        (FilmJob.LipSync, "Lip-synced shots"),
-        (FilmJob.Song, "The song"),
-    ];
+    private readonly DispatcherTimer _modelTimer;
+    private IMadeWith? _modelTyped;
 
-    public ObservableCollection<WorkflowChoice> Workflows { get; } = [];
+    /// <summary>The words for what a frame, shot or song is made with changed: they are looked up once the typing stops.</summary>
+    public void ModelChanged(IMadeWith item)
+    {
+        if (_loading)
+            return;
+        if (item.Model.Trim().Length == 0)
+        {
+            item.ModelUse = "";
+            return;
+        }
+        if (_modelTyped is { } other && other != item)
+            _ = ShowModelAsync(other);
+        _modelTyped = item;
+        _modelTimer.Stop();
+        _modelTimer.Start();
+    }
 
-    [ObservableProperty]
-    private string _workflowsState = "";
+    private void OnModelTyped()
+    {
+        _modelTimer.Stop();
+        if (Interlocked.Exchange(ref _modelTyped, null) is { } item)
+            _ = ShowModelAsync(item);
+    }
 
     /// <summary>
-    /// Lists the templates that can do each job, from ComfyUI (started for it if it isn't
-    /// running): only on request, as opening the window shouldn't start ComfyUI.
+    /// Finds what the words name among everything ComfyUI has installed for that kind of job (it is
+    /// started if it isn't running), and says it under them. Words that name nothing outright are
+    /// read by the chat model, and replaced by the name of what it picked, so they mean the same the
+    /// next time.
     /// </summary>
-    [RelayCommand]
-    private async Task ListTemplates()
+    public async Task ShowModelAsync(IMadeWith item)
     {
-        WorkflowsState = "Asking ComfyUI…";
+        var words = item.Model.Trim();
+        var job = item.Job;
+        if (words.Length == 0)
+            return;
+        item.ModelUse = "Looking among what ComfyUI has installed…";
         _maker.Use();
         try
         {
-            var lists = await Task.Run(async () =>
+            var options = await Task.Run(async () =>
             {
-                var api = await _hub.ConnectAsync(null, [], s => Dispatcher.UIThread.Post(() => WorkflowsState = s), CancellationToken.None);
-                var found = new Dictionary<FilmJob, List<string>>();
-                foreach (var (job, _) in WorkflowLabels)
-                    found[job] = await FilmTemplates.CandidatesAsync(_hub, api, job, CancellationToken.None);
-                return found;
+                var api = await _hub.ConnectAsync(null, [], s => Dispatcher.UIThread.Post(() => item.ModelUse = s), CancellationToken.None);
+                return await FilmTemplates.OptionsAsync(_hub, api, job, CancellationToken.None);
             });
-            foreach (var choice in Workflows)
-                if (lists.TryGetValue(choice.Job, out var names))
-                    choice.Offer(names);
-            WorkflowsState = "The known good ones come first; one whose models aren't installed says so when it is used.";
+            // Typed on since: the newer words are looked up instead.
+            bool Stale() => item.Model.Trim() != words;
+            if (Stale())
+                return;
+            if (FilmTemplates.Match(options, words) is { } match)
+            {
+                item.ModelUse = $"Made with {match.Label}.";
+                return;
+            }
+            if (words.StartsWith(FilmTemplates.CheckpointPrefix, StringComparison.OrdinalIgnoreCase) || words.Contains('/'))
+            {
+                item.ModelUse = $"Made with the template {words}.";
+                return;
+            }
+            if (_ask is not null && options.Count > 0)
+            {
+                item.ModelUse = "Asking the chat model what you mean…";
+                var meant = await FilmTemplates.InterpretAsync(options, words, job, _ask, CancellationToken.None);
+                if (Stale())
+                    return;
+                if (meant is not null)
+                {
+                    // The title when only it has it, so the box reads well; else the name, which is unique.
+                    item.Model = options.Count(o => o.Title.Equals(meant.Title, StringComparison.OrdinalIgnoreCase)) == 1 ? meant.Title : meant.Name;
+                    _modelTimer.Stop();
+                    _modelTyped = null;
+                    item.ModelUse = $"Read \"{words}\" as {meant.Label}.";
+                    return;
+                }
+            }
+            item.ModelUse = options.Count == 0
+                ? $"Nothing installed makes {FilmTemplates.Describe(job)}."
+                : $"Nothing installed matches. Installed for this: {string.Join("; ", options.Take(15).Select(o => o.Title))}" + (options.Count > 15 ? $" and {options.Count - 15} more." : ".");
         }
-        catch (Exception ex) when (ex is ComfyApiException or IOException or FilmException)
+        catch (Exception ex) when (ex is ComfyApiException or IOException or FilmException or ComfyWorkflowException)
         {
-            WorkflowsState = ex.Message;
+            item.ModelUse = ex.Message;
         }
     }
+
+    /// <summary>
+    /// What a new frame is made with: what the frames of the shot it comes after are made with, so a
+    /// new frame looks like the ones before it until it is changed.
+    /// </summary>
+    private string? FrameModelNear(FilmShot? shot) =>
+        _board.Frame(shot?.Last)?.Model ?? _board.Frame(shot?.First)?.Model ?? _board.Frames.LastOrDefault(f => f.Model is not null && !f.Reference)?.Model;
 
     /// <summary>Names each frame by where it is used: "Start of shot 2", "End of shot 1, start of shot 2".</summary>
     public void Relabel()
@@ -645,6 +674,8 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     {
         SaveNow();
         var before = _board.Shots.LastOrDefault();
+        // New frames and the shot are made with what the ones before are: a copy, so changing one changes only it.
+        var model = FrameModelNear(before);
         // A new shot goes on from the last one's end when it has one, the usual way a scene goes on.
         string first;
         if (before?.Last is { } end)
@@ -652,11 +683,11 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         else
         {
             first = _board.NewId("f");
-            _board.Frames.Add(new FilmFrame { Id = first, Seed = Storyboard.NewSeed() });
+            _board.Frames.Add(new FilmFrame { Id = first, Seed = Storyboard.NewSeed(), Model = model });
         }
         var last = _board.NewId("f");
-        _board.Frames.Add(new FilmFrame { Id = last, Seed = Storyboard.NewSeed() });
-        var shot = new FilmShot { Id = _board.NewId("s"), First = first, Last = last, Seconds = 5, Seed = Storyboard.NewSeed() };
+        _board.Frames.Add(new FilmFrame { Id = last, Seed = Storyboard.NewSeed(), Model = model });
+        var shot = new FilmShot { Id = _board.NewId("s"), First = first, Last = last, Seconds = 5, Seed = Storyboard.NewSeed(), Model = before?.Model };
         _board.Shots.Add(shot);
         SaveNow(force: true);
         Rebuild();
@@ -667,7 +698,11 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     private void AddReference()
     {
         SaveNow();
-        var frame = new FilmFrame { Id = _board.NewId("f"), Reference = true, Name = $"Reference {References.Count(r => r.Frame.Reference) + 1}", Seed = Storyboard.NewSeed() };
+        var frame = new FilmFrame
+        {
+            Id = _board.NewId("f"), Reference = true, Name = $"Reference {References.Count(r => r.Frame.Reference) + 1}", Seed = Storyboard.NewSeed(),
+            Model = _board.Frames.LastOrDefault(f => f.Reference && f.Model is not null)?.Model ?? FrameModelNear(null),
+        };
         _board.Frames.Add(frame);
         SaveNow(force: true);
         Rebuild();
@@ -739,15 +774,16 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             if (before.Last is null)
             {
                 before.Last = _board.NewId("f");
-                _board.Frames.Add(new FilmFrame { Id = before.Last, Seed = Storyboard.NewSeed() });
+                _board.Frames.Add(new FilmFrame { Id = before.Last, Seed = Storyboard.NewSeed(), Model = FrameModelNear(before) });
             }
             item.Shot.First = before.Last;
             item.Shot.Transition = FilmShot.Cut;
         }
         else
         {
+            var model = FrameModelNear(item.Shot);
             item.Shot.First = _board.NewId("f");
-            _board.Frames.Add(new FilmFrame { Id = item.Shot.First, Seed = Storyboard.NewSeed() });
+            _board.Frames.Add(new FilmFrame { Id = item.Shot.First, Seed = Storyboard.NewSeed(), Model = model });
         }
         if (old is not null && !Used(old))
             _board.Frames.RemoveAll(f => f.Id.Equals(old, StringComparison.OrdinalIgnoreCase) && !f.Reference);
@@ -763,8 +799,9 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         SaveNow();
         if (has)
         {
+            var model = FrameModelNear(item.Shot);
             item.Shot.Last = _board.NewId("f");
-            _board.Frames.Add(new FilmFrame { Id = item.Shot.Last, Seed = Storyboard.NewSeed() });
+            _board.Frames.Add(new FilmFrame { Id = item.Shot.Last, Seed = Storyboard.NewSeed(), Model = model });
         }
         else
         {

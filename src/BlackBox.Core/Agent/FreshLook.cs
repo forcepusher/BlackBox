@@ -120,6 +120,27 @@ internal sealed partial class FreshLook(OpenAiChatClient client, ChatRequestOpti
         }
     }
 
+    /// <summary>A question without a picture, in a conversation of its own; only the answer comes back, or null when the request failed.</summary>
+    public async Task<string?> AskTextAsync(string question, CancellationToken ct)
+    {
+        List<ChatMessage> request = [ChatMessage.System("You answer exactly what is asked, briefly."), ChatMessage.User(question)];
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromMinutes(2));
+        try
+        {
+            var reply = await client.CompleteAsync(request, [], new ChatRequestOptions { Model = options.Model, Extra = options.Extra, MaxTokens = 4096 }, null, timeout.Token)
+                .ConfigureAwait(false);
+            var text = reply.Content ?? "";
+            if (text.LastIndexOf("</think>", StringComparison.Ordinal) is var end and >= 0)
+                text = text[(end + "</think>".Length)..];
+            return text.Trim() is { Length: > 0 } answer ? answer : null;
+        }
+        catch (Exception ex) when (ex is LlmException or HttpRequestException or IOException || (ex is OperationCanceledException && !ct.IsCancellationRequested))
+        {
+            return null;
+        }
+    }
+
     /// <summary>Qwen 3 and later: their chat templates mark thinking with think tags and skip it for a reply begun with an empty pair.</summary>
     internal static bool ThinksInQwenTags(string? model) => model is not null && QwenThreeOrLater().IsMatch(model);
 

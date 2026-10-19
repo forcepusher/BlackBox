@@ -387,20 +387,10 @@ public static partial class FilmCheck
 
     private static string N(double d) => d.ToString("0.##", CultureInfo.InvariantCulture);
 
-    /// <summary>The film's title, story and look, a line each.</summary>
+    /// <summary>The film's title (what it is about and its look are in each frame's and shot's prompt).</summary>
     private static void About(Storyboard board, StringBuilder sb)
     {
         if (board.Title.Trim().Length > 0)
             sb.AppendLine($"The film is called \"{board.Title.Trim()}\".");
-        if (board.Story.Trim().Length > 0)
-            sb.AppendLine("What it is about: " + Sentence(board.Story));
-        if (board.Style.Trim().Length > 0)
-            sb.AppendLine("Its look: " + Sentence(board.Style));
-    }
-
-    private static string Sentence(string s)
-    {
-        s = s.Trim().ReplaceLineEndings(" ");
-        return s.EndsWith('.') || s.EndsWith('!') || s.EndsWith('?') ? s : s + ".";
     }
 }

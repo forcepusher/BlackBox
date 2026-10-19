@@ -141,6 +141,12 @@
             <TextBox Text="{Binding Prompt}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="96"
                      Watermark="Who is where, doing what, and how it is framed: a wide shot of an old keeper in a yellow raincoat at the door of a lighthouse at dusk" />
           </StackPanel>
+          <StackPanel Spacing="3">
+            <TextBlock Classes="label" Text="Made with (a model or workflow, in your words; empty: the best installed one)" TextWrapping="Wrap" />
+            <TextBox Text="{Binding Model}" Watermark="furry nova xl, z image turbo, juggernaut, my pony workflow" />
+            <TextBlock Classes="muted" Text="{Binding ModelUse}" TextWrapping="Wrap" FontSize="12"
+                       IsVisible="{Binding ModelUse, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          </StackPanel>
           <StackPanel Spacing="3" IsVisible="{Binding HasFromChoices}">
             <TextBlock Classes="label" Text="Made from these, so the same people and places look the same:" TextWrapping="Wrap" />
             <ItemsControl ItemsSource="{Binding FromChoices}">
@@ -234,6 +240,12 @@
           <TextBlock Text="Lip-synced, from its first frame: the people in it say its line, or sing the soundtrack's part under it" TextWrapping="Wrap" />
         </CheckBox>
         <StackPanel Spacing="3">
+          <TextBlock Classes="label" Text="Made with (a video model or workflow, in your words; empty: the best installed one)" TextWrapping="Wrap" />
+          <TextBox Text="{Binding Model}" Watermark="ltx 2.5, wan 2.2, my furry lip sync workflow" />
+          <TextBlock Classes="muted" Text="{Binding ModelUse}" TextWrapping="Wrap" FontSize="12"
+                     IsVisible="{Binding ModelUse, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+        <StackPanel Spacing="3">
           <TextBlock Classes="label" Text="Seed: the same frames, prompt and seed make the same clip again" TextWrapping="Wrap" />
           <DockPanel>
             <Button DockPanel.Dock="Right" Classes="ghost" Content="New seed" Margin="6,0,0,0" Command="{Binding NewSeedCommand}" ToolTip.Tip="Another clip from the same frames and prompt" />
@@ -270,6 +282,12 @@
               <TextBlock Classes="label" Text="Style" />
               <TextBox Text="{Binding Tags}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60"
                        Watermark="gentle folk, acoustic guitar, warm male vocals, 80 BPM" />
+            </StackPanel>
+            <StackPanel Spacing="3">
+              <TextBlock Classes="label" Text="Made with (empty: the best installed one)" />
+              <TextBox Text="{Binding Model}" Watermark="ace step xl turbo, stable audio" />
+              <TextBlock Classes="muted" Text="{Binding ModelUse}" TextWrapping="Wrap" FontSize="12"
+                         IsVisible="{Binding ModelUse, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             </StackPanel>
             <StackPanel Spacing="3">
               <TextBlock Classes="label" Text="Seed" />
@@ -337,8 +355,9 @@
     <Grid ColumnDefinitions="*,Auto">
       <ScrollViewer HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="16,12,16,20" Spacing="12">
-          <!-- What the film is: its title, story and look, and its frame. -->
-          <Grid ColumnDefinitions="*,16,Auto" RowDefinitions="Auto,Auto">
+          <!-- What the film is: its title and its frame. Nothing here goes into a prompt: a change to it
+               would make every frame and shot again. -->
+          <Grid ColumnDefinitions="*,16,Auto">
             <StackPanel Spacing="3">
               <TextBlock Classes="label" Text="Title" />
               <TextBox Text="{Binding Title}" FontSize="16" />
@@ -356,18 +375,6 @@
                 <TextBlock Classes="muted" Text="fps" VerticalAlignment="Center" />
               </StackPanel>
             </StackPanel>
-            <Grid Grid.Row="1" Grid.ColumnSpan="3" ColumnDefinitions="*,16,*" Margin="0,10,0,0">
-              <StackPanel Spacing="3">
-                <TextBlock Classes="label" Text="What it is about" />
-                <TextBox Text="{Binding Story}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
-                         Watermark="An old lighthouse keeper greets the evening and lights the lamp as a storm comes in." />
-              </StackPanel>
-              <StackPanel Grid.Column="2" Spacing="3">
-                <TextBlock Classes="label" Text="Its look (added to every frame and shot)" />
-                <TextBox Text="{Binding Style}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
-                         Watermark="cinematic, golden-hour light, 35mm film look" />
-              </StackPanel>
-            </Grid>
           </Grid>
 
           <!-- Characters, places and things the frames are made from. -->
@@ -505,28 +512,6 @@
             </StackPanel>
           </Border>
 
-          <!-- Which ComfyUI template makes each part: picked from what is installed unless the user picks one. -->
-          <Expander Header="Workflows: the ComfyUI templates each part is made with" HorizontalAlignment="Stretch" Padding="14,10">
-            <StackPanel Spacing="8">
-              <TextBlock Classes="muted" TextWrapping="Wrap"
-                         Text="Each is picked from what is installed unless you pick one. Every frame, clip and song keeps the workflow it was made with, with its seed, beside it in the film's folder." />
-              <ItemsControl ItemsSource="{Binding Workflows}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:WorkflowChoice">
-                    <Grid ColumnDefinitions="230,*" Margin="0,0,0,6">
-                      <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
-                      <ComboBox Grid.Column="1" ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}" HorizontalAlignment="Stretch" />
-                    </Grid>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-              <DockPanel>
-                <Button DockPanel.Dock="Left" Classes="ghost" Content="List the templates" Command="{Binding ListTemplatesCommand}"
-                        ToolTip.Tip="Asks ComfyUI which templates can make each part (it is started if it isn't running)" />
-                <TextBlock Classes="muted" Text="{Binding WorkflowsState}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="10,0,0,0" />
-              </DockPanel>
-            </StackPanel>
-          </Expander>
         </StackPanel>
       </ScrollViewer>
 

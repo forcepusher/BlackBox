@@ -377,8 +377,15 @@ the PC's Videos folder). The window's **Show folder** opens it:
   the film's frame). A frame can be made **from other frames** (an edit model such as
   Qwen-Image-Edit gets them as its pictures), so the people and places stay the same from shot to
   shot; **references** (a character, a place) are frames for that alone, in no shot.
-- **The film's look** (`style`), added to every frame's and shot's prompt, and its frame size and
-  frame rate (1280x720 at 24 fps unless changed).
+- **Nothing film-wide that goes into a prompt.** Each frame's and shot's prompt holds all of its
+  own look, and each says what it is made with (`model`). There used to be a film-wide look added
+  to every prompt, a story and a template per kind of job, and the user ruled them out: one change
+  to them made every frame and shot out of date. A storyboard that has them is upgraded when it is
+  loaded: the look is joined to every prompt (so frames come out with the prompt they were made
+  with), the templates go to the frames, shots and song of their kind, and what was made and up to
+  date is stamped again so it stays made. A `style` the agent gives with a change goes only into the
+  frames and shots of that change. Only the frame size and frame rate are the film's (1280x720 at 24
+  fps unless changed).
 - **The soundtrack**: none (each shot keeps the sound it was made with), a sound file of the
   user's, or a song made for the film from a style and lyrics. A shot can be **lip-synced**: the
   soundtrack's part under it is cut out as a WAV and given to LTX's picture and sound to video
@@ -402,12 +409,31 @@ the tool say (a frame changed after the clip that starts on it was made, a song 
 film became). So the window and the agent never overwrite each other's results, and the same
 seed and prompt make the same picture again.
 
-Which template makes each kind of piece is the storyboard's choice (the window's Workflows list,
-or `workflows` in the file), else the first of a list known to do it well whose models and nodes
-are installed, else the best ready match of a template search: Z-Image Turbo, then Qwen-Image
-2512, for frames; Qwen-Image-Edit 2509 for frames made from others; LTX-2.5's first and last frame,
-image to video and text to video templates for shots, and its picture and sound to video for
-lip-synced ones; ACE-Step 1.5 for the song. A template's inputs are found, not hard-coded: its
+What a frame, shot or the song is made with is its `model`: words ("furry nova xl", "my pony
+workflow", "juggernaut") matched against everything ComfyUI has installed for that kind of job, a
+template's name, or nothing for the first of a list known to do it well whose models and nodes are
+installed: Z-Image Turbo, then Qwen-Image 2512, for frames; Qwen-Image-Edit 2509 for frames made
+from others; LTX-2.5's first and last frame, image to video and text to video templates for shots,
+and its picture and sound to video for lip-synced ones; ACE-Step 1.5 for the song.
+
+What is installed is listed in full, not searched (`FilmTemplates.OptionsAsync`, the tool's
+`action=models`): the template list used to be the known ones plus the six best hits of a word
+search, and the user's Furry Nova XL workflow and checkpoint were in neither. Now every saved
+workflow of the user's, and every ComfyUI template of the right kind, is fetched and judged by the
+nodes it runs: what it saves (a picture, a video, a sound, a mesh), what it loads (pictures, a
+sound, a video; muted loaders don't count) and whether it takes a prompt; and it is offered only
+when every model file and node it names is installed. For a picture from words, every checkpoint
+BlackBox's plain text-to-image workflow can run is offered too, told by the names of its tensors (a
+UNet, a text encoder and a VAE of SD 1.5, SD 2 or SDXL): on this PC that took DreamShaper,
+Juggernaut XL, Nova Furry XL, Pony and SD 1.5, and left out LTX, Hunyuan3D, Stable Audio, SDPose,
+an all-in-one Flux and an Anima model. Words match the option that has most of them (more than
+half) among its name, title, notes, folders and model files, the user's own workflows first among
+equals, then ComfyUI's, then bare checkpoints; a number alone or "my workflow" names nothing. Words
+for a frame made from others that name a picture-from-words model ("furry nova xl" on an edit) make
+it with the best edit model, and the result says why. In the window, words that name nothing are
+read by the chat model, which picks one of the installed options, and its name replaces them.
+
+A template's inputs are found, not hard-coded: its
 prompt by a title such as "Prompt" (a primitive first), else by following the sampler's positive
 conditioning back to the text it is made from (through LTX's guides and switches); width, height,
 duration and frame rate by primitives titled so, else the empty latent's own inputs (an LTX length

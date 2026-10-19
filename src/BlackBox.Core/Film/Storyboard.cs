@@ -21,11 +21,12 @@ public sealed class Storyboard
 
     public string Title { get; set; } = "";
 
-    /// <summary>What the film is about, in the user's words.</summary>
-    public string Story { get; set; } = "";
-
-    /// <summary>The look of the whole film, added to every frame's and shot's prompt ("cinematic, 35 mm film, warm light").</summary>
-    public string Style { get; set; } = "";
+    /// <summary>
+    /// The look of the whole film, from storyboards before each frame and shot had all of its own
+    /// prompt: read, moved into every prompt (<see cref="Upgrade"/>) and not written again. A setting
+    /// in every prompt made one change remake every frame and shot.
+    /// </summary>
+    public string? Style { get; set; }
 
     public int Width { get; set; } = 1280;
     public int Height { get; set; } = 720;
@@ -38,8 +39,11 @@ public sealed class Storyboard
 
     public FilmSound Sound { get; set; } = new();
 
-    /// <summary>The ComfyUI templates used for each kind of job; picked from what is installed when empty.</summary>
-    public FilmWorkflows Workflows { get; set; } = new();
+    /// <summary>
+    /// The templates for each kind of job, from storyboards before each frame, shot and song said what
+    /// it is made with (<see cref="FilmFrame.Model"/>): read, moved into them, and not written again.
+    /// </summary>
+    public FilmWorkflows? Workflows { get; set; }
 
     /// <summary>How loud each shot's own sound is in the film (0 to 1); unset: quiet under a soundtrack, full without one.</summary>
     public double? ShotVolume { get; set; }
@@ -142,16 +146,23 @@ public sealed class Storyboard
 
     // ---- reading and writing ---------------------------------------------------------------------
 
-    /// <summary>The storyboard in a folder, or in the storyboard.json given.</summary>
-    public static Storyboard Load(string path)
+    /// <summary>
+    /// The storyboard in a folder, or in the storyboard.json given. One from before frames and shots
+    /// said all of their own look and model is upgraded and saved, what was made staying made
+    /// (<paramref name="upgrade"/> false only reads it, for its title).
+    /// </summary>
+    public static Storyboard Load(string path, bool upgrade = true)
     {
         var file = Directory.Exists(path) ? Path.Combine(path, FileName) : path;
-        var board = Parse(File.ReadAllText(file));
+        var board = Parse(File.ReadAllText(file), upgrade: false);
         board.Folder = Path.GetDirectoryName(Path.GetFullPath(file))!;
+        if (upgrade && board.IsOld)
+            FilmMaker.Upgrade(board);
         return board;
     }
 
-    public static Storyboard Parse(string json)
+    /// <param name="upgrade">Moves an old storyboard's film-wide look and templates into its frames and shots (see <see cref="Upgrade"/>).</param>
+    public static Storyboard Parse(string json, bool upgrade = true)
     {
         try
         {
@@ -161,6 +172,8 @@ public sealed class Storyboard
             Tidy(root);
             var board = root.Deserialize(StoryboardJson.Default.Storyboard) ?? new Storyboard();
             board.Normalize();
+            if (upgrade)
+                board.Upgrade();
             return board;
         }
         catch (JsonException ex)
@@ -196,6 +209,49 @@ public sealed class Storyboard
         }
     }
 
+    /// <summary>Whether it still has a film-wide look or templates, from before frames and shots had all of their own.</summary>
+    [JsonIgnore]
+    public bool IsOld => Style is not null || Workflows is not null;
+
+    /// <summary>
+    /// Moves a film-wide look into every frame's and shot's own prompt, and film-wide templates into
+    /// what each frame, shot and the song is made with, so that from then on a change to one of them
+    /// changes only it. The prompts come out as they were made with, so frames stay made; shots are
+    /// stamped again by <see cref="FilmMaker.Upgrade"/>.
+    /// </summary>
+    public void Upgrade()
+    {
+        if (Style is { } style && style.Trim().Length > 0)
+        {
+            foreach (var f in Frames.Where(f => f.File is not { Length: > 0 }))
+                f.Prompt = JoinText(f.Prompt, style);
+            foreach (var s in Shots)
+                s.Prompt = JoinText(s.Prompt, style);
+        }
+        Style = null;
+        if (Workflows is { } w)
+        {
+            foreach (var f in Frames)
+                f.Model ??= Clean(FilmTemplates.Chosen(w, f.From.Count > 0 ? FilmJob.Edit : FilmJob.Frame));
+            foreach (var s in Shots)
+                s.Model ??= Clean(FilmTemplates.Chosen(w, FilmMaker.JobOf(s)));
+            Sound.Model ??= Clean(w.Song);
+        }
+        Workflows = null;
+    }
+
+    /// <summary>Two parts of a prompt as one: a full stop between them unless the first ends a sentence.</summary>
+    public static string JoinText(string a, string b)
+    {
+        a = a.Trim();
+        b = b.Trim();
+        if (a.Length == 0) return b;
+        if (b.Length == 0) return a;
+        return a.EndsWith('.') || a.EndsWith('!') || a.EndsWith('?') ? $"{a} {b}" : $"{a}. {b}";
+    }
+
+    private static string? Clean(string? s) => s?.Trim() is { Length: > 0 } t ? t : null;
+
     public string ToJson() => JsonSerializer.Serialize(this, Readable.Storyboard);
 
     /// <summary>Written as people read it: "fox's", not "fox's" (the user may open the file).</summary>
@@ -223,7 +279,6 @@ public sealed class Storyboard
         Frames ??= [];
         Shots ??= [];
         Sound ??= new FilmSound();
-        Workflows ??= new FilmWorkflows();
         Width = Even(Math.Clamp(Width <= 0 ? 1280 : Width, 64, 4096));
         Height = Even(Math.Clamp(Height <= 0 ? 720 : Height, 64, 4096));
         Fps = Math.Clamp(Fps <= 0 ? 24 : Fps, 1, 120);
@@ -240,6 +295,7 @@ public sealed class Storyboard
             if (f.Seed <= 0)
                 f.Seed = NewSeed();
             f.Prompt ??= "";
+            f.Model = Clean(f.Model);
         }
         foreach (var s in Shots)
         {
@@ -252,6 +308,7 @@ public sealed class Storyboard
             s.Prompt ??= "";
             s.Camera ??= "";
             s.Line ??= "";
+            s.Model = Clean(s.Model);
             // A line is said lip-synced: a shot given one is.
             if (s.Line.Trim().Length > 0)
                 s.LipSync = true;
@@ -269,6 +326,7 @@ public sealed class Storyboard
         Sound.Voice ??= "";
         Sound.Tags ??= "";
         Sound.Lyrics ??= "";
+        Sound.Model = Clean(Sound.Model);
         Sound.Source = Sound.Source?.Trim().ToLowerInvariant() switch
         {
             FilmSound.FromFile or "audio" => FilmSound.FromFile,
@@ -338,13 +396,14 @@ public sealed class Storyboard
     /// </summary>
     public static Storyboard Merge(Storyboard board, JsonObject change)
     {
+        change = Spread(change);
         var json = board.ToJsonObject();
         foreach (var (key, value) in change)
         {
             var name = JsonKey(key);
             if (name is "frames" or "shots" && value is JsonArray items)
                 json[name] = MergeList(json[name] as JsonArray ?? [], items);
-            else if (name is "sound" or "workflows" && value is JsonObject inner && json[name] is JsonObject existing)
+            else if (name is "sound" && value is JsonObject inner && json[name] is JsonObject existing)
                 foreach (var (k, v) in inner)
                     existing[JsonKey(k)] = v?.DeepClone();
             else
@@ -353,6 +412,49 @@ public sealed class Storyboard
         var merged = Parse(json.ToJsonString());
         merged.Folder = board.Folder;
         return merged;
+
+        // A film-wide look or templates in a change go to the frames and shots that change gives,
+        // never to those there before: one setting in every prompt remade everything when it changed.
+        static JsonObject Spread(JsonObject change)
+        {
+            var keys = change.Select(p => p.Key).Where(k => JsonKey(k) is "style" or "story" or "workflows").ToList();
+            if (keys.Count == 0)
+                return change;
+            change = (JsonObject)change.DeepClone();
+            var style = keys.Where(k => JsonKey(k) == "style").Select(k => change[k]).OfType<JsonValue>().Select(v => v.TryGetValue<string>(out var s) ? s : null).FirstOrDefault();
+            var workflows = keys.Where(k => JsonKey(k) == "workflows").Select(k => change[k]).OfType<JsonObject>().FirstOrDefault();
+            foreach (var key in keys)
+                change.Remove(key);
+            string? Job(JsonObject? w, string job) =>
+                w?.FirstOrDefault(p => p.Key.Equals(job, StringComparison.OrdinalIgnoreCase)).Value is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
+            foreach (var (kind, item) in Items(change))
+            {
+                if (style is { Length: > 0 } && item["prompt"] is JsonValue p && p.TryGetValue<string>(out var prompt))
+                    item["prompt"] = JoinText(prompt, style);
+                if (workflows is not null && item["model"] is null)
+                {
+                    var job = kind == "frames"
+                        ? item["from"] is JsonArray { Count: > 0 } ? "edit" : "frame"
+                        : item["lipSync"] is JsonValue ls && ls.TryGetValue<bool>(out var lip) && lip ||
+                          item["line"] is JsonValue lv && lv.TryGetValue<string>(out var line) && line.Trim().Length > 0 ? "lipSync"
+                        : item["first"] is null ? "shotFromText" : item["last"] is null ? "shotFromFirst" : "shot";
+                    if (Job(workflows, job) is { Length: > 0 } model)
+                        item["model"] = model;
+                }
+            }
+            if (Job(workflows, "song") is { Length: > 0 } song)
+            {
+                var given = change.FirstOrDefault(p => JsonKey(p.Key) == "sound");
+                if (given.Key is null)
+                    change["sound"] = new JsonObject { ["model"] = song };
+                else if (given.Value is JsonObject sound && sound["model"] is null)
+                    sound["model"] = song;
+            }
+            return change;
+
+            static IEnumerable<(string Kind, JsonObject Item)> Items(JsonObject change) =>
+                change.Where(p => JsonKey(p.Key) is "frames" or "shots").SelectMany(p => (p.Value as JsonArray ?? []).OfType<JsonObject>().Select(o => (JsonKey(p.Key), o)));
+        }
 
         static JsonArray MergeList(JsonArray existing, JsonArray changes)
         {
@@ -403,8 +505,15 @@ public sealed class FilmFrame
     /// <summary>A character, place or thing other frames are made from, not a frame of a shot.</summary>
     public bool Reference { get; set; }
 
-    /// <summary>What the picture shows.</summary>
+    /// <summary>What the picture shows, and how it looks.</summary>
     public string Prompt { get; set; } = "";
+
+    /// <summary>
+    /// What it is made with: a model or workflow in the user's words ("furry nova xl", "my pony
+    /// workflow"), matched against what ComfyUI has installed, or a template's name; none: the best
+    /// installed one (<see cref="FilmTemplates.PickAsync"/>).
+    /// </summary>
+    public string? Model { get; set; }
 
     public long Seed { get; set; }
 
@@ -440,6 +549,9 @@ public sealed class FilmShot
 
     /// <summary>What the camera does ("slow push in", "pans left", "still").</summary>
     public string Camera { get; set; } = "";
+
+    /// <summary>What it is made with, as <see cref="FilmFrame.Model"/>: a video model or workflow.</summary>
+    public string? Model { get; set; }
 
     public long Seed { get; set; }
 
@@ -477,12 +589,18 @@ public sealed class FilmSound
     /// <summary>The voice the shots' lines are said in ("a man in his forties, warm and a little hoarse, deadpan").</summary>
     public string Voice { get; set; } = "";
 
+    /// <summary>What the song is made with, as <see cref="FilmFrame.Model"/>: a music model or workflow.</summary>
+    public string? Model { get; set; }
+
     public long Seed { get; set; }
 
     public JsonObject? Set { get; set; }
 }
 
-/// <summary>The ComfyUI templates a film is made with, by the job: a name as the comfyui tool lists templates.</summary>
+/// <summary>
+/// The ComfyUI templates a film was made with, by the job, from storyboards before each frame, shot
+/// and song said what it is made with; only read, to move them there (<see cref="Storyboard.Upgrade"/>).
+/// </summary>
 public sealed class FilmWorkflows
 {
     /// <summary>A picture from words.</summary>
