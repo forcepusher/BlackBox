@@ -431,6 +431,31 @@ public sealed class FilmToolTests : IDisposable
     }
 
     [Fact]
+    public void A_changed_frame_puts_what_is_made_from_it_on_the_list_too()
+    {
+        var board = Storyboard.Parse("""
+            {"title": "Keeper", "frames": [{"id": "f1", "prompt": "a keeper"}, {"id": "f2", "prompt": "closer", "from": ["f1"]}, {"id": "f3", "prompt": "the goal"}],
+             "shots": [{"id": "s1", "first": "f2", "prompt": "he waves"}, {"id": "s2", "first": "f3", "prompt": "the net shakes"}]}
+            """);
+        board.Folder = _dir;
+        void Made(string file, string workflow, string stamp)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.WriteAllText(file, file);
+            File.WriteAllText(workflow, new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = stamp } }.ToJsonString());
+        }
+        Made(board.FramePicture(board.Frame("f1")!), board.FrameWorkflow(board.Frame("f1")!), "made before f1 was changed");
+        foreach (var id in new[] { "f2", "f3" })
+            Made(board.FramePicture(board.Frame(id)!), board.FrameWorkflow(board.Frame(id)!), FilmMaker.FrameStamp(board, board.Frame(id)!));
+        foreach (var shot in board.Shots)
+            Made(board.ShotVideo(shot), board.ShotWorkflow(shot), FilmMaker.ShotStamp(board, shot));
+        var text = FilmTool.Overview(board);
+        Assert.Contains("To make: frame f1, frame f2, shot s1, then join.", text);
+        Assert.Contains("made, but to be made again after f1", text);
+        Assert.Contains("Made, but to be made again after frame f2", text);
+    }
+
+    [Fact]
     public async Task Without_a_path_a_new_film_goes_into_the_films_folder_and_never_over_another()
     {
         var tool = new FilmTool();

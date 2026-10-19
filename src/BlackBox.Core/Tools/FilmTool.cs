@@ -201,11 +201,15 @@ public sealed class FilmTool : Tool
         sb.AppendLine("Frames:");
         if (board.Frames.Count == 0) sb.AppendLine("  (none)");
         var todo = new List<string>();
+        // What is to be made again: frames out of date, frames made from those, and shots that start or end on them.
+        var stale = board.Frames.Where(f => !FilmMaker.IsCurrent(board, f)).Select(f => f.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        while (board.Frames.FirstOrDefault(f => !stale.Contains(f.Id) && f.File is not { Length: > 0 } && f.From.Any(stale.Contains)) is { } after)
+            stale.Add(after.Id);
         foreach (var f in board.Frames)
         {
             var made = File.Exists(board.FramePicture(f));
-            var current = FilmMaker.IsCurrent(board, f);
-            var state = !made ? "not made" : current ? "made" : "made, but out of date (changed since)";
+            var current = !stale.Contains(f.Id);
+            var state = !made ? "not made" : current ? "made" : FilmMaker.IsCurrent(board, f) ? $"made, but to be made again after {string.Join(", ", f.From.Where(stale.Contains))}" : "made, but out of date (changed since)";
             var source = f.File is { Length: > 0 } file ? $"the user's picture {file}" : $"\"{f.Prompt.Trim().ReplaceLineEndings(" ").Clip(300)}\" seed {f.Seed}" +
                                                                                       (f.From.Count > 0 ? $", made from {string.Join(", ", f.From)}" : "");
             var used = board.Shots.Where(s => s.First == f.Id || s.Last == f.Id).Select(s => s.Id).ToList();
@@ -223,13 +227,15 @@ public sealed class FilmTool : Tool
             if (i > 0 && s.Transition != FilmShot.Cut && !join.Contains(s.Transition, StringComparison.Ordinal)) join += $" ({s.Transition})";
             var frames = $"{s.First ?? "no first frame"} → {(s.LipSync ? "(lip-synced, first frame only)" : s.Last ?? "no last frame")}";
             var made = File.Exists(board.ShotVideo(s));
-            var current = FilmMaker.IsCurrent(board, s);
+            var staleFrames = new[] { s.First, s.LipSync ? null : s.Last }.OfType<string>().Where(stale.Contains).Distinct().ToList();
+            var current = FilmMaker.IsCurrent(board, s) && staleFrames.Count == 0;
             sb.AppendLine($"  {s.Id} ({N(starts[i])}–{N(starts[i] + s.Seconds)} s, {N(s.Seconds)} s{join}): {frames}. \"{s.Prompt.Trim().ReplaceLineEndings(" ").Clip(300)}\"" +
                           (s.Camera.Length > 0 ? $" Camera: {s.Camera}." : "") +
                           (Storyboard.Speaks(s) ? $" Says: \"{s.Line.Trim().ReplaceLineEndings(" ")}\"" + (FilmMaker.LineIsCurrent(board, s) ? " (said)." : " (not said yet).") :
                            s.LipSync ? " Sings the soundtrack's part under it (lipSync without a line)." : "") +
                           $" Seed {s.Seed}. " +
-                          (!made ? "Not made." : current ? $"Made: {board.ShotVideo(s)}" : $"Made, but out of date: {board.ShotVideo(s)}"));
+                          (!made ? "Not made." : current ? $"Made: {board.ShotVideo(s)}" :
+                           FilmMaker.IsCurrent(board, s) ? $"Made, but to be made again after frame {string.Join(", ", staleFrames)}: {board.ShotVideo(s)}" : $"Made, but out of date: {board.ShotVideo(s)}"));
             if (!current)
                 todo.Add($"shot {s.Id}");
         }
