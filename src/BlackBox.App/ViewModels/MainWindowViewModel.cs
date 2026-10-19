@@ -570,8 +570,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// The Filmmaking window's model. Its "Make the film" sends a message to this chat as if the user
     /// had typed it, so the agent's work on the film shows here, with every clip it makes.
     /// </summary>
-    public FilmViewModel CreateFilmViewModel() =>
-        new(_previews, Core.Comfy.ComfyHub.For(_paths.ComfyDir), text => Dispatcher.UIThread.Post(() => _ = SendAsync(new UserInput(text))), null);
+    /// <param name="sent">Called once such a message is in the chat (the window brings the chat forward).</param>
+    public FilmViewModel CreateFilmViewModel(Action? sent = null) =>
+        new(_previews, Core.Comfy.ComfyHub.For(_paths.ComfyDir), text => Dispatcher.UIThread.Post(() =>
+        {
+            _ = SendAsync(new UserInput(text));
+            sent?.Invoke();
+        }), null);
 
     // ---- files going with the next message ------------------------------------------
 

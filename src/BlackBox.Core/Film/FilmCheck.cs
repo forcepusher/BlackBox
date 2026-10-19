@@ -100,6 +100,8 @@ public static partial class FilmCheck
         sb.AppendLine("2. Faults: warped or melting faces, hands, limbs or bodies; people or things appearing, vanishing or changing; flicker; garbled text.");
         sb.AppendLine("3. Do the people, their clothes, the things and the place stay the same as in the storyboard's frames and all through the clip?");
         sb.AppendLine("4. Does the camera do what was asked?");
+        sb.AppendLine("Ask for a redo only for what spoils the shot for a viewer: the action not happening, a warped face or body, a person or thing that changes. " +
+                      "Small things (a detail that leaves the frame as the camera moves, a pose a little off) are worth saying, but no reason to redo it.");
         sb.Append("Then end with exactly one line: VERDICT: good, or VERDICT: redo: and the main reason.");
         return sb.ToString();
     }
@@ -167,6 +169,8 @@ public static partial class FilmCheck
             sb.AppendLine($"- {s.Id}: {s.Prompt.Trim().ReplaceLineEndings(" ")}");
         sb.AppendLine("Say briefly and concretely: do the same people look the same in every shot (face, hair, clothes, colours)? Does the look stay the same? " +
                       "Does each shot show what it should, and do they tell the story in order? Which shots stand out as wrong, and why?");
+        sb.AppendLine("Ask for a redo only for what a viewer would clearly notice: someone who looks like another person or animal, a place that changes where it should be the same, " +
+                      "a shot that doesn't show its action. A part of someone out of frame in a close-up, or small differences in pose and framing, are no reason to redo a shot.");
         sb.Append("Then end with exactly one line: VERDICT: good, or VERDICT: redo shots s1, s2…: and the main reason.");
         return sb.ToString();
     }

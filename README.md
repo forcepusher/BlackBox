@@ -11,6 +11,9 @@ downloads stay in a `Data` folder next to the exe.
 ## What it can do
 - **Use any app.** It sees the screen and uses the mouse and keyboard, in any program.
 - **Pictures, video and sound.** It makes them with ComfyUI, installing ComfyUI and the models if needed.
+- **Films.** Plan one shot by shot with the **Filmmaking** button (the frames each shot starts and
+  ends on, how long it lasts, what happens, the soundtrack), or just ask for one. It makes every
+  piece, checks each shot and redoes the ones that are wrong, then puts the film together.
 - **Game development.** It makes games in any engine (Unity, Unreal, Godot) and play-tests them.
 - **Documents.** It writes and edits Word, Excel, PowerPoint and PDF files, no Office needed.
 - **Servers.** It logs in over SSH to set servers up or fix them.

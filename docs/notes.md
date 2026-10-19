@@ -355,6 +355,106 @@ checkpoint, which needed six tries for one lighthouse. Without a tool the agent 
 half minutes getting ComfyUI to stay up and wrote an SD 1.5 workflow from memory. It still sets
 comfyui-mcp up by itself when the user asks for it.
 
+## Films
+A video of more than one shot (a music video, a story, an ad) is planned as a **storyboard** and
+made piece by piece with ComfyUI: one video model run can't hold a story together for more than
+a few seconds, and not every film is one continuous camera shot. The **Filmmaking** button opens a
+window for it beside the chat, and the agent's `film` tool reads and writes the same storyboard,
+so a film can start in either and go on in the other.
+
+A storyboard is the `storyboard.json` in the film's folder (`Videos\BlackBox films\<title>`;
+`BLACKBOX_FILMS` moves that folder, for tests):
+
+- **Shots** in order, each going from its **first frame** to its **last frame** in so many seconds,
+  with what happens in it, what the camera does, and how it follows the shot before (a cut, a
+  dissolve, a fade through black). A shot that starts on the frame the one before ends on goes on
+  with the same camera; one that starts on a frame of its own is a cut to another scene or angle.
+  Without a last frame a shot goes where its prompt takes it; without a first frame too, it is
+  made from words alone.
+- **Frames**: made from a prompt with a fixed seed, or taken from a picture of the user's (cut to
+  the film's frame). A frame can be made **from other frames** (an edit model such as
+  Qwen-Image-Edit gets them as its pictures), so the people and places stay the same from shot to
+  shot; **references** (a character, a place) are frames for that alone, in no shot.
+- **The film's look** (`style`), added to every frame's and shot's prompt, and its frame size and
+  frame rate (1280x720 at 24 fps unless changed).
+- **The soundtrack**: none (each shot keeps the sound it was made with), a sound file of the
+  user's, or a song made for the film from a style and lyrics, as long as the film. A shot can be
+  **lip-synced**: the soundtrack's part under it is cut out as a WAV and given to LTX's picture
+  and sound to video template with its first frame, so the people in it sing or speak it.
+
+Only decisions are kept in the storyboard. What is made sits at fixed places beside it, each with
+the workflow that made it: `frames/<id>.png` and `frames/<id>.json`, `shots/<id>.mp4` and
+`shots/<id>.json`, `sound/song.mp3` and `sound/song.json`, and the joined film as `<title>.mp4`.
+A workflow file is ComfyUI's API format under `"prompt"` (the comfyui tool runs it as it is, with
+`workflow_file`; the files it loads named by their full paths), with what it was made from under
+`"blackbox"`: a hash of the prompt, seed, size, template, and the pictures and sound it started
+from. A piece whose hash no longer matches the storyboard is out of date, which the window and
+the tool say (a frame changed after the clip that starts on it was made, a song shorter than the
+film became). So the window and the agent never overwrite each other's results, and the same
+seed and prompt make the same picture again.
+
+Which template makes each kind of piece is the storyboard's choice (the window's Workflows list,
+or `workflows` in the file), else the first of a list known to do it well whose models and nodes
+are installed, else the best ready match of a template search: Z-Image Turbo, then Qwen-Image
+2512, for frames; Qwen-Image-Edit 2509 for frames made from others; LTX-2.5's first and last frame,
+image to video and text to video templates for shots, and its picture and sound to video for
+lip-synced ones; ACE-Step 1.5 for the song. A template's inputs are found, not hard-coded: its
+prompt by a title such as "Prompt" (a primitive first), else by following the sampler's positive
+conditioning back to the text it is made from (through LTX's guides and switches); width, height,
+duration and frame rate by primitives titled so, else the empty latent's own inputs (an LTX length
+in frames is the fewest 8n + 1 that last the shot; a duration taken in whole seconds is rounded up
+and the clip cut in the film); seeds wherever they are set; first and last frames by the loaders'
+titles; pictures past the edit template's one are wired into its encoders' `image2` and `image3`;
+the prompt enhancer LTX's templates switch on is switched off, so the prompt is the one written.
+What the storyboard sets that a template has no place for is said. Every frame is scaled to cover
+the film's frame and cut to it, and black bars along its edges are cut off first: asked for a
+close-up in "a 35mm film look", Qwen-Image-Edit drew the picture letterboxed, and LTX kept the
+bars through the whole clip.
+
+**Joining** is ffmpeg: each clip held on its last frame or cut to its shot's length, scaled and
+cut to the film's frame and frame rate, joined with concat (a cut) or xfade (a dissolve or a fade,
+which overlap the shot before by half a second or a second), its own sound under the soundtrack
+(30% unless set; a lip-synced shot's own sound is the soundtrack again and is left out), a short
+fade in and a fade out at the end. Without ffmpeg the error says where to put a portable one.
+
+**Checking** a shot compares its clip with the storyboard: whether its first and last frames are
+the frames it should start and end on (pictures shrunk to 48 pixels across, brightness pattern
+and colour, 0 to 1; LTX's first frame came out 0.98 alike), whether it moves, freezes or jumps
+suddenly (a cut inside a shot), black frames, its length and sound; for a lip-synced shot, what
+is sung in its part of the soundtrack (a small Gemma 4 in ComfyUI hears it). Then the sheet of the
+storyboard's frames above eight of the clip's goes to a **fresh look**: the model, in a request of
+its own without the run's history, says whether what should happen happens, what is warped or
+changing, whether the people stay the same, and ends with a verdict. The model that made a clip
+judges it too kindly (it called four bunnies mature and true to a reference sheet that the user
+saw as a chubby teenager). `tries=N` makes up to N takes with new seeds until one passes and keeps
+the best. The whole film is checked from a frame of each shot side by side and the joins where the
+camera should go on.
+
+In the window, frames, clips and the song are made directly (no model involved), each with a Stop;
+**Make the film** hands the storyboard to the agent in the chat, which makes what isn't made, checks
+every shot, fixes what is wrong, joins the film and checks it. The window shows what the agent
+changes and makes as it goes, from the film's folder. A ComfyUI BlackBox started for the window is
+closed once the window is.
+
+### How films did
+On this PC (RTX 5070 Ti 16 GB, ComfyUI 0.41.3), at 1280x720 and 24 fps: a frame from words took
+about 20 s (Z-Image Turbo), one made from other frames 25 to 45 s (Qwen-Image-Edit 2509), a 5 s shot
+about 2 minutes (LTX-2.5 distilled; 1280x704 out of the model, cut to the film's frame), a 4 s
+lip-synced shot 2 minutes, a 10 s song 15 to 35 s (ACE-Step 1.5 XL Turbo), joining two shots 1 s.
+A fresh look at a shot took qwen3.8 (LM Studio) under a minute.
+
+"The Fox and the Moon", a storyboard of a reference fox, three frames made from it and two shots
+(a leap from a first to a last frame, then a cut by dissolve to a howl from a first frame alone)
+with an instrumental song, handed to qwen3.8 as the window's **Make the film** words it: done in
+34 minutes, 21 model calls, 20 tool calls, no errors. It made the frames in the order they depend
+on each other, then the song, then each shot with `tries=3`. The leap passed its first take; the
+howl failed three (the howl broke off, the tail vanished, the framing drifted wider than the
+close-up), passed after the agent made its prompt plainer, and the whole-film check then found
+the fox's world different between the shots (a bare mound, then pine woods): the agent remade the
+first two frames with the woods, made the leap again (its second take passed), joined, and the
+check passed, saying the moon changes sides at the cut. Every frame and clip kept its first frame
+0.98 alike to the storyboard's.
+
 ## Chat history
 Every chat is saved on its own in `Data/chats/` from its first message on, after every step, and
 named after that message. **History** next to **New chat** lists them, the latest first: pick one to

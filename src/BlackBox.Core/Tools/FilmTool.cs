@@ -375,7 +375,8 @@ public sealed class FilmTool : Tool
             text.AppendLine("A fresh look at the shots side by side: " + judged.Trim());
         if (check.Faults.Count > 0)
             text.AppendLine("To fix: " + string.Join("; ", check.Faults) + ".");
-        text.Append("Fix the shots that are wrong (action=shot), then join again.");
+        text.Append("Fix what a viewer would notice (a frame first when a person or place differs, then its shots), then join again. " +
+                    "Each round costs minutes per shot: after two rounds, finish unless something is still clearly wrong, and tell the user what is left.");
         return new ToolResult(text.ToString(), check.Sheet, ImageCaption: check.Sheet is null ? null : "One frame from the middle of each shot, in order:", Files: [film]);
     }
 

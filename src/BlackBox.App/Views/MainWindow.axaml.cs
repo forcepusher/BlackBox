@@ -382,7 +382,8 @@ public partial class MainWindow : Window
             open.Activate();
             return;
         }
-        _film = new FilmWindow { DataContext = Vm.CreateFilmViewModel() };
+        // "Make the film" brings the chat forward, where the agent's work on it shows.
+        _film = new FilmWindow { DataContext = Vm.CreateFilmViewModel(sent: () => Activate()) };
         _film.Closed += (_, _) => _film = null;
         // A window of its own, not one kept in front of the chat: the user watches both while the film is made.
         _film.Show();

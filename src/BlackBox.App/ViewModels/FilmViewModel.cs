@@ -23,6 +23,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     private readonly PreviewServices _previews;
     private readonly Action<string> _sendToChat;
     private readonly FilmMaker _maker;
+    private readonly ComfyHub _hub;
     private Storyboard _board = new();
     private readonly Dictionary<string, FrameItem> _frames = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer _saveTimer;
@@ -36,6 +37,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         _previews = previews;
         _sendToChat = sendToChat;
         _maker = new FilmMaker(hub, previews.Decoder);
+        _hub = hub;
         _saveTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(400), DispatcherPriority.Background, (_, _) => SaveNow());
         _refreshTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) =>
         {
@@ -287,7 +289,15 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         foreach (var shot in Shots)
             shot.Clip?.Dispose();
         Sound?.Player?.Dispose();
+        foreach (var old in _frames.Values)
+        {
+            var (thumbnail, picture) = (old.Thumbnail, old.Picture);
+            (old.Thumbnail, old.Picture) = (null, null);
+            thumbnail?.Dispose();
+            picture?.Dispose();
+        }
         _frames.Clear();
+        _thumbStamps.Clear();
         Shots.Clear();
         References.Clear();
         foreach (var frame in _board.Frames)
@@ -306,6 +316,9 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         foreach (var frame in _board.Frames.Where(f => f.Reference || !inShots.Contains(f.Id)))
             References.Add(_frames[frame.Id]);
         Sound = new SoundItem(this, _board.Sound);
+        Workflows.Clear();
+        foreach (var (job, label) in WorkflowLabels)
+            Workflows.Add(new WorkflowChoice(this, _board.Workflows, job, label));
         _loading = false;
         Relabel();
         RefreshStates();
@@ -318,6 +331,54 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             ['s', ':', .. var id] => Shots.FirstOrDefault(s => s.Id == id),
             _ => Shots.FirstOrDefault(),
         });
+    }
+
+    // ---- the ComfyUI templates it is made with ------------------------------------------------------------
+
+    private static readonly (FilmJob Job, string Label)[] WorkflowLabels =
+    [
+        (FilmJob.Frame, "Frames from a prompt"),
+        (FilmJob.Edit, "Frames made from others"),
+        (FilmJob.Shot, "Shots from a first and a last frame"),
+        (FilmJob.ShotFromFirst, "Shots from a first frame"),
+        (FilmJob.ShotFromText, "Shots from words alone"),
+        (FilmJob.LipSync, "Lip-synced shots"),
+        (FilmJob.Song, "The song"),
+    ];
+
+    public ObservableCollection<WorkflowChoice> Workflows { get; } = [];
+
+    [ObservableProperty]
+    private string _workflowsState = "";
+
+    /// <summary>
+    /// Lists the templates that can do each job, from ComfyUI (started for it if it isn't
+    /// running): only on request, as opening the window shouldn't start ComfyUI.
+    /// </summary>
+    [RelayCommand]
+    private async Task ListTemplates()
+    {
+        WorkflowsState = "Asking ComfyUI…";
+        _maker.Use();
+        try
+        {
+            var lists = await Task.Run(async () =>
+            {
+                var api = await _hub.ConnectAsync(null, [], s => Dispatcher.UIThread.Post(() => WorkflowsState = s), CancellationToken.None);
+                var found = new Dictionary<FilmJob, List<string>>();
+                foreach (var (job, _) in WorkflowLabels)
+                    found[job] = await FilmTemplates.CandidatesAsync(_hub, api, job, CancellationToken.None);
+                return found;
+            });
+            foreach (var choice in Workflows)
+                if (lists.TryGetValue(choice.Job, out var names))
+                    choice.Offer(names);
+            WorkflowsState = "The known good ones come first; one whose models aren't installed says so when it is used.";
+        }
+        catch (Exception ex) when (ex is ComfyApiException or IOException or FilmException)
+        {
+            WorkflowsState = ex.Message;
+        }
     }
 
     /// <summary>Names each frame by where it is used: "Start of shot 2", "End of shot 1, start of shot 2".</summary>

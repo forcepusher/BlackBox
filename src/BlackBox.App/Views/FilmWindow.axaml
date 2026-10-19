@@ -482,6 +482,29 @@
               </Grid>
             </StackPanel>
           </Border>
+
+          <!-- Which ComfyUI template makes each part: picked from what is installed unless the user picks one. -->
+          <Expander Header="Workflows: the ComfyUI templates each part is made with" HorizontalAlignment="Stretch" Padding="14,10">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="muted" TextWrapping="Wrap"
+                         Text="Each is picked from what is installed unless you pick one. Every frame, clip and song keeps the workflow it was made with, with its seed, beside it in the film's folder." />
+              <ItemsControl ItemsSource="{Binding Workflows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:WorkflowChoice">
+                    <Grid ColumnDefinitions="230,*" Margin="0,0,0,6">
+                      <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+                      <ComboBox Grid.Column="1" ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}" HorizontalAlignment="Stretch" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <DockPanel>
+                <Button DockPanel.Dock="Left" Classes="ghost" Content="List the templates" Command="{Binding ListTemplatesCommand}"
+                        ToolTip.Tip="Asks ComfyUI which templates can make each part (it is started if it isn't running)" />
+                <TextBlock Classes="muted" Text="{Binding WorkflowsState}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="10,0,0,0" />
+              </DockPanel>
+            </StackPanel>
+          </Expander>
         </StackPanel>
       </ScrollViewer>
 

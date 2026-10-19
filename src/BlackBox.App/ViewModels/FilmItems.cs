@@ -479,6 +479,48 @@ public sealed partial class SoundItem(FilmViewModel film, FilmSound sound) : Obs
     public void Report(string state, bool error = false) => Dispatcher.UIThread.Post(() => (State, IsError) = (state, error));
 }
 
+/// <summary>Which ComfyUI template makes one kind of job: picked from what is installed, or one the user chose.</summary>
+public sealed partial class WorkflowChoice : ObservableObject
+{
+    public const string Automatic = "Picked from what is installed";
+
+    private readonly FilmViewModel _film;
+    private readonly FilmWorkflows _workflows;
+
+    public WorkflowChoice(FilmViewModel film, FilmWorkflows workflows, FilmJob job, string label)
+    {
+        (_film, _workflows, Job, Label) = (film, workflows, job, label);
+        Options.Add(Automatic);
+        if (FilmTemplates.Chosen(workflows, job) is { } chosen)
+            Options.Add(chosen);
+        _selected = FilmTemplates.Chosen(workflows, job) ?? Automatic;
+    }
+
+    public FilmJob Job { get; }
+    public string Label { get; }
+    public ObservableCollection<string> Options { get; } = [];
+
+    [ObservableProperty]
+    private string _selected;
+
+    partial void OnSelectedChanged(string value)
+    {
+        if (value is null)
+            return;
+        FilmTemplates.Choose(_workflows, Job, value == Automatic ? null : value);
+        _film.Changed(this);
+    }
+
+    /// <summary>The templates that can do the job, the ones known to do it well first.</summary>
+    public void Offer(IEnumerable<string> names)
+    {
+        var keep = Selected;
+        foreach (var name in names.Where(n => !Options.Contains(n)))
+            Options.Add(name);
+        Selected = keep;
+    }
+}
+
 /// <summary>A film in the list at the top of the window: its title, and where it is.</summary>
 public sealed record FilmChoice(string Folder, string Title)
 {

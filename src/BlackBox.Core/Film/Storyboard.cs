@@ -188,7 +188,13 @@ public sealed class Storyboard
         }
     }
 
-    public string ToJson() => JsonSerializer.Serialize(this, StoryboardJson.Default.Storyboard);
+    public string ToJson() => JsonSerializer.Serialize(this, Readable.Storyboard);
+
+    /// <summary>Written as people read it: "fox's", not "fox's" (the user may open the file).</summary>
+    private static readonly StoryboardJson Readable = new(new JsonSerializerOptions(StoryboardJson.Default.Options)
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    });
 
     public JsonObject ToJsonObject() => (JsonObject)JsonNode.Parse(ToJson())!;
 
@@ -480,7 +486,7 @@ public sealed class FilmWorkflows
 public sealed class FilmException(string message) : Exception(message);
 
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true,
-    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, IgnoreReadOnlyProperties = true, AllowTrailingCommas = true,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault, IgnoreReadOnlyProperties = true, AllowTrailingCommas = true,
     ReadCommentHandling = JsonCommentHandling.Skip, NumberHandling = JsonNumberHandling.AllowReadingFromString)]
 [JsonSerializable(typeof(Storyboard))]
 internal sealed partial class StoryboardJson : JsonSerializerContext;
