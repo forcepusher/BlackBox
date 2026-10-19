@@ -12,9 +12,9 @@ public static class ModelQuestion
     public static Task<string?> AskAsync(BackendConnection backend, string question, CancellationToken ct) =>
         new FreshLook(backend.Client, backend.Options).AskTextAsync(question, ct);
 
-    /// <summary>A question with its own instructions, and a picture when the model sees pictures (else it is left out).</summary>
+    /// <summary>A question with its own instructions, and pictures when the model sees pictures (else they are left out).</summary>
     /// <returns>The answer (the thinking before it left out), or null when the server couldn't be asked.</returns>
     /// <param name="think">False: a Qwen 3+ model answers without thinking first, much sooner.</param>
-    public static Task<string?> AskAsync(BackendConnection backend, string system, string question, byte[]? picture, int maxTokens, TimeSpan limit, CancellationToken ct, bool think = true) =>
-        new FreshLook(backend.Client, backend.Options).AskAsync(system, question, backend.Vision ? picture : null, maxTokens, limit, ct, think);
+    public static Task<string?> AskAsync(BackendConnection backend, string system, string question, IReadOnlyList<byte[]> pictures, int maxTokens, TimeSpan limit, CancellationToken ct, bool think = true) =>
+        new FreshLook(backend.Client, backend.Options).AskAsync(system, question, backend.Vision ? pictures : [], maxTokens, limit, ct, think);
 }

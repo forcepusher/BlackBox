@@ -1111,17 +1111,27 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             var check = await FilmDirector.CheckAsync(_board, picked.Piece, _previews.Decoder, _ask, ct);
             if (check is { } c && picked.Piece.Workflow(_board) is { } wf)
                 FilmTakes.RememberLook(wf, c.Verdict, c.Said);
-            Say(key, check?.Said ?? "It couldn't be looked at: it isn't made yet, or the chat model doesn't see pictures.", replace: true);
+            if (check?.Reason is not null)
+                Say(key, check.Value.Said + " Say what to change, or ask for another take.", replace: true);
+            else
+                Say(key, check?.Said ?? "It couldn't be looked at: it isn't made yet, or the chat model doesn't see pictures.", replace: true);
             SaveTalk();
         });
     }
 
+    /// <summary>How many times a piece the look finds wrong is fixed and made again before the user is told what is left.</summary>
+    private const int Fixes = 2;
+
     /// <summary>
     /// Makes a piece: the one there kept as a take, the new one made as the storyboard says, and a
     /// fresh look at it, all said in the piece's talk (and <paramref name="key"/>'s, where the request was).
+    /// What the look finds wrong is fixed and made again, up to <see cref="Fixes"/> times: the user
+    /// found a pass the look should have failed dismissive, and a flagged piece left for them lenient.
     /// </summary>
-    private async Task MakePieceAsync(FilmPiece piece, string key, CancellationToken ct)
+    /// <param name="round">How many fixes came before this make.</param>
+    private async Task MakePieceAsync(FilmPiece piece, string key, CancellationToken ct, int round = 0)
     {
+        string? fix = null;
         var item = ItemOf(piece);
         var label = Lower(item?.Title ?? piece.Id);
         if (item is not null)
@@ -1165,7 +1175,9 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
                 {
                     if (piece.Workflow(_board) is { } wf)
                         FilmTakes.RememberLook(wf, c.Verdict, c.Said);
-                    Say(key, said + " " + c.Said, replace: true);
+                    fix = c.Reason;
+                    Say(key, said + " " + c.Said + (fix is null ? "" : round < Fixes ? $" Fixing it ({round + 1} of {Fixes})…" :
+                        $" It still isn't right after {Fixes} fixes: say what to change, or pick an earlier take."), replace: true);
                 }
                 else
                     Say(key, said, replace: true);
@@ -1185,12 +1197,57 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
                 RefreshDetails();
             }
         }
+        if (fix is not null && round < Fixes && !ct.IsCancellationRequested)
+            await FixAsync(piece, key, fix, ct, round);
+    }
+
+    /// <summary>
+    /// What the look found wrong with a piece, handed to BlackBox to change what it is made from
+    /// (its prompt, its frames, a new seed), then made again and looked at again.
+    /// </summary>
+    private async Task FixAsync(FilmPiece piece, string key, string found, CancellationToken ct, int round)
+    {
+        if (_ask is not { } ask)
+            return;
+        var installed = await InstalledAsync(piece, _ => { }, ct);
+        var picture = await Task.Run(() => PictureOf(piece), ct);
+        // A shot between two frames that disagree on what stays put moves it: the fox film's frames put
+        // the moon "in the upper left" and "directly above", and three takes of rewording the action
+        // couldn't hold it still.
+        var frames = piece.Kind == FilmPieceKind.Shot && _board.Shot(piece.Id) is { LipSync: false } shot && _board.Frame(shot.First) is { } first && _board.Frame(shot.Last) is { } last
+            ? $" Its first frame ({first.Id}) is: \"{first.Prompt.Trim()}\". Its last frame ({last.Id}) is: \"{last.Prompt.Trim()}\". Compare where the things that stay put " +
+              "(the moon, the trees, the horizon, where someone stands) and the camera's angle are in the two: the shot moves whatever differs, so if they differ, " +
+              $"that is the cause: change the last frame ({last.Id}) to agree with the first, keeping only the change the shot is for."
+            : "";
+        var direction = await FilmDirector.DirectAsync(_board, piece,
+            $"A fresh look at it as just made found this wrong: {found}. Change what it is made from so that it doesn't happen again, keeping what was asked for." + frames +
+            " Otherwise write the action so a video model can't get it wrong, or only give it a new seed if nothing else would help. Keep the model it is made with unless the user asked for another.",
+            _talk, installed, picture, ask, ct, think: true);
+        var board = direction.Board;
+        // Made again whatever was changed: with no change, at least another seed.
+        if (piece.IsCurrent(board))
+        {
+            switch (piece.Kind)
+            {
+                case FilmPieceKind.Frame when board.Frame(piece.Id) is { } f: f.Seed = Storyboard.NewSeed(); break;
+                case FilmPieceKind.Shot when board.Shot(piece.Id) is { } s: s.Seed = Storyboard.NewSeed(); break;
+            }
+        }
+        _board = board;
+        _dirty = true;
+        SaveNow(force: true);
+        Rebuild();
+        Say(key, direction.Reply);
+        SaveTalk();
+        foreach (var other in direction.Make.Where(p => p != piece && !p.IsCurrent(_board)))
+            await MakePieceAsync(other, key, ct, Fixes);
+        await MakePieceAsync(piece, key, ct, round + 1);
     }
 
     /// <summary>A note from making a piece worth telling the user: not what is so by design (a lip-synced shot made from its first frame alone).</summary>
     private static bool Worth(string note) =>
         !note.Contains("no place for the size", StringComparison.Ordinal) && !note.Contains("made from its first frame only", StringComparison.Ordinal) &&
-        !note.StartsWith("Using the ComfyUI", StringComparison.Ordinal);
+        !note.StartsWith("Using the ComfyUI", StringComparison.Ordinal) && !note.StartsWith("Started ComfyUI", StringComparison.Ordinal);
 
     /// <summary>The next piece not made or out of date, in the order they have to be made: references, frames, the song, shots.</summary>
     private FilmPiece? Missing()

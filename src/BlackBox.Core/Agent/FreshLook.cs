@@ -87,54 +87,29 @@ internal sealed partial class FreshLook(OpenAiChatClient client, ChatRequestOpti
     }
 
     /// <summary>
-    /// Asks about a picture in a conversation of its own: a judgement with fresh eyes, such as
-    /// whether a clip shows what its shot should. The model may think first; only its answer
-    /// comes back, or null when the request failed.
+    /// Asks about pictures in a conversation of its own: a judgement with fresh eyes, such as
+    /// whether a clip shows what its shot should (its frames, and a closer look at its busiest
+    /// moment). The model may think first; only its answer comes back, or null when the request failed.
     /// </summary>
-    public async Task<string?> AskAsync(byte[] picture, string question, CancellationToken ct)
-    {
-        List<ChatMessage> request =
-        [
-            ChatMessage.System("You look at pictures carefully and say plainly what you see, faults included. You don't praise what isn't good."),
-            new()
-            {
-                Role = ChatRole.User,
-                Parts = [ContentPart.FromImage(picture, "image/jpeg"), ContentPart.FromText(question)],
-            },
-        ];
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromMinutes(5));
-        try
-        {
-            var reply = await client.CompleteAsync(request, [], new ChatRequestOptions { Model = options.Model, Extra = options.Extra, MaxTokens = 8192 }, null, timeout.Token)
-                .ConfigureAwait(false);
-            // A server that leaves the thinking in the answer: the answer is what follows it.
-            var text = reply.Content ?? "";
-            if (text.LastIndexOf("</think>", StringComparison.Ordinal) is var end and >= 0)
-                text = text[(end + "</think>".Length)..];
-            return text.Trim() is { Length: > 0 } answer ? answer : null;
-        }
-        catch (Exception ex) when (ex is LlmException or HttpRequestException or IOException || (ex is OperationCanceledException && !ct.IsCancellationRequested))
-        {
-            return null;
-        }
-    }
+    public Task<string?> AskAsync(IReadOnlyList<byte[]> pictures, string question, CancellationToken ct) =>
+        AskAsync("You look at pictures carefully and say plainly what you see, faults included. You don't praise what isn't good.", question, pictures, 8192, TimeSpan.FromMinutes(5), ct);
 
     /// <summary>A question without a picture, in a conversation of its own; only the answer comes back, or null when the request failed.</summary>
     public Task<string?> AskTextAsync(string question, CancellationToken ct) =>
-        AskAsync("You answer exactly what is asked, briefly.", question, null, 4096, TimeSpan.FromMinutes(2), ct);
+        AskAsync("You answer exactly what is asked, briefly.", question, [], 4096, TimeSpan.FromMinutes(2), ct);
 
     /// <summary>
-    /// A question in a conversation of its own, with its own instructions and a picture or none:
+    /// A question in a conversation of its own, with its own instructions and pictures or none:
     /// only the answer comes back (the thinking before it left out), or null when the request failed.
     /// </summary>
     /// <param name="think">False: a Qwen 3+ model answers without thinking first (its reply begun with an empty think block), much sooner.</param>
-    public async Task<string?> AskAsync(string system, string question, byte[]? picture, int maxTokens, TimeSpan limit, CancellationToken ct, bool think = true)
+    public async Task<string?> AskAsync(string system, string question, IReadOnlyList<byte[]> pictures, int maxTokens, TimeSpan limit, CancellationToken ct, bool think = true)
     {
         List<ChatMessage> request =
         [
             ChatMessage.System(system),
-            picture is null ? ChatMessage.User(question) : new() { Role = ChatRole.User, Parts = [ContentPart.FromImage(picture, "image/jpeg"), ContentPart.FromText(question)] },
+            pictures.Count == 0 ? ChatMessage.User(question)
+                : new() { Role = ChatRole.User, Parts = [.. pictures.Select(p => ContentPart.FromImage(p, "image/jpeg")), ContentPart.FromText(question)] },
         ];
         var prefill = !think && !_prefillRejected && ThinksInQwenTags(options.Model);
         if (prefill)
@@ -153,7 +128,7 @@ internal sealed partial class FreshLook(OpenAiChatClient client, ChatRequestOpti
         catch (LlmException ex) when (prefill && ex is not (ConnectionLostException or RateLimitedException or ContextOverflowException))
         {
             _prefillRejected = true;
-            return await AskAsync(system, question, picture, maxTokens, limit, ct, think).ConfigureAwait(false);
+            return await AskAsync(system, question, pictures, maxTokens, limit, ct, think).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is LlmException or HttpRequestException or IOException || (ex is OperationCanceledException && !ct.IsCancellationRequested))
         {

@@ -204,7 +204,7 @@ public sealed partial class AgentSession(
         if (toolContext.Ask is null)
         {
             var eyes = new FreshLook(client, requestOptions);
-            toolContext.Ask = (image, question, ct2) => toolContext.SeesImages ? eyes.AskAsync(image, question, ct2) : Task.FromResult<string?>(null);
+            toolContext.Ask = (images, question, ct2) => toolContext.SeesImages ? eyes.AskAsync(images, question, ct2) : Task.FromResult<string?>(null);
         }
         var nudges = 0;
         var cutCalls = 0;

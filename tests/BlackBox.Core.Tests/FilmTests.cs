@@ -241,6 +241,26 @@ public sealed class FilmDirectorTests : IDisposable
     }
 
     [Fact]
+    public async Task A_shot_is_redone_when_any_of_its_looks_asks_for_it()
+    {
+        var board = Board();
+        var shot = board.Shot("s1")!;
+        var look = new FilmLook("", [1, 2, 3], [], [4, 5]);
+        var asked = new List<(int Pictures, string Question)>();
+        Task<string?> Ask(IReadOnlyList<byte[]> pictures, string question, CancellationToken ct)
+        {
+            asked.Add((pictures.Count, question));
+            return Task.FromResult<string?>(question.Contains("stays put") ? "The moon wanders.\nVERDICT: redo: the moon slides across the sky" : "Fine.\nVERDICT: good");
+        }
+        var answer = await FilmCheck.JudgeShotAsync(board, shot, look, null, Ask, CancellationToken.None);
+        Assert.Equal(3, asked.Count);
+        Assert.Equal(2, asked[0].Pictures); // the overview and the closer look
+        Assert.Contains("never excuses impossible physics", asked[0].Question);
+        Assert.Equal("redo", FilmCheck.Verdict(answer!));
+        Assert.Equal("the moon slides across the sky", FilmCheck.Reason(answer!));
+    }
+
+    [Fact]
     public void Takes_are_kept_and_put_back_with_their_settings()
     {
         var board = Board();

@@ -451,7 +451,7 @@ public sealed class FilmTool : Tool
                 text.AppendLine("Its sound couldn't be judged: " + ex.Message);
             }
         }
-        if (check.Sheet is { } sheet && ctx.Ask is { } ask && await ask(sheet, FilmCheck.JudgeFilm(board), ct).ConfigureAwait(false) is { Length: > 0 } judged)
+        if (check.Sheet is { } sheet && ctx.Ask is { } ask && await ask([sheet], FilmCheck.JudgeFilm(board), ct).ConfigureAwait(false) is { Length: > 0 } judged)
             text.AppendLine("A fresh look at the shots side by side: " + judged.Trim());
         if (check.Faults.Count > 0)
             text.AppendLine("To fix: " + string.Join("; ", check.Faults) + ".");
@@ -468,18 +468,17 @@ public sealed class FilmTool : Tool
         ctx.Progress?.Invoke($"Looking at shot {shot.Id}…");
         var look = await Task.Run(() => FilmCheck.Shot(board, shot, clip, decoder), ct).ConfigureAwait(false);
         var text = new StringBuilder(look.Text).AppendLine();
-        var question = FilmCheck.JudgeShot(board, shot);
+        string? sung = null;
         if (shot.LipSync && File.Exists(board.ShotAudio(shot)) && await HearAsync(ctx, board.ShotAudio(shot), ct).ConfigureAwait(false) is { } heard)
         {
-            var sung = heard.Words is null ? "No words are sung or said in the soundtrack's part under this shot." : $"The words sung or said under this shot: \"{heard.Words.ReplaceLineEndings(" ").Clip(600)}\".";
+            sung = heard.Words is null ? "No words are sung or said in the soundtrack's part under this shot." : $"The words sung or said under this shot: \"{heard.Words.ReplaceLineEndings(" ").Clip(600)}\".";
             text.AppendLine(sung + $" ({heard.Model} listened to it.)");
-            question += "\n" + sung;
         }
-        if (look.Sheet is { } sheet && ctx.Ask is { } ask)
+        if (ctx.Ask is { } ask)
         {
-            ctx.Progress?.Invoke($"A fresh look at shot {shot.Id}…");
-            if (await ask(sheet, question, ct).ConfigureAwait(false) is { Length: > 0 } judged)
-                text.AppendLine("A fresh look at its frames: " + judged.Trim());
+            ctx.Progress?.Invoke($"Two fresh looks at shot {shot.Id}: physics and bodies, then behaviour over time…");
+            if (await FilmCheck.JudgeShotAsync(board, shot, look, sung, ask, ct).ConfigureAwait(false) is { Length: > 0 } judged)
+                text.AppendLine("Fresh looks at its frames and at a closer look at its busiest moment: " + judged.Trim());
         }
         return look with { Text = text.ToString().TrimEnd() };
     }

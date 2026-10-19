@@ -6,8 +6,8 @@ using BlackBox.Core.Media;
 
 namespace BlackBox.Core.Film;
 
-/// <summary>Asks the chat model something in a request of its own, with its own instructions and a picture or none, thinking first or not; null when it couldn't be asked.</summary>
-public delegate Task<string?> FilmAsk(string system, string question, byte[]? picture, bool think, CancellationToken ct);
+/// <summary>Asks the chat model something in a request of its own, with its own instructions and pictures or none, thinking first or not; null when it couldn't be asked.</summary>
+public delegate Task<string?> FilmAsk(string system, string question, IReadOnlyList<byte[]> pictures, bool think, CancellationToken ct);
 
 /// <summary>What BlackBox made of what the user said: what it says back, the storyboard as it is now, and what to make.</summary>
 /// <param name="Make">The pieces to make now, in the order they are to be made.</param>
@@ -28,7 +28,7 @@ public static class FilmDirector
 
         - A frame is one still picture: who is in it (repeat what makes each person look like themselves: age, hair, face, build, clothes), where, doing what, how it is framed (wide, medium, close-up; the angle), the light, and the film's look. Write the film's look into every prompt, in the same words each time, so the pictures match. No words or letters in a picture unless asked.
         - A reference is a picture other frames are made from, so a person or place looks the same in every shot: a character sheet (the same person from the front and three-quarters on a plain background) or the place on its own. It is in no shot, and has a short "name" the person knows it by ("Marco", "the fox", "the forest"). A frame made from references lists them in "from", and its prompt says the person is the same as in the reference.
-        - A shot is a few seconds of video from its first frame to its last one, if it has one. Its prompt says what happens, in order, in the present tense: one clear action, how people move and what changes, with the look. "camera" says what the camera does (still, slow push in, pans left, follows her). 3 to 8 seconds. A shot that starts on the frame the one before ends on goes on with the same camera; one with a first frame of its own is a cut. Its first frame is how it begins and its last frame how it ends: what changes during the shot goes in the shot's prompt, and a frame changes only when the way the shot begins or ends changes.
+        - A shot is a few seconds of video from its first frame to its last one, if it has one. Its prompt says what happens, in order, in the present tense: one clear action, how people move and what changes, with the look. Write action a camera could film for real, because a video model takes the words literally: people move as people do, and things come from somewhere and fall ("twirls a big forkful, slurps it, sauce flicks onto his chin", not "noodles flying"; "leans over the plate", not "head down in the plate"). "camera" says what the camera does (still, slow push in, pans left, follows her). 3 to 8 seconds. A shot that starts on the frame the one before ends on goes on with the same camera; one with a first frame of its own is a cut. Its first frame is how it begins and its last frame how it ends: what changes during the shot goes in the shot's prompt, and a frame changes only when the way the shot begins or ends changes. A shot with both moves from one to the other, so whatever is in a different place in the two (the moon, a tree, the horizon) moves during the shot: write the two frames to agree on everything that stays put (the same words for where the moon and the trees are), differing only in what the shot changes, and make the last frame from the first (its "from" holds the first frame's id, with the references), so the picture model keeps everything else exactly where it is.
         - A line is what someone says in a shot, lip-synced from its first frame, in the film's one voice ("voice" in sound: age, voice, manner). It starts 0.4 s into the shot at about 2.5 words a second, so it has to fit. A speaking shot's first frame shows the face toward the camera with the mouth free: no food or hand over it. A lip-synced shot is made from its first frame only.
         - The song: "tags" (genre, instruments, mood, tempo such as "100 BPM") and "lyrics" ([verse] and [chorus] lines; none for an instrumental). It is made a minute long and the film uses its start.
         - "model" is what a piece is made with. Set it only when the person names or describes a model or workflow, to the name of an installed one (listed with the request). Leave it out otherwise: the best installed one is used.
@@ -48,8 +48,9 @@ public static class FilmDirector
     /// </summary>
     /// <param name="installed">What is installed for the jobs the piece can be, to name in "model".</param>
     /// <param name="picture">The piece as it is (a frame, a sheet of a clip), for the model to see.</param>
+    /// <param name="think">Whether the model thinks first; by default a whole film is thought out and a piece's request answered at once.</param>
     public static async Task<FilmDirection> DirectAsync(Storyboard board, FilmPiece? piece, string request, FilmTalk talk,
-        IReadOnlyList<FilmOption> installed, byte[]? picture, FilmAsk ask, CancellationToken ct)
+        IReadOnlyList<FilmOption> installed, byte[]? picture, FilmAsk ask, CancellationToken ct, bool? think = null)
     {
         var question = Question(board, piece, request, talk, installed, picture is not null);
         string? answer = null;
@@ -57,7 +58,8 @@ public static class FilmDirector
         for (var attempt = 0; attempt < 2 && json is null; attempt++)
         {
             // A whole film is laid out with thought (half a minute without, three with); a piece is changed at once.
-            answer = await ask(Brief, attempt == 0 ? question : question + "\n\nYour last answer wasn't a JSON object as asked. Reply with only the JSON object.", picture, piece is null, ct).ConfigureAwait(false);
+            answer = await ask(Brief, attempt == 0 ? question : question + "\n\nYour last answer wasn't a JSON object as asked. Reply with only the JSON object.",
+                picture is null ? [] : [picture], think ?? piece is null, ct).ConfigureAwait(false);
             if (answer is null)
                 throw new FilmException("BlackBox's model couldn't be asked: is the chat server running?");
             json = JsonIn(answer);
@@ -274,42 +276,41 @@ public static class FilmDirector
     /// A fresh look at a piece just made: does a frame show what its prompt says, does a shot do what
     /// it should (with the numbers of how it moves and starts and ends). Null when it can't be looked at.
     /// </summary>
-    /// <returns>The verdict (good or redo), and a line to tell the user.</returns>
-    public static async Task<(string Verdict, string Said)?> CheckAsync(Storyboard board, FilmPiece piece, IMediaDecoder? media, FilmAsk ask, CancellationToken ct)
+    /// <returns>The verdict (good or redo), a line to tell the user, and what is wrong (for a redo).</returns>
+    public static async Task<(string Verdict, string Said, string? Reason)?> CheckAsync(Storyboard board, FilmPiece piece, IMediaDecoder? media, FilmAsk ask, CancellationToken ct)
     {
-        string question;
-        byte[]? picture;
+        const string Eyes = "You look at pictures carefully and say plainly what you see, faults included. You don't praise what isn't good.";
+        string? answer;
         var faults = new List<string>();
         switch (piece.Kind)
         {
             case FilmPieceKind.Frame when board.Frame(piece.Id) is { } frame && File.Exists(board.FramePicture(frame)):
-                picture = await Task.Run(() => FilmCheck.Picture(board.FramePicture(frame), 1024), ct).ConfigureAwait(false);
-                question = $"This picture is {(frame.Reference ? "a reference sheet" : "a frame")} of a film, made from the prompt: \"{frame.Prompt.Trim()}\"" +
-                           (frame.From.Count > 0 ? $" It was made from other pictures ({string.Join(", ", frame.From.Select(id => board.Frame(id)?.Label ?? id))}) so the same people and places look the same." : "") +
-                           "\nSay briefly and concretely: does it show what the prompt says? Faults a viewer would notice: warped faces or hands, extra fingers or limbs, garbled text, black bars, " +
-                           "a person who doesn't match the prompt. Ask for a redo only for what a viewer would clearly notice.\nThen end with exactly one line: VERDICT: good, or VERDICT: redo: and the main reason.";
+                if (await Task.Run(() => FilmCheck.Picture(board.FramePicture(frame), 1024), ct).ConfigureAwait(false) is not { } picture)
+                    return null;
+                var question = $"This picture is {(frame.Reference ? "a reference sheet" : "a frame")} of a film, made from the prompt: \"{frame.Prompt.Trim()}\"" +
+                               (frame.From.Count > 0 ? $" It was made from other pictures ({string.Join(", ", frame.From.Select(id => board.Frame(id)?.Label ?? id))}) so the same people and places look the same." : "") +
+                               "\nSay briefly and concretely: does it show what the prompt says? Faults a viewer would notice: warped faces or hands, extra fingers or limbs, " +
+                               "things that couldn't be (food coming out of a head, a body merged with a chair), garbled text, black bars, a person who doesn't match the prompt. " +
+                               "Mark each SEVERE (a viewer would notice it and it spoils the picture) or MINOR.\nThen end with exactly one line: VERDICT: good, or VERDICT: redo: and the main reason. Redo for any SEVERE problem.";
+                answer = await ask(Eyes, question, [picture], true, ct).ConfigureAwait(false);
                 break;
             case FilmPieceKind.Shot when media is not null && board.Shot(piece.Id) is { } shot && File.Exists(board.ShotVideo(shot)):
                 var look = await Task.Run(() => FilmCheck.Shot(board, shot, board.ShotVideo(shot), media), ct).ConfigureAwait(false);
-                picture = look.Sheet;
                 faults.AddRange(look.Faults);
-                question = FilmCheck.JudgeShot(board, shot) + "\n\nWhat the numbers say about the clip:\n" + look.Text;
+                // Two looks: physics and bodies with a closer look at its busiest moment, then behaviour over time.
+                answer = await FilmCheck.JudgeShotAsync(board, shot, look, null, (pictures, q, c) => ask(Eyes, q, pictures, true, c), ct).ConfigureAwait(false);
                 break;
             default:
                 return null;
         }
-        if (picture is null)
-            return null;
-        var answer = await ask("You look at pictures carefully and say plainly what you see, faults included. You don't praise what isn't good.", question, picture, true, ct).ConfigureAwait(false);
         if (answer is null)
             return null;
         var verdict = FilmCheck.Verdict(answer) ?? "good";
-        var reason = System.Text.RegularExpressions.Regex.Match(answer, @"VERDICT\s*:\s*\**\s*redo\s*\**\s*[:,\-–]?\s*(.+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase) is { Success: true } m
-            ? m.Groups[1].Value.Trim().TrimEnd('.') : null;
-        var said = verdict == "redo"
-            ? $"Checked: {(reason is { Length: > 0 } ? reason : "something is off")}. Say what to fix, or ask for another take."
+        var reason = verdict == "redo" ? FilmCheck.Reason(answer) : null;
+        var said = reason is not null
+            ? $"Checked: {reason}."
             : faults.Count > 0 ? $"Checked: it looks right, though {string.Join("; ", faults)}." : "Checked: it looks right.";
-        return (verdict, said);
+        return (verdict, said, reason);
     }
 
     private static string N(double d) => d.ToString("0.##", CultureInfo.InvariantCulture);

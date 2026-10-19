@@ -9,7 +9,8 @@ namespace BlackBox.Core.Film;
 /// <summary>What a look at a shot or a film found: in words, with the sheet of frames it is based on.</summary>
 /// <param name="Sheet">A JPEG: the storyboard's frames above the clip's (or each shot of the film), with their times.</param>
 /// <param name="Faults">What is surely wrong (a clip that doesn't start on its frame, a black or frozen clip), to fix before anything else.</param>
-public sealed record FilmLook(string Text, byte[]? Sheet, IReadOnlyList<string> Faults);
+/// <param name="Closer">A JPEG: twelve frames close together from the stretch of a shot where the most changes, cropped to where things move.</param>
+public sealed record FilmLook(string Text, byte[]? Sheet, IReadOnlyList<string> Faults, byte[]? Closer = null);
 
 /// <summary>
 /// Looks at what was made against the storyboard: whether a clip starts and ends on its frames, how
@@ -67,7 +68,8 @@ public static partial class FilmCheck
                         text.AppendLine("Its sound: " + SoundStats.Of(mono, rate).Describe() + ".");
                 }
             var sheet = ShotSheet(start, end, first?.Label, last?.Label, frames, reader.Width, reader.Height);
-            return new FilmLook(text.ToString().TrimEnd(), sheet, faults);
+            var closer = CloserLook(reader, text);
+            return new FilmLook(text.ToString().TrimEnd(), sheet, faults, closer);
         }
         finally
         {
@@ -76,36 +78,269 @@ public static partial class FilmCheck
         }
     }
 
-    /// <summary>What a fresh look is asked about a shot, with its sheet.</summary>
-    public static string JudgeShot(Storyboard board, FilmShot shot)
+    /// <summary>
+    /// The first of two fresh looks at a shot: physics and bodies, from its frames (OVERVIEW) and a
+    /// closer look at the stretch where the most changes. Video models make slop a viewer sees at once
+    /// at normal speed: noodles bursting out of a head as he eats, a face smearing as he lunges. The
+    /// question this replaced judged the clip against its prompt, so a prompt asking for "noodles
+    /// flying" excused them, and said small things were no reason to redo, so a half-noticed glitch
+    /// passed; from 8 small frames qwen3.8 read the burst as hair fluffing up. Asked this way, with
+    /// the closer look, it asked for a redo both times (the judging thread's test, 2026-10-19).
+    /// </summary>
+    /// <param name="closer">Whether a closer look comes with the overview.</param>
+    /// <param name="heard">What was heard sung or said under it, if it was listened to.</param>
+    public static string JudgeShot(Storyboard board, FilmShot shot, bool closer, string? heard = null)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("You check one shot of a film for the person making it, from a sheet of frames.");
-        About(board, sb);
-        sb.AppendLine($"This shot lasts {N(shot.Seconds)} s and should show: {shot.Prompt.Trim()}");
-        if (shot.Camera.Trim().Length > 0)
-            sb.AppendLine($"The camera: {shot.Camera.Trim()}.");
+        sb.AppendLine($"You are the quality judge for one shot of an AI-made film{Title(board)}. Video models often make \"slop\" that a viewer spots instantly at normal speed: " +
+                      "physically impossible events and unnatural motion, not just warped faces. Your job is to catch it, and also not to reject a shot for nothing.");
+        sb.AppendLine($"The shot lasts {N(shot.Seconds)} s and should show: {shot.Prompt.Trim()}" + (shot.Camera.Trim().Length > 0 ? $" The camera: {shot.Camera.Trim().TrimEnd('.')}." : ""));
+        Says(shot, heard, sb);
+        sb.AppendLine("What the shot asks for never excuses impossible physics or behaviour: if it asks for flying food, splashes or a messy action, the food must still come from a real source " +
+                      "(a plate, a fork, a mouth) and fall naturally, and people must still move like real people.");
+        sb.AppendLine(closer ? "You get two pictures:" : "You get one picture:");
+        sb.AppendLine("- OVERVIEW: " + TopRow(board, shot) + "8 frames spread over the whole shot, with their times.");
+        if (closer)
+            sb.AppendLine("- CLOSER LOOK: 12 frames close together in time, from the stretch where the most changes, cropped to where things move, with their times.");
+        sb.AppendLine(closer
+            ? "Step 1. Narrate the CLOSER LOOK frame by frame, like slow motion: for every moving thing (people, hands, food, liquid, particles, hair, cloth, vehicles, water) say where it is, where it comes from and where it goes next."
+            : "Step 1. Narrate the OVERVIEW frame by frame: for every moving thing say where it is, where it comes from and where it goes next.");
+        sb.AppendLine("Step 2. Check, giving the times:");
+        sb.AppendLine("A. Physics: does everything move as it would in the real world? Things fall under gravity, come from a real source, keep their shape and amount, " +
+                      "don't pass through solid things or come out of a body, don't appear or vanish.");
+        sb.AppendLine("B. Bodies: faces, hands, limbs warping, smearing, melting or merging with objects; wrong anatomy.");
+        sb.AppendLine("C. Behaviour: would a real person or animal move like this? A pose held unnaturally long or frozen while things around move, a lunge, twitch or speed that looks wrong, an action that makes no sense.");
+        sb.AppendLine("D. Continuity: the same person, clothes, objects and place all through" + (board.Frame(shot.First) is not null ? ", and as in the storyboard's frames." : "."));
+        sb.AppendLine("E. Does the shot show what it should, and does the camera do what was asked?");
+        sb.AppendLine("Step 3. Mark each problem SEVERE (a viewer would notice it at normal speed and it spoils the shot) or MINOR. Don't invent problems: if a frame is simply blurred by fast motion, that is normal.");
+        sb.Append("End with exactly one line: VERDICT: good, or VERDICT: redo: and the main reason. Redo for any SEVERE problem.");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The second fresh look at a shot: behaviour over time, from its frames alone. Every frame of a
+    /// man frozen face-down in his plate for two seconds looks like a man eating; asked only about
+    /// what each person does from frame to frame, qwen3.8 caught the freeze both times and passed a
+    /// talking close-up both times.
+    /// </summary>
+    public static string JudgeBehaviour(Storyboard board, FilmShot shot, string? heard = null)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"You judge one shot of an AI-made film{Title(board)} for ONE thing only: behaviour over time. Video models often make people or animals freeze in a pose, " +
+                      "hold an awkward position far too long, or move in ways no real person would, even when every single frame looks fine.");
+        sb.AppendLine($"The shot lasts {N(shot.Seconds)} s and should show: {shot.Prompt.Trim()}");
+        Says(shot, heard, sb);
+        sb.AppendLine("The picture shows " + TopRow(board, shot) + "8 frames spread evenly over the whole shot, with their times.");
+        sb.AppendLine("1. For each person or animal, say what they are doing in each frame, and what they must have done between one frame and the next.");
+        sb.AppendLine("2. Is there a stretch of more than about 1.5 s where they hold the same pose while the shot calls for action (eating, talking, walking), or a pose no real person would keep that long " +
+                      "(slumped or bent double, mid-fall, mid-jump, an arm stuck in the air)? Give the times.");
+        sb.AppendLine("3. Is any movement between frames impossible or bizarre for a real person (teleporting, a lunge or twist that makes no sense for what they are doing)?");
+        sb.AppendLine("Talking to the camera with small head and mouth movements is normal behaviour, not a frozen pose. With no person or animal in it, say so: that is good.");
+        sb.Append("End with exactly one line: VERDICT: good, or VERDICT: redo: and the main reason.");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The third fresh look at a shot: whether the world stays put. In a fox film made from one
+    /// sentence the moon wandered across the sky and the fox drifted against the snow while the
+    /// shot was a still camera on a standing fox; the user saw the fox float, and both other looks
+    /// had passed it once.
+    /// </summary>
+    public static string JudgeSteadiness(Storyboard board, FilmShot shot)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"You judge one shot of an AI-made film{Title(board)} for ONE thing only: whether the world in it stays put. Video models often let the background drift " +
+                      "(the moon wandering across the sky, trees or buildings sliding, growing or shrinking) and let people or animals slide, float or sink against the ground, " +
+                      "while every single frame looks fine.");
+        sb.AppendLine($"The shot lasts {N(shot.Seconds)} s and should show: {shot.Prompt.Trim()}");
+        sb.AppendLine("What the camera should do: " + (shot.Camera.Trim().Length > 0 ? shot.Camera.Trim().TrimEnd('.') + "." : "nothing said (most likely it holds still)."));
+        sb.AppendLine("The picture shows " + TopRow(board, shot) + "8 frames spread evenly over the whole shot, with their times.");
+        sb.AppendLine("1. For each frame, say where the fixed things are (the moon or sun, the horizon, trees, buildings, furniture) and how big the moon or sun is (as a share of the frame's width), " +
+                      "and where each person's or animal's feet or base touch the ground.");
+        sb.AppendLine("2. Given what the camera does, do the fixed things move, grow, shrink, appear or vanish when they shouldn't? A camera that pans or pushes in moves everything together; " +
+                      "one fixed thing moving on its own while the rest stays is wrong.");
+        sb.AppendLine("3. Does anyone or anything that stands, sits or walks slide, float, rise off or sink into the ground, or change size against the things around it? Give the times.");
+        sb.AppendLine("Mark each problem SEVERE (a viewer would notice it at normal speed) or MINOR.");
+        sb.Append("End with exactly one line: VERDICT: good, or VERDICT: redo: and the main reason. Redo for any SEVERE problem.");
+        return sb.ToString();
+    }
+
+    private static string Title(Storyboard board) => board.Title.Trim().Length > 0 ? $" (\"{board.Title.Trim()}\")" : "";
+
+    /// <summary>What the top row of a shot's overview is: the storyboard's frames it should start and end on.</summary>
+    private static string TopRow(Storyboard board, FilmShot shot)
+    {
         var first = board.Frame(shot.First);
         var last = shot.LipSync ? null : board.Frame(shot.Last);
-        sb.AppendLine(first is null && last is null
-            ? "The picture shows frames of the clip that was made, in order, with their times."
-            : "In the picture, the top row is the storyboard: " +
-              (first is not null ? "the frame the shot should start on" : "") + (first is not null && last is not null ? " (left) and " : "") +
-              (last is not null ? "the frame it should end on" : "") + (first is not null && last is not null ? " (right)" : "") +
-              ". Under it are frames of the clip that was made, in order, with their times.");
+        return first is null && last is null ? ""
+            : "in its top row, the storyboard's " + (first is not null && last is not null ? "frames the shot should start on (left) and end on (right)" : first is not null ? "frame the shot should start on" : "frame it should end on") +
+              "; under it, ";
+    }
+
+    private static void Says(FilmShot shot, string? heard, StringBuilder sb)
+    {
         if (Storyboard.Speaks(shot))
             sb.AppendLine($"The person speaking in it says \"{shot.Line.Trim()}\": their mouth should move with the words, and they should look like they say them.");
         else if (shot.LipSync)
             sb.AppendLine("The people in it should sing or speak along with the soundtrack, their mouths moving.");
-        sb.AppendLine("Say briefly and concretely:");
-        sb.AppendLine("1. Does what should happen happen, clearly?");
-        sb.AppendLine("2. Faults: warped or melting faces, hands, limbs or bodies; people or things appearing, vanishing or changing; flicker; garbled text.");
-        sb.AppendLine("3. Do the people, their clothes, the things and the place stay the same as in the storyboard's frames and all through the clip?");
-        sb.AppendLine("4. Does the camera do what was asked?");
-        sb.AppendLine("Ask for a redo only for what spoils the shot for a viewer: the action not happening, a warped face or body, a person or thing that changes. " +
-                      "Small things (a detail that leaves the frame as the camera moves, a pose a little off) are worth saying, but no reason to redo it.");
-        sb.Append("Then end with exactly one line: VERDICT: good, or VERDICT: redo: and the main reason.");
+        if (heard is { Length: > 0 })
+            sb.AppendLine(heard);
+    }
+
+    /// <summary>
+    /// The fresh looks at a shot, one question each (one question per kind of fault catches more
+    /// than one big question): physics and bodies (<see cref="JudgeShot"/>), behaviour over time
+    /// (<see cref="JudgeBehaviour"/>), whether the world stays put (<see cref="JudgeSteadiness"/>).
+    /// As one answer ending with one verdict: redo when any asks for it. Null when none could be had.
+    /// </summary>
+    public static async Task<string?> JudgeShotAsync(Storyboard board, FilmShot shot, FilmLook look, string? heard,
+        Func<IReadOnlyList<byte[]>, string, CancellationToken, Task<string?>> ask, CancellationToken ct)
+    {
+        if (look.Sheet is not { } sheet)
+            return null;
+        var looks = new List<(string Name, string? Answer)>
+        {
+            ("Physics and bodies", await ask(look.Closer is { } closer ? [sheet, closer] : [sheet], JudgeShot(board, shot, look.Closer is not null, heard), ct).ConfigureAwait(false)),
+            ("Behaviour over time", await ask([sheet], JudgeBehaviour(board, shot, heard), ct).ConfigureAwait(false)),
+            ("Whether the world stays put", await ask([sheet], JudgeSteadiness(board, shot), ct).ConfigureAwait(false)),
+        };
+        if (looks.All(l => l.Answer is null))
+            return null;
+        var redo = looks.Select(l => l.Answer).OfType<string>().Where(a => Verdict(a) == "redo").Select(Reason).FirstOrDefault();
+        var sb = new StringBuilder();
+        foreach (var (name, answer) in looks.Where(l => l.Answer is not null))
+            sb.AppendLine($"{name}: {answer!.Trim()}").AppendLine();
+        sb.Append(redo is null ? "VERDICT: good" : $"VERDICT: redo: {redo}");
         return sb.ToString();
+    }
+
+    /// <summary>The reason a fresh look gave for a redo ("VERDICT: redo: his face melts"), or a plain one.</summary>
+    public static string Reason(string answer) =>
+        RedoReason().Matches(answer).LastOrDefault() is { } m && m.Groups[1].Value.Trim().TrimEnd('.') is { Length: > 0 } reason ? reason : "something is off";
+
+    [GeneratedRegex(@"VERDICT\s*:\s*\**\s*redo\s*\**\s*[:,\-–]?\s*(.+)", RegexOptions.IgnoreCase)]
+    private static partial Regex RedoReason();
+
+    // ---- the closer look ------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Twelve frames close together from the ~0.9 s of a shot where the most changes, cropped to where
+    /// things move, with their times: in the 8 frames spread over a shot, a one-second glitch falls in
+    /// one small frame or between two. The stretch is found from how much each small grey frame
+    /// differs from the one before, each measured against its own brightness, and a frame that
+    /// brightens or darkens as a whole (a fade) not counted. Null for a clip too short to have one.
+    /// </summary>
+    private static byte[]? CloserLook(IVideoReader reader, StringBuilder text)
+    {
+        const int w = 160, h = 90;
+        var times = new List<double>();
+        var grays = new List<float[]>();
+        var means = new List<float>();
+        reader.Seek(TimeSpan.Zero);
+        while (reader.Next() is { } next && times.Count < 24 * 60)
+        {
+            using var bitmap = MediaPreview.ToBitmap(next.Frame);
+            using var small = bitmap.Resize(new SKImageInfo(w, h), SKFilterQuality.Low);
+            if (small is null)
+                continue;
+            var gray = new float[w * h];
+            var pixels = small.Pixels;
+            float sum = 0;
+            for (var i = 0; i < gray.Length; i++)
+                sum += gray[i] = 0.299f * pixels[i].Red + 0.587f * pixels[i].Green + 0.114f * pixels[i].Blue;
+            var mean = sum / gray.Length;
+            for (var i = 0; i < gray.Length; i++)
+                gray[i] = gray[i] / Math.Max(mean, 4) * 100;
+            times.Add(next.Time.TotalSeconds);
+            grays.Add(gray);
+            means.Add(mean);
+        }
+        var n = times.Count;
+        if (n < 8)
+            return null;
+        var fps = reader.FrameRate > 0 ? reader.FrameRate : (n - 1) / Math.Max(0.1, times[^1] - times[0]);
+        var diff = new double[n];
+        for (var i = 1; i < n; i++)
+            diff[i] = Math.Min(means[i], means[i - 1]) < 25 || Math.Abs(means[i] - means[i - 1]) > 0.08 * means[i - 1] ? 0 : MeanAbs(grays[i], grays[i - 1]);
+        var win = Math.Clamp((int)(fps * 0.9), 1, n - 1);
+        var (s, best) = (0, -1.0);
+        for (var i = 0; i + win <= n; i++)
+        {
+            var score = 0.0;
+            for (var j = i; j < i + win; j++)
+                score += diff[j];
+            if (score > best)
+                (s, best) = (i, score);
+        }
+        if (best <= 0)
+            return null;
+        var e = s + win;
+        // Where in the picture things move in that stretch: a box around the most changing tenth.
+        var acc = new double[w * h];
+        for (var i = Math.Max(1, s); i < e; i++)
+            for (var p = 0; p < acc.Length; p++)
+                acc[p] += Math.Abs(grays[i][p] - grays[i - 1][p]);
+        var threshold = acc.Order().ElementAt((int)(acc.Length * 0.9));
+        int x0 = w, x1 = 0, y0 = h, y1 = 0;
+        for (var p = 0; p < acc.Length; p++)
+            if (acc[p] > threshold)
+                (x0, x1, y0, y1) = (Math.Min(x0, p % w), Math.Max(x1, p % w), Math.Min(y0, p / w), Math.Max(y1, p / w));
+        var (width, height) = (reader.Width, reader.Height);
+        var box = x1 < x0
+            ? new SKRectI(0, 0, width, height)
+            : Box(x0 / (double)w * width, (x1 + 1) / (double)w * width, y0 / (double)h * height, (y1 + 1) / (double)h * height, width, height);
+        // Twelve frames over that stretch and a little either side of it.
+        var (a, b) = (Math.Max(0, s - win / 4), Math.Min(n - 1, e + win / 4));
+        var picks = Enumerable.Range(0, 12).Select(i => times[(int)Math.Round(a + i * (b - a) / 11.0)]).ToList();
+        var cells = new List<(string, SKBitmap)>();
+        try
+        {
+            reader.Seek(TimeSpan.FromSeconds(Math.Max(0, picks[0] - 0.001)));
+            var at = 0;
+            while (at < picks.Count && reader.Next() is { } next)
+            {
+                if (next.Time.TotalSeconds + 0.001 < picks[at])
+                    continue;
+                using var bitmap = MediaPreview.ToBitmap(next.Frame);
+                var crop = new SKBitmap(box.Width, box.Height);
+                using (var canvas = new SKCanvas(crop))
+                    canvas.DrawBitmap(bitmap, box, new SKRect(0, 0, box.Width, box.Height));
+                while (at < picks.Count && next.Time.TotalSeconds + 0.001 >= picks[at])
+                {
+                    cells.Add(($"{next.Time.TotalSeconds.ToString("0.00", CultureInfo.InvariantCulture)} s", crop));
+                    at++;
+                }
+            }
+            if (cells.Count < 4)
+                return null;
+            text.AppendLine($"The most changes between {N(times[s])} and {N(times[Math.Min(e, n - 1)])} s: the closer look is that stretch, cropped to where things move.");
+            using var grid = GridBitmap(cells, box.Width, box.Height, columns: 3);
+            return Jpeg(grid);
+        }
+        finally
+        {
+            foreach (var bitmap in cells.Select(c => c.Item2).Distinct())
+                bitmap.Dispose();
+        }
+
+        static double MeanAbs(float[] p, float[] q)
+        {
+            var sum = 0.0;
+            for (var i = 0; i < p.Length; i++)
+                sum += Math.Abs(p[i] - q[i]);
+            return sum / p.Length;
+        }
+
+        // At least 55% of the picture's width, in its shape, around the middle of what moves.
+        static SKRectI Box(double left, double right, double top, double bottom, int width, int height)
+        {
+            var bw = Math.Min(width, Math.Max(right - left, width * 0.55));
+            var bh = Math.Min(height, bw * height / width);
+            var (cx, cy) = ((left + right) / 2, (top + bottom) / 2);
+            var x = (int)Math.Clamp(cx - bw / 2, 0, width - bw);
+            var y = (int)Math.Clamp(cy - bh / 2, 0, height - bh);
+            return new SKRectI(x, y, x + (int)bw, y + (int)bh);
+        }
     }
 
     // ---- the whole film --------------------------------------------------------------------------------
@@ -357,7 +592,8 @@ public static partial class FilmCheck
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(new SKColor(20, 20, 20));
         using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true };
-        using var font = new SKFont(SKTypeface.Default, Math.Clamp(cellW / 16f, 13, 22));
+        // Times a model can read: qwen3.8 and Claude Haiku guessed them at a sixteenth of a cell.
+        using var font = new SKFont(SKTypeface.FromFamilyName(null, SKFontStyle.Bold), Math.Clamp(cellW / 9f, 16, 34));
         using var text = new SKPaint { Color = SKColors.White, IsAntialias = true, TextSize = font.Size, Typeface = font.Typeface };
         using var shade = new SKPaint { Color = new SKColor(0, 0, 0, 180) };
         for (var i = 0; i < cells.Count; i++)

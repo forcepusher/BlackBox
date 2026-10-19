@@ -72,7 +72,7 @@ public sealed class ToolContext
     /// a fresh look, as at a clip's frames to judge it (see <see cref="FilmTool"/>). The answer, or
     /// null when it couldn't be had. Set by the agent session; null when the model can't see.
     /// </summary>
-    public Func<byte[], string, CancellationToken, Task<string?>>? Ask { get; set; }
+    public Func<IReadOnlyList<byte[]>, string, CancellationToken, Task<string?>>? Ask { get; set; }
 
     /// <summary>The latest screenshot taken for the model (screen and frame).</summary>
     public (ScreenRect Screen, RawImage Frame)? LastShot { get; set; }
