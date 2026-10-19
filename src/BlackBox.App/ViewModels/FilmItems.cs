@@ -459,6 +459,9 @@ public sealed partial class SoundItem(FilmViewModel film, FilmSound sound) : Obs
 
     public string MakeLabel => IsWorking ? "Stop" : IsMade ? "Make the song again" : "Make the song";
 
+    /// <summary>The seed changed elsewhere (the best of several songs was kept).</summary>
+    public void Refresh() => OnPropertyChanged(nameof(Seed));
+
     private CancellationTokenSource? _job;
 
     [RelayCommand]

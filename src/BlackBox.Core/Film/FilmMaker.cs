@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -10,7 +11,11 @@ namespace BlackBox.Core.Film;
 
 /// <summary>What a film job made: the file in the film's folder, and the workflow that made it.</summary>
 /// <param name="Notes">What the job couldn't put where the storyboard said, or other things worth knowing.</param>
-public sealed record FilmMade(string File, string? Workflow, string? Template, TimeSpan Took, IReadOnlyList<string> Notes);
+public sealed record FilmMade(string File, string? Workflow, string? Template, TimeSpan Took, IReadOnlyList<string> Notes)
+{
+    /// <summary>How the song sounds to the judge, for a song it heard.</summary>
+    public SongScore? Score { get; init; }
+}
 
 /// <summary>A job still running in ComfyUI when the wait for it ended (the user wrote meanwhile): asking for the same thing again waits for it.</summary>
 public sealed class FilmStillRunningException(string message) : Exception(message);
@@ -169,26 +174,88 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
 
     // ---- the song -----------------------------------------------------------------------------------
 
-    /// <summary>Makes the soundtrack: a song in the storyboard's style, with its lyrics (an instrumental without), as long as the film.</summary>
-    public async Task<FilmMade> MakeSongAsync(Storyboard board, Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
+    /// <summary>
+    /// The shortest song made: ACE-Step 1.5 makes music that falls apart when asked for a short one.
+    /// For the same style and lyrics, songs of 21 s scored 2.4 to 2.9 of 5 on SongEval (the user called
+    /// them garbage), 30 s 3.2, 45 to 90 s 3.8 to 4.4. The film uses the song's start and fades it out.
+    /// </summary>
+    public const double MinSongSeconds = 60;
+
+    /// <summary>How long the song is made: the film's length and a little more, a minute at least.</summary>
+    public static double SongSeconds(Storyboard board) => Math.Max(MinSongSeconds, Math.Ceiling(board.Timing().Length) + 2);
+
+    /// <summary>Hears how good a song is, to keep the best of several takes; null when it can't run here.</summary>
+    public SongJudge? Judge { get; init; }
+
+    /// <summary>
+    /// Makes the soundtrack: a song in the storyboard's style, with its lyrics (an instrumental
+    /// without), a minute long at least. With a judge, up to <paramref name="takes"/> songs with new
+    /// seeds, each heard for the part the film uses, and the best kept (its seed in the storyboard,
+    /// which the caller saves): the same settings scored 3.3 to 4.2 by the seed alone.
+    /// </summary>
+    public async Task<FilmMade> MakeSongAsync(Storyboard board, Action<string>? progress, CancellationToken userMessage, CancellationToken ct, int takes = 1)
     {
         var sound = board.Sound;
         if (sound.Tags.Trim().Length == 0)
             throw new FilmException("The song has no style: say what it should sound like (genre, instruments, voice, tempo).");
-        var (_, length) = board.Timing();
-        var inputs = new FilmInputs
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var python = Judge is null ? null : SongJudge.PythonOf(hub);
+        var ffmpeg = media?.Ffmpeg;
+        if (python is null || ffmpeg is null)
+            takes = 1;
+        var made = new List<(long Seed, string File, string Workflow, Run Run)>();
+        for (var take = 1; take <= Math.Max(1, takes); take++)
         {
-            Tags = sound.Tags.Trim(),
-            Lyrics = sound.Lyrics.Trim().Length > 0 ? sound.Lyrics.Trim() : "[Instrumental]",
-            Seed = sound.Seed,
-            Seconds = Math.Max(5, Math.Ceiling(length) + 1),
-            Prefix = Prefix(board, "song"),
-        };
-        var run = await RunAsync(board, FilmJob.Song, inputs, sound.Set, board.SongWorkflow, SongStamp(board), "audio", progress, userMessage, ct).ConfigureAwait(false);
-        Directory.CreateDirectory(Path.GetDirectoryName(board.SongFile)!);
-        File.Copy(run.Output, board.SongFile, overwrite: true);
-        return new FilmMade(board.SongFile, board.SongWorkflow, run.Template, run.Took, run.Notes);
+            if (take > 1)
+                sound.Seed = Storyboard.NewSeed();
+            var inputs = new FilmInputs
+            {
+                Tags = sound.Tags.Trim(),
+                Lyrics = sound.Lyrics.Trim().Length > 0 ? sound.Lyrics.Trim() : "[Instrumental]",
+                Bpm = Bpm(sound.Tags),
+                Seed = sound.Seed,
+                Seconds = SongSeconds(board),
+                Prefix = Prefix(board, "song"),
+            };
+            var (file, workflow) = takes <= 1 ? (board.SongFile, board.SongWorkflow)
+                : (Path.Combine(board.Folder, "sound", $"song.take{take}.mp3"), Path.Combine(board.Folder, "sound", $"song.take{take}.json"));
+            var run = await RunAsync(board, FilmJob.Song, inputs, sound.Set, workflow, SongStamp(board), "audio",
+                takes <= 1 ? progress : s => progress?.Invoke($"Song {take} of {takes}: {s}"), userMessage, ct).ConfigureAwait(false);
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.Copy(run.Output, file, overwrite: true);
+            made.Add((sound.Seed, file, workflow, run));
+        }
+
+        // Each heard for the part of it the film uses.
+        Dictionary<string, SongScore>? scores = null;
+        var notes = made.SelectMany(m => m.Run.Notes).Distinct().ToList();
+        if (python is not null && ffmpeg is not null)
+        {
+            try
+            {
+                scores = await Judge!.ScoreAsync(made.Select(m => m.File).ToList(), python, ffmpeg, board.Timing().Length, progress, ct).ConfigureAwait(false);
+            }
+            catch (FilmException ex)
+            {
+                notes.Add(ex.Message);
+            }
+        }
+        var best = made.MaxBy(m => scores?.GetValueOrDefault(m.File)?.Musicality ?? 0);
+        sound.Seed = best.Seed;
+        if (made.Count > 1)
+        {
+            File.Copy(best.File, board.SongFile, overwrite: true);
+            File.Copy(best.Workflow, board.SongWorkflow, overwrite: true);
+            notes.Insert(0, $"Kept song {made.IndexOf(best) + 1} of {made.Count} (seed {best.Seed}); musicality of each: " +
+                            string.Join(", ", made.Select(m => scores?.GetValueOrDefault(m.File) is { } s ? s.Musicality.ToString("0.0", CultureInfo.InvariantCulture) : "?")) + ".");
+        }
+        return new FilmMade(board.SongFile, board.SongWorkflow, best.Run.Template, clock.Elapsed, notes) { Score = scores?.GetValueOrDefault(best.File) };
     }
+
+    /// <summary>The tempo a song's style names ("70 BPM"), for ACE-Step's own setting.</summary>
+    internal static int? Bpm(string tags) =>
+        System.Text.RegularExpressions.Regex.Match(tags, @"(\d{2,3})\s*bpm", System.Text.RegularExpressions.RegexOptions.IgnoreCase) is { Success: true } m &&
+        int.TryParse(m.Groups[1].Value, out var bpm) && bpm is >= 30 and <= 300 ? bpm : null;
 
     // ---- running a job --------------------------------------------------------------------------------
 
@@ -344,7 +411,7 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     }
 
     public static string SongStamp(Storyboard board) =>
-        Hash($"{board.Sound.Tags}|{board.Sound.Lyrics}|{board.Sound.Seed}|{Math.Ceiling(board.Timing().Length)}|{board.Workflows.Song}|{board.Sound.Set?.ToJsonString()}");
+        Hash($"{board.Sound.Tags}|{board.Sound.Lyrics}|{board.Sound.Seed}|{SongSeconds(board)}|{board.Workflows.Song}|{board.Sound.Set?.ToJsonString()}");
 
     private static string FileStamp(string path)
     {

@@ -34,6 +34,7 @@ public static class AgentSetup
             Media = Media.MediaDecoders.Create(platform, paths, comfy),
             ScratchDirectory = paths.ScratchDir,
             FilmsDirectory = paths.FilmsDir,
+            ToolsDirectory = paths.ToolsDir,
         };
 
         // A model that can't see gets no screen tools, nor does an OS without desktop control.

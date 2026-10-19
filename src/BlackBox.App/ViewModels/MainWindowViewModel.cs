@@ -576,7 +576,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         {
             _ = SendAsync(new UserInput(text));
             sent?.Invoke();
-        }), _paths.FilmsDir, null);
+        }), _paths.FilmsDir, _paths.ToolsDir, null);
 
     // ---- files going with the next message ------------------------------------------
 

@@ -202,6 +202,42 @@ public sealed class FilmRolesTests
         Assert.Equal(9.5, (double?)wf.ValueOf("98.seconds"));
     }
 
+    [Fact]
+    public void A_seed_taken_from_an_untitled_primitive_is_set_there()
+    {
+        var wf = Load("""
+            {
+              "3": {"class_type": "KSampler", "inputs": {"seed": ["109", 0], "steps": 50}},
+              "94": {"class_type": "TextEncodeAceStepAudio1.5", "inputs": {"tags": "trap", "seed": ["109", 0]}},
+              "109": {"class_type": "PrimitiveInt", "inputs": {"value": 0}, "_meta": {"title": "Int"}}
+            }
+            """);
+        var missed = new List<string>();
+        FilmRoles.Apply(wf, Empty, new FilmInputs { Seed = 77 }, missed);
+        Assert.Empty(missed);
+        Assert.Equal(77, (long?)wf.ValueOf("109.value"));
+    }
+
+    [Fact]
+    public void A_song_is_a_minute_long_at_least_and_takes_the_tempo_its_style_names()
+    {
+        var board = Storyboard.Parse("""{"shots": [{"id": "s1", "seconds": 8}], "sound": {"source": "song", "tags": "lullaby, 70 BPM"}}""");
+        Assert.Equal(60, FilmMaker.SongSeconds(board));
+        board.Shots[0].Seconds = 75;
+        Assert.Equal(77, FilmMaker.SongSeconds(board));
+        Assert.Equal(70, FilmMaker.Bpm("dreamy lo-fi piano, 70 BPM, instrumental"));
+        Assert.Equal(128, FilmMaker.Bpm("house at 128bpm"));
+        Assert.Null(FilmMaker.Bpm("slow and dreamy"));
+    }
+
+    [Fact]
+    public void A_songs_score_says_whether_it_sounds_like_music()
+    {
+        Assert.Contains("sounds bad", new SongScore(2.3, 2.4, 2.4, 2.1, 2.2).Describe());
+        Assert.Contains("passable", new SongScore(3.5, 3.4, 3.3, 3.2, 3.1).Describe());
+        Assert.Contains("like a real song", new SongScore(4.3, 4.2, 4.4, 4.2, 3.9).Describe());
+    }
+
     [Theory]
     [InlineData(5, 24, 121)]
     [InlineData(4, 24, 97)]
@@ -254,7 +290,10 @@ public sealed class FilmMontageTests : IDisposable
         Assert.Contains("anullsrc=r=48000:cl=stereo,atrim=duration=4", graph);
         Assert.Contains("[3:a]", graph);
         Assert.Contains("amix=inputs=2", graph);
-        Assert.Contains("volume=0.3", graph); // the shots' own sound, quiet under a soundtrack
+        Assert.DoesNotContain("[0:a]", graph); // the shots' own sound is left out under a soundtrack unless asked for
+        board.ShotVolume = 0.25;
+        var (asked, _, _) = FilmMontage.Plan(board, _ => true, "out.mp4");
+        Assert.Contains("volume=0.25", asked[asked.IndexOf("-filter_complex") + 1]);
         Assert.Equal("out.mp4", args[^1]);
         Assert.Equal("11.5", args[^2]);
     }

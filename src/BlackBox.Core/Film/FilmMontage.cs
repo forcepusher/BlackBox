@@ -34,7 +34,9 @@ public static class FilmMontage
             notes.Add($"The soundtrack {soundtrack} isn't there, so the film has the shots' own sound only.");
             soundtrack = null;
         }
-        var shotVolume = board.ShotVolume ?? (soundtrack is null ? 1.0 : 0.3);
+        // Under a soundtrack the shots' own sound is left out unless asked for: LTX's is a muddy wash
+        // that took the Paper Boat song from 3.1 to 2.7 on SongEval at 30%.
+        var shotVolume = board.ShotVolume ?? (soundtrack is null ? 1.0 : 0);
         var args = new List<string> { "-hide_banner", "-y", "-nostats", "-progress", "pipe:1" };
         foreach (var shot in board.Shots)
             args.AddRange(["-i", board.ShotVideo(shot)]);
@@ -86,7 +88,9 @@ public static class FilmMontage
              .Append($"[{audio}][music]amix=inputs=2:duration=first:normalize=0[mixed];");
             audio = "mixed";
         }
-        f.Append($"[{audio}]afade=t=out:st={N(length - fadeOut)}:d={N(fadeOut)},alimiter=limit=0.95[aout]");
+        // A song is cut where the film ends, so it fades out over longer than the picture does.
+        var soundFade = soundtrack is null ? fadeOut : Math.Min(2.5, length / 3);
+        f.Append($"[{audio}]afade=t=out:st={N(length - soundFade)}:d={N(soundFade)},alimiter=limit=0.95[aout]");
 
         args.AddRange(["-filter_complex", f.ToString(), "-map", "[vout]", "-map", "[aout]",
             "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p", "-r", fps.ToString(CultureInfo.InvariantCulture),

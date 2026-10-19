@@ -101,6 +101,9 @@ public sealed class ToolContext
     /// <summary>Reads video and sound, so the model can look at them (frames, waveforms); null when nothing can.</summary>
     public Media.IMediaDecoder? Media { get; init; }
 
+    /// <summary>BlackBox's Data/tools, where portable helpers it sets up for a job live (the song judge); null when there is none.</summary>
+    public string? ToolsDirectory { get; init; }
+
     /// <summary>Where films go, a folder each (BlackBox's Data/films, where the Filmmaking window finds them); null when there is none.</summary>
     public string? FilmsDirectory { get; init; }
 

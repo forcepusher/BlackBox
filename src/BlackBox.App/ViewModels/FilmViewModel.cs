@@ -36,13 +36,14 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     private readonly string _filmsRoot;
 
     /// <param name="filmsRoot">Where films go (BlackBox's Data\films).</param>
+    /// <param name="toolsDir">BlackBox's Data\tools, where the song judge is set up.</param>
     /// <param name="folder">The film to open; the latest changed one when null.</param>
-    public FilmViewModel(PreviewServices previews, ComfyHub hub, Action<string> sendToChat, string filmsRoot, string? folder)
+    public FilmViewModel(PreviewServices previews, ComfyHub hub, Action<string> sendToChat, string filmsRoot, string toolsDir, string? folder)
     {
         _filmsRoot = filmsRoot;
         _previews = previews;
         _sendToChat = sendToChat;
-        _maker = new FilmMaker(hub, previews.Decoder);
+        _maker = new FilmMaker(hub, previews.Decoder) { Judge = new SongJudge(Path.Combine(toolsDir, "songeval")) };
         _hub = hub;
         _saveTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(400), DispatcherPriority.Background, (_, _) => SaveNow());
         _refreshTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) =>
@@ -230,7 +231,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     /// <summary>How loud the shots' own sound is under the soundtrack, 0 to 100.</summary>
     public double ShotVolume
     {
-        get => (_board.ShotVolume ?? (_board.Sound.Source == FilmSound.None ? 1 : 0.3)) * 100;
+        get => (_board.ShotVolume ?? (_board.Sound.Source == FilmSound.None ? 1 : 0)) * 100;
         set
         {
             _board.ShotVolume = Math.Clamp(value / 100, 0, 2);
@@ -309,6 +310,129 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
                 RefreshStrip();
             });
         });
+    }
+
+    // ---- playing the storyboard: the soundtrack with each shot's frame ---------------------------------------
+
+    /// <summary>Where the preview is, in seconds from the film's start; -1 before it plays.</summary>
+    [ObservableProperty]
+    private double _playPosition = -1;
+
+    /// <summary>The storyboard frame under the playhead: a shot's first frame, its last for the second half.</summary>
+    [ObservableProperty]
+    private Bitmap? _playFrame;
+
+    [ObservableProperty]
+    private string _playLabel = "Play the soundtrack with the storyboard's frames";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PlayIcon))]
+    private bool _isPlaying;
+
+    private static readonly Avalonia.Media.Geometry PlayShape = Avalonia.Media.StreamGeometry.Parse("M8 5v14l11-7z");
+    private static readonly Avalonia.Media.Geometry PauseShape = Avalonia.Media.StreamGeometry.Parse("M6 4h4v16H6zM14 4h4v16h-4z");
+
+    public Avalonia.Media.Geometry PlayIcon => IsPlaying ? PauseShape : PlayShape;
+
+    private IAudioOutput? _playOutput;
+    private DispatcherTimer? _playTimer;
+    private Stopwatch _playClock = new();
+    private double _playFrom;
+
+    /// <summary>Plays the soundtrack from the playhead with the frames switching as the shots do, or pauses it.</summary>
+    [RelayCommand]
+    private void PlayStrip()
+    {
+        if (IsPlaying)
+        {
+            StopPlaying();
+            return;
+        }
+        var (_, length) = _board.Timing();
+        StartPlaying(PlayPosition >= 0 && PlayPosition < length - 0.05 ? PlayPosition : 0);
+    }
+
+    /// <summary>The strip was clicked: the playhead goes there (and plays on from there if it was playing).</summary>
+    public void SeekStrip(double seconds)
+    {
+        var playing = IsPlaying;
+        StopPlaying();
+        PlayPosition = seconds;
+        ShowFrameAt(seconds);
+        if (playing)
+            StartPlaying(seconds);
+    }
+
+    private void StartPlaying(double from)
+    {
+        StopPlaying();
+        // The soundtrack from there, if there is one and the PC can play it; otherwise the frames go by the clock.
+        if (_board.SoundtrackFile is { } file && File.Exists(file) && _previews.Decoder?.OpenAudio(file) is { } reader)
+        {
+            reader.Seek(TimeSpan.FromSeconds(from));
+            var output = _previews.NewAudioOutput();
+            if (output is null)
+                reader.Dispose();
+            else
+                try
+                {
+                    output.Play(reader);
+                    _playOutput = output;
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    output.Dispose(); // no speakers to open
+                }
+        }
+        _playFrom = from;
+        _playClock = Stopwatch.StartNew();
+        IsPlaying = true;
+        PlayPosition = from;
+        ShowFrameAt(from);
+        _playTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(40), DispatcherPriority.Render, (_, _) => PlayTick());
+        _playTimer.Start();
+    }
+
+    private void PlayTick()
+    {
+        var (_, length) = _board.Timing();
+        var at = _playFrom + (_playOutput?.Played ?? _playClock.Elapsed).TotalSeconds;
+        if (at >= length)
+        {
+            StopPlaying();
+            PlayPosition = length;
+            return;
+        }
+        PlayPosition = at;
+        ShowFrameAt(at);
+    }
+
+    private void StopPlaying()
+    {
+        _playTimer?.Stop();
+        _playTimer = null;
+        Interlocked.Exchange(ref _playOutput, null)?.Dispose();
+        IsPlaying = false;
+    }
+
+    /// <summary>The frame of the shot at a time: its first frame, its last for the second half (when it has one).</summary>
+    private void ShowFrameAt(double seconds)
+    {
+        var (starts, _) = _board.Timing();
+        var at = -1;
+        for (var i = 0; i < Shots.Count && i < starts.Count; i++)
+            if (starts[i] <= seconds + 1e-6)
+                at = i;
+        if (at < 0)
+        {
+            PlayFrame = null;
+            return;
+        }
+        var shot = Shots[at];
+        var late = seconds - starts[at] >= shot.Shot.Seconds / 2 && shot.Last is not null;
+        var frame = late ? shot.Last : shot.First ?? shot.Last;
+        PlayFrame = frame?.Thumbnail;
+        PlayLabel = $"{shot.Title}, {(late ? "end" : "start")} · {seconds:0.0} s";
     }
 
     /// <summary>How long the film is, and in how many shots.</summary>
@@ -729,7 +853,15 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         item.IsWorking = true;
         try
         {
-            await RunAsync((progress, token) => _maker.MakeSongAsync(_board, progress, CancellationToken.None, token), (s, e) => item.Report(s, e), ct);
+            // Three songs, the best kept by how it sounds to the judge: the seed alone moved one from 3.3 to 4.2 of 5.
+            var made = await RunAsync((progress, token) => _maker.MakeSongAsync(_board, progress, CancellationToken.None, token, takes: 3), (s, e) => item.Report(s, e), ct);
+            if (made is not null)
+            {
+                _songScore = (made.File, File.GetLastWriteTimeUtc(made.File), made.Score);
+                // The seed of the song kept.
+                item.Refresh();
+                Changed(item);
+            }
         }
         finally
         {
@@ -819,10 +951,11 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         var song = _board.Sound.Source switch { FilmSound.Song => _board.SongFile, FilmSound.FromFile => _board.Sound.File, _ => null };
         var songMade = song is not null && File.Exists(song);
         Sound.IsMade = _board.Sound.Source == FilmSound.Song && songMade;
+        var heard = songMade && _songScore.File == song && _songScore.Stamp == File.GetLastWriteTimeUtc(song!) && _songScore.Score is { } s ? " " + Capital(s.Describe()) + "." : "";
         if (!Sound.IsWorking && !Sound.IsError)
             Sound.State = _board.Sound.Source switch
             {
-                FilmSound.Song => !songMade ? "Not made yet." : FilmMaker.SongIsCurrent(_board) ? "Made." : "Changed since it was made (or the film's length did): make it again.",
+                FilmSound.Song => !songMade ? "Not made yet." : FilmMaker.SongIsCurrent(_board) ? "Made." + heard : "Changed since it was made (or the film's length did): make it again.",
                 FilmSound.FromFile => song is null ? "Pick a sound file." : songMade ? "" : "The file isn't there.",
                 _ => "",
             };
@@ -842,6 +975,11 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ShotVolume));
         RefreshStrip();
     }
+
+    /// <summary>How the song made last sounded to the judge, while it is the song in the folder.</summary>
+    private (string? File, DateTime Stamp, SongScore? Score) _songScore;
+
+    private static string Capital(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
     private readonly Dictionary<string, DateTime> _clipStamps = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<FrameItem, DateTime> _thumbStamps = [];
@@ -952,6 +1090,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        StopPlaying();
         SaveNow();
         _watcher?.Dispose();
         lock (_jobs)

@@ -22,7 +22,29 @@ public sealed class FilmStrip : Control
         set => SetValue(StripProperty, value);
     }
 
-    static FilmStrip() => AffectsRender<FilmStrip>(StripProperty);
+    /// <summary>Where the preview is playing, in seconds from the film's start; below 0 when it isn't.</summary>
+    public static readonly StyledProperty<double> PositionProperty = AvaloniaProperty.Register<FilmStrip, double>(nameof(Position), -1);
+
+    public double Position
+    {
+        get => GetValue(PositionProperty);
+        set => SetValue(PositionProperty, value);
+    }
+
+    /// <summary>The user clicked the strip: the time there, to play from.</summary>
+    public event Action<double>? Seeked;
+
+    static FilmStrip() => AffectsRender<FilmStrip>(StripProperty, PositionProperty);
+
+    /// <summary>The seconds the strip spans: the film, and the soundtrack where it runs on past it.</summary>
+    private static double Span(FilmStripModel strip) => Math.Max(strip.Length, Math.Min(strip.SoundSeconds, strip.Length * 1.5));
+
+    protected override void OnPointerPressed(Avalonia.Input.PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (Strip is { } strip && Span(strip) > 0 && Bounds.Width > 1)
+            Seeked?.Invoke(Math.Clamp(e.GetPosition(this).X / (Bounds.Width - 1) * Span(strip), 0, strip.Length));
+    }
 
     // The window's palette (App.axaml).
     private static readonly IBrush Raised = new SolidColorBrush(Color.Parse("#23262A"));
@@ -46,7 +68,7 @@ public sealed class FilmStrip : Control
         if (strip is null || strip.Shots.Count == 0 || w < 40)
             return;
         // The scale covers the film, and the soundtrack where it runs on past it.
-        var span = Math.Max(strip.Length, Math.Min(strip.SoundSeconds, strip.Length * 1.5));
+        var span = Span(strip);
         if (span <= 0)
             return;
         double X(double seconds) => Math.Round(seconds / span * (w - 1)) + 0.5;
@@ -105,7 +127,16 @@ public sealed class FilmStrip : Control
         // Where the film ends.
         var endX = X(strip.Length);
         context.DrawLine(End, new Point(endX, Ruler), new Point(endX, h));
+
+        // Where the preview plays.
+        if (Position >= 0)
+        {
+            var at = X(Math.Min(Position, span));
+            context.DrawLine(Playhead, new Point(at, 0), new Point(at, h));
+        }
     }
+
+    private static readonly IPen Playhead = new Pen(Brushes.White, 2);
 
     private static void Draw(DrawingContext context, string text, double x, double y, double size, IBrush brush, double maxWidth)
     {

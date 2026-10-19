@@ -32,7 +32,8 @@ public sealed class FilmTool : Tool
         "(BlackBox is portable: what it makes stays next to it). " +
         "A shot that starts on the last frame of the one before goes on with the same camera; " +
         "a new first frame is a cut to another scene or angle. Keep one clear action per shot, 3 to 8 seconds. " +
-        "action=frame id= makes a frame's picture; action=sound makes the song; action=shot id= makes a shot's clip and checks it (does it start and end on its frames, " +
+        "action=frame id= makes a frame's picture; action=sound makes the song, a minute long at least (the film uses its start), the best of tries=3 by a judge " +
+        "of how good music sounds (SongEval); write lyrics for the part the film uses. action=shot id= makes a shot's clip and checks it (does it start and end on its frames, " +
         "how it moves, and a fresh look at what happens, faults and whether people stay the same); tries=N makes up to N takes with new seeds until one passes. " +
         "Fix a shot the check finds wrong: a plainer prompt, another seed, frames closer to each other, or a new frame. " +
         "action=join puts the shots and the soundtrack together into the film; action=check looks at a shot (id) or, without id, the whole film. " +
@@ -51,7 +52,7 @@ public sealed class FilmTool : Tool
         ("seconds", Num("action=shot: how long it lasts"), false),
         ("seed", Int("action=frame or shot: a new seed (another result from the same prompt)"), false),
         ("from", StrArray("action=frame: the frames it is made from"), false),
-        ("tries", Int("action=shot: up to this many takes, each with a new seed, until the check passes (default 1)"), false));
+        ("tries", Int("action=shot: up to this many takes, each with a new seed, until the check passes (default 1); action=sound: songs to make, the best kept (default 3)"), false));
 
     public override string Describe(JsonObject args)
     {
@@ -91,7 +92,7 @@ public sealed class FilmTool : Tool
                 "storyboard" => Show(board, args["storyboard"] is JsonObject, ctx),
                 "frame" => await FrameAsync(board, RequireId(args), ctx, ct).ConfigureAwait(false),
                 "shot" => await ShotAsync(board, RequireId(args), (int)Math.Clamp(GetNumber(args, "tries") ?? 1, 1, 8), ctx, ct).ConfigureAwait(false),
-                "sound" or "song" => await SoundAsync(board, ctx, ct).ConfigureAwait(false),
+                "sound" or "song" => await SoundAsync(board, (int)Math.Clamp(GetNumber(args, "tries") ?? 3, 1, 8), ctx, ct).ConfigureAwait(false),
                 "join" or "montage" => await JoinAsync(board, ctx, ct).ConfigureAwait(false),
                 "check" => await CheckAsync(board, GetString(args, "id"), ctx, ct).ConfigureAwait(false),
                 _ => throw new ToolArgumentException("action must be storyboard, frame, shot, sound, join or check."),
@@ -166,7 +167,7 @@ public sealed class FilmTool : Tool
             throw new FilmException("ComfyUI isn't available in this run.");
         if (_maker is null)
         {
-            _maker = new FilmMaker(hub, ctx.Media);
+            _maker = new FilmMaker(hub, ctx.Media) { Judge = ctx.ToolsDirectory is { } tools ? new SongJudge(Path.Combine(tools, "songeval")) : null };
             // From before it may be started: when the task is over, a ComfyUI BlackBox started is closed.
             _maker.Use();
             ctx.AfterRun(nameof(FilmTool), () =>
@@ -281,17 +282,21 @@ public sealed class FilmTool : Tool
         return new ToolResult(sb.ToString(), preview.Image, ImageCaption: preview.Image is null ? null : $"Frame {frame.Id}:", Files: [made.File]);
     }
 
-    private async Task<ToolResult> SoundAsync(Storyboard board, ToolContext ctx, CancellationToken ct)
+    private async Task<ToolResult> SoundAsync(Storyboard board, int tries, ToolContext ctx, CancellationToken ct)
     {
         if (board.Sound.Source == FilmSound.FromFile)
             return new ToolResult(board.SoundtrackFile is { } f && File.Exists(f) ? $"The soundtrack is the user's file {f}; nothing to make." : "The soundtrack is to be a file of the user's, and it isn't there.");
         if (board.Sound.Source != FilmSound.Song)
             throw new FilmException("The storyboard has no song to make: set sound {\"source\": \"song\", \"tags\": …, \"lyrics\": …} first.");
-        var made = await Maker(ctx).MakeSongAsync(board, ctx.Progress, ctx.UserMessage, ct).ConfigureAwait(false);
+        var made = await Maker(ctx).MakeSongAsync(board, ctx.Progress, ctx.UserMessage, ct, tries).ConfigureAwait(false);
+        board.Save(); // the seed of the song kept
         var preview = MediaPreview.ForFiles([made.File], ctx.Media, ctx.SeesImages);
         var sb = new StringBuilder();
-        sb.AppendLine($"The song is made in {Clock(made.Took)} with {made.Template}: {made.File}");
+        sb.AppendLine($"The song is made in {Clock(made.Took)} with {made.Template}: {made.File} (a minute long at least: shorter songs come out badly; the film uses its start).");
         sb.AppendLine(string.Join("\n", preview.Lines));
+        if (made.Score is { } score)
+            sb.AppendLine($"How it sounds to SongEval, a judge trained on musicians' ratings, for the part the film uses: {score.Describe()}." +
+                          (score.Musicality < SongScore.Good ? " Make it again (more tries, another style or simpler lyrics) before the shots that use it." : ""));
         if (board.Sound.Lyrics.Trim().Length > 0 && await HearAsync(ctx, made.File, ct).ConfigureAwait(false) is { } heard)
             sb.AppendLine(heard.Words is null ? $"{heard.Model} heard no words in it." : $"Its words, as {heard.Model} heard them: \"{heard.Words.ReplaceLineEndings(" ").Clip(1500)}\" Check them against the lyrics.");
         foreach (var note in made.Notes)
@@ -377,6 +382,19 @@ public sealed class FilmTool : Tool
             throw new FilmException("The film isn't joined yet: action=join first, or give a shot's id to check that shot.");
         var check = await Task.Run(() => FilmCheck.Film(board, film, decoder), ct).ConfigureAwait(false);
         var text = new StringBuilder(check.Text).AppendLine();
+        // Its sound as people hear it: no one has to listen to every take.
+        if (board.Sound.Source != FilmSound.None && ctx.Comfy is { } hub && SongJudge.PythonOf(hub) is { } python && decoder.Ffmpeg is { } ffmpeg && Maker(ctx).Judge is { } judge)
+        {
+            try
+            {
+                if ((await judge.ScoreAsync([film], python, ffmpeg, 0, ctx.Progress, ct).ConfigureAwait(false)).Values.FirstOrDefault() is { } heard)
+                    text.AppendLine($"Its sound, to SongEval: {heard.Describe()}." + (heard.Musicality < SongScore.Poor ? " The song or the shots' own sound under it spoils it." : ""));
+            }
+            catch (FilmException ex)
+            {
+                text.AppendLine("Its sound couldn't be judged: " + ex.Message);
+            }
+        }
         if (check.Sheet is { } sheet && ctx.Ask is { } ask && await ask(sheet, FilmCheck.JudgeFilm(board), ct).ConfigureAwait(false) is { Length: > 0 } judged)
             text.AppendLine("A fresh look at the shots side by side: " + judged.Trim());
         if (check.Faults.Count > 0)

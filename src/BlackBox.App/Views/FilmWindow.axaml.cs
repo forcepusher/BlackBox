@@ -7,7 +7,12 @@ namespace BlackBox.App.Views;
 
 public partial class FilmWindow : Window
 {
-    public FilmWindow() => InitializeComponent();
+    public FilmWindow()
+    {
+        InitializeComponent();
+        // A click on the strip moves the playhead there.
+        Strip.Seeked += seconds => (DataContext as FilmViewModel)?.SeekStrip(seconds);
+    }
 
     private FilmViewModel Vm => (FilmViewModel)DataContext!;
 

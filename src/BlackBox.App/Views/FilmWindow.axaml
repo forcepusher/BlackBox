@@ -462,8 +462,24 @@
 
           <!-- How the shots line up with the soundtrack: to read, not to edit (a real timeline is for later). -->
           <StackPanel Spacing="4">
-            <TextBlock Classes="label" Text="The shots against the soundtrack" />
-            <views:FilmStrip Strip="{Binding Strip}" Height="108" HorizontalAlignment="Stretch" Margin="0,0,12,0" />
+            <TextBlock Classes="label" Text="The shots against the soundtrack (click it to move the playhead)" />
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,12,0">
+              <Button Width="40" Height="40" CornerRadius="20" Padding="0" Background="{StaticResource BbAccent}" VerticalAlignment="Center"
+                      HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                      Command="{Binding PlayStripCommand}" ToolTip.Tip="Play the soundtrack with each shot's frames" AutomationProperties.Name="Play the storyboard">
+                <PathIcon Data="{Binding PlayIcon}" Width="16" Height="16" Foreground="#111214" />
+              </Button>
+              <views:FilmStrip x:Name="Strip" Grid.Column="1" Strip="{Binding Strip}" Position="{Binding PlayPosition}" Height="108" Margin="10,0" />
+              <!-- The storyboard frame under the playhead. -->
+              <Border Grid.Column="2" Classes="thumb" BorderThickness="0" Width="192" Height="108">
+                <Panel>
+                  <Image Source="{Binding PlayFrame}" Stretch="UniformToFill" />
+                  <Border Background="#B0000000" VerticalAlignment="Bottom" Padding="6,2">
+                    <TextBlock Text="{Binding PlayLabel}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                  </Border>
+                </Panel>
+              </Border>
+            </Grid>
           </StackPanel>
 
           <!-- The film's sound. -->

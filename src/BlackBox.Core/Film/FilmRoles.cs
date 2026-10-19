@@ -34,6 +34,9 @@ public sealed class FilmInputs
 
     public string? Lyrics { get; init; }
 
+    /// <summary>A song's tempo, when its style names one ("80 BPM"): ACE-Step's templates set their own (95, 120) otherwise.</summary>
+    public int? Bpm { get; init; }
+
     /// <summary>Where ComfyUI saves what the job makes, under its output folder.</summary>
     public string? Prefix { get; init; }
 
@@ -141,7 +144,7 @@ public static partial class FilmRoles
                     Put(id, "start_index", 0);
         }
 
-        if (inputs.Tags is { } tags || inputs.Lyrics is not null)
+        if (inputs.Tags is not null || inputs.Lyrics is not null || inputs.Bpm is not null)
             foreach (var (id, node) in workflow.All().ToList())
             {
                 var own = node["inputs"] as JsonObject ?? [];
@@ -149,6 +152,8 @@ public static partial class FilmRoles
                     Put(id, "tags", t);
                 if (inputs.Lyrics is { } l && own["lyrics"] is JsonValue)
                     Put(id, "lyrics", l);
+                if (inputs.Bpm is { } bpm && own["bpm"] is JsonValue)
+                    Put(id, "bpm", bpm);
             }
 
         foreach (var (id, node) in workflow.All().ToList())
@@ -284,12 +289,20 @@ public static partial class FilmRoles
             if (node["inputs"] is not JsonObject inputs)
                 continue;
             foreach (var name in new[] { "seed", "noise_seed" })
+            {
                 if (inputs[name] is JsonValue)
                     found.Add((id, name));
+                // A seed taken from a primitive, whatever it is titled: ACE-Step's SFT template calls it just "Int",
+                // and its seed stayed 0 whatever the storyboard said.
+                else if (inputs[name] is JsonArray link && ComfyWorkflow.IsLink(link) && link[0]?.ToString() is { } from &&
+                         workflow.Nodes[from] is JsonObject source && ComfyWorkflow.ClassOf(source).StartsWith("Primitive", StringComparison.Ordinal) &&
+                         source["inputs"] is JsonObject own && Single(own) is { } value)
+                    found.Add((from, value));
+            }
             if (Single(inputs) is { } only && SeedTitle().IsMatch(ComfyWorkflow.TitleOf(node) ?? ""))
                 found.Add((id, only));
         }
-        return found;
+        return found.Distinct().ToList();
     }
 
     /// <summary>The width and height to set: primitives titled so, else the empty latent's own.</summary>
