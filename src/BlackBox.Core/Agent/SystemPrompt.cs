@@ -81,6 +81,10 @@ public static class SystemPrompt
                       "(a style, or a checkpoint or LoRA the user named); a custom node pack or program it lacks you can install yourself. " +
                       "Its files stay in ComfyUI's output folder, where the user finds them; copy them elsewhere (save_to) only when the user names a place. " +
                       "Give the full paths of the files you made in your answer.");
+        sb.AppendLine("- A film, or any video of more than one shot (a music video, a story, an ad), is made with the film tool: plan it as a storyboard " +
+                      "(shots from a first frame to a last one, frames made from earlier ones so people stay the same, a soundtrack), make each piece, " +
+                      "check every shot and fix the ones that are wrong, then join them and check the film. A storyboard the user gives you is theirs: " +
+                      "keep to it, and change only what doesn't work.");
         // The user's rule: what can't be opened gets the right tool, not a hand-made decoder (a PDF
         // took eight minutes of inflating streams and mapping glyphs in PowerShell).
         if (toolsDirectory is not null)

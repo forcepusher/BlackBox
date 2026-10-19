@@ -1,0 +1,501 @@
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json.Nodes;
+using BlackBox.Core.Comfy;
+using BlackBox.Core.Media;
+using SkiaSharp;
+
+namespace BlackBox.Core.Film;
+
+/// <summary>What a film job made: the file in the film's folder, and the workflow that made it.</summary>
+/// <param name="Notes">What the job couldn't put where the storyboard said, or other things worth knowing.</param>
+public sealed record FilmMade(string File, string? Workflow, string? Template, TimeSpan Took, IReadOnlyList<string> Notes);
+
+/// <summary>A job still running in ComfyUI when the wait for it ended (the user wrote meanwhile): asking for the same thing again waits for it.</summary>
+public sealed class FilmStillRunningException(string message) : Exception(message);
+
+/// <summary>
+/// Makes a film's pieces with ComfyUI: each frame, each shot's clip and the song, every one with a
+/// workflow of its own kept beside what it made, its seed fixed, so running it again makes the same
+/// thing. Shared by the Filmmaking window and the film tool.
+/// </summary>
+public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
+{
+    /// <summary>How long a job is waited for at most; it goes on in ComfyUI after that.</summary>
+    public TimeSpan MaxWait { get; init; } = TimeSpan.FromHours(3);
+
+    /// <summary>Whether this maker queued any job: ComfyUI then lets go of the models when it is released.</summary>
+    public bool RanJobs { get; private set; }
+
+    private int _using;
+
+    /// <summary>Marks the server as in use until <see cref="ReleaseAsync"/>, so a ComfyUI BlackBox started stays up between jobs.</summary>
+    public void Use()
+    {
+        if (Interlocked.Exchange(ref _using, 1) == 0)
+            hub.Use();
+    }
+
+    /// <summary>Done with the server: one BlackBox started is closed once its queue is empty (the user's own keeps running).</summary>
+    public Task ReleaseAsync()
+    {
+        if (Interlocked.Exchange(ref _using, 0) == 0)
+            return Task.CompletedTask;
+        var ran = RanJobs;
+        RanJobs = false;
+        return hub.ReleaseAsync(ran);
+    }
+
+    // ---- frames ----------------------------------------------------------------------------------
+
+    /// <summary>The prompt a frame is made with: its own words and the film's style.</summary>
+    public static string FramePrompt(Storyboard board, FilmFrame frame) => Join(frame.Prompt, board.Style);
+
+    /// <summary>The prompt a shot is made with: what happens, what the camera does, and the film's style.</summary>
+    public static string ShotPrompt(Storyboard board, FilmShot shot) =>
+        Join(Join(shot.Prompt, shot.Camera.Length > 0 ? "Camera: " + shot.Camera.TrimEnd('.') : ""), board.Style.Length > 0 ? "Style: " + board.Style.TrimEnd('.') : "");
+
+    private static string Join(string a, string b)
+    {
+        a = a.Trim();
+        b = b.Trim();
+        if (a.Length == 0) return b;
+        if (b.Length == 0) return a;
+        return a.EndsWith('.') || a.EndsWith('!') || a.EndsWith('?') ? $"{a} {b}" : $"{a}. {b}";
+    }
+
+    /// <summary>Makes a frame's picture: taken from the user's file, else made from words, or from the frames it is based on.</summary>
+    public async Task<FilmMade> MakeFrameAsync(Storyboard board, FilmFrame frame, Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
+    {
+        var target = board.FramePicture(frame);
+        if (frame.File is { Length: > 0 } file)
+        {
+            var started = DateTime.UtcNow;
+            if (!File.Exists(file))
+                throw new FilmException($"{frame.Label}'s picture {file} isn't there.");
+            await Task.Run(() => SaveFrame(file, target, board.Width, board.Height), ct).ConfigureAwait(false);
+            WriteStamp(board.FrameWorkflow(frame), FrameStamp(board, frame), null, null);
+            return new FilmMade(target, null, null, DateTime.UtcNow - started, []);
+        }
+        if (frame.Prompt.Trim().Length == 0)
+            throw new FilmException($"{frame.Label} has no prompt: say what the picture shows, or give a picture of your own for it.");
+        var pictures = new List<string>();
+        foreach (var id in frame.From)
+        {
+            var from = board.Frame(id) ?? throw new FilmException($"{frame.Label} is to be made from \"{id}\", which isn't a frame of this film.");
+            if (from.Id == frame.Id)
+                continue;
+            var picture = board.FramePicture(from);
+            if (!File.Exists(picture))
+                throw new FilmException($"{from.Label} isn't made yet, and {frame.Label} is made from it: make {from.Label} first.");
+            pictures.Add(picture);
+        }
+        var inputs = new FilmInputs
+        {
+            Prompt = FramePrompt(board, frame),
+            Seed = frame.Seed,
+            Width = board.Width,
+            Height = board.Height,
+            Pictures = pictures,
+            Prefix = Prefix(board, frame.Id),
+        };
+        var job = pictures.Count > 0 ? FilmJob.Edit : FilmJob.Frame;
+        var run = await RunAsync(board, job, inputs, frame.Set, board.FrameWorkflow(frame), FrameStamp(board, frame), "image", progress, userMessage, ct).ConfigureAwait(false);
+        await Task.Run(() => SaveFrame(run.Output, target, board.Width, board.Height), ct).ConfigureAwait(false);
+        return new FilmMade(target, board.FrameWorkflow(frame), run.Template, run.Took, run.Notes);
+    }
+
+    // ---- shots -------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Makes a shot's clip from its frames: first and last, first only, or words only; a lip-synced
+    /// one from its first frame and the soundtrack's part under it.
+    /// </summary>
+    /// <param name="take">Saved as this file instead of the shot's own (one take of several).</param>
+    public async Task<FilmMade> MakeShotAsync(Storyboard board, FilmShot shot, Action<string>? progress, CancellationToken userMessage, CancellationToken ct, string? take = null)
+    {
+        var first = board.Frame(shot.First);
+        var last = board.Frame(shot.Last);
+        string? Picture(FilmFrame? frame)
+        {
+            if (frame is null)
+                return null;
+            var path = board.FramePicture(frame);
+            return File.Exists(path) ? path : throw new FilmException($"{frame.Label} isn't made yet, and shot {shot.Id} {(frame == first ? "starts" : "ends")} on it: make it first.");
+        }
+        var (firstPicture, lastPicture) = (Picture(first), Picture(last));
+        var notes = new List<string>();
+        string? audio = null;
+        FilmJob job;
+        if (shot.LipSync)
+        {
+            if (firstPicture is null)
+                throw new FilmException($"Shot {shot.Id} is lip-synced, which needs its first frame to show who sings or speaks: give it one.");
+            var soundtrack = board.SoundtrackFile ?? throw new FilmException($"Shot {shot.Id} is lip-synced to the soundtrack, and there is none yet: " +
+                                                                             (board.Sound.Source == FilmSound.Song ? "make the song first." : "give the film a soundtrack first."));
+            var (starts, _) = board.Timing();
+            var start = starts[board.Shots.IndexOf(shot)];
+            audio = board.ShotAudio(shot);
+            await Task.Run(() => CutSound(soundtrack, start, shot.Seconds, audio), ct).ConfigureAwait(false);
+            job = FilmJob.LipSync;
+            if (lastPicture is not null)
+                notes.Add($"A lip-synced shot is made from its first frame only, so it doesn't end on {last!.Label}.");
+            lastPicture = null;
+        }
+        else
+            job = firstPicture is null ? FilmJob.ShotFromText : lastPicture is null ? FilmJob.ShotFromFirst : FilmJob.Shot;
+        var inputs = new FilmInputs
+        {
+            Prompt = ShotPrompt(board, shot),
+            Seed = shot.Seed,
+            Width = board.Width,
+            Height = board.Height,
+            Seconds = shot.Seconds,
+            Fps = board.Fps,
+            FirstImage = firstPicture,
+            LastImage = lastPicture,
+            Audio = audio,
+            TextToVideo = firstPicture is null,
+            Prefix = Prefix(board, shot.Id),
+        };
+        var target = take ?? board.ShotVideo(shot);
+        var workflow = take is null ? board.ShotWorkflow(shot) : Path.ChangeExtension(take, ".json");
+        var run = await RunAsync(board, job, inputs, shot.Set, workflow, ShotStamp(board, shot), "video", progress, userMessage, ct).ConfigureAwait(false);
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        File.Copy(run.Output, target, overwrite: true);
+        return new FilmMade(target, workflow, run.Template, run.Took, [.. notes, .. run.Notes]);
+    }
+
+    // ---- the song -----------------------------------------------------------------------------------
+
+    /// <summary>Makes the soundtrack: a song in the storyboard's style, with its lyrics (an instrumental without), as long as the film.</summary>
+    public async Task<FilmMade> MakeSongAsync(Storyboard board, Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
+    {
+        var sound = board.Sound;
+        if (sound.Tags.Trim().Length == 0)
+            throw new FilmException("The song has no style: say what it should sound like (genre, instruments, voice, tempo).");
+        var (_, length) = board.Timing();
+        var inputs = new FilmInputs
+        {
+            Tags = sound.Tags.Trim(),
+            Lyrics = sound.Lyrics.Trim().Length > 0 ? sound.Lyrics.Trim() : "[Instrumental]",
+            Seed = sound.Seed,
+            Seconds = Math.Max(5, Math.Ceiling(length) + 1),
+            Prefix = Prefix(board, "song"),
+        };
+        var run = await RunAsync(board, FilmJob.Song, inputs, sound.Set, board.SongWorkflow, SongStamp(board), "audio", progress, userMessage, ct).ConfigureAwait(false);
+        Directory.CreateDirectory(Path.GetDirectoryName(board.SongFile)!);
+        File.Copy(run.Output, board.SongFile, overwrite: true);
+        return new FilmMade(board.SongFile, board.SongWorkflow, run.Template, run.Took, run.Notes);
+    }
+
+    // ---- running a job --------------------------------------------------------------------------------
+
+    /// <summary>Where ComfyUI saves a film's files, under its output folder.</summary>
+    private static string Prefix(Storyboard board, string id) => $"BlackBox films/{Storyboard.Safe(board.Title.Length > 0 ? board.Title : Path.GetFileName(board.Folder))}/{id}";
+
+    private sealed record Run(string Output, string Template, TimeSpan Took, List<string> Notes);
+
+    /// <summary>A job queued in ComfyUI and not yet picked up: by the workflow file it is for.</summary>
+    private sealed record Pending(string PromptId, string ClientId, string Stamp, string Server, IReadOnlyDictionary<string, string> Titles, string Template, DateTime Queued);
+
+    private static readonly ConcurrentDictionary<string, Pending> Running = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Runs the template for a job with the inputs set, and saves the workflow as it ran beside the
+    /// result (with the files it loads by their full paths, so the comfyui tool can run it again).
+    /// </summary>
+    private async Task<Run> RunAsync(Storyboard board, FilmJob job, FilmInputs inputs, JsonObject? extra, string workflowFile, string stamp, string kind,
+        Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
+    {
+        Use();
+        var notes = new List<string>();
+        var api = await hub.ConnectAsync(null, notes, progress, ct).ConfigureAwait(false);
+        var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        // The same job asked for again while it still runs (the wait for it ended when the user wrote): wait for it.
+        if (Running.TryGetValue(workflowFile, out var pending))
+        {
+            if (pending.Stamp == stamp && pending.Server == api.BaseUrl.ToString())
+                return await FinishAsync(api, pending, kind, workflowFile, notes, progress, userMessage, ct).ConfigureAwait(false);
+            // Asked for with other settings since: the old one is of no use.
+            Running.TryRemove(workflowFile, out _);
+            try { await api.CancelAsync(pending.PromptId, ct).ConfigureAwait(false); }
+            catch (ComfyApiException) { }
+        }
+
+        progress?.Invoke("Getting the workflow ready…");
+        var template = await FilmTemplates.PickAsync(hub, api, board.Workflows, job, ct).ConfigureAwait(false)
+                       ?? throw new FilmException($"No ComfyUI template for {FilmTemplates.Describe(job)} is ready on this PC: " +
+                                                  "every one this needs a model or node that isn't installed. The comfyui tool finds templates (action=templates) and downloads what they need.");
+        if (!template.Ready)
+            throw new FilmException($"The template {template.Template.Name} needs {string.Join(", ", template.Missing.Take(6))}, which isn't installed: " +
+                                    "download it (the comfyui tool's action=templates with its name gives the links), or pick another template for this.");
+        var workflow = template.Workflow;
+        var missed = new List<string>();
+        var set = FilmRoles.Apply(workflow, library, inputs, missed);
+        // What the job can't go without stops it; the rest is said.
+        var vital = missed.Where(m => m.StartsWith("the prompt", StringComparison.Ordinal) || m.StartsWith("the first frame", StringComparison.Ordinal) ||
+                                      m.StartsWith("the last frame", StringComparison.Ordinal) || m.StartsWith("the sound", StringComparison.Ordinal)).ToList();
+        if (vital.Count > 0)
+            throw new FilmException($"The template {template.Template.Name} has no place for {string.Join(", ", vital)}: pick another template for this job, " +
+                                    "or say where it goes with set {\"node id.input\": value}.");
+        notes.AddRange(missed.Select(m => $"The template {template.Template.Name} had no place for {m}."));
+        if (extra is { Count: > 0 } && workflow.Set(extra, library) is { Count: > 0 } wrong)
+            throw new FilmException($"These changes don't fit the template {template.Template.Name}:\n- " + string.Join("\n- ", wrong));
+        workflow.FillAdvancedDefaults(library);
+        WriteStamp(workflowFile, stamp, template.Template.Name, workflow);
+
+        // The files it loads go into ComfyUI's input folder.
+        var uploaded = new HashSet<string>();
+        foreach (var (id, input, path) in workflow.LocalFiles(library, p => p))
+        {
+            if (!File.Exists(path))
+                throw new FilmException($"{path} isn't there: node {id} loads it.");
+            progress?.Invoke($"Uploading {Path.GetFileName(path)}…");
+            ((JsonObject)workflow.Nodes[id]!["inputs"]!)[input] = await api.UploadAsync(path, ct).ConfigureAwait(false);
+            uploaded.Add(id + "." + input);
+        }
+        var problems = workflow.Validate(library, uploaded);
+        if (problems.Count > 0)
+            throw new FilmException($"The workflow from {template.Template.Name} can't run:\n- " + string.Join("\n- ", problems.Take(12)));
+        var clientId = "blackbox-" + Guid.NewGuid().ToString("N")[..12];
+        var (promptId, refused) = await ComfyRunner.QueueAsync(api, workflow, clientId, ct).ConfigureAwait(false);
+        if (promptId is null)
+            throw new FilmException($"ComfyUI refused the workflow from {template.Template.Name}:\n- " + string.Join("\n- ", refused));
+        RanJobs = true;
+        var titles = workflow.All().ToDictionary(n => n.Id, n => ComfyWorkflow.TitleOf(n.Node) ?? ComfyWorkflow.ClassOf(n.Node));
+        hub.RememberJob(promptId, clientId, titles);
+        var queued = new Pending(promptId, clientId, stamp, api.BaseUrl.ToString(), titles, template.Template.Name, DateTime.UtcNow);
+        Running[workflowFile] = queued;
+        var run = await FinishAsync(api, queued, kind, workflowFile, notes, progress, userMessage, ct).ConfigureAwait(false);
+        return run with { Took = clock.Elapsed };
+    }
+
+    /// <summary>Waits for a queued job and finds what it made of the kind wanted.</summary>
+    private async Task<Run> FinishAsync(ComfyApi api, Pending pending, string kind, string workflowFile, List<string> notes,
+        Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
+    {
+        ComfyJob job;
+        try
+        {
+            job = await ComfyRunner.WaitAsync(api, pending.PromptId, pending.ClientId, pending.Titles, MaxWait, progress, userMessage, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            Running.TryRemove(workflowFile, out _); // the wait cancelled the job in ComfyUI
+            throw;
+        }
+        if (job.Status is "running" or "queued")
+            throw new FilmStillRunningException($"It is still being made in ComfyUI ({job.Progress ?? job.Status}, {ComfyRunner.Clock(DateTime.UtcNow - pending.Queued)} so far)" +
+                                                ": asking for the same thing again waits for it.");
+        Running.TryRemove(workflowFile, out _);
+        if (job.Status != "success")
+            throw new FilmException($"ComfyUI's job from {pending.Template} {(job.Status == "interrupted" ? "was stopped" : "failed")}: {job.Error}");
+        var dirs = await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) ?? [];
+        var files = await ComfyRunner.LocateAsync(api, job.Files, dirs, Path.Combine(Path.GetTempPath(), "BlackBox films"), ct).ConfigureAwait(false);
+        var made = files.Where(f => f.LocalPath is not null && f.Kind == kind || kind == "image" && f.Kind == "animation" && f.LocalPath is not null).ToList();
+        var saved = made.Where(f => f.Type == "output").ToList();
+        var pick = (saved.Count > 0 ? saved : made).MaxBy(f => new FileInfo(f.LocalPath!).Length)
+                   ?? throw new FilmException($"The job from {pending.Template} made no {kind} (it made {(files.Count == 0 ? "nothing" : string.Join(", ", files.Select(f => f.Filename)))}).");
+        return new Run(pick.LocalPath!, pending.Template, job.Elapsed, notes);
+    }
+
+    // ---- what each piece was made from ----------------------------------------------------------------
+
+    /// <summary>
+    /// What a frame's picture comes from, as a short hash: its prompt, the style, seed, size and
+    /// template, its user's file, the pictures it is based on. A frame whose stamp differs from the
+    /// one it was made with is out of date.
+    /// </summary>
+    public static string FrameStamp(Storyboard board, FilmFrame frame)
+    {
+        var sb = new StringBuilder();
+        if (frame.File is { Length: > 0 } file)
+            sb.Append("file|").Append(file).Append('|').Append(FileStamp(file));
+        else
+        {
+            sb.Append(FramePrompt(board, frame)).Append('|').Append(frame.Seed).Append('|')
+              .Append(FilmTemplates.Chosen(board.Workflows, frame.From.Count > 0 ? FilmJob.Edit : FilmJob.Frame)).Append('|').Append(frame.Set?.ToJsonString());
+            foreach (var id in frame.From)
+                sb.Append("|from ").Append(id).Append(' ').Append(board.Frame(id) is { } from ? FileStamp(board.FramePicture(from)) : "");
+        }
+        sb.Append('|').Append(board.Width).Append('x').Append(board.Height);
+        return Hash(sb.ToString());
+    }
+
+    public static string ShotStamp(Storyboard board, FilmShot shot)
+    {
+        var sb = new StringBuilder();
+        sb.Append(ShotPrompt(board, shot)).Append('|').Append(shot.Seed).Append('|').Append(shot.Seconds).Append('|').Append(board.Fps).Append('|')
+          .Append(board.Width).Append('x').Append(board.Height).Append('|').Append(shot.LipSync).Append('|').Append(shot.Set?.ToJsonString());
+        foreach (var id in new[] { shot.First, shot.LipSync ? null : shot.Last })
+            sb.Append('|').Append(board.Frame(id) is { } frame ? FileStamp(board.FramePicture(frame)) : "none");
+        var job = shot.LipSync ? FilmJob.LipSync : shot.First is null ? FilmJob.ShotFromText : shot.Last is null ? FilmJob.ShotFromFirst : FilmJob.Shot;
+        sb.Append('|').Append(FilmTemplates.Chosen(board.Workflows, job));
+        if (shot.LipSync)
+        {
+            var (starts, _) = board.Timing();
+            sb.Append("|sound ").Append(board.SoundtrackFile is { } s ? FileStamp(s) : "").Append(' ').Append(starts[Math.Max(0, board.Shots.IndexOf(shot))]);
+        }
+        return Hash(sb.ToString());
+    }
+
+    public static string SongStamp(Storyboard board) =>
+        Hash($"{board.Sound.Tags}|{board.Sound.Lyrics}|{board.Sound.Seed}|{Math.Ceiling(board.Timing().Length)}|{board.Workflows.Song}|{board.Sound.Set?.ToJsonString()}");
+
+    private static string FileStamp(string path)
+    {
+        var info = new FileInfo(path);
+        return info.Exists ? $"{info.Length}@{info.LastWriteTimeUtc.Ticks}" : "missing";
+    }
+
+    private static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..16].ToLowerInvariant();
+
+    /// <summary>The stamp a piece was made with, kept in its workflow file; null when it wasn't made (or by hand).</summary>
+    public static string? MadeStamp(string workflowFile)
+    {
+        try
+        {
+            return File.Exists(workflowFile) && JsonNode.Parse(File.ReadAllText(workflowFile))?["blackbox"]?["stamp"] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Keeps the workflow a piece is made with beside it, with what it was made from: ComfyUI's
+    /// API format under "prompt", which the comfyui tool runs as it is (workflow_file).
+    /// </summary>
+    private static void WriteStamp(string workflowFile, string stamp, string? template, ComfyWorkflow? workflow)
+    {
+        var json = new JsonObject
+        {
+            ["blackbox"] = new JsonObject { ["stamp"] = stamp, ["template"] = template, ["made"] = DateTime.UtcNow.ToString("O") },
+        };
+        if (workflow is not null)
+            json["prompt"] = JsonNode.Parse(workflow.ToJson());
+        Settings.AtomicFile.Write(workflowFile, json.ToJsonString(ComfyWorkflow.Indented));
+    }
+
+    /// <summary>Whether a frame's picture is there and was made from what the storyboard says now.</summary>
+    public static bool IsCurrent(Storyboard board, FilmFrame frame) =>
+        File.Exists(board.FramePicture(frame)) && MadeStamp(board.FrameWorkflow(frame)) is { } made && made == FrameStamp(board, frame);
+
+    public static bool IsCurrent(Storyboard board, FilmShot shot) =>
+        File.Exists(board.ShotVideo(shot)) && MadeStamp(board.ShotWorkflow(shot)) is { } made && made == ShotStamp(board, shot);
+
+    public static bool SongIsCurrent(Storyboard board) =>
+        File.Exists(board.SongFile) && MadeStamp(board.SongWorkflow) is { } made && made == SongStamp(board);
+
+    // ---- pictures and sound --------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A picture scaled to cover the film's frame and cut to it in the middle, saved as PNG: every
+    /// frame of a film has its size, whatever made it or wherever it came from.
+    /// </summary>
+    public static void SaveFrame(string source, string target, int width, int height)
+    {
+        using var bitmap = SKBitmap.Decode(source) ?? throw new FilmException($"{source} isn't a picture this can read.");
+        var inside = Bars(bitmap);
+        using var frame = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(frame))
+        {
+            canvas.Clear(SKColors.Black);
+            var scale = Math.Max(width / (double)inside.Width, height / (double)inside.Height);
+            var (w, h) = ((float)(inside.Width * scale), (float)(inside.Height * scale));
+            using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true };
+            canvas.DrawBitmap(bitmap, inside, new SKRect((width - w) / 2, (height - h) / 2, (width + w) / 2, (height + h) / 2), paint);
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        var temp = target + ".tmp";
+        using (var data = frame.Encode(SKEncodedImageFormat.Png, 100))
+        using (var stream = File.Create(temp))
+            data.SaveTo(stream);
+        File.Move(temp, target, overwrite: true);
+    }
+
+    /// <summary>
+    /// The picture inside black bars along its edges, if it has some. Asked for a close-up "in a
+    /// cinematic 35mm look", Qwen-Image-Edit drew the picture letterboxed, and LTX kept the bars
+    /// through the whole clip; a film's frame is the picture all over.
+    /// </summary>
+    internal static SKRectI Bars(SKBitmap bitmap)
+    {
+        var (w, h) = (bitmap.Width, bitmap.Height);
+        bool Dark(int x0, int y0, int dx, int dy, int count)
+        {
+            var (samples, dark) = (0, 0);
+            var step = Math.Max(1, count / 64);
+            for (var i = 0; i < count; i += step)
+            {
+                var c = bitmap.GetPixel(x0 + dx * i, y0 + dy * i);
+                samples++;
+                dark += c.Red + c.Green + c.Blue < 3 * 18 ? 1 : 0;
+            }
+            return dark >= samples * 0.97;
+        }
+        bool DarkRow(int y) => Dark(0, y, 1, 0, w);
+        bool DarkColumn(int x) => Dark(x, 0, 0, 1, h);
+        int top = 0, bottom = 0, left = 0, right = 0;
+        while (top < h * 0.3 && DarkRow(top)) top++;
+        while (bottom < h * 0.3 && DarkRow(h - 1 - bottom)) bottom++;
+        while (left < w * 0.3 && DarkColumn(left)) left++;
+        while (right < w * 0.3 && DarkColumn(w - 1 - right)) right++;
+        // A band of a few rows is a dark picture's edge, not a bar; one past 30% is a dark picture.
+        if (top + bottom < h * 0.03 || top >= h * 0.3 || bottom >= h * 0.3) top = bottom = 0;
+        if (left + right < w * 0.03 || left >= w * 0.3 || right >= w * 0.3) left = right = 0;
+        return new SKRectI(left, top, w - right, h - bottom);
+    }
+
+    /// <summary>
+    /// The part of the soundtrack from <paramref name="start"/> for <paramref name="seconds"/>, as a
+    /// WAV file (silence where the soundtrack is shorter): what a lip-synced shot is made with.
+    /// </summary>
+    public void CutSound(string soundtrack, double start, double seconds, string target)
+    {
+        using var reader = media?.OpenAudio(soundtrack) ?? throw new FilmException($"The soundtrack {soundtrack} can't be read on this PC (ffmpeg in BlackBox's Data\\tools would).");
+        var (rate, channels) = (reader.SampleRate, Math.Max(1, reader.Channels));
+        if (start > 0)
+            reader.Seek(TimeSpan.FromSeconds(start));
+        var wanted = (long)Math.Round(seconds * rate) * channels;
+        var samples = new float[wanted];
+        long got = 0;
+        var buffer = new float[8192 * channels];
+        while (got < wanted)
+        {
+            var read = reader.Read(buffer, 0, (int)Math.Min(buffer.Length, wanted - got));
+            if (read <= 0)
+                break;
+            Array.Copy(buffer, 0, samples, got, read);
+            got += read;
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        WriteWav(target, samples, rate, channels);
+    }
+
+    /// <summary>Samples (interleaved, -1 to 1) as a 16-bit PCM WAV file.</summary>
+    internal static void WriteWav(string path, float[] samples, int rate, int channels)
+    {
+        using var file = new BinaryWriter(File.Create(path));
+        var bytes = samples.Length * 2;
+        file.Write("RIFF"u8);
+        file.Write(36 + bytes);
+        file.Write("WAVEfmt "u8);
+        file.Write(16);
+        file.Write((short)1);
+        file.Write((short)channels);
+        file.Write(rate);
+        file.Write(rate * channels * 2);
+        file.Write((short)(channels * 2));
+        file.Write((short)16);
+        file.Write("data"u8);
+        file.Write(bytes);
+        foreach (var s in samples)
+            file.Write((short)Math.Round(Math.Clamp(s, -1f, 1f) * 32767));
+    }
+}

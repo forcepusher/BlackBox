@@ -201,6 +201,11 @@ public sealed partial class AgentSession(
                 ? look.LocateAsync(image, space.Describe(), target, ct2)
                 : Task.FromResult<(double X, double Y)?>(null);
         }
+        if (toolContext.Ask is null)
+        {
+            var eyes = new FreshLook(client, requestOptions);
+            toolContext.Ask = (image, question, ct2) => toolContext.SeesImages ? eyes.AskAsync(image, question, ct2) : Task.FromResult<string?>(null);
+        }
         var nudges = 0;
         var cutCalls = 0;
         var loops = new LoopDetector();

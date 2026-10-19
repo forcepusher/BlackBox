@@ -240,6 +240,9 @@
             <TextBlock Classes="muted" Text="{Binding ContextUsage, StringFormat='· {0}'}" IsVisible="{Binding HasContextUsage}"
                        ToolTip.Tip="{Binding ContextUsageTip}" VerticalAlignment="Center" />
           </StackPanel>
+          <!-- Films planned shot by shot (see FilmWindow): beside the chat, which "Make the film" hands it to. -->
+          <Button Classes="ghost" Content="Filmmaking" Click="OnFilmmakingClick"
+                  ToolTip.Tip="Plan a film shot by shot, with its frames and soundtrack, and make it with ComfyUI" />
           <!-- Earlier chats, newest first: a row opens one, its trash button deletes it. -->
           <Button x:Name="HistoryButton" Classes="ghost" ToolTip.Tip="Earlier chats" AutomationProperties.Name="History">
             <StackPanel Orientation="Horizontal" Spacing="6">

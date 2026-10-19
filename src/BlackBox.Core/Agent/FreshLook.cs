@@ -86,6 +86,40 @@ internal sealed partial class FreshLook(OpenAiChatClient client, ChatRequestOpti
         return Parse(reply.Content);
     }
 
+    /// <summary>
+    /// Asks about a picture in a conversation of its own: a judgement with fresh eyes, such as
+    /// whether a clip shows what its shot should. The model may think first; only its answer
+    /// comes back, or null when the request failed.
+    /// </summary>
+    public async Task<string?> AskAsync(byte[] picture, string question, CancellationToken ct)
+    {
+        List<ChatMessage> request =
+        [
+            ChatMessage.System("You look at pictures carefully and say plainly what you see, faults included. You don't praise what isn't good."),
+            new()
+            {
+                Role = ChatRole.User,
+                Parts = [ContentPart.FromImage(picture, "image/jpeg"), ContentPart.FromText(question)],
+            },
+        ];
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromMinutes(5));
+        try
+        {
+            var reply = await client.CompleteAsync(request, [], new ChatRequestOptions { Model = options.Model, Extra = options.Extra, MaxTokens = 8192 }, null, timeout.Token)
+                .ConfigureAwait(false);
+            // A server that leaves the thinking in the answer: the answer is what follows it.
+            var text = reply.Content ?? "";
+            if (text.LastIndexOf("</think>", StringComparison.Ordinal) is var end and >= 0)
+                text = text[(end + "</think>".Length)..];
+            return text.Trim() is { Length: > 0 } answer ? answer : null;
+        }
+        catch (Exception ex) when (ex is LlmException or HttpRequestException or IOException || (ex is OperationCanceledException && !ct.IsCancellationRequested))
+        {
+            return null;
+        }
+    }
+
     /// <summary>Qwen 3 and later: their chat templates mark thinking with think tags and skip it for a reply begun with an empty pair.</summary>
     internal static bool ThinksInQwenTags(string? model) => model is not null && QwenThreeOrLater().IsMatch(model);
 

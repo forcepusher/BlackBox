@@ -372,6 +372,22 @@ public partial class MainWindow : Window
         });
     }
 
+    /// <summary>The Filmmaking window, while it is open: the button brings it forward rather than opening a second one.</summary>
+    private FilmWindow? _film;
+
+    private void OnFilmmakingClick(object? sender, RoutedEventArgs e)
+    {
+        if (_film is { } open)
+        {
+            open.Activate();
+            return;
+        }
+        _film = new FilmWindow { DataContext = Vm.CreateFilmViewModel() };
+        _film.Closed += (_, _) => _film = null;
+        // A window of its own, not one kept in front of the chat: the user watches both while the film is made.
+        _film.Show();
+    }
+
     private async void OnSettingsClick(object? sender, RoutedEventArgs e)
     {
         var settingsVm = Vm.CreateSettingsViewModel();

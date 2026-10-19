@@ -67,6 +67,13 @@ public sealed class ToolContext
     /// </summary>
     public (ScreenRect Screen, RawImage Frame)? Seen { get; set; }
 
+    /// <summary>
+    /// Asks the model about a picture in a conversation of its own, without the run's history:
+    /// a fresh look, as at a clip's frames to judge it (see <see cref="FilmTool"/>). The answer, or
+    /// null when it couldn't be had. Set by the agent session; null when the model can't see.
+    /// </summary>
+    public Func<byte[], string, CancellationToken, Task<string?>>? Ask { get; set; }
+
     /// <summary>The latest screenshot taken for the model (screen and frame).</summary>
     public (ScreenRect Screen, RawImage Frame)? LastShot { get; set; }
 
