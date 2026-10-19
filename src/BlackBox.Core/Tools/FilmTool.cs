@@ -45,7 +45,7 @@ public sealed class FilmTool : Tool
 
     public override JsonObject Parameters => Schema(
         ("action", Str("What to do", "storyboard", "frame", "shot", "sound", "join", "check"), true),
-        ("path", Str("The film's folder (or its storyboard.json); a new film's folder for action=storyboard"), false),
+        ("path", Str("The film's folder (or its storyboard.json, or the name of a film in the films folder); a new film's folder for action=storyboard"), false),
         ("id", Str("A frame's id (action=frame) or a shot's (action=shot, check)"), false),
         ("storyboard", new JsonObject { ["type"] = "object", ["description"] = "action=storyboard: the storyboard, or the parts of it to change (frames and shots by id)" }, false),
         ("prompt", Str("action=frame or shot: a new prompt for it"), false),
@@ -114,9 +114,14 @@ public sealed class FilmTool : Tool
     /// <summary>The storyboard the call is about: by path, the one used last in this task, or a new one for action=storyboard.</summary>
     private Storyboard LoadOrCreate(JsonObject args, ToolContext ctx, bool create)
     {
-        var given = GetString(args, "path") is { Length: > 0 } p ? ctx.ResolvePath(p) : _lastFolder;
+        var root = ctx.FilmsDirectory ?? Path.Combine(ctx.ScratchDirectory ?? Path.GetTempPath(), "films");
+        var path = GetString(args, "path");
+        var given = path is { Length: > 0 } ? ctx.ResolvePath(path) : _lastFolder;
+        // A film's name alone ("Spaghetti Days") is its folder in the films folder.
+        if (path is { Length: > 0 } && !Path.IsPathRooted(path) && !Exists(given) && Path.Combine(root, path) is var named && Exists(named))
+            given = named;
         var change = args["storyboard"] as JsonObject;
-        if (given is not null && (File.Exists(given) && Path.GetFileName(given).Equals(Storyboard.FileName, StringComparison.OrdinalIgnoreCase) || File.Exists(Path.Combine(given, Storyboard.FileName))))
+        if (Exists(given))
         {
             var board = Storyboard.Load(given);
             if (change is not null)
@@ -127,11 +132,14 @@ public sealed class FilmTool : Tool
             return board;
         }
         if (!create || change is null)
-            throw new FilmException(given is null
+        {
+            var films = Storyboard.Recent(root);
+            throw new FilmException((given is null
                 ? "Which film? Give path: the film's folder (the one with its storyboard.json), or make a new one with action=storyboard and storyboard={…}."
-                : $"There is no storyboard in {given}. Make one with action=storyboard and storyboard={{…}} (path is where it goes).");
+                : $"There is no storyboard in {given}. Make one with action=storyboard and storyboard={{…}} (path is where it goes).") +
+                (films.Count > 0 ? $" The films in {root}, the latest first: {string.Join("; ", films.Take(12))}." : ""));
+        }
         var title = (string?)change["title"] ?? "Untitled film";
-        var root = ctx.FilmsDirectory ?? Path.Combine(ctx.ScratchDirectory ?? Path.GetTempPath(), "films");
         var folder = given ?? Path.Combine(root, Storyboard.Safe(title));
         // Another film of the same title is another film: it isn't written over.
         for (var n = 2; given is null && File.Exists(Path.Combine(folder, Storyboard.FileName)); n++)
@@ -142,6 +150,9 @@ public sealed class FilmTool : Tool
         var created = Storyboard.Merge(new Storyboard { Title = title, Folder = folder }, change);
         created.Save();
         return created;
+
+        static bool Exists([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] string? at) =>
+            at is not null && (File.Exists(at) && Path.GetFileName(at).Equals(Storyboard.FileName, StringComparison.OrdinalIgnoreCase) || File.Exists(Path.Combine(at, Storyboard.FileName)));
     }
 
     /// <summary>The storyboard changes a frame or shot call gives with it: a new prompt, seed, length.</summary>

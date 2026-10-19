@@ -470,6 +470,14 @@ public sealed class FilmToolTests : IDisposable
         Assert.False((await new FilmTool().ExecuteAsync(Call(), ctx, CancellationToken.None)).IsError);
         Assert.True(File.Exists(Path.Combine(films, "Paper Boat", "storyboard.json")));
         Assert.True(File.Exists(Path.Combine(films, "Paper Boat 2", "storyboard.json")));
+
+        // Another task finds a film by its name, or is told which films there are.
+        var byName = await new FilmTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = "Paper Boat 2" }, ctx, CancellationToken.None);
+        Assert.False(byName.IsError);
+        Assert.Contains(Path.Combine(films, "Paper Boat 2"), byName.Text);
+        var unsaid = await new FilmTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard" }, ctx, CancellationToken.None);
+        Assert.True(unsaid.IsError);
+        Assert.Contains(Path.Combine(films, "Paper Boat 2"), unsaid.Text);
     }
 
     [Fact]
