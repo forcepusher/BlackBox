@@ -420,7 +420,8 @@ public sealed class FilmTool : Tool
             ctx.Progress?.Invoke($"Listening to {Path.GetFileName(file)}…");
             var workflow = ComfyTool.HearingWorkflow(library, model, await api.UploadAsync(file, ct).ConfigureAwait(false));
             workflow.FillAdvancedDefaults(library);
-            if (workflow.Validate(library).Count > 0)
+            // The file just uploaded isn't among LoadAudio's choices the library knows yet.
+            if (workflow.Validate(library, new HashSet<string> { "1.audio" }).Count > 0)
                 return null;
             var clientId = "blackbox-" + Guid.NewGuid().ToString("N")[..12];
             var (promptId, _) = await ComfyRunner.QueueAsync(api, workflow, clientId, ct).ConfigureAwait(false);
