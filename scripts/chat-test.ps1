@@ -26,8 +26,10 @@
   ./scripts/chat-test.ps1 -SelfTest                           # the reference stand-in instead of BlackBox: checks the checks, no model or browser
   ./scripts/chat-test.ps1 -Cli D:\old\blackbox-cli.exe        # another build, e.g. to compare with a baseline
 #>
+# Minutes: the most a scenario may run. The evening watch lasts 45 minutes on its own, and with 40
+# it was always cut off before its end.
 param([string[]]$Scenarios = @(), [string]$Url = "", [string]$Model = "", [string]$Root = "",
-  [double]$Minutes = 40, [switch]$SelfTest, [string]$Cli = "", [int]$Port = 5170)
+  [double]$Minutes = 60, [switch]$SelfTest, [string]$Cli = "", [int]$Port = 5170)
 $ErrorActionPreference = "Stop"
 $repo = Split-Path $PSScriptRoot
 
@@ -212,7 +214,9 @@ function Invoke-Scenario([string]$name, [string]$sdir, [Diagnostics.Stopwatch]$s
       if ($sw.Elapsed -gt $limit) {
         Stop-Process $p -Force
         $p.WaitForExit()
-        Add-Content $log "`n[done] TIMEOUT after $Minutes min"
+        # Start-Process can still hold the log it redirected to: failing here ended the whole run
+        # without checking the scenario.
+        try { Add-Content $log "`n[done] TIMEOUT after $Minutes min" } catch { Write-Host "[done] TIMEOUT after $Minutes min" }
         break
       }
       Start-Sleep -Milliseconds 300
