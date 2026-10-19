@@ -3,6 +3,8 @@ BlackBox does work on your Windows PC for you. Tell it what you want in plain wo
 does it the way a person would: it looks at the screen, clicks, types, edits files and runs commands
 until the job is done.
 
+![BlackBox's start screen](docs/screenshot.png)
+
 It is a single portable `BlackBox.exe`. Nothing gets installed: its settings, chats and whatever it
 downloads stay in a `Data` folder next to the exe.
 
@@ -33,7 +35,7 @@ private or long work, use your own model.
 - Type in the box to correct it or add to the task. It holds off the mouse and keyboard while you type.
 - Paste a screenshot or files with Ctrl+V, or drop them on the window, to send them with a message.
 - **History** keeps every chat, so you can come back to one and carry on.
-- It doesn't ask before it acts. To approve each step, turn approvals on in Settings.
+- It doesn't ask before it acts. To approve each step, use "Ask me first" in Settings.
 
 ## Using your own model
 Type your server's address in the bar at the top of the window, such as `http://localhost:1234/v1`
