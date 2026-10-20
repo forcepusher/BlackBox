@@ -167,14 +167,11 @@ public sealed partial class OpenAiChatClient
                         throw new ImagesRefusedException(said.Clip(300));
                     if (CreditWords().IsMatch(said))
                         throw new KeyRefusedException($"The Anthropic account behind the API key has run out of credits (it says \"{said.Clip(300)}\"). Add credits in Anthropic's Console, or pick another server at the top.");
-                    // The reply limit asked for is more than the account's output tokens a minute:
-                    // asked again for less, at once, as nothing of the minute was used.
-                    if (status == 429 && attempt < 6 && wire.MaxReply > 4096 && said.Contains("output tokens", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var most = OutputLimitWords().Match(said) is { Success: true } m && int.TryParse(m.Groups[1].Value.Replace(",", ""), out var limit) ? limit * 3 / 4 : wire.MaxReply / 2;
-                        Wires[_baseUrl] = Wires[_baseUrl] with { MaxReply = Math.Clamp(most, 4096, wire.MaxReply / 2) };
-                        continue;
-                    }
+                    // A spend limit reached comes as a 400 (one set for the account) or a 429 without
+                    // retry-after (its tier's monthly cap): asking again fails until it is raised or
+                    // the month is over, so it isn't waited out like a rate limit.
+                    if (status is 400 or 429 && SpendWords().IsMatch(said + err))
+                        throw new KeyRefusedException($"The Anthropic account behind the API key has reached its spend limit (it says \"{said.Clip(300)}\"). Raise it in Anthropic's Console, or pick another server at the top.");
                     if (status == 429)
                         throw new RateLimitedException($"{_baseUrl} answered 429: {said.Clip(300)}", RetryAfter(resp.Headers, err, DateTimeOffset.UtcNow));
                     // 529: Anthropic is overloaded. Sent again after growing waits, like a model
@@ -243,11 +240,12 @@ public sealed partial class OpenAiChatClient
     [GeneratedRegex(@"many-image|image dimensions exceed", RegexOptions.IgnoreCase)]
     private static partial Regex ManyImagesWords();
 
-    // "This request would exceed the rate limit for your organization (…) of 8,000 output tokens per minute."
-    [GeneratedRegex(@"([\d,]+) output tokens per minute", RegexOptions.IgnoreCase)]
-    private static partial Regex OutputLimitWords();
-
     // "Your credit balance is too low to access the Anthropic API." comes as a 400.
     [GeneratedRegex(@"credit balance is too low", RegexOptions.IgnoreCase)]
     private static partial Regex CreditWords();
+
+    // "You have reached your specified API usage limits…" (400); the monthly cap's 429 says
+    // "You have reached your API usage limits" with error_code "enforced_spend_limit_reached".
+    [GeneratedRegex(@"reached your (specified )?(workspace )?API usage limits|enforced_spend_limit_reached", RegexOptions.IgnoreCase)]
+    private static partial Regex SpendWords();
 }

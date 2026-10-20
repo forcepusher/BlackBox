@@ -783,10 +783,9 @@ Claude unchanged. A gateway in front of Anthropic whose address has an `anthropi
   out and the request sent again. A context reset keeps only the user's messages, the handoff note
   and a screenshot, which the check allows. Effort is the model's default (medium on Opus 5.5),
   except for fresh looks and quick questions, which ask for low: every Claude since 4.6 thinks, and
-  only effort says how much. Thinking counts toward the reply limit, so requests ask for 32k (the
-  model's limit if lower) whatever smaller limit a caller set. Anthropic counts that limit against
-  the output tokens a minute an account may use before the reply is written (8,000 at its lowest
-  tier), so a 429 saying so lowers it to three quarters of the account's figure.
+  only effort says how much. Thinking counts toward the reply limit, so requests ask for 64k (the
+  model's limit if lower) whatever smaller limit a caller set; only what is written is paid for and
+  counts toward the output tokens a minute.
 - Refusals: on the models that take it (Opus and Fable 5 on, Sonnet 5.5), a request Anthropic's
   safety checks decline goes to the model Anthropic recommends for what was declined
   (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`); what the declined model wrote
@@ -797,15 +796,19 @@ Claude unchanged. A gateway in front of Anthropic whose address has an `anthropi
   result gets "Not run.", and a result without its call is said as text. Tool call ids from other
   servers get Claude's characters. A reply from another model goes as its text and calls: its
   reasoning can't be sent as Claude's thinking.
-- Pictures: screenshots for Claude are at most 2000 px a side (1280 for models before Opus 4.7 and
-  the Claude 5 models), whatever the screenshot setting: Claude makes larger ones smaller itself and
-  points on what it saw, so clicks would miss, and a request with more than 20 pictures refuses any
+- Pictures: screenshots for Claude are at most 2000 px a side (1280 for models before Claude 4.7,
+  which see at most 1568 px), whatever the screenshot setting: Claude makes larger ones smaller itself and
+  points on what it saw (in the pixels of the picture it saw, Anthropic's vision guide says), so
+  clicks would miss, and a request with more than 20 pictures refuses any
   over 2000 px. Other pictures in such a request are made to fit, and any over 8000 px a side or
-  5 MB, or not JPEG, PNG, GIF or WebP, are converted; the same picture always comes out the same,
+  5 MB (the Claude API takes 10 MB, Bedrock and Google Cloud 5), or not JPEG, PNG, GIF or WebP,
+  are converted; the same picture always comes out the same,
   so the cache holds.
 - Errors: "prompt is too long: … > 200000 maximum" resets the context like any server's "too
   long"; 529 (overloaded) is sent again after growing waits; a 429 waits as long as `retry-after`
-  says; 401, 403 and the 400 "credit balance is too low" say what to change. A part of a request
+  says; 401, 403, the 400 "credit balance is too low" and a spend limit reached (a 400 for one set
+  on the account, a 429 without `retry-after` for the tier's monthly cap, which waiting doesn't
+  lift) say what to change. A part of a request
   the API turns down (a beta it doesn't know, streamed tool calls, thinking summaries, a reply limit
   over the model's) is left out, the request sent again, and the part stays out.
 - An Anthropic key (`sk-ant-…`) given to another server, or pasted as the address, gets a line

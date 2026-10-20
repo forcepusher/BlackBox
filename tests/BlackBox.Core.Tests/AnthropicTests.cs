@@ -137,7 +137,7 @@ public class AnthropicTests
         Assert.Equal("summarized", (string)body["thinking"]!["display"]!);
         Assert.Equal("drop_block", (string)body["thinking"]!["block_binding"]!["prefix_mismatch_behavior"]!);
         Assert.Equal("default", (string)body["fallbacks"]!);
-        Assert.Equal(32_000, (int)body["max_tokens"]!);
+        Assert.Equal(64_000, (int)body["max_tokens"]!);
         Assert.True((bool)body["stream"]!);
         Assert.Null(body["output_config"]);
     }
@@ -149,7 +149,7 @@ public class AnthropicTests
         await client.CompleteAsync([ChatMessage.User("Where is Save?")], [], new ChatRequestOptions { Model = "claude-opus-5-5", MaxTokens = 4096, QuickAnswer = true }, null, CancellationToken.None);
         var body = api.Requests.Last().Body!;
         Assert.Equal("low", (string)body["output_config"]!["effort"]!);
-        Assert.Equal(32_000, (int)body["max_tokens"]!);
+        Assert.Equal(64_000, (int)body["max_tokens"]!);
     }
 
     [Fact]
@@ -240,10 +240,9 @@ public class AnthropicTests
         api.Failures.Enqueue((HttpStatusCode.TooManyRequests, FakeAnthropic.Error("rate_limit_error", "Number of request tokens has exceeded your per-minute rate limit").ToJsonString()));
         await Assert.ThrowsAsync<RateLimitedException>(Send);
 
-        // An account allowed fewer output tokens a minute than the reply limit asked for.
-        api.Failures.Enqueue((HttpStatusCode.TooManyRequests, FakeAnthropic.Error("rate_limit_error", "This request would exceed the rate limit for your organization (org) of 8,000 output tokens per minute.").ToJsonString()));
-        await Send();
-        Assert.Equal(6000, (int)api.Requests.Last().Body!["max_tokens"]!);
+        // A spend limit isn't waited out: asking again fails until it is raised.
+        api.Failures.Enqueue((HttpStatusCode.TooManyRequests, """{"type":"error","error":{"type":"rate_limit_error","message":"You have reached your API usage limits: your organization has crossed its monthly API usage threshold.","details":{"error_code":"enforced_spend_limit_reached"}}}"""));
+        Assert.Contains("spend limit", (await Assert.ThrowsAsync<KeyRefusedException>(Send)).Message);
 
         api.Failures.Enqueue((HttpStatusCode.BadRequest, FakeAnthropic.Error("invalid_request_error", "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.").ToJsonString()));
         Assert.Contains("credits", (await Assert.ThrowsAsync<KeyRefusedException>(Send)).Message);
@@ -332,6 +331,15 @@ public class AnthropicTests
         var thoughts = last.SelectMany(m => m!["content"]!.AsArray()).Where(b => (string)b!["type"]! == "thinking").Select(b => (string)b!["thinking"]!).ToList();
         Assert.Equal(["First I need to see the screen.", "Notepad is closed; I'll wait a moment.", "Two things at once."], thoughts);
         Assert.Equal("Done.", session.History.Last().Content);
+
+        // The chat saved and opened again (History): its screenshots and thinking aren't kept, and
+        // carrying on with it is a valid conversation.
+        var reopened = Chats.ChatStore.ForSaving(session.History);
+        Assert.All(reopened, m => Assert.Null(m.AnthropicContent));
+        var again = new AgentSession(client, Opus, ToolRegistry.CreateDefault(true), ctx, "You are BlackBox, test prompt.", reopened, 200_000);
+        await again.RunAsync("Now close it.", observer, CancellationToken.None);
+        Assert.Empty(api.Violations);
+        Assert.Equal("Done.", again.History.Last().Content);
     }
 
     /// <summary>

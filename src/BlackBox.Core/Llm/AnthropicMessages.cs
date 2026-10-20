@@ -33,16 +33,16 @@ internal sealed partial record ClaudeModel(string Id, int MaxTokens, bool Adapti
 
     /// <summary>
     /// The longest side screenshots are sent at, so that Claude points on the picture BlackBox sent:
-    /// 2000 px for the models that see up to 2576 px (Opus 4.7 and later, the Claude 5 models), the
-    /// most a picture may have in a request with more than 20; 1280 for the ones before, which make
-    /// a picture over about 1.15 megapixels smaller.
+    /// 2000 px for the models that see up to 2576 px (Claude 4.7 and later), the most a picture may
+    /// have in a request with more than 20; 1280 for the ones before, which make a picture over
+    /// 1568 px or 1568 patches of 28x28 px smaller.
     /// </summary>
     public int ScreenshotSide
     {
         get
         {
             var (family, version) = Parse(Id);
-            return version >= 5 || family is "opus" or "fable" or "mythos" && version >= 4.7 || family is null ? AnthropicMessages.ManyImagesSide : 1280;
+            return version >= 4.7 || family is null ? AnthropicMessages.ManyImagesSide : 1280;
         }
     }
 
@@ -120,13 +120,10 @@ public static partial class AnthropicMessages
     /// <param name="Summaries">Thinking summarized for the reasoning BlackBox shows (<c>display: "summarized"</c>; left out by default since Opus 4.7).</param>
     /// <param name="StripThinking">Earlier thinking left out: the API refused it as written for another history.</param>
     /// <param name="MaxImageSide">Pictures made to fit this many pixels a side (20+ pictures at once take 2000 at most).</param>
-    /// <param name="MaxReply">
-    /// The reply limit asked for, thinking included: a step is a short thought and a call, a handoff
-    /// note 600 words. Anthropic counts it against the output tokens a minute an account may use
-    /// before the reply is written, so an account allowed fewer (8,000 at its lowest tier) has it
-    /// lowered when a 429 says so.
-    /// </param>
-    internal sealed record Wire(bool Betas = true, bool Eager = true, bool Summaries = true, bool StripThinking = false, int MaxImageSide = 8000, int MaxReply = 32_000);
+    internal sealed record Wire(bool Betas = true, bool Eager = true, bool Summaries = true, bool StripThinking = false, int MaxImageSide = 8000);
+
+    /// <summary>The reply limit asked for, thinking included.</summary>
+    internal const int MaxReply = 64_000;
 
     /// <summary>More pictures than this in one request, and none may be over <see cref="ManyImagesSide"/> pixels a side.</summary>
     internal const int ManyImages = 20;
@@ -138,8 +135,9 @@ public static partial class AnthropicMessages
     {
         var req = new JsonObject { ["model"] = options.Model };
         // Thinking counts toward max_tokens and can't be capped on these models: a reply limit
-        // meant for the answer alone (a fresh look's 4096) would cut it off mid-thought.
-        var room = Math.Min(model.MaxTokens, wire.MaxReply);
+        // meant for the answer alone (a fresh look's 4096) would cut it off mid-thought. A high one
+        // costs nothing: only what is written counts, also toward the output tokens a minute.
+        var room = Math.Min(model.MaxTokens, MaxReply);
         req["max_tokens"] = model.Adaptive ? room : Math.Min(options.MaxTokens ?? room, room);
 
         var system = string.Join("\n\n", messages.Where(m => m.Role == ChatRole.System).Take(1).Select(TextOf));
