@@ -51,6 +51,9 @@ model the server has, or you pick one from the list.
   if BlackBox runs on another PC.
 - To use the screen, the model has to see images (Qwen3.5 VL or later, Gemma 4 with its vision
   projector). Most testing was done with Qwen3.8 27B.
+- For Claude, type `api.anthropic.com` and your Anthropic API key. BlackBox speaks Anthropic's own
+  API, so Claude keeps its thinking and most of each step comes from its cheaper cache. It uses
+  Claude Opus 5.5 unless you pick another.
 - Give the model at least 32k of context.
 - In LM Studio, turn off the model's "Image Input: Never exceed 2048 px" option. Otherwise
   screenshots get shrunk and clicks miss more often.

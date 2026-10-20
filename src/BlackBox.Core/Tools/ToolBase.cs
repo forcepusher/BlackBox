@@ -33,6 +33,13 @@ public sealed class ToolContext
     /// <summary>The relative grid the model gives x/y on (see <see cref="ScreenSpace"/>), or null for screenshot pixels. Set from the model, see <see cref="ModelCoordinates"/>.</summary>
     public int? CoordinateGrid { get; init; }
 
+    /// <summary>
+    /// The longest side a screenshot may have for this model, whatever the setting: Claude makes
+    /// larger ones smaller itself (and refuses them over 2000 px in a request with more than 20
+    /// pictures), and then points on the smaller picture, so a click would miss. Null for no limit.
+    /// </summary>
+    public int? MaxScreenshotSide { get; init; }
+
     /// <summary>Whether the model takes images, so read_file can show it a picture. Turned off mid-run when its server refuses one.</summary>
     public bool SeesImages { get; set; } = true;
 
@@ -149,12 +156,20 @@ public sealed class ToolContext
     public ScreenSpace GetScreenSpace(int screen)
     {
         var screens = Screens;
-        return new(screens[Math.Clamp(screen, 0, screens.Count - 1)], Settings.ScreenshotResolution.Box(), CoordinateGrid);
+        return new(screens[Math.Clamp(screen, 0, screens.Count - 1)], ScreenshotBox(), CoordinateGrid);
     }
 
     /// <summary>One <see cref="ScreenSpace"/> per monitor, in <see cref="Screens"/> order.</summary>
     public IReadOnlyList<ScreenSpace> ScreenSpaces() =>
-        Screens.Select(s => new ScreenSpace(s, Settings.ScreenshotResolution.Box(), CoordinateGrid)).ToList();
+        Screens.Select(s => new ScreenSpace(s, ScreenshotBox(), CoordinateGrid)).ToList();
+
+    /// <summary>The box screenshots are made to fit: the setting's, within <see cref="MaxScreenshotSide"/>.</summary>
+    private (int Width, int Height)? ScreenshotBox()
+    {
+        var box = Settings.ScreenshotResolution.Box();
+        return MaxScreenshotSide is not { } most ? box
+            : box is { } b ? (Math.Min(b.Width, most), Math.Min(b.Height, most)) : (most, most);
+    }
 
     /// <summary>The monitor a physical point lies on; the current one if none contains it.</summary>
     public int ScreenAt(int x, int y)

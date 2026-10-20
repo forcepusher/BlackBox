@@ -54,6 +54,15 @@ public sealed class ChatMessage
     /// <summary>For replies: why the server stopped ("stop", "tool_calls", "length" when out of room).</summary>
     public string? FinishReason { get; set; }
 
+    /// <summary>
+    /// For replies from Anthropic's Messages API: the reply's content blocks as they came, its
+    /// thinking (with the signature Claude checks) among them, sent back as they are (see
+    /// <see cref="AnthropicMessages"/>). Not saved with the chat: a saved chat leaves its screenshots
+    /// out, and thinking sent back after an earlier message changed is refused.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public JsonArray? AnthropicContent { get; set; }
+
     public bool HasToolCalls => ToolCalls is { Count: > 0 };
 
     public static ChatMessage System(string text) => new() { Role = ChatRole.System, Content = text };
@@ -81,6 +90,12 @@ public sealed class ChatRequestOptions
 
     /// <summary>Send earlier reasoning back as reasoning_content so thinking models keep their train of thought.</summary>
     public bool SendReasoning { get; set; }
+
+    /// <summary>
+    /// The answer is wanted soon, with little thinking first (a click's fresh look). Claude, which
+    /// always thinks, is asked for low effort; for Qwen the caller begins the reply itself.
+    /// </summary>
+    public bool QuickAnswer { get; set; }
 }
 
 public enum StreamChannel { Content, Reasoning }

@@ -69,7 +69,7 @@ internal sealed partial class FreshLook(OpenAiChatClient client, ChatRequestOpti
         ChatMessage reply;
         try
         {
-            reply = await client.CompleteAsync(request, [], new ChatRequestOptions { Model = options.Model, Extra = options.Extra, MaxTokens = MaxTokens }, null, timeout.Token)
+            reply = await client.CompleteAsync(request, [], new ChatRequestOptions { Model = options.Model, Extra = options.Extra, MaxTokens = MaxTokens, QuickAnswer = !Thinking }, null, timeout.Token)
                 .ConfigureAwait(false);
         }
         // A server that takes no reply begun for the model says so with an error, not a reply:
@@ -118,7 +118,7 @@ internal sealed partial class FreshLook(OpenAiChatClient client, ChatRequestOpti
         timeout.CancelAfter(limit);
         try
         {
-            var reply = await client.CompleteAsync(request, [], new ChatRequestOptions { Model = options.Model, Extra = options.Extra, MaxTokens = maxTokens }, null, timeout.Token)
+            var reply = await client.CompleteAsync(request, [], new ChatRequestOptions { Model = options.Model, Extra = options.Extra, MaxTokens = maxTokens, QuickAnswer = !think }, null, timeout.Token)
                 .ConfigureAwait(false);
             var text = reply.Content ?? "";
             if (text.LastIndexOf("</think>", StringComparison.Ordinal) is var end and >= 0)

@@ -716,7 +716,7 @@ failed (401): {"error":{"message":"User not found.","code":401}}`. Nothing answe
 Studio's port 1234 adds that its server has to be switched on in its Developer tab (and Serve on
 Local Network turned on for another PC), and on Ollama's 11434 that the Ollama app has to run.
 A service's website typed for its API (`openrouter.ai`, `groq.com`, `openai.com`, `mistral.ai`,
-`deepseek.com`, `x.ai`, `together.ai`, `fireworks.ai`, `anthropic.com`, any page of them) has its API
+`deepseek.com`, `x.ai`, `together.ai`, `fireworks.ai`, `anthropic.com`, `claude.com`, any page of them) has its API
 address tried first, so it just works; another website says it is one, rather than filling the
 banner with its 404 page's HTML. An API key pasted into the address box is named as one.
 For screen control the
@@ -753,6 +753,65 @@ the server's own model configuration (in LM Studio, per model).
 
 Thinking models get their earlier reasoning sent back each step (`reasoning_content`,
 `preserve_thinking`), as the Qwen3.5+ and Gemma 4 templates expect.
+
+### Claude through Anthropic's API
+With `api.anthropic.com` as the address (or `anthropic.com`, `claude.com`, `platform.claude.com`,
+`console.anthropic.com`, `claude.ai`) and an Anthropic API key, BlackBox speaks Anthropic's own
+Messages API (`POST /v1/messages`, the key as `x-api-key`) rather than its OpenAI-compatible layer,
+which caches nothing and gives no thinking back. `src/BlackBox.Core/Llm/AnthropicMessages.cs` turns
+each request and reply into the other format, so the agent, fresh looks and model questions use
+Claude unchanged. A gateway in front of Anthropic whose address has an `anthropic` part
+(Cloudflare's AI Gateway, `…/{account}/{gateway}/anthropic`) is spoken to the same way.
+
+- Models: the list comes from `/v1/models`, every page, with each model's context
+  (`max_input_tokens`, 1M for the current ones), reply limit and image support. With none picked
+  BlackBox uses Claude Opus 5.5, Anthropic's recommended default (without it the newest Opus, then
+  Sonnet, then Haiku); Fable and Mythos only when picked, at more than twice the price. On Auto it
+  uses 100k of the 1M, as on other hosted services; the slider goes to 1M.
+- Prompt caching: breakpoints on the system prompt (which caches the tools with it), at the end of
+  the request and where the previous request ended, so each step reads everything before it from
+  the cache (on Opus 5.5 at $0.20 a million tokens against $4) and pays in full only for what it
+  adds. The prompt size BlackBox resets by adds up the three parts Anthropic reports (read anew,
+  written to the cache, read from it).
+- Thinking: adaptive, its summaries shown as the reasoning (`display: "summarized"`; since Opus 4.7
+  none are shown otherwise). Each reply's blocks are kept on the message and sent back unchanged
+  with their signatures, as Claude requires; they aren't saved with the chat. Claude also checks
+  that nothing before a thinking block changed since it was written (for accounts made since 31
+  August 2026); where BlackBox changes the history (an MCP server added mid-run changes the prompt
+  and the tools), the request asks for such blocks to be dropped (`drop_block`, beta
+  `thinking-binding-controls-2026-08-01`), and where that beta is unknown, earlier thinking is left
+  out and the request sent again. A context reset keeps only the user's messages, the handoff note
+  and a screenshot, which the check allows. Effort is the model's default (medium on Opus 5.5),
+  except for fresh looks and quick questions, which ask for low: every Claude since 4.6 thinks, and
+  only effort says how much. Thinking counts toward the reply limit, so requests ask for 64k (the
+  model's limit if lower) whatever smaller limit a caller set.
+- Refusals: on the models that take it (Opus and Fable 5 on, Sonnet 5.5), a request Anthropic's
+  safety checks decline goes to the model Anthropic recommends for what was declined
+  (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`); what the declined model wrote
+  before such a switch goes back as text only. A refusal that stands ends the task with a line
+  saying so and why.
+- Messages: tool results become `tool_result` blocks at the start of a user turn, the screenshot
+  after them; turns of one role are joined, as Claude wants them to alternate; a call without a
+  result gets "Not run.", and a result without its call is said as text. Tool call ids from other
+  servers get Claude's characters. A reply from another model goes as its text and calls: its
+  reasoning can't be sent as Claude's thinking.
+- Pictures: screenshots for Claude are at most 2000 px a side (1280 for models before Opus 4.7 and
+  the Claude 5 models), whatever the screenshot setting: Claude makes larger ones smaller itself and
+  points on what it saw, so clicks would miss, and a request with more than 20 pictures refuses any
+  over 2000 px. Other pictures in such a request are made to fit, and any over 8000 px a side or
+  5 MB, or not JPEG, PNG, GIF or WebP, are converted; the same picture always comes out the same,
+  so the cache holds.
+- Errors: "prompt is too long: … > 200000 maximum" resets the context like any server's "too
+  long"; 529 (overloaded) is sent again after growing waits; a 429 waits as long as `retry-after`
+  says; 401, 403 and the 400 "credit balance is too low" say what to change. A part of a request
+  the API turns down (a beta it doesn't know, streamed tool calls, thinking summaries, a reply limit
+  over the model's) is left out, the request sent again, and the part stays out.
+- An Anthropic key (`sk-ant-…`) given to another server, or pasted as the address, gets a line
+  saying Claude's address.
+
+Not yet run against Anthropic itself: the test PC had no key on 21 October 2026.
+`tests/BlackBox.Core.Tests/AnthropicFake.cs` stands in for it, with the rules the API answers 400
+to, its prompt cache (a prefix match, looked for up to 20 blocks back) and its thinking check.
 
 ### Without a model server: Kilo's free models
 A new BlackBox's address is Kilo's AI gateway (`https://ai-gateway.kilo.ai/api/v1`), whose free
@@ -812,7 +871,9 @@ The **Context** slider in the top bar shows that size while **Auto** is ticked (
 the model, which your first message does; a `?` means the server doesn't say and it is the 100k guess). Untick Auto
 to set the size yourself: the slider stops at 4k to 1M in coarser steps as it grows (4k, 8k, 12k,
 16k, 24k, 32k, 40k, 48k, 64k, 80k, 96k, 128k, 160k, 192k, 256k, 320k, 384k, 512k, 640k, 768k,
-1M) and ends at the server's own size when the server reports one. The box next to it takes any
+1M) and goes up to 1M whatever the server reports (further for a server that reports more), the
+server's own size a stop of its own in place of the standard ones near it (100k for 96k). It used
+to end at the server's size, so with LM Studio's 100k nothing larger could be picked. The box next to it takes any
 size typed in (`48k`, `100000`, `1M`; Enter or leaving the box applies it), past the slider's end
 too; the server refuses requests longer than its own size, and a run that hits that drops to the
 size the server names. The choice is saved; it only changes BlackBox's budgeting and when it

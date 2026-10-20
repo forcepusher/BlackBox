@@ -146,15 +146,19 @@ public static class ContextSizes
             .Select(k => k * 1024).ToArray();
 
     /// <summary>
-    /// The stops the slider offers. When the server reports its size, the slider ends exactly
-    /// there, so its far right is "everything the server has" and nothing beyond it can be picked.
+    /// The stops the slider offers: up to 1M whatever the server says (or further, to a server's
+    /// larger size), with the size the server reports as a stop of its own in place of the
+    /// standard ones close to it (100k for 96k, 1,000,000 for 1M), so all of it can be picked.
+    /// It used to end at the server's size: connected to LM Studio's 100k, nothing larger could be
+    /// picked for a model that takes 1M.
     /// </summary>
     public static IReadOnlyList<int> Stops(int? serverMax)
     {
         if (serverMax is not > 0)
             return Standard;
-        var stops = Standard.Where(s => s < serverMax).ToList();
+        var stops = Standard.Where(s => Math.Abs(s - serverMax.Value) > serverMax.Value / 20).ToList();
         stops.Add(serverMax.Value);
+        stops.Sort();
         return stops;
     }
 

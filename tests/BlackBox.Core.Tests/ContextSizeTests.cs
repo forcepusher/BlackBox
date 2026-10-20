@@ -135,22 +135,27 @@ public class ContextSizeTests
     }
 
     [Fact]
-    public void The_slider_ends_at_the_servers_size_when_it_reports_one()
+    public void The_slider_goes_up_to_a_million_with_the_servers_size_on_it()
     {
         var all = ContextSizes.Stops(null);
         Assert.Equal(4096, all[0]);
         Assert.Equal(1024 * 1024, all[^1]);
         Assert.True(all.Zip(all.Skip(1)).All(p => p.First < p.Second));
 
-        var upTo100k = ContextSizes.Stops(100_000);
-        Assert.Equal(100_000, upTo100k[^1]);
-        Assert.Equal(96 * 1024, upTo100k[^2]);
+        // LM Studio's 100k takes 96k's place, and the slider goes on to 1M.
+        var lmStudio = ContextSizes.Stops(100_000);
+        Assert.Equal(1024 * 1024, lmStudio[^1]);
+        Assert.Contains(100_000, lmStudio);
+        Assert.DoesNotContain(96 * 1024, lmStudio);
+        Assert.True(lmStudio.Zip(lmStudio.Skip(1)).All(p => p.First < p.Second));
 
         var exact = ContextSizes.Stops(65536);
-        Assert.Equal(65536, exact[^1]);
-        Assert.Equal(48 * 1024, exact[^2]); // no duplicate 64k stop
+        Assert.Single(exact, s => s == 65536); // no duplicate 64k stop
 
-        Assert.Equal([2048], ContextSizes.Stops(2048)); // a tiny server still gets a working slider
+        // Claude's 1,000,000 is the end, not a second "1M" beside 1,048,576.
+        Assert.Equal(1_000_000, ContextSizes.Stops(1_000_000)[^1]);
+        Assert.Equal(2_000_000, ContextSizes.Stops(2_000_000)[^1]);
+        Assert.Equal(2048, ContextSizes.Stops(2048)[0]); // a tiny server's size is on it too
     }
 
     [Theory]

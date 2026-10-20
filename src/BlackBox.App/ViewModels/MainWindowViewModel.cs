@@ -249,7 +249,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private IReadOnlyList<int> ContextStops =>
         ContextSizes.Stops(_settings.Server.ContextReported ? _settings.Server.DetectedContextSize : null);
 
-    /// <summary>Last slider position: the server's own size when it reports one, else 1M.</summary>
+    /// <summary>Last slider position: 1M, or a server's own size when it reports more.</summary>
     public double ContextMaxIndex => ContextStops.Count - 1;
 
     /// <summary>Slider position, an index into <see cref="ContextStops"/>. A typed size past the last stop sits at the end.</summary>
@@ -381,6 +381,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     public string? ModelToolTip => !string.IsNullOrEmpty(_settings.Server.Model) || _settings.Server.AutoModel is not { } auto ? null
         : auto == KiloGateway.Model && KiloGateway.Is(_settings.Server.BaseUrl)
             ? "Picked by BlackBox: of Kilo's free models, the one that clicked best in BlackBox's tests. Pick one yourself to keep using it."
+            : OpenAiChatClient.IsAnthropic(_settings.Server.BaseUrl)
+                ? auto == AnthropicMessages.DefaultModel
+                    ? "Picked by BlackBox: Claude Opus 5.5, Anthropic's recommended model. Pick one yourself to keep using it."
+                    : "Picked by BlackBox: the newest Opus, Sonnet or Haiku the key may use. Pick one yourself to keep using it."
             : $"Picked by BlackBox as the strongest model the server offers{AutoModelDetails}: the best score on an agent benchmark, " +
               "else the most parameters, then the most bits per weight. Pick one yourself to keep using it.";
 

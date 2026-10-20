@@ -28,6 +28,8 @@ public class ContextOverflowException : LlmException
             @"""n_ctx""\s*:\s*(\d+)",                            // llama.cpp server error details
             @"context (?:length|size|window) (?:is|of) (\d+)",   // other wordings
             @"\((\d+) tokens\) exceeds",                        // "... (4096 tokens) exceeds"
+            @"tokens > (\d+) maximum",                          // Anthropic: "prompt is too long: 215430 tokens > 200000 maximum"
+            @"exceed context limit: \d+ \+ \d+ > (\d+)",          // Anthropic, older: "input length and max_tokens exceed context limit: 188240 + 21333 > 200000"
         })
         {
             var m = Regex.Match(message, pattern, RegexOptions.IgnoreCase);
@@ -143,6 +145,7 @@ public sealed partial class OpenAiChatClient
         _http = http;
         _baseUrl = NormalizeBaseUrl(baseUrl);
         _apiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
+        _anthropic = IsAnthropic(_baseUrl);
     }
 
     public string BaseUrl => _baseUrl;
@@ -191,6 +194,8 @@ public sealed partial class OpenAiChatClient
     /// </summary>
     public async Task<IReadOnlyList<JsonObject>> ListModelEntriesAsync(CancellationToken ct)
     {
+        if (_anthropic)
+            return await ListClaudeModelsAsync(ct).ConfigureAwait(false);
         using var req = new HttpRequestMessage(HttpMethod.Get, _baseUrl + "/models");
         Authorize(req);
         using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
@@ -222,6 +227,8 @@ public sealed partial class OpenAiChatClient
         CancellationToken ct,
         Action<long, long>? onSending = null)
     {
+        if (_anthropic)
+            return await CompleteClaudeAsync(messages, tools, options, onDelta, ct, onSending).ConfigureAwait(false);
         var sendReasoning = options.SendReasoning && !_reasoningRejected;
         var sendExtras = !_extrasRejected;
         var payload = Encoding.UTF8.GetBytes(BuildRequest(messages, tools, options, sendReasoning, sendExtras, PromptShifts.GetValueOrDefault(_baseUrl)).ToJsonString());
@@ -656,7 +663,8 @@ public sealed partial class OpenAiChatClient
             .Any(w => err.Contains(w, StringComparison.OrdinalIgnoreCase));
 
     internal static bool LooksLikeContextOverflow(string err) =>
-        new[] { "context length", "context_length", "context window", "n_ctx", "maximum context", "too many tokens", "exceeds the context", "context size", "context overflow" }
+        new[] { "context length", "context_length", "context window", "n_ctx", "maximum context", "too many tokens", "exceeds the context", "context size", "context overflow",
+                "prompt is too long", "exceed context limit" }
             .Any(w => err.Contains(w, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
@@ -689,7 +697,11 @@ public sealed partial class OpenAiChatClient
 
     private void Authorize(HttpRequestMessage req)
     {
-        if (_apiKey is not null)
+        if (_apiKey is null)
+            return;
+        if (_anthropic)
+            req.Headers.Add("x-api-key", _apiKey);
+        else
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
     }
 
