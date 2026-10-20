@@ -86,6 +86,31 @@ public class AnthropicTests
     }
 
     [Fact]
+    public async Task A_call_whose_input_comes_whole_keeps_it()
+    {
+        var sse = """
+            event: message_start
+            data: {"type":"message_start","message":{"usage":{"input_tokens":10,"output_tokens":1}}}
+
+            event: content_block_start
+            data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_9","name":"wait","input":{"seconds":2}}}
+
+            event: content_block_stop
+            data: {"type":"content_block_stop","index":0}
+
+            event: message_delta
+            data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":5}}
+
+            event: message_stop
+            data: {"type":"message_stop"}
+
+            """;
+        var reply = await AnthropicMessages.ReadStreamAsync(new StringReader(sse), null, CancellationToken.None);
+        Assert.Equal(2, JsonNode.Parse(Assert.Single(reply.ToolCalls!).Arguments)!["seconds"]!.GetValue<int>());
+        Assert.Equal(2, reply.AnthropicContent![0]!["input"]!["seconds"]!.GetValue<int>());
+    }
+
+    [Fact]
     public async Task Stream_cut_off_is_a_drop_and_an_overload_is_sent_again()
     {
         var sse = Message("end_turn", new Said("Half"));

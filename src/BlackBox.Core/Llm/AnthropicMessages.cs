@@ -452,7 +452,9 @@ public static partial class AnthropicMessages
                 case "content_block_stop" when index >= 0 && blocks.TryGetValue(index, out var done):
                     if (texts.TryGetValue(index, out var args))
                     {
-                        done["input"] = Input(args.ToString());
+                        // A call whose input came whole in its start has no pieces to put together.
+                        if (args.Length > 0)
+                            done["input"] = Input(args.ToString());
                         callInProgress = null;
                     }
                     break;
