@@ -34,6 +34,10 @@ public sealed partial class ComfyTool : Tool
         "To change a picture or restyle it (put a hat on, make a photo anime or a painting), or to draw the character it shows in a new scene or pose, " +
         "an installed edit model's template (templates search \"edit\": Qwen-Image-Edit, Flux Kontext) does what is asked and keeps the subject, with no download; " +
         "image to image keeps the photo's look at low denoise and loses the subject at high. " +
+        "A video starts from a picture: make it with an image model first and look at it, then animate it with an image-to-video template (first and last frames " +
+        "when where it ends matters); text-to-video draws its own picture badly, so only when the user asks for it. LTX makes the video's sound (speech, " +
+        "footsteps, wind) but not music: say \"no music\" and make music with a music model (ACE-Step). Before writing a video prompt, read action=guide " +
+        "search=\"video\": motion, direction, poses and props are what ruin most takes. " +
         "A checkpoint's or LoRA's card (with action=models search=its file name, a template's view, or after its first run) says how its maker uses it: " +
         "the prompt style, size, sampler, CFG and negative prompt to start from. " +
         "Change the seed for a different result. A model a workflow lacks: action=download with its url (a template lists the links of its models); " +
@@ -46,8 +50,8 @@ public sealed partial class ComfyTool : Tool
     public override ToolRisk Risk => ToolRisk.Risky;
 
     public override JsonObject Parameters => Schema(
-        ("action", Str("What to do", "templates", "nodes", "models", "run", "status", "cancel", "install", "find_models", "download", "free", "restart", "stop"), true),
-        ("search", Str("Words to look for: in templates (\"video from image\"), node types (\"wan video\"), installed model files (\"lora\"), or models online (find_models: \"furry\", \"watercolor\", \"DreamShaper\"; none for this month's most downloaded)"), false),
+        ("action", Str("What to do", "templates", "nodes", "models", "run", "status", "cancel", "install", "find_models", "download", "free", "restart", "stop", "guide"), true),
+        ("search", Str("Words to look for: in templates (\"video from image\"), node types (\"wan video\"), installed model files (\"lora\"), models online (find_models: \"furry\", \"watercolor\", \"DreamShaper\"; none for this month's most downloaded), or guides (guide: \"video\")"), false),
         ("name", Str("A template's name as action=templates lists it: to see it (templates) or run it (run)"), false),
         ("names", StrArray("Node types to show in full: inputs, their types and choices, outputs (nodes)"), false),
         ("workflow", new JsonObject { ["description"] = "A workflow in API format to run (a JSON object or its text)" }, false),
@@ -76,6 +80,7 @@ public sealed partial class ComfyTool : Tool
             "install" => "Install ComfyUI" + (GetString(args, "folder") is { } f ? $" in {f}" : ""),
             "find_models" => $"Models online: {GetString(args, "search")}" + (GetString(args, "kind") is { } k ? $" ({k})" : ""),
             "download" => $"Download {GetString(args, "url")}" + (GetString(args, "model_folder") is { } m ? $" into {m}" : ""),
+            "guide" => $"ComfyUI guide: {GetString(args, "search") ?? "all"}",
             _ => "ComfyUI " + action,
         };
     }
@@ -87,6 +92,9 @@ public sealed partial class ComfyTool : Tool
     {
         if (ctx.Comfy is not { } hub)
             return ToolResult.Error("ComfyUI isn't available in this run.");
+        var action = RequireString(args, "action").Trim().ToLowerInvariant();
+        if (action is "guide" or "guides")
+            return Guide(GetString(args, "search"));
         // From before it may be started: when the task is over, a ComfyUI BlackBox started is closed.
         if (!_usesServer)
         {
@@ -95,11 +103,10 @@ public sealed partial class ComfyTool : Tool
             ctx.AfterRun(nameof(ComfyTool), () =>
             {
                 var ranJobs = _ranJobs;
-                (_usesServer, _ranJobs) = (false, false);
+                (_usesServer, _ranJobs, _guideShown) = (false, false, false);
                 return hub.ReleaseAsync(ranJobs);
             });
         }
-        var action = RequireString(args, "action").Trim().ToLowerInvariant();
         var notes = new List<string>();
         try
         {
@@ -135,7 +142,7 @@ public sealed partial class ComfyTool : Tool
                 "models" => await ModelsAsync(args, hub, api, ct).ConfigureAwait(false),
                 "templates" => await TemplatesAsync(args, hub, api, ctx, ct).ConfigureAwait(false),
                 "run" => await RunAsync(args, hub, api, ctx, ct).ConfigureAwait(false),
-                _ => throw new ToolArgumentException("action must be templates, nodes, models, run, status, cancel, install, find_models, download, free, restart or stop."),
+                _ => throw new ToolArgumentException("action must be templates, nodes, models, run, status, cancel, install, find_models, download, free, restart, stop or guide."),
             };
             return notes.Count == 0 ? result : result with { Text = string.Join("\n", notes) + "\n" + result.Text };
         }
@@ -151,6 +158,29 @@ public sealed partial class ComfyTool : Tool
         {
             return ToolResult.Error(ex.Message);
         }
+    }
+
+    // ---- guides ---------------------------------------------------------------------------------
+
+    /// <summary>Whether the video guide was shown in this task: with an LTX workflow, once.</summary>
+    private bool _guideShown;
+
+    private ToolResult Guide(string? search)
+    {
+        var found = ComfyGuides.Find(search);
+        if (found.Count == 0)
+            return new ToolResult($"No guide matches \"{search}\". The guides: {string.Join(", ", ComfyGuides.Names)}.");
+        _guideShown |= found.Contains(ComfyGuides.Video);
+        return new ToolResult(string.Join("\n\n", found.Select(ComfyGuides.Text)));
+    }
+
+    /// <summary>The video guide, the first time an LTX workflow is looked at or run in a task: what a model writes for LTX is what ruins most takes.</summary>
+    private string? VideoGuideFor(ComfyWorkflow workflow)
+    {
+        if (_guideShown || !ComfyGuides.IsLtx(workflow))
+            return null;
+        _guideShown = true;
+        return "Before you write its prompt, BlackBox's guide to video prompts:\n" + ComfyGuides.Text(ComfyGuides.Video);
     }
 
     // ---- install, find_models, download ------------------------------------------------------
@@ -599,6 +629,10 @@ public sealed partial class ComfyTool : Tool
                 sb.AppendLine("Inputs a run usually changes: " + string.Join(", ", usual.Take(30)) + ".");
             sb.Append($"Run it with action=run name=\"{template.Name}\" and set {{\"node id.input\": value}}, or edit {Path.GetFileName(file)} and run it with workflow_file. " +
                       "Nodes can be added the same way, with ids of your own.");
+            if (ComfyGuides.IsLtx(workflow) && !ComfyGuides.StartsFromPicture(workflow))
+                sb.Append("\n").Append(TextToVideoNote);
+            if (VideoGuideFor(workflow) is { } guide)
+                sb.Append("\n\n").Append(guide);
             return new ToolResult(sb.ToString());
         }
 
@@ -647,6 +681,9 @@ public sealed partial class ComfyTool : Tool
             lines.AppendLine((outpaintReady ? "" : $"{OutpaintHere}{MaskAdvice} An edit model leaves the padding grey. ") + OutpaintPrompt);
         if (seamless is not null)
             lines.AppendLine(seamless);
+        if (VideoWords().IsMatch(search))
+            lines.AppendLine("For a video, make its picture first with an image model and look at it, then animate it with an image-to-video template " +
+                             "(first and last frames when where it ends matters); text to video only when the user asks for it. action=guide search=\"video\" says how to write its prompt.");
         // Templates are workflows; a style may be a LoRA or a checkpoint. Finding no pixel art
         // template, qwen3.8 drew a 32x32 knight by hand, row by row, with Pixel Art XL installed.
         if (MatchingModels(search, models) is { Count: > 0 } named)
@@ -857,8 +894,19 @@ public sealed partial class ComfyTool : Tool
             after.Add(ViewsNote(await hub.TemplatesAsync(api, ct).ConfigureAwait(false)));
         }
         after.AddRange(await CardsAsync(api, hub, used, ct).ConfigureAwait(false));
+        if (ComfyGuides.IsLtx(workflow) && !ComfyGuides.StartsFromPicture(workflow))
+            after.Add(TextToVideoNote);
+        if (VideoGuideFor(workflow) is { } guide)
+            after.Add(guide);
         return after.Count > 0 ? result with { Text = result.Text + "\n\n" + string.Join("\n\n", after) } : result;
     }
+
+    /// <summary>
+    /// LTX drawing a video's picture from words alone. The user found LTX good at animating and
+    /// poor at drawing: the picture comes from an image model, and LTX animates it.
+    /// </summary>
+    private const string TextToVideoNote = "This LTX workflow draws the video's picture itself from words, which LTX does badly. Unless the user asked for text to video, " +
+                                           "make the picture with an image model, look at it, and animate it with an image-to-video template (first and last frames when where it ends matters).";
 
     private bool _maskNoted, _viewsNoted;
 
@@ -926,6 +974,9 @@ public sealed partial class ComfyTool : Tool
 
     [System.Text.RegularExpressions.GeneratedRegex(@"seamless|tileable|tileset|tiling", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex SeamlessWords();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"video|animat|\bclip|movie|\bfilm|\bltx|\bwan\b|\bi2v|\bt2v", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex VideoWords();
 
     [System.Text.RegularExpressions.GeneratedRegex(@"outpaint|uncrop|panorama|\b(extend|expand|widen|wider)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex OutpaintWords();

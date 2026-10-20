@@ -34,9 +34,11 @@ public static class FilmMontage
             notes.Add($"The soundtrack {soundtrack} isn't there, so the film has the shots' own sound only.");
             soundtrack = null;
         }
-        // Under a soundtrack the shots' own sound is left out unless asked for: LTX's is a muddy wash
-        // that took the Paper Boat song from 3.1 to 2.7 on SongEval at 30%.
-        var shotVolume = board.ShotVolume ?? (soundtrack is null ? 1.0 : 0);
+        // Under a soundtrack the shots' own sound is kept at half: LTX makes a shot's sounds well and
+        // its music badly (the user's finding), so a shot is asked for its sounds and no music
+        // (FilmMaker.WithoutMusic) and the music is the song. Asked for nothing, LTX's sound was a
+        // muddy wash that took the Paper Boat song from 3.1 to 2.7 on SongEval at 30%.
+        var shotVolume = board.ShotVolume ?? (soundtrack is null ? 1.0 : 0.5);
         var args = new List<string> { "-hide_banner", "-y", "-nostats", "-progress", "pipe:1" };
         foreach (var shot in board.Shots)
             args.AddRange(["-i", board.ShotVideo(shot)]);

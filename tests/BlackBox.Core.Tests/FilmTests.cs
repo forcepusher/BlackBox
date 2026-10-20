@@ -38,6 +38,51 @@ public sealed class StoryboardTests : IDisposable
     }
 
     [Fact]
+    public void A_shot_without_a_first_frame_gets_one_made_from_the_references_near_it()
+    {
+        var board = Storyboard.Parse("""
+            {"frames": [{"id": "r1", "reference": true, "prompt": "the fox"}, {"id": "f1", "prompt": "a fox", "from": ["r1"]}, {"id": "f2", "prompt": "it howls", "from": ["f1"]}],
+             "shots": [{"id": "s1", "first": "f1", "last": "f2", "prompt": "it looks up"}, {"id": "s2", "prompt": "the fox runs from the left of the frame to the right"},
+                       {"id": "s3", "first": "f2", "prompt": "it howls"}]}
+            """);
+        var added = board.AddFirstFrames();
+        var frame = Assert.Single(added);
+        Assert.Equal(frame.Id, board.Shot("s2")!.First);
+        Assert.Equal("the fox runs from the left of the frame to the right", frame.Prompt);
+        Assert.Equal(["r1"], frame.From); // through f1, the frame of the shot before
+        Assert.Empty(board.AddFirstFrames());
+    }
+
+    [Fact]
+    public void A_shot_is_asked_for_no_music_unless_it_speaks_of_music()
+    {
+        Assert.Equal("The fox howls. Wind hisses. No music.", FilmMaker.WithoutMusic("The fox howls. Wind hisses."));
+        Assert.Equal("A busker plays the guitar.", FilmMaker.WithoutMusic("A busker plays the guitar."));
+        Assert.Equal("Quiet, no music.", FilmMaker.WithoutMusic("Quiet, no music."));
+    }
+
+    [Fact]
+    public void The_video_guide_is_built_in_and_its_sections_can_be_left_out()
+    {
+        Assert.Contains(ComfyGuides.Video, ComfyGuides.Names);
+        var guide = ComfyGuides.Text(ComfyGuides.Video);
+        Assert.Contains("## Pictures first", guide);
+        Assert.Contains("## Direction and distance", guide);
+        var brief = ComfyGuides.Without(ComfyGuides.Video, "Pictures first", "Settings");
+        Assert.DoesNotContain("## Pictures first", brief);
+        Assert.DoesNotContain("CFG near 1", brief);
+        Assert.Contains("## Poses and bodies", brief);
+        Assert.Equal([ComfyGuides.Video], ComfyGuides.Find("video motion"));
+        Assert.Empty(ComfyGuides.Find("zebra"));
+        var t2v = ComfyWorkflow.FromApi(JsonNode.Parse("""{"1": {"class_type": "EmptyLTXVLatentVideo", "inputs": {}}, "2": {"class_type": "LTXVConditioning", "inputs": {}}}"""));
+        var i2v = ComfyWorkflow.FromApi(JsonNode.Parse("""{"1": {"class_type": "LoadImage", "inputs": {"image": "a.png"}}, "2": {"class_type": "LTXVImgToVideoInplace", "inputs": {}}}"""));
+        var sdxl = ComfyWorkflow.FromApi(JsonNode.Parse("""{"1": {"class_type": "KSampler", "inputs": {}}}"""));
+        Assert.True(ComfyGuides.IsLtx(t2v) && !ComfyGuides.StartsFromPicture(t2v));
+        Assert.True(ComfyGuides.IsLtx(i2v) && ComfyGuides.StartsFromPicture(i2v));
+        Assert.False(ComfyGuides.IsLtx(sdxl));
+    }
+
+    [Fact]
     public void A_change_is_merged_by_id_and_a_frame_can_be_taken_out()
     {
         var board = Storyboard.New(_dir, "Keeper");
@@ -627,7 +672,7 @@ public sealed class FilmMontageTests : IDisposable
         Assert.Contains("anullsrc=r=48000:cl=stereo,atrim=duration=4", graph);
         Assert.Contains("[3:a]", graph);
         Assert.Contains("amix=inputs=2", graph);
-        Assert.DoesNotContain("[0:a]", graph); // the shots' own sound is left out under a soundtrack unless asked for
+        Assert.Contains("[0:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur=5,atrim=duration=5,asetpts=PTS-STARTPTS,volume=0.5[a0]", graph); // the shots' own sounds at half under a soundtrack
         board.ShotVolume = 0.25;
         var (asked, _, _) = FilmMontage.Plan(board, _ => true, "out.mp4");
         Assert.Contains("volume=0.25", asked[asked.IndexOf("-filter_complex") + 1]);

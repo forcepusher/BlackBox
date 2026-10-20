@@ -217,7 +217,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     /// <summary>How loud the shots' own sound is under the soundtrack, 0 to 100.</summary>
     public double ShotVolume
     {
-        get => (_board.ShotVolume ?? (_board.Sound.Source == FilmSound.None ? 1 : 0)) * 100;
+        get => (_board.ShotVolume ?? (_board.Sound.Source == FilmSound.None ? 1 : 0.5)) * 100;
         set
         {
             _board.ShotVolume = Math.Clamp(value / 100, 0, 2);
@@ -1149,6 +1149,19 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     /// <param name="round">How many fixes came before this make.</param>
     private async Task MakePieceAsync(FilmPiece piece, string key, CancellationToken ct, int round = 0)
     {
+        // A shot starts on a picture a picture model makes: one without gets a first frame, and its frames are made first.
+        if (piece.Kind == FilmPieceKind.Shot && _board.Shot(piece.Id) is { } shot)
+        {
+            if (_board.Frame(shot.First) is null && _board.AddFirstFrames().Count > 0)
+            {
+                _dirty = true;
+                SaveNow(force: true);
+                Rebuild();
+            }
+            foreach (var id in new[] { shot.First, shot.LipSync ? null : shot.Last }.OfType<string>().Distinct())
+                if (_board.Frame(id) is { } frame && !FilmMaker.IsCurrent(_board, frame) && (frame.File is { Length: > 0 } || frame.Prompt.Trim().Length > 0))
+                    await MakePieceAsync(FilmPiece.Of(frame), key, ct, Fixes);
+        }
         string? fix = null;
         var item = ItemOf(piece);
         var label = Lower(item?.Title ?? piece.Id);
@@ -1306,6 +1319,15 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         {
             Status = "Some shots don't say what happens in them yet: pick them and say it.";
             return;
+        }
+        // Every shot starts on a picture a picture model makes.
+        if (_board.AddFirstFrames() is { Count: > 0 } added)
+        {
+            _dirty = true;
+            SaveNow(force: true);
+            Rebuild();
+            Say(FilmTalk.Film, $"{(added.Count == 1 ? "A shot" : "Some shots")} had no first frame, so I gave {(added.Count == 1 ? "it one" : "each one")} " +
+                               $"({string.Join(", ", added.Select(f => f.Id))}) from what happens in {(added.Count == 1 ? "it" : "them")}: a picture model makes what a shot starts on.");
         }
         if (Missing() is null && Joined())
         {

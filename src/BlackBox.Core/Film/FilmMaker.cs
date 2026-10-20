@@ -25,7 +25,7 @@ public sealed class FilmStillRunningException(string message) : Exception(messag
 /// workflow of its own kept beside what it made, its seed fixed, so running it again makes the same
 /// thing. Shared by the Filmmaking window and the film tool.
 /// </summary>
-public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
+public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
 {
     /// <summary>How long a job is waited for at most; it goes on in ComfyUI after that.</summary>
     public TimeSpan MaxWait { get; init; } = TimeSpan.FromHours(3);
@@ -62,6 +62,16 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         Join(Join(shot.Prompt, shot.Camera.Length > 0 ? "Camera: " + shot.Camera.TrimEnd('.') : ""), board.Style is { Length: > 0 } style ? "Style: " + style.TrimEnd('.') : "");
 
     private static string Join(string a, string b) => Storyboard.JoinText(a, b);
+
+    /// <summary>
+    /// A shot's prompt as the video model is given it: "No music." at the end unless it speaks of
+    /// music. LTX makes a shot's sounds well and its music badly (the user's finding), and the film's
+    /// music is its song. Not part of the shot's stamp, so shots made before stay up to date.
+    /// </summary>
+    internal static string WithoutMusic(string prompt) => MusicWords().IsMatch(prompt) ? prompt : Join(prompt, "No music.");
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b(music|musical|song|sings?|singing|melody|band|piano|guitar|drums?|orchestra)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex MusicWords();
 
     /// <summary>The kind of job a frame is: made from words, or from other frames.</summary>
     public static FilmJob JobOf(FilmFrame frame) => frame.From.Count > 0 ? FilmJob.Edit : FilmJob.Frame;
@@ -169,10 +179,17 @@ public sealed class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             lastPicture = null;
         }
         else
-            job = firstPicture is null ? FilmJob.ShotFromText : lastPicture is null ? FilmJob.ShotFromFirst : FilmJob.Shot;
+        {
+            // The video model animates a picture well and draws one badly: a picture model makes it first.
+            if (firstPicture is null)
+                throw new FilmException(first is null
+                    ? $"Shot {shot.Id} has no first frame: a picture model makes the picture a shot starts on, and the video model animates it. Give it a first frame."
+                    : $"Shot {shot.Id} starts on {first.Label}, which isn't made yet: make it first.");
+            job = lastPicture is null ? FilmJob.ShotFromFirst : FilmJob.Shot;
+        }
         var inputs = new FilmInputs
         {
-            Prompt = ShotPrompt(board, shot),
+            Prompt = shot.LipSync ? ShotPrompt(board, shot) : WithoutMusic(ShotPrompt(board, shot)),
             Seed = shot.Seed,
             Width = board.Width,
             Height = board.Height,

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using BlackBox.Core.Comfy;
 using BlackBox.Core.Media;
 
 namespace BlackBox.Core.Film;
@@ -28,7 +29,7 @@ public static class FilmDirector
 
         - A frame is one still picture: who is in it (repeat what makes each person look like themselves: age, hair, face, build, clothes), where, doing what, how it is framed (wide, medium, close-up; the angle), the light, and the film's look. Write the film's look into every prompt, in the same words each time, so the pictures match. No words or letters in a picture unless asked.
         - A reference is a picture other frames are made from, so a person or place looks the same in every shot: a character sheet (the same person from the front and three-quarters on a plain background) or the place on its own. It is in no shot, and has a short "name" the person knows it by ("Marco", "the fox", "the forest"). A frame made from references lists them in "from", and its prompt says the person is the same as in the reference.
-        - A shot is a few seconds of video from its first frame to its last one, if it has one. Its prompt says what happens, in order, in the present tense: one clear action, how people move and what changes, with the look. Write action a camera could film for real, because a video model takes the words literally: people move as people do, and things come from somewhere and fall ("twirls a big forkful, slurps it, sauce flicks onto his chin", not "noodles flying"; "leans over the plate", not "head down in the plate"). "camera" says what the camera does (still, slow push in, pans left, follows her). 3 to 8 seconds. A shot that starts on the frame the one before ends on goes on with the same camera; one with a first frame of its own is a cut. Its first frame is how it begins and its last frame how it ends: what changes during the shot goes in the shot's prompt, and a frame changes only when the way the shot begins or ends changes. A shot with both moves from one to the other, so whatever is in a different place in the two (the moon, a tree, the horizon) moves during the shot: write the two frames to agree on everything that stays put (the same words for where the moon and the trees are), differing only in what the shot changes, and make the last frame from the first (its "from" holds the first frame's id, with the references), so the picture model keeps everything else exactly where it is.
+        - A shot is a few seconds of video from its first frame to its last one, if it has one. Every shot starts on a frame (its own, or the one the shot before ends on): the video model animates a picture well and draws one badly, so a picture model makes it. Its prompt says what happens, in order, in the present tense: one clear action, how people move and what changes, with the look, and last what is heard (footsteps, wind, a door; no music: the video model makes the shot's sound, and the music is the song). Write action a camera could film for real, because a video model takes the words literally: people move as people do, and things come from somewhere and fall ("twirls a big forkful, slurps it, sauce flicks onto his chin", not "noodles flying"; "leans over the plate", not "head down in the plate"). "camera" says what the camera does (still, slow push in, pans left, follows her). 3 to 8 seconds. A shot that starts on the frame the one before ends on goes on with the same camera; one with a first frame of its own is a cut. Its first frame is how it begins and its last frame how it ends: what changes during the shot goes in the shot's prompt, and a frame changes only when the way the shot begins or ends changes. A shot with both moves from one to the other, so whatever is in a different place in the two (the moon, a tree, the horizon) moves during the shot: write the two frames to agree on everything that stays put (the same words for where the moon and the trees are), differing only in what the shot changes, and make the last frame from the first (its "from" holds the first frame's id, with the references), so the picture model keeps everything else exactly where it is.
         - A line is what someone says in a shot, lip-synced from its first frame, in the film's one voice ("voice" in sound: age, voice, manner). It starts 0.4 s into the shot at about 2.5 words a second, so it has to fit. A speaking shot's first frame shows the face toward the camera with the mouth free: no food or hand over it. A lip-synced shot is made from its first frame only.
         - The song: "tags" (genre, instruments, mood, tempo such as "100 BPM") and "lyrics" ([verse] and [chorus] lines; none for an instrumental). It is made a minute long and the film uses its start.
         - "model" is what a piece is made with. Set it only when the person names or describes a model or workflow, to the name of an installed one (listed with the request). Leave it out otherwise: the best installed one is used.
@@ -40,6 +41,14 @@ public static class FilmDirector
          "make": ["f2", "s1"]}
         In "change" give only what changes: a frame or shot by its id with the fields that change; a new one with a new id and all its fields; {"id": "s4", "delete": true} takes one out. Frame fields: name, reference (true for a reference), prompt, from (ids of the frames it is made from), model, seed. Shot fields: first, last (frame ids; null for none), seconds, prompt, camera, line, lipSync, transition (cut, dissolve or fade), model, seed. Sound fields: source (none, song or file), tags, lyrics, voice, model, seed. "seed": "new" makes another take of the same settings. "make" lists the pieces to make now, by id ("song" for the song), in the order they are to be made: frames before the shots that start or end on them, references before the frames made from them.
         """;
+
+    /// <summary>
+    /// The brief with how the video model reads a shot's prompt: the user found most takes ruined by
+    /// motion (the wrong way, bodies bent wrong, props moving by themselves), which is what a prompt
+    /// leaves open.
+    /// </summary>
+    private static readonly string Instructions = Brief + "\n\nHow the video model (LTX) reads a shot's prompt, which is how to write one:\n\n" +
+                                            ComfyGuides.Without(ComfyGuides.Video, "Pictures first", "Sound and music", "Exact motion: tracks and controls", "Settings");
 
     /// <summary>
     /// Turns what the user said about <paramref name="piece"/> (null: the whole film) into changes to
@@ -58,7 +67,7 @@ public static class FilmDirector
         for (var attempt = 0; attempt < 2 && json is null; attempt++)
         {
             // A whole film is laid out with thought (half a minute without, three with); a piece is changed at once.
-            answer = await ask(Brief, attempt == 0 ? question : question + "\n\nYour last answer wasn't a JSON object as asked. Reply with only the JSON object.",
+            answer = await ask(Instructions, attempt == 0 ? question : question + "\n\nYour last answer wasn't a JSON object as asked. Reply with only the JSON object.",
                 picture is null ? [] : [picture], think ?? piece is null, ct).ConfigureAwait(false);
             if (answer is null)
                 throw new FilmException("BlackBox's model couldn't be asked: is the chat server running?");
@@ -73,6 +82,11 @@ public static class FilmDirector
         if (piece is not null)
             Keep(board, piece, change, notes);
         var changed = change.Count > 0 ? Storyboard.Merge(board, change) : board;
+        // Every shot starts on a picture a picture model makes; one written without gets its own.
+        var added = changed != board ? changed.AddFirstFrames() : [];
+        if (added.Count > 0)
+            reply = Storyboard.JoinText(reply, $"{(added.Count == 1 ? "A shot" : "Some shots")} had no first frame, so I gave {(added.Count == 1 ? "it one" : "each one")} " +
+                                               $"({string.Join(", ", added.Select(f => f.Id))}): a picture model makes what a shot starts on.");
         var make = new List<FilmPiece>();
         // The whole film is made piece by piece, as the user asks for each: a change to it makes nothing.
         var asked = piece is null ? [] : json["make"] as JsonArray ?? [];
@@ -87,6 +101,9 @@ public static class FilmDirector
                 continue;
             make.Add(made);
         }
+        foreach (var frame in added)
+            if (make.Any(p => p.Kind == FilmPieceKind.Shot && changed.Shot(p.Id)?.First == frame.Id))
+                make.Add(FilmPiece.Of(frame));
         return new FilmDirection(reply.Length > 0 ? reply : "Done.", changed, Order(changed, make), notes);
     }
 

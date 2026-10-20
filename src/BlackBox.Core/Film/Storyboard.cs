@@ -45,7 +45,7 @@ public sealed class Storyboard
     /// </summary>
     public FilmWorkflows? Workflows { get; set; }
 
-    /// <summary>How loud each shot's own sound is in the film (0 to 1); unset: quiet under a soundtrack, full without one.</summary>
+    /// <summary>How loud each shot's own sound is in the film (0 to 1); unset: half under a soundtrack, full without one.</summary>
     public double? ShotVolume { get; set; }
 
     /// <summary>How loud the soundtrack is in the film (0 to 1).</summary>
@@ -143,6 +143,51 @@ public sealed class Storyboard
 
     /// <summary>A seed to start from: fixed once given, so the same prompt makes the same picture again.</summary>
     public static long NewSeed() => Random.Shared.NextInt64(1, 1L << 48);
+
+    /// <summary>
+    /// Gives each shot without a first frame one of its own, from the shot's words and the references
+    /// of the frames nearest it: the video model animates a picture well and draws one badly (the
+    /// user's finding), so every shot starts on a picture a picture model made. The frames added.
+    /// </summary>
+    public IReadOnlyList<FilmFrame> AddFirstFrames()
+    {
+        var added = new List<FilmFrame>();
+        for (var i = 0; i < Shots.Count; i++)
+        {
+            var shot = Shots[i];
+            if (shot.First is not null && Frame(shot.First) is not null)
+                continue;
+            // The people and places the shots around it are made from.
+            var near = Enumerable.Range(1, Shots.Count).SelectMany(d => new[] { i - d, i + d }).Where(j => j >= 0 && j < Shots.Count)
+                .Select(j => Frame(Shots[j].First)).OfType<FilmFrame>().FirstOrDefault();
+            var frame = new FilmFrame { Id = NewId("f"), Prompt = shot.Prompt.Trim(), Seed = NewSeed(), From = References(near) };
+            Frames.Add(frame);
+            shot.First = frame.Id;
+            added.Add(frame);
+        }
+        return added;
+    }
+
+    /// <summary>The references a frame is made from, however far back.</summary>
+    private List<string> References(FilmFrame? frame)
+    {
+        var found = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Walk(FilmFrame f)
+        {
+            foreach (var id in f.From)
+                if (seen.Add(id) && Frame(id) is { } from)
+                {
+                    if (from.Reference)
+                        found.Add(from.Id);
+                    else
+                        Walk(from);
+                }
+        }
+        if (frame is not null)
+            Walk(frame);
+        return found;
+    }
 
     // ---- reading and writing ---------------------------------------------------------------------
 

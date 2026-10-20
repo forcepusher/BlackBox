@@ -35,7 +35,9 @@ public sealed class FilmTool : Tool
         "Without path a new film goes into a folder of its own in BlackBox's Data\\films, where the Filmmaking window finds it; its frames, clips and the film are made there too " +
         "(BlackBox is portable: what it makes stays next to it). " +
         "A shot that starts on the last frame of the one before goes on with the same camera; " +
-        "a new first frame is a cut to another scene or angle. Keep one clear action per shot, 3 to 8 seconds. " +
+        "a new first frame is a cut to another scene or angle. Every shot starts on a frame: the video model animates a picture well and draws one badly. " +
+        "Keep one clear action per shot, 3 to 8 seconds: say which way things move on screen, from where to where, and what stays still, " +
+        "and what is heard (the shot's own sound is kept under the song at half; music comes from the song, not the video model). " +
         "action=frame id= makes a frame's picture; action=sound makes the song, a minute long at least (the film uses its start), the best of tries=3 by a judge " +
         "of how good music sounds (SongEval); write lyrics for the part the film uses. action=shot id= makes a shot's clip and checks it (does it start and end on its frames, " +
         "how it moves, and a fresh look at what happens, faults and whether people stay the same); tries=N makes up to N takes with new seeds until one passes. " +
@@ -363,16 +365,30 @@ public sealed class FilmTool : Tool
     private async Task<ToolResult> ShotAsync(Storyboard board, string id, int tries, ToolContext ctx, CancellationToken ct)
     {
         var shot = board.Shot(id) ?? throw new FilmException($"There is no shot \"{id}\" in this film; its shots are {string.Join(", ", board.Shots.Select(s => s.Id))}.");
+        // A shot starts on a picture a picture model makes (the video model draws one badly): one
+        // without a first frame gets one from its words, and frames not made yet are made first.
+        var first = new List<string>();
+        if (board.Frame(shot.First) is null && board.AddFirstFrames() is { Count: > 0 } added)
+        {
+            board.Save();
+            first.Add($"It had no first frame, so it got {string.Join(", ", added.Select(f => f.Id))} from its prompt: look at it, and make it again from the references if someone in it should look the same.");
+        }
+        foreach (var frame in new[] { shot.First, shot.LipSync ? null : shot.Last }.Distinct().Select(board.Frame).OfType<FilmFrame>())
+            if (!FilmMaker.IsCurrent(board, frame))
+            {
+                var picture = await Maker(ctx).MakeFrameAsync(board, frame, ctx.Progress, ctx.UserMessage, ct).ConfigureAwait(false);
+                first.Add($"Made {frame.Label} first: {picture.File}.");
+            }
         if (tries <= 1)
         {
             var made = await Maker(ctx).MakeShotAsync(board, shot, ctx.Progress, ctx.UserMessage, ct).ConfigureAwait(false);
             var look = await LookAtShotAsync(board, shot, made.File, ctx, ct).ConfigureAwait(false);
-            return Result($"Shot {shot.Id} made in {Clock(made.Took)} with {made.Template}: {made.File}\nIts workflow (fixed seed {shot.Seed}): {made.Workflow}", made.Notes, look, made.File);
+            return Result($"Shot {shot.Id} made in {Clock(made.Took)} with {made.Template}: {made.File}\nIts workflow (fixed seed {shot.Seed}): {made.Workflow}", [.. first, .. made.Notes], look, made.File);
         }
 
         // Takes with new seeds until a check passes; the best one is kept as the shot's clip.
         var takes = new List<(long Seed, string File, FilmLook Look, string? Verdict, double Score)>();
-        var notes = new List<string>();
+        var notes = first;
         for (var take = 1; take <= tries; take++)
         {
             if (take > 1)
@@ -416,7 +432,8 @@ public sealed class FilmTool : Tool
 
     private const string FixAdvice =
         "If the clip doesn't show what the shot should (the check above, and your own look), fix it and make it again: a plainer prompt (one action, the people and place named " +
-        "as in the frames), another seed, a shorter shot, frames closer to each other, or a new frame. Move on when it is right.";
+        "as in the frames; which way things move on screen, from where to where, and what stays still), another seed, a shorter shot, frames closer to each other, " +
+        "or a new frame. comfyui action=guide search=\"video\" has more on what makes a video model move things right. Move on when it is right.";
 
     // ---- checking ----------------------------------------------------------------------------------------
 
