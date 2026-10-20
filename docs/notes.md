@@ -814,6 +814,13 @@ Claude unchanged. A gateway in front of Anthropic whose address has an `anthropi
 Not yet run against Anthropic itself: the test PC had no key on 21 October 2026.
 `tests/BlackBox.Core.Tests/AnthropicFake.cs` stands in for it, with the rules the API answers 400
 to, its prompt cache (a prefix match, looked for up to 20 blocks back) and its thinking check.
+The app and the command-line runner were run against a stand-in like it on 21 October, with Kilo's
+free Nemotron answering behind it: a file written and read back, a screenshot and the free disk
+space (two calls at once), an Excel budget and a follow-up message changing it, and a task in a 24k
+context that reset eight times. All 39 requests kept the API's rules, none had thinking dropped,
+and from the second step on each read everything before it from the cache; screenshots of the
+2560x1080 screen went at 1984x832, and the model list, "Picked by BlackBox: Claude Opus 5.5" and
+the slider's 1M showed in the window.
 
 ### Without a model server: Kilo's free models
 A new BlackBox's address is Kilo's AI gateway (`https://ai-gateway.kilo.ai/api/v1`), whose free
