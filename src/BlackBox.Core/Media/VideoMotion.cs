@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace BlackBox.Core.Film;
+namespace BlackBox.Core.Media;
 
 /// <summary>
 /// How things move in a clip, measured from its pixels: the whole picture moving (the camera
@@ -11,15 +11,42 @@ namespace BlackBox.Core.Film;
 /// a model reads "the middle moves up 9% of the height while the rest stays" where it can't see a
 /// fox float between two frames a second apart.
 /// </summary>
-public static class FilmMotion
+public static class VideoMotion
 {
     /// <summary>The size frames are measured at: small enough to be quick, big enough for a block to hold detail.</summary>
     public const int Width = 160, Height = 90;
 
     private const int Block = 10, Radius = 8, Columns = Width / Block, Rows = Height / Block;
 
-    /// <summary>A frame at <see cref="Width"/> x <see cref="Height"/>, grey, and its time in seconds.</summary>
-    public sealed record Frame(double Time, float[] Gray);
+    /// <summary>A frame at <see cref="Width"/> x <see cref="Height"/>, grey, and its time in seconds; its brightness was <paramref name="Mean"/>.</summary>
+    public sealed record Frame(double Time, float[] Gray, float Mean = 100);
+
+    /// <summary>
+    /// A clip's frames from its start, small and grey, each measured against its own brightness
+    /// (100 is its mean), so a frame that brightens as a whole doesn't count as movement.
+    /// </summary>
+    public static List<Frame> Read(IVideoReader reader, int limit = 24 * 60)
+    {
+        var frames = new List<Frame>();
+        reader.Seek(TimeSpan.Zero);
+        while (frames.Count < limit && reader.Next() is { } next)
+        {
+            using var bitmap = MediaPreview.ToBitmap(next.Frame);
+            using var small = bitmap.Resize(new SkiaSharp.SKImageInfo(Width, Height), SkiaSharp.SKFilterQuality.Low);
+            if (small is null)
+                continue;
+            var gray = new float[Width * Height];
+            var pixels = small.Pixels;
+            float sum = 0;
+            for (var i = 0; i < gray.Length; i++)
+                sum += gray[i] = 0.299f * pixels[i].Red + 0.587f * pixels[i].Green + 0.114f * pixels[i].Blue;
+            var mean = sum / gray.Length;
+            for (var i = 0; i < gray.Length; i++)
+                gray[i] = gray[i] / Math.Max(mean, 4) * 100;
+            frames.Add(new Frame(next.Time.TotalSeconds, gray, mean));
+        }
+        return frames;
+    }
 
     /// <summary>
     /// The movement from one frame to another, in pixels at <see cref="Width"/> x <see cref="Height"/>:

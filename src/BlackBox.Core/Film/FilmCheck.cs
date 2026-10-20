@@ -11,7 +11,7 @@ namespace BlackBox.Core.Film;
 /// <param name="Faults">What is surely wrong (a clip that doesn't start on its frame, a black or frozen clip), to fix before anything else.</param>
 /// <param name="Closer">A JPEG: twelve frames close together from the stretch of a shot where the most changes, cropped to where things move.</param>
 /// <param name="Cuts">For a film: its cuts.</param>
-/// <param name="Motion">For a shot: how things in it move, measured from its pixels (<see cref="FilmMotion"/>), in words.</param>
+/// <param name="Motion">For a shot: how things in it move, measured from its pixels (<see cref="VideoMotion"/>), in words.</param>
 public sealed record FilmLook(string Text, byte[]? Sheet, IReadOnlyList<string> Faults, byte[]? Closer = null, IReadOnlyList<FilmCut>? Cuts = null, string? Motion = null);
 
 /// <summary>A cut as a JPEG: the last frame of the shot before above the first frame of the shot after.</summary>
@@ -77,8 +77,8 @@ public static partial class FilmCheck
                         text.AppendLine("Its sound: " + SoundStats.Of(mono, rate).Describe() + ".");
                 }
             var sheet = ShotSheet(start, end, first?.Label, last?.Label, frames, reader.Width, reader.Height);
-            var small = SmallFrames(reader);
-            var motion = FilmMotion.Describe(FilmMotion.Measure(small.Times.Zip(small.Grays, (t, g) => new FilmMotion.Frame(t, g)).ToList()));
+            var small = VideoMotion.Read(reader);
+            var motion = VideoMotion.Describe(VideoMotion.Measure(small));
             if (motion.Length > 0)
                 text.AppendLine(motion);
             var closer = CloserLook(reader, small, text);
@@ -185,7 +185,7 @@ public static partial class FilmCheck
     /// The fourth fresh look at a shot: whether things move as the shot asks. The user found the
     /// looks catching botched takes but often missing motion gone wrong: a subject moving the wrong
     /// way, a pose bending wrong, a prop or a person doing what nobody asked. Each movement asked for
-    /// is held against the frames and the movement measured from the pixels (<see cref="FilmMotion"/>).
+    /// is held against the frames and the movement measured from the pixels (<see cref="VideoMotion"/>).
     /// </summary>
     /// <param name="motion">The measured movement in words; none when it couldn't be measured.</param>
     public static string JudgeMotion(Storyboard board, FilmShot shot, string? motion)
@@ -276,39 +276,10 @@ public static partial class FilmCheck
     /// differs from the one before, each measured against its own brightness, and a frame that
     /// brightens or darkens as a whole (a fade) not counted. Null for a clip too short to have one.
     /// </summary>
-    /// <summary>Every frame of a clip small and grey, each measured against its own brightness (×100 of its mean), with its time and mean.</summary>
-    private static (List<double> Times, List<float[]> Grays, List<float> Means) SmallFrames(IVideoReader reader)
+    private static byte[]? CloserLook(IVideoReader reader, List<VideoMotion.Frame> frames, StringBuilder text)
     {
-        const int w = FilmMotion.Width, h = FilmMotion.Height;
-        var times = new List<double>();
-        var grays = new List<float[]>();
-        var means = new List<float>();
-        reader.Seek(TimeSpan.Zero);
-        while (reader.Next() is { } next && times.Count < 24 * 60)
-        {
-            using var bitmap = MediaPreview.ToBitmap(next.Frame);
-            using var small = bitmap.Resize(new SKImageInfo(w, h), SKFilterQuality.Low);
-            if (small is null)
-                continue;
-            var gray = new float[w * h];
-            var pixels = small.Pixels;
-            float sum = 0;
-            for (var i = 0; i < gray.Length; i++)
-                sum += gray[i] = 0.299f * pixels[i].Red + 0.587f * pixels[i].Green + 0.114f * pixels[i].Blue;
-            var mean = sum / gray.Length;
-            for (var i = 0; i < gray.Length; i++)
-                gray[i] = gray[i] / Math.Max(mean, 4) * 100;
-            times.Add(next.Time.TotalSeconds);
-            grays.Add(gray);
-            means.Add(mean);
-        }
-        return (times, grays, means);
-    }
-
-    private static byte[]? CloserLook(IVideoReader reader, (List<double> Times, List<float[]> Grays, List<float> Means) frames, StringBuilder text)
-    {
-        const int w = FilmMotion.Width, h = FilmMotion.Height;
-        var (times, grays, means) = frames;
+        const int w = VideoMotion.Width, h = VideoMotion.Height;
+        var (times, grays, means) = (frames.Select(f => f.Time).ToList(), frames.Select(f => f.Gray).ToList(), frames.Select(f => f.Mean).ToList());
         var n = times.Count;
         if (n < 8)
             return null;

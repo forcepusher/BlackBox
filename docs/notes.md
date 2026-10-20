@@ -227,7 +227,8 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   film director writes shots by it.
 
 `read_file` gives the model a look at media as well as pictures: a video as eight frames with their
-times (and how loud its sound is, in words), a sound as its waveform and spectrogram with its
+times (and how loud its sound is, in words; a clip up to 15 s also with its movement measured from
+the pixels, as the film looks have it: the camera, and what moves where, which way, how far), a sound as its waveform and spectrogram with its
 length, loudness, clipping and silences in words, a 3D model (GLB, glTF, OBJ, PLY, STL) from four
 sides, an animated GIF or WebP as frames.
 Video and sound are decoded by Windows' own Media Foundation (MP4/H.264, MOV, MP3, AAC, FLAC, WAV
@@ -570,7 +571,7 @@ on the spaghetti film's four cuts good 3 of 4 (once it found the man slimmer fro
 drift the side-by-side look had missed before). A look with thinking takes qwen3.8 30 to 100 s, so
 a shot's looks about 3 to 5 minutes.
 
-**Movement measured from the pixels** (`FilmMotion`). Later the user found the looks good at
+**Movement measured from the pixels** (`VideoMotion`). Later the user found the looks good at
 botched takes and often blind to motion gone wrong: the wrong way, a pose bending wrong, a prop or
 a person doing what nobody asked. From 8 or 12 stills a second apart a model can't see which way
 something went. So every frame of a shot, 160x90 and grey, is matched block by block (10x10 pixels,
@@ -583,6 +584,12 @@ from where to where, when), say whether the frames and the measurement show it, 
 that nobody asked for. On the fox film's original takes it read the floating fox (the middle up 10%
 of the height in shot 2's first two seconds) and shot 1's moon sliding (the top middle right by 21%
 of the width over 5 s; by the frames, from 28% to 52% across). It takes about a second a shot.
+On six fox clips, right and wrong (two played backwards, so the head goes down and the jaw closes;
+the floating take; the sliding moon), the movement look asked for a redo on all four wrong ones
+and passed the jaw opening as asked; without the measurement it passed the head
+going down. It also failed the fixed shot 1, whose fox looks up and then back down, which nothing
+asked for. With the measurement the steadiness look named the user's fault in its words: "the fox
+floats upward off the snow".
 
 **Pictures first, LTX's sounds, the song's music.** Every shot starts on a frame a picture model
 makes: a shot written without one gets one from its words and the references of the frames near it

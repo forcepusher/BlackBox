@@ -174,6 +174,10 @@ public static class MediaPreview
             }
             if (shots.Count == 0)
                 return (line, null, "");
+            // Which way things went between the stills, measured: from frames a second apart a model
+            // can't tell a fox rising from one standing (a short clip only: every frame is read).
+            if (info.Duration.TotalSeconds <= 15 && VideoMotion.Describe(VideoMotion.Measure(VideoMotion.Read(reader))) is { Length: > 0 } motion)
+                line += "\n" + motion;
             return (line, Sheet(shots, reader.Width, reader.Height), $"{shots.Count} frames of the video with their times");
         }
         finally
