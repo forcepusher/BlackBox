@@ -350,9 +350,11 @@ public static class FilmDirector
             var shot = board.Shots[i];
             if (!shot.LipSync && shot.Last == frame.Id && board.Frame(shot.First) is { } first && first.Id != frame.Id && File.Exists(board.FramePicture(first)))
                 return (first, $"The second picture is {first.Label}, the frame its shot starts on: the shot moves from that picture to this one" +
-                               (shot.Camera.Trim().Length > 0 ? $" (the camera: {shot.Camera.Trim().TrimEnd('.')})" : "") + ". So what stays put (the moon or sun, the horizon, trees, buildings, " +
-                               "furniture, where people stand) must be in the same place and the same size in both, the camera at the same angle and distance unless the shot moves it; " +
-                               "only what the shot is for may change. Something that should stay put but sits elsewhere or is another size is SEVERE: the video would slide it across the screen.");
+                               (shot.Camera.Trim().Length > 0 ? $" (the camera: {shot.Camera.Trim().TrimEnd('.')})" : "") + $", and shows: \"{shot.Prompt.Trim().ReplaceLineEndings(" ")}\" " +
+                               "So who or what the shot moves should be where the shot takes them by its end (a girl who walks to a mailbox stands beside it), " +
+                               "and everything else stays put: the moon or sun, the horizon, trees, buildings, furniture and props in the same place and the same size in both, " +
+                               "the camera at the same angle and distance unless the shot moves it. Something that should stay put but sits elsewhere or is another size is SEVERE: " +
+                               "the video would slide it across the screen. So is someone not where the shot takes them: the video would walk them back.");
             if (i > 0 && shot.First == frame.Id && board.Shots[i - 1] is { LipSync: false, Last: { } end } && end != frame.Id && board.Frame(end) is { } last && File.Exists(board.FramePicture(last)))
                 return (last, $"The second picture is {last.Label}, the last frame of the shot before: the film cuts from it to this one. Unless this prompt moves the story to another place " +
                               "or time, a viewer must take this as the same place a moment later: the same kind of place (not a forest turned into a clearing, not another room), the moon or sun " +

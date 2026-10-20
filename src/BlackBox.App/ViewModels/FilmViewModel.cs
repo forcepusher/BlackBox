@@ -1250,6 +1250,11 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             ? $" Its first frame ({first.Id}) is: \"{first.Prompt.Trim()}\". Its last frame ({last.Id}) is: \"{last.Prompt.Trim()}\". Compare where the things that stay put " +
               "(the moon, the trees, the horizon, where someone stands) and the camera's angle are in the two: the shot moves whatever differs, so if they differ, " +
               $"that is the cause: change the last frame ({last.Id}) to agree with the first, keeping only the change the shot is for."
+            // A shot's last frame made afresh from the references lost the first's framing: a girl's
+            // mailbox moved and grew, and the fix that dropped the first frame from "from" made it worse.
+            : piece.Kind == FilmPieceKind.Frame && _board.Shots.FirstOrDefault(s => !s.LipSync && s.Last == piece.Id && s.First is not null && s.First != piece.Id) is { } ending
+            ? $" It is the last frame of {ending.Id}, which moves from {ending.First} to it: keep it made from {ending.First} (in its \"from\", with the references), " +
+              $"so it keeps {ending.First}'s framing and everything that stays put, and say in its prompt only what the shot changes."
             : "";
         var direction = await FilmDirector.DirectAsync(_board, piece,
             $"A fresh look at it as just made found this wrong: {found}. Change what it is made from so that it doesn't happen again, keeping what was asked for." + (seen is { Text: var text } ? " " + text : "") + frames +
