@@ -238,11 +238,40 @@ ComfyUI's folder; 3D models are drawn by BlackBox itself.
 ### Previews
 Files the agent makes or shows appear in the chat: under the tool call that made them, and under
 a reply that names them by their full path (whatever made them: ComfyUI, a script, Blender, a
-download). Pictures are shown at the chat's width, animations play, videos play in place with
-their sound and a position to drag, a sound plays over its waveform, a 3D model turns with the
-mouse (the wheel comes closer, a double click resets it), and any other file gets a card. Each has
-Open (its own program) and Show in folder. A saved chat shows them again when it is opened, as
-long as the files are still there.
+download). Pictures are shown at the chat's width, animations play, a sound plays over its
+waveform, a 3D model turns with the mouse (the wheel comes closer, a double click resets it), and
+any other file gets a card. Each has Open (its own program) and Show in folder. A saved chat shows
+them again when it is opened, as long as the files are still there.
+
+A video plays by itself while it is on screen, over and over and without its sound, as a GIF
+would; scrolled away, under the full-screen viewer or with the window minimized it pauses, so a
+long chat decodes only what can be seen (a third of its height showing, or 120 pixels of a tall one,
+counts as on screen). Its pause button holds it until it is played again. The Filmmaking window's
+players are not touched by this: they play with sound when asked.
+
+A click on a picture or a video (a preview, a picture that came with a message, a tool's
+screenshot) opens the full-screen viewer on the chat's screen, rather than another program: a
+picture as large as the screen, the wheel coming closer where it points, a drag moving it, a double
+click between that and its own size (from twice its size its pixels stay square, for pixel art); a
+video plays with its sound (M or the speaker turns it off), Space plays or pauses. The arrow keys
+and the side buttons go through the chat's other pictures and videos, Esc, × or a click beside the
+picture goes back. The agent's clicks step it aside as they do the chat's window, and its keys go to
+the window under both (before, from the chat they could go to the Filmmaking window).
+
+**Prompt** under a picture, video or sound made with ComfyUI shows the prompts it was made with and
+the settings that matter for making it again (model, LoRAs with their strength, shift, sampler,
+scheduler, steps, CFG, seed, denoise, size, a song's tempo and key, the pictures it started from),
+with Copy for each prompt and for all of it; the viewer has it too (P). It is read from the file
+itself, so it works for files the user made in ComfyUI as well: ComfyUI keeps the workflow it ran
+in every file it saves, in a PNG's text chunks, an MP4's tags (Video Combine's as a string of JSON),
+an MP3's TXXX frame or a FLAC's comments. The API form of the workflow is found by how it begins
+in the first and last 8 MB of the file, and each sampler (KSampler, SamplerCustom,
+SamplerCustomAdvanced) is followed back to its prompts through guiders, conditioning nodes (LTX's
+guides take and give back both prompts), switches as they were set and primitives; a negative
+zeroed out is none. A workflow without a sampler (a cloned voice) shows the text it was given.
+AUTOMATIC1111's and Forge's "parameters" text is read too. Over the 901 pictures, videos and sounds
+in the PC's ComfyUI output folder it took at most 66 ms a file; 51 said nothing (files ffmpeg or a
+script made from ComfyUI's), and the 62 without a prompt had an empty one in their workflow.
 
 Right-click → Copy on any picture in the chat (a preview, a picture in your message or under the
 box, a tool's screenshot) puts it on the clipboard at its full size, not the chat's, together with
@@ -1266,6 +1295,17 @@ box says it is paused and how it goes on: send the message, click Resume (what y
 the box), or stop typing, after which it carries on in 15 seconds, counted down on that line. A
 message that arrives as the run finishes starts the next one, and what the agent hadn't read when
 you stopped it goes back in the box.
+
+Until the model reads it, a message sent during a run waits above the box, and moves into the chat
+when it is read: there it stands after what the model was doing when it was sent, as the model
+sees it (it used to show where it was sent, above work the model did before reading it). × on it
+takes it back unsent. **Interrupt** over them (or Ctrl+Enter to send one) has them read at once:
+the model's reply in progress, thinking or writing, is cut off and left out of the conversation
+(what streamed stays on screen, with "Interrupted to read your message."), or the tool calls it is
+running are stopped and the rest of that reply's calls not run, each saying so to the model, and
+the next step starts with the messages. Without it a long think went on for minutes past a
+correction that made it pointless. A wait (`wait`, a ComfyUI job) already ended for any message.
+Leaving the chat, the messages still waiting go back in the box.
 
 Such a message reaches the model marked as sent while it worked on the request, which it names
 ("Try using pony diffusion"): a question or a side request is answered or done and the request goes

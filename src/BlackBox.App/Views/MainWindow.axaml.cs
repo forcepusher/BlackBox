@@ -339,7 +339,10 @@ public partial class MainWindow : Window
             return;
         e.Handled = true;
         _stickToBottom = true;
-        if (Vm.SendCommand.CanExecute(null))
+        // Ctrl+Enter during a run: read at once, as Interrupt does.
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            Vm.SendNow();
+        else if (Vm.SendCommand.CanExecute(null))
             Vm.SendCommand.Execute(null);
     }
 
@@ -370,6 +373,82 @@ public partial class MainWindow : Window
             HistoryButton.Flyout?.Hide();
             InputBox.Focus();
         });
+    }
+
+    // ---- the full-screen viewer ---------------------------------------------------------------------
+
+    /// <summary>The full-screen viewer, while it is open.</summary>
+    private MediaViewer? _viewer;
+
+    /// <summary>A picture or video preview in the chat: full screen.</summary>
+    private void OnPictureClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is FilePreview preview)
+            OpenViewer(preview);
+    }
+
+    /// <summary>A file in a sent message's bubble: a picture or video full screen, anything else in its own program.</summary>
+    private void OnAttachmentClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not AttachmentItem attachment)
+            return;
+        if (!OpenViewer(attachment))
+            attachment.OpenCommand.Execute(null);
+    }
+
+    private void OnScreenshotClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is ToolCallItem tool)
+            OpenViewer(tool);
+    }
+
+    /// <summary>
+    /// Shows <paramref name="source"/> full screen on the chat's screen, with the chat's other pictures
+    /// and videos to go through; false when it is none of those. The chat's videos hold still meanwhile.
+    /// </summary>
+    private bool OpenViewer(object source)
+    {
+        var entries = Vm.MediaInChat();
+        var index = entries.FindIndex(e => ReferenceEquals(e.Source, source));
+        if (index < 0 || (Screens.ScreenFromWindow(this) ?? Screens.Primary) is not { } screen)
+            return false;
+        _viewer?.Close();
+        var viewer = _viewer = new MediaViewer { DataContext = new MediaViewerViewModel(entries, index, Vm.Previews, screen.Bounds.Width) };
+        // Placed on the chat's screen, where it then goes full screen.
+        viewer.Position = screen.Bounds.Position;
+        viewer.Width = screen.Bounds.Width / screen.Scaling;
+        viewer.Height = screen.Bounds.Height / screen.Scaling;
+        nint handle = 0;
+        viewer.Opened += (_, _) =>
+        {
+            // Out of the agent's way as the chat is: a click of its lands behind it.
+            if (viewer.TryGetPlatformHandle()?.Handle is { } h)
+                Vm.AttachViewer(handle = h);
+        };
+        viewer.Closed += (_, _) =>
+        {
+            if (handle != 0)
+                Vm.DetachViewer(handle);
+            if (ReferenceEquals(_viewer, viewer))
+            {
+                _viewer = null;
+                HoldVideos();
+                Activate();
+            }
+        };
+        HoldVideos();
+        viewer.Show();
+        return true;
+    }
+
+    /// <summary>The chat's videos play while they can be seen: not under the viewer, nor with the window minimized.</summary>
+    private void HoldVideos() => InView.Hold(_viewer is not null || WindowState == WindowState.Minimized);
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == WindowStateProperty)
+            HoldVideos();
     }
 
     /// <summary>The Filmmaking window, while it is open: the button brings it forward rather than opening a second one.</summary>

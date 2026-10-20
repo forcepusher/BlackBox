@@ -713,6 +713,122 @@ public class AgentSessionTests
         Assert.Equal(["And thanks"], session.TakeUndelivered().Select(u => u.Text));
     }
 
+    [Fact]
+    public async Task Interrupt_cuts_the_models_thinking_short_and_the_next_step_reads_the_message()
+    {
+        var server = new ScriptedServer(Sse.ThinkingOn("The user wants a red poster, so first I should think about shades of red"), Sse.Text("Made it green."), Sse.Text("That was all."));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        var message = new UserInput("Make it green");
+        _ = observer.FirstDelta.Task.ContinueWith(_ =>
+        {
+            session.Steer(message);
+            Assert.True(session.Interrupt());
+        }, TestContext.Current.CancellationToken);
+
+        await session.RunAsync("Make a red poster", observer, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Contains(AgentSession.InterruptedNotice, observer.Notices);
+        Assert.Equal(3, server.Requests.Count);
+        Assert.Equal(SentDuring("Make a red poster") + "Make it green", LastText(server.Requests[1]));
+        // The thinking that was cut off is not part of the conversation.
+        Assert.DoesNotContain(session.History, m => m.Reasoning?.Contains("shades of red") == true);
+        Assert.Same(message, Assert.Single(observer.Delivered));
+    }
+
+    [Fact]
+    public async Task Interrupt_stops_a_tool_call_in_progress_and_the_rest_of_the_reply_is_not_run()
+    {
+        var endless = new EndlessTool();
+        var server = new ScriptedServer(
+            Sse.ToolCalls(("e1", "endless", "{}"), ("e2", "endless", "{}")),
+            Sse.Text("Stopped the build as you asked."),
+            Sse.Text("That was all."));
+        var settings = new AgentSettings { ScreenshotAfterActions = false, Approval = ApprovalMode.AskRisky };
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = settings, WorkingDirectory = Path.GetTempPath() };
+        var client = new OpenAiChatClient(new HttpClient(server), "http://test", null);
+        var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(includeScreenTools: true, [endless]), ctx, "system prompt");
+        var observer = new RecordingObserver();
+        _ = endless.Started.Task.ContinueWith(_ =>
+        {
+            session.Steer("Don't build it");
+            session.Interrupt();
+        }, TestContext.Current.CancellationToken);
+
+        await session.RunAsync("Build the game", observer, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(1, endless.Runs);
+        var results = session.History.Where(m => m.Role == ChatRole.Tool).Select(m => m.Content).ToList();
+        Assert.Equal([AgentSession.InterruptedResult, AgentSession.NotRunResult], results);
+        // The results, then the message: the conversation stays valid for the server.
+        Assert.Equal(SentDuring("Build the game") + "Don't build it", LastText(server.Requests[1]));
+        Assert.Contains(session.History, m => m.Content == "Stopped the build as you asked.");
+    }
+
+    [Fact]
+    public async Task A_message_taken_back_before_the_next_step_never_reaches_the_model()
+    {
+        AgentSession? session = null;
+        var taken = new UserInput("Make it blue");
+        var replies = new Queue<string>([Sse.ToolCall("w1", "wait", """{"seconds":0}"""), Sse.Text("The poster is done.")]);
+        var server = new ScriptedServer
+        {
+            Responder = _ =>
+            {
+                if (replies.Count == 2)
+                {
+                    session!.Steer(taken);
+                    Assert.True(session.Unsteer(taken));
+                    // Nothing waits any more: Interrupt has nothing to send.
+                    Assert.False(session.Interrupt());
+                }
+                return replies.Dequeue();
+            },
+        };
+        var (s, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        session = s;
+
+        await session.RunAsync("Make a poster", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.DoesNotContain(session.History, m => m.FromUser && m.Content!.Contains("Make it blue"));
+        Assert.Empty(observer.Delivered);
+        // Delivered ones can't be taken back.
+        var late = new UserInput("And thanks");
+        session.Steer(late);
+        Assert.Equal([late], session.TakeUndelivered());
+        Assert.False(session.Unsteer(late));
+    }
+
+    [Fact]
+    public async Task Of_two_messages_alike_the_one_taken_back_is_that_one()
+    {
+        AgentSession? session = null;
+        var first = new UserInput("yes");
+        var second = new UserInput("yes");
+        var replies = new Queue<string>([Sse.ToolCall("w1", "wait", """{"seconds":0}"""), Sse.Text("Okay.")]);
+        var server = new ScriptedServer
+        {
+            Responder = _ =>
+            {
+                if (replies.Count == 2)
+                {
+                    session!.Steer(first);
+                    session.Steer(second);
+                    session.Unsteer(second);
+                }
+                return replies.Dequeue();
+            },
+        };
+        var (s, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        session = s;
+
+        await session.RunAsync("Shall I go on?", observer, CancellationToken.None);
+
+        Assert.Same(first, Assert.Single(observer.Delivered));
+    }
+
     /// <summary>A small PNG and a text file in a new folder, as the user would drop them on the window.</summary>
     private static (string Dir, string Picture, string Text) Dropped()
     {

@@ -36,6 +36,24 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
     [ObservableProperty]
     private string _details = "";
 
+    /// <summary>The prompts and settings the file says it was made with (ComfyUI keeps them in every file it saves); null when it says none.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRecipe))]
+    private MediaRecipe? _recipe;
+
+    public bool HasRecipe => Recipe is not null;
+
+    /// <summary>Reads what the file says it was made with, off the UI thread.</summary>
+    private void LoadRecipe() => Task.Run(() =>
+    {
+        try
+        {
+            if (MediaRecipe.Read(Path) is { } recipe)
+                Show(() => Recipe = recipe);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException) { /* a workflow the reader didn't expect: no button */ }
+    });
+
     // Both off the UI thread: Windows' opening of a file on a share that is off waits for the share.
     [RelayCommand]
     private void Open() => Task.Run(() =>
@@ -84,24 +102,28 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
     });
 
     /// <summary>The preview that suits a file, by its kind; it reads the file in the background.</summary>
-    public static FilePreview For(string path, PreviewServices services)
+    /// <param name="width">How wide pictures and frames are decoded: the chat's width, or a screen's for the full-screen viewer.</param>
+    public static FilePreview For(string path, PreviewServices services, int width = Width)
     {
-        FilePreview preview = MediaPreview.KindOf(path) switch
+        var kind = MediaPreview.KindOf(path);
+        FilePreview preview = kind switch
         {
             "image" => new ImagePreview(path),
-            "animation" => new AnimationPreview(path),
-            "video" => new VideoPreview(path, services),
+            "animation" => new AnimationPreview(path, width),
+            "video" => new VideoPreview(path, services, width),
             "audio" => new AudioPreview(path, services),
             "3d" => new ModelPreview(path),
             _ => new FileCardPreview(path),
         };
         preview.Load();
+        if (kind is "image" or "animation" or "video" or "audio")
+            preview.LoadRecipe();
         return preview;
     }
 
     protected abstract void Load();
 
-    protected static string Size(string path)
+    internal static string Size(string path)
     {
         try { return Sized(new FileInfo(path).Length); }
         catch (IOException) { return ""; }
@@ -158,7 +180,8 @@ public sealed partial class ImagePreview(string path) : FilePreview(path)
 }
 
 /// <summary>An animated GIF or WebP, playing over and over.</summary>
-public sealed partial class AnimationPreview(string path) : FilePreview(path)
+/// <param name="width">How wide its frames are kept: the chat's width, or a screen's.</param>
+public sealed partial class AnimationPreview(string path, int width = FilePreview.Width) : FilePreview(path)
 {
     private readonly List<(Bitmap Frame, int Ms)> _frames = [];
     private DispatcherTimer? _timer;
@@ -172,7 +195,7 @@ public sealed partial class AnimationPreview(string path) : FilePreview(path)
         using var codec = SKCodec.Create(Path) ?? throw new InvalidDataException("not a picture");
         var info = codec.FrameInfo;
         var count = Math.Max(1, Math.Min(codec.FrameCount, 400));
-        var scale = Math.Min(1.0, (double)Width / codec.Info.Width);
+        var scale = Math.Min(1.0, (double)width / codec.Info.Width);
         var size = new SKImageInfo(Math.Max(1, (int)(codec.Info.Width * scale)), Math.Max(1, (int)(codec.Info.Height * scale)), SKColorType.Bgra8888, SKAlphaType.Premul);
         using var full = new SKBitmap(new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
         var frames = new List<(Bitmap, int)>();
@@ -255,7 +278,10 @@ internal sealed class Playback : IDisposable
     private readonly Task _task;
     private IAudioOutput? _output;
 
-    public Playback(string path, PreviewServices services, TimeSpan from, bool video, Action<RawImage>? onFrame, Action<TimeSpan> onPosition, Action onEnded)
+    /// <param name="width">How wide the frames are decoded.</param>
+    /// <param name="sound">False for a video playing without its sound (in the chat): the frames go by the clock.</param>
+    public Playback(string path, PreviewServices services, TimeSpan from, bool video, Action<RawImage>? onFrame, Action<TimeSpan> onPosition, Action onEnded,
+        int width = FilePreview.Width, bool sound = true)
     {
         _task = Task.Run(() =>
         {
@@ -264,20 +290,20 @@ internal sealed class Playback : IDisposable
             {
                 if (video)
                 {
-                    reader = services.Decoder?.OpenVideo(path, FilePreview.Width);
+                    reader = services.Decoder?.OpenVideo(path, width);
                     reader?.Seek(from);
                 }
                 // The sound, if there is one and the PC can play it; the frames follow its clock.
-                if (services.Decoder?.OpenAudio(path) is { } sound)
+                if (sound && services.Decoder?.OpenAudio(path) is { } track)
                 {
-                    sound.Seek(from);
+                    track.Seek(from);
                     var output = _stop.IsCancellationRequested ? null : services.NewAudioOutput();
                     if (output is null)
-                        sound.Dispose();
+                        track.Dispose();
                     else
                         try
                         {
-                            output.Play(sound); // the output has the sound from here on
+                            output.Play(track); // the output has the sound from here on
                             _output = output;
                         }
                         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -355,9 +381,14 @@ internal sealed class Playback : IDisposable
 }
 
 /// <summary>Shared by the video and sound players: play, pause, a position to drag, and the time.</summary>
-public abstract partial class PlayerPreview(string path, PreviewServices services) : FilePreview(path)
+/// <param name="width">How wide a video's frames are decoded: the chat's width, or a screen's.</param>
+public abstract partial class PlayerPreview(string path, PreviewServices services, int width = FilePreview.Width) : FilePreview(path)
 {
     protected PreviewServices Services { get; } = services;
+
+    /// <summary>How wide a video's frames are decoded.</summary>
+    protected int FrameWidth { get; } = width;
+
     private Playback? _playback;
     private bool _reporting;
 
@@ -370,6 +401,29 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
 
     /// <summary>The play or pause icon for the button.</summary>
     public Avalonia.Media.Geometry PlayIcon => IsPlaying ? PauseShape : PlayShape;
+
+    /// <summary>Plays without its sound: a video in the chat, or one the user muted.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SoundIcon))]
+    private bool _muted;
+
+    private static readonly Avalonia.Media.Geometry SoundShape = Avalonia.Media.StreamGeometry.Parse(
+        "M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z");
+    private static readonly Avalonia.Media.Geometry MutedShape = Avalonia.Media.StreamGeometry.Parse(
+        "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z");
+
+    /// <summary>The sound button's icon: a speaker, crossed out while muted.</summary>
+    public Avalonia.Media.Geometry SoundIcon => Muted ? MutedShape : SoundShape;
+
+    /// <summary>Muted or unmuted while it plays: it goes on from where it is, with or without its sound.</summary>
+    partial void OnMutedChanged(bool value)
+    {
+        if (IsPlaying)
+            Start(TimeSpan.FromSeconds(Position));
+    }
+
+    [RelayCommand]
+    private void ToggleSound() => Muted = !Muted;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TimeText))]
@@ -409,22 +463,30 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
         if (IsPlaying)
         {
             Stop();
+            UserPlayed(false);
             return;
         }
         Start(TimeSpan.FromSeconds(Position >= Length - 0.05 ? 0 : Position));
+        UserPlayed(true);
     }
 
-    private void Start(TimeSpan from)
+    /// <summary>The user pressed play or pause.</summary>
+    protected virtual void UserPlayed(bool playing) { }
+
+    protected void Start(TimeSpan from)
     {
         End(_playback);
         IsPlaying = true;
         _playback = new Playback(Path, Services, from, HasVideo, HasVideo ? ShowFrame : null,
             at => Dispatcher.UIThread.Post(() => Report(at.TotalSeconds)),
-            () => Dispatcher.UIThread.Post(() =>
-            {
-                IsPlaying = false;
-                Report(Length);
-            }));
+            () => Dispatcher.UIThread.Post(Ended), FrameWidth, sound: !Muted);
+    }
+
+    /// <summary>It played to its end.</summary>
+    protected virtual void Ended()
+    {
+        IsPlaying = false;
+        Report(Length);
     }
 
     public void Stop()
@@ -462,8 +524,12 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
     protected override void Release() => Stop();
 }
 
-/// <summary>A video: its first frame, then playing in place with its sound.</summary>
-public sealed partial class VideoPreview(string path, PreviewServices services) : PlayerPreview(path, services)
+/// <summary>
+/// A video: its first frame, then playing in place. In the chat it plays by itself while it is on
+/// screen, over and over and without its sound, and stops when scrolled away (see
+/// <see cref="Views.InView"/>); the full-screen viewer plays it with its sound.
+/// </summary>
+public sealed partial class VideoPreview(string path, PreviewServices services, int width = FilePreview.Width) : PlayerPreview(path, services, width)
 {
     private int _stillRequest;
 
@@ -479,6 +545,9 @@ public sealed partial class VideoPreview(string path, PreviewServices services) 
 
     protected override bool HasVideo => true;
 
+    /// <summary>Its first frame and length are in: it can play.</summary>
+    private bool _loaded;
+
     protected override void Load() => Background(() =>
     {
         var decoder = Services.Decoder;
@@ -488,7 +557,7 @@ public sealed partial class VideoPreview(string path, PreviewServices services) 
             Dispatcher.UIThread.Post(() => Details = $"{Size(Path)} (nothing on this PC can play it here; Open uses your player)");
             return;
         }
-        using var reader = decoder!.OpenVideo(Path, Width);
+        using var reader = decoder!.OpenVideo(Path, FrameWidth);
         var first = reader?.Next();
         var details = $"{info.Width}x{info.Height}, {info.Duration.TotalSeconds:0.0} s" + (info.FrameRate > 0 ? $" at {info.FrameRate:0.##} fps" : "") +
                       (info.HasAudio ? ", with sound" : ", no sound") + ", " + Size(Path);
@@ -498,8 +567,62 @@ public sealed partial class VideoPreview(string path, PreviewServices services) 
             Length = Math.Max(0.1, info.Duration.TotalSeconds);
             if (first is { } f)
                 ShowFrameNow(f.Frame);
+            _loaded = true;
+            if (_playWhenLoaded || PlaysInView && _inView && !_userPaused)
+                Start(TimeSpan.Zero);
         });
     });
+
+    // ---- playing by itself while on screen ------------------------------------------------------
+
+    /// <summary>A preview in the chat: it plays by itself while on screen, without its sound.</summary>
+    public bool PlaysInView { get; private set; }
+
+    private bool _inView, _userPaused, _playWhenLoaded;
+
+    /// <summary>Makes this a preview that plays by itself while on screen, muted; set by the chat's template.</summary>
+    public void PlayInView()
+    {
+        PlaysInView = true;
+        Muted = true;
+    }
+
+    /// <summary>Plays from the start as soon as it can (the full-screen viewer).</summary>
+    public void PlayWhenLoaded()
+    {
+        if (_loaded) Start(TimeSpan.Zero);
+        else _playWhenLoaded = true;
+    }
+
+    /// <summary>
+    /// It came into view or left it (scrolled, the window minimized, the full-screen viewer over it).
+    /// On screen it plays on from where it was, unless the user paused it; off screen it pauses, so
+    /// a long chat doesn't decode videos nobody sees.
+    /// </summary>
+    public void SetInView(bool inView)
+    {
+        if (_inView == inView || !PlaysInView)
+        {
+            _inView = inView;
+            return;
+        }
+        _inView = inView;
+        if (inView && _loaded && !_userPaused && !IsPlaying)
+            Start(TimeSpan.FromSeconds(Position >= Length - 0.05 ? 0 : Position));
+        else if (!inView && IsPlaying)
+            Stop();
+    }
+
+    protected override void UserPlayed(bool playing) => _userPaused = !playing;
+
+    /// <summary>On screen in the chat it starts again, as a GIF would.</summary>
+    protected override void Ended()
+    {
+        if (PlaysInView && _inView && !_userPaused && !Disposed)
+            Start(TimeSpan.Zero);
+        else
+            base.Ended();
+    }
 
     protected override void ShowFrame(RawImage frame) => Show(() => ShowFrameNow(frame));
 
@@ -527,7 +650,7 @@ public sealed partial class VideoPreview(string path, PreviewServices services) 
         Background(() =>
         {
             if (request != _stillRequest) return;
-            using var reader = Services.Decoder?.OpenVideo(Path, Width);
+            using var reader = Services.Decoder?.OpenVideo(Path, FrameWidth);
             if (reader is null) return;
             reader.Seek(at);
             if (reader.Next() is { } f && request == _stillRequest)

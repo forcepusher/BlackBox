@@ -37,6 +37,10 @@ private or long work, use your own model.
 ## While it works
 - **Pause/Break** (or the Stop button) stops it at any time, from any window.
 - Type in the box to correct it or add to the task. It holds off the mouse and keyboard while you type.
+  Your message waits above the box until it reads it: × takes it back, and **Interrupt** (or
+  Ctrl+Enter) has it read right away, cutting short what it was thinking or running.
+- Click a picture or video in the chat to see it full screen. **Prompt** under one made with ComfyUI
+  (or AUTOMATIC1111) shows the prompts and settings it was made with.
 - Paste a screenshot or files with Ctrl+V, or drop them on the window, to send them with a message.
 - **History** keeps every chat, so you can come back to one and carry on.
 - It doesn't ask before it acts. To approve each step, use "Ask me first" in Settings.

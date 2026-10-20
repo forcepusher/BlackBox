@@ -72,6 +72,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             OnPropertyChanged(nameof(HasAttachments));
             SendCommand.NotifyCanExecuteChanged();
         };
+        Queued.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasQueued));
+            OnPropertyChanged(nameof(QueuedTitle));
+            InterruptCommand.NotifyCanExecuteChanged();
+        };
     }
 
     public ObservableCollection<ChatItemViewModel> Items { get; } = [];
@@ -81,7 +87,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private string _input = "";
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SendCommand), nameof(StopCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SendCommand), nameof(StopCommand), nameof(InterruptCommand))]
     [NotifyPropertyChangedFor(nameof(InputHint), nameof(TypingPause), nameof(TypingPauseText))]
     private bool _isBusy;
 
@@ -137,6 +143,36 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _platform.InputOverlay.Duration = TimeSpan.FromSeconds(AgentSettings.InputLogSeconds);
         _platform.InputOverlay.Enabled = true;
     }
+
+    // ---- the full-screen viewer -------------------------------------------------------
+
+    /// <summary>Decoders and speakers, for the full-screen viewer's videos.</summary>
+    public PreviewServices Previews => _previews;
+
+    /// <summary>The full-screen viewer, kept out of the agent's way while it is open, as the chat is.</summary>
+    public void AttachViewer(nint handle) => _platform.HostWindow.Attach(handle);
+
+    public void DetachViewer(nint handle) => _platform.HostWindow.Detach(handle);
+
+    /// <summary>
+    /// The chat's pictures and videos from the top, for the full-screen viewer to go through: those
+    /// that came with messages, tools' screenshots, and what tools made or replies named.
+    /// </summary>
+    public List<MediaEntry> MediaInChat()
+    {
+        var all = new List<MediaEntry>();
+        foreach (var item in Items)
+        {
+            if (item is UserMessageItem message)
+                all.AddRange(message.Attachments.Where(a => Viewable(a.Path)).Select(a => new MediaEntry(a, a.Path, null, a.FileName)));
+            if (item is ToolCallItem { ScreenshotData: { } shot } tool)
+                all.Add(new MediaEntry(tool, null, shot, $"Screenshot, {tool.TimeText}"));
+            all.AddRange(item.Previews.Where(p => Viewable(p.Path)).Select(p => new MediaEntry(p, p.Path, null, p.FileName)));
+        }
+        return all;
+    }
+
+    private static bool Viewable(string path) => Core.Media.MediaPreview.KindOf(path) is "image" or "animation" or "video" && !Directory.Exists(path);
 
     public void OnStartup()
     {
@@ -679,19 +715,73 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     private async Task SendAsync(UserInput input)
     {
-        Items.Add(new UserMessageItem(input.Text, input.Files));
         if (IsBusy)
         {
+            // Above the box until the model reads it; then into the chat, where it reads it.
+            Queued.Add(new QueuedMessageItem(input, CancelQueued));
             if (_runDetached) _forNextRun.Add(input);
             else if (_session is { } running) running.Steer(input);
             else _steerPending.Add(input);
-            SaveChat(SnapshotHistory());
             return;
         }
+        Items.Add(new UserMessageItem(input.Text, input.Files));
         SaveChat(SnapshotHistory());
         // What arrived just as a run ended, too late for it, starts the next one.
         for (UserInput? next = input; next is not null;)
             next = await RunAsync(next);
+    }
+
+    // ---- messages sent during a run, until the model reads them ---------------------
+
+    /// <summary>
+    /// Messages sent during the run that the model hasn't read yet, above the box: × takes one back,
+    /// Interrupt has them read at once. Each joins the chat when the model reads it. In the chat from
+    /// the moment they were sent, they stood above the work the model went on with before it read them.
+    /// </summary>
+    public ObservableCollection<QueuedMessageItem> Queued { get; } = [];
+
+    public bool HasQueued => Queued.Count > 0;
+
+    public string QueuedTitle => Queued.Count == 1 ? "I read this before my next step:" : $"I read these {Queued.Count} before my next step:";
+
+    /// <summary>A queued message the model has now, or one that starts the next run: from above the box into the chat.</summary>
+    private void MoveIntoChat(UserInput input)
+    {
+        var queued = Queued.FirstOrDefault(q => ReferenceEquals(q.Input, input));
+        if (queued is not null)
+            Queued.Remove(queued);
+        Items.Add(new UserMessageItem(input.Text, input.Files) { At = queued?.SentAt ?? DateTime.UtcNow });
+    }
+
+    /// <summary>× on a queued message: taken back unsent, unless the model has just read it, and then it joins the chat as any other.</summary>
+    private void CancelQueued(QueuedMessageItem item)
+    {
+        var input = item.Input;
+        var taken = _steerPending.RemoveAll(i => ReferenceEquals(i, input)) > 0
+                    || _forNextRun.RemoveAll(i => ReferenceEquals(i, input)) > 0
+                    || _session?.Unsteer(input) == true;
+        if (taken)
+            Queued.Remove(item);
+    }
+
+    private bool CanInterrupt() => IsBusy && HasQueued;
+
+    /// <summary>
+    /// Interrupt, over the queued messages (or Ctrl+Enter): the model stops thinking, writing or
+    /// running a tool, and reads them now. While the run is still starting there is nothing to stop:
+    /// its first step reads them.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanInterrupt))]
+    private void Interrupt() => _session?.Interrupt();
+
+    /// <summary>Ctrl+Enter: sends what is in the box, and during a run has it read at once.</summary>
+    public void SendNow()
+    {
+        if (!SendCommand.CanExecute(null))
+            return;
+        SendCommand.Execute(null);
+        if (InterruptCommand.CanExecute(null))
+            InterruptCommand.Execute(null);
     }
 
     /// <summary>What Continue sends after a stop: the model reads the conversation up to the stop, and carries on from there.</summary>
@@ -903,6 +993,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             if (_forNextRun.Count == 0)
                 return null;
             var next = UserInput.Join(_forNextRun);
+            foreach (var message in _forNextRun)
+                MoveIntoChat(message);
             _forNextRun.Clear();
             return next;
         }
@@ -910,18 +1002,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             return null;
         if (ct.IsCancellationRequested)
         {
-            // Stopped: what the agent hadn't read yet comes off the chat and goes back in the box,
-            // with its files under it, to send again or not.
+            // Stopped: what the agent hadn't read yet goes back in the box, with its files under it,
+            // to send again or not.
             foreach (var unread in late)
-                if (Items.LastOrDefault(i => i is UserMessageItem u && u.Text == unread.Text && u.Files.SequenceEqual(unread.Files)) is { } item)
-                {
-                    Items.Remove(item);
-                    item.DisposePreviews();
-                }
+                if (Queued.FirstOrDefault(q => ReferenceEquals(q.Input, unread)) is { } item)
+                    Queued.Remove(item);
             Input = string.Join("\n\n", late.Select(l => l.Text).Append(Input).Where(t => t.Length > 0));
             Attach(late.SelectMany(l => l.Files));
             return null;
         }
+        foreach (var message in late)
+            MoveIntoChat(message);
         return UserInput.Join(late);
     }
 
@@ -987,14 +1078,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         // The stopped run keeps its own list until it ends, so it can't write into the next chat.
         _history = [];
-        _steerPending.Clear();
-        // Left before they could run: back in the box, with their files, to send again or not.
-        if (_forNextRun.Count > 0)
+        // Left before the model read them (or before they could start a run): back in the box, with
+        // their files, to send again or not.
+        if (Queued.Count > 0)
         {
-            Input = string.Join("\n\n", _forNextRun.Select(m => m.Text).Append(Input).Where(t => t.Length > 0));
-            Attach(_forNextRun.SelectMany(m => m.Files));
-            _forNextRun.Clear();
+            foreach (var queued in Queued)
+                _session?.Unsteer(queued.Input);
+            Input = string.Join("\n\n", Queued.Select(q => q.Input.Text).Append(Input).Where(t => t.Length > 0));
+            Attach(Queued.SelectMany(q => q.Input.Files));
+            Queued.Clear();
         }
+        _steerPending.Clear();
+        _forNextRun.Clear();
         // Logins belong to the chat: the next one starts logged out (the stopped run's tools fail).
         // Logging out talks to the servers, so it happens off the UI thread.
         var ended = _ssh;
@@ -1351,6 +1446,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         });
     }
 
+    void IAgentObserver.OnUserMessageDelivered(UserInput input) => Dispatcher.UIThread.Post(() =>
+    {
+        if (_runDetached) return;
+        MoveIntoChat(input);
+    });
+
     void IAgentObserver.OnDelta(StreamDelta delta) => _streaming?.Append(delta);
 
     void IAgentObserver.OnSending(long sent, long total) => _streaming?.Sending(sent, total);
@@ -1492,7 +1593,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         {
             item.Ended = at;
             if (item.State is not (ToolItemState.Denied or ToolItemState.Stopped))
-                item.State = result.IsError ? ToolItemState.Error : ToolItemState.Done;
+                item.State = result.Text is AgentSession.InterruptedResult or AgentSession.NotRunResult ? ToolItemState.Stopped
+                    : result.IsError ? ToolItemState.Error : ToolItemState.Done;
         }
     });
 
