@@ -1007,8 +1007,10 @@ things up is now something BlackBox makes happen, not only asks for:
   was wanted. For what no ComfyUI template does, it reads the model makers' guide first.
 - A question the model asks itself in its thinking about how something is done, what it is called,
   which node or setting does it or whether a program has it ("How do I make LTX follow the motion of
-  a reference video?", "I'm not sure how the IC-LoRA takes the control video"), which it then goes
-  on without looking up, BlackBox searches for it: the first five results come under the step's
+  a reference video?", "I'm not sure how the IC-LoRA takes the control video"), or what it says it
+  will look up on the web ("Let me do a quick web search for Blender 5.2's geometry nodes Python
+  API", after which qwen3.8 thought "Actually, let me think about what I know" and wrote the script
+  from memory), which it then goes on without looking up, BlackBox searches for it: the first five results come under the step's
   last result, with the question quoted, and the chat says what was looked up. Questions about the
   screen, the user or how a result looks are left alone, as are ones that name nothing ("How should
   I proceed?"), a question like one searched before, and any for a few calls after a look-up, while
