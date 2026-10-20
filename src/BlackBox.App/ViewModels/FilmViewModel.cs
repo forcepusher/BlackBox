@@ -1249,7 +1249,11 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         var frames = piece.Kind == FilmPieceKind.Shot && _board.Shot(piece.Id) is { LipSync: false } shot && _board.Frame(shot.First) is { } first && _board.Frame(shot.Last) is { } last
             ? $" Its first frame ({first.Id}) is: \"{first.Prompt.Trim()}\". Its last frame ({last.Id}) is: \"{last.Prompt.Trim()}\". Compare where the things that stay put " +
               "(the moon, the trees, the horizon, where someone stands) and the camera's angle are in the two: the shot moves whatever differs, so if they differ, " +
-              $"that is the cause: change the last frame ({last.Id}) to agree with the first, keeping only the change the shot is for."
+              $"that is the cause: change the last frame ({last.Id}) to agree with the first, keeping only the change the shot is for. " +
+              // The picture model may not draw what a frame's prompt says: a girl the prompt put beside a mailbox
+              // stood two steps from it, so every take walked her back there, whatever the shot's words.
+              "The picture's top row shows the two frames as they were made, which may not be what their prompts say: if the last one doesn't show where the shot " +
+              $"takes everyone (someone not where they end up, a prop not in hand), the video goes there anyway, so make the last frame ({last.Id}) again, from the first."
             // A shot's last frame made afresh from the references lost the first's framing: a girl's
             // mailbox moved and grew, and the fix that dropped the first frame from "from" made it worse.
             : piece.Kind == FilmPieceKind.Frame && _board.Shots.FirstOrDefault(s => !s.LipSync && s.Last == piece.Id && s.First is not null && s.First != piece.Id) is { } ending

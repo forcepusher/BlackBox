@@ -13,6 +13,10 @@ whatever they leave open, so say what moves, which way, how far, and what stays 
   and use a first-and-last-frame template. The two frames agree on framing, light and everything
   that stays put, and differ only in what the shot changes: whatever differs between them is moved
   during the shot (a moon "upper left" in one and "above" in the other slides across the sky).
+- An edit model changes a pose, a face, a turn or what someone holds well, and moves someone across
+  the frame badly: asked for a girl "now beside the mailbox", it left her where she stood, and every
+  take then walked her to the mailbox and back. When someone walks or moves far, animate the first
+  frame alone and say in the prompt where they end up; look at a last frame before using it.
 - The prompt says what happens from the picture. Call what is in it by the same words as the
   picture's prompt (the red fox, the wooden table), and don't describe a different scene.
 
