@@ -121,8 +121,8 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         Question = null;
         if (calls.Count == 0 || calls.Any(t => t is WebSearchTool or FetchPageTool))
             return;
-        var text = Plain(reply.Reasoning + "\n" + reply.Content);
-        if (_tried && Doubts().IsMatch(text))
+        var text = reply.Reasoning + "\n" + reply.Content;
+        if (_tried && SaysItFailed(text))
         {
             _tried = false;
             _pending = Failed() ?? (_lookedUp || _firstSaid ? null : DoubtNote);
@@ -234,14 +234,15 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     internal static string? QuestionIn(string text)
     {
         string? found = null;
-        foreach (var raw in Sentences().Split(Plain(text)))
+        foreach (var sentence in Sentences().Split(Plain(text)))
         {
-            var sentence = raw.Trim().Trim('*', '_', '`', '-', ' ', '"', '\'');
+            // The question is the part of a sentence that asks: "Node 1 loads Pony — wait, which checkpoint should I use?"
+            var asked = Clauses().Split(sentence).Select(c => c.Trim().Trim('*', '_', '`', '-', ' ', '"', '\''))
+                .LastOrDefault(c => (c.EndsWith('?') && Asks().IsMatch(c)) || DoesntKnow().IsMatch(c));
             // "How should I proceed with this?" names nothing to search for.
-            if (sentence.Length is < 20 or > 300 || Screenish().IsMatch(sentence) || Words(sentence).Count < 3)
+            if (asked is null || asked.Length is < 20 or > 300 || Screenish().IsMatch(asked) || Words(asked).Count < 3)
                 continue;
-            if ((sentence.EndsWith('?') && Asks().IsMatch(sentence)) || DoesntKnow().IsMatch(sentence))
-                found = sentence;
+            found = asked;
         }
         return found;
     }
@@ -252,7 +253,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     /// </summary>
     internal static string Query(string question, string? subject)
     {
-        var q = Filler().Replace(question, "");
+        var q = Filler().Replace(question.Replace("`", ""), "");
         // "I'm not sure how LTX takes a video" is searched as "how LTX takes a video".
         if (!q.EndsWith('?') && DoesntKnow().Match(q) is { Success: true } m)
             q = AfterThought().Replace(q[m.Groups["what"].Index..], "");
@@ -288,8 +289,11 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     // Curly apostrophes as straight ones, so "doesn’t" reads as "doesn't".
     private static string Plain(string text) => text.Replace('’', '\'').Replace('‘', '\'');
 
+    /// <summary>Whether the model's words say its last try didn't do what it should.</summary>
+    internal static bool SaysItFailed(string text) => Doubts().IsMatch(Plain(text));
+
     /// <summary>Whether the user's message says the last result isn't right.</summary>
-    internal static bool UserDoubts(string text) => Doubts().IsMatch(Plain(text)) || UserSaysWrong().IsMatch(Plain(text));
+    internal static bool UserDoubts(string text) => SaysItFailed(text) || UserSaysWrong().IsMatch(Plain(text));
 
     /// <summary>
     /// Tools that run code report its errors as their output: an MCP server's "Error executing
@@ -365,6 +369,9 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     [GeneratedRegex(@"(?<=[.!?])\s+|\n")]
     private static partial Regex Sentences();
 
+    [GeneratedRegex(@"\s+[—–-]+\s+|[:;]\s+")]
+    private static partial Regex Clauses();
+
     // Python, Blender, C#, PowerShell, JavaScript, GDScript and command-line tools, as they say it.
     [GeneratedRegex(@"has no attribute|is not defined|not declared|no module named|cannot import name|unexpected keyword|positional argument|" +
                     @"\b(key|enum|attribute|property|method|function|module|command|option|parameter|argument|identifier|member|field|node|socket|type)\b[^.;]{0,80}\bnot found|" +
@@ -377,9 +384,9 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     private static partial Regex MissingName();
 
     // The model saying a try didn't do what it should: nothing failed, it just didn't work.
-    [GeneratedRegex(@"\bstill\b[^.!?\n]{0,40}\b(wrong|broken|static|frozen|stuck|missing|empty|blank|the same|not|no|isn't|doesn't|didn't|won't|fails?|failing|failed)\b|" +
+    [GeneratedRegex(@"\bstill\s+(\w+\s+){0,3}?(wrong|broken|static|frozen|stuck|missing|empty|blank|the same|not|no|isn't|doesn't|didn't|won't|fails?|failing|failed)\b|" +
                     @"\b(didn't|did not|doesn't|does not|isn't|is not|wasn't|was not|won't|aren't|are not)\s+(work|working|help|fix|change|move|moving|follow|following|match|matching|look right|come out right|do (anything|what))\b|" +
-                    @"\bno (visible )?(change|effect|difference|improvement|motion|movement)\b|" +
+                    @"\bno (visible )?(change|effect|difference|improvement|motion|movement) (in|at all|to|from)\b|\b(had|has|made|makes) no (effect|difference)\b|" +
                     @"\bnot what (i|we|the user|they|you) (wanted|asked|expected|intended|meant)\b|" +
                     @"\b(try|use|need) (a |an )?(different|another|other|new) (approach|way|method|node|workflow|technique|strategy)\b|" +
                     @"\b(that|this|it) (failed|did not work|didn't work|doesn't work)\b|\bfailed (again|to (work|follow|move|change))\b",
@@ -404,9 +411,10 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     private static partial Regex Asks();
 
     // Not knowing, said as a statement: "I'm not sure how LTX takes a reference video." What isn't known starts at "what".
-    [GeneratedRegex(@"\b(i'm|i am|not) (not )?(sure|certain) (?<what>how|what|which|whether|if|where)\b|" +
-                    @"\bi (don't|do not) (know|remember|recall) (?<what>how|what|which|whether|if|where|the (exact|right|correct))\b|" +
-                    @"\bi (need|have|will need) to (figure|find) out (?<what>how|what|which|whether|where)\b|\bunclear (?<what>how|what|which|whether)\b",
+    // "Whether" and "if" only for what a program can do: "I don't know if the original s3 was good" is no question for the web.
+    [GeneratedRegex(@"\b((i'm|i am|not) (not )?(sure|certain)|i (don't|do not) (know|remember|recall)|i (need|have|will need) to (figure|find) out|unclear) " +
+                    @"((?<what>how|what|which|where)\b|(?<what>whether|if)\b[^,;]*\b(supports?|accepts?|allows?|handles?|has|have|exists?|works? with|is built into|comes with)\b|" +
+                    @"(?<what>the (exact|right|correct|proper) (name|syntax|parameter|argument|option|setting|node|function|method|api|flag|command|format|signature|value)s?)\b)",
         RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture)]
     private static partial Regex DoesntKnow();
 
@@ -418,7 +426,10 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     [GeneratedRegex(@"^((so|but|hmm+|ok(ay)?|well|wait|now|and|also|actually|then|right|oh|ah)\b[,.:]?\s*)+", RegexOptions.IgnoreCase)]
     private static partial Regex Filler();
 
-    // Questions about the screen, the user or how something looks, which the web can't answer.
-    [GeneratedRegex(@"\b(screen|screenshot|cursor|click|clicked|button|the user|user's|they want|he|she)\b|\b(look|looks|seem|seems)\?$|\blooks? (best|better|good|right|nicer)\b", RegexOptions.IgnoreCase)]
+    // Questions the web can't answer: about the screen, the user, how something looks, what a check
+    // would show here, or BlackBox's own tools.
+    [GeneratedRegex(@"\b(screen|screenshot|cursor|click|clicked|button|the user|user's|they want|he|she)\b|\b(look|looks|seem|seems)\?$|\blooks? (best|better|good|right|nicer)\b|" +
+                    @"\b(determine|tell|check|see|verify|confirm) (whether|if|which)\b|\b(film|comfyui) tool\b|\bthe tool\b|\bblackbox\b|\bstoryboard\b",
+        RegexOptions.IgnoreCase)]
     private static partial Regex Screenish();
 }

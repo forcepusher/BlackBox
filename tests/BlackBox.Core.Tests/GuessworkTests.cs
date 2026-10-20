@@ -192,6 +192,12 @@ public class GuessworkTests
     [InlineData("What's the correct way to add a socket to a node group in Blender 5.2?", "What's the correct way to add a socket to a node group in Blender 5.2?")]
     [InlineData("I'm not sure how the IC-LoRA takes the control video.", "I'm not sure how the IC-LoRA takes the control video.")]
     [InlineData("The template runs. I don't know which sampler Nova Furry XL wants, so I'll keep euler.", "I don't know which sampler Nova Furry XL wants, so I'll keep euler.")]
+    // From qwen3.8's thinking in earlier runs: the part of the sentence that asks.
+    [InlineData("In ComfyUI, VAEDecode uses the VAE's dtype; is there a node input for fp32?", "is there a node input for fp32?")]
+    [InlineData("Actually, does ComfyUI have a \"Remove Background\" node?", "Actually, does ComfyUI have a \"Remove Background\" node?")]
+    [InlineData("I don't know if the original s3 was good or not.", null)]
+    [InlineData("So how do we determine whether it's Juggernaut XL or SnowPony?", null)]
+    [InlineData("Now, how does the film tool handle lip-sync?", null)]
     // Questions the web can't answer: the screen, the user, how a result looks, or nothing named.
     [InlineData("Did the click on the Export button work?", null)]
     [InlineData("How do I get to the button in the top right of the screen?", null)]
