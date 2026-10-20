@@ -1027,6 +1027,14 @@ things up is now something BlackBox makes happen, not only asks for:
   things up, until the model does. The record is kept for the chat, so "still wrong" in the next
   message counts against the tries before it.
 
+Measured with qwen3.8 on the Blender 5.2 task made from the command line instead (`blender -b`,
+one run each): before, it thought "let me do a quick web search… Actually, let me think about what
+I know", wrote its first script from memory (`GeometryNodeRandomValue`, which is
+`FunctionNodeRandomValue`), and was still checking its scene at 15 minutes, 10 of 20 scripts
+failed; with the new prompt it searched before its first script, read the pages for Random Value
+and the node group interface, and finished in 8.5 minutes, 5 of 8 scripts failed (setting the
+modifier's inputs, which it then looked up too). Both scenes were right.
+
 No API key and nothing to install. `web_search` asks DuckDuckGo's HTML page through the system's
 `curl` (built into Windows 10 and later; a fraction of a second): DuckDuckGo recognizes .NET's own
 HTTP client by its TLS handshake and answers it with a captcha, even on the first search.
