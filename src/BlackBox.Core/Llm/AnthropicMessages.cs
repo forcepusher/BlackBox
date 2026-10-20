@@ -118,9 +118,12 @@ public static partial class AnthropicMessages
     /// <param name="Betas">The beta features (drop_block, fallbacks); off once the API says it doesn't know them.</param>
     /// <param name="Eager">Tool calls streamed as they are written (<c>eager_input_streaming</c>).</param>
     /// <param name="Summaries">Thinking summarized for the reasoning BlackBox shows (<c>display: "summarized"</c>; left out by default since Opus 4.7).</param>
-    /// <param name="StripThinking">Earlier thinking left out: the API refused it as written for another history.</param>
+    /// <param name="StripThinking">
+    /// Thinking the API refused as written for another history, left out: 1 that of the replies
+    /// before the latest (whose thinking must go back whole while its calls are answered), 2 all.
+    /// </param>
     /// <param name="MaxImageSide">Pictures made to fit this many pixels a side (20+ pictures at once take 2000 at most).</param>
-    internal sealed record Wire(bool Betas = true, bool Eager = true, bool Summaries = true, bool StripThinking = false, int MaxImageSide = 8000);
+    internal sealed record Wire(bool Betas = true, bool Eager = true, bool Summaries = true, int StripThinking = 0, int MaxImageSide = 8000);
 
     /// <summary>The reply limit asked for, thinking included.</summary>
     internal const int MaxReply = 64_000;
@@ -213,12 +216,13 @@ public static partial class AnthropicMessages
                 turns.Add((role, blocks));
         }
 
+        var latest = history.LastOrDefault(m => m.Role == ChatRole.Assistant);
         foreach (var m in history)
         {
             switch (m.Role)
             {
                 case ChatRole.Assistant:
-                    Add(ChatRole.Assistant, AssistantBlocks(m, wire));
+                    Add(ChatRole.Assistant, AssistantBlocks(m, wire.StripThinking > (ReferenceEquals(m, latest) ? 1 : 0)));
                     break;
                 case ChatRole.Tool:
                     var result = new JsonObject { ["type"] = "tool_result", ["tool_use_id"] = ToolId(m.ToolCallId ?? "") };
@@ -294,7 +298,7 @@ public static partial class AnthropicMessages
     /// calls BlackBox kept: one it took out (a check after "the task is complete") is left out.
     /// A reply from another model is its text and calls; its reasoning can't be sent as Claude's thinking.
     /// </summary>
-    private static List<JsonObject> AssistantBlocks(ChatMessage m, Wire wire)
+    private static List<JsonObject> AssistantBlocks(ChatMessage m, bool stripThinking)
     {
         var blocks = new List<JsonObject>();
         var calls = (m.ToolCalls ?? []).ToList();
@@ -304,7 +308,7 @@ public static partial class AnthropicMessages
             {
                 switch (Type(block))
                 {
-                    case "thinking" or "redacted_thinking" when !wire.StripThinking:
+                    case "thinking" or "redacted_thinking" when !stripThinking:
                         blocks.Add((JsonObject)block.DeepClone());
                         break;
                     case "text" when block["text"]?.GetValue<string>() is { } text && text.Trim().Length > 0:

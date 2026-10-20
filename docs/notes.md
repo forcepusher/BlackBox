@@ -779,8 +779,9 @@ Claude unchanged. A gateway in front of Anthropic whose address has an `anthropi
   that nothing before a thinking block changed since it was written (for accounts made since 31
   August 2026); where BlackBox changes the history (an MCP server added mid-run changes the prompt
   and the tools), the request asks for such blocks to be dropped (`drop_block`, beta
-  `thinking-binding-controls-2026-08-01`), and where that beta is unknown, earlier thinking is left
-  out and the request sent again. A context reset keeps only the user's messages, the handoff note
+  `thinking-binding-controls-2026-08-01`), and where that beta is unknown, the thinking of the
+  replies before the latest is left out and the request sent again, then if need be all of it (the
+  latest reply's must otherwise go back whole while its calls are answered). A context reset keeps only the user's messages, the handoff note
   and a screenshot, which the check allows. Effort is the model's default (medium on Opus 5.5),
   except for fresh looks and quick questions, which ask for low: every Claude since 4.6 thinks, and
   only effort says how much. Thinking counts toward the reply limit, so requests ask for 64k (the

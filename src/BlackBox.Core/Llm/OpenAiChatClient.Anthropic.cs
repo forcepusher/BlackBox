@@ -41,8 +41,8 @@ public sealed partial class OpenAiChatClient
 
     private ConcurrentDictionary<string, AnthropicMessages.Wire> Wires => Learnt.GetOrCreateValue(_http).Wires;
 
-    /// <summary>Set once the API refused earlier thinking as written for another history: this conversation goes on without it.</summary>
-    private bool _stripThinking;
+    /// <summary>Set once the API refused earlier thinking as written for another history: this conversation goes on without it (see <see cref="AnthropicMessages.Wire.StripThinking"/>).</summary>
+    private int _stripThinking;
 
     private void ClaudeHeaders(HttpRequestMessage req, IReadOnlyCollection<string>? betas = null)
     {
@@ -154,7 +154,7 @@ public sealed partial class OpenAiChatClient
                     // out, and the request sent again.
                     if (status == 400 && attempt < 6 && Adjust(said, wire, ref model) is { } adjusted)
                     {
-                        Wires[_baseUrl] = adjusted with { StripThinking = false };
+                        Wires[_baseUrl] = adjusted with { StripThinking = 0 };
                         _stripThinking = adjusted.StripThinking;
                         ClaudeModels[_baseUrl + "|" + model.Id] = model;
                         continue;
@@ -213,8 +213,8 @@ public sealed partial class OpenAiChatClient
             model = model with { MaxTokens = cap };
             return wire;
         }
-        if (said.Contains("signature", StringComparison.OrdinalIgnoreCase) && said.Contains("thinking", StringComparison.OrdinalIgnoreCase) && !wire.StripThinking)
-            return wire with { StripThinking = true };
+        if (said.Contains("signature", StringComparison.OrdinalIgnoreCase) && said.Contains("thinking", StringComparison.OrdinalIgnoreCase) && wire.StripThinking < 2)
+            return wire with { StripThinking = wire.StripThinking + 1 };
         if (wire.Betas && (said.Contains("anthropic-beta", StringComparison.OrdinalIgnoreCase) || said.Contains("block_binding", StringComparison.OrdinalIgnoreCase)
                            || said.Contains("fallback", StringComparison.OrdinalIgnoreCase)))
             return wire with { Betas = false };
