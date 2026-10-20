@@ -1,6 +1,9 @@
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using BlackBox.Core.Llm;
 using BlackBox.Core.Mcp;
 using BlackBox.Core.Tools;
+using BlackBox.Core.Web;
 
 namespace BlackBox.Core.Agent;
 
@@ -16,14 +19,31 @@ namespace BlackBox.Core.Agent;
 /// something that doesn't exist gets it at once, the same error a second time, any failure from
 /// the third since the last look-up, and the first script or command that fails in a task before
 /// anything was looked up.
+/// <para>
+/// Errors weren't enough. Asked to make a character follow a video's motion with LTX, a run tried
+/// workflows for two hours; nothing failed, the videos just didn't move as asked, and the job was
+/// done right after the user said to look for guidance (LTX's motion control guide). So a try the
+/// model itself calls wrong, or the user does, counts as a failed one; a question the model asks
+/// itself about how something is done is searched for it (see <see cref="Question"/>); and after
+/// ten minutes of tries with nothing looked up, every next try says it is time to look.
+/// </para>
 /// </summary>
-internal sealed partial class Guesswork
+internal sealed partial class Guesswork(Func<DateTime>? clock = null)
 {
     /// <summary>Failures further back than this many calls no longer count.</summary>
     private const int Window = 20;
 
     /// <summary>Failures since the last look-up (within <see cref="Window"/>) before every next one gets a note.</summary>
     internal const int Tries = 3;
+
+    /// <summary>Time spent on tries with nothing looked up before every next try says it is time to look.</summary>
+    internal static readonly TimeSpan CheckAfter = TimeSpan.FromMinutes(10);
+
+    /// <summary>Tries in that time it takes as well: a long wait or one long render is no guesswork.</summary>
+    internal const int CheckTries = 3;
+
+    /// <summary>Calls after a look-up before a question of the model's is searched for it: it is reading what it found.</summary>
+    internal const int SearchGap = 4;
 
     internal const string RepeatNote =
         "[BlackBox] This error came up before in this task. Unless you know exactly why, look it up with web_search " +
@@ -42,34 +62,122 @@ internal sealed partial class Guesswork
         "[BlackBox] Nothing has been looked up in this task yet. Unless you know exactly why this failed, look up how this is done " +
         "in the version you are working with (web_search, then fetch_page with find=) before you try again, rather than trying variations.";
 
+    internal const string DoubtNote =
+        "[BlackBox] By your own account the last try didn't give what was wanted, and nothing has been looked up in this task yet. " +
+        "Before the next try, search the web for how this is done (the official documentation, the makers' guides and examples, " +
+        "for the version in use: web_search, then fetch_page with find=) rather than trying variations.";
+
+    internal const string UserDoubtNote =
+        "[BlackBox] The user says the result isn't right yet. Before you try again, search the web for how this is done " +
+        "(the official documentation, the makers' guides and examples, for the version in use: web_search, then fetch_page with find=) " +
+        "rather than trying variations of what didn't work.";
+
+    internal static string CheckNote(TimeSpan worked, int tries) =>
+        $"[BlackBox] Time to look things up: {(int)worked.TotalMinutes} minutes and {tries} tries since anything was last looked up. " +
+        "Search the web for guidance on what you are doing now (the official documentation, the makers' guides and examples, " +
+        "for the version in use) before your next try: a better way is often one search away, even when things seem to work.";
+
+    private readonly Func<DateTime> _now = clock ?? (() => DateTime.UtcNow);
     private readonly Dictionary<string, int> _seen = [];
     private readonly Queue<int> _failures = new();
-    private int _calls;
-    private bool _lookedUp, _firstSaid;
+    private readonly List<HashSet<string>> _searched = [];
+    private int _calls, _triesSince, _lookedUpAt = -SearchGap;
+    private TimeSpan _worked;
+    private DateTime? _tick;
+    private bool _lookedUp, _firstSaid, _tried, _triedInRun;
+    private string? _pending;
+
+    /// <summary>
+    /// A question the model asked itself in its last reply about how something is done, which it
+    /// went on without looking up: BlackBox searches it for the model (see <see cref="Searched"/>).
+    /// </summary>
+    public string? Question { get; private set; }
+
+    /// <summary>
+    /// A new run, on the user's message: the clock only counts time spent working, and a message
+    /// saying the result of the run before isn't right counts as a failed try.
+    /// </summary>
+    public void StartRun(string? userText)
+    {
+        (_tick, _lookedUp, _firstSaid, _tried, Question) = (_now(), false, false, false, null);
+        Heard(userText);
+        _triedInRun = false;
+    }
+
+    /// <summary>A message of the user's, at the start of a run or while it goes on: one saying a result isn't right counts as a failed try.</summary>
+    public void Heard(string? userText)
+    {
+        if (_triedInRun && userText is { } text && UserDoubts(text))
+            _pending = Failed() ?? UserDoubtNote;
+    }
+
+    /// <summary>
+    /// Reads a reply before its calls run: a try it calls wrong counts as a failed one (its note
+    /// comes with the reply's first result), and a question about how something is done that it
+    /// doesn't look up becomes <see cref="Question"/>.
+    /// </summary>
+    public void Read(ChatMessage reply, IReadOnlyList<Tool?> calls)
+    {
+        Question = null;
+        if (calls.Count == 0 || calls.Any(t => t is WebSearchTool or FetchPageTool))
+            return;
+        var text = Plain(reply.Reasoning + "\n" + reply.Content);
+        if (_tried && Doubts().IsMatch(text))
+        {
+            _tried = false;
+            _pending = Failed() ?? (_lookedUp || _firstSaid ? null : DoubtNote);
+            _firstSaid |= _pending == DoubtNote;
+        }
+        if (_calls - _lookedUpAt >= SearchGap && QuestionIn(text) is { } question && !SearchedBefore(question))
+            Question = question;
+    }
+
+    /// <summary>The question was searched for the model: not again, and the clock starts over.</summary>
+    public void Searched(string question)
+    {
+        _searched.Add(Words(question));
+        Question = null;
+        (_worked, _triesSince, _lookedUpAt, _lookedUp) = (TimeSpan.Zero, 0, _calls, true);
+    }
 
     /// <summary>The note for a call's result, or null.</summary>
-    public string? Check(Tool? tool, ToolResult result)
+    /// <param name="action">The call's action argument, for tools that do several things (comfyui, film).</param>
+    public string? Check(Tool? tool, ToolResult result, string? action = null)
     {
         _calls++;
+        var now = _now();
+        if (_tick is { } tick)
+            _worked += now - tick;
+        _tick = now;
         if (tool is WebSearchTool or FetchPageTool)
         {
             _failures.Clear();
-            _lookedUp = true;
+            (_lookedUp, _worked, _triesSince, _lookedUpAt, _pending) = (true, TimeSpan.Zero, 0, _calls, null);
             return null;
         }
+        var isTry = IsTry(tool, action);
+        if (isTry)
+        {
+            _triesSince++;
+            _triedInRun = true;
+        }
+        var pending = _pending;
+        _pending = null;
+        _tried = false;
         // A call the user declined failed for no lack of knowledge.
-        if (result.Text == AgentSession.DeclinedText || ErrorLine(result, ErrorsInText(tool)) is not { } line)
-            return null;
+        if (result.Text == AgentSession.DeclinedText)
+            return pending;
+        if (ErrorLine(result, ErrorsInText(tool)) is not { } line)
+        {
+            _tried = isTry;
+            return pending ?? (isTry && _worked >= CheckAfter && _triesSince >= CheckTries ? CheckNote(_worked, _triesSince) : null);
+        }
 
-        _failures.Enqueue(_calls);
-        while (_failures.Peek() <= _calls - Window)
-            _failures.Dequeue();
         var signature = Signature(line);
         var count = _seen[signature] = _seen.GetValueOrDefault(signature) + 1;
-        if (count == 2)
-            return RepeatNote;
-        if (_failures.Count >= Tries)
-            return TriesNote(_failures.Count);
+        var failed = Failed(count);
+        if (failed is not null)
+            return failed;
         if (count == 1 && NamesWhatIsNotThere(line))
             return NameNote;
         // The first script or command that fails in a task, before anything was looked up: in the
@@ -79,8 +187,109 @@ internal sealed partial class Guesswork
             _firstSaid = true;
             return FirstNote;
         }
-        return null;
+        return pending;
     }
+
+    /// <summary>Counts a failed try; the note for a failure seen before or for one too many since the last look-up, or null.</summary>
+    private string? Failed(int seen = 1)
+    {
+        _failures.Enqueue(_calls);
+        while (_failures.Peek() <= _calls - Window)
+            _failures.Dequeue();
+        return seen == 2 ? RepeatNote : _failures.Count >= Tries ? TriesNote(_failures.Count) : null;
+    }
+
+    /// <summary>
+    /// Calls that try to get something done, as against looking or reading: running code or a
+    /// command, writing a file, a ComfyUI job, making a piece of a film.
+    /// </summary>
+    internal static bool IsTry(Tool? tool, string? action) => tool switch
+    {
+        ShellTool or SshTool or WriteFileTool or EditFileTool => true,
+        McpTool mcp => mcp.Risk != ToolRisk.ReadOnly,
+        ComfyTool => action is "run",
+        FilmTool => action is "frame" or "shot" or "sound" or "join",
+        _ => false,
+    };
+
+    /// <summary>The action argument of a call's arguments, if it has one.</summary>
+    internal static string? ActionOf(string arguments)
+    {
+        try
+        {
+            return JsonNode.Parse(arguments) is JsonObject args && args["action"] is JsonValue v && v.TryGetValue<string>(out var a)
+                ? a.Trim().ToLowerInvariant() : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The last question in a reply's thinking or text about how something is done, what it is
+    /// called or whether a program has it, or a statement of not knowing that; null when there is
+    /// none. Questions about the screen, the user or how a result looks are no matter for a search.
+    /// </summary>
+    internal static string? QuestionIn(string text)
+    {
+        string? found = null;
+        foreach (var raw in Sentences().Split(Plain(text)))
+        {
+            var sentence = raw.Trim().Trim('*', '_', '`', '-', ' ', '"', '\'');
+            // "How should I proceed with this?" names nothing to search for.
+            if (sentence.Length is < 20 or > 300 || Screenish().IsMatch(sentence) || Words(sentence).Count < 3)
+                continue;
+            if ((sentence.EndsWith('?') && Asks().IsMatch(sentence)) || DoesntKnow().IsMatch(sentence))
+                found = sentence;
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// What to search for a question: without the thinking's fillers, and with the program it is
+    /// about when the question doesn't name it (<paramref name="subject"/>: ComfyUI, an MCP server's name).
+    /// </summary>
+    internal static string Query(string question, string? subject)
+    {
+        var q = Filler().Replace(question, "");
+        // "I'm not sure how LTX takes a video" is searched as "how LTX takes a video".
+        if (!q.EndsWith('?') && DoesntKnow().Match(q) is { Success: true } m)
+            q = AfterThought().Replace(q[m.Groups["what"].Index..], "");
+        q = q.TrimEnd('?', '.', ' ');
+        if (subject is { Length: > 0 } && !q.Contains(subject, StringComparison.OrdinalIgnoreCase))
+            q += " " + subject;
+        if (q.Length > 160)
+            q = q[..q.LastIndexOf(' ', 160)];
+        return q;
+    }
+
+    /// <summary>What BlackBox found for the model's question, said with the step's last result.</summary>
+    internal static string Found(string question, IReadOnlyList<SearchHit> hits) =>
+        $"[BlackBox] You asked yourself: \"{question}\" Rather than answer that from memory, here is what a web search for it found:\n" +
+        WebSearchTool.Format(hits) +
+        "\nRead the page that answers it with fetch_page (find= the part you need) before your next try; " +
+        "if none does, search again with the exact program or model and its version.";
+
+    private bool SearchedBefore(string question)
+    {
+        var words = Words(question);
+        return _searched.Any(s => s.Intersect(words).Count() * 10 >= Math.Max(1, Math.Min(s.Count, words.Count)) * 7);
+    }
+
+    private static HashSet<string> Words(string text) =>
+        Word().Matches(text.ToLowerInvariant()).Select(m => m.Value).Where(w => w.Length > 2 && !Common.Contains(w)).ToHashSet();
+
+    private static readonly HashSet<string> Common =
+        ["the", "and", "how", "can", "could", "should", "would", "does", "what", "which", "this", "that", "with", "for", "not", "sure", "know",
+         "there", "way", "any", "into", "from", "you", "use", "proceed", "task", "next", "step", "now", "here", "then", "need", "want", "get",
+         "done", "doing", "thing", "things", "it's", "i'm", "will", "work", "best", "about", "right", "correct", "exactly"];
+
+    // Curly apostrophes as straight ones, so "doesn’t" reads as "doesn't".
+    private static string Plain(string text) => text.Replace('’', '\'').Replace('‘', '\'');
+
+    /// <summary>Whether the user's message says the last result isn't right.</summary>
+    internal static bool UserDoubts(string text) => Doubts().IsMatch(Plain(text)) || UserSaysWrong().IsMatch(Plain(text));
 
     /// <summary>
     /// Tools that run code report its errors as their output: an MCP server's "Error executing
@@ -150,6 +359,12 @@ internal sealed partial class Guesswork
     [GeneratedRegex(@"\s+")]
     private static partial Regex Spaces();
 
+    [GeneratedRegex(@"[\p{L}\p{N}][\p{L}\p{N}.+-]*")]
+    private static partial Regex Word();
+
+    [GeneratedRegex(@"(?<=[.!?])\s+|\n")]
+    private static partial Regex Sentences();
+
     // Python, Blender, C#, PowerShell, JavaScript, GDScript and command-line tools, as they say it.
     [GeneratedRegex(@"has no attribute|is not defined|not declared|no module named|cannot import name|unexpected keyword|positional argument|" +
                     @"\b(key|enum|attribute|property|method|function|module|command|option|parameter|argument|identifier|member|field|node|socket|type)\b[^.;]{0,80}\bnot found|" +
@@ -160,4 +375,50 @@ internal sealed partial class Guesswork
                     @"\bunrecognized (option|argument|command|parameter)|\binvalid (choice|option|keyword|enum)|\bno such (option|command|method|property|attribute|module|function)",
         RegexOptions.IgnoreCase)]
     private static partial Regex MissingName();
+
+    // The model saying a try didn't do what it should: nothing failed, it just didn't work.
+    [GeneratedRegex(@"\bstill\b[^.!?\n]{0,40}\b(wrong|broken|static|frozen|stuck|missing|empty|blank|the same|not|no|isn't|doesn't|didn't|won't|fails?|failing|failed)\b|" +
+                    @"\b(didn't|did not|doesn't|does not|isn't|is not|wasn't|was not|won't|aren't|are not)\s+(work|working|help|fix|change|move|moving|follow|following|match|matching|look right|come out right|do (anything|what))\b|" +
+                    @"\bno (visible )?(change|effect|difference|improvement|motion|movement)\b|" +
+                    @"\bnot what (i|we|the user|they|you) (wanted|asked|expected|intended|meant)\b|" +
+                    @"\b(try|use|need) (a |an )?(different|another|other|new) (approach|way|method|node|workflow|technique|strategy)\b|" +
+                    @"\b(that|this|it) (failed|did not work|didn't work|doesn't work)\b|\bfailed (again|to (work|follow|move|change))\b",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex Doubts();
+
+    // What else a user writes when a result isn't right: "Dude it's still ...", "wrong again", "nope".
+    [GeneratedRegex(@"\bstill\b|\b(wrong|worse|nope|not right|isn't right|no good|try again|redo it|start over)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex UserSaysWrong();
+
+    // A question about how something is done, what it is called, which one does it, whether it exists.
+    [GeneratedRegex(@"\bhow (do|does|can|could|should|would|to)\b(?! (it|this|that|they|things) (look|seem|feel)\b)|" +
+                    @"\bhow (is|are) [^?]{0,60}\b(done|made|set|configured|called|named|used|enabled|controlled|specified|passed|handled|supported|defined|installed|loaded|connected)\b|" +
+                    @"\bwhat('s| is| are| was) the (right|correct|proper|best|usual|official|recommended|exact|actual|current|new) (way|name|syntax|node|setting|parameter|argument|option|value|method|function|api|format|workflow|approach|command|flag|field|property|input|output|class)|" +
+                    @"\bwhat('s| is| are) [^?]{1,50}\b(called|named)\b|" +
+                    @"\b(which|what) (nodes?|models?|settings?|parameters?|arguments?|options?|functions?|methods?|api|loras?|workflows?|samplers?|schedulers?|flags?|propert(y|ies)|attributes?|class(es)?|modules?|packages?|librar(y|ies)|codecs?|formats?|versions?|templates?|checkpoints?|controlnets?|preprocessors?|inputs?|sockets?|operators?|commands?|fields?|keys?) " +
+                    @"(do|does|should|would|can|could|is|are|was|were|to|i|we|handles?|supports?|controls?|makes?|gives?)\b|" +
+                    @"\bis there (a|an|any) (way|node|setting|option|parameter|function|method|api|built-in|builtin|tool|template|model|lora|flag|feature|command|official|example)\b|" +
+                    @"\bdoes (it|this|that|the \w+|\w+) (support|accept|allow|handle|have an?|expose|provide)\b|" +
+                    @"\b((is|are) (it|they|these|those|the \w+)|it's|they're|it is|they are) (built into|part of|included in|supported (by|in))\b",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex Asks();
+
+    // Not knowing, said as a statement: "I'm not sure how LTX takes a reference video." What isn't known starts at "what".
+    [GeneratedRegex(@"\b(i'm|i am|not) (not )?(sure|certain) (?<what>how|what|which|whether|if|where)\b|" +
+                    @"\bi (don't|do not) (know|remember|recall) (?<what>how|what|which|whether|if|where|the (exact|right|correct))\b|" +
+                    @"\bi (need|have|will need) to (figure|find) out (?<what>how|what|which|whether|where)\b|\bunclear (?<what>how|what|which|whether)\b",
+        RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture)]
+    private static partial Regex DoesntKnow();
+
+    // What a statement goes on to say after what isn't known: ", so I'll keep euler".
+    [GeneratedRegex(@",\s*(so|and|but|then|because|which|i'll|i will)\b.*$", RegexOptions.IgnoreCase)]
+    private static partial Regex AfterThought();
+
+    // Thinking's fillers before a question: "Hmm, so", "But wait,", "OK".
+    [GeneratedRegex(@"^((so|but|hmm+|ok(ay)?|well|wait|now|and|also|actually|then|right|oh|ah)\b[,.:]?\s*)+", RegexOptions.IgnoreCase)]
+    private static partial Regex Filler();
+
+    // Questions about the screen, the user or how something looks, which the web can't answer.
+    [GeneratedRegex(@"\b(screen|screenshot|cursor|click|clicked|button|the user|user's|they want|he|she)\b|\b(look|looks|seem|seems)\?$|\blooks? (best|better|good|right|nicer)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex Screenish();
 }

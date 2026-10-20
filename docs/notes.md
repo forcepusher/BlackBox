@@ -879,7 +879,7 @@ script after another. So a failed call's result tells the model to search the we
 again when the error says a name doesn't exist (an attribute, method, argument, enum value, node
 type or command), when the same error comes back, on every failure from the third since its last
 `web_search` or `fetch_page`, and the first time a script or command fails in a task before
-anything was looked up. Errors a tool that runs code reports as its output count too: an
+anything was looked up (and tries that fail without an error, see Web search). Errors a tool that runs code reports as its output count too: an
 MCP server's "Error executing code: ..." comes as an ordinary result, and Blender run with a script
 prints the traceback and exits with 0.
 ## Tools the agent has
@@ -996,6 +996,34 @@ over a plane with geometry nodes, each turned and sized at random, the density a
 inputs of the modifier), qwen3.8 failed 11 and 6 scripts in two runs before the rule and the notes
 (see Unstable connections), and searched only after the 7th and the 4th failure; with them it failed
 4 and 3, searched after the second, and finished in 6.4 minutes on average instead of 7.7.
+
+Errors weren't enough. Asked to make a character follow a video's motion with LTX, a run tried
+workflows for two hours: nothing failed, the videos just didn't move as asked, and the job was done
+right after the user said to look for guidance and it read LTX's motion control guide. So looking
+things up is now something BlackBox makes happen, not only asks for:
+- The prompt says to look things up before the first try at anything not yet looked up in the chat
+  (a program's feature, a model's technique, not only code), to search every question the model
+  asks itself about how something is done, and to search again after a try that didn't give what
+  was wanted. For what no ComfyUI template does, it reads the model makers' guide first.
+- A question the model asks itself in its thinking about how something is done, what it is called,
+  which node or setting does it or whether a program has it ("How do I make LTX follow the motion of
+  a reference video?", "I'm not sure how the IC-LoRA takes the control video"), which it then goes
+  on without looking up, BlackBox searches for it: the first five results come under the step's
+  last result, with the question quoted, and the chat says what was looked up. Questions about the
+  screen, the user or how a result looks are left alone, as are ones that name nothing ("How should
+  I proceed?"), a question like one searched before, and any for a few calls after a look-up, while
+  the model reads. Without a program's name the search adds the one the step drives (ComfyUI, an
+  MCP server's name).
+- A try the model itself calls wrong ("still doesn't follow the dance", "no change in the motion",
+  "I need a different approach") counts as a failed one, as does the user's next message saying the
+  result isn't right ("Dude it's still a kid"): the first such failure before anything was looked
+  up gets a note to search before the next try, and from the third since the last look-up every one
+  does, as errors do. A try is a call that does something: a command, a script, a file written, a
+  ComfyUI job, a piece of a film.
+- After ten minutes of tries with nothing looked up (three tries at least, and only time in a run:
+  not while the user is away between messages), every next try's result says it is time to look
+  things up, until the model does. The record is kept for the chat, so "still wrong" in the next
+  message counts against the tries before it.
 
 No API key and nothing to install. `web_search` asks DuckDuckGo's HTML page through the system's
 `curl` (built into Windows 10 and later; a fraction of a second): DuckDuckGo recognizes .NET's own

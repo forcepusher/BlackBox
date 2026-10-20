@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using BlackBox.Core.Llm;
+using BlackBox.Core.Mcp;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
 
@@ -114,11 +115,15 @@ public sealed partial class AgentSession(
                 if (turnEnded)
                 {
                     if (first)
+                    {
                         (_request, _interrupted) = (RequestOf(input), false);
+                        _guesswork?.StartRun(input.Text);
+                    }
                     first = false;
                     History.Add(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid));
                     continue;
                 }
+                _guesswork?.Heard(input.Text);
                 History.Add(Interjection(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid)));
                 _interrupted = true;
             }
@@ -209,8 +214,10 @@ public sealed partial class AgentSession(
         var nudges = 0;
         var cutCalls = 0;
         var loops = new LoopDetector();
-        // Pointing at web_search only makes sense when the model has it.
-        var guesswork = tools.Find("web_search") is not null ? new Guesswork() : null;
+        // Pointing at web_search only makes sense when the model has it. Kept for the chat: "still
+        // wrong" in the next message is a failed try, and the time since the last look-up goes on.
+        var guesswork = _guesswork ??= tools.Find("web_search") is not null ? new Guesswork() : null;
+        guesswork?.StartRun(input.Text);
         var justReset = false;
         var turnEnded = false;
 
@@ -311,12 +318,14 @@ public sealed partial class AgentSession(
                 ChatMessage? last = null;
                 // This reply's calls were decided on the screen in the last screenshot.
                 toolContext.Seen = toolContext.LastShot;
+                var called = reply.ToolCalls!.Select(c => ToolCallRepair.ResolveTool(c.Name, tools)).ToList();
+                guesswork?.Read(reply, called);
                 foreach (var call in reply.ToolCalls!)
                 {
                     var result = await RunToolAsync(call, observer, ct).ConfigureAwait(false);
                     if (loops.Check(call, result) is { } warning)
                         result = result with { Text = result.Text + "\n" + warning };
-                    if (guesswork?.Check(ToolCallRepair.ResolveTool(call.Name, tools), result) is { } lookItUp)
+                    if (guesswork?.Check(ToolCallRepair.ResolveTool(call.Name, tools), result, Guesswork.ActionOf(call.Arguments)) is { } lookItUp)
                         result = result with { Text = result.Text + "\n" + lookItUp };
                     // A model that can't see gets no picture (an MCP tool's, say): its server
                     // refused that request and every one after it, since the conversation keeps it.
@@ -330,6 +339,8 @@ public sealed partial class AgentSession(
                 // The whole calls ran; the cut one is said with the last result.
                 if (cutCall && last is not null)
                     last.Content += "\n" + CutToolCallNote;
+                if (guesswork?.Question is { } question && last is not null)
+                    await LookUpAsync(guesswork, question, called, last, observer, ct).ConfigureAwait(false);
 
                 // Most OpenAI-compatible servers only accept images in user messages,
                 // so the screenshot (or a picture read_file opened) is delivered right after the tool results.
@@ -449,6 +460,40 @@ public sealed partial class AgentSession(
 
     [GeneratedRegex(@"(^|[.!?\n]\s*)(let me(?! know)|let's|i'll|i will|i'm going to|i am going to|next,? i|now i|i need to)\b[^.!?\n]*[.!]?\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex AnnouncedAction();
+
+    /// <summary>Guesswork seen in this chat (see <see cref="Guesswork"/>); null without web_search.</summary>
+    private Guesswork? _guesswork;
+
+    /// <summary>The web search BlackBox runs for a question of the model's: five results, as web_search finds them.</summary>
+    internal Func<string, CancellationToken, Task<IReadOnlyList<Web.SearchHit>>>? SearchWeb { get; set; }
+
+    /// <summary>
+    /// Searches the web for a question the model asked itself and went on without looking up, and
+    /// puts what it found under the step's last result: told to search, models rarely did, and
+    /// trying from memory cost hours where a guide had the answer.
+    /// </summary>
+    private async Task LookUpAsync(Guesswork guesswork, string question, IReadOnlyList<Tool?> called, ChatMessage last, IAgentObserver observer, CancellationToken ct)
+    {
+        // What the question is about, when it doesn't say: the program the step's calls drive.
+        var subject = called.OfType<McpTool>().Select(t => t.ServerName).FirstOrDefault() ??
+                      (called.Any(t => t is ComfyTool or FilmTool) ? "ComfyUI" : null);
+        var query = Guesswork.Query(question, subject);
+        guesswork.Searched(question);
+        IReadOnlyList<Web.SearchHit> hits;
+        try
+        {
+            hits = await (SearchWeb ?? ((q, c) => Web.WebSearch.SearchAsync(q, 5, toolContext.Browser, c)))(query, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is Web.WebSearchException or HttpRequestException or IOException ||
+                                   ex is OperationCanceledException && !ct.IsCancellationRequested)
+        {
+            return; // no answer is no worse than not asking: the model has web_search itself
+        }
+        if (hits.Count == 0)
+            return;
+        observer.OnNotice($"Looked up on the web what the model asked itself: {query}");
+        last.Content += "\n" + Guesswork.Found(question, hits);
+    }
 
     private async Task<ToolResult> RunToolAsync(ToolCall call, IAgentObserver observer, CancellationToken ct)
     {

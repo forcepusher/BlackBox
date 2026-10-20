@@ -178,4 +178,151 @@ public class GuessworkTests
 
         Assert.EndsWith(Guesswork.NameNote, session.History.Single(m => m.Role == ChatRole.Tool).Content);
     }
+
+    private static readonly WriteFileTool Write = new();
+    private static readonly ToolResult Wrote = new("Wrote C:\\Users\\user\\BlackBox\\Data\\scratch\\motion.json");
+    private static ChatMessage Reply(string thinking, string text = "") => new() { Role = ChatRole.Assistant, Reasoning = thinking, Content = text };
+
+    [Theory]
+    // What a model asks itself about how something is done, what it is called or whether it is there.
+    [InlineData("Hmm, how do I make LTX 2.5 follow the motion of a reference video?", "Hmm, how do I make LTX 2.5 follow the motion of a reference video?")]
+    [InlineData("Which node does the pose conditioning in the LTX workflow?", "Which node does the pose conditioning in the LTX workflow?")]
+    [InlineData("Is there a node for depth control in LTX 2.5?", "Is there a node for depth control in LTX 2.5?")]
+    [InlineData("But maybe they're built into newer ComfyUI?", "But maybe they're built into newer ComfyUI?")]
+    [InlineData("What's the correct way to add a socket to a node group in Blender 5.2?", "What's the correct way to add a socket to a node group in Blender 5.2?")]
+    [InlineData("I'm not sure how the IC-LoRA takes the control video.", "I'm not sure how the IC-LoRA takes the control video.")]
+    [InlineData("The template runs. I don't know which sampler Nova Furry XL wants, so I'll keep euler.", "I don't know which sampler Nova Furry XL wants, so I'll keep euler.")]
+    // Questions the web can't answer: the screen, the user, how a result looks, or nothing named.
+    [InlineData("Did the click on the Export button work?", null)]
+    [InlineData("How do I get to the button in the top right of the screen?", null)]
+    [InlineData("What does the user want here, a portrait or a full body?", null)]
+    [InlineData("How does the second render look?", null)]
+    [InlineData("How should I proceed with this task now?", null)]
+    [InlineData("Maybe I should crop just one view?", null)]
+    [InlineData("I'm not sure which crop looks best.", null)]
+    [InlineData("Let me make the frame first, then the shot.", null)]
+    public void Questions_about_how_things_are_done_are_told_apart(string thinking, string? question) =>
+        Assert.Equal(question, Guesswork.QuestionIn(thinking));
+
+    [Theory]
+    [InlineData("Hmm, how do I make LTX follow the motion of a reference video?", "ComfyUI", "how do I make LTX follow the motion of a reference video ComfyUI")]
+    [InlineData("I'm not sure how the IC-LoRA takes the control video.", null, "how the IC-LoRA takes the control video")]
+    [InlineData("So which node does motion control in ComfyUI?", "ComfyUI", "which node does motion control in ComfyUI")]
+    [InlineData("I don't know which sampler Nova Furry XL wants, so I'll keep euler.", "ComfyUI", "which sampler Nova Furry XL wants ComfyUI")]
+    public void A_question_is_searched_without_the_thinking_around_it(string question, string? subject, string query) =>
+        Assert.Equal(query, Guesswork.Query(question, subject));
+
+    [Fact]
+    public void A_try_the_model_calls_wrong_counts_as_a_failed_one()
+    {
+        var guesswork = new Guesswork();
+        guesswork.StartRun("Make the bunny dance like in dance.mp4");
+        Assert.Null(guesswork.Check(Write, Wrote));
+
+        // Nothing failed; the video just didn't do what was asked. Its note comes with the next result.
+        guesswork.Read(Reply("The video still doesn't follow the dance. Let me raise the guide strength."), [Write]);
+        Assert.Equal(Guesswork.DoubtNote, guesswork.Check(Write, Wrote));
+        // Said once; then, as for errors, from the third failure since the last look-up.
+        guesswork.Read(Reply("No change in the motion at all."), [Write]);
+        Assert.Null(guesswork.Check(Write, Wrote));
+        guesswork.Read(Reply("That didn't work either; I need a different approach."), [Write]);
+        Assert.Equal(Guesswork.TriesNote(3), guesswork.Check(Write, Wrote));
+
+        // Words of doubt with no try before them, or in a reply that looks something up, don't count.
+        var fresh = new Guesswork();
+        fresh.StartRun("Make the bunny dance");
+        fresh.Read(Reply("If this still doesn't work, I'll look it up."), [Write]);
+        Assert.Null(fresh.Check(Write, Wrote));
+        fresh.Read(Reply("It still isn't moving."), [new WebSearchTool()]);
+        Assert.Null(fresh.Check(new WebSearchTool(), new ToolResult("1. LTX motion control")));
+        fresh.Read(Reply("It still isn't moving."), [Write]);
+        Assert.Null(fresh.Check(Write, Wrote)); // looked up in this task: one more failure is no matter yet
+    }
+
+    [Fact]
+    public void The_user_saying_the_result_isnt_right_counts_as_a_failed_try()
+    {
+        var guesswork = new Guesswork();
+        guesswork.StartRun("Make a picture of Anton from his refsheet");
+        Assert.Null(guesswork.Check(Write, Wrote));
+
+        guesswork.StartRun("Dude it's still a kid, not an adult");
+        Assert.Equal(Guesswork.UserDoubtNote, guesswork.Check(new ReadFileTool(), new ToolResult("refsheet.png")));
+
+        // Without a try before it, a message is a new task, whatever it says.
+        var fresh = new Guesswork();
+        fresh.StartRun("My printer doesn't work, fix it");
+        Assert.Null(fresh.Check(Shell, new ToolResult("Exit code 0\nPrinter: HP LaserJet")));
+    }
+
+    [Fact]
+    public void Ten_minutes_of_tries_with_nothing_looked_up_makes_every_next_try_say_to_look()
+    {
+        var now = new DateTime(2026, 10, 21, 3, 0, 0, DateTimeKind.Utc);
+        var guesswork = new Guesswork(() => now);
+        guesswork.StartRun("Make the bunny dance like in dance.mp4");
+        for (var i = 0; i < 3; i++)
+        {
+            now += TimeSpan.FromMinutes(3);
+            Assert.Null(guesswork.Check(Write, Wrote));
+        }
+        now += TimeSpan.FromMinutes(2);
+        Assert.Equal(Guesswork.CheckNote(TimeSpan.FromMinutes(11), 4), guesswork.Check(Write, Wrote));
+        Assert.Null(guesswork.Check(new ReadFileTool(), new ToolResult("text"))); // only tries say it
+        now += TimeSpan.FromMinutes(1);
+        Assert.Equal(Guesswork.CheckNote(TimeSpan.FromMinutes(12), 5), guesswork.Check(Write, Wrote));
+
+        // A look-up starts the clock again.
+        Assert.Null(guesswork.Check(new FetchPageTool(), new ToolResult("# Motion control")));
+        now += TimeSpan.FromMinutes(5);
+        Assert.Null(guesswork.Check(Write, Wrote));
+
+        // Time between runs, while the user is away, isn't time spent trying.
+        now += TimeSpan.FromHours(3);
+        guesswork.StartRun("Now make it longer");
+        now += TimeSpan.FromMinutes(1);
+        Assert.Null(guesswork.Check(Write, Wrote));
+        Assert.Null(guesswork.Check(Write, Wrote));
+    }
+
+    [Theory]
+    [InlineData("run", true)]
+    [InlineData("templates", false)]
+    [InlineData("nodes", false)]
+    [InlineData("status", false)]
+    public void Only_a_comfyui_job_is_a_try(string action, bool isTry) =>
+        Assert.Equal(isTry, Guesswork.IsTry(new ComfyTool(), Guesswork.ActionOf($$"""{"action": "{{action}}"}""")));
+
+    [Fact]
+    public async Task A_question_the_model_goes_on_without_looking_up_is_searched_for_it()
+    {
+        var server = new ScriptedServer(
+            Sse.Thought("How do I make LTX follow the motion of a reference video? I'll try the depth guide first.",
+                Sse.ToolCall("w1", "write_file", """{"path":"motion.json","content":"{}"}""")),
+            // The same question again isn't searched twice.
+            Sse.Thought("Hmm, how do I make LTX follow the motion of the reference video?",
+                Sse.ToolCall("w2", "write_file", """{"path":"motion.json","content":"{}"}""")),
+            Sse.Text("Done."));
+        var dir = Directory.CreateTempSubdirectory().FullName;
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = dir };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null), new ChatRequestOptions(),
+            ToolRegistry.CreateDefault(includeScreenTools: false, includeWebTools: true), ctx, "sys");
+        var queries = new List<string>();
+        session.SearchWeb = (q, _) =>
+        {
+            queries.Add(q);
+            return Task.FromResult<IReadOnlyList<Web.SearchHit>>(
+                [new("Motion Control | LTX Documentation", "https://docs.ltx.io/open-source-model/feature-guides/structural-control/motion-control", "Use IC-LoRA to follow a reference video's motion.")]);
+        };
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("Make the bunny dance like in dance.mp4", observer, CancellationToken.None);
+
+        Assert.Equal(["How do I make LTX follow the motion of a reference video"], queries);
+        var results = session.History.Where(m => m.Role == ChatRole.Tool).Select(m => m.Content!).ToList();
+        Assert.Contains("You asked yourself: \"How do I make LTX follow the motion of a reference video?\"", results[0]);
+        Assert.Contains("https://docs.ltx.io/open-source-model/feature-guides/structural-control/motion-control", results[0]);
+        Assert.DoesNotContain("You asked yourself", results[1]);
+        Assert.Contains(observer.Notices, n => n.Contains("How do I make LTX follow"));
+    }
 }
