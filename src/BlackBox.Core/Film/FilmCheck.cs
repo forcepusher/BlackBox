@@ -11,7 +11,8 @@ namespace BlackBox.Core.Film;
 /// <param name="Faults">What is surely wrong (a clip that doesn't start on its frame, a black or frozen clip), to fix before anything else.</param>
 /// <param name="Closer">A JPEG: twelve frames close together from the stretch of a shot where the most changes, cropped to where things move.</param>
 /// <param name="Cuts">For a film: its cuts.</param>
-public sealed record FilmLook(string Text, byte[]? Sheet, IReadOnlyList<string> Faults, byte[]? Closer = null, IReadOnlyList<FilmCut>? Cuts = null);
+/// <param name="Motion">For a shot: how things in it move, measured from its pixels (<see cref="FilmMotion"/>), in words.</param>
+public sealed record FilmLook(string Text, byte[]? Sheet, IReadOnlyList<string> Faults, byte[]? Closer = null, IReadOnlyList<FilmCut>? Cuts = null, string? Motion = null);
 
 /// <summary>A cut as a JPEG: the last frame of the shot before above the first frame of the shot after.</summary>
 /// <param name="At">The index of the shot after the cut.</param>
@@ -76,8 +77,12 @@ public static partial class FilmCheck
                         text.AppendLine("Its sound: " + SoundStats.Of(mono, rate).Describe() + ".");
                 }
             var sheet = ShotSheet(start, end, first?.Label, last?.Label, frames, reader.Width, reader.Height);
-            var closer = CloserLook(reader, text);
-            return new FilmLook(text.ToString().TrimEnd(), sheet, faults, closer);
+            var small = SmallFrames(reader);
+            var motion = FilmMotion.Describe(FilmMotion.Measure(small.Times.Zip(small.Grays, (t, g) => new FilmMotion.Frame(t, g)).ToList()));
+            if (motion.Length > 0)
+                text.AppendLine(motion);
+            var closer = CloserLook(reader, small, text);
+            return new FilmLook(text.ToString().TrimEnd(), sheet, faults, closer, Motion: motion.Length > 0 ? motion : null);
         }
         finally
         {
@@ -154,7 +159,8 @@ public static partial class FilmCheck
     /// shot was a still camera on a standing fox; the user saw the fox float, and both other looks
     /// had passed it once.
     /// </summary>
-    public static string JudgeSteadiness(Storyboard board, FilmShot shot)
+    /// <param name="motion">The movement measured from the pixels, in words, if any.</param>
+    public static string JudgeSteadiness(Storyboard board, FilmShot shot, string? motion = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"You judge one shot of an AI-made film{Title(board)} for ONE thing only: whether the world in it stays put. Video models often let the background drift " +
@@ -163,12 +169,42 @@ public static partial class FilmCheck
         sb.AppendLine($"The shot lasts {N(shot.Seconds)} s and should show: {shot.Prompt.Trim()}");
         sb.AppendLine("What the camera should do: " + (shot.Camera.Trim().Length > 0 ? shot.Camera.Trim().TrimEnd('.') + "." : "nothing said (most likely it holds still)."));
         sb.AppendLine("The picture shows " + TopRow(board, shot) + "8 frames spread evenly over the whole shot, with their times.");
+        if (motion is { Length: > 0 })
+            sb.AppendLine(motion).AppendLine("The measured movement is reliable about which way and how far things go: the whole picture moving is the camera; something moving against the rest is a person, an animal or a thing.");
         sb.AppendLine("1. For each frame, say where the fixed things are (the moon or sun, the horizon, trees, buildings, furniture) and how big the moon or sun is (as a share of the frame's width), " +
                       "and where each person's or animal's feet or base touch the ground.");
         sb.AppendLine("2. Given what the camera does, do the fixed things move, grow, shrink, appear or vanish when they shouldn't? A camera that pans or pushes in moves everything together; " +
                       "one fixed thing moving on its own while the rest stays is wrong.");
         sb.AppendLine("3. Does anyone or anything that stands, sits or walks slide, float, rise off or sink into the ground, or change size against the things around it? Give the times.");
         sb.AppendLine("Mark each problem SEVERE (a viewer would notice it at normal speed) or MINOR.");
+        sb.Append("End with exactly one line: VERDICT: good, or VERDICT: redo: and the main reason. Redo for any SEVERE problem.");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The fourth fresh look at a shot: whether things move as the shot asks. The user found the
+    /// looks catching botched takes but often missing motion gone wrong: a subject moving the wrong
+    /// way, a pose bending wrong, a prop or a person doing what nobody asked. Each movement asked for
+    /// is held against the frames and the movement measured from the pixels (<see cref="FilmMotion"/>).
+    /// </summary>
+    /// <param name="motion">The measured movement in words; none when it couldn't be measured.</param>
+    public static string JudgeMotion(Storyboard board, FilmShot shot, string? motion)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"You judge one shot of an AI-made film{Title(board)} for ONE thing only: whether things move as the shot asks. Video models often move a subject the wrong way, " +
+                      "bend a body into a pose nobody asked for, turn a head or walk toward the wrong side, make a prop move by itself or someone do something unasked, " +
+                      "while every single frame looks fine.");
+        sb.AppendLine($"The shot lasts {N(shot.Seconds)} s and should show: {shot.Prompt.Trim()}");
+        sb.AppendLine("What the camera should do: " + (shot.Camera.Trim().Length > 0 ? shot.Camera.Trim().TrimEnd('.') + "." : "nothing said (most likely it holds still)."));
+        sb.AppendLine("The picture shows " + TopRow(board, shot) + "8 frames spread evenly over the whole shot, with their times.");
+        if (motion is { Length: > 0 })
+            sb.AppendLine(motion).AppendLine("The measured movement is reliable about which way and how far things go; the frames say what is moving.");
+        sb.AppendLine("1. List each movement the shot asks for: who or what moves, which body part, which way on screen, from where to where, and when.");
+        sb.AppendLine("2. For each, say what the frames" + (motion is { Length: > 0 } ? " and the measured movement" : "") + " show: does it happen, with that body part, " +
+                      "the way and as far as asked, at about that time? A movement the other way, or by another part (the whole body sliding where only the head should turn), is wrong.");
+        sb.AppendLine("3. List what moves that nobody asked for: a prop or object moving by itself, someone turning, stepping or reaching unasked, a limb or the body changing pose " +
+                      "where it should stay put, things sliding, rising or sinking, the camera moving when it should hold still. Give the times.");
+        sb.AppendLine("Mark each problem SEVERE (a viewer would see the wrong movement at normal speed) or MINOR (a small extra movement that doesn't spoil the shot).");
         sb.Append("End with exactly one line: VERDICT: good, or VERDICT: redo: and the main reason. Redo for any SEVERE problem.");
         return sb.ToString();
     }
@@ -198,7 +234,8 @@ public static partial class FilmCheck
     /// <summary>
     /// The fresh looks at a shot, one question each (one question per kind of fault catches more
     /// than one big question): physics and bodies (<see cref="JudgeShot"/>), behaviour over time
-    /// (<see cref="JudgeBehaviour"/>), whether the world stays put (<see cref="JudgeSteadiness"/>).
+    /// (<see cref="JudgeBehaviour"/>), whether the world stays put (<see cref="JudgeSteadiness"/>),
+    /// whether things move as asked (<see cref="JudgeMotion"/>).
     /// As one answer ending with one verdict: redo when any asks for it. Null when none could be had.
     /// </summary>
     public static async Task<string?> JudgeShotAsync(Storyboard board, FilmShot shot, FilmLook look, string? heard,
@@ -210,7 +247,8 @@ public static partial class FilmCheck
         {
             ("Physics and bodies", await ask(look.Closer is { } closer ? [sheet, closer] : [sheet], JudgeShot(board, shot, look.Closer is not null, heard), ct).ConfigureAwait(false)),
             ("Behaviour over time", await ask([sheet], JudgeBehaviour(board, shot, heard), ct).ConfigureAwait(false)),
-            ("Whether the world stays put", await ask([sheet], JudgeSteadiness(board, shot), ct).ConfigureAwait(false)),
+            ("Whether the world stays put", await ask([sheet], JudgeSteadiness(board, shot, look.Motion), ct).ConfigureAwait(false)),
+            ("Movement as asked", await ask([sheet], JudgeMotion(board, shot, look.Motion), ct).ConfigureAwait(false)),
         };
         if (looks.All(l => l.Answer is null))
             return null;
@@ -238,9 +276,10 @@ public static partial class FilmCheck
     /// differs from the one before, each measured against its own brightness, and a frame that
     /// brightens or darkens as a whole (a fade) not counted. Null for a clip too short to have one.
     /// </summary>
-    private static byte[]? CloserLook(IVideoReader reader, StringBuilder text)
+    /// <summary>Every frame of a clip small and grey, each measured against its own brightness (×100 of its mean), with its time and mean.</summary>
+    private static (List<double> Times, List<float[]> Grays, List<float> Means) SmallFrames(IVideoReader reader)
     {
-        const int w = 160, h = 90;
+        const int w = FilmMotion.Width, h = FilmMotion.Height;
         var times = new List<double>();
         var grays = new List<float[]>();
         var means = new List<float>();
@@ -263,6 +302,13 @@ public static partial class FilmCheck
             grays.Add(gray);
             means.Add(mean);
         }
+        return (times, grays, means);
+    }
+
+    private static byte[]? CloserLook(IVideoReader reader, (List<double> Times, List<float[]> Grays, List<float> Means) frames, StringBuilder text)
+    {
+        const int w = FilmMotion.Width, h = FilmMotion.Height;
+        var (times, grays, means) = frames;
         var n = times.Count;
         if (n < 8)
             return null;

@@ -290,7 +290,7 @@ public sealed class FilmDirectorTests : IDisposable
     {
         var board = Board();
         var shot = board.Shot("s1")!;
-        var look = new FilmLook("", [1, 2, 3], [], [4, 5]);
+        var look = new FilmLook("", [1, 2, 3], [], [4, 5], Motion: "Measured movement: the leg goes up.");
         var asked = new List<(int Pictures, string Question)>();
         Task<string?> Ask(IReadOnlyList<byte[]> pictures, string question, CancellationToken ct)
         {
@@ -298,8 +298,9 @@ public sealed class FilmDirectorTests : IDisposable
             return Task.FromResult<string?>(question.Contains("stays put") ? "The moon wanders.\nVERDICT: redo: the moon slides across the sky" : "Fine.\nVERDICT: good");
         }
         var answer = await FilmCheck.JudgeShotAsync(board, shot, look, null, Ask, CancellationToken.None);
-        Assert.Equal(3, asked.Count);
+        Assert.Equal(4, asked.Count);
         Assert.Equal(2, asked[0].Pictures); // the overview and the closer look
+        Assert.Contains("the leg goes up", asked[3].Question); // the measured movement, for the look at movement as asked
         Assert.Contains("never excuses impossible physics", asked[0].Question);
         Assert.Equal("redo", FilmCheck.Verdict(answer!));
         Assert.Equal("the moon slides across the sky", FilmCheck.Reason(answer!));
@@ -719,6 +720,51 @@ public sealed class FilmMontageTests : IDisposable
 
 public sealed class FilmCheckTests
 {
+    /// <summary>Frames of a textured field the camera pans across by <paramref name="pan"/> pixels a frame, with a textured patch that rises <paramref name="rise"/> a frame on its own.</summary>
+    private static List<FilmMotion.Frame> Moving(double pan, double rise, int count = 25)
+    {
+        const int big = 400;
+        var random = new Random(7);
+        var field = new float[big * big];
+        for (var i = 0; i < field.Length; i++)
+            field[i] = random.Next(40, 160);
+        var patch = new float[20 * 20];
+        for (var i = 0; i < patch.Length; i++)
+            patch[i] = random.Next(0, 255);
+        var frames = new List<FilmMotion.Frame>();
+        for (var f = 0; f < count; f++)
+        {
+            var gray = new float[FilmMotion.Width * FilmMotion.Height];
+            var (ox, py) = ((int)Math.Round(100 + f * pan), (int)Math.Round(50 - f * rise));
+            for (var y = 0; y < FilmMotion.Height; y++)
+                for (var x = 0; x < FilmMotion.Width; x++)
+                    gray[y * FilmMotion.Width + x] = field[(y + 100) * big + x + ox];
+            for (var y = 0; y < 20; y++)
+                for (var x = 0; x < 20; x++)
+                    if (py + y is >= 0 and < FilmMotion.Height)
+                        gray[(py + y) * FilmMotion.Width + 70 + x] = patch[y * 20 + x];
+            frames.Add(new FilmMotion.Frame(f / 24.0, gray));
+        }
+        return frames;
+    }
+
+    [Fact]
+    public void Movement_is_measured_from_the_pixels_the_camera_apart_from_what_moves_on_its_own()
+    {
+        var still = FilmMotion.Describe(FilmMotion.Measure(Moving(0, 0)));
+        Assert.Contains("Over the whole clip: nothing moves much.", still);
+
+        // A camera panning right moves the whole picture left; a fox rising in the middle moves up against it.
+        var steps = FilmMotion.Measure(Moving(1, 1));
+        Assert.All(steps, s => Assert.InRange(s.ShiftX, -6.5, -5.5)); // 6 frames apart, a pixel a frame
+        Assert.All(steps, s => Assert.InRange(s.ShiftY, -0.5, 0.5));
+        Assert.All(steps, s => Assert.Contains(4, (IDictionary<int, (double X, double Y, int Blocks)>)s.Moving));
+        var said = FilmMotion.Describe(steps);
+        Assert.Contains("the whole picture moves left", said);
+        Assert.Contains("(as when the camera pans right)", said);
+        Assert.Contains("in the middle something moves up", said);
+    }
+
     private static SKBitmap Picture(int width, int height, Action<SKCanvas> draw)
     {
         var bitmap = new SKBitmap(width, height);

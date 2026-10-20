@@ -79,6 +79,9 @@ public static class SystemPrompt
                       "(action=nodes, action=models), never from memory. A picture the user gave you goes into LoadImage by its full path. " +
                       "A model it lacks: action=download with the link the template gives, or action=find_models to look for one online " +
                       "(a style, or a checkpoint or LoRA the user named); a custom node pack or program it lacks you can install yourself. " +
+                      // The user's finding: LTX animates a picture well and draws one badly, and makes sounds well and music badly.
+                      "A video starts from a picture an image model makes, which an image-to-video template animates; music comes from a music model, " +
+                      "not the video model. Read action=guide search=\"video\" before writing a video prompt. " +
                       "Its files stay in ComfyUI's output folder, where the user finds them; copy them elsewhere (save_to) only when the user names a place. " +
                       "Give the full paths of the files you made in your answer.");
         sb.AppendLine("- A film, or any video of more than one shot (a music video, a story, an ad), is made with the film tool: plan it as a storyboard " +

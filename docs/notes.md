@@ -211,6 +211,20 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   models they are on; with words, the ones whose tags match ("furry": Nova Furry AM, a newer
   version of the user's model, on Anima) come before the search's own results. Models tagged as
   porn are left out, as Civitai's own NSFW mark was off on several.
+- **Video starts from a picture.** The user found LTX good at animating a picture and poor at
+  drawing one, and good at a clip's sounds (voices, footsteps, wind) and poor at music. So a video
+  is a picture an image model makes, looked at, then animated with an image-to-video template;
+  music comes from a music model (ACE-Step) and is put together with the video's sound. The tool's
+  description and the system prompt say so; a template search with video words adds it; running
+  or viewing an LTX workflow that draws its own picture (no `LTXVImgToVideo…` or `LTXVAddGuide`
+  node) adds a note.
+- **A guide to video prompts** (`Comfy/Guides/video-prompts.md`, built into the exe;
+  `action=guide`): LTX's own prompting guide (docs.ltx.io) and motion control, and what ruined
+  BlackBox's takes: say which way things move on screen, from where to where, how far, which body
+  part, what stays still, who holds what; one main action per 3 to 4 seconds; the camera move named
+  first; how to fix a take that went wrong; motion tracks (the Motion Control IC-LoRA) when a path
+  must be followed exactly. It comes with the first LTX template viewed or run in a task, and the
+  film director writes shots by it.
 
 `read_file` gives the model a look at media as well as pictures: a video as eight frames with their
 times (and how loud its sound is, in words), a sound as its waveform and spectrogram with its
@@ -522,11 +536,11 @@ What was said about each piece is in `talk.json` beside the storyboard.
 
 **Looks that don't let slop through.** The user found the judging dismissive: the fox film passed
 with the fox floating up the screen at the cut at 5 s. One question per kind of fault catches more
-than one big question, so a shot gets three, each a request of its own with thinking: physics and
+than one big question, so a shot gets four, each a request of its own with thinking: physics and
 bodies (the sheet, and a closer look: twelve frames from the ~0.9 s where the most changes, cropped
-to where things move), behaviour over time (frozen or held poses), and whether the world stays put
+to where things move), behaviour over time (frozen or held poses), whether the world stays put
 (where the moon, horizon and trees are in each frame, how big the moon is as a share of the width,
-whether anyone slides or floats). A frame is looked at beside the frame a viewer sees before it:
+whether anyone slides or floats), and movement as asked (see below). A frame is looked at beside the frame a viewer sees before it:
 its shot's first frame (what differs between the two, the shot slides across the screen: the fox
 film's moon was "in the upper left" in one and "directly above" in the other) or the last frame of
 the shot before (a cut to another kind of place); and against the shot size its prompt names. What a
@@ -554,7 +568,29 @@ the window, it fixed shot 2 by making its first frame from shot 1's last (the sa
 in 17 minutes. On the fixed cut it said good 3 runs of 4 (once it found the fox's face different);
 on the spaghetti film's four cuts good 3 of 4 (once it found the man slimmer from s2 to s3, a face
 drift the side-by-side look had missed before). A look with thinking takes qwen3.8 30 to 100 s, so
-a shot's three looks about 2 to 4 minutes.
+a shot's looks about 3 to 5 minutes.
+
+**Movement measured from the pixels** (`FilmMotion`). Later the user found the looks good at
+botched takes and often blind to motion gone wrong: the wrong way, a pose bending wrong, a prop or
+a person doing what nobody asked. From 8 or 12 stills a second apart a model can't see which way
+something went. So every frame of a shot, 160x90 and grey, is matched block by block (10x10 pixels,
+to a tenth of a pixel) with the frame a quarter of a second later: what most of the picture does is
+the camera (a shift, and a growth for a push in), and blocks that move against it are grouped by
+ninth of the picture. In words, by half second and over the whole clip ("in the middle something
+moves up 10% of the height against the rest"), it goes to the steadiness look and to a fourth look,
+movement as asked: list each movement the shot asks for (who, which body part, which way on screen,
+from where to where, when), say whether the frames and the measurement show it, then what moves
+that nobody asked for. On the fox film's original takes it read the floating fox (the middle up 10%
+of the height in shot 2's first two seconds) and shot 1's moon sliding (the top middle right by 21%
+of the width over 5 s; by the frames, from 28% to 52% across). It takes about a second a shot.
+
+**Pictures first, LTX's sounds, the song's music.** Every shot starts on a frame a picture model
+makes: a shot written without one gets one from its words and the references of the frames near it
+(`Storyboard.AddFirstFrames`, in the director's change, Make it, Make what's missing and the film
+tool), frames not made yet are made first, and LTX is never asked to draw a shot from words. A
+shot's prompt ends with what is heard; LTX is given it with "No music." unless it speaks of music
+(not part of the shot's stamp, so made shots stay up to date), and under a song the shots' own
+sound is kept at half rather than left out.
 
 **Takes**: before a piece is made again, the one there is kept beside it (`frames/f2.v1.png` and
 `.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it was made with
