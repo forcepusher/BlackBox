@@ -46,7 +46,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     internal const int SearchGap = 4;
 
     internal const string RepeatNote =
-        "[BlackBox] This error came up before in this task. Unless you know exactly why, look it up with web_search " +
+        "[BlackBox] This error came up before in this chat. Unless you know exactly why, look it up with web_search " +
         "(the error message, and the program or language it comes from) before you try again.";
 
     internal const string NameNote =
@@ -238,7 +238,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         {
             // The question is the part of a sentence that asks: "Node 1 loads Pony — wait, which checkpoint should I use?"
             var asked = Clauses().Split(sentence).Select(c => c.Trim().Trim('*', '_', '`', '-', ' ', '"', '\''))
-                .LastOrDefault(c => (c.EndsWith('?') && Asks().IsMatch(c)) || DoesntKnow().IsMatch(c));
+                .LastOrDefault(c => (c.EndsWith('?') && Asks().IsMatch(c)) || DoesntKnow().IsMatch(c) || MeansToLookUp(c) is not null);
             // "How should I proceed with this?" names nothing to search for.
             if (asked is null || asked.Length is < 20 or > 300 || Screenish().IsMatch(asked) || Words(asked).Count < 3)
                 continue;
@@ -254,9 +254,12 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     internal static string Query(string question, string? subject)
     {
         var q = Filler().Replace(question.Replace("`", ""), "");
-        // "I'm not sure how LTX takes a video" is searched as "how LTX takes a video".
+        // "I'm not sure how LTX takes a video" is searched as "how LTX takes a video", and "Let me
+        // search for the node names in Blender 5.2" as "the node names in Blender 5.2".
         if (!q.EndsWith('?') && DoesntKnow().Match(q) is { Success: true } m)
             q = AfterThought().Replace(q[m.Groups["what"].Index..], "");
+        else if (MeansToLookUp(q) is { } what)
+            q = AfterThought().Replace(what, "");
         q = q.TrimEnd('?', '.', ' ');
         if (subject is { Length: > 0 } && !q.Contains(subject, StringComparison.OrdinalIgnoreCase))
             q += " " + subject;
@@ -265,9 +268,18 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         return q;
     }
 
+    /// <summary>
+    /// What a clause says the model means to look up ("Let me do a quick web search for Blender
+    /// 5.2's geometry nodes Python API", "I need to check the node names in Blender 5.2"), or null.
+    /// In the Blender runs it said so, then wrote the script from memory: "Actually, let me think
+    /// about what I know".
+    /// </summary>
+    internal static string? MeansToLookUp(string clause) =>
+        LookUpIntent().Match(clause) is { Success: true } m && !LocalThing().IsMatch(m.Groups["what"].Value) ? m.Groups["what"].Value : null;
+
     /// <summary>What BlackBox found for the model's question, said with the step's last result.</summary>
     internal static string Found(string question, IReadOnlyList<SearchHit> hits) =>
-        $"[BlackBox] You asked yourself: \"{question}\" Rather than answer that from memory, here is what a web search for it found:\n" +
+        $"[BlackBox] You thought: \"{question}\" Rather than go by memory, here is what a web search for it found:\n" +
         WebSearchTool.Format(hits) +
         "\nRead the page that answers it with fetch_page (find= the part you need) before your next try; " +
         "if none does, search again with the exact program or model and its version.";
@@ -417,6 +429,21 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
                     @"(?<what>the (exact|right|correct|proper) (name|syntax|parameter|argument|option|setting|node|function|method|api|flag|command|format|signature|value)s?)\b)",
         RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture)]
     private static partial Regex DoesntKnow();
+
+    // Meaning to look something up on the web: a web search, the docs, or names in a version
+    // ("Let me search for TTS templates" is a search in ComfyUI, which the model then makes).
+    [GeneratedRegex(@"\b(let me|let's|i'll|i will|i should|i need to|i have to|i could|i must|i'd better|i want to)\s+(quickly\s+|first\s+|just\s+)?(" +
+                    @"((do|run|make) an?\s+)?((quick|fast)\s+)?(web|online|internet) search\s+((for|on|about)\s+)?(?<what>\S.*)|" +
+                    @"(search|look|check|look up)\s+(online|on the web|the web|the internet|the docs|the documentation|the api docs)\s+((for|about|on)\s+)?(?<what>\S.*)|" +
+                    @"google\s+(?<what>\S.*)|" +
+                    @"(check|verify|confirm|look up|search for)\s+(?<what>(the\s+)?((correct|right|exact|current|actual|new)\s+)?((node|api|python|input|socket|parameter)\s+)?" +
+                    @"(names?|api|syntax|signatures?|parameters?|arguments?|options?|docs|documentation)\b.*?\b(in|for|of) [\w.+-]+ (v(ersion)?\s*)?\d.*))",
+        RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture)]
+    private static partial Regex LookUpIntent();
+
+    // What is looked up on this PC, not on the web: "let me search for the templates", "look up the output folder".
+    [GeneratedRegex(@"^((the|my|our|this|that|a|an)\s+)?(templates?|files?|folders?|output|logs?|results?|images?|pictures?|videos?|frames?|status|queue|screenshot|window)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex LocalThing();
 
     // What a statement goes on to say after what isn't known: ", so I'll keep euler".
     [GeneratedRegex(@",\s*(so|and|but|then|because|which|i'll|i will)\b.*$", RegexOptions.IgnoreCase)]

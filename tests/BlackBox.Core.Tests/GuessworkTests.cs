@@ -196,6 +196,10 @@ public class GuessworkTests
     [InlineData("In ComfyUI, VAEDecode uses the VAE's dtype; is there a node input for fp32?", "is there a node input for fp32?")]
     [InlineData("Actually, does ComfyUI have a \"Remove Background\" node?", "Actually, does ComfyUI have a \"Remove Background\" node?")]
     [InlineData("I don't know if the original s3 was good or not.", null)]
+    [InlineData("I need to check the node names in Blender 5.2. Let me do a quick web search for Blender 5.2's geometry nodes Python API. Actually, let me think about what I know.",
+        "Let me do a quick web search for Blender 5.2's geometry nodes Python API.")]
+    [InlineData("Let me search for the templates that make video first.", null)]
+    [InlineData("Let me check the output folder for the new file.", null)]
     [InlineData("So how do we determine whether it's Juggernaut XL or SnowPony?", null)]
     [InlineData("Now, how does the film tool handle lip-sync?", null)]
     // Questions the web can't answer: the screen, the user, how a result looks, or nothing named.
@@ -214,6 +218,9 @@ public class GuessworkTests
     [InlineData("Hmm, how do I make LTX follow the motion of a reference video?", "ComfyUI", "how do I make LTX follow the motion of a reference video ComfyUI")]
     [InlineData("I'm not sure how the IC-LoRA takes the control video.", null, "how the IC-LoRA takes the control video")]
     [InlineData("So which node does motion control in ComfyUI?", "ComfyUI", "which node does motion control in ComfyUI")]
+    // Saying it will look something up, and then writing the script from memory (qwen3.8 on Blender 5.2).
+    [InlineData("Let me do a quick web search for Blender 5.2's geometry nodes Python API.", null, "Blender 5.2's geometry nodes Python API")]
+    [InlineData("I need to check the node names in Blender 5.2, but most are stable.", null, "the node names in Blender 5.2")]
     [InlineData("I don't know which sampler Nova Furry XL wants, so I'll keep euler.", "ComfyUI", "which sampler Nova Furry XL wants ComfyUI")]
     public void A_question_is_searched_without_the_thinking_around_it(string question, string? subject, string query) =>
         Assert.Equal(query, Guesswork.Query(question, subject));
@@ -326,9 +333,9 @@ public class GuessworkTests
 
         Assert.Equal(["How do I make LTX follow the motion of a reference video"], queries);
         var results = session.History.Where(m => m.Role == ChatRole.Tool).Select(m => m.Content!).ToList();
-        Assert.Contains("You asked yourself: \"How do I make LTX follow the motion of a reference video?\"", results[0]);
+        Assert.Contains("You thought: \"How do I make LTX follow the motion of a reference video?\"", results[0]);
         Assert.Contains("https://docs.ltx.io/open-source-model/feature-guides/structural-control/motion-control", results[0]);
-        Assert.DoesNotContain("You asked yourself", results[1]);
+        Assert.DoesNotContain("You thought", results[1]);
         Assert.Contains(observer.Notices, n => n.Contains("How do I make LTX follow"));
     }
 }
