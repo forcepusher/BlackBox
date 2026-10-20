@@ -137,7 +137,7 @@ public class AnthropicTests
         Assert.Equal("summarized", (string)body["thinking"]!["display"]!);
         Assert.Equal("drop_block", (string)body["thinking"]!["block_binding"]!["prefix_mismatch_behavior"]!);
         Assert.Equal("default", (string)body["fallbacks"]!);
-        Assert.Equal(64_000, (int)body["max_tokens"]!);
+        Assert.Equal(32_000, (int)body["max_tokens"]!);
         Assert.True((bool)body["stream"]!);
         Assert.Null(body["output_config"]);
     }
@@ -149,7 +149,7 @@ public class AnthropicTests
         await client.CompleteAsync([ChatMessage.User("Where is Save?")], [], new ChatRequestOptions { Model = "claude-opus-5-5", MaxTokens = 4096, QuickAnswer = true }, null, CancellationToken.None);
         var body = api.Requests.Last().Body!;
         Assert.Equal("low", (string)body["output_config"]!["effort"]!);
-        Assert.Equal(64_000, (int)body["max_tokens"]!);
+        Assert.Equal(32_000, (int)body["max_tokens"]!);
     }
 
     [Fact]
@@ -240,6 +240,11 @@ public class AnthropicTests
         api.Failures.Enqueue((HttpStatusCode.TooManyRequests, FakeAnthropic.Error("rate_limit_error", "Number of request tokens has exceeded your per-minute rate limit").ToJsonString()));
         await Assert.ThrowsAsync<RateLimitedException>(Send);
 
+        // An account allowed fewer output tokens a minute than the reply limit asked for.
+        api.Failures.Enqueue((HttpStatusCode.TooManyRequests, FakeAnthropic.Error("rate_limit_error", "This request would exceed the rate limit for your organization (org) of 8,000 output tokens per minute.").ToJsonString()));
+        await Send();
+        Assert.Equal(6000, (int)api.Requests.Last().Body!["max_tokens"]!);
+
         api.Failures.Enqueue((HttpStatusCode.BadRequest, FakeAnthropic.Error("invalid_request_error", "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.").ToJsonString()));
         Assert.Contains("credits", (await Assert.ThrowsAsync<KeyRefusedException>(Send)).Message);
 
@@ -326,6 +331,39 @@ public class AnthropicTests
         var last = (JsonArray)api.Requests.Last(r => r.Path == "/v1/messages").Body!["messages"]!;
         var thoughts = last.SelectMany(m => m!["content"]!.AsArray()).Where(b => (string)b!["type"]! == "thinking").Select(b => (string)b!["thinking"]!).ToList();
         Assert.Equal(["First I need to see the screen.", "Notepad is closed; I'll wait a moment.", "Two things at once."], thoughts);
+        Assert.Equal("Done.", session.History.Last().Content);
+    }
+
+    /// <summary>
+    /// A context reset: the handoff note is asked for on the cached history, thinking and all, and
+    /// the conversation after it (the user's messages, the note, the screen) carries no earlier
+    /// thinking, so nothing is refused or dropped.
+    /// </summary>
+    [Fact]
+    public async Task A_context_reset_starts_clean_and_the_note_reads_the_cache()
+    {
+        var api = new FakeAnthropic();
+        api.Reply = (body, n) => n switch
+        {
+            0 => Message(15_000, "tool_use", null, new Thinking("Look first."), new Call("toolu_1", "screenshot", "{}")),
+            1 => Message("end_turn", new Thinking("Summing up."), new Said("Handoff: took a screenshot of the desktop; next, say done.")),
+            _ => Text("Done."),
+        };
+        var client = new OpenAiChatClient(new HttpClient(api), Address, "sk-ant-test");
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(client, Opus, ToolRegistry.CreateDefault(true), ctx, "You are BlackBox, test prompt.", contextTokens: 20_000);
+        var observer = new RecordingObserver();
+        await session.RunAsync("Look at the screen.", observer, CancellationToken.None);
+
+        Assert.Empty(api.Violations);
+        Assert.Equal(0, api.DroppedThinking);
+        var sent = api.Requests.Where(r => r.Path == "/v1/messages").Select(r => r.Body!).ToList();
+        Assert.Equal(3, sent.Count);
+        Assert.Contains(sent[1]["messages"]!.AsArray().SelectMany(m => m!["content"]!.AsArray()), b => (string?)b!["text"] == AgentSession.HandoffRequest);
+        Assert.True(api.CacheReads[1] > 0); // the note was written on the cached history
+        var after = (JsonArray)sent[2]["messages"]!;
+        Assert.Single(after); // the user's message, the note and the screen, as one user turn
+        Assert.DoesNotContain(after.SelectMany(m => m!["content"]!.AsArray()), b => (string)b!["type"]! is "thinking" or "tool_use");
         Assert.Equal("Done.", session.History.Last().Content);
     }
 

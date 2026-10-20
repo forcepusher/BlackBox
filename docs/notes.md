@@ -783,8 +783,10 @@ Claude unchanged. A gateway in front of Anthropic whose address has an `anthropi
   out and the request sent again. A context reset keeps only the user's messages, the handoff note
   and a screenshot, which the check allows. Effort is the model's default (medium on Opus 5.5),
   except for fresh looks and quick questions, which ask for low: every Claude since 4.6 thinks, and
-  only effort says how much. Thinking counts toward the reply limit, so requests ask for 64k (the
-  model's limit if lower) whatever smaller limit a caller set.
+  only effort says how much. Thinking counts toward the reply limit, so requests ask for 32k (the
+  model's limit if lower) whatever smaller limit a caller set. Anthropic counts that limit against
+  the output tokens a minute an account may use before the reply is written (8,000 at its lowest
+  tier), so a 429 saying so lowers it to three quarters of the account's figure.
 - Refusals: on the models that take it (Opus and Fable 5 on, Sonnet 5.5), a request Anthropic's
   safety checks decline goes to the model Anthropic recommends for what was declined
   (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`); what the declined model wrote

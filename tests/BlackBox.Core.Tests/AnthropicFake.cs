@@ -374,7 +374,10 @@ internal static class ClaudeSse
 
     public static string Message(string stopReason, params Block[] blocks) => Message(stopReason, null, blocks);
 
-    public static string Message(string stopReason, JsonObject? stopDetails, params Block[] blocks)
+    public static string Message(string stopReason, JsonObject? stopDetails, params Block[] blocks) => Message(40, stopReason, stopDetails, blocks);
+
+    /// <summary>A reply to a prompt of <paramref name="inputTokens"/> (read anew; 300 more are written to the cache).</summary>
+    public static string Message(int inputTokens, string stopReason, JsonObject? stopDetails, params Block[] blocks)
     {
         var sse = new StringBuilder();
         void Event(string type, JsonObject data)
@@ -387,7 +390,7 @@ internal static class ClaudeSse
             ["message"] = new JsonObject
             {
                 ["id"] = "msg_test", ["type"] = "message", ["role"] = "assistant", ["model"] = "claude-opus-5-5", ["content"] = new JsonArray(),
-                ["usage"] = new JsonObject { ["input_tokens"] = 40, ["cache_creation_input_tokens"] = 300, ["cache_read_input_tokens"] = 0, ["output_tokens"] = 1 },
+                ["usage"] = new JsonObject { ["input_tokens"] = inputTokens, ["cache_creation_input_tokens"] = 300, ["cache_read_input_tokens"] = 0, ["output_tokens"] = 1 },
             },
         });
         Event("ping", new JsonObject());

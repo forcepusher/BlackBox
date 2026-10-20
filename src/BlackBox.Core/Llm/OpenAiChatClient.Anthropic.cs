@@ -167,6 +167,14 @@ public sealed partial class OpenAiChatClient
                         throw new ImagesRefusedException(said.Clip(300));
                     if (CreditWords().IsMatch(said))
                         throw new KeyRefusedException($"The Anthropic account behind the API key has run out of credits (it says \"{said.Clip(300)}\"). Add credits in Anthropic's Console, or pick another server at the top.");
+                    // The reply limit asked for is more than the account's output tokens a minute:
+                    // asked again for less, at once, as nothing of the minute was used.
+                    if (status == 429 && attempt < 6 && wire.MaxReply > 4096 && said.Contains("output tokens", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var most = OutputLimitWords().Match(said) is { Success: true } m && int.TryParse(m.Groups[1].Value.Replace(",", ""), out var limit) ? limit * 3 / 4 : wire.MaxReply / 2;
+                        Wires[_baseUrl] = Wires[_baseUrl] with { MaxReply = Math.Clamp(most, 4096, wire.MaxReply / 2) };
+                        continue;
+                    }
                     if (status == 429)
                         throw new RateLimitedException($"{_baseUrl} answered 429: {said.Clip(300)}", RetryAfter(resp.Headers, err, DateTimeOffset.UtcNow));
                     // 529: Anthropic is overloaded. Sent again after growing waits, like a model
@@ -234,6 +242,10 @@ public sealed partial class OpenAiChatClient
     // "At least one of the image dimensions exceed max allowed size for many-image requests: 2000 pixels"
     [GeneratedRegex(@"many-image|image dimensions exceed", RegexOptions.IgnoreCase)]
     private static partial Regex ManyImagesWords();
+
+    // "This request would exceed the rate limit for your organization (…) of 8,000 output tokens per minute."
+    [GeneratedRegex(@"([\d,]+) output tokens per minute", RegexOptions.IgnoreCase)]
+    private static partial Regex OutputLimitWords();
 
     // "Your credit balance is too low to access the Anthropic API." comes as a 400.
     [GeneratedRegex(@"credit balance is too low", RegexOptions.IgnoreCase)]
