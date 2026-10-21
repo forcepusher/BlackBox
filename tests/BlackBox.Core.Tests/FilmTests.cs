@@ -806,6 +806,25 @@ public sealed class FilmCheckTests
     }
 
     [Fact]
+    public void The_cameras_path_is_measured_to_hold_it_still()
+    {
+        // A pixel a frame to the left for 24 frames: 15% of the width.
+        var path = VideoSteady.Measure(Moving(1, 0));
+        Assert.InRange(path.Frames[^1].X, -0.16, -0.14);
+        Assert.InRange(path.Frames[^1].Grow, 0.98, 1.02);
+        Assert.True(path.Moved);
+        Assert.True(path.Enlarged > VideoSteady.MostEnlarged); // too far to hold
+        Assert.InRange(path.At(path.Frames[^1].Time / 2).X, -0.09, -0.06);
+        var still = VideoSteady.Measure(Moving(0, 1));
+        Assert.False(still.Moved);
+        Assert.Equal(1, still.Enlarged, 2);
+        Assert.True(VideoSteady.AsksStill("static locked-off medium"));
+        Assert.True(VideoSteady.AsksStill("still"));
+        Assert.False(VideoSteady.AsksStill("slow push in"));
+        Assert.False(VideoSteady.AsksStill("The camera pans left with her."));
+    }
+
+    [Fact]
     public void Movement_is_measured_from_the_pixels_the_camera_apart_from_what_moves_on_its_own()
     {
         var still = VideoMotion.Describe(VideoMotion.Measure(Moving(0, 0)));

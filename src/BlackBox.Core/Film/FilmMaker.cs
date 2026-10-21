@@ -234,8 +234,45 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         var run = await RunAsync(board, job, ModelOf(board, shot), inputs, shot.Set, workflow, ShotStamp(board, shot), "video", progress, userMessage, ct).ConfigureAwait(false);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         File.Copy(run.Output, target, overwrite: true);
+        if (VideoSteady.AsksStill(shot.Camera + "\n" + shot.Prompt) && await HoldStillAsync(target, ct).ConfigureAwait(false) is { } held)
+            notes.Add(held);
         FilmTakes.Remember(workflow, FilmPiece.Of(shot).Settings(board));
         return new FilmMade(target, workflow, run.Template, run.Took, [.. notes, .. run.Notes]);
+    }
+
+    /// <summary>
+    /// A clip whose camera moved where its shot holds it still, held still after the fact
+    /// (<see cref="VideoSteady"/>): LTX pushed in, panned or tilted on every locked-off shot of a
+    /// night of films. What was done, for the notes; null when the camera held still or nothing could be read.
+    /// </summary>
+    private async Task<string?> HoldStillAsync(string clip, CancellationToken ct)
+    {
+        if (media is null || media.Ffmpeg is not { } ffmpeg)
+            return null;
+        var path = await Task.Run(() =>
+        {
+            using var reader = media.OpenVideo(clip, 512);
+            return reader is null ? null : VideoSteady.Measure(VideoMotion.Read(reader));
+        }, ct).ConfigureAwait(false);
+        if (path is not { Moved: true })
+            return null;
+        var held = Path.Combine(Path.GetDirectoryName(clip)!, Path.GetFileNameWithoutExtension(clip) + ".held.mp4");
+        try
+        {
+            if (!await VideoSteady.HoldAsync(clip, held, path, media, ffmpeg, ct).ConfigureAwait(false))
+                return $"The camera {path.Describe()} where the shot holds it still, too far to hold still after the fact.";
+            File.Move(held, clip, overwrite: true);
+            return $"The camera {path.Describe()} where the shot holds it still: held it still, the picture enlarged {(path.Enlarged - 1) * 100:0}%.";
+        }
+        catch (IOException ex)
+        {
+            return $"The camera {path.Describe()} where the shot holds it still, and holding it still failed: {ex.Message}";
+        }
+        finally
+        {
+            if (File.Exists(held))
+                File.Delete(held);
+        }
     }
 
     // ---- lines -------------------------------------------------------------------------------------
