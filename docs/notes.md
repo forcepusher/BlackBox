@@ -1130,7 +1130,7 @@ things up is now something BlackBox makes happen, not only asks for:
   MCP server's name).
 - A try the model itself calls wrong ("still doesn't follow the dance", "no change in the motion",
   "I need a different approach") counts as a failed one, as does the user's next message saying the
-  result isn't right ("Dude it's still a kid"): the first such failure before anything was looked
+  result isn't right ("Dude it's still a kid", "it should fade from transparent"): the first such failure before anything was looked
   up gets a note to search before the next try, and from the third since the last look-up every one
   does, as errors do. A try is a call that does something: a command, a script, a file written, a
   ComfyUI job, a piece of a film.
