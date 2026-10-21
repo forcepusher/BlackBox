@@ -136,7 +136,8 @@ public static partial class FilmCheck
     /// what each person does from frame to frame, qwen3.8 caught the freeze both times and passed a
     /// talking close-up both times.
     /// </summary>
-    public static string JudgeBehaviour(Storyboard board, FilmShot shot, string? heard = null)
+    /// <param name="motion">The movement measured from the pixels, in words, if any: it says when something moves, where frames a second apart can't.</param>
+    public static string JudgeBehaviour(Storyboard board, FilmShot shot, string? heard = null, string? motion = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"You judge one shot of an AI-made film{Title(board)} for ONE thing only: behaviour over time. Video models often make people or animals freeze in a pose, " +
@@ -144,6 +145,10 @@ public static partial class FilmCheck
         sb.AppendLine($"The shot lasts {N(shot.Seconds)} s and should show: {shot.Prompt.Trim()}");
         Says(shot, heard, sb);
         sb.AppendLine("The picture shows " + TopRow(board, shot) + "8 frames spread evenly over the whole shot, with their times.");
+        // A girl walking steadily to a mailbox read as frozen for 2 s and then teleporting, from frames 0.7 s apart.
+        if (motion is { Length: > 0 })
+            sb.AppendLine(motion).AppendLine("The measured movement is reliable about when something moves: a stretch where nothing moves much is a freeze, " +
+                                             "and something moving steadily across stretches is not one, whatever two frames side by side suggest.");
         sb.AppendLine("1. For each person or animal, say what they are doing in each frame, and what they must have done between one frame and the next.");
         sb.AppendLine("2. Is there a stretch of more than about 1.5 s where they hold the same pose while the shot calls for action (eating, talking, walking), or a pose no real person would keep that long " +
                       "(slumped or bent double, mid-fall, mid-jump, an arm stuck in the air)? Give the times.");
@@ -246,7 +251,7 @@ public static partial class FilmCheck
         var looks = new List<(string Name, string? Answer)>
         {
             ("Physics and bodies", await ask(look.Closer is { } closer ? [sheet, closer] : [sheet], JudgeShot(board, shot, look.Closer is not null, heard), ct).ConfigureAwait(false)),
-            ("Behaviour over time", await ask([sheet], JudgeBehaviour(board, shot, heard), ct).ConfigureAwait(false)),
+            ("Behaviour over time", await ask([sheet], JudgeBehaviour(board, shot, heard, look.Motion), ct).ConfigureAwait(false)),
             ("Whether the world stays put", await ask([sheet], JudgeSteadiness(board, shot, look.Motion), ct).ConfigureAwait(false)),
             ("Movement as asked", await ask([sheet], JudgeMotion(board, shot, look.Motion), ct).ConfigureAwait(false)),
         };
