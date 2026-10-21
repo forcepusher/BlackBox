@@ -610,6 +610,9 @@ public sealed partial class AgentSession(
         // What the question is about, when it doesn't say: the program the step's calls drive.
         var subject = called.OfType<McpTool>().Select(t => t.ServerName).FirstOrDefault() ??
                       (called.Any(t => t is ComfyTool or FilmTool) ? "ComfyUI" : guesswork.Subject);
+        // The request's "Blender 5.2" says more than the server's name "blender".
+        if (subject is not null && guesswork.Subject is { } named && named.Contains(subject, StringComparison.OrdinalIgnoreCase))
+            subject = named;
         var query = Guesswork.Query(question, subject);
         var error = guesswork.QuestionIsError;
         guesswork.Searched(question);
