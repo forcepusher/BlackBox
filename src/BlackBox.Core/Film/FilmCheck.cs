@@ -385,17 +385,26 @@ public static partial class FilmCheck
         if (Math.Abs(info.Duration.TotalSeconds - length) > 1)
             faults.Add($"it is {N(info.Duration.TotalSeconds)} s long where the storyboard makes it {N(length)} s");
         using var reader = decoder.OpenVideo(film, 512) ?? throw new FilmException($"{film} has no picture this PC can read.");
-        var middles = new List<(TimeSpan Time, SKBitmap Frame)>();
+        var middles = new List<(string Label, SKBitmap Frame)>();
+        // Near each shot's start as well as its middle, a row a shot: in the middle of a boy's
+        // climb he was a small figure from behind, and the side-by-side look passed him drawn as a
+        // cartoon in one shot and photographed in the next.
+        var both = board.Shots.Count <= 6;
         try
         {
             for (var i = 0; i < board.Shots.Count; i++)
-                if (FrameAt(reader, starts[i] + board.Shots[i].Seconds / 2) is { } frame)
-                    middles.Add(frame);
+            {
+                var (at, middle) = (starts[i] + Math.Min(0.5, board.Shots[i].Seconds / 4), starts[i] + board.Shots[i].Seconds / 2);
+                if (both && FrameAt(reader, at) is { } start)
+                    middles.Add(($"{board.Shots[i].Id} at {N(at)} s", start.Frame));
+                if (FrameAt(reader, middle) is { } frame)
+                    middles.Add(($"{board.Shots[i].Id} at {N(middle)} s", frame.Frame));
+            }
             // Where the camera should go on from one shot into the next, the picture should too.
             for (var i = 1; i < board.Shots.Count; i++)
             {
                 var (before, after) = (board.Shots[i - 1], board.Shots[i]);
-                if (after.First is null || after.First != before.Last || after.Transition != FilmShot.Cut)
+                if (after.First is null || after.First != before.Last && board.Frame(after.First)?.Of != before.Id || after.Transition != FilmShot.Cut)
                     continue;
                 using var a = FrameAt(reader, starts[i] - 0.06)?.Frame;
                 using var b = FrameAt(reader, starts[i] + 0.06)?.Frame;
@@ -415,8 +424,12 @@ public static partial class FilmCheck
                 }
             else
                 text.AppendLine("It has no sound.");
-            var labels = board.Shots.Select((s, i) => $"{s.Id} at {N(starts[i] + s.Seconds / 2)} s").ToList();
-            var sheet = middles.Count == 0 ? null : Grid(middles.Select((m, i) => (i < labels.Count ? labels[i] : "", m.Frame)).ToList(), reader.Width, reader.Height);
+            byte[]? sheet = null;
+            if (middles.Count > 0)
+            {
+                using var grid = GridBitmap(middles, reader.Width, reader.Height, columns: both ? 2 : middles.Count <= 4 ? middles.Count : middles.Count <= 9 ? 3 : 4);
+                sheet = Jpeg(grid);
+            }
             return new FilmLook(text.ToString().TrimEnd(), sheet, faults, Cuts: Cuts(board, decoder));
         }
         finally
@@ -429,14 +442,18 @@ public static partial class FilmCheck
     public static string JudgeFilm(Storyboard board)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("You check a short film for the person making it, from a sheet with one frame from the middle of each shot, in order, labelled with the shot and its time.");
+        sb.AppendLine(board.Shots.Count <= 6
+            ? "You check a short film for the person making it, from a sheet with a row for each shot, in order: a frame near its start and one from its middle, labelled with the shot and the time."
+            : "You check a short film for the person making it, from a sheet with one frame from the middle of each shot, in order, labelled with the shot and its time.");
         About(board, sb);
         sb.AppendLine("The shots should show:");
         foreach (var s in board.Shots)
             sb.AppendLine($"- {s.Id}: {s.Prompt.Trim().ReplaceLineEndings(" ")}");
-        sb.AppendLine("Say briefly and concretely: do the same people look the same in every shot (face, hair, clothes, colours)? Does the look stay the same? " +
+        sb.AppendLine("Say briefly and concretely: do the same people look the same in every shot (face, hair, clothes, colours)? Is every shot in the same style: " +
+                      "all photographs, or all the same kind of drawing or render? Say for each person in each shot whether they look photographed, a 3D render or drawn. Does the look stay the same? " +
                       "Does each shot show what it should, and do they tell the story in order? Which shots stand out as wrong, and why?");
-        sb.AppendLine("Ask for a redo only for what a viewer would clearly notice: someone who looks like another person or animal, a place that changes where it should be the same, " +
+        sb.AppendLine("Ask for a redo only for what a viewer would clearly notice: someone who looks like another person or animal, someone drawn as a cartoon or a 3D render in one shot " +
+                      "and photographed in another, a place that changes where it should be the same, " +
                       "a shot that doesn't show its action. A part of someone out of frame in a close-up, or small differences in pose and framing, are no reason to redo a shot.");
         sb.Append("Then end with exactly one line: VERDICT: good, or VERDICT: redo shots s1, s2…: and the main reason.");
         return sb.ToString();
