@@ -17,6 +17,9 @@ whatever they leave open, so say what moves, which way, how far, and what stays 
   the frame badly: asked for a girl "now beside the mailbox", it left her where she stood, and every
   take then walked her to the mailbox and back. When someone walks or moves far, animate the first
   frame alone and say in the prompt where they end up; look at a last frame before using it.
+- A last frame pins the end: the video gets there early and holds it. A wave given a last frame
+  with the hand up froze with the hand up for the last second and a half, twice. For an action
+  that keeps going to the end (waving, walking, dancing, talking), give no last frame.
 - The prompt says what happens from the picture. Call what is in it by the same words as the
   picture's prompt (the red fox, the wooden table), and don't describe a different scene.
 

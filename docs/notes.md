@@ -635,7 +635,12 @@ her where she stood, and every take of the shot walked her to the mailbox and ba
 caught each one: walking back, teleporting, a see-through double). So a shot where someone walks
 far gets no last frame, and the shot after can start on a frame taken from where its clip ends
 (`{"id": "f5", "of": "s1"}`, no prompt): the clip's last picture, made once that shot is made and
-out of date when it is made again. The director's brief and the video guide say so.
+out of date when it is made again. The director's brief and the video guide say so. A last frame
+also pins the end: the video gets there early and holds it (a wave ending on a raised hand froze
+for the last 1.5 s, twice), so an action that keeps going to the end gets no last frame either.
+Told "let her walk end wherever it ends and have shot 2 go on from exactly where shot 1 ends", the
+director dropped shot 1's last frame and started shot 2 on a frame of s1's end, and the film came
+out seamless at the cut (8 s, made in about an hour with the looks and their fixes).
 
 **Takes**: before a piece is made again, the one there is kept beside it (`frames/f2.v1.png` and
 `.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it was made with
