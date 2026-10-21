@@ -1139,7 +1139,7 @@ things up is now something BlackBox makes happen, not only asks for:
   screen, the user or how a result looks are left alone, as are ones that name nothing ("How should
   I proceed?"), a question like one searched before, and any for a few calls after a look-up, while
   the model reads. Without a program's name the search adds the one the step drives (ComfyUI, an
-  MCP server's name).
+  MCP server's name) or the one the request names with its version ("Blender 5.2").
 - A try the model itself calls wrong ("still doesn't follow the dance", "no change in the motion",
   "I need a different approach") counts as a failed one, as does the user's next message saying the
   result isn't right ("Dude it's still a kid", "it should fade from transparent"): the first such failure before anything was looked

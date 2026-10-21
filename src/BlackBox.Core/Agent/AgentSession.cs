@@ -609,7 +609,7 @@ public sealed partial class AgentSession(
     {
         // What the question is about, when it doesn't say: the program the step's calls drive.
         var subject = called.OfType<McpTool>().Select(t => t.ServerName).FirstOrDefault() ??
-                      (called.Any(t => t is ComfyTool or FilmTool) ? "ComfyUI" : null);
+                      (called.Any(t => t is ComfyTool or FilmTool) ? "ComfyUI" : guesswork.Subject);
         var query = Guesswork.Query(question, subject);
         guesswork.Searched(question);
         IReadOnlyList<Web.SearchHit> hits;

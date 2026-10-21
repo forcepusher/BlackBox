@@ -101,12 +101,23 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     public string? Question { get; private set; }
 
     /// <summary>
+    /// The program and version the user's request names ("Blender 5.2"), added to a question that
+    /// names neither: "how do I set the socket's default" alone finds nothing about Blender.
+    /// </summary>
+    public string? Subject { get; private set; }
+
+    internal static string? SubjectIn(string request) =>
+        NamedVersion().Match(request) is { Success: true } m ? m.Value : null;
+
+    /// <summary>
     /// A new run, on the user's message: the clock only counts time spent working, and a message
     /// saying the result of the run before isn't right counts as a failed try.
     /// </summary>
     public void StartRun(string? userText)
     {
         (_tick, _lookedUp, _firstSaid, _tried, Question) = (_now(), false, false, false, null);
+        if (userText is not null && SubjectIn(userText) is { } subject)
+            Subject = subject;
         Heard(userText);
         _triedInRun = false;
     }
@@ -278,7 +289,8 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         else if (MeansToLookUp(q) is { } what)
             q = AfterThought().Replace(what, "");
         q = q.TrimEnd('?', '.', ' ');
-        if (subject is { Length: > 0 } && !q.Contains(subject, StringComparison.OrdinalIgnoreCase))
+        // The program, unless the question names it (or another one with its version).
+        if (subject is { Length: > 0 } && !q.Contains(subject.Split(' ')[0], StringComparison.OrdinalIgnoreCase) && !NamedVersion().IsMatch(q))
             q += " " + subject;
         if (q.Length > 160)
             q = q[..q.LastIndexOf(' ', 160)];
@@ -313,7 +325,8 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     private static readonly HashSet<string> Common =
         ["the", "and", "how", "can", "could", "should", "would", "does", "what", "which", "this", "that", "with", "for", "not", "sure", "know",
          "there", "way", "any", "into", "from", "you", "use", "proceed", "task", "next", "step", "now", "here", "then", "need", "want", "get",
-         "done", "doing", "thing", "things", "it's", "i'm", "will", "work", "best", "about", "right", "correct", "exactly"];
+         "done", "doing", "thing", "things", "it's", "i'm", "will", "work", "best", "about", "right", "correct", "exactly",
+         "wait", "but", "hmm", "also", "actually", "maybe", "well", "okay"];
 
     // Curly apostrophes as straight ones, so "doesn’t" reads as "doesn't".
     private static string Plain(string text) => text.Replace('’', '\'').Replace('‘', '\'');
@@ -397,6 +410,11 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
 
     [GeneratedRegex(@"(?<=[.!?])\s+|\n")]
     private static partial Regex Sentences();
+
+    // A program and its version as people write them: "Blender 5.2", "Unity 6", "LTX-2.5", "moviepy 2.x".
+    // Only a dotted or joined version, so "Make 3 cubes" names no program.
+    [GeneratedRegex(@"\b[A-Za-z][\w+-]*[A-Za-z](\s+v?\d+\.(\d+|x)(\.\d+)*|-v?\d+(\.(\d+|x))*)\b")]
+    private static partial Regex NamedVersion();
 
     [GeneratedRegex(@"\s+[—–-]+\s+|[:;]\s+")]
     private static partial Regex Clauses();

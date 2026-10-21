@@ -229,6 +229,22 @@ public class GuessworkTests
     public void A_question_is_searched_without_the_thinking_around_it(string question, string? subject, string query) =>
         Assert.Equal(query, Guesswork.Query(question, subject));
 
+    [Theory]
+    [InlineData(@"With Blender 5.2 (C:\Program Files\Blender Foundation\Blender 5.2\blender.exe), make scatter.blend", "Blender 5.2")]
+    [InlineData("Make the bunny dance with LTX-2.5 like in dance.mp4", "LTX-2.5")]
+    [InlineData("Use the latest moviepy 2.x for a title", "moviepy 2.x")]
+    [InlineData("Make 3 cubes and a 6-second video", null)]
+    public void The_program_a_request_names_is_found(string request, string? subject) =>
+        Assert.Equal(subject, Guesswork.SubjectIn(request));
+
+    [Fact]
+    public void A_question_that_names_no_program_is_searched_with_the_one_the_request_names()
+    {
+        Assert.Equal("how do I set a socket's default value Blender 5.2", Guesswork.Query("Wait, how do I set a socket's default value?", "Blender 5.2"));
+        Assert.Equal("how do I set a socket's default value in Blender 4.2", Guesswork.Query("how do I set a socket's default value in Blender 4.2?", "Blender 5.2"));
+        Assert.Null(Guesswork.QuestionIn("Wait, but how does the default value work now?"));
+    }
+
     [Fact]
     public void A_try_the_model_calls_wrong_counts_as_a_failed_one()
     {
