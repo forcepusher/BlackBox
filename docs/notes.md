@@ -656,7 +656,8 @@ each shot camera first, the run from the left edge to the trunk, and what stays 
 there, the looks asked for redos that the frames bear out: the camera panning and tilting though the
 prompt locked it, a run that glided with feet not planting, and the boy holding his sitting pose for
 2 s before the wave began. Even without a last frame, LTX often holds the opening picture for a
-second or two before anything moves; that hold is now the most common fault the looks find.
+second or two before anything moves; that hold is now the most common fault the looks find, so
+the brief and the guide say to draw a shot's first frame mid-action (a foot lifting, a hand rising).
 
 **Takes**: before a piece is made again, the one there is kept beside it (`frames/f2.v1.png` and
 `.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it was made with
