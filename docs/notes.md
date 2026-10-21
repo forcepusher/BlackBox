@@ -260,8 +260,8 @@ long chat decodes only what can be seen (a third of its height showing, or 120 p
 counts as on screen). Its pause button holds it until it is played again. The Filmmaking window's
 players are not touched by this: they play with sound when asked.
 
-A click on a picture or a video (a preview, a picture that came with a message, a tool's
-screenshot) opens the full-screen viewer on the chat's screen, rather than another program: a
+A click on a picture or a video (a preview, a picture that came with a message or waits under the
+box to go with one, a tool's screenshot) opens the full-screen viewer on the chat's screen, rather than another program: a
 picture as large as the screen, the wheel coming closer where it points, a drag moving it, a double
 click between that and its own size (from twice its size its pixels stay square, for pixel art); a
 video plays with its sound (M or the speaker turns it off), Space plays or pauses. The arrow keys
