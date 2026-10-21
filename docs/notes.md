@@ -899,7 +899,9 @@ to, its prompt cache (a prefix match, looked for up to 20 blocks back) and its t
 The app and the command-line runner were run against a stand-in like it on 21 October, with Kilo's
 free Nemotron answering behind it: a file written and read back, a screenshot and the free disk
 space (two calls at once), an Excel budget and a follow-up message changing it, and a task in a 24k
-context that reset eight times. All 39 requests kept the API's rules, none had thinking dropped,
+context that reset eight times; then on the merged develop build a web search, a Word document on
+Claude Haiku 4.5 (no adaptive thinking, so no thinking or betas sent), a Python script written and
+run, and a screenshot question in the app. All 54 requests kept the API's rules, none had thinking dropped,
 and from the second step on each read everything before it from the cache; screenshots of the
 2560x1080 screen went at 1984x832, and the model list, "Picked by BlackBox: Claude Opus 5.5" and
 the slider's 1M showed in the window.
