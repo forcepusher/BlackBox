@@ -641,6 +641,17 @@ shot's prompt ends with what is heard; LTX is given it with "No music." unless i
 (not part of the shot's stamp, so made shots stay up to date), and under a song the shots' own
 sound is kept at half rather than left out.
 
+**A camera held still after the fact** (`VideoSteady`). LTX moved the camera on every
+locked-off shot of a night of films (a push in of 11%, pans and tilts), whatever the prompt said,
+and a negative prompt does nothing at CFG 1. ffmpeg's tripod stabilizer (vid.stab, `tripod=1`)
+neither undid the push in nor found the snowfield behind a trotting fox. So when a shot's camera or
+prompt says it holds still and its clip's camera moved (1.5% across or 2% in or out), the camera's
+path is measured as `VideoMotion` measures it (steps of an eighth of a second chained; a push in from
+the blocks that move with the camera), and every frame is drawn back to where the first one was,
+enlarged just enough to fill the frame: 20% for the boy's 11% push in and 4% pan, after which the
+branch and trunk stay put for the whole shot. Past 25% (the fox's camera tracked it 23% across) the
+clip is left as it is and the note says so. About 9 s for a 5 s shot.
+
 **A shot that goes on from where the one before ends.** The edit model that makes a shot's last
 frame from its first changes a pose, a face or what someone holds well, and moves someone across
 the frame badly: asked for the girl of "The Letter in the Rain" "now beside the mailbox", it left
