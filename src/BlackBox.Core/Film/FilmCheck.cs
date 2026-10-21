@@ -457,7 +457,7 @@ public static partial class FilmCheck
         var sb = new StringBuilder();
         sb.AppendLine($"You judge the cuts of an AI-made film{Title(board)} for ONE thing only: whether the world stays the same across each cut. Each shot's frames are made " +
                       "on their own, so the shot after a cut often lands somewhere else: a dense forest becomes an open clearing, a kitchen another kitchen, the moon or sun jumps " +
-                      "to the other side of the sky or changes size, day turns to dusk, someone's clothes, hair or fur change, while the story has the same place and moment.");
+                      "to the other side of the sky or changes size, day turns to dusk, someone's clothes, hair or fur change, a photo turns into a cartoon, while the story has the same place and moment.");
         sb.AppendLine("The shots should show:");
         foreach (var s in board.Shots)
             sb.AppendLine($"- {s.Id}: {s.Prompt.Trim().ReplaceLineEndings(" ")}");
@@ -473,7 +473,7 @@ public static partial class FilmCheck
         }
         sb.AppendLine("1. For each cut, describe each of its two frames in a few words: the place (what is right behind the people or animals, the ground, how close and dense the trees, " +
                       "buildings or furniture are), the light (the moon, sun or brightest light: how far across its own frame its centre is, from 0 at the frame's left edge to 1 at its right, " +
-                      "and how wide it is as a share of the frame's width), the time of day and weather, each person or animal (how they look, which way they face), " +
+                      "and how wide it is as a share of the frame's width), the time of day and weather, the style (photo, cartoon, painting), each person or animal (how they look, which way they face), " +
                       "and how close the camera is (wide, medium or close-up).");
         sb.AppendLine("2. Compare: would a viewer take the frame after the cut as the same place a moment later, unless the story moves on? A new angle may show another part of the same place, " +
                       "but not another kind of place; the moon or sun stays on the same side (its centre within about a quarter of the width) and about the same size unless the camera turned around; " +
