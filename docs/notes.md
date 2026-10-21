@@ -649,7 +649,10 @@ also pins the end: the video gets there early and holds it (a wave ending on a r
 for the last 1.5 s, twice), so an action that keeps going to the end gets no last frame either.
 Told "let her walk end wherever it ends and have shot 2 go on from exactly where shot 1 ends", the
 director dropped shot 1's last frame and started shot 2 on a frame of s1's end, and the film came
-out seamless at the cut (8 s, made in about an hour with the looks and their fixes).
+out seamless at the cut (8 s, made in about an hour with the looks and their fixes). Laying out "a
+boy runs across a park from the left to a big oak tree on the right, climbs onto its lowest branch,
+then sits on it and waves" afresh, it gave the run and the climb-and-wave no last frame, and wrote
+each shot camera first, the run from the left edge to the trunk, and what stays still.
 
 **Takes**: before a piece is made again, the one there is kept beside it (`frames/f2.v1.png` and
 `.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it was made with
