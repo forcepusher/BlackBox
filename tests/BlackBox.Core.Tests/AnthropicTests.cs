@@ -368,6 +368,37 @@ public class AnthropicTests
         Assert.Equal("Done.", again.History.Last().Content);
     }
 
+    /// <summary>A message the user sends while the agent works joins the turn of tool results and stays a valid, cached conversation.</summary>
+    [Fact]
+    public async Task A_message_sent_mid_run_joins_the_conversation()
+    {
+        var api = new FakeAnthropic();
+        AgentSession? session = null;
+        api.Reply = (body, n) =>
+        {
+            if (n == 0)
+                session!.Steer("Also say hello when you're done.");
+            return n switch
+            {
+                0 => Message("tool_use", new Thinking("Wait first."), new Call("toolu_1", "wait", """{"seconds":1}""")),
+                1 => Message("end_turn", new Thinking("They asked for hello too."), new Said("Done. Hello!")),
+                _ => Text("Hello again."),
+            };
+        };
+        var client = new OpenAiChatClient(new HttpClient(api), Address, "sk-ant-test");
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        session = new AgentSession(client, Opus, ToolRegistry.CreateDefault(true), ctx, "You are BlackBox, test prompt.", contextTokens: 200_000);
+        await session.RunAsync("Wait a second.", new RecordingObserver(), CancellationToken.None);
+
+        Assert.Empty(api.Violations);
+        Assert.Equal(0, api.DroppedThinking);
+        var second = (JsonArray)api.Requests.Where(r => r.Path == "/v1/messages").ElementAt(1).Body!["messages"]!;
+        var turn = second[^1]!["content"]!.AsArray();
+        Assert.Equal("tool_result", (string)turn[0]!["type"]!);
+        Assert.Contains(turn, b => ((string?)b!["text"])?.Contains("Also say hello") == true);
+        Assert.True(api.CacheReads[1] > 0);
+    }
+
     /// <summary>
     /// A context reset: the handoff note is asked for on the cached history, thinking and all, and
     /// the conversation after it (the user's messages, the note, the screen) carries no earlier
