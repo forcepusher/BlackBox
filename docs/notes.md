@@ -676,6 +676,17 @@ the brief and the guide say to draw a shot's first frame mid-action (a foot lift
 With the boy's hand already mid-wave in shot 2's first frame, he waved from the first moment; the
 looks still failed it for a slow push-in the prompt didn't ask for, and the cut look passed a boy
 drawn cartoonish in shot 1 (from a character sheet that came out cartoonish) and photoreal in shot 2.
+That sheet's prompt had no look at all, so Z-Image drew a 3D cartoon, and every frame made from it
+was one. Now the brief puts the film's look into references too, the frame look counts a cartoon
+face in a photograph (it failed the boy's first frame, which it had passed), and the whole-film
+sheet has each shot near its start as well as its middle, with a question on style (it then named
+the switch in 1 run of 2; in the middle of the climb the boy was a small figure from behind).
+
+From the merged develop, "a woman in a blue wool coat at a cafe table by the window lifts her cup of
+coffee to her lips and takes a sip; the camera holds still" became one 4 s shot from a frame with
+the cup just leaving the saucer: the shot's look failed its first take for a second cup on the
+saucer vanishing, the director took that cup out of the picture, and the second take passed every
+look and the film's, its camera still (measured), in 21 minutes.
 
 **Takes**: before a piece is made again, the one there is kept beside it (`frames/f2.v1.png` and
 `.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it was made with
