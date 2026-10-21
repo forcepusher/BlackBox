@@ -409,6 +409,35 @@ public class GuessworkTests
         Assert.Equal(isTry, Guesswork.IsTry(new ComfyTool(), Guesswork.ActionOf($$"""{"action": "{{action}}"}""")));
 
     [Fact]
+    public async Task An_error_the_model_goes_on_past_is_searched_for_it_in_a_run()
+    {
+        var execute = new McpTool("blender", "blender__execute_blender_code", new ModelContextProtocol.Protocol.Tool { Name = "execute_blender_code" },
+            (_, _) => Task.FromResult(new CallToolResult { Content = [new TextContentBlock { Text = BlenderError }] }));
+        var server = new ScriptedServer(
+            Sse.ToolCall("b1", "blender__execute_blender_code", """{"code":"tree.inputs.new('NodeSocketGeometry', 'Geometry')"}"""),
+            Sse.ToolCall("b2", "blender__execute_blender_code", """{"code":"tree.outputs.new('NodeSocketGeometry', 'Geometry')"}"""),
+            Sse.Text("Done."));
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null), new ChatRequestOptions(),
+            ToolRegistry.CreateDefault(includeScreenTools: false, extra: [execute]), ctx, "sys");
+        var queries = new List<string>();
+        session.SearchWeb = (q, _) =>
+        {
+            queries.Add(q);
+            return Task.FromResult<IReadOnlyList<Web.SearchHit>>([new("NodeTreeInterface - Blender Python API", "https://docs.blender.org/api/current/bpy.types.NodeTreeInterface.html", "new_socket(name, in_out, socket_type)")]);
+        };
+
+        await session.RunAsync("Build a geometry nodes graph in Blender 5.2", new RecordingObserver(), CancellationToken.None);
+
+        // The program and version the request names say what the error is about.
+        Assert.Equal(["AttributeError: 'GeometryNodeTree' object has no attribute 'inputs' Blender 5.2"], queries);
+        var results = session.History.Where(m => m.Role == ChatRole.Tool).Select(m => m.Content!).ToList();
+        Assert.EndsWith(Guesswork.NameNote, results[0]);
+        Assert.Contains("You went on without looking up the error \"AttributeError: 'GeometryNodeTree' object has no attribute 'inputs'\"", results[1]);
+        Assert.Contains("https://docs.blender.org/api/current/bpy.types.NodeTreeInterface.html", results[1]);
+    }
+
+    [Fact]
     public async Task A_question_the_model_goes_on_without_looking_up_is_searched_for_it()
     {
         var server = new ScriptedServer(
