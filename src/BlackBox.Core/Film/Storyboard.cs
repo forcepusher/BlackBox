@@ -175,6 +175,8 @@ public sealed class Storyboard
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         void Walk(FilmFrame f)
         {
+            if (f.Of is { } of && Shot(of)?.First is { } first && seen.Add(first) && Frame(first) is { } start)
+                Walk(start);
             foreach (var id in f.From)
                 if (seen.Add(id) && Frame(id) is { } from)
                 {
@@ -366,6 +368,10 @@ public sealed class Storyboard
             if (Frame(s.First) is null) s.First = null;
             if (Frame(s.Last) is null) s.Last = null;
         }
+        // A frame is where a shot's clip ends only for a shot there is, and not one of that shot's own frames.
+        foreach (var f in Frames)
+            if (f.Of is { } of && (Shot(of) is not { } shot || shot.First == f.Id || shot.Last == f.Id))
+                f.Of = null;
         if (Sound.Seed <= 0)
             Sound.Seed = NewSeed();
         Sound.Voice ??= "";
@@ -567,6 +573,13 @@ public sealed class FilmFrame
 
     /// <summary>A picture of the user's own to use instead of making one.</summary>
     public string? File { get; set; }
+
+    /// <summary>
+    /// The shot whose clip this frame is the last picture of, taken from the clip: the shot that
+    /// starts on it goes on from the moment that one ends. A picture model can't make that frame:
+    /// asked to move a girl to a mailbox, an edit model left her where she stood.
+    /// </summary>
+    public string? Of { get; set; }
 
     /// <summary>Changes to the workflow after the storyboard's own, as the comfyui tool's set takes them: {"node id.input": value}.</summary>
     public JsonObject? Set { get; set; }

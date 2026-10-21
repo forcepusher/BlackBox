@@ -55,6 +55,28 @@ public sealed class StoryboardTests : IDisposable
     }
 
     [Fact]
+    public void A_frame_can_be_where_a_shots_clip_ends_and_is_out_of_date_when_the_clip_is_made_again()
+    {
+        var board = Storyboard.Parse("""
+            {"frames": [{"id": "f1", "prompt": "a girl at the left"}, {"id": "f2", "of": "s1"}, {"id": "f3", "of": "s2"}, {"id": "f4", "of": "s9"}],
+             "shots": [{"id": "s1", "first": "f1", "prompt": "she walks to the mailbox"}, {"id": "s2", "first": "f2", "prompt": "she waves"}]}
+            """);
+        board.Folder = _dir;
+        Assert.Equal("s1", board.Frame("f2")!.Of);
+        Assert.Equal("s2", board.Frame("f3")!.Of);
+        Assert.Null(board.Frame("f4")!.Of); // no such shot
+        Assert.Empty(board.AddFirstFrames());
+        var clip = board.ShotVideo(board.Shot("s1")!);
+        Directory.CreateDirectory(Path.GetDirectoryName(clip)!);
+        File.WriteAllText(clip, "take one");
+        var before = FilmMaker.FrameStamp(board, board.Frame("f2")!);
+        File.WriteAllText(clip, "take two, longer");
+        Assert.NotEqual(before, FilmMaker.FrameStamp(board, board.Frame("f2")!));
+        // Its own shot can't start on it.
+        Assert.Null(Storyboard.Parse("""{"frames": [{"id": "f1", "of": "s1"}], "shots": [{"id": "s1", "first": "f1"}]}""").Frame("f1")!.Of);
+    }
+
+    [Fact]
     public void A_shot_is_asked_for_no_music_unless_it_speaks_of_music()
     {
         Assert.Equal("The fox howls. Wind hisses. No music.", FilmMaker.WithoutMusic("The fox howls. Wind hisses."));
@@ -257,6 +279,26 @@ public sealed class FilmDirectorTests : IDisposable
         Assert.Equal(["f2", "s1"], direction.Make.Select(p => p.Id));
         Assert.Contains(direction.Notes, n => n.Contains("f3"));
         Assert.Equal("he waves", board.Shot("s1")!.Prompt); // the storyboard given is left as it was
+    }
+
+    [Fact]
+    public async Task A_frame_taken_from_where_a_shot_ends_is_made_after_that_shot()
+    {
+        var board = Storyboard.Parse("""
+            {"frames": [{"id": "f1", "prompt": "a girl at the left"}, {"id": "f2", "prompt": "old"}],
+             "shots": [{"id": "s1", "first": "f1", "prompt": "she walks"}, {"id": "s2", "first": "f2", "prompt": "she waves"}]}
+            """);
+        board.Folder = _dir;
+        var direction = await FilmDirector.DirectAsync(board, FilmPiece.Of(board.Shot("s2")!), "start where shot 1 ends", FilmTalk.Load(""), [], null, Answer("""
+            {"reply": "It goes on from shot 1 now.", "change": {"frames": [{"id": "f5", "of": "s1"}], "shots": [{"id": "s2", "first": "f5"}]}, "make": ["f5", "s2"]}
+            """), CancellationToken.None);
+        Assert.Equal("s1", direction.Board.Frame("f5")!.Of);
+        Assert.Equal("f5", direction.Board.Shot("s2")!.First);
+        Assert.Equal(["f5", "s2"], direction.Make.Select(p => p.Id));
+        var whole = await FilmDirector.DirectAsync(board, FilmPiece.Of(board.Shot("s1")!), "again", FilmTalk.Load(""), [], null, Answer("""
+            {"reply": "Again.", "change": {"shots": [{"id": "s1", "seed": "new"}]}, "make": ["s1"]}
+            """), CancellationToken.None);
+        Assert.Equal(["s1"], whole.Make.Select(p => p.Id));
     }
 
     [Fact]

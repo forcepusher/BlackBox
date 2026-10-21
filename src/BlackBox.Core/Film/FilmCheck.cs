@@ -536,6 +536,8 @@ public static partial class FilmCheck
                 return;
             if (frame.Reference)
                 refs.Add(frame.Id);
+            else if (frame.Of is { } of && board.Shot(of) is { } before)
+                Walk(before.First);
             else
                 foreach (var from in frame.From)
                     Walk(from);
@@ -669,6 +671,19 @@ public static partial class FilmCheck
                 last?.Item2.Dispose();
         }
         return frames;
+    }
+
+    /// <summary>A clip's very last frame; null when none can be read.</summary>
+    public static SKBitmap? LastFrame(IVideoReader reader)
+    {
+        reader.Seek(TimeSpan.FromSeconds(Math.Max(0, reader.Duration.TotalSeconds - 0.5)));
+        SKBitmap? last = null;
+        while (reader.Next() is { } next)
+        {
+            last?.Dispose();
+            last = MediaPreview.ToBitmap(next.Frame);
+        }
+        return last;
     }
 
     private static (TimeSpan Time, SKBitmap Frame)? FrameAt(IVideoReader reader, double seconds, bool first = false)

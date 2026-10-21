@@ -91,6 +91,34 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     public async Task<FilmMade> MakeFrameAsync(Storyboard board, FilmFrame frame, Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
     {
         var target = board.FramePicture(frame);
+        if (frame.Of is { } of && board.Shot(of) is { } before)
+        {
+            // Where the shot before's clip ends, as the clip has it.
+            var started = DateTime.UtcNow;
+            var clip = board.ShotVideo(before);
+            if (!File.Exists(clip))
+                throw new FilmException($"{frame.Label} is where shot {before.Id} ends, and shot {before.Id} isn't made yet: make it first.");
+            if (media is null)
+                throw new FilmException($"Nothing on this PC can read video to take {frame.Label} from shot {before.Id} (ffmpeg in BlackBox's Data\\tools would).");
+            await Task.Run(() =>
+            {
+                using var reader = media.OpenVideo(clip, Math.Max(board.Width, board.Height)) ?? throw new FilmException($"{clip} has no picture this PC can read.");
+                using var last = FilmCheck.LastFrame(reader) ?? throw new FilmException($"No frame of {clip} could be read.");
+                var taken = Path.Combine(Path.GetTempPath(), $"blackbox-{Guid.NewGuid():N}.png");
+                try
+                {
+                    using (var stream = File.Create(taken))
+                        last.Encode(stream, SkiaSharp.SKEncodedImageFormat.Png, 100);
+                    SaveFrame(taken, target, board.Width, board.Height);
+                }
+                finally
+                {
+                    File.Delete(taken);
+                }
+            }, ct).ConfigureAwait(false);
+            WriteStamp(board.FrameWorkflow(frame), FrameStamp(board, frame), null, null);
+            return new FilmMade(target, null, null, DateTime.UtcNow - started, []);
+        }
         if (frame.File is { Length: > 0 } file)
         {
             var started = DateTime.UtcNow;
@@ -541,7 +569,9 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     public static string FrameStamp(Storyboard board, FilmFrame frame)
     {
         var sb = new StringBuilder();
-        if (frame.File is { Length: > 0 } file)
+        if (frame.Of is { } of && board.Shot(of) is { } before)
+            sb.Append("of|").Append(of).Append('|').Append(FileStamp(board.ShotVideo(before)));
+        else if (frame.File is { Length: > 0 } file)
             sb.Append("file|").Append(file).Append('|').Append(FileStamp(file));
         else
         {

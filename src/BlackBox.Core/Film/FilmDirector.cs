@@ -29,7 +29,7 @@ public static class FilmDirector
 
         - A frame is one still picture: who is in it (repeat what makes each person look like themselves: age, hair, face, build, clothes), where, doing what, how it is framed (wide, medium, close-up; the angle), the light, and the film's look. Write the film's look into every prompt, in the same words each time, so the pictures match. No words or letters in a picture unless asked.
         - A reference is a picture other frames are made from, so a person or place looks the same in every shot: a character sheet (the same person from the front and three-quarters on a plain background) or the place on its own. It is in no shot, and has a short "name" the person knows it by ("Marco", "the fox", "the forest"). A frame made from references lists them in "from", and its prompt says the person is the same as in the reference.
-        - A shot is a few seconds of video from its first frame to its last one, if it has one. Every shot starts on a frame (its own, or the one the shot before ends on): the video model animates a picture well and draws one badly, so a picture model makes it. Its prompt says what happens, in order, in the present tense: one clear action, how people move and what changes, with the look, and last what is heard (footsteps, wind, a door; no music: the video model makes the shot's sound, and the music is the song). Write action a camera could film for real, because a video model takes the words literally: people move as people do, and things come from somewhere and fall ("twirls a big forkful, slurps it, sauce flicks onto his chin", not "noodles flying"; "leans over the plate", not "head down in the plate"). "camera" says what the camera does (still, slow push in, pans left, follows her). 3 to 8 seconds. A shot that starts on the frame the one before ends on goes on with the same camera; one with a first frame of its own is a cut. Its first frame is how it begins and its last frame how it ends: what changes during the shot goes in the shot's prompt, and a frame changes only when the way the shot begins or ends changes. A shot with both moves from one to the other, so whatever is in a different place in the two (the moon, a tree, the horizon) moves during the shot: write the two frames to agree on everything that stays put (the same words for where the moon and the trees are), differing only in what the shot changes, and make the last frame from the first (its "from" holds the first frame's id, with the references), so the picture model keeps everything else exactly where it is. That picture model changes a pose, a face, a turn or what someone holds well, and moves someone across the frame badly (asked for a girl "now beside the mailbox", it left her where she stood, and the video walked her there and back): when someone walks or moves far, give the shot no last frame and say in its prompt where they end up.
+        - A shot is a few seconds of video from its first frame to its last one, if it has one. Every shot starts on a frame (its own, or the one the shot before ends on): the video model animates a picture well and draws one badly, so a picture model makes it. Its prompt says what happens, in order, in the present tense: one clear action, how people move and what changes, with the look, and last what is heard (footsteps, wind, a door; no music: the video model makes the shot's sound, and the music is the song). Write action a camera could film for real, because a video model takes the words literally: people move as people do, and things come from somewhere and fall ("twirls a big forkful, slurps it, sauce flicks onto his chin", not "noodles flying"; "leans over the plate", not "head down in the plate"). "camera" says what the camera does (still, slow push in, pans left, follows her). 3 to 8 seconds. A shot that starts on the frame the one before ends on goes on with the same camera; one with a first frame of its own is a cut. Its first frame is how it begins and its last frame how it ends: what changes during the shot goes in the shot's prompt, and a frame changes only when the way the shot begins or ends changes. A shot with both moves from one to the other, so whatever is in a different place in the two (the moon, a tree, the horizon) moves during the shot: write the two frames to agree on everything that stays put (the same words for where the moon and the trees are), differing only in what the shot changes, and make the last frame from the first (its "from" holds the first frame's id, with the references), so the picture model keeps everything else exactly where it is. That picture model changes a pose, a face, a turn or what someone holds well, and moves someone across the frame badly (asked for a girl "now beside the mailbox", it left her where she stood, and the video walked her there and back): when someone walks or moves far, give the shot no last frame and say in its prompt where they end up. A shot that goes on from the very moment the one before ends starts on a frame taken from that shot's clip: {"id": "f5", "of": "s1"} with no prompt is where s1's clip ends, so nothing jumps; use it after a shot without a last frame.
         - A line is what someone says in a shot, lip-synced from its first frame, in the film's one voice ("voice" in sound: age, voice, manner). It starts 0.4 s into the shot at about 2.5 words a second, so it has to fit. A speaking shot's first frame shows the face toward the camera with the mouth free: no food or hand over it. A lip-synced shot is made from its first frame only.
         - The song: "tags" (genre, instruments, mood, tempo such as "100 BPM") and "lyrics" ([verse] and [chorus] lines; none for an instrumental). It is made a minute long and the film uses its start.
         - "model" is what a piece is made with. Set it only when the person names or describes a model or workflow, to the name of an installed one (listed with the request). Leave it out otherwise: the best installed one is used.
@@ -39,7 +39,7 @@ public static class FilmDirector
         {"reply": "what you did, or the answer to their question: one or two plain sentences to them, no jargon",
          "change": {"title": "...", "frames": [{"id": "f2", "prompt": "..."}], "shots": [{"id": "s1", "seconds": 5}], "sound": {"tags": "..."}},
          "make": ["f2", "s1"]}
-        In "change" give only what changes: a frame or shot by its id with the fields that change; a new one with a new id and all its fields; {"id": "s4", "delete": true} takes one out. Frame fields: name, reference (true for a reference), prompt, from (ids of the frames it is made from), model, seed. Shot fields: first, last (frame ids; null for none), seconds, prompt, camera, line, lipSync, transition (cut, dissolve or fade), model, seed. Sound fields: source (none, song or file), tags, lyrics, voice, model, seed. "seed": "new" makes another take of the same settings. "make" lists the pieces to make now, by id ("song" for the song), in the order they are to be made: frames before the shots that start or end on them, references before the frames made from them.
+        In "change" give only what changes: a frame or shot by its id with the fields that change; a new one with a new id and all its fields; {"id": "s4", "delete": true} takes one out. Frame fields: name, reference (true for a reference), prompt, from (ids of the frames it is made from), of (a shot's id: the frame is where that shot's clip ends, taken from it), model, seed. Shot fields: first, last (frame ids; null for none), seconds, prompt, camera, line, lipSync, transition (cut, dissolve or fade), model, seed. Sound fields: source (none, song or file), tags, lyrics, voice, model, seed. "seed": "new" makes another take of the same settings. "make" lists the pieces to make now, by id ("song" for the song), in the order they are to be made: frames before the shots that start or end on them, references before the frames made from them.
         """;
 
     /// <summary>
@@ -119,7 +119,7 @@ public static class FilmDirector
         {
             var used = board.Shots.Where(s => s.First == f.Id || s.Last == f.Id).Select(s => s.Id).ToList();
             sb.AppendLine($"  {f.Id}{(f.Name is { Length: > 0 } n ? $" \"{n}\"" : "")}{(f.Reference ? " (reference)" : used.Count > 0 ? $" (in {string.Join(", ", used)})" : "")}: " +
-                          (f.File is { Length: > 0 } ? "the person's own picture" : $"prompt \"{f.Prompt.Trim().ReplaceLineEndings(" ")}\"") +
+                          (f.Of is { } of ? $"where {of}'s clip ends, taken from it" : f.File is { Length: > 0 } ? "the person's own picture" : $"prompt \"{f.Prompt.Trim().ReplaceLineEndings(" ")}\"") +
                           (f.From.Count > 0 ? $"; from {string.Join(", ", f.From)}" : "") + (f.Model is { } m ? $"; model \"{m}\"" : "") +
                           $"; {State(board, FilmPiece.Of(f))}.");
         }
@@ -267,7 +267,17 @@ public static class FilmDirector
             FilmPieceKind.Song => 4,
             _ => 5,
         };
-        return make.Select((p, i) => (p, i)).OrderBy(x => Rank(x.p)).ThenBy(x => x.i).Select(x => x.p).ToList();
+        var ordered = make.Select((p, i) => (p, i)).OrderBy(x => Rank(x.p)).ThenBy(x => x.i).Select(x => x.p).ToList();
+        // A frame taken from where a shot's clip ends comes right after that shot.
+        foreach (var taken in ordered.Where(p => p.Kind == FilmPieceKind.Frame && board.Frame(p.Id)?.Of is not null).ToList())
+        {
+            int After() => ordered.FindIndex(p => p.Kind == FilmPieceKind.Shot && p.Id == board.Frame(taken.Id)!.Of);
+            if (After() < 0)
+                continue;
+            ordered.Remove(taken);
+            ordered.Insert(After() + 1, taken);
+        }
+        return ordered;
     }
 
     /// <summary>The JSON object in a model's answer, wherever it put it (in a code block, after a sentence); null when there is none.</summary>
@@ -301,7 +311,7 @@ public static class FilmDirector
         var faults = new List<string>();
         switch (piece.Kind)
         {
-            case FilmPieceKind.Frame when board.Frame(piece.Id) is { } frame && File.Exists(board.FramePicture(frame)):
+            case FilmPieceKind.Frame when board.Frame(piece.Id) is { Of: null } frame && File.Exists(board.FramePicture(frame)):
                 if (await Task.Run(() => FilmCheck.Picture(board.FramePicture(frame), 1024), ct).ConfigureAwait(false) is not { } picture)
                     return null;
                 var (before, beside) = Before(board, frame);

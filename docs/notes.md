@@ -628,6 +628,15 @@ shot's prompt ends with what is heard; LTX is given it with "No music." unless i
 (not part of the shot's stamp, so made shots stay up to date), and under a song the shots' own
 sound is kept at half rather than left out.
 
+**A shot that goes on from where the one before ends.** The edit model that makes a shot's last
+frame from its first changes a pose, a face or what someone holds well, and moves someone across
+the frame badly: asked for the girl of "The Letter in the Rain" "now beside the mailbox", it left
+her where she stood, and every take of the shot walked her to the mailbox and back (its looks
+caught each one: walking back, teleporting, a see-through double). So a shot where someone walks
+far gets no last frame, and the shot after can start on a frame taken from where its clip ends
+(`{"id": "f5", "of": "s1"}`, no prompt): the clip's last picture, made once that shot is made and
+out of date when it is made again. The director's brief and the video guide say so.
+
 **Takes**: before a piece is made again, the one there is kept beside it (`frames/f2.v1.png` and
 `.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it was made with
 (`"settings"`). Picking an earlier take puts it back in the film with those settings (so it is up

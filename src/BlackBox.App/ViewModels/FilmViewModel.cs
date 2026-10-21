@@ -1159,7 +1159,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
                 Rebuild();
             }
             foreach (var id in new[] { shot.First, shot.LipSync ? null : shot.Last }.OfType<string>().Distinct())
-                if (_board.Frame(id) is { } frame && !FilmMaker.IsCurrent(_board, frame) && (frame.File is { Length: > 0 } || frame.Prompt.Trim().Length > 0))
+                if (_board.Frame(id) is { } frame && !FilmMaker.IsCurrent(_board, frame) && (frame.File is { Length: > 0 } || frame.Prompt.Trim().Length > 0 || frame.Of is not null))
                     await MakePieceAsync(FilmPiece.Of(frame), key, ct, Fixes);
         }
         string? fix = null;
@@ -1294,6 +1294,8 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     private FilmPiece? Missing()
     {
         bool Stale(FilmFrame f) => !FilmMaker.IsCurrent(_board, f);
+        // A frame taken from where a shot's clip ends, once that shot is made as it is now.
+        bool Taken(FilmFrame f) => f.Of is { } of && _board.Shot(of) is { } before && FilmMaker.IsCurrent(_board, before);
         var needed = _board.Shots.SelectMany(s => new[] { s.First, s.LipSync ? null : s.Last }).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
         // The frames shots need, and what those are made from, a reference before what is made from it.
         var frames = new List<FilmFrame>();
@@ -1309,7 +1311,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             Need(id, 0);
         foreach (var f in _board.Frames.Where(f => f.Reference))
             Need(f.Id, 0);
-        if (frames.FirstOrDefault(f => Stale(f) && (f.File is { Length: > 0 } || f.Prompt.Trim().Length > 0) && f.From.All(id => _board.Frame(id) is not { } src || !Stale(src))) is { } frame)
+        if (frames.FirstOrDefault(f => Stale(f) && (f.File is { Length: > 0 } || f.Prompt.Trim().Length > 0 || Taken(f)) && f.From.All(id => _board.Frame(id) is not { } src || !Stale(src))) is { } frame)
             return FilmPiece.Of(frame);
         if (_board.Sound.Source == FilmSound.Song && _board.Sound.Tags.Trim().Length > 0 && !FilmMaker.SongIsCurrent(_board))
             return FilmPiece.Song;

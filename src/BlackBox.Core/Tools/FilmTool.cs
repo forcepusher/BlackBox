@@ -25,7 +25,8 @@ public sealed class FilmTool : Tool
         "The storyboard is the film's storyboard.json, which the user also edits in BlackBox's Filmmaking window: shots in order, each going from a first frame " +
         "to an optional last frame in so many seconds, the pictures they start and end on, and the soundtrack. " +
         "action=storyboard shows it (path: the film's folder), or makes or changes it with storyboard={...}: title, " +
-        "width, height, fps, frames:[{id, prompt (what it shows and its look), model, seed, from: [ids of frames it is made from, to keep people and places the same], file (a picture of the user's), name, reference: true for a character or place sheet}], " +
+        "width, height, fps, frames:[{id, prompt (what it shows and its look), model, seed, from: [ids of frames it is made from, to keep people and places the same], file (a picture of the user's), name, reference: true for a character or place sheet, " +
+        "of: a shot's id, for a frame taken from where that shot's clip ends, so the shot that starts on it goes on from that moment (after a shot without a last frame)}], " +
         "shots:[{id, first, last (frame ids), seconds, prompt (what happens, and its look), camera, model, transition: cut|dissolve|fade, " +
         "line (what is said in it, lip-synced, in the voice sound.voice describes; it starts 0.4 s in, so leave time for it), lipSync (without a line: sings the soundtrack's part under it), seed}], " +
         "sound:{source: none|file|song, file, tags (the song's style), lyrics, voice (who says the lines: age, voice, manner), model, seed}. Frames and shots are matched by id; {\"id\": …, \"delete\": true} removes one. " +
