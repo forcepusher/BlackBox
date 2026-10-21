@@ -22,6 +22,9 @@ whatever they leave open, so say what moves, which way, how far, and what stays 
   that keeps going to the end (waving, walking, dancing, talking), give no last frame.
 - The prompt says what happens from the picture. Call what is in it by the same words as the
   picture's prompt (the red fox, the wooden table), and don't describe a different scene.
+- From a still pose LTX often holds the picture for a second or two before anything moves. Draw
+  the first frame mid-action (a foot lifting, a hand already rising) and say the movement is
+  already under way at the start.
 
 ## Sound and music
 - LTX makes the sound with the video: speech, footsteps, wind, crowds, things being handled. Say
