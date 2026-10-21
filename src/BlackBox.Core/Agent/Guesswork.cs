@@ -141,8 +141,8 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     }
 
     /// <summary>The note for a call's result, or null.</summary>
-    /// <param name="action">The call's action argument, for tools that do several things (comfyui, film).</param>
-    public string? Check(Tool? tool, ToolResult result, string? action = null)
+    /// <param name="arguments">The call's arguments: what a comfyui or film call does, what a command runs.</param>
+    public string? Check(Tool? tool, ToolResult result, string? arguments = null)
     {
         _calls++;
         var now = _now();
@@ -155,7 +155,10 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
             (_lookedUp, _worked, _triesSince, _lookedUpAt, _pending) = (true, TimeSpan.Zero, 0, _calls, null);
             return null;
         }
-        var isTry = IsTry(tool, action);
+        // Reading the installed version's own API (inspect.signature, --help) is looking it up too.
+        if (Reads(tool, arguments))
+            (_worked, _triesSince) = (TimeSpan.Zero, 0);
+        var isTry = IsTry(tool, arguments is null ? null : ActionOf(arguments)) && !Reads(tool, arguments);
         if (isTry)
         {
             _triesSince++;
@@ -211,6 +214,13 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         FilmTool => action is "frame" or "shot" or "sound" or "join",
         _ => false,
     };
+
+    /// <summary>Whether a command only reads how the installed program or library works: its signatures, help or members.</summary>
+    internal static bool Reads(Tool? tool, string? arguments) =>
+        tool is ShellTool or SshTool && arguments is not null && Introspects().IsMatch(arguments);
+
+    [GeneratedRegex(@"inspect\.(signature|getsource|getdoc|getmembers)|\bhelp\(|\.__doc__|--help\b|\bGet-Help\b|\bGet-Member\b|\bpip3? show\b", RegexOptions.IgnoreCase)]
+    private static partial Regex Introspects();
 
     /// <summary>The action argument of a call's arguments, if it has one.</summary>
     internal static string? ActionOf(string arguments)
@@ -436,7 +446,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
                     @"((do|run|make) an?\s+)?((quick|fast)\s+)?(web|online|internet) search\s+((for|on|about)\s+)?(?<what>\S.*)|" +
                     @"(search|look|check|look up)\s+(online|on the web|the web|the internet|the docs|the documentation|the api docs)\s+((for|about|on)\s+)?(?<what>\S.*)|" +
                     @"google\s+(?<what>\S.*)|" +
-                    @"(check|verify|confirm|look up|search for)\s+(?<what>(the\s+)?((correct|right|exact|current|actual|new)\s+)?((node|api|python|input|socket|parameter)\s+)?" +
+                    @"(look up|search for|search the web for)\s+(?<what>(the\s+)?((correct|right|exact|current|actual|new)\s+)?((node|api|python|input|socket|parameter)\s+)?" +
                     @"(names?|api|syntax|signatures?|parameters?|arguments?|options?|docs|documentation)\b.*?\b(in|for|of) [\w.+-]+ (v(ersion)?\s*)?\d.*))",
         RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture)]
     private static partial Regex LookUpIntent();

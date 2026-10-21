@@ -1137,7 +1137,10 @@ things up is now something BlackBox makes happen, not only asks for:
 - After ten minutes of tries with nothing looked up (three tries at least, and only time in a run:
   not while the user is away between messages), every next try's result says it is time to look
   things up, until the model does. The record is kept for the chat, so "still wrong" in the next
-  message counts against the tries before it.
+  message counts against the tries before it. A command that reads the installed version's own API
+  (`inspect.signature`, `--help`, `Get-Help`, `pip show`) counts as looking it up for this, and a
+  plan to check something ("let's check the signature of FadeIn in moviepy 2.x") is no web search:
+  the model makes that check on the PC, as qwen3.8 did with the installed moviepy.
 
 Measured with qwen3.8 on the Blender 5.2 task made from the command line instead (`blender -b`,
 one run each): before, it thought "let me do a quick web search… Actually, let me think about what

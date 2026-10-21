@@ -457,7 +457,7 @@ public sealed partial class AgentSession(
                     // A call Interrupt stopped failed for no fault of the model's.
                     if (!calls.Interrupted(ct) && loops.Check(call, result) is { } warning)
                         result = result with { Text = result.Text + "\n" + warning };
-                    if (!calls.Interrupted(ct) && guesswork?.Check(ToolCallRepair.ResolveTool(call.Name, tools), result, Guesswork.ActionOf(call.Arguments)) is { } lookItUp)
+                    if (!calls.Interrupted(ct) && guesswork?.Check(ToolCallRepair.ResolveTool(call.Name, tools), result, call.Arguments) is { } lookItUp)
                         result = result with { Text = result.Text + "\n" + lookItUp };
                     // A model that can't see gets no picture (an MCP tool's, say): its server
                     // refused that request and every one after it, since the conversation keeps it.

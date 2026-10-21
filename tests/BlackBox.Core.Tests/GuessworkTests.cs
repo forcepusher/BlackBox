@@ -199,6 +199,8 @@ public class GuessworkTests
     [InlineData("I need to check the node names in Blender 5.2. Let me do a quick web search for Blender 5.2's geometry nodes Python API. Actually, let me think about what I know.",
         "Let me do a quick web search for Blender 5.2's geometry nodes Python API.")]
     [InlineData("Let me search for the templates that make video first.", null)]
+    // A check it makes on this PC (inspect.signature on the installed moviepy), not on the web.
+    [InlineData("Also, let's check the signature of crossfadein/crossfadeout in moviepy 2.x. Let me verify.", null)]
     [InlineData("Let me check the output folder for the new file.", null)]
     [InlineData("So how do we determine whether it's Juggernaut XL or SnowPony?", null)]
     [InlineData("Now, how does the film tool handle lip-sync?", null)]
@@ -220,7 +222,7 @@ public class GuessworkTests
     [InlineData("So which node does motion control in ComfyUI?", "ComfyUI", "which node does motion control in ComfyUI")]
     // Saying it will look something up, and then writing the script from memory (qwen3.8 on Blender 5.2).
     [InlineData("Let me do a quick web search for Blender 5.2's geometry nodes Python API.", null, "Blender 5.2's geometry nodes Python API")]
-    [InlineData("I need to check the node names in Blender 5.2, but most are stable.", null, "the node names in Blender 5.2")]
+    [InlineData("I should look up the node names in Blender 5.2, but most are stable.", null, "the node names in Blender 5.2")]
     [InlineData("I don't know which sampler Nova Furry XL wants, so I'll keep euler.", "ComfyUI", "which sampler Nova Furry XL wants ComfyUI")]
     public void A_question_is_searched_without_the_thinking_around_it(string question, string? subject, string query) =>
         Assert.Equal(query, Guesswork.Query(question, subject));
@@ -285,9 +287,18 @@ public class GuessworkTests
         now += TimeSpan.FromMinutes(1);
         Assert.Equal(Guesswork.CheckNote(TimeSpan.FromMinutes(12), 5), guesswork.Check(Write, Wrote));
 
-        // A look-up starts the clock again.
+        // A look-up starts the clock again, and so does reading the installed version's own API.
         Assert.Null(guesswork.Check(new FetchPageTool(), new ToolResult("# Motion control")));
         now += TimeSpan.FromMinutes(5);
+        Assert.Null(guesswork.Check(Write, Wrote));
+        for (var i = 0; i < 2; i++)
+        {
+            now += TimeSpan.FromMinutes(2);
+            Assert.Null(guesswork.Check(Write, Wrote));
+        }
+        Assert.Null(guesswork.Check(Shell, new ToolResult("Exit code 0\n(self, duration: float, initial_color: list = None)"),
+            """{"command":"python -c \"import inspect; from moviepy.video.fx import FadeIn; print(inspect.signature(FadeIn.__init__))\""}"""));
+        now += TimeSpan.FromMinutes(1);
         Assert.Null(guesswork.Check(Write, Wrote));
 
         // Time between runs, while the user is away, isn't time spent trying.
