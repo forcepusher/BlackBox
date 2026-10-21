@@ -37,7 +37,7 @@ public sealed class FilmTool : Tool
         "(BlackBox is portable: what it makes stays next to it). " +
         "A shot that starts on the last frame of the one before goes on with the same camera; " +
         "a new first frame is a cut to another scene or angle. Every shot starts on a frame: the video model animates a picture well and draws one badly. " +
-        "Keep one clear action per shot, 3 to 8 seconds: say which way things move on screen, from where to where, and what stays still, " +
+        "Keep one clear action per shot, as many seconds as it takes (2 to 8; a longer clip holds its opening pose, then rushes): say which way things move on screen, from where to where, and what stays still, " +
         "and what is heard (the shot's own sound is kept under the song at half; music comes from the song, not the video model). " +
         "action=frame id= makes a frame's picture; action=sound makes the song, a minute long at least (the film uses its start), the best of tries=3 by a judge " +
         "of how good music sounds (SongEval); write lyrics for the part the film uses. action=shot id= makes a shot's clip and checks it (does it start and end on its frames, " +

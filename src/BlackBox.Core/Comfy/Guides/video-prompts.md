@@ -42,6 +42,12 @@ whatever they leave open, so say what moves, which way, how far, and what stays 
   Time words keep the order: "at first", "then", "a moment later", "by the end".
 - About one main action per 3 to 4 seconds. More than that gets rushed, blurred or skipped; LTX 2.5
   times the clip by the prompt, so write pauses in ("she holds still for a beat").
+- Make the clip as long as the action, no longer. A clip longer than its action holds the opening
+  pose and then rushes: a wave LTX 2.5 times at about 3 s, in a 5 s clip, stood still for 3 s first;
+  at 2.7 s the hold dropped to about 1 s. A wave or a turn takes 2 to 3 s, a few steps 3 to 4 s.
+  LTX 2.5's duration predictor (LTXVDurationPredictor with the 3.8 MB
+  ltx-2.5-duration-head-bf16.safetensors in models/model_patches) says how long a prompt's action
+  takes.
 - One main subject that moves, at most one small movement in the background. Crowded frames and
   chaotic motion turn into artifacts.
 
@@ -102,7 +108,11 @@ whatever they leave open, so say what moves, which way, how far, and what stays 
 ## Settings
 - Distilled LTX runs about 8 steps with CFG near 1; a higher CFG doesn't help. Frames are 1 plus a
   multiple of 8, at 24 to 30 fps, at the picture's size (sides a multiple of 32).
-- A negative prompt, where the template has one: blurry, warping, morphing, extra limbs, deformed
-  hands, sliding feet, floating, camera shake, text, watermark, music.
+- A negative prompt does nothing at CFG 1, which every distilled LTX template runs at: ComfyUI
+  skips the pass that would use it. Say what should happen instead, in the prompt itself ("the
+  camera does not move", "his feet stay on the ground").
+- With a first and a last frame, the first frame put in place (LTXVImgToVideoInplace at strength
+  0.7) starts moving at once, where a guide at frame 0 (LTXVAddGuide, as ComfyUI's own template has
+  it) held it; a last-frame guide at 0.7 lands about as well as at 1.0.
 - The prompt enhancer (Gemma) helps a short rough prompt; it picks its own shot type, so leave it
   off for a prompt written this way.
