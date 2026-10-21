@@ -224,7 +224,14 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   part, what stays still, who holds what; one main action per 3 to 4 seconds; the camera move named
   first; how to fix a take that went wrong; motion tracks (the Motion Control IC-LoRA) when a path
   must be followed exactly. It comes with the first LTX template viewed or run in a task, and the
-  film director writes shots by it.
+  film director writes shots by it. Asked in a chat for "a 5 second video of a red fox trotting from
+  the left side of the frame to the right across a snowy field at dawn", qwen3.8 looked at the
+  image-to-video template (and with it the guide), made the fox at the left third facing right with
+  Z-Image Turbo, wrote the prompt by the guide (locked-off camera, which way, all four paws on the
+  ground, only the paws' crunch, no music), gave it no last frame because the trot goes on, and
+  checked the way the fox went against the measured movement: 17 minutes, no errors. LTX tracked the
+  fox though the prompt asked for a still camera; a run that asks for one and measures the whole
+  picture moving now says so.
 
 `read_file` gives the model a look at media as well as pictures: a video as eight frames with their
 times (and how loud its sound is, in words; a clip up to 15 s also with its movement measured from

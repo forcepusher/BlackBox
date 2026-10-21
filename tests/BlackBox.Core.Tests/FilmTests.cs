@@ -85,6 +85,20 @@ public sealed class StoryboardTests : IDisposable
     }
 
     [Fact]
+    public void A_still_camera_asked_for_and_the_whole_picture_measured_moving_is_noted()
+    {
+        var workflow = ComfyWorkflow.FromApi(JsonNode.Parse("""
+            {"1": {"class_type": "CLIPTextEncode", "inputs": {"text": "Static locked-off camera. A fox trots to the right."}}, "2": {"class_type": "LTXVImgToVideoInplace", "inputs": {}}}
+            """));
+        Assert.NotNull(ComfyTool.CameraNote(workflow, "video 5 s\nMeasured movement:\n- 0–0.5 s: nothing moves much.\nOver the whole clip: the whole picture moves left 12% of the width (as when the camera pans right)."));
+        Assert.Null(ComfyTool.CameraNote(workflow, "Over the whole clip: in the middle something moves right 30% of the width against the rest."));
+        var moving = ComfyWorkflow.FromApi(JsonNode.Parse("""
+            {"1": {"class_type": "CLIPTextEncode", "inputs": {"text": "The camera pans right with the fox."}}, "2": {"class_type": "LTXVImgToVideoInplace", "inputs": {}}}
+            """));
+        Assert.Null(ComfyTool.CameraNote(moving, "Over the whole clip: the whole picture moves left 12% of the width."));
+    }
+
+    [Fact]
     public void The_video_guide_is_built_in_and_its_sections_can_be_left_out()
     {
         Assert.Contains(ComfyGuides.Video, ComfyGuides.Names);

@@ -896,6 +896,8 @@ public sealed partial class ComfyTool : Tool
         after.AddRange(await CardsAsync(api, hub, used, ct).ConfigureAwait(false));
         if (ComfyGuides.IsLtx(workflow) && !ComfyGuides.StartsFromPicture(workflow))
             after.Add(TextToVideoNote);
+        if (CameraNote(workflow, result.Text) is { } camera)
+            after.Add(camera);
         if (VideoGuideFor(workflow) is { } guide)
             after.Add(guide);
         return after.Count > 0 ? result with { Text = result.Text + "\n\n" + string.Join("\n\n", after) } : result;
@@ -907,6 +909,30 @@ public sealed partial class ComfyTool : Tool
     /// </summary>
     private const string TextToVideoNote = "This LTX workflow draws the video's picture itself from words, which LTX does badly. Unless the user asked for text to video, " +
                                            "make the picture with an image model, look at it, and animate it with an image-to-video template (first and last frames when where it ends matters).";
+
+    /// <summary>
+    /// A still camera asked for and the whole picture measured moving. Asked for "static locked-off
+    /// camera" on a fox trotting across snow, LTX tracked the fox; the measured movement said the
+    /// whole picture moved left, and qwen3.8 checked the fox's way and called the clip right.
+    /// </summary>
+    internal static string? CameraNote(ComfyWorkflow workflow, string result)
+    {
+        if (!ComfyGuides.IsLtx(workflow) || WholeClip().Match(result) is not { Success: true } whole || !whole.Value.Contains("the whole picture", StringComparison.Ordinal))
+            return null;
+        var prompts = string.Join(" ", workflow.All().SelectMany(n => n.Node["inputs"] is JsonObject inputs
+            ? inputs.Where(i => i.Key is "text" or "prompt" or "positive" && i.Value is JsonValue v && v.TryGetValue<string>(out _)).Select(i => i.Value!.GetValue<string>())
+            : []));
+        return StillCamera().IsMatch(prompts)
+            ? "The prompt asks for a still camera, and the measured movement has the whole picture moving: the camera moved. If it matters, say again in the prompt " +
+              "that the camera is locked off and what stays put in the frame, and run it again."
+            : null;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"Over the whole clip:[^\n]*")]
+    private static partial System.Text.RegularExpressions.Regex WholeClip();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\b(static|locked[- ]off|locked camera|still camera|tripod|camera (is )?(still|fixed)|camera does not move|camera holds)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex StillCamera();
 
     private bool _maskNoted, _viewsNoted;
 
