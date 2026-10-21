@@ -24,8 +24,9 @@ namespace BlackBox.Core.Agent;
 /// workflows for two hours; nothing failed, the videos just didn't move as asked, and the job was
 /// done right after the user said to look for guidance (LTX's motion control guide). So a try the
 /// model itself calls wrong, or the user does, counts as a failed one; a question the model asks
-/// itself about how something is done is searched for it (see <see cref="Question"/>); and after
-/// ten minutes of tries with nothing looked up, every next try says it is time to look.
+/// itself about how something is done, or an error it was told to look up and went on past, is
+/// searched for it (see <see cref="Question"/>); and after ten minutes of tries, or eight quick
+/// ones, with nothing looked up, every next try says it is time to look.
 /// </para>
 /// </summary>
 internal sealed partial class Guesswork(Func<DateTime>? clock = null)
@@ -131,16 +132,20 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
 
     /// <summary>
     /// Reads a reply before its calls run: a try it calls wrong counts as a failed one (its note
-    /// comes with the reply's first result), and a question about how something is done that it
-    /// doesn't look up becomes <see cref="Question"/>.
+    /// comes with the reply's first result), and a question about how something is done, or an
+    /// error it was told to look up, that it goes on without looking up becomes <see cref="Question"/>.
     /// </summary>
     public void Read(ChatMessage reply, IReadOnlyList<Tool?> calls)
     {
         (Question, QuestionIsError) = (null, false);
-        if (calls.Any(t => t is WebSearchTool or FetchPageTool))
-            _noted = null;
-        if (calls.Count == 0 || calls.Any(t => t is WebSearchTool or FetchPageTool))
+        if (calls.Count == 0)
             return;
+        // It is looking something up: what it wondered and the error it was told about are its to search.
+        if (calls.Any(t => t is WebSearchTool or FetchPageTool))
+        {
+            _noted = null;
+            return;
+        }
         var text = reply.Reasoning + "\n" + reply.Content;
         if (_tried && SaysItFailed(text))
         {
