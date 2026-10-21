@@ -764,7 +764,7 @@ public sealed class FilmMontageTests : IDisposable
 public sealed class FilmCheckTests
 {
     /// <summary>Frames of a textured field the camera pans across by <paramref name="pan"/> pixels a frame, with a textured patch that rises <paramref name="rise"/> a frame on its own.</summary>
-    private static List<VideoMotion.Frame> Moving(double pan, double rise, int count = 25)
+    private static List<VideoMotion.Frame> Moving(double pan, double rise, int count = 25, double walk = 0)
     {
         const int big = 400;
         var random = new Random(7);
@@ -785,7 +785,7 @@ public sealed class FilmCheckTests
             for (var y = 0; y < 20; y++)
                 for (var x = 0; x < 20; x++)
                     if (py + y is >= 0 and < VideoMotion.Height)
-                        gray[(py + y) * VideoMotion.Width + 70 + x] = patch[y * 20 + x];
+                        gray[(py + y) * VideoMotion.Width + (int)Math.Round((walk == 0 ? 70 : 20) + f * walk) + x] = patch[y * 20 + x];
             frames.Add(new VideoMotion.Frame(f / 24.0, gray));
         }
         return frames;
@@ -804,6 +804,10 @@ public sealed class FilmCheckTests
         Assert.All(steps, s => Assert.Contains(4, (IDictionary<int, (double X, double Y, int Blocks)>)s.Moving));
         var said = VideoMotion.Describe(steps);
         Assert.Contains("the whole picture moves left", said);
+        // Someone walking right across the left of a still picture is not the camera pulling back.
+        var walking = VideoMotion.Describe(VideoMotion.Measure(Moving(0, 0, walk: 2)));
+        Assert.DoesNotContain("the whole picture", walking);
+        Assert.Contains("something moves right", walking);
         Assert.Contains("(as when the camera pans right)", said);
         Assert.Contains("in the middle something moves up", said);
     }

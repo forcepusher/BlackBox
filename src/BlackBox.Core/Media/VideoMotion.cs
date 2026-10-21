@@ -82,8 +82,11 @@ public static class VideoMotion
         var shiftX = Median(found.Select(f => f.Dx));
         var shiftY = Median(found.Select(f => f.Dy));
         var (cx, cy) = (Width / 2.0, Height / 2.0);
+        // A push in or pull back, from the blocks that move with the camera: a girl walking right on the
+        // left of a foggy street read as the camera pulling back 8% when every block counted.
+        var background = found.Where(f => Math.Abs(f.Dx - shiftX) < 1.5 && Math.Abs(f.Dy - shiftY) < 1.5).ToList();
         double num = 0, den = 0;
-        foreach (var f in found)
+        foreach (var f in background.Count >= Math.Max(6, found.Count * 0.4) ? background : [])
         {
             var (px, py) = (f.Cx - cx, f.Cy - cy);
             num += px * (f.Dx - shiftX) + py * (f.Dy - shiftY);
