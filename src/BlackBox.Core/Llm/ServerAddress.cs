@@ -44,6 +44,8 @@ public static partial class ServerAddress
         ["fireworks.ai"] = "https://api.fireworks.ai/inference/v1",
         ["anthropic.com"] = "https://api.anthropic.com/v1", ["console.anthropic.com"] = "https://api.anthropic.com/v1",
         ["claude.com"] = "https://api.anthropic.com/v1", ["platform.claude.com"] = "https://api.anthropic.com/v1", ["claude.ai"] = "https://api.anthropic.com/v1",
+        // Just the name typed.
+        ["claude"] = "https://api.anthropic.com/v1", ["anthropic"] = "https://api.anthropic.com/v1",
     };
 
     /// <summary>A service's website (any page of it) gets its API address tried first; the address as typed stays a candidate.</summary>

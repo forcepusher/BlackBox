@@ -40,6 +40,7 @@ public class AnthropicTests
         Assert.False(OpenAiChatClient.IsAnthropic(""));
         // Its websites lead to the API.
         Assert.Equal(Address, ServerAddress.Candidates("platform.claude.com")[0]);
+        Assert.Equal(Address, ServerAddress.Candidates("Claude")[0]);
         Assert.Equal(Address, ServerAddress.Candidates("https://console.anthropic.com/settings/keys")[0]);
     }
 

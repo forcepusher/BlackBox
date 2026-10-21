@@ -823,7 +823,7 @@ Thinking models get their earlier reasoning sent back each step (`reasoning_cont
 
 ### Claude through Anthropic's API
 With `api.anthropic.com` as the address (or `anthropic.com`, `claude.com`, `platform.claude.com`,
-`console.anthropic.com`, `claude.ai`) and an Anthropic API key, BlackBox speaks Anthropic's own
+`console.anthropic.com`, `claude.ai`, or just `claude`) and an Anthropic API key, BlackBox speaks Anthropic's own
 Messages API (`POST /v1/messages`, the key as `x-api-key`) rather than its OpenAI-compatible layer,
 which caches nothing and gives no thinking back. `src/BlackBox.Core/Llm/AnthropicMessages.cs` turns
 each request and reply into the other format, so the agent, fresh looks and model questions use
