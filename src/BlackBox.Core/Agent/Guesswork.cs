@@ -430,7 +430,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
                     @"\b(which|what) (nodes?|models?|settings?|parameters?|arguments?|options?|functions?|methods?|api|loras?|workflows?|samplers?|schedulers?|flags?|propert(y|ies)|attributes?|class(es)?|modules?|packages?|librar(y|ies)|codecs?|formats?|versions?|templates?|checkpoints?|controlnets?|preprocessors?|inputs?|sockets?|operators?|commands?|fields?|keys?) " +
                     @"(do|does|should|would|can|could|is|are|was|were|to|i|we|handles?|supports?|controls?|makes?|gives?)\b|" +
                     @"\bis there (a|an|any) (way|node|setting|option|parameter|function|method|api|built-in|builtin|tool|template|model|lora|flag|feature|command|official|example)\b|" +
-                    @"\bdoes (it|this|that|the \w+|\w+) (support|accept|allow|handle|have an?|expose|provide)\b|" +
+                    @"\bdoes (?!(it|this|that|they)\b)(the \w+|\w+) (support|accept|allow|handle|have an?|expose|provide)\b|" +
                     @"\b((is|are) (it|they|these|those|the \w+)|it's|they're|it is|they are) (built into|part of|included in|supported (by|in))\b",
         RegexOptions.IgnoreCase)]
     private static partial Regex Asks();

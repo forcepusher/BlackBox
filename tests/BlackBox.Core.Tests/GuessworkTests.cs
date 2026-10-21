@@ -204,6 +204,8 @@ public class GuessworkTests
     [InlineData("Let me check the output folder for the new file.", null)]
     [InlineData("So how do we determine whether it's Juggernaut XL or SnowPony?", null)]
     [InlineData("Now, how does the film tool handle lip-sync?", null)]
+    [InlineData("Hmm, write_videofile: does it have an audio parameter?", null)]
+    [InlineData("Does LoadAudio support flac files?", "Does LoadAudio support flac files?")]
     // Questions the web can't answer: the screen, the user, how a result looks, or nothing named.
     [InlineData("Did the click on the Export button work?", null)]
     [InlineData("How do I get to the button in the top right of the screen?", null)]
