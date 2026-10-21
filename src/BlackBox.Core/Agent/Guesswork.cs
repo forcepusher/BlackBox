@@ -219,7 +219,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
             _firstSaid = true;
             failed = FirstNote;
         }
-        if (failed is not null)
+        if (failed is not null && Searchable(line))
             _noted = ErrorQuery(line);
         return failed ?? pending;
     }
@@ -318,6 +318,22 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     /// </summary>
     internal static string? MeansToLookUp(string clause) =>
         LookUpIntent().Match(clause) is { Success: true } m && !LocalThing().IsMatch(m.Groups["what"].Value) ? m.Groups["what"].Value : null;
+
+    /// <summary>
+    /// Whether an error is one a search answers: an exception a program or library raised, or a
+    /// name that isn't there. A command line's own slips (PowerShell's quoting, a path cut at its
+    /// space) aren't: searched for Nemotron as "Unexpected token 'version' in expression or
+    /// statement Blender 5.2", they brought pages about nothing it was doing.
+    /// </summary>
+    internal static bool Searchable(string line) =>
+        !ShellSlip().IsMatch(line) && (Raised().IsMatch(line) || NamesWhatIsNotThere(line));
+
+    [GeneratedRegex(@"^([A-Za-z_]\w*\.)*[A-Z]\w*(Error|Exception)\b")]
+    private static partial Regex Raised();
+
+    [GeneratedRegex(@"^[\w-]+ : |\bUnexpected token\b|syntax is incorrect|missing the terminator|\bMissing (expression|closing|argument)\b|ParserError|is not recognized as the name of a cmdlet|positional parameter cannot be found",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex ShellSlip();
 
     /// <summary>An error line as it is searched: without paths, which no page shares, and not too long.</summary>
     internal static string ErrorQuery(string line)

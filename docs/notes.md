@@ -1157,6 +1157,10 @@ things up is now something BlackBox makes happen, not only asks for:
   MCP server's name) or the one the request names with its version ("Blender 5.2"). So is an error
   whose note said to look it up when the model's next step goes on without doing so (without the
   paths in it): Nemotron failed 13 of 29 Blender scripts, many with that note, and never searched.
+  With it, BlackBox searched its Python errors for it and the next run made 80 cubes where the two
+  before made none (still without random sizes). Only an exception a program raised or a name
+  that isn't there is searched: the command line's own slips (PowerShell's quoting, a path cut at
+  its space) brought pages about nothing it was doing.
 - A try the model itself calls wrong ("still doesn't follow the dance", "no change in the motion",
   "I need a different approach") counts as a failed one, as does the user's next message saying the
   result isn't right ("Dude it's still a kid", "it should fade from transparent"): the first such failure before anything was looked

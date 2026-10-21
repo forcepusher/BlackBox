@@ -274,6 +274,19 @@ public class GuessworkTests
         Assert.Null(searching.Question);
     }
 
+    [Theory]
+    // What Nemotron's Blender run failed with: the command line's own slips aren't searched.
+    [InlineData("Unexpected token 'version' in expression or statement.", false)]
+    [InlineData("The filename, directory name, or volume label syntax is incorrect.", false)]
+    [InlineData(@"ls : Cannot find path 'C:\Program' because it does not exist.", false)]
+    [InlineData("Start-Process : A positional parameter cannot be found that accepts argument 'extension].enum_items])'.", false)]
+    [InlineData("AttributeError: 'NodeTreeInterfaceSocketFloat' object has no attribute 'bl_idname'", true)]
+    [InlineData("TypeError: 'bpy_prop_collection' object is not callable", true)]
+    [InlineData("error CS0117: 'KeyCode' does not contain a definition for 'Left'", true)]
+    [InlineData("Method invocation failed because [System.__ComObject] does not contain a method named 'Add'.", true)]
+    public void Only_errors_a_search_answers_are_searched(string line, bool searchable) =>
+        Assert.Equal(searchable, Guesswork.Searchable(line));
+
     [Fact]
     public void An_error_is_searched_without_the_paths_in_it() =>
         Assert.Equal("FileNotFoundError: [Errno 2] No such file or directory: ''",
