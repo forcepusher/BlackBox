@@ -658,6 +658,9 @@ prompt locked it, a run that glided with feet not planting, and the boy holding 
 2 s before the wave began. Even without a last frame, LTX often holds the opening picture for a
 second or two before anything moves; that hold is now the most common fault the looks find, so
 the brief and the guide say to draw a shot's first frame mid-action (a foot lifting, a hand rising).
+With the boy's hand already mid-wave in shot 2's first frame, he waved from the first moment; the
+looks still failed it for a slow push-in the prompt didn't ask for, and the cut look passed a boy
+drawn cartoonish in shot 1 (from a character sheet that came out cartoonish) and photoreal in shot 2.
 
 **Takes**: before a piece is made again, the one there is kept beside it (`frames/f2.v1.png` and
 `.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it was made with
