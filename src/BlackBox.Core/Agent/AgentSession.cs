@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using BlackBox.Core.Llm;
+using BlackBox.Core.Mcp;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
 
@@ -19,6 +20,13 @@ public interface IAgentObserver
 
     /// <summary>How a long call is getting on ("KSampler, step 3 of 20 · 1:12"), for its card while it runs.</summary>
     void OnToolProgress(ToolCall call, string text) { }
+
+    /// <summary>
+    /// A message the user sent during the run (see <see cref="AgentSession.Steer(UserInput)"/>) has
+    /// joined the conversation: the model reads it in the step that starts next. The same instance
+    /// that was sent. Called before that step's <see cref="OnStepStarted"/>.
+    /// </summary>
+    void OnUserMessageDelivered(UserInput input) { }
 
     /// <summary>Status the user should see that is not part of the conversation (e.g. reconnecting).</summary>
     void OnNotice(string text);
@@ -59,8 +67,13 @@ public sealed partial class AgentSession(
     /// <summary>Conversation so far (without the system prompt). Can be shared across sessions so settings changes keep the chat.</summary>
     public List<ChatMessage> History { get; } = history ?? [];
 
-    /// <summary>Messages the user sent while the run goes on, waiting for the model's next step.</summary>
-    private readonly System.Collections.Concurrent.ConcurrentQueue<UserInput> _incoming = new();
+    /// <summary>Messages the user sent while the run goes on, waiting for the model's next step. Locked on itself.</summary>
+    private readonly List<UserInput> _incoming = [];
+
+    private bool HasIncoming
+    {
+        get { lock (_incoming) return _incoming.Count > 0; }
+    }
 
     /// <summary>Cancelled when such a message arrives, so a wait in progress ends early (see <see cref="ToolContext.UserMessage"/>).</summary>
     private CancellationTokenSource _arrived = new();
@@ -78,19 +91,111 @@ public sealed partial class AgentSession(
     {
         lock (_incoming)
         {
-            _incoming.Enqueue(input);
+            _incoming.Add(input);
             _arrived.Cancel();
+        }
+    }
+
+    /// <summary>
+    /// Takes back a message the model hasn't read yet (Cancel on it in the app): true while it was
+    /// still waiting, false once the model has it. The very instance that was sent. Any thread.
+    /// </summary>
+    public bool Unsteer(UserInput input)
+    {
+        lock (_incoming)
+        {
+            if (_incoming.RemoveAll(i => ReferenceEquals(i, input)) == 0)
+                return false;
+            // None left: a wait that starts now goes on, rather than ending for a message that isn't there.
+            if (_incoming.Count == 0 && _arrived.IsCancellationRequested)
+            {
+                _arrived = new CancellationTokenSource();
+                toolContext.UserMessage = _arrived.Token;
+                _interruptAsked = false;
+            }
+            return true;
         }
     }
 
     /// <summary>Messages that arrived too late for the run (it ended first); the caller sends them on.</summary>
     public List<UserInput> TakeUndelivered()
     {
-        var left = new List<UserInput>();
-        while (_incoming.TryDequeue(out var input))
-            left.Add(input);
-        return left;
+        lock (_incoming)
+        {
+            var left = _incoming.ToList();
+            _incoming.Clear();
+            return left;
+        }
     }
+
+    /// <summary>The model's reply in progress, or the tool calls of its reply, which <see cref="Interrupt"/> cuts short. Locked with <see cref="_incoming"/>.</summary>
+    private CancellationTokenSource? _step;
+
+    /// <summary>Interrupt was pressed with messages waiting: what of the step is still to come is cut short as well.</summary>
+    private bool _interruptAsked;
+
+    /// <summary>
+    /// The Interrupt button: the messages the user sent meanwhile go to the model now, not after
+    /// what it is doing. Its reply in progress (thinking or writing) is cut off, or the tool calls
+    /// it is running are stopped and the rest of them not run, and the next step starts with the
+    /// messages. A long think could otherwise go on for minutes past a correction that made it
+    /// pointless. False when no message waits. Any thread.
+    /// </summary>
+    public bool Interrupt()
+    {
+        CancellationTokenSource? step;
+        lock (_incoming)
+        {
+            if (_incoming.Count == 0)
+                return false;
+            _interruptAsked = true;
+            step = _step;
+        }
+        try { step?.Cancel(); }
+        catch (ObjectDisposedException) { } // the step ended at that very moment; the next one delivers the messages
+        return true;
+    }
+
+    /// <summary>The scope of one part of a step that <see cref="Interrupt"/> can cut short; cut at once when Interrupt came just before it.</summary>
+    private sealed class StepScope : IDisposable
+    {
+        private readonly AgentSession _session;
+        public CancellationTokenSource Source { get; }
+
+        public StepScope(AgentSession session, CancellationToken ct)
+        {
+            _session = session;
+            Source = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            lock (session._incoming)
+            {
+                session._step = Source;
+                if (session._interruptAsked && session._incoming.Count > 0)
+                    Source.Cancel();
+            }
+        }
+
+        public CancellationToken Token => Source.Token;
+
+        /// <summary>Interrupt cut it short, and not a stop of the whole run.</summary>
+        public bool Interrupted(CancellationToken run) => Source.IsCancellationRequested && !run.IsCancellationRequested;
+
+        public void Dispose()
+        {
+            lock (_session._incoming)
+                if (ReferenceEquals(_session._step, Source))
+                    _session._step = null;
+            Source.Dispose();
+        }
+    }
+
+    /// <summary>Said in the chat where Interrupt cut the model's reply off.</summary>
+    internal const string InterruptedNotice = "Interrupted to read your message.";
+
+    /// <summary>The result of a tool call Interrupt stopped, or kept from running.</summary>
+    public const string InterruptedResult = "Interrupted: the user's message (below) came in before this finished, and the user asked for it to be read at once. " +
+                                            "It may have done part of its work: check before doing it again.";
+
+    public const string NotRunResult = "Not run: the user's message (below) came in first, and the user asked for it to be read at once.";
 
     /// <summary>Adds the user's messages that arrived since the last step, as user messages: the history only grows.</summary>
     /// <param name="turnEnded">
@@ -99,8 +204,9 @@ public sealed partial class AgentSession(
     /// the model wrote its final answer was answered, and then the model was asked whether the task
     /// it had already finished was done, and answered the same thing again.
     /// </param>
-    private void DeliverIncoming(bool turnEnded)
+    private void DeliverIncoming(bool turnEnded, IAgentObserver observer)
     {
+        List<UserInput> delivered;
         lock (_incoming)
         {
             if (!_arrived.IsCancellationRequested)
@@ -108,22 +214,31 @@ public sealed partial class AgentSession(
             // A fresh token for the next message; the one a wait may still hold stays cancelled.
             _arrived = new CancellationTokenSource();
             toolContext.UserMessage = _arrived.Token;
+            _interruptAsked = false;
+            delivered = _incoming.ToList();
+            _incoming.Clear();
             var first = true;
-            while (_incoming.TryDequeue(out var input))
+            foreach (var input in delivered)
             {
                 if (turnEnded)
                 {
                     if (first)
+                    {
                         (_request, _interrupted) = (RequestOf(input), false);
+                        _guesswork?.StartRun(input.Text);
+                    }
                     first = false;
                     History.Add(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid));
                     continue;
                 }
+                _guesswork?.Heard(input.Text);
                 History.Add(Interjection(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid)));
                 _interrupted = true;
             }
             toolContext.UserPictures = UserInput.PicturesIn(History);
         }
+        foreach (var input in delivered)
+            observer.OnUserMessageDelivered(input);
     }
 
     /// <summary>What the user asked for in this run, quoted to the model when a message of theirs comes in on top of it.</summary>
@@ -201,11 +316,18 @@ public sealed partial class AgentSession(
                 ? look.LocateAsync(image, space.Describe(), target, ct2)
                 : Task.FromResult<(double X, double Y)?>(null);
         }
+        if (toolContext.Ask is null)
+        {
+            var eyes = new FreshLook(client, requestOptions);
+            toolContext.Ask = (images, question, ct2) => toolContext.SeesImages ? eyes.AskAsync(images, question, ct2) : Task.FromResult<string?>(null);
+        }
         var nudges = 0;
         var cutCalls = 0;
         var loops = new LoopDetector();
-        // Pointing at web_search only makes sense when the model has it.
-        var guesswork = tools.Find("web_search") is not null ? new Guesswork() : null;
+        // Pointing at web_search only makes sense when the model has it. Kept for the chat: "still
+        // wrong" in the next message is a failed try, and the time since the last look-up goes on.
+        var guesswork = _guesswork ??= tools.Find("web_search") is not null ? new Guesswork() : null;
+        guesswork?.StartRun(input.Text);
         var justReset = false;
         var turnEnded = false;
 
@@ -217,7 +339,7 @@ public sealed partial class AgentSession(
             for (var step = 1; ; step++)
             {
                 ct.ThrowIfCancellationRequested();
-                DeliverIncoming(turnEnded);
+                DeliverIncoming(turnEnded, observer);
                 turnEnded = false;
                 // The reset first: its handoff note is a reply of its own, and the step's reply
                 // comes after it, in a new step.
@@ -228,7 +350,21 @@ public sealed partial class AgentSession(
                 var request = new List<ChatMessage>(History.Count + 1) { ChatMessage.System(systemPrompt) };
                 request.AddRange(History);
 
-                var reply = await CompleteWithResetAsync(request, observer, ct).ConfigureAwait(false);
+                ChatMessage reply;
+                using (var thinking = new StepScope(this, ct))
+                {
+                    try
+                    {
+                        reply = await CompleteWithResetAsync(request, observer, ct, thinking.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (thinking.Interrupted(ct))
+                    {
+                        // Interrupt: what streamed stays on screen, and the reply is left out of the
+                        // conversation, which goes on with the user's messages.
+                        observer.OnNotice(InterruptedNotice);
+                        continue;
+                    }
+                }
                 var cutCall = reply.FinishReason == "length" && DropCutCalls(reply);
                 var cutOff = reply.FinishReason == "length" && !reply.HasToolCalls;
                 if (cutOff && contextTokens > 0 && !justReset && OutOfRoom(reply))
@@ -267,7 +403,7 @@ public sealed partial class AgentSession(
                     }
                     // The user wrote while the model answered: it goes on with that, as its next
                     // request when this answer finished the task.
-                    if (!_incoming.IsEmpty)
+                    if (HasIncoming)
                     {
                         turnEnded = !cutOff && !LooksUnfinished(reply);
                         continue;
@@ -306,12 +442,22 @@ public sealed partial class AgentSession(
                 ChatMessage? last = null;
                 // This reply's calls were decided on the screen in the last screenshot.
                 toolContext.Seen = toolContext.LastShot;
+                var called = reply.ToolCalls!.Select(c => ToolCallRepair.ResolveTool(c.Name, tools)).ToList();
+                guesswork?.Read(reply, called);
+                using var calls = new StepScope(this, ct);
                 foreach (var call in reply.ToolCalls!)
                 {
-                    var result = await RunToolAsync(call, observer, ct).ConfigureAwait(false);
-                    if (loops.Check(call, result) is { } warning)
+                    // Interrupt: the rest of the reply's calls give way to the user's message.
+                    if (calls.Interrupted(ct))
+                    {
+                        History.Add(last = ChatMessage.ToolResult(call.Id, NotRunResult));
+                        continue;
+                    }
+                    var result = await RunToolAsync(call, observer, ct, calls.Token).ConfigureAwait(false);
+                    // A call Interrupt stopped failed for no fault of the model's.
+                    if (!calls.Interrupted(ct) && loops.Check(call, result) is { } warning)
                         result = result with { Text = result.Text + "\n" + warning };
-                    if (guesswork?.Check(ToolCallRepair.ResolveTool(call.Name, tools), result) is { } lookItUp)
+                    if (!calls.Interrupted(ct) && guesswork?.Check(ToolCallRepair.ResolveTool(call.Name, tools), result, call.Arguments) is { } lookItUp)
                         result = result with { Text = result.Text + "\n" + lookItUp };
                     // A model that can't see gets no picture (an MCP tool's, say): its server
                     // refused that request and every one after it, since the conversation keeps it.
@@ -325,6 +471,9 @@ public sealed partial class AgentSession(
                 // The whole calls ran; the cut one is said with the last result.
                 if (cutCall && last is not null)
                     last.Content += "\n" + CutToolCallNote;
+                // Not when Interrupt cut the calls short: the user's message is to be read at once.
+                if (guesswork?.Question is { } question && last is not null && !calls.Interrupted(ct))
+                    await LookUpAsync(guesswork, question, called, last, observer, ct).ConfigureAwait(false);
 
                 // Most OpenAI-compatible servers only accept images in user messages,
                 // so the screenshot (or a picture read_file opened) is delivered right after the tool results.
@@ -445,7 +594,44 @@ public sealed partial class AgentSession(
     [GeneratedRegex(@"(^|[.!?\n]\s*)(let me(?! know)|let's|i'll|i will|i'm going to|i am going to|next,? i|now i|i need to)\b[^.!?\n]*[.!]?\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex AnnouncedAction();
 
-    private async Task<ToolResult> RunToolAsync(ToolCall call, IAgentObserver observer, CancellationToken ct)
+    /// <summary>Guesswork seen in this chat (see <see cref="Guesswork"/>); null without web_search.</summary>
+    private Guesswork? _guesswork;
+
+    /// <summary>The web search BlackBox runs for a question of the model's: five results, as web_search finds them.</summary>
+    internal Func<string, CancellationToken, Task<IReadOnlyList<Web.SearchHit>>>? SearchWeb { get; set; }
+
+    /// <summary>
+    /// Searches the web for a question the model asked itself and went on without looking up, and
+    /// puts what it found under the step's last result: told to search, models rarely did, and
+    /// trying from memory cost hours where a guide had the answer.
+    /// </summary>
+    private async Task LookUpAsync(Guesswork guesswork, string question, IReadOnlyList<Tool?> called, ChatMessage last, IAgentObserver observer, CancellationToken ct)
+    {
+        // What the question is about, when it doesn't say: the program the step's calls drive.
+        var subject = called.OfType<McpTool>().Select(t => t.ServerName).FirstOrDefault() ??
+                      (called.Any(t => t is ComfyTool or FilmTool) ? "ComfyUI" : guesswork.Subject);
+        var query = Guesswork.Query(question, subject);
+        var error = guesswork.QuestionIsError;
+        guesswork.Searched(question);
+        IReadOnlyList<Web.SearchHit> hits;
+        try
+        {
+            hits = await (SearchWeb ?? ((q, c) => Web.WebSearch.SearchAsync(q, 5, toolContext.Browser, c)))(query, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is Web.WebSearchException or HttpRequestException or IOException ||
+                                   ex is OperationCanceledException && !ct.IsCancellationRequested)
+        {
+            return; // no answer is no worse than not asking: the model has web_search itself
+        }
+        if (hits.Count == 0)
+            return;
+        observer.OnNotice(error ? $"Looked up on the web the error the model went on without looking up: {query}" : $"Looked up on the web what the model asked itself: {query}");
+        last.Content += "\n" + Guesswork.Found(question, hits, error);
+    }
+
+    /// <param name="ct">The run's: Stop and Pause/Break.</param>
+    /// <param name="step">Also cancelled by <see cref="Interrupt"/>, which stops the call and leaves the run going.</param>
+    private async Task<ToolResult> RunToolAsync(ToolCall call, IAgentObserver observer, CancellationToken ct, CancellationToken step)
     {
         var tool = ToolCallRepair.ResolveTool(call.Name, tools);
         if (tool is null)
@@ -477,12 +663,12 @@ public sealed partial class AgentSession(
             return bad;
         }
 
-        if (NeedsApproval(tool) && !await observer.RequestApprovalAsync(call, tool, summary, ct).ConfigureAwait(false))
+        if (NeedsApproval(tool) && !await observer.RequestApprovalAsync(call, tool, summary, step).ConfigureAwait(false))
         {
             // A stop while the call waited for an OK is no answer to it. Taken for a no, it went into
             // the conversation as declined, and after Continue the model asked what to do instead.
             ct.ThrowIfCancellationRequested();
-            var denied = ToolResult.Error(DeclinedText);
+            var denied = step.IsCancellationRequested ? ToolResult.Error(NotRunResult) : ToolResult.Error(DeclinedText);
             observer.OnToolFinished(call, denied);
             return denied;
         }
@@ -492,11 +678,15 @@ public sealed partial class AgentSession(
         toolContext.Progress = text => observer.OnToolProgress(call, text);
         try
         {
-            result = await tool.ExecuteAsync(args, toolContext, ct).ConfigureAwait(false);
+            result = await tool.ExecuteAsync(args, toolContext, step).ConfigureAwait(false);
         }
         catch (ToolArgumentException ex)
         {
             result = ToolResult.Error($"{ex.Message} Parameters for {tool.Name}: {tool.Parameters.ToJsonString()}");
+        }
+        catch (OperationCanceledException) when (step.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            result = ToolResult.Error(InterruptedResult);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
@@ -541,7 +731,8 @@ public sealed partial class AgentSession(
     /// Sends the request; if the server says it does not fit, resets the context and tries again
     /// (twice at most) before giving up.
     /// </summary>
-    private async Task<ChatMessage> CompleteWithResetAsync(List<ChatMessage> request, IAgentObserver observer, CancellationToken ct)
+    /// <param name="replying">The run's token, or also cancelled by <see cref="Interrupt"/>: the reply and the waits to send it again. A reset goes by <paramref name="ct"/>.</param>
+    private async Task<ChatMessage> CompleteWithResetAsync(List<ChatMessage> request, IAgentObserver observer, CancellationToken ct, CancellationToken replying)
     {
         var repeats = 0;
         for (var attempt = 0; ; attempt++)
@@ -549,7 +740,7 @@ public sealed partial class AgentSession(
             try
             {
                 var guard = new RepetitionGuard(observer.OnDelta);
-                return await CompleteWithReconnectAsync(request, tools.Definitions(), requestOptions, observer, guard.OnDelta, ct).ConfigureAwait(false);
+                return await CompleteWithReconnectAsync(request, tools.Definitions(), requestOptions, observer, guard.OnDelta, replying).ConfigureAwait(false);
             }
             catch (RepetitionException) when (++repeats <= MaxRepetitionRetries)
             {

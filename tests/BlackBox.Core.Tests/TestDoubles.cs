@@ -36,6 +36,45 @@ internal static class Sse
     /// <summary>A reply that thinks <paramref name="reasoning"/> first, then streams <paramref name="then"/>.</summary>
     public static string Thought(string reasoning, string then) =>
         $"data: {new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["reasoning_content"] = reasoning } }) }.ToJsonString()}\n\n" + then;
+
+    /// <summary>Where a reply stops coming in, as a model that thinks on and on: nothing more until the request is cancelled.</summary>
+    public const string Stall = "\u0001stall\u0001";
+
+    /// <summary>A reply that thinks <paramref name="reasoning"/> and then goes on thinking, sending nothing more.</summary>
+    public static string ThinkingOn(string reasoning) => Thought(reasoning, Stall);
+
+    /// <summary>One reply with several tool calls: (id, name, arguments) each.</summary>
+    public static string ToolCalls(params (string Id, string Name, string Args)[] calls)
+    {
+        var list = new JsonArray(calls.Select((c, i) => (JsonNode)new JsonObject
+        {
+            ["index"] = i,
+            ["id"] = c.Id,
+            ["function"] = new JsonObject { ["name"] = c.Name, ["arguments"] = c.Args },
+        }).ToArray());
+        var chunk = new JsonObject { ["choices"] = new JsonArray(new JsonObject { ["delta"] = new JsonObject { ["tool_calls"] = list } }) };
+        return $"data: {chunk.ToJsonString()}\n\ndata: [DONE]\n\n";
+    }
+}
+
+/// <summary>A tool that runs until it is cancelled, as a long build would, and says when it started.</summary>
+internal sealed class EndlessTool : Tool
+{
+    public override string Name => "endless";
+    public override string Description => "Runs until it is stopped.";
+    public override ToolRisk Risk => ToolRisk.ReadOnly;
+    public override JsonObject Parameters => Schema();
+
+    public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public int Runs { get; private set; }
+
+    public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
+    {
+        Runs++;
+        Started.TrySetResult();
+        await Task.Delay(Timeout.Infinite, ct);
+        return new ToolResult("never");
+    }
 }
 
 internal sealed class ScriptedServer(params string[] responses) : HttpMessageHandler
@@ -97,9 +136,34 @@ internal sealed class ScriptedServer(params string[] responses) : HttpMessageHan
             return new HttpResponseMessage(HttpStatusCode.BadGateway) { Content = new StreamContent(new BrokenStream()) };
         }
         if (Responder is not null)
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Responder(Requests[^1]), Encoding.UTF8, "text/event-stream") };
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = Stream(Responder(Requests[^1])) };
         var body = _next < responses.Length ? responses[_next++] : Sse.Text("(script exhausted)");
-        return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "text/event-stream") };
+        return new HttpResponseMessage(HttpStatusCode.OK) { Content = Stream(body) };
+    }
+
+    /// <summary>The reply as it streams; one with <see cref="Sse.Stall"/> in it sends what comes before it and then nothing more.</summary>
+    private static HttpContent Stream(string body)
+    {
+        if (body.IndexOf(Sse.Stall, StringComparison.Ordinal) is not (>= 0 and var at))
+            return new StringContent(body, Encoding.UTF8, "text/event-stream");
+        var content = new StreamContent(new StallingStream(Encoding.UTF8.GetBytes(body[..at])));
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/event-stream");
+        return content;
+    }
+
+    /// <summary>Gives what it has, then waits on every read until that read is cancelled.</summary>
+    private sealed class StallingStream(byte[] start) : MemoryStream(start)
+    {
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            var read = await base.ReadAsync(buffer, ct);
+            if (read > 0)
+                return read;
+            await Task.Delay(Timeout.Infinite, ct);
+            return 0;
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) => ReadAsync(buffer.AsMemory(offset, count), ct).AsTask();
     }
 
     /// <summary>A connection that takes nothing: every write waits until it is cancelled.</summary>
@@ -132,7 +196,7 @@ internal sealed class RecordingObserver : IAgentObserver
     public List<string> Events { get; } = [];
 
     public void OnStepStarted(int step) => Events.Add($"step {step}");
-    public void OnDelta(StreamDelta delta) { }
+    public void OnDelta(StreamDelta delta) => FirstDelta.TrySetResult();
     public void OnAssistantMessage(ChatMessage message) => Events.Add("reply " + message.Content);
 
     /// <summary>Runs while an OK is asked for, before the answer (e.g. the user pressing Stop meanwhile).</summary>
@@ -146,6 +210,13 @@ internal sealed class RecordingObserver : IAgentObserver
     }
 
     public void OnToolStarted(ToolCall call, string summary) => ToolsRun.Add(call.Name);
+
+    /// <summary>The user's messages that joined the conversation during the run, as sent.</summary>
+    public List<UserInput> Delivered { get; } = [];
+    public void OnUserMessageDelivered(UserInput input) => Delivered.Add(input);
+
+    /// <summary>The first streamed piece of the reply in progress: the model has started on it.</summary>
+    public TaskCompletionSource FirstDelta { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public List<string> Notices { get; } = [];
     public event Action<string>? NoticeReceived;
     public void OnNotice(string text) { Notices.Add(text); NoticeReceived?.Invoke(text); }

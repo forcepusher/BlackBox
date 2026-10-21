@@ -70,7 +70,7 @@ public class GuessworkTests
         Assert.Equal(Guesswork.FirstNote, guesswork.Check(Shell, ToolResult.Error("Exit code 1\nFirst failure of the task.")));
         Assert.Null(guesswork.Check(Shell, ToolResult.Error("Exit code 1\nSecond failure of the task.")));
         for (var i = 0; i < 20; i++)
-            Assert.Null(guesswork.Check(Shell, new ToolResult("Exit code 0\nfine")));
+            Assert.Null(guesswork.Check(Read, new ToolResult("fine")));
         Assert.Null(guesswork.Check(Shell, ToolResult.Error(AgentSession.DeclinedText)));
         Assert.Null(guesswork.Check(Shell, ToolResult.Error("Exit code 1\nThird failure, long after the others.")));
     }
@@ -177,5 +177,261 @@ public class GuessworkTests
         await session.RunAsync("Build a geometry nodes graph in Blender", new RecordingObserver(), CancellationToken.None);
 
         Assert.EndsWith(Guesswork.NameNote, session.History.Single(m => m.Role == ChatRole.Tool).Content);
+    }
+
+    private static readonly WriteFileTool Write = new();
+    private static readonly ToolResult Wrote = new("Wrote C:\\Users\\user\\BlackBox\\Data\\scratch\\motion.json");
+    private static ChatMessage Reply(string thinking, string text = "") => new() { Role = ChatRole.Assistant, Reasoning = thinking, Content = text };
+
+    [Theory]
+    // What a model asks itself about how something is done, what it is called or whether it is there.
+    [InlineData("Hmm, how do I make LTX 2.5 follow the motion of a reference video?", "Hmm, how do I make LTX 2.5 follow the motion of a reference video?")]
+    [InlineData("Which node does the pose conditioning in the LTX workflow?", "Which node does the pose conditioning in the LTX workflow?")]
+    [InlineData("Is there a node for depth control in LTX 2.5?", "Is there a node for depth control in LTX 2.5?")]
+    [InlineData("But maybe they're built into newer ComfyUI?", "But maybe they're built into newer ComfyUI?")]
+    [InlineData("What's the correct way to add a socket to a node group in Blender 5.2?", "What's the correct way to add a socket to a node group in Blender 5.2?")]
+    [InlineData("I'm not sure how the IC-LoRA takes the control video.", "I'm not sure how the IC-LoRA takes the control video.")]
+    [InlineData("The template runs. I don't know which sampler Nova Furry XL wants, so I'll keep euler.", "I don't know which sampler Nova Furry XL wants, so I'll keep euler.")]
+    // From qwen3.8's thinking in earlier runs: the part of the sentence that asks.
+    [InlineData("In ComfyUI, VAEDecode uses the VAE's dtype; is there a node input for fp32?", "is there a node input for fp32?")]
+    [InlineData("Actually, does ComfyUI have a \"Remove Background\" node?", "Actually, does ComfyUI have a \"Remove Background\" node?")]
+    [InlineData("I don't know if the original s3 was good or not.", null)]
+    [InlineData("I need to check the node names in Blender 5.2. Let me do a quick web search for Blender 5.2's geometry nodes Python API. Actually, let me think about what I know.",
+        "Let me do a quick web search for Blender 5.2's geometry nodes Python API.")]
+    [InlineData("Let me search for the templates that make video first.", null)]
+    // A check it makes on this PC (inspect.signature on the installed moviepy), not on the web.
+    [InlineData("Also, let's check the signature of crossfadein/crossfadeout in moviepy 2.x. Let me verify.", null)]
+    [InlineData("Let me check the output folder for the new file.", null)]
+    [InlineData("So how do we determine whether it's Juggernaut XL or SnowPony?", null)]
+    [InlineData("Now, how does the film tool handle lip-sync?", null)]
+    [InlineData("Hmm, write_videofile: does it have an audio parameter?", null)]
+    [InlineData("Does LoadAudio support flac files?", "Does LoadAudio support flac files?")]
+    // Questions the web can't answer: the screen, the user, how a result looks, or nothing named.
+    [InlineData("Did the click on the Export button work?", null)]
+    [InlineData("How do I get to the button in the top right of the screen?", null)]
+    [InlineData("What does the user want here, a portrait or a full body?", null)]
+    [InlineData("How does the second render look?", null)]
+    [InlineData("How should I proceed with this task now?", null)]
+    [InlineData("Maybe I should crop just one view?", null)]
+    [InlineData("I'm not sure which crop looks best.", null)]
+    [InlineData("Let me make the frame first, then the shot.", null)]
+    public void Questions_about_how_things_are_done_are_told_apart(string thinking, string? question) =>
+        Assert.Equal(question, Guesswork.QuestionIn(thinking));
+
+    [Theory]
+    [InlineData("Hmm, how do I make LTX follow the motion of a reference video?", "ComfyUI", "how do I make LTX follow the motion of a reference video ComfyUI")]
+    [InlineData("I'm not sure how the IC-LoRA takes the control video.", null, "how the IC-LoRA takes the control video")]
+    [InlineData("So which node does motion control in ComfyUI?", "ComfyUI", "which node does motion control in ComfyUI")]
+    // Saying it will look something up, and then writing the script from memory (qwen3.8 on Blender 5.2).
+    [InlineData("Let me do a quick web search for Blender 5.2's geometry nodes Python API.", null, "Blender 5.2's geometry nodes Python API")]
+    [InlineData("I should look up the node names in Blender 5.2, but most are stable.", null, "the node names in Blender 5.2")]
+    [InlineData("I don't know which sampler Nova Furry XL wants, so I'll keep euler.", "ComfyUI", "which sampler Nova Furry XL wants ComfyUI")]
+    public void A_question_is_searched_without_the_thinking_around_it(string question, string? subject, string query) =>
+        Assert.Equal(query, Guesswork.Query(question, subject));
+
+    [Theory]
+    [InlineData(@"With Blender 5.2 (C:\Program Files\Blender Foundation\Blender 5.2\blender.exe), make scatter.blend", "Blender 5.2")]
+    [InlineData("Make the bunny dance with LTX-2.5 like in dance.mp4", "LTX-2.5")]
+    [InlineData("Use the latest moviepy 2.x for a title", "moviepy 2.x")]
+    [InlineData("Make 3 cubes and a 6-second video", null)]
+    public void The_program_a_request_names_is_found(string request, string? subject) =>
+        Assert.Equal(subject, Guesswork.SubjectIn(request));
+
+    [Fact]
+    public void A_question_that_names_no_program_is_searched_with_the_one_the_request_names()
+    {
+        Assert.Equal("how do I set a socket's default value Blender 5.2", Guesswork.Query("Wait, how do I set a socket's default value?", "Blender 5.2"));
+        Assert.Equal("how do I set a socket's default value in Blender 4.2", Guesswork.Query("how do I set a socket's default value in Blender 4.2?", "Blender 5.2"));
+        Assert.Null(Guesswork.QuestionIn("Wait, but how does the default value work now?"));
+    }
+
+    [Fact]
+    public void An_error_the_model_was_told_to_look_up_and_didnt_is_searched_for_it()
+    {
+        var guesswork = new Guesswork();
+        guesswork.StartRun("Make scatter.blend with Blender 5.2");
+        var failed = ToolResult.Error("Exit code 1\nTraceback (most recent call last):\n  File \"C:\\Users\\user\\BlackBox\\Data\\scratch\\scatter.py\", line 9, in <module>\n" +
+                                      "RuntimeError: Error: Node type GeometryNodeDistributePointsInFaces undefined");
+        Assert.Equal(Guesswork.NameNote, guesswork.Check(Shell, failed));
+
+        // It went on with another script: the error is searched, once.
+        guesswork.Read(Reply("Let me try another name."), [Shell]);
+        Assert.Equal("RuntimeError: Error: Node type GeometryNodeDistributePointsInFaces undefined", guesswork.Question);
+        Assert.True(guesswork.QuestionIsError);
+        guesswork.Searched(guesswork.Question!);
+        Assert.Null(guesswork.Check(Shell, new ToolResult("Exit code 0")));
+        guesswork.Read(Reply("Next step."), [Shell]);
+        Assert.Null(guesswork.Question);
+
+        // One that looks it up itself is left to it.
+        var searching = new Guesswork();
+        searching.StartRun("Make scatter.blend with Blender 5.2");
+        Assert.Equal(Guesswork.NameNote, searching.Check(Shell, failed));
+        searching.Read(Reply("Let me search for it."), [new WebSearchTool()]);
+        Assert.Null(searching.Question);
+        Assert.Null(searching.Check(new WebSearchTool(), new ToolResult("1. Distribute Points on Faces")));
+        searching.Read(Reply("Now the script."), [Shell]);
+        Assert.Null(searching.Question);
+    }
+
+    [Theory]
+    // What Nemotron's Blender run failed with: the command line's own slips aren't searched.
+    [InlineData("Unexpected token 'version' in expression or statement.", false)]
+    [InlineData("The filename, directory name, or volume label syntax is incorrect.", false)]
+    [InlineData(@"ls : Cannot find path 'C:\Program' because it does not exist.", false)]
+    [InlineData("Start-Process : A positional parameter cannot be found that accepts argument 'extension].enum_items])'.", false)]
+    [InlineData("AttributeError: 'NodeTreeInterfaceSocketFloat' object has no attribute 'bl_idname'", true)]
+    [InlineData("TypeError: 'bpy_prop_collection' object is not callable", true)]
+    [InlineData("error CS0117: 'KeyCode' does not contain a definition for 'Left'", true)]
+    [InlineData("Method invocation failed because [System.__ComObject] does not contain a method named 'Add'.", true)]
+    public void Only_errors_a_search_answers_are_searched(string line, bool searchable) =>
+        Assert.Equal(searchable, Guesswork.Searchable(line));
+
+    [Fact]
+    public void An_error_is_searched_without_the_paths_in_it() =>
+        Assert.Equal("FileNotFoundError: [Errno 2] No such file or directory: ''",
+            Guesswork.ErrorQuery(@"FileNotFoundError: [Errno 2] No such file or directory: 'C:\Users\user\BlackBox\Data\scratch\scatter.blend'"));
+
+    [Fact]
+    public void A_try_the_model_calls_wrong_counts_as_a_failed_one()
+    {
+        var guesswork = new Guesswork();
+        guesswork.StartRun("Make the bunny dance like in dance.mp4");
+        Assert.Null(guesswork.Check(Write, Wrote));
+
+        // Nothing failed; the video just didn't do what was asked. Its note comes with the next result.
+        guesswork.Read(Reply("The video still doesn't follow the dance. Let me raise the guide strength."), [Write]);
+        Assert.Equal(Guesswork.DoubtNote, guesswork.Check(Write, Wrote));
+        // Said once; then, as for errors, from the third failure since the last look-up.
+        guesswork.Read(Reply("No change in the motion at all."), [Write]);
+        Assert.Null(guesswork.Check(Write, Wrote));
+        guesswork.Read(Reply("That didn't work either; I need a different approach."), [Write]);
+        Assert.Equal(Guesswork.TriesNote(3), guesswork.Check(Write, Wrote));
+
+        // Words of doubt with no try before them, or in a reply that looks something up, don't count.
+        var fresh = new Guesswork();
+        fresh.StartRun("Make the bunny dance");
+        fresh.Read(Reply("If this still doesn't work, I'll look it up."), [Write]);
+        Assert.Null(fresh.Check(Write, Wrote));
+        fresh.Read(Reply("It still isn't moving."), [new WebSearchTool()]);
+        Assert.Null(fresh.Check(new WebSearchTool(), new ToolResult("1. LTX motion control")));
+        fresh.Read(Reply("It still isn't moving."), [Write]);
+        Assert.Null(fresh.Check(Write, Wrote)); // looked up in this task: one more failure is no matter yet
+    }
+
+    [Fact]
+    public void The_user_saying_the_result_isnt_right_counts_as_a_failed_try()
+    {
+        var guesswork = new Guesswork();
+        guesswork.StartRun("Make a picture of Anton from his refsheet");
+        Assert.Null(guesswork.Check(Write, Wrote));
+
+        guesswork.StartRun("Dude it's still a kid, not an adult");
+        Assert.Equal(Guesswork.UserDoubtNote, guesswork.Check(new ReadFileTool(), new ToolResult("refsheet.png")));
+
+        // Saying what it should have done is saying it isn't right.
+        Assert.True(Guesswork.UserDoubts("The text fades in from black; it should fade from transparent, with the blue showing through."));
+        Assert.False(Guesswork.UserDoubts("Great, now make a version 10 seconds long."));
+
+        // Without a try before it, a message is a new task, whatever it says.
+        var fresh = new Guesswork();
+        fresh.StartRun("My printer doesn't work, fix it");
+        Assert.Null(fresh.Check(Shell, new ToolResult("Exit code 0\nPrinter: HP LaserJet")));
+    }
+
+    [Fact]
+    public void Ten_minutes_of_tries_with_nothing_looked_up_makes_every_next_try_say_to_look()
+    {
+        var now = new DateTime(2026, 10, 21, 3, 0, 0, DateTimeKind.Utc);
+        var guesswork = new Guesswork(() => now);
+        guesswork.StartRun("Make the bunny dance like in dance.mp4");
+        for (var i = 0; i < 3; i++)
+        {
+            now += TimeSpan.FromMinutes(3);
+            Assert.Null(guesswork.Check(Write, Wrote));
+        }
+        now += TimeSpan.FromMinutes(2);
+        Assert.Equal(Guesswork.CheckNote(TimeSpan.FromMinutes(11), 4), guesswork.Check(Write, Wrote));
+        Assert.Null(guesswork.Check(new ReadFileTool(), new ToolResult("text"))); // only tries say it
+        now += TimeSpan.FromMinutes(1);
+        Assert.Equal(Guesswork.CheckNote(TimeSpan.FromMinutes(12), 5), guesswork.Check(Write, Wrote));
+
+        // A look-up starts the clock again, and so does reading the installed version's own API.
+        Assert.Null(guesswork.Check(new FetchPageTool(), new ToolResult("# Motion control")));
+        now += TimeSpan.FromMinutes(5);
+        Assert.Null(guesswork.Check(Write, Wrote));
+        for (var i = 0; i < 2; i++)
+        {
+            now += TimeSpan.FromMinutes(2);
+            Assert.Null(guesswork.Check(Write, Wrote));
+        }
+        Assert.Null(guesswork.Check(Shell, new ToolResult("Exit code 0\n(self, duration: float, initial_color: list = None)"),
+            """{"command":"python -c \"import inspect; from moviepy.video.fx import FadeIn; print(inspect.signature(FadeIn.__init__))\""}"""));
+        now += TimeSpan.FromMinutes(1);
+        Assert.Null(guesswork.Check(Write, Wrote));
+
+        // Time between runs, while the user is away, isn't time spent trying.
+        now += TimeSpan.FromHours(3);
+        guesswork.StartRun("Now make it longer");
+        now += TimeSpan.FromMinutes(1);
+        Assert.Null(guesswork.Check(Write, Wrote));
+        Assert.Null(guesswork.Check(Write, Wrote));
+    }
+
+    [Fact]
+    public void Eight_quick_tries_with_nothing_looked_up_make_it_time_to_look_too()
+    {
+        var now = new DateTime(2026, 10, 21, 8, 34, 0, DateTimeKind.Utc);
+        var guesswork = new Guesswork(() => now);
+        guesswork.StartRun("Make scatter.blend with Blender 5.2");
+        for (var i = 1; i < Guesswork.CheckBurst; i++)
+        {
+            now += TimeSpan.FromSeconds(20);
+            Assert.Null(guesswork.Check(Shell, new ToolResult("Exit code 0\nprobing")));
+        }
+        now += TimeSpan.FromSeconds(20);
+        Assert.Equal(Guesswork.CheckNote(TimeSpan.FromSeconds(160), 8), guesswork.Check(Shell, new ToolResult("Exit code 0\nprobing")));
+        Assert.StartsWith("[BlackBox] Time to look things up: 8 tries and 2 minutes since", Guesswork.CheckNote(TimeSpan.FromSeconds(160), 8));
+    }
+
+    [Theory]
+    [InlineData("run", true)]
+    [InlineData("templates", false)]
+    [InlineData("nodes", false)]
+    [InlineData("status", false)]
+    public void Only_a_comfyui_job_is_a_try(string action, bool isTry) =>
+        Assert.Equal(isTry, Guesswork.IsTry(new ComfyTool(), Guesswork.ActionOf($$"""{"action": "{{action}}"}""")));
+
+    [Fact]
+    public async Task A_question_the_model_goes_on_without_looking_up_is_searched_for_it()
+    {
+        var server = new ScriptedServer(
+            Sse.Thought("How do I make LTX follow the motion of a reference video? I'll try the depth guide first.",
+                Sse.ToolCall("w1", "write_file", """{"path":"motion.json","content":"{}"}""")),
+            // The same question again isn't searched twice.
+            Sse.Thought("Hmm, how do I make LTX follow the motion of the reference video?",
+                Sse.ToolCall("w2", "write_file", """{"path":"motion.json","content":"{}"}""")),
+            Sse.Text("Done."));
+        var dir = Directory.CreateTempSubdirectory().FullName;
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = dir };
+        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null), new ChatRequestOptions(),
+            ToolRegistry.CreateDefault(includeScreenTools: false, includeWebTools: true), ctx, "sys");
+        var queries = new List<string>();
+        session.SearchWeb = (q, _) =>
+        {
+            queries.Add(q);
+            return Task.FromResult<IReadOnlyList<Web.SearchHit>>(
+                [new("Motion Control | LTX Documentation", "https://docs.ltx.io/open-source-model/feature-guides/structural-control/motion-control", "Use IC-LoRA to follow a reference video's motion.")]);
+        };
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("Make the bunny dance like in dance.mp4", observer, CancellationToken.None);
+
+        Assert.Equal(["How do I make LTX follow the motion of a reference video"], queries);
+        var results = session.History.Where(m => m.Role == ChatRole.Tool).Select(m => m.Content!).ToList();
+        Assert.Contains("You thought: \"How do I make LTX follow the motion of a reference video?\"", results[0]);
+        Assert.Contains("https://docs.ltx.io/open-source-model/feature-guides/structural-control/motion-control", results[0]);
+        Assert.DoesNotContain("You thought", results[1]);
+        Assert.Contains(observer.Notices, n => n.Contains("How do I make LTX follow"));
     }
 }

@@ -18,6 +18,7 @@ BlackBox/
                tools/ (portable programs the agent downloaded), scratch/ (helper files it made for a task),
                comfyui/ (ComfyUI's address and folder, the log of a server BlackBox started, see Pictures, video and sound),
                pasted/ (pictures pasted into the chat, see Files in a message),
+               films/ (a folder per film: storyboard, frames, shots, song and the film, see Films),
                crash.log (errors no code caught, see below)
 ```
 
@@ -210,9 +211,31 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   models they are on; with words, the ones whose tags match ("furry": Nova Furry AM, a newer
   version of the user's model, on Anima) come before the search's own results. Models tagged as
   porn are left out, as Civitai's own NSFW mark was off on several.
+- **Video starts from a picture.** The user found LTX good at animating a picture and poor at
+  drawing one, and good at a clip's sounds (voices, footsteps, wind) and poor at music. So a video
+  is a picture an image model makes, looked at, then animated with an image-to-video template;
+  music comes from a music model (ACE-Step) and is put together with the video's sound. The tool's
+  description and the system prompt say so; a template search with video words adds it; running
+  or viewing an LTX workflow that draws its own picture (no `LTXVImgToVideo…` or `LTXVAddGuide`
+  node) adds a note.
+- **A guide to video prompts** (`Comfy/Guides/video-prompts.md`, built into the exe;
+  `action=guide`): LTX's own prompting guide (docs.ltx.io) and motion control, and what ruined
+  BlackBox's takes: say which way things move on screen, from where to where, how far, which body
+  part, what stays still, who holds what; one main action per 3 to 4 seconds; the camera move named
+  first; how to fix a take that went wrong; motion tracks (the Motion Control IC-LoRA) when a path
+  must be followed exactly. It comes with the first LTX template viewed or run in a task, and the
+  film director writes shots by it. Asked in a chat for "a 5 second video of a red fox trotting from
+  the left side of the frame to the right across a snowy field at dawn", qwen3.8 looked at the
+  image-to-video template (and with it the guide), made the fox at the left third facing right with
+  Z-Image Turbo, wrote the prompt by the guide (locked-off camera, which way, all four paws on the
+  ground, only the paws' crunch, no music), gave it no last frame because the trot goes on, and
+  checked the way the fox went against the measured movement: 17 minutes, no errors. LTX tracked the
+  fox though the prompt asked for a still camera; a run that asks for one and measures the whole
+  picture moving now says so.
 
 `read_file` gives the model a look at media as well as pictures: a video as eight frames with their
-times (and how loud its sound is, in words), a sound as its waveform and spectrogram with its
+times (and how loud its sound is, in words; a clip up to 15 s also with its movement measured from
+the pixels, as the film looks have it: the camera, and what moves where, which way, how far), a sound as its waveform and spectrogram with its
 length, loudness, clipping and silences in words, a 3D model (GLB, glTF, OBJ, PLY, STL) from four
 sides, an animated GIF or WebP as frames.
 Video and sound are decoded by Windows' own Media Foundation (MP4/H.264, MOV, MP3, AAC, FLAC, WAV
@@ -222,11 +245,40 @@ ComfyUI's folder; 3D models are drawn by BlackBox itself.
 ### Previews
 Files the agent makes or shows appear in the chat: under the tool call that made them, and under
 a reply that names them by their full path (whatever made them: ComfyUI, a script, Blender, a
-download). Pictures are shown at the chat's width, animations play, videos play in place with
-their sound and a position to drag, a sound plays over its waveform, a 3D model turns with the
-mouse (the wheel comes closer, a double click resets it), and any other file gets a card. Each has
-Open (its own program) and Show in folder. A saved chat shows them again when it is opened, as
-long as the files are still there.
+download). Pictures are shown at the chat's width, animations play, a sound plays over its
+waveform, a 3D model turns with the mouse (the wheel comes closer, a double click resets it), and
+any other file gets a card. Each has Open (its own program) and Show in folder. A saved chat shows
+them again when it is opened, as long as the files are still there.
+
+A video plays by itself while it is on screen, over and over and without its sound, as a GIF
+would; scrolled away, under the full-screen viewer or with the window minimized it pauses, so a
+long chat decodes only what can be seen (a third of its height showing, or 120 pixels of a tall one,
+counts as on screen). Its pause button holds it until it is played again. The Filmmaking window's
+players are not touched by this: they play with sound when asked.
+
+A click on a picture or a video (a preview, a picture that came with a message, a tool's
+screenshot) opens the full-screen viewer on the chat's screen, rather than another program: a
+picture as large as the screen, the wheel coming closer where it points, a drag moving it, a double
+click between that and its own size (from twice its size its pixels stay square, for pixel art); a
+video plays with its sound (M or the speaker turns it off), Space plays or pauses. The arrow keys
+and the side buttons go through the chat's other pictures and videos, Esc, × or a click beside the
+picture goes back. The agent's clicks step it aside as they do the chat's window, and its keys go to
+the window under both (before, from the chat they could go to the Filmmaking window).
+
+**Prompt** under a picture, video or sound made with ComfyUI shows the prompts it was made with and
+the settings that matter for making it again (model, LoRAs with their strength, shift, sampler,
+scheduler, steps, CFG, seed, denoise, size, a song's tempo and key, the pictures it started from),
+with Copy for each prompt and for all of it; the viewer has it too (P). It is read from the file
+itself, so it works for files the user made in ComfyUI as well: ComfyUI keeps the workflow it ran
+in every file it saves, in a PNG's text chunks, an MP4's tags (Video Combine's as a string of JSON),
+an MP3's TXXX frame or a FLAC's comments. The API form of the workflow is found by how it begins
+in the first and last 8 MB of the file, and each sampler (KSampler, SamplerCustom,
+SamplerCustomAdvanced) is followed back to its prompts through guiders, conditioning nodes (LTX's
+guides take and give back both prompts), switches as they were set and primitives; a negative
+zeroed out is none. A workflow without a sampler (a cloned voice) shows the text it was given.
+AUTOMATIC1111's and Forge's "parameters" text is read too. Over the 901 pictures, videos and sounds
+in the PC's ComfyUI output folder it took at most 66 ms a file; 51 said nothing (files ffmpeg or a
+script made from ComfyUI's), and the 62 without a prompt had an empty one in their workflow.
 
 Right-click → Copy on any picture in the chat (a preview, a picture in your message or under the
 box, a tool's screenshot) puts it on the clipboard at its full size, not the chat's, together with
@@ -355,6 +407,323 @@ checkpoint, which needed six tries for one lighthouse. Without a tool the agent 
 half minutes getting ComfyUI to stay up and wrote an SD 1.5 workflow from memory. It still sets
 comfyui-mcp up by itself when the user asks for it.
 
+## Films
+A video of more than one shot (a music video, a story, an ad) is planned as a **storyboard** and
+made piece by piece with ComfyUI: one video model run can't hold a story together for more than
+a few seconds, and not every film is one continuous camera shot. The **Filmmaking** button opens a
+window for it beside the chat, and the agent's `film` tool reads and writes the same storyboard,
+so a film can start in either and go on in the other.
+
+A storyboard is the `storyboard.json` in the film's folder, `Data/films/<title>` next to the exe
+like the rest of BlackBox's data (the user's choice: it is portable; the first build put films in
+the PC's Videos folder). The window's **Show folder** opens it:
+
+- **Shots** in order, each going from its **first frame** to its **last frame** in so many seconds,
+  with what happens in it, what the camera does, and how it follows the shot before (a cut, a
+  dissolve, a fade through black). A shot that starts on the frame the one before ends on goes on
+  with the same camera; one that starts on a frame of its own is a cut to another scene or angle.
+  Without a last frame a shot goes where its prompt takes it; without a first frame too, it is
+  made from words alone.
+- **Frames**: made from a prompt with a fixed seed, or taken from a picture of the user's (cut to
+  the film's frame). A frame can be made **from other frames** (an edit model such as
+  Qwen-Image-Edit gets them as its pictures), so the people and places stay the same from shot to
+  shot; **references** (a character, a place) are frames for that alone, in no shot.
+- **Nothing film-wide that goes into a prompt.** Each frame's and shot's prompt holds all of its
+  own look, and each says what it is made with (`model`). There used to be a film-wide look added
+  to every prompt, a story and a template per kind of job, and the user ruled them out: one change
+  to them made every frame and shot out of date. A storyboard that has them is upgraded when it is
+  loaded: the look is joined to every prompt (so frames come out with the prompt they were made
+  with), the templates go to the frames, shots and song of their kind, and what was made and up to
+  date is stamped again so it stays made. A `style` the agent gives with a change goes only into the
+  frames and shots of that change. Only the frame size and frame rate are the film's (1280x720 at 24
+  fps unless changed).
+- **The soundtrack**: none (each shot keeps the sound it was made with), a sound file of the
+  user's, or a song made for the film from a style and lyrics. A shot can be **lip-synced**: the
+  soundtrack's part under it is cut out as a WAV and given to LTX's picture and sound to video
+  template with its first frame, so the people in it sing or speak it.
+- **Lines**: what is said in a shot, in the film's voice (a description: "a man in his forties,
+  warm, deadpan"). VoxCPM2 says the first speaking shot's line from the description and clones
+  that line's voice for the others, so every line is the same person; the line is placed 0.4 s into
+  the shot (time to turn to the camera) and the shot is lip-synced to it. In the film the line is
+  heard as VoxCPM2 said it, not as LTX gives it back, and the soundtrack drops to 35% under it. A
+  line longer than its shot is said to be cut. A small Gemma 4 hears each line back in the check:
+  "Honestly? It used to be a lot worse." came back word for word.
+
+Only decisions are kept in the storyboard. What is made sits at fixed places beside it, each with
+the workflow that made it: `frames/<id>.png` and `frames/<id>.json`, `shots/<id>.mp4` and
+`shots/<id>.json`, `sound/song.mp3` and `sound/song.json`, and the joined film as `<title>.mp4`.
+A workflow file is ComfyUI's API format under `"prompt"` (the comfyui tool runs it as it is, with
+`workflow_file`; the files it loads named by their full paths), with what it was made from under
+`"blackbox"`: a hash of the prompt, seed, size, template, and the pictures and sound it started
+from. A piece whose hash no longer matches the storyboard is out of date, which the window and
+the tool say (a frame changed after the clip that starts on it was made, a song shorter than the
+film became). So the window and the agent never overwrite each other's results, and the same
+seed and prompt make the same picture again.
+
+What a frame, shot or the song is made with is its `model`: words ("furry nova xl", "my pony
+workflow", "juggernaut") matched against everything ComfyUI has installed for that kind of job, a
+template's name, or nothing for the first of a list known to do it well whose models and nodes are
+installed: Z-Image Turbo, then Qwen-Image 2512, for frames; Qwen-Image-Edit 2509 for frames made
+from others; LTX-2.5's first and last frame, image to video and text to video templates for shots,
+and its picture and sound to video for lip-synced ones; ACE-Step 1.5 for the song.
+
+What is installed is listed in full, not searched (`FilmTemplates.OptionsAsync`, the tool's
+`action=models`): the template list used to be the known ones plus the six best hits of a word
+search, and the user's Furry Nova XL workflow and checkpoint were in neither. Now every saved
+workflow of the user's, and every ComfyUI template of the right kind, is fetched and judged by the
+nodes it runs: what it saves (a picture, a video, a sound, a mesh), what it loads (pictures, a
+sound, a video; muted loaders don't count) and whether it takes a prompt; and it is offered only
+when every model file and node it names is installed. For a picture from words, every checkpoint
+BlackBox's plain text-to-image workflow can run is offered too, told by the names of its tensors (a
+UNet, a text encoder and a VAE of SD 1.5, SD 2 or SDXL): on this PC that took DreamShaper,
+Juggernaut XL, Nova Furry XL, Pony and SD 1.5, and left out LTX, Hunyuan3D, Stable Audio, SDPose,
+an all-in-one Flux and an Anima model. Words match the option that has most of them (more than
+half) among its name, title, notes, folders and model files, the user's own workflows first among
+equals, then ComfyUI's, then bare checkpoints; a number alone or "my workflow" names nothing. Words
+for a frame made from others that name a picture-from-words model ("furry nova xl" on an edit) make
+it with the best edit model, and the result says why. In the window, words that name nothing are
+read by the chat model, which picks one of the installed options, and its name replaces them.
+
+A template's inputs are found, not hard-coded: its
+prompt by a title such as "Prompt" (a primitive first), else by following the sampler's positive
+conditioning back to the text it is made from (through LTX's guides and switches); width, height,
+duration and frame rate by primitives titled so, else the empty latent's own inputs (an LTX length
+in frames is the fewest 8n + 1 that last the shot; a duration taken in whole seconds is rounded up
+and the clip cut in the film); seeds wherever they are set; first and last frames by the loaders'
+titles; pictures past the edit template's one are wired into its encoders' `image2` and `image3`;
+the prompt enhancer LTX's templates switch on is switched off, so the prompt is the one written.
+What the storyboard sets that a template has no place for is said. Every frame is scaled to cover
+the film's frame and cut to it, and black bars along its edges are cut off first: asked for a
+close-up in "a 35mm film look", Qwen-Image-Edit drew the picture letterboxed, and LTX kept the
+bars through the whole clip.
+
+**Joining** is ffmpeg: each clip held on its last frame or cut to its shot's length, scaled and
+cut to the film's frame and frame rate, joined with concat (a cut) or xfade (a dissolve or a fade,
+which overlap the shot before by half a second or a second), the soundtrack under it (the shots'
+own sound left out under one unless its volume is raised: LTX's is a muddy wash that took the
+Paper Boat song from 3.1 to 2.7 on SongEval at 30%), a short fade in, a fade out at the end, longer
+for the song, which is cut there. Without ffmpeg the error says where to put a portable one.
+
+**The song** is made a minute long at least and the film uses its start: ACE-Step 1.5 falls apart
+when asked for a short song. For the Paper Boat's style and lyrics, 21 s songs scored 2.4 to 2.9 of
+5 on SongEval (the user called the films' sound garbage), 30 s 3.2, 45 to 90 s 3.8 to 4.4; the
+Turbo template beat SFT (3.3) and base (2.6); a tempo the style names ("70 BPM") is ACE-Step's own
+setting, which the templates otherwise fix at 95 or 120. Three songs are made with new seeds and the
+one that sounds best for the part the film uses is kept (the same settings scored 3.3 to 4.2 by the
+seed alone), its seed saved in the storyboard.
+
+**Listening** is what no one should have to do for every take, so a song, and the film's sound, are
+judged by [SongEval](https://github.com/ASLP-lab/SongEval): a scorer trained on 2,400 songs rated
+by musicians, over the MuQ music model, scoring coherence, musicality, memorability, structure and
+natural vocals from 1 to 5. Meta's Audiobox Aesthetics was tried first and rated the two songs the
+user called garbage 8.2 of 10 for production quality: it hears how clean a recording is, not
+whether it is music. SongEval gave them 2.4 and 2.7, a released song 3.9 to 4.3 (10 to 30 s
+excerpts of it too, its intro 3.2), and the Paper Boat film made again 4.1. It is trained on songs
+with singing: instrumentals scored 2.5 to 3.3 in every style tried (a soft hummed lullaby 3.7), so
+for an instrumental it is a rough guide. It runs with ComfyUI's own Python (which has PyTorch),
+set up once in `Data/tools/songeval`: MuQ and nnAudio by pip into that folder (ComfyUI's own
+packages left alone; MuQ's MuLan half, which needs x_clip, stubbed out), SongEval's 100 MB head from
+GitHub with its SHA-256 checked, MuQ's 1.3 GB model from Hugging Face with `HF_HOME` in that folder.
+torchaudio can't load files in ComfyUI 0.41's Python (its torchcodec lacks FFmpeg's libraries), so
+the script reads a WAV ffmpeg made. MuQ's weights are CC BY-NC 4.0.
+
+**Checking** a shot compares its clip with the storyboard: whether its first and last frames are
+the frames it should start and end on (pictures shrunk to 48 pixels across, brightness pattern
+and colour, 0 to 1; LTX's first frame came out 0.98 alike), whether it moves, freezes or jumps
+suddenly (a cut inside a shot), black frames, its length and sound; for a lip-synced shot, what
+is sung in its part of the soundtrack (a small Gemma 4 in ComfyUI hears it). Then the sheet of the
+storyboard's frames above eight of the clip's goes to a **fresh look**: the model, in a request of
+its own without the run's history, says whether what should happen happens, what is warped or
+changing, whether the people stay the same, and ends with a verdict. The model that made a clip
+judges it too kindly (it called four bunnies mature and true to a reference sheet that the user
+saw as a chubby teenager). `tries=N` makes up to N takes with new seeds until one passes and keeps
+the best. The whole film is checked from a frame of each shot side by side and the joins where the
+camera should go on.
+
+**The window is a timeline**, the user's design (it replaced a grid of shots two to a row with
+prompt boxes, and a read-only strip): one horizontal scroll for three kinds of row, the names
+staying put at the left. **References** have a row each, with a bar under every run of shots made
+from them (directly or through frames made from frames). **Video** has a block per shot from where
+it starts for as long as it lasts, its clip's frames inside once made (else its frames and what
+happens in it), its state under it; dragging a shot's right edge makes it longer or shorter, in
+half seconds. **Sound** has the lines where they are said and the soundtrack's waveform, darker
+where it is turned down under the lines. A ruler on top moves the playhead (click or drag), and the
+play button plays the soundtrack from it with each shot's frame in the viewer. The wheel scrolls
+sideways, Ctrl+wheel zooms. Above the timeline are a viewer (the piece picked: a frame, a clip, the
+song; with nothing picked, the joined film) and a panel.
+
+**The user never writes a prompt** (their rule): there are no prompt fields. They pick a piece (a
+reference, a shot or one of its frames, the sound) or nothing (the whole film), and say in the
+panel what they want; `FilmDirector` asks the chat model, in a request of its own, with the film's
+storyboard, what was said about that piece before, what is installed for its kind of job and a
+picture of it as it is (a frame, or the sheet of a clip), to answer with a JSON change to the
+storyboard, a reply, and what to make now. A piece's request may change only that piece (a shot,
+its frames too, and the lines' voice); a change it would make elsewhere is left and said. A whole
+film's request may lay the film out or change anything, and makes nothing: each piece is made when
+the user makes it (Make it, Another take) or with **Make what's missing**, which makes every piece
+not made or out of date in the order they need (references, frames, the song, shots), each looked
+at, then joins the film. The model writes prompts as the brief in `FilmDirector` says: who is in a
+frame (repeating what makes each person look like themselves), where, framing, light, and the
+film's look in the same words in every prompt; a shot's action in order in the present tense; lines
+that fit their shot; a model named only when the user names or describes one. A piece's request is
+answered without thinking (11 to 30 s with qwen3.8, against three minutes thinking, and as good on
+the meme); a whole film is laid out with thinking. Each piece made is looked at by fresh looks (see
+below), and what they found is kept in the piece's workflow file (`"look"`) so the state shows it.
+What was said about each piece is in `talk.json` beside the storyboard.
+
+**Looks that don't let slop through.** The user found the judging dismissive: the fox film passed
+with the fox floating up the screen at the cut at 5 s. One question per kind of fault catches more
+than one big question, so a shot gets four, each a request of its own with thinking: physics and
+bodies (the sheet, and a closer look: twelve frames from the ~0.9 s where the most changes, cropped
+to where things move), behaviour over time (frozen or held poses), whether the world stays put
+(where the moon, horizon and trees are in each frame, how big the moon is as a share of the width,
+whether anyone slides or floats), and movement as asked (see below). A frame is looked at beside the frame a viewer sees before it:
+its shot's first frame (what differs between the two, the shot slides across the screen: the fox
+film's moon was "in the upper left" in one and "directly above" in the other) or the last frame of
+the shot before (a cut to another kind of place); and against the shot size its prompt names. What a
+look finds wrong goes back to `FilmDirector` (with thinking, and the two end frames' prompts to
+compare), which changes what the piece is made from; it is made and looked at again, up to twice,
+then the user is told what is left. After Make what's missing joins the film, the whole film gets
+two looks: a frame from the middle of each shot side by side (the same people, the story in order),
+and the cuts, each a picture of the last frame of the shot before above the first of the shot after
+(from the clips, so a fade isn't half through), with the references both shots are made from. The
+shots they name are fixed once, the film joined again and looked at again to say what is left; the
+**Look at the film** chip does the same for a film already joined.
+
+The two frames of a cut are one above the other: side by side, qwen3.8 measured where the moon was
+across the whole picture and found a moon that hadn't moved jumping from 0.13 to 0.6 of the width
+(4 runs of 4). Shot prompts that say the camera is locked made the cut look ask for the same framing
+across a cut, so it is told that holds inside a shot only.
+
+On the fox film the old looks passed both shots. The steadiness look found shot 1's moon wandering
+and shot 2's moon growing from a dot to a full disc (the floating: the camera rising on the fox in
+shot 2's first second); the fixes made each shot's last frame from its first and shot 1 then passed
+all three looks. Shot 2 was rebuilt as an open clearing with the moon on the other side, which all
+of its own looks and the side-by-side look passed ("intended framing changes"). The cut look caught
+that cut 4 runs of 4 and the user's original cut (the moon shrinking to a dot) 4 of 4; asked from
+the window, it fixed shot 2 by making its first frame from shot 1's last (the same forest and moon)
+in 17 minutes. On the fixed cut it said good 3 runs of 4 (once it found the fox's face different);
+on the spaghetti film's four cuts good 3 of 4 (once it found the man slimmer from s2 to s3, a face
+drift the side-by-side look had missed before). A look with thinking takes qwen3.8 30 to 100 s, so
+a shot's looks about 3 to 5 minutes.
+
+**Movement measured from the pixels** (`VideoMotion`). Later the user found the looks good at
+botched takes and often blind to motion gone wrong: the wrong way, a pose bending wrong, a prop or
+a person doing what nobody asked. From 8 or 12 stills a second apart a model can't see which way
+something went. So every frame of a shot, 160x90 and grey, is matched block by block (10x10 pixels,
+to a tenth of a pixel) with the frame a quarter of a second later: what most of the picture does is
+the camera (a shift, and a growth for a push in), and blocks that move against it are grouped by
+ninth of the picture. In words, by half second and over the whole clip ("in the middle something
+moves up 10% of the height against the rest"), it goes to the steadiness look and to a fourth look,
+movement as asked: list each movement the shot asks for (who, which body part, which way on screen,
+from where to where, when), say whether the frames and the measurement show it, then what moves
+that nobody asked for. On the fox film's original takes it read the floating fox (the middle up 10%
+of the height in shot 2's first two seconds) and shot 1's moon sliding (the top middle right by 21%
+of the width over 5 s; by the frames, from 28% to 52% across). It takes about a second a shot.
+On six fox clips, right and wrong (two played backwards, so the head goes down and the jaw closes;
+the floating take; the sliding moon), the movement look asked for a redo on all four wrong ones
+and passed the jaw opening as asked; without the measurement it passed the head
+going down. It also failed the fixed shot 1, whose fox looks up and then back down, which nothing
+asked for. With the measurement the steadiness look named the user's fault in its words: "the fox
+floats upward off the snow". The measurement doesn't cost the behaviour look what it caught before:
+on the spaghetti take with the man frozen face-down in his plate for its last 2.5 s it asks for a
+redo with the measurement as without ("a bent-double, head-in-the-plate pose from ~1.9 s to 4.0 s").
+
+**Pictures first, LTX's sounds, the song's music.** Every shot starts on a frame a picture model
+makes: a shot written without one gets one from its words and the references of the frames near it
+(`Storyboard.AddFirstFrames`, in the director's change, Make it, Make what's missing and the film
+tool), frames not made yet are made first, and LTX is never asked to draw a shot from words. A
+shot's prompt ends with what is heard; LTX is given it with "No music." unless it speaks of music
+(not part of the shot's stamp, so made shots stay up to date), and under a song the shots' own
+sound is kept at half rather than left out.
+
+**A shot that goes on from where the one before ends.** The edit model that makes a shot's last
+frame from its first changes a pose, a face or what someone holds well, and moves someone across
+the frame badly: asked for the girl of "The Letter in the Rain" "now beside the mailbox", it left
+her where she stood, and every take of the shot walked her to the mailbox and back (its looks
+caught each one: walking back, teleporting, a see-through double). So a shot where someone walks
+far gets no last frame, and the shot after can start on a frame taken from where its clip ends
+(`{"id": "f5", "of": "s1"}`, no prompt): the clip's last picture, made once that shot is made and
+out of date when it is made again. The director's brief and the video guide say so. A last frame
+also pins the end: the video gets there early and holds it (a wave ending on a raised hand froze
+for the last 1.5 s, twice), so an action that keeps going to the end gets no last frame either.
+Told "let her walk end wherever it ends and have shot 2 go on from exactly where shot 1 ends", the
+director dropped shot 1's last frame and started shot 2 on a frame of s1's end, and the film came
+out seamless at the cut (8 s, made in about an hour with the looks and their fixes). Laying out "a
+boy runs across a park from the left to a big oak tree on the right, climbs onto its lowest branch,
+then sits on it and waves" afresh, it gave the run and the climb-and-wave no last frame, and wrote
+each shot camera first, the run from the left edge to the trunk, and what stays still. Made from
+there, the looks asked for redos that the frames bear out: the camera panning and tilting though the
+prompt locked it, a run that glided with feet not planting, and the boy holding his sitting pose for
+2 s before the wave began. Even without a last frame, LTX often holds the opening picture for a
+second or two before anything moves; that hold is now the most common fault the looks find, so
+the brief and the guide say to draw a shot's first frame mid-action (a foot lifting, a hand rising).
+With the boy's hand already mid-wave in shot 2's first frame, he waved from the first moment; the
+looks still failed it for a slow push-in the prompt didn't ask for, and the cut look passed a boy
+drawn cartoonish in shot 1 (from a character sheet that came out cartoonish) and photoreal in shot 2.
+
+**Takes**: before a piece is made again, the one there is kept beside it (`frames/f2.v1.png` and
+`.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it was made with
+(`"settings"`). Picking an earlier take puts it back in the film with those settings (so it is up
+to date again), and the one it replaces becomes a take.
+
+From one sentence ("a little red fox in a snowy pine forest at night looks up at the full moon,
+then howls at it, gentle piano") the window laid out two references, four frames made from them,
+two shots and a song in about two minutes, and Make what's missing made all nine pieces and joined
+them in 14 minutes; two of the looks found faults worth a retake (a reference with one pose, not a
+sheet; a frame not as close as asked). On the meme, "make him look more surprised when he turns to
+the camera" on shot 3 rewrote its prompt in 15 s and made it again in two minutes. **Make the whole
+film** still hands the storyboard to the agent in the chat. A ComfyUI BlackBox started for the
+window is closed once the window is.
+
+### How films did
+On this PC (RTX 5070 Ti 16 GB, ComfyUI 0.41.3), at 1280x720 and 24 fps: a frame from words took
+about 20 s (Z-Image Turbo), one made from other frames 25 to 45 s (Qwen-Image-Edit 2509), a 5 s shot
+about 2 minutes (LTX-2.5 distilled; 1280x704 out of the model, cut to the film's frame), a 4 s
+lip-synced shot 2 minutes, a 10 s song 15 to 35 s (ACE-Step 1.5 XL Turbo), joining two shots 1 s.
+A fresh look at a shot took qwen3.8 (LM Studio) under a minute.
+
+"The Fox and the Moon", a storyboard of a reference fox, three frames made from it and two shots
+(a leap from a first to a last frame, then a cut by dissolve to a howl from a first frame alone)
+with an instrumental song, handed to qwen3.8 as the window's **Make the film** words it: done in
+34 minutes, 21 model calls, 20 tool calls, no errors. It made the frames in the order they depend
+on each other, then the song, then each shot with `tries=3`. The leap passed its first take; the
+howl failed three (the howl broke off, the tail vanished, the framing drifted wider than the
+close-up), passed after the agent made its prompt plainer, and the whole-film check then found
+the fox's world different between the shots (a bare mound, then pine woods): the agent remade the
+first two frames with the woods, made the leap again (its second take passed), joined, and the
+check passed, saying the moon changes sides at the cut. Every frame and clip kept its first frame
+0.98 alike to the storyboard's.
+
+"Make a short music video, about 20 seconds: a paper boat sails down a rainy city street gutter at
+dusk, slips under a bridge of fallen leaves, and comes out into a big puddle that reflects the city
+lights. Add a gentle song with lyrics about small journeys." in the chat: qwen3.8 wrote a storyboard
+of three frames, each made from the one before, and three shots going on from each other, with a
+song with lyrics; done in 30 minutes, 16 model calls, 15 tool calls, no errors, 20 s. The first shot
+failed five takes the same way (the boat stays put while the leaves fade in: its two frames had the
+boat in the same place), and the agent first tried to make the boat small in the first frame (the
+image model kept drawing it big), then had the camera glide forward with the boat in the middle,
+which passed, and wrote the next shot the same way. Its film was made in a test folder while the
+tool's description named the Videos folder, so it copied the film there as well; the description
+now names where films go.
+A song's words are heard after it is made: ACE-Step's 10 s song for two lines of lyrics came back
+as "I see it's cold now I keep telling", which the model is told to check against the lyrics.
+
+"Spaghetti Days", a 22 s meme asked for in one chat message (an original man eating spaghetti
+messily at a restaurant, several angles, turning to the camera between bites to say deadpan lines
+about AI video, Italian music under it): qwen3.8 wrote a character sheet, four frames made from it,
+four lip-synced shots with lines and an instrumental song; done in 70 minutes, 31 tool calls, no
+errors. What it learned on the way: a lip-synced shot whose first frame has spaghetti in the mouth
+doesn't move the mouth (it made new frames with the mouth free); a shot that eats and then talks
+had the line over the eating (it split eating and talking into shots of their own); a frame added
+later from words alone drew another man each time, and the film check caught only one of three.
+Two more messages fixed it: "make him the same man" (it remade those frames from the sheet, 36
+minutes) and "turn his head to the camera before he talks" (a first frame looking down at the plate,
+19 minutes). It also tripped on things now fixed: taking a shot's line out left the shot
+lip-synced to the song; remaking a frame didn't put the shots on it on the list; the fade in from
+black looked like a fault; and a new task looking for a film by name searched the whole user
+folder. The frame tool now says when a frame is made from words alone in a film with a sheet.
+
 ## Chat history
 Every chat is saved on its own in `Data/chats/` from its first message on, after every step, and
 named after that message. **History** next to **New chat** lists them, the latest first: pick one to
@@ -410,7 +779,7 @@ failed (401): {"error":{"message":"User not found.","code":401}}`. Nothing answe
 Studio's port 1234 adds that its server has to be switched on in its Developer tab (and Serve on
 Local Network turned on for another PC), and on Ollama's 11434 that the Ollama app has to run.
 A service's website typed for its API (`openrouter.ai`, `groq.com`, `openai.com`, `mistral.ai`,
-`deepseek.com`, `x.ai`, `together.ai`, `fireworks.ai`, `anthropic.com`, any page of them) has its API
+`deepseek.com`, `x.ai`, `together.ai`, `fireworks.ai`, `anthropic.com`, `claude.com`, any page of them) has its API
 address tried first, so it just works; another website says it is one, rather than filling the
 banner with its 404 page's HTML. An API key pasted into the address box is named as one.
 For screen control the
@@ -447,6 +816,78 @@ the server's own model configuration (in LM Studio, per model).
 
 Thinking models get their earlier reasoning sent back each step (`reasoning_content`,
 `preserve_thinking`), as the Qwen3.5+ and Gemma 4 templates expect.
+
+### Claude through Anthropic's API
+With `api.anthropic.com` as the address (or `anthropic.com`, `claude.com`, `platform.claude.com`,
+`console.anthropic.com`, `claude.ai`) and an Anthropic API key, BlackBox speaks Anthropic's own
+Messages API (`POST /v1/messages`, the key as `x-api-key`) rather than its OpenAI-compatible layer,
+which caches nothing and gives no thinking back. `src/BlackBox.Core/Llm/AnthropicMessages.cs` turns
+each request and reply into the other format, so the agent, fresh looks and model questions use
+Claude unchanged. A gateway in front of Anthropic whose address has an `anthropic` part
+(Cloudflare's AI Gateway, `…/{account}/{gateway}/anthropic`) is spoken to the same way.
+
+- Models: the list comes from `/v1/models`, every page, with each model's context
+  (`max_input_tokens`, 1M for the current ones), reply limit and image support. With none picked
+  BlackBox uses Claude Opus 5.5, Anthropic's recommended default (without it the newest Opus, then
+  Sonnet, then Haiku); Fable and Mythos only when picked, at more than twice the price. On Auto it
+  uses 100k of the 1M, as on other hosted services; the slider goes to 1M.
+- Prompt caching: breakpoints on the system prompt (which caches the tools with it), at the end of
+  the request and where the previous request ended, so each step reads everything before it from
+  the cache (on Opus 5.5 at $0.20 a million tokens against $4) and pays in full only for what it
+  adds. The prompt size BlackBox resets by adds up the three parts Anthropic reports (read anew,
+  written to the cache, read from it).
+- Thinking: adaptive, its summaries shown as the reasoning (`display: "summarized"`; since Opus 4.7
+  none are shown otherwise). Each reply's blocks are kept on the message and sent back unchanged
+  with their signatures, as Claude requires; they aren't saved with the chat. Claude also checks
+  that nothing before a thinking block changed since it was written (for accounts made since 31
+  August 2026); where BlackBox changes the history (an MCP server added mid-run changes the prompt
+  and the tools), the request asks for such blocks to be dropped (`drop_block`, beta
+  `thinking-binding-controls-2026-08-01`), and where that beta is unknown, the thinking of the
+  replies before the latest is left out and the request sent again, then if need be all of it (the
+  latest reply's must otherwise go back whole while its calls are answered). A context reset keeps only the user's messages, the handoff note
+  and a screenshot, which the check allows. Effort is the model's default (medium on Opus 5.5),
+  except for fresh looks and quick questions, which ask for low: every Claude since 4.6 thinks, and
+  only effort says how much. Thinking counts toward the reply limit, so requests ask for 64k (the
+  model's limit if lower) whatever smaller limit a caller set; only what is written is paid for and
+  counts toward the output tokens a minute.
+- Refusals: on the models that take it (Opus and Fable 5 on, Sonnet 5.5), a request Anthropic's
+  safety checks decline goes to the model Anthropic recommends for what was declined
+  (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`); what the declined model wrote
+  before such a switch goes back as text only. A refusal that stands ends the task with a line
+  saying so and why.
+- Messages: tool results become `tool_result` blocks at the start of a user turn, the screenshot
+  after them; turns of one role are joined, as Claude wants them to alternate; a call without a
+  result gets "Not run.", and a result without its call is said as text. Tool call ids from other
+  servers get Claude's characters. A reply from another model goes as its text and calls: its
+  reasoning can't be sent as Claude's thinking.
+- Pictures: screenshots for Claude are at most 2000 px a side (1280 for models before Claude 4.7,
+  which see at most 1568 px), whatever the screenshot setting: Claude makes larger ones smaller itself and
+  points on what it saw (in the pixels of the picture it saw, Anthropic's vision guide says), so
+  clicks would miss, and a request with more than 20 pictures refuses any
+  over 2000 px. Other pictures in such a request are made to fit, and any over 8000 px a side or
+  5 MB (the Claude API takes 10 MB, Bedrock and Google Cloud 5), or not JPEG, PNG, GIF or WebP,
+  are converted; the same picture always comes out the same,
+  so the cache holds.
+- Errors: "prompt is too long: … > 200000 maximum" resets the context like any server's "too
+  long"; 529 (overloaded) is sent again after growing waits; a 429 waits as long as `retry-after`
+  says; 401, 403, the 400 "credit balance is too low" and a spend limit reached (a 400 for one set
+  on the account, a 429 without `retry-after` for the tier's monthly cap, which waiting doesn't
+  lift) say what to change. A part of a request
+  the API turns down (a beta it doesn't know, streamed tool calls, thinking summaries, a reply limit
+  over the model's) is left out, the request sent again, and the part stays out.
+- An Anthropic key (`sk-ant-…`) given to another server, or pasted as the address, gets a line
+  saying Claude's address.
+
+Not yet run against Anthropic itself: the test PC had no key on 21 October 2026.
+`tests/BlackBox.Core.Tests/AnthropicFake.cs` stands in for it, with the rules the API answers 400
+to, its prompt cache (a prefix match, looked for up to 20 blocks back) and its thinking check.
+The app and the command-line runner were run against a stand-in like it on 21 October, with Kilo's
+free Nemotron answering behind it: a file written and read back, a screenshot and the free disk
+space (two calls at once), an Excel budget and a follow-up message changing it, and a task in a 24k
+context that reset eight times. All 39 requests kept the API's rules, none had thinking dropped,
+and from the second step on each read everything before it from the cache; screenshots of the
+2560x1080 screen went at 1984x832, and the model list, "Picked by BlackBox: Claude Opus 5.5" and
+the slider's 1M showed in the window.
 
 ### Without a model server: Kilo's free models
 A new BlackBox's address is Kilo's AI gateway (`https://ai-gateway.kilo.ai/api/v1`), whose free
@@ -506,7 +947,9 @@ The **Context** slider in the top bar shows that size while **Auto** is ticked (
 the model, which your first message does; a `?` means the server doesn't say and it is the 100k guess). Untick Auto
 to set the size yourself: the slider stops at 4k to 1M in coarser steps as it grows (4k, 8k, 12k,
 16k, 24k, 32k, 40k, 48k, 64k, 80k, 96k, 128k, 160k, 192k, 256k, 320k, 384k, 512k, 640k, 768k,
-1M) and ends at the server's own size when the server reports one. The box next to it takes any
+1M) and goes up to 1M whatever the server reports (further for a server that reports more), the
+server's own size a stop of its own in place of the standard ones near it (100k for 96k). It used
+to end at the server's size, so with LM Studio's 100k nothing larger could be picked. The box next to it takes any
 size typed in (`48k`, `100000`, `1M`; Enter or leaving the box applies it), past the slider's end
 too; the server refuses requests longer than its own size, and a run that hits that drops to the
 size the server names. The choice is saved; it only changes BlackBox's budgeting and when it
@@ -573,7 +1016,7 @@ script after another. So a failed call's result tells the model to search the we
 again when the error says a name doesn't exist (an attribute, method, argument, enum value, node
 type or command), when the same error comes back, on every failure from the third since its last
 `web_search` or `fetch_page`, and the first time a script or command fails in a task before
-anything was looked up. Errors a tool that runs code reports as its output count too: an
+anything was looked up (and tries that fail without an error, see Web search). Errors a tool that runs code reports as its output count too: an
 MCP server's "Error executing code: ..." comes as an ordinary result, and Blender run with a script
 prints the traceback and exits with 0.
 ## Tools the agent has
@@ -586,6 +1029,7 @@ prints the traceback and exits with 0.
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures, videos, sounds and 3D models to the model; `write_file` makes documents from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
 | `comfyui` | Pictures, video, sound, music, speech and 3D models with ComfyUI on this PC, which it installs when there is none: templates, node and model look-ups, models found online and downloaded, checked runs that hand back the files (see Pictures, video and sound) |
+| `film` | Films from a storyboard (the Filmmaking window's): plans or changes it, makes its frames, song and shots with ComfyUI, checks each shot against what it should show, joins them with ffmpeg (see Films) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
 | `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |
@@ -605,7 +1049,12 @@ it checked; a check that doesn't show what the user asked for means the task isn
 Building a geometry nodes graph in Blender, Nemotron twice said "done" with no cubes in the scene:
 every script had run, but the modifier's density was left at 0. Told only to check, it rendered
 the scene three times, saw it empty, and put that down to the lights. It is a guideline in the
-system prompt, not a request of BlackBox's after the answer, which read to the user as a bug.
+system prompt, not a request of BlackBox's after the answer, which read to the user as a bug. Made
+from the command line, Nemotron then "fully verified" its scene by printing every node and link
+(the group had no Geometry input, so not one cube was made), so the check is to measure what the
+result does, not that its parts are set up as planned. Told that, it counted what the scene held
+once worked out, found nothing, and put it down to Blender run in the background: still explained
+away, but measured.
 
 With several monitors the agent sees one at a time: screenshots show the screen it looked at last
 (the primary at first) and `screen=N` switches. All coordinates refer to the screen in the latest
@@ -689,6 +1138,62 @@ over a plane with geometry nodes, each turned and sized at random, the density a
 inputs of the modifier), qwen3.8 failed 11 and 6 scripts in two runs before the rule and the notes
 (see Unstable connections), and searched only after the 7th and the 4th failure; with them it failed
 4 and 3, searched after the second, and finished in 6.4 minutes on average instead of 7.7.
+
+Errors weren't enough. Asked to make a character follow a video's motion with LTX, a run tried
+workflows for two hours: nothing failed, the videos just didn't move as asked, and the job was done
+right after the user said to look for guidance and it read LTX's motion control guide. So looking
+things up is now something BlackBox makes happen, not only asks for:
+- The prompt says to look things up before the first try at anything not yet looked up in the chat
+  (a program's feature, a model's technique, not only code), to search every question the model
+  asks itself about how something is done, and to search again after a try that didn't give what
+  was wanted. For what no ComfyUI template does, it reads the model makers' guide first.
+- A question the model asks itself in its thinking about how something is done, what it is called,
+  which node or setting does it or whether a program has it ("How do I make LTX follow the motion of
+  a reference video?", "I'm not sure how the IC-LoRA takes the control video"), or what it says it
+  will look up on the web ("Let me do a quick web search for Blender 5.2's geometry nodes Python
+  API", after which qwen3.8 thought "Actually, let me think about what I know" and wrote the script
+  from memory), which it then goes on without looking up, BlackBox searches for it: the first five results come under the step's
+  last result, with the question quoted, and the chat says what was looked up. Questions about the
+  screen, the user or how a result looks are left alone, as are ones that name nothing ("How should
+  I proceed?"), a question like one searched before, and any for a few calls after a look-up, while
+  the model reads. Without a program's name the search adds the one the step drives (ComfyUI, an
+  MCP server's name) or the one the request names with its version ("Blender 5.2"). So is an error
+  whose note said to look it up when the model's next step goes on without doing so (without the
+  paths in it): Nemotron failed 13 of 29 Blender scripts, many with that note, and never searched.
+  With it, BlackBox searched its Python errors for it and the next run made 80 cubes where the two
+  before made none (still without random sizes). Only an exception a program raised or a name
+  that isn't there is searched: the command line's own slips (PowerShell's quoting, a path cut at
+  its space) brought pages about nothing it was doing.
+- A try the model itself calls wrong ("still doesn't follow the dance", "no change in the motion",
+  "I need a different approach") counts as a failed one, as does the user's next message saying the
+  result isn't right ("Dude it's still a kid", "it should fade from transparent"): the first such failure before anything was looked
+  up gets a note to search before the next try, and from the third since the last look-up every one
+  does, as errors do. A try is a call that does something: a command, a script, a file written, a
+  ComfyUI job, a piece of a film.
+- After ten minutes of tries with nothing looked up (three tries at least, and only time in a run:
+  not while the user is away between messages), or eight tries however quick (probing how Blender
+  5.2 sets a modifier's inputs, qwen3.8 ran 17 scripts in 7 minutes after its last search and ran
+  out of time), every next try's result says it is time to look
+  things up, until the model does. The record is kept for the chat, so "still wrong" in the next
+  message counts against the tries before it. A command that reads the installed version's own API
+  (`inspect.signature`, `--help`, `Get-Help`, `pip show`) counts as looking it up for this, and a
+  plan to check something ("let's check the signature of FadeIn in moviepy 2.x") is no web search:
+  the model makes that check on the PC, as qwen3.8 did with the installed moviepy.
+
+Measured with qwen3.8 on the Blender 5.2 task made from the command line instead (`blender -b`,
+one run each): before, it thought "let me do a quick web search… Actually, let me think about what
+I know", wrote its first script from memory (`GeometryNodeRandomValue`, which is
+`FunctionNodeRandomValue`), and was still checking its scene at 15 minutes, 10 of 20 scripts
+failed; with the new prompt it searched before its first script, read the pages for Random Value
+and the node group interface, and finished in 8.5 minutes, 5 of 8 scripts failed (setting the
+modifier's inputs, which it then looked up too). Both scenes were right. A second pair was mixed:
+both searched before their first script (the old prompt asks that too, and this time it did), the
+old one had the scene right with 5 of 9 scripts failed but was still checking it at 13 minutes,
+and the new one read 5.2's release notes, failed 5 of 20 scripts probing how 5.2 sets a modifier's
+inputs, and hadn't saved the file at 13 minutes. So searching first now happens every time, but
+how long the task takes still turns on the model. A third run with the eight-tries rule searched
+first again, failed 2 of 10 scripts and was done in 10 minutes with the scene right: the new build
+finished two of its three runs, the old one neither of its two.
 
 No API key and nothing to install. `web_search` asks DuckDuckGo's HTML page through the system's
 `curl` (built into Windows 10 and later; a fraction of a second): DuckDuckGo recognizes .NET's own
@@ -847,6 +1352,17 @@ box says it is paused and how it goes on: send the message, click Resume (what y
 the box), or stop typing, after which it carries on in 15 seconds, counted down on that line. A
 message that arrives as the run finishes starts the next one, and what the agent hadn't read when
 you stopped it goes back in the box.
+
+Until the model reads it, a message sent during a run waits above the box, and moves into the chat
+when it is read: there it stands after what the model was doing when it was sent, as the model
+sees it (it used to show where it was sent, above work the model did before reading it). × on it
+takes it back unsent. **Interrupt** over them (or Ctrl+Enter to send one) has them read at once:
+the model's reply in progress, thinking or writing, is cut off and left out of the conversation
+(what streamed stays on screen, with "Interrupted to read your message."), or the tool calls it is
+running are stopped and the rest of that reply's calls not run, each saying so to the model, and
+the next step starts with the messages. Without it a long think went on for minutes past a
+correction that made it pointless. A wait (`wait`, a ComfyUI job) already ended for any message.
+Leaving the chat, the messages still waiting go back in the box.
 
 Such a message reaches the model marked as sent while it worked on the request, which it names
 ("Try using pony diffusion"): a question or a side request is answered or done and the request goes

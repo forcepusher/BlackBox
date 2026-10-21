@@ -71,8 +71,11 @@ public interface IInputController
 /// </summary>
 public interface IHostWindow
 {
-    /// <summary>Registers the native window handle.</summary>
+    /// <summary>Registers a native window handle: the main window, or another of BlackBox's over the screen (the full-screen viewer).</summary>
     void Attach(nint handle);
+
+    /// <summary>A window registered with <see cref="Attach"/> has closed.</summary>
+    void Detach(nint handle) { }
 
     /// <summary>If any of the points lie on the window, sends it behind other windows until the result is disposed.</summary>
     IDisposable StepAside(params (int X, int Y)[] points);

@@ -56,8 +56,10 @@ public static class ServerProbe
     {
         // Pasted into the wrong box, a key was looked up as a host name: "No such host is known. (sk-or-v1-…:80)".
         if (ServerAddress.LooksLikeKey(server.BaseUrl))
-            return new ProbeResult(false, [], null, null, "That looks like an API key, not a server address: it goes in the API key box. " +
-                                                          "The Server box takes the address of the service's API, such as https://openrouter.ai/api/v1.");
+            return new ProbeResult(false, [], null, null, server.BaseUrl.Trim().StartsWith("sk-ant-", StringComparison.Ordinal)
+                ? "That looks like an Anthropic API key, not a server address: it goes in the API key box, and the Server box takes https://api.anthropic.com."
+                : "That looks like an API key, not a server address: it goes in the API key box. " +
+                  "The Server box takes the address of the service's API, such as https://openrouter.ai/api/v1.");
         var candidates = ServerAddress.Candidates(server.BaseUrl);
         if (candidates.Count == 0)
             return new ProbeResult(false, [], null, null, server.BaseUrl.Trim().Length == 0 ? "No server address." : "That is not a server address.");
@@ -73,9 +75,12 @@ public static class ServerProbe
             var catalog = Usable(await CatalogAsync(http, found, models, ct).ConfigureAwait(false), server.ApiKey);
             // Kilo's free models carry no benchmark score, and their sizes don't tell how they click,
             // so with none picked the one BlackBox was tested with comes first there.
+            // On Anthropic's API, Claude Opus 5.5 unless another is picked (see AnthropicMessages.Pick).
             found.Model = (server.Model.Length == 0 && KiloGateway.Is(candidates[i]) && catalog.Any(m => m.Id == KiloGateway.Model)
                 ? KiloGateway.Model
-                : ModelChoice.Choose(server.Model, catalog)) ?? "";
+                : OpenAiChatClient.IsAnthropic(candidates[i]) && catalog.All(m => m.Id != server.Model)
+                    ? AnthropicMessages.Pick(catalog.Where(m => m.Chat).Select(m => m.Id).ToList())
+                    : ModelChoice.Choose(server.Model, catalog)) ?? "";
             var auto = found.Model.Length > 0 && found.Model != server.Model;
             var facts = await TryContextAsync(http, found, ct, models).ConfigureAwait(false);
             return new ProbeResult(true, catalog.Where(m => m.Chat).Select(m => m.Id).ToList(), facts.Context, facts.Vision,
@@ -84,11 +89,17 @@ public static class ServerProbe
         }
         // A server that answered but turned the key down is reachable all right: that is what to fix.
         if (attempts.FirstOrDefault(a => a.Result.KeyRefused) is { } refused)
-            return new ProbeResult(false, [], null, null, refused.Result.Error!, KeyRefused: true);
+            return new ProbeResult(false, [], null, null, refused.Result.Error! + AnthropicKeyHint(server, candidates[0]), KeyRefused: true);
         // The plain-http error reads better than a failed TLS handshake.
         var http0 = Math.Max(0, candidates.ToList().FindIndex(c => c.StartsWith("http://", StringComparison.OrdinalIgnoreCase)));
         return new ProbeResult(false, [], null, null, "Can't reach the server: " + attempts[http0].Result.Error);
     }
+
+    /// <summary>An Anthropic key (sk-ant-…) given to another server: Claude's address is said.</summary>
+    private static string AnthropicKeyHint(ServerSettings server, string address) =>
+        server.ApiKey.Trim().StartsWith("sk-ant-", StringComparison.Ordinal) && !OpenAiChatClient.IsAnthropic(address)
+            ? " That is an Anthropic API key: for Claude, the server address is https://api.anthropic.com."
+            : "";
 
     private static async Task<(IReadOnlyList<JsonObject>? Models, string? Error, bool KeyRefused)> ListModelsAsync(HttpClient http, string baseUrl, string apiKey, CancellationToken ct)
     {
@@ -130,13 +141,15 @@ public static class ServerProbe
         var ids = listed.Select(m => Str(m["id"])!).ToList();
         var root = OpenAiChatClient.NormalizeBaseUrl(server.BaseUrl)[..^"/v1".Length];
         var described = new Dictionary<string, ModelInfo>();
-        if (await GetJsonAsync(http, server, $"{root}/api/v1/models", ct).ConfigureAwait(false) is { } v1 && v1["models"] is JsonArray models)
+        // Anthropic's list says it all, and LM Studio's addresses there only answer "not found".
+        var lmStudio = !OpenAiChatClient.IsAnthropic(server.BaseUrl);
+        if (lmStudio && await GetJsonAsync(http, server, $"{root}/api/v1/models", ct).ConfigureAwait(false) is { } v1 && v1["models"] is JsonArray models)
         {
             foreach (var m in models.OfType<JsonObject>())
                 if (Str(m["key"]) is { } key)
                     described[key] = FromLmStudio(key, m);
         }
-        else if (await GetJsonAsync(http, server, $"{root}/api/v0/models", ct).ConfigureAwait(false) is { } v0 && v0["data"] is JsonArray data)
+        else if (lmStudio && await GetJsonAsync(http, server, $"{root}/api/v0/models", ct).ConfigureAwait(false) is { } v0 && v0["data"] is JsonArray data)
         {
             foreach (var m in data.OfType<JsonObject>())
                 if (Str(m["id"]) is { } id)
@@ -292,8 +305,14 @@ public static class ServerProbe
         var v1 = OpenAiChatClient.NormalizeBaseUrl(server.BaseUrl);
         var root = v1[..^"/v1".Length];
 
+        // Anthropic: its model list, in OpenAI style, says the context (max_input_tokens) and whether it takes pictures.
+        if (OpenAiChatClient.IsAnthropic(v1))
+        {
+            try { listed ??= await new OpenAiChatClient(http, server.BaseUrl, server.ApiKey).ListModelEntriesAsync(ct).ConfigureAwait(false); }
+            catch (Exception ex) when (ex is LlmException or HttpRequestException or IOException || ex is OperationCanceledException && !ct.IsCancellationRequested) { return default; }
+        }
         // LM Studio
-        if (await GetJsonAsync(http, server, $"{root}/api/v0/models/{Uri.EscapeDataString(model)}", ct).ConfigureAwait(false) is { } lms
+        else if (await GetJsonAsync(http, server, $"{root}/api/v0/models/{Uri.EscapeDataString(model)}", ct).ConfigureAwait(false) is { } lms
             && lms["state"] is JsonValue stateValue && stateValue.TryGetValue<string>(out var state))
         {
             // Only a loaded model has a real context length. max_context_length is what the model
@@ -302,16 +321,18 @@ public static class ServerProbe
             bool? vision = lms["type"] is JsonValue t && t.TryGetValue<string>(out var type) && type is "vlm" or "llm" ? type == "vlm" : null;
             return new ModelFacts(state == "loaded" ? Int(lms["loaded_context_length"]) : null, state == "loaded", vision);
         }
+        else
+        {
+            // llama.cpp llama-server; "modalities" (2025 on) says whether it runs with a vision projector.
+            // Taken to see without it, a model that can't refused every request after its first screenshot.
+            if (await GetJsonAsync(http, server, $"{root}/props", ct).ConfigureAwait(false) is { } props
+                && (Int(props["default_generation_settings"]?["n_ctx"]) ?? Int(props["n_ctx"])) is { } nctx)
+                return new ModelFacts(nctx, true, props["modalities"]?["vision"] is JsonValue projector && projector.TryGetValue<bool>(out var takesImages) ? takesImages : null);
 
-        // llama.cpp llama-server; "modalities" (2025 on) says whether it runs with a vision projector.
-        // Taken to see without it, a model that can't refused every request after its first screenshot.
-        if (await GetJsonAsync(http, server, $"{root}/props", ct).ConfigureAwait(false) is { } props
-            && (Int(props["default_generation_settings"]?["n_ctx"]) ?? Int(props["n_ctx"])) is { } nctx)
-            return new ModelFacts(nctx, true, props["modalities"]?["vision"] is JsonValue projector && projector.TryGetValue<bool>(out var takesImages) ? takesImages : null);
-
-        // Ollama: the context a model runs with is its num_ctx, not what the model could do.
-        if (await OllamaFactsAsync(http, server, root, ct).ConfigureAwait(false) is { } ollama)
-            return ollama;
+            // Ollama: the context a model runs with is its num_ctx, not what the model could do.
+            if (await OllamaFactsAsync(http, server, root, ct).ConfigureAwait(false) is { } ollama)
+                return ollama;
+        }
 
         // vLLM / OpenRouter style metadata on the model list
         listed ??= await GetJsonAsync(http, server, $"{v1}/models", ct).ConfigureAwait(false) is { } list && list["data"] is JsonArray data

@@ -1,0 +1,563 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:BlackBox.App.ViewModels"
+        xmlns:views="using:BlackBox.App.Views"
+        x:Class="BlackBox.App.Views.FilmWindow"
+        x:DataType="vm:FilmViewModel"
+        Title="Filmmaking"
+        Icon="/Assets/blackbox.ico"
+        Width="1440" Height="900" MinWidth="1000" MinHeight="640"
+        WindowStartupLocation="CenterScreen">
+
+  <Window.Styles>
+    <Style Selector="TextBlock.label">
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="TextBlock.row">
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="LetterSpacing" Value="0.6" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="12,0,0,0" />
+    </Style>
+    <Style Selector="TextBlock.error">
+      <Setter Property="Foreground" Value="{StaticResource BbError}" />
+    </Style>
+    <!-- A shot on the timeline; the one picked has the accent around it. -->
+    <Style Selector="Border.block">
+      <Setter Property="Background" Value="{StaticResource BbSurfaceRaised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Border.block.selected">
+      <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="Border.handle">
+      <Setter Property="Background" Value="#33E0A64B" />
+    </Style>
+    <Style Selector="Border.handle:pointerover">
+      <Setter Property="Background" Value="{StaticResource BbAccent}" />
+    </Style>
+    <Style Selector="Border.block.selected Border.handle">
+      <Setter Property="Background" Value="{StaticResource BbAccent}" />
+    </Style>
+    <Style Selector="Border.ref">
+      <Setter Property="Background" Value="#384FB3A9" />
+      <Setter Property="BorderBrush" Value="#994FB3A9" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="Border.ref.selected">
+      <Setter Property="Background" Value="#40E0A64B" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="Border.line">
+      <Setter Property="Background" Value="#29E0A64B" />
+      <Setter Property="BorderBrush" Value="#80E0A64B" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <!-- Something the user said, and what BlackBox said back. -->
+    <Style Selector="Border.mine">
+      <Setter Property="Background" Value="{StaticResource BbUserBubble}" />
+      <Setter Property="CornerRadius" Value="10,10,2,10" />
+      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="MaxWidth" Value="380" />
+    </Style>
+    <!-- What is picked on the timeline by a click: no look of a button's own. -->
+    <Style Selector="Button.pick">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="Button.pick /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.chip">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="Button.thumb">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.thumb /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.thumb">
+      <Setter Property="Background" Value="#0B0C0E" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Border.thumb.selected">
+      <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="Button.name">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+  </Window.Styles>
+
+  <Window.DataTemplates>
+    <!-- What the viewer shows: a clip or the film playing, the song, a frame's picture. -->
+    <DataTemplate DataType="vm:VideoPreview">
+      <DockPanel>
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+          <Button DockPanel.Dock="Left" Classes="ghost" Padding="8,4" Command="{Binding PlayCommand}" VerticalAlignment="Center" AutomationProperties.Name="Play or pause">
+            <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" />
+          </Button>
+          <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
+          <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" Margin="8,-8,0,-8" VerticalAlignment="Center" />
+        </DockPanel>
+        <Button Classes="thumb" Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause video" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+          <Panel Background="#000000">
+            <Image Source="{Binding Frame}" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+            <Border Width="56" Height="56" CornerRadius="28" Background="#B0000000" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !IsPlaying}">
+              <PathIcon Data="M8 5v14l11-7z" Width="22" Height="22" Foreground="White" />
+            </Border>
+          </Panel>
+        </Button>
+      </DockPanel>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:AudioPreview">
+      <DockPanel VerticalAlignment="Center" MaxWidth="640">
+        <Button DockPanel.Dock="Left" Width="40" Height="40" CornerRadius="20" Padding="0" Background="{StaticResource BbAccent}"
+                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                Command="{Binding PlayCommand}" VerticalAlignment="Center" AutomationProperties.Name="Play or pause sound">
+          <PathIcon Data="{Binding PlayIcon}" Width="16" Height="16" Foreground="#111214" />
+        </Button>
+        <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
+        <Panel Height="64" Margin="12,0,0,0">
+          <Image Source="{Binding Waveform}" Stretch="Fill" />
+          <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" VerticalAlignment="Center" Opacity="0.85" />
+        </Panel>
+      </DockPanel>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:PictureView">
+      <Border Classes="thumb" BorderThickness="1" Background="#15171A">
+        <Panel>
+          <Image Source="{Binding Picture}" Stretch="Uniform" />
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="520" Margin="24" IsVisible="{Binding Missing, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Text="{Binding Caption}" FontSize="16" HorizontalAlignment="Center" />
+            <TextBlock Classes="muted" Text="{Binding Missing}" TextWrapping="Wrap" TextAlignment="Center" />
+          </StackPanel>
+        </Panel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:FrameItem">
+      <Border Classes="thumb" Background="#000000">
+        <Panel>
+          <Image Source="{Binding Picture}" Stretch="Uniform" />
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="520" Margin="24" IsVisible="{Binding !IsMade}">
+            <TextBlock Text="{Binding Label}" FontSize="16" HorizontalAlignment="Center" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
+                       Text="Not made yet. Say in the panel what it shows, or make it as it is." />
+          </StackPanel>
+        </Panel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:ShotItem">
+      <Panel>
+        <ContentControl Content="{Binding Clip}" IsVisible="{Binding IsMade}" />
+        <Border Classes="thumb" Background="#000000" IsVisible="{Binding !IsMade}">
+          <Panel>
+            <Image Source="{Binding First.Picture, FallbackValue={x:Null}}" Stretch="Uniform" Opacity="0.45" />
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="520" Margin="24">
+              <TextBlock Text="{Binding Title, StringFormat='{}{0} is not made yet'}" FontSize="16" HorizontalAlignment="Center" />
+              <TextBlock Classes="muted" Text="{Binding Summary}" TextWrapping="Wrap" TextAlignment="Center" />
+            </StackPanel>
+          </Panel>
+        </Border>
+      </Panel>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:SoundItem">
+      <Border Classes="thumb" Background="#15171A" Padding="32">
+        <StackPanel VerticalAlignment="Center" Spacing="14">
+          <TextBlock Text="{Binding Title}" FontSize="16" HorizontalAlignment="Center" />
+          <ContentControl Content="{Binding Player}" HorizontalAlignment="Stretch" />
+          <TextBlock Classes="muted" Text="{Binding State}" HorizontalAlignment="Center" />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:JoinedFilm">
+      <ContentControl Content="{Binding Player}" />
+    </DataTemplate>
+  </Window.DataTemplates>
+
+  <DockPanel>
+    <!-- Which film. -->
+    <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,8">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+          <TextBlock Classes="muted" Text="{Binding LengthText}" VerticalAlignment="Center" Margin="0,0,6,0" />
+          <Button Classes="ghost" Content="Make what's missing" Command="{Binding MakeMissingCommand}"
+                  ToolTip.Tip="Makes every piece not made yet or changed since, one after another, looks at each, then joins the film" />
+          <Button Classes="primary" Content="Make the whole film" Command="{Binding MakeFilmCommand}"
+                  ToolTip.Tip="BlackBox makes the film in the chat: what isn't made, each shot checked and fixed, joined and checked" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="Filmmaking" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0" />
+          <ComboBox ItemsSource="{Binding Films}" SelectedItem="{Binding SelectedFilm}" Width="260" />
+          <Button Classes="ghost" Content="New film" Command="{Binding NewFilmCommand}" />
+          <Button Classes="ghost" Content="Open…" Click="OnOpenClick" ToolTip.Tip="Open a film's storyboard.json from another folder" />
+          <Button Classes="ghost" Content="Show folder" Command="{Binding ShowFolderCommand}" ToolTip.Tip="{Binding Folder}" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- The timeline: references, video and sound, under one scroll. -->
+    <Border DockPanel.Dock="Bottom" Background="#15171A" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0">
+      <DockPanel>
+        <Grid DockPanel.Dock="Top" Height="42" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="12,0">
+          <Button Width="32" Height="32" CornerRadius="16" Padding="0" Background="{StaticResource BbAccent}" VerticalAlignment="Center"
+                  HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                  Command="{Binding PlayStripCommand}" ToolTip.Tip="Play the soundtrack with each shot's frames from the playhead" AutomationProperties.Name="Play the storyboard">
+            <PathIcon Data="{Binding PlayIcon}" Width="13" Height="13" Foreground="#111214" />
+          </Button>
+          <TextBlock Grid.Column="1" Text="{Binding PlayTime}" FontFamily="Consolas, monospace" Foreground="{StaticResource BbAccent}" VerticalAlignment="Center" Margin="10,0,16,0" />
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <TextBlock Classes="label" Text="Zoom" VerticalAlignment="Center" Margin="0,0,4,0" />
+            <Button Classes="ghost" Content="−" Padding="10,2" Command="{Binding ZoomOutCommand}" ToolTip.Tip="See more of the film (Ctrl + wheel)" />
+            <Button Classes="ghost" Content="+" Padding="10,2" Command="{Binding ZoomInCommand}" ToolTip.Tip="See it closer (Ctrl + wheel)" />
+          </StackPanel>
+          <TextBlock Grid.Column="3" Classes="muted" Text="{Binding Status}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="16,0" FontSize="12" />
+          <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <TextBlock Classes="label" Text="Drag a shot's right edge to make it longer or shorter" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <Button Classes="ghost" Content="+ Shot" Command="{Binding AddShotCommand}" ToolTip.Tip="A shot after the last one; then say what happens in it" />
+            <Button Classes="ghost" Content="+ Reference" Command="{Binding AddReferenceCommand}" ToolTip.Tip="A character, place or thing to make frames from; then say what it is" />
+          </StackPanel>
+        </Grid>
+        <Grid ColumnDefinitions="176,*" Margin="0,0,0,4">
+          <!-- The rows' names stay put; what is right of them scrolls as one. -->
+          <Border BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,1,0">
+            <StackPanel>
+              <Border Height="26" />
+              <ItemsControl ItemsSource="{Binding RefLanes}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:RefLane">
+                    <Button Classes="name" Height="28" Click="OnRefNameClick" ToolTip.Tip="{Binding Frame.Prompt}">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Border Classes="thumb" Classes.selected="{Binding Frame.IsSelected}" Width="22" Height="22">
+                          <Image Source="{Binding Frame.Thumbnail}" Stretch="UniformToFill" />
+                        </Border>
+                        <TextBlock Text="{Binding Frame.Label}" VerticalAlignment="Center" MaxWidth="120" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <StackPanel Height="112" Margin="12,10,8,0" Spacing="4">
+                <TextBlock Text="Video" />
+                <TextBlock Classes="label" TextWrapping="Wrap" FontSize="11" Text="Each shot from its first frame to its last" />
+              </StackPanel>
+              <TextBlock Height="34" Text="Lines" Margin="12,9,0,0" />
+              <Button Classes="name" Height="56" Command="{Binding PickSongCommand}" Content="Sound" />
+            </StackPanel>
+          </Border>
+
+          <ScrollViewer x:Name="Timeline" Grid.Column="1" HorizontalScrollBarVisibility="Visible" VerticalScrollBarVisibility="Disabled"
+                        PointerWheelChanged="OnTimelineWheel">
+            <Panel Width="{Binding TimelineWidth}" HorizontalAlignment="Left" ClipToBounds="True">
+              <StackPanel>
+                <views:FilmRuler x:Name="Ruler" Height="26" Pps="{Binding Pps}" Length="{Binding Length}" Lead="{x:Static vm:FilmViewModel.Lead}" />
+                <ItemsControl ItemsSource="{Binding RefLanes}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:RefLane">
+                      <ItemsControl ItemsSource="{Binding Segments}" Height="28">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <Canvas />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.Styles>
+                          <Style Selector="ContentPresenter" x:DataType="vm:RefSegment">
+                            <Setter Property="Canvas.Left" Value="{Binding X}" />
+                            <Setter Property="Canvas.Top" Value="4" />
+                          </Style>
+                        </ItemsControl.Styles>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:RefSegment">
+                            <Button Classes="pick" Click="OnRefClick" ToolTip.Tip="{Binding Frame.Prompt}" AutomationProperties.Name="{Binding Text}">
+                              <Border Classes="ref" Classes.selected="{Binding Frame.IsSelected}" Width="{Binding Width}" Height="20" Cursor="Hand">
+                                <TextBlock Text="{Binding Text}" FontSize="11" VerticalAlignment="Center" Margin="8,0" TextTrimming="CharacterEllipsis" />
+                              </Border>
+                            </Button>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <ItemsControl ItemsSource="{Binding Shots}" Height="112">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <Canvas />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.Styles>
+                    <Style Selector="ContentPresenter" x:DataType="vm:ShotItem">
+                      <Setter Property="Canvas.Left" Value="{Binding X}" />
+                      <Setter Property="Canvas.Top" Value="4" />
+                    </Style>
+                  </ItemsControl.Styles>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ShotItem">
+                      <Button Classes="pick" Click="OnShotClick" ToolTip.Tip="{Binding Summary}" AutomationProperties.Name="{Binding Title}">
+                      <Border Classes="block" Classes.selected="{Binding IsSelected}" Width="{Binding BlockWidth}" Height="104" Cursor="Hand">
+                        <Panel>
+                          <DockPanel>
+                            <Grid DockPanel.Dock="Top" Height="20" ColumnDefinitions="Auto,*,Auto" Margin="7,0,10,0">
+                              <TextBlock Text="{Binding Number}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+                              <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" Margin="6,0" VerticalAlignment="Center" />
+                              <TextBlock Grid.Column="2" Text="{Binding LengthText}" Classes="muted" FontSize="12" VerticalAlignment="Center" />
+                            </Grid>
+                            <TextBlock DockPanel.Dock="Bottom" Height="18" Text="{Binding State}" FontSize="11" Margin="7,2,10,0" Classes="muted" Classes.error="{Binding IsError}" TextTrimming="CharacterEllipsis" />
+                            <Panel ClipToBounds="True">
+                              <Image Source="{Binding Strip}" Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Top" IsVisible="{Binding HasStrip}" />
+                              <Grid ColumnDefinitions="*,*" IsVisible="{Binding !HasStrip}" Opacity="0.65">
+                                <Image Source="{Binding First.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
+                                <Image Grid.Column="1" Source="{Binding Last.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
+                              </Grid>
+                              <TextBlock Text="{Binding Summary}" IsVisible="{Binding !IsMade}" Classes="muted" FontSize="11" TextWrapping="Wrap" Margin="7,2,8,0" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                            </Panel>
+                          </DockPanel>
+                          <Border Classes="handle" Width="7" HorizontalAlignment="Right" Cursor="SizeWestEast" ToolTip.Tip="Drag to make it longer or shorter"
+                                  PointerPressed="OnHandlePressed" PointerMoved="OnHandleMoved" PointerReleased="OnHandleReleased" />
+                        </Panel>
+                      </Border>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <ItemsControl ItemsSource="{Binding Lines}" Height="34">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <Canvas />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.Styles>
+                    <Style Selector="ContentPresenter" x:DataType="vm:LineItem">
+                      <Setter Property="Canvas.Left" Value="{Binding X}" />
+                      <Setter Property="Canvas.Top" Value="4" />
+                    </Style>
+                  </ItemsControl.Styles>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LineItem">
+                      <Button Classes="pick" Click="OnLineClick" ToolTip.Tip="{Binding Text}" AutomationProperties.Name="{Binding Text}">
+                        <Border Classes="line" Width="{Binding Width}" Height="26" Cursor="Hand">
+                          <TextBlock Text="{Binding Text}" FontSize="11" VerticalAlignment="Center" Margin="8,0" TextTrimming="CharacterEllipsis" />
+                        </Border>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <views:FilmWave x:Name="Wave" Height="56" Peaks="{Binding Peaks}" Seconds="{Binding SoundSeconds}" Pps="{Binding Pps}" Lead="{x:Static vm:FilmViewModel.Lead}"
+                                Length="{Binding Length}" Ducks="{Binding Ducks}" Label="{Binding SoundLabel}" IsPicked="{Binding IsSongPicked}" Cursor="Hand" />
+              </StackPanel>
+              <!-- The playhead, through every row. -->
+              <Canvas IsHitTestVisible="False">
+                <Rectangle Canvas.Left="{Binding PlayheadX}" Width="2" Height="2000" Fill="{StaticResource BbAccent}" />
+              </Canvas>
+            </Panel>
+          </ScrollViewer>
+        </Grid>
+      </DockPanel>
+    </Border>
+
+    <!-- The viewer, and the panel to tell BlackBox what to do. -->
+    <Grid ColumnDefinitions="*,470">
+      <DockPanel Margin="16,14,16,12">
+        <Panel>
+          <ContentControl Content="{Binding Viewer}" IsVisible="{Binding !IsPlaying}" />
+          <Border Classes="thumb" Background="#000000" IsVisible="{Binding IsPlaying}">
+            <Panel>
+              <Image Source="{Binding PlayFrame}" Stretch="Uniform" />
+              <Border Background="#B0000000" VerticalAlignment="Bottom" HorizontalAlignment="Left" Padding="8,3" Margin="10" CornerRadius="4">
+                <TextBlock Text="{Binding PlayLabel}" FontSize="12" />
+              </Border>
+            </Panel>
+          </Border>
+        </Panel>
+      </DockPanel>
+
+      <Border Grid.Column="1" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="1,0,0,0">
+        <DockPanel>
+          <!-- What is picked. -->
+          <Border DockPanel.Dock="Top" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,10">
+            <StackPanel Spacing="4">
+              <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Classes="muted" Classes.error="{Binding PickedShot.IsError, FallbackValue=False}" FontSize="12" VerticalAlignment="Center"
+                           Text="{Binding PickedShot.State, FallbackValue=''}" IsVisible="{Binding IsShotPicked}" MaxWidth="180" TextTrimming="CharacterEllipsis" />
+                <TextBlock DockPanel.Dock="Right" Classes="muted" FontSize="12" VerticalAlignment="Center"
+                           Text="{Binding PickedFrame.State, FallbackValue=''}" IsVisible="{Binding IsFramePicked}" MaxWidth="180" TextTrimming="CharacterEllipsis" />
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Button Classes="ghost" Content="Whole film" Padding="6,2" Command="{Binding PickFilmCommand}" IsVisible="{Binding !IsFilmPicked}" />
+                  <TextBlock Classes="muted" Text="›" VerticalAlignment="Center" IsVisible="{Binding !IsFilmPicked}" />
+                  <TextBlock Text="{Binding PanelTitle}" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" />
+                </StackPanel>
+              </DockPanel>
+              <TextBlock Classes="muted" Text="{Binding PanelSubtitle}" FontSize="12" TextWrapping="Wrap" />
+              <!-- A shot's frames, to pick and change on their own. -->
+              <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsShotPicked}" Margin="0,6,0,0">
+                <Button Classes="thumb" Click="OnPickFirstFrame" ToolTip.Tip="The frame it starts on: pick it to change it" IsVisible="{Binding PickedShot.First, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}">
+                  <StackPanel Spacing="2">
+                    <Border Classes="thumb" Width="96" Height="54">
+                      <Image Source="{Binding PickedShot.First.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
+                    </Border>
+                    <TextBlock Classes="label" Text="Starts on" FontSize="11" />
+                  </StackPanel>
+                </Button>
+                <Button Classes="thumb" Click="OnPickLastFrame" ToolTip.Tip="The frame it ends on: pick it to change it" IsVisible="{Binding PickedShot.EndsOnFrame, FallbackValue=False}">
+                  <StackPanel Spacing="2">
+                    <Border Classes="thumb" Width="96" Height="54">
+                      <Image Source="{Binding PickedShot.Last.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
+                    </Border>
+                    <TextBlock Classes="label" Text="Ends on" FontSize="11" />
+                  </StackPanel>
+                </Button>
+                <StackPanel VerticalAlignment="Center" Spacing="4" Margin="6,0,0,0">
+                  <Button Classes="chip" Content="◀ Earlier" Command="{Binding MoveEarlierCommand}" />
+                  <Button Classes="chip" Content="Later ▶" Command="{Binding MoveLaterCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <!-- Telling BlackBox. -->
+          <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0" Padding="14,10,14,12">
+            <StackPanel Spacing="8">
+              <!-- How BlackBox asked for the piece: the prompt and settings it wrote, to look at, not to edit. -->
+              <Border Classes="card" Padding="10,8" IsVisible="{Binding DetailsVisible}">
+                <StackPanel Spacing="6">
+                  <SelectableTextBlock Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" FontSize="12" MaxHeight="160" />
+                  <TextBlock Classes="muted" Text="{Binding MadeWith}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding MadeWith, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </StackPanel>
+              </Border>
+              <ItemsControl ItemsSource="{Binding Takes}" IsVisible="{Binding HasTakes}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:TakeItem">
+                    <Button Classes="thumb" Margin="0,0,8,4" Command="{Binding $parent[Window].((vm:FilmViewModel)DataContext).UseTakeCommand}" CommandParameter="{Binding}"
+                            ToolTip.Tip="Put this take in the film (the one in it now is kept as a take)">
+                      <StackPanel Spacing="2">
+                        <Border Classes="thumb" Classes.selected="{Binding InFilm}" Width="80" Height="45">
+                          <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                        </Border>
+                        <TextBlock Classes="label" Text="{Binding Label}" FontSize="11" HorizontalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Classes="label" Text="{Binding AskLabel}" />
+              <DockPanel>
+                <Panel DockPanel.Dock="Right" Margin="8,0,0,0" VerticalAlignment="Bottom">
+                  <Button Width="44" Height="44" CornerRadius="8" Padding="0" Background="{StaticResource BbAccent}" Command="{Binding SendCommand}" IsVisible="{Binding !IsWorking}"
+                          HorizontalContentAlignment="Center" VerticalContentAlignment="Center" AutomationProperties.Name="Send" ToolTip.Tip="Send (Enter)">
+                    <PathIcon Data="M5 12h14M13 6l6 6-6 6" Width="18" Height="18" Foreground="#111214" />
+                  </Button>
+                  <Button Width="44" Height="44" CornerRadius="8" Padding="0" Command="{Binding StopCommand}" IsVisible="{Binding IsWorking}"
+                          HorizontalContentAlignment="Center" VerticalContentAlignment="Center" AutomationProperties.Name="Stop" ToolTip.Tip="Stop what BlackBox is doing">
+                    <PathIcon Data="M6 6h12v12H6z" Width="14" Height="14" />
+                  </Button>
+                </Panel>
+                <TextBox x:Name="Ask" AutomationProperties.Name="What to tell BlackBox" Text="{Binding Request}" Watermark="{Binding AskHint}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44" MaxHeight="140"
+                         KeyDown="OnAskKeyDown" />
+              </DockPanel>
+              <WrapPanel>
+                <Button Classes="chip" Margin="0,0,6,6" Content="Make it" Command="{Binding MakePickedCommand}" IsVisible="{Binding !IsFilmPicked}" ToolTip.Tip="Make it as it is now" />
+                <Button Classes="chip" Margin="0,0,6,6" Content="Another take" Command="{Binding AnotherTakeCommand}" IsVisible="{Binding !IsFilmPicked}" ToolTip.Tip="The same, with a new seed; the one there now is kept as a take" />
+                <Button Classes="chip" Margin="0,0,6,6" Content="Look at it again" Command="{Binding CheckAgainCommand}" IsVisible="{Binding !IsFilmPicked}" />
+                <Button Classes="chip" Margin="0,0,6,6" Content="Use a picture of mine…" Click="OnPickPicture" IsVisible="{Binding IsFramePicked}" />
+                <Button Classes="chip" Margin="0,0,6,6" Content="Use a sound file of mine…" Click="OnPickSound" IsVisible="{Binding IsSongPicked}" />
+                <Button Classes="chip" Margin="0,0,6,6" Content="How it was asked" Command="{Binding ToggleDetailsCommand}" IsVisible="{Binding !IsFilmPicked}" />
+                <Button Classes="chip" Margin="0,0,6,6" Content="Delete it" Command="{Binding DeletePickedCommand}" IsVisible="{Binding CanDelete}" />
+                <Button Classes="chip" Margin="0,0,6,6" Content="Make what's missing" Command="{Binding MakeMissingCommand}" IsVisible="{Binding IsFilmPicked}" />
+                <Button Classes="chip" Margin="0,0,6,6" Content="Join the clips" Command="{Binding JoinCommand}" IsVisible="{Binding IsFilmPicked}" ToolTip.Tip="Puts the clips made so far together with the soundtrack" />
+                <Button Classes="chip" Margin="0,0,6,6" Content="Look at the film" Command="{Binding LookAtFilmCommand}" IsVisible="{Binding IsFilmPicked}" ToolTip.Tip="Looks at the joined film's shots side by side and at each cut, and fixes what it finds" />
+              </WrapPanel>
+              <Expander Header="The film's size, frame rate and sound levels" IsVisible="{Binding IsFilmPicked}" HorizontalAlignment="Stretch" Padding="0,6,0,0">
+                <StackPanel Spacing="8">
+                  <DockPanel>
+                    <TextBlock Classes="label" Text="Title" Width="90" VerticalAlignment="Center" />
+                    <TextBox Text="{Binding Title}" />
+                  </DockPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Classes="label" Text="Frame" Width="90" VerticalAlignment="Center" />
+                    <NumericUpDown Value="{Binding FrameWidth}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="80" ShowButtonSpinner="False" />
+                    <TextBlock Text="×" VerticalAlignment="Center" />
+                    <NumericUpDown Value="{Binding FrameHeight}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="80" ShowButtonSpinner="False" />
+                    <NumericUpDown Value="{Binding Fps}" Minimum="1" Maximum="120" Increment="1" FormatString="0" Width="56" Margin="8,0,0,0" ShowButtonSpinner="False" />
+                    <TextBlock Classes="muted" Text="fps" VerticalAlignment="Center" />
+                  </StackPanel>
+                  <DockPanel>
+                    <TextBlock Classes="label" Text="Soundtrack" Width="90" VerticalAlignment="Center" />
+                    <Slider Minimum="0" Maximum="150" Value="{Binding SoundVolume}" />
+                  </DockPanel>
+                  <DockPanel>
+                    <TextBlock Classes="label" Text="Shots' own sound" Width="90" VerticalAlignment="Center" TextWrapping="Wrap" />
+                    <Slider Minimum="0" Maximum="150" Value="{Binding ShotVolume}" />
+                  </DockPanel>
+                </StackPanel>
+              </Expander>
+            </StackPanel>
+          </Border>
+
+          <!-- What was said about it. -->
+          <ScrollViewer x:Name="TalkScroll" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="10" Margin="14,10">
+              <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding NoTalk}"
+                         Text="Say what you want in plain words: BlackBox writes the prompts, picks the models, makes it and looks at it. Nothing else in the film changes." />
+              <ItemsControl ItemsSource="{Binding Talk}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:TalkItem">
+                    <Panel Margin="0,0,0,10">
+                      <Border Classes="mine" IsVisible="{Binding Mine}">
+                        <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                      </Border>
+                      <StackPanel Spacing="3" IsVisible="{Binding !Mine}" MaxWidth="420" HorizontalAlignment="Left">
+                        <TextBlock Text="BlackBox" Foreground="{StaticResource BbAccent}" FontSize="12" FontWeight="SemiBold" />
+                        <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                        <ProgressBar IsIndeterminate="True" Height="3" MinHeight="3" Width="200" HorizontalAlignment="Left" IsVisible="{Binding Working}" />
+                      </StackPanel>
+                    </Panel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
+</Window>

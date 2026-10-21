@@ -25,6 +25,7 @@ public static class AgentSetup
             Settings = agent,
             WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             CoordinateGrid = ModelCoordinates.GridFor(backend.Options.Model),
+            MaxScreenshotSide = OpenAiChatClient.IsAnthropic(backend.Client.BaseUrl) ? ClaudeModel.FromName(backend.Options.Model).ScreenshotSide : null,
             SeesImages = backend.Vision,
             UserComposing = userComposing,
             Browser = HeadlessBrowser.Find(paths.BrowserProfileDir),
@@ -33,6 +34,8 @@ public static class AgentSetup
             Comfy = comfy,
             Media = Media.MediaDecoders.Create(platform, paths, comfy),
             ScratchDirectory = paths.ScratchDir,
+            FilmsDirectory = paths.FilmsDir,
+            ToolsDirectory = paths.ToolsDir,
         };
 
         // A model that can't see gets no screen tools, nor does an OS without desktop control.

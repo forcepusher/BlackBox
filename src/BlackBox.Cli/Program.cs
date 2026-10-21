@@ -106,7 +106,9 @@ try
             ? $"[server] the server doesn't offer {settings.Server.Model}: using {probe.Model}{details}, the strongest it offers"
             : probe.Model == KiloGateway.Model && KiloGateway.Is(probe.BaseUrl)
                 ? $"[server] no model picked: using {probe.Model}, the free model on Kilo that clicked best in BlackBox's tests"
-                : $"[server] no model picked: using {probe.Model}{details}, the strongest the server offers");
+                : OpenAiChatClient.IsAnthropic(probe.BaseUrl)
+                    ? $"[server] no model picked: using {probe.Model}" + (probe.Model == AnthropicMessages.DefaultModel ? ", Anthropic's recommended model" : ", the newest Opus, Sonnet or Haiku the key may use")
+                    : $"[server] no model picked: using {probe.Model}{details}, the strongest the server offers");
     }
     settings.Server.SupportsVision = probe.Vision ?? true;
     var facts = await ServerProbe.EnsureLoadedAsync(probeHttp, settings.Server, () => Console.WriteLine("[server] loading the model…"), cts.Token,
