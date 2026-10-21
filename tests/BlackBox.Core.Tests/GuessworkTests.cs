@@ -329,6 +329,12 @@ public class GuessworkTests
         guesswork.StartRun("Dude it's still a kid, not an adult");
         Assert.Equal(Guesswork.UserDoubtNote, guesswork.Check(new ReadFileTool(), new ToolResult("refsheet.png")));
 
+        // What a video does wrong, in the model's words after a look or a measurement.
+        Assert.True(Guesswork.SaysItFailed("The measurement says the ball moves right to left, the opposite of what was asked."));
+        Assert.True(Guesswork.SaysItFailed("The bunny barely moves in the whole clip."));
+        Assert.True(Guesswork.SaysItFailed("The ball rolls the wrong way."));
+        Assert.False(Guesswork.SaysItFailed("The ball rolls from left to right, as asked, and the camera stays still."));
+
         // Saying what it should have done is saying it isn't right.
         Assert.True(Guesswork.UserDoubts("The text fades in from black; it should fade from transparent, with the blue showing through."));
         Assert.False(Guesswork.UserDoubts("Great, now make a version 10 seconds long."));

@@ -402,14 +402,24 @@ public partial class MainWindow : Window
             OpenViewer(tool);
     }
 
+    /// <summary>A picture under the box, waiting to go with the next message: full screen on its own.</summary>
+    private void OnComposerPictureReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (e.InitialPressMouseButton == MouseButton.Left && (sender as Control)?.DataContext is AttachmentItem attachment)
+            OpenViewer(attachment);
+    }
+
     /// <summary>
     /// Shows <paramref name="source"/> full screen on the chat's screen, with the chat's other pictures
-    /// and videos to go through; false when it is none of those. The chat's videos hold still meanwhile.
+    /// and videos to go through (a picture not yet sent, on its own); false when it is no picture or
+    /// video. The chat's videos hold still meanwhile.
     /// </summary>
     private bool OpenViewer(object source)
     {
         var entries = Vm.MediaInChat();
         var index = entries.FindIndex(e => ReferenceEquals(e.Source, source));
+        if (index < 0 && source is AttachmentItem { Path: var path } attachment && MainWindowViewModel.Viewable(path))
+            (entries, index) = ([new MediaEntry(attachment, path, null, attachment.FileName)], 0);
         if (index < 0 || (Screens.ScreenFromWindow(this) ?? Screens.Primary) is not { } screen)
             return false;
         _viewer?.Close();

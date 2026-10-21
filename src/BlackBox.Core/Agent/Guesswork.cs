@@ -477,7 +477,9 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
                     @"\bno (visible )?(change|effect|difference|improvement|motion|movement) (in|at all|to|from)\b|\b(had|has|made|makes) no (effect|difference)\b|" +
                     @"\bnot what (i|we|the user|they|you) (wanted|asked|expected|intended|meant)\b|" +
                     @"\b(try|use|need) (a |an )?(different|another|other|new) (approach|way|method|node|workflow|technique|strategy)\b|" +
-                    @"\b(that|this|it) (failed|did not work|didn't work|doesn't work)\b|\bfailed (again|to (work|follow|move|change))\b",
+                    @"\b(that|this|it) (failed|did not work|didn't work|doesn't work)\b|\bfailed (again|to (work|follow|move|change))\b|" +
+                    // What a video does wrong, as a look or a measurement shows it: "rolls the wrong way", "barely moves".
+                    @"\b(wrong|opposite) (direction|way|side)\b|\bopposite of what\b|\b(barely|hardly) (moves?|moving|changes?)\b|\b(is|stays|looks) (static|frozen)\b",
         RegexOptions.IgnoreCase)]
     private static partial Regex Doubts();
 

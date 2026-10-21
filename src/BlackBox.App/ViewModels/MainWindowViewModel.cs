@@ -172,7 +172,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         return all;
     }
 
-    private static bool Viewable(string path) => Core.Media.MediaPreview.KindOf(path) is "image" or "animation" or "video" && !Directory.Exists(path);
+    /// <summary>A picture, animation or video the full-screen viewer shows.</summary>
+    public static bool Viewable(string path) => Core.Media.MediaPreview.KindOf(path) is "image" or "animation" or "video" && !Directory.Exists(path);
 
     public void OnStartup()
     {

@@ -732,7 +732,8 @@
                         <MenuItem Header="Copy" Click="OnCopyPicture" />
                       </ContextMenu>
                     </Panel.ContextMenu>
-                    <Border Classes="attachment" IsVisible="{Binding !ShowsName}">
+                    <!-- A click on the picture shows it full screen, as one in the chat. -->
+                    <Border Classes="attachment" IsVisible="{Binding !ShowsName}" Cursor="Hand" PointerReleased="OnComposerPictureReleased" AutomationProperties.Name="{Binding FileName}">
                       <Image Source="{Binding Thumbnail}" Height="64" MaxWidth="160" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
                     </Border>
                     <Border Classes="attachment file" IsVisible="{Binding ShowsName}" MinHeight="36">
