@@ -60,6 +60,8 @@ whatever they leave open, so say what moves, which way, how far, and what stays 
 - Say how far and how fast: "two slow steps", "raises his hand to shoulder height", "slowly, over
   the whole shot".
 - Keep paths simple. A sudden change of direction comes out unnatural.
+- Name a side of the body by where it is in the picture: "the arm on the left side of the picture
+  (his right arm)". Told "raises his right arm", both Qwen-Image-Edit and LTX raised the wrong one.
 
 ## Poses and bodies
 - Describe the pose at the start (as the picture shows it) and the pose at the end: "she starts
@@ -97,13 +99,31 @@ whatever they leave open, so say what moves, which way, how far, and what stays 
 - Change the prompt first; a new seed alone repeats the same mistake.
 
 ## Exact motion: tracks and controls
-- For a path the subject must follow, the Motion Control IC-LoRA (ComfyUI-LTXVideo's LTX Sparse
-  Track Editor, LTX Draw Tracks and LTXAddVideoICLoRAGuide nodes; file
-  ltx-2.3-22b-ic-lora-motion-track-control-ref0.5.safetensors in models/loras, strength 1.0;
-  workflow LTX-2.5_ICLoRA_Motion_Track_Distilled.json) follows tracks drawn on the first frame.
-  3 or 4 points a track, plausible paths. With tracks, the prompt describes the look, not the
-  movement.
-- Pose, depth or edges from a reference video: the Union Control IC-LoRA.
+- When the prompt gets the direction or the distance wrong, give it motion tracks: the Motion
+  Control IC-LoRA (ComfyUI-LTXVideo's LTX Sparse Track Editor, LTX Draw Tracks and
+  LTXAddVideoICLoRAGuide nodes; ltx-2.3-22b-ic-lora-motion-track-control-ref0.5.safetensors in
+  models/loras, strength 1.0) follows tracks on the first frame: LTXVSparseTrackEditor's
+  points_store, points in the picture's pixels spread evenly over the clip, 3 or 4 a track, on
+  plausible paths (two tracks, head and chest, were enough). Told only "walks toward the left edge
+  of the frame", a bunny walked at the camera, grew huge and became someone else; with the tracks
+  he turned side-on and walked left at the same size. Where the prompt already works (a sip from a
+  mug), tracks only set the timing. With tracks, the prompt describes the look, not the movement.
+- A pose at a set moment: a guide in the middle (LTXVAddGuide, strength 1, frame index = the
+  moment's share of the clip × (frames − 1)) between the same first and last picture.
+- Exact poses and timing from a reference video: the Union Control IC-LoRA
+  (ltx-2.3-22b-ic-lora-union-control-ref0.5) with skeletons from ComfyUI's own SDPose nodes
+  (SDPoseKeypointExtractor, SDPoseDrawKeypoints; sdpose_wholebody_fp16). It copied a wave and its
+  timing exactly. For a cartoon or animal character, make the reference video from a realistic
+  human in the same pose and framing (Qwen-Image-Edit, then LTX): LTX moves real people better.
+- The IC-LoRAs need the picture's sides to be multiples of 64, not 32: a 736 px height failed in
+  LTXAddVideoICLoRAGuide.
+- A loop: the same picture as the first frame (in place, strength 1) and as the last-frame guide
+  (strength 1), then the last 8 frames crossfaded into the first 8 (an eased SolidMask ramp through
+  ImageCompositeMasked) and the sound's ends faded and merged. Without the crossfade the motion
+  slows almost to a stop around the seam.
+- The user's templates for these, in their saved workflows under Templates/Video/LTX/Custom:
+  video_furry_ltx2_5_flf2v (first and last frames, the first in place), _loop, _motion_tracks and
+  _pose.
 
 ## Settings
 - Distilled LTX runs about 8 steps with CFG near 1; a higher CFG doesn't help. Frames are 1 plus a

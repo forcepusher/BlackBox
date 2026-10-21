@@ -228,7 +228,11 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   nothing at the distilled templates' CFG 1, and a first frame put in place
   (`LTXVImgToVideoInplace` at 0.7) starts moving where a frame-0 guide holds. It comes with the
   first LTX template viewed or run in a task, and the film director writes shots by it (shots as
-  long as their action, 2 to 8 s). Asked in a chat for "a 5 second video of a red fox trotting from
+  long as their action, 2 to 8 s). Its section on exact motion has the template thread's results
+  too: motion tracks that fixed a bunny walking at the camera where the prompt said left, a middle
+  guide for a pose at a set moment, the Union Control IC-LoRA with SDPose skeletons copying a wave,
+  sides in multiples of 64 for IC-LoRAs, a loop recipe, and naming an arm by the side of the picture
+  it is on (told "his right arm", both Qwen-Image-Edit and LTX raised the left). Asked in a chat for "a 5 second video of a red fox trotting from
   the left side of the frame to the right across a snowy field at dawn", qwen3.8 looked at the
   image-to-video template (and with it the guide), made the fox at the left third facing right with
   Z-Image Turbo, wrote the prompt by the guide (locked-off camera, which way, all four paws on the
