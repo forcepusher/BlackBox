@@ -415,8 +415,11 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         RegexOptions.IgnoreCase)]
     private static partial Regex Doubts();
 
-    // What else a user writes when a result isn't right: "Dude it's still ...", "wrong again", "nope".
-    [GeneratedRegex(@"\bstill\b|\b(wrong|worse|nope|not right|isn't right|no good|try again|redo it|start over)\b", RegexOptions.IgnoreCase)]
+    // What else a user writes when a result isn't right: "Dude it's still ...", "wrong again", "nope",
+    // or what it should have done: "it should fade from transparent", "it was supposed to move".
+    [GeneratedRegex(@"\bstill\b|\b(wrong|worse|nope|not right|isn't right|no good|try again|redo it|start over)\b|" +
+                    @"\b(it|they|that|this|he|she) (should|shouldn't|should not|was supposed to|were supposed to|is supposed to)\b|\binstead of\b",
+        RegexOptions.IgnoreCase)]
     private static partial Regex UserSaysWrong();
 
     // A question about how something is done, what it is called, which one does it, whether it exists.

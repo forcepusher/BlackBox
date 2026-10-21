@@ -264,6 +264,10 @@ public class GuessworkTests
         guesswork.StartRun("Dude it's still a kid, not an adult");
         Assert.Equal(Guesswork.UserDoubtNote, guesswork.Check(new ReadFileTool(), new ToolResult("refsheet.png")));
 
+        // Saying what it should have done is saying it isn't right.
+        Assert.True(Guesswork.UserDoubts("The text fades in from black; it should fade from transparent, with the blue showing through."));
+        Assert.False(Guesswork.UserDoubts("Great, now make a version 10 seconds long."));
+
         // Without a try before it, a message is a new task, whatever it says.
         var fresh = new Guesswork();
         fresh.StartRun("My printer doesn't work, fix it");
