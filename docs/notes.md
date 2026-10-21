@@ -625,7 +625,9 @@ the floating take; the sliding moon), the movement look asked for a redo on all 
 and passed the jaw opening as asked; without the measurement it passed the head
 going down. It also failed the fixed shot 1, whose fox looks up and then back down, which nothing
 asked for. With the measurement the steadiness look named the user's fault in its words: "the fox
-floats upward off the snow".
+floats upward off the snow". On the spaghetti take whose last 2.5 s of the man frozen face-down in
+his plate both earlier questions missed, the behaviour look now asks for a redo with or without the
+measurement ("freezes in a bent-double, head-in-the-plate pose from ~1.9 s to 4.0 s").
 
 **Pictures first, LTX's sounds, the song's music.** Every shot starts on a frame a picture model
 makes: a shot written without one gets one from its words and the references of the frames near it
