@@ -223,8 +223,12 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   BlackBox's takes: say which way things move on screen, from where to where, how far, which body
   part, what stays still, who holds what; one main action per 3 to 4 seconds; the camera move named
   first; how to fix a take that went wrong; motion tracks (the Motion Control IC-LoRA) when a path
-  must be followed exactly. It comes with the first LTX template viewed or run in a task, and the
-  film director writes shots by it. Asked in a chat for "a 5 second video of a red fox trotting from
+  must be followed exactly; and, from the LTX template thread's tests: a clip longer than its action
+  holds the opening pose (a wave timed at 3 s stood still 3 s in a 5 s clip), a negative prompt does
+  nothing at the distilled templates' CFG 1, and a first frame put in place
+  (`LTXVImgToVideoInplace` at 0.7) starts moving where a frame-0 guide holds. It comes with the
+  first LTX template viewed or run in a task, and the film director writes shots by it (shots as
+  long as their action, 2 to 8 s). Asked in a chat for "a 5 second video of a red fox trotting from
   the left side of the frame to the right across a snowy field at dawn", qwen3.8 looked at the
   image-to-video template (and with it the guide), made the fox at the left third facing right with
   Z-Image Turbo, wrote the prompt by the guide (locked-off camera, which way, all four paws on the
