@@ -246,6 +246,40 @@ public class GuessworkTests
     }
 
     [Fact]
+    public void An_error_the_model_was_told_to_look_up_and_didnt_is_searched_for_it()
+    {
+        var guesswork = new Guesswork();
+        guesswork.StartRun("Make scatter.blend with Blender 5.2");
+        var failed = ToolResult.Error("Exit code 1\nTraceback (most recent call last):\n  File \"C:\\Users\\user\\BlackBox\\Data\\scratch\\scatter.py\", line 9, in <module>\n" +
+                                      "RuntimeError: Error: Node type GeometryNodeDistributePointsInFaces undefined");
+        Assert.Equal(Guesswork.NameNote, guesswork.Check(Shell, failed));
+
+        // It went on with another script: the error is searched, once.
+        guesswork.Read(Reply("Let me try another name."), [Shell]);
+        Assert.Equal("RuntimeError: Error: Node type GeometryNodeDistributePointsInFaces undefined", guesswork.Question);
+        Assert.True(guesswork.QuestionIsError);
+        guesswork.Searched(guesswork.Question!);
+        Assert.Null(guesswork.Check(Shell, new ToolResult("Exit code 0")));
+        guesswork.Read(Reply("Next step."), [Shell]);
+        Assert.Null(guesswork.Question);
+
+        // One that looks it up itself is left to it.
+        var searching = new Guesswork();
+        searching.StartRun("Make scatter.blend with Blender 5.2");
+        Assert.Equal(Guesswork.NameNote, searching.Check(Shell, failed));
+        searching.Read(Reply("Let me search for it."), [new WebSearchTool()]);
+        Assert.Null(searching.Question);
+        Assert.Null(searching.Check(new WebSearchTool(), new ToolResult("1. Distribute Points on Faces")));
+        searching.Read(Reply("Now the script."), [Shell]);
+        Assert.Null(searching.Question);
+    }
+
+    [Fact]
+    public void An_error_is_searched_without_the_paths_in_it() =>
+        Assert.Equal("FileNotFoundError: [Errno 2] No such file or directory: ''",
+            Guesswork.ErrorQuery(@"FileNotFoundError: [Errno 2] No such file or directory: 'C:\Users\user\BlackBox\Data\scratch\scatter.blend'"));
+
+    [Fact]
     public void A_try_the_model_calls_wrong_counts_as_a_failed_one()
     {
         var guesswork = new Guesswork();

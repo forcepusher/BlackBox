@@ -1041,7 +1041,12 @@ it checked; a check that doesn't show what the user asked for means the task isn
 Building a geometry nodes graph in Blender, Nemotron twice said "done" with no cubes in the scene:
 every script had run, but the modifier's density was left at 0. Told only to check, it rendered
 the scene three times, saw it empty, and put that down to the lights. It is a guideline in the
-system prompt, not a request of BlackBox's after the answer, which read to the user as a bug.
+system prompt, not a request of BlackBox's after the answer, which read to the user as a bug. Made
+from the command line, Nemotron then "fully verified" its scene by printing every node and link
+(the group had no Geometry input, so not one cube was made), so the check is to measure what the
+result does, not that its parts are set up as planned. Told that, it counted what the scene held
+once worked out, found nothing, and put it down to Blender run in the background: still explained
+away, but measured.
 
 With several monitors the agent sees one at a time: screenshots show the screen it looked at last
 (the primary at first) and `screen=N` switches. All coordinates refer to the screen in the latest
@@ -1144,7 +1149,9 @@ things up is now something BlackBox makes happen, not only asks for:
   screen, the user or how a result looks are left alone, as are ones that name nothing ("How should
   I proceed?"), a question like one searched before, and any for a few calls after a look-up, while
   the model reads. Without a program's name the search adds the one the step drives (ComfyUI, an
-  MCP server's name) or the one the request names with its version ("Blender 5.2").
+  MCP server's name) or the one the request names with its version ("Blender 5.2"). So is an error
+  whose note said to look it up when the model's next step goes on without doing so (without the
+  paths in it): Nemotron failed 13 of 29 Blender scripts, many with that note, and never searched.
 - A try the model itself calls wrong ("still doesn't follow the dance", "no change in the motion",
   "I need a different approach") counts as a failed one, as does the user's next message saying the
   result isn't right ("Dude it's still a kid", "it should fade from transparent"): the first such failure before anything was looked

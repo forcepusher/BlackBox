@@ -611,6 +611,7 @@ public sealed partial class AgentSession(
         var subject = called.OfType<McpTool>().Select(t => t.ServerName).FirstOrDefault() ??
                       (called.Any(t => t is ComfyTool or FilmTool) ? "ComfyUI" : guesswork.Subject);
         var query = Guesswork.Query(question, subject);
+        var error = guesswork.QuestionIsError;
         guesswork.Searched(question);
         IReadOnlyList<Web.SearchHit> hits;
         try
@@ -624,8 +625,8 @@ public sealed partial class AgentSession(
         }
         if (hits.Count == 0)
             return;
-        observer.OnNotice($"Looked up on the web what the model asked itself: {query}");
-        last.Content += "\n" + Guesswork.Found(question, hits);
+        observer.OnNotice(error ? $"Looked up on the web the error the model went on without looking up: {query}" : $"Looked up on the web what the model asked itself: {query}");
+        last.Content += "\n" + Guesswork.Found(question, hits, error);
     }
 
     /// <param name="ct">The run's: Stop and Pause/Break.</param>

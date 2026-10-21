@@ -136,7 +136,9 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     /// </summary>
     public void Read(ChatMessage reply, IReadOnlyList<Tool?> calls)
     {
-        Question = null;
+        (Question, QuestionIsError) = (null, false);
+        if (calls.Any(t => t is WebSearchTool or FetchPageTool))
+            _noted = null;
         if (calls.Count == 0 || calls.Any(t => t is WebSearchTool or FetchPageTool))
             return;
         var text = reply.Reasoning + "\n" + reply.Content;
@@ -148,7 +150,18 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         }
         if (_calls - _lookedUpAt >= SearchGap && QuestionIn(text) is { } question && !SearchedBefore(question))
             Question = question;
+        // Told to look an error up, the model went on without it: Nemotron failed 13 of 29 Blender
+        // scripts with a note on many of them and never searched. The error is searched for it.
+        else if (_noted is { } error && !SearchedBefore(error))
+            (Question, QuestionIsError) = (error, true);
+        _noted = null;
     }
+
+    /// <summary>Whether <see cref="Question"/> is an error the model was told to look up and didn't.</summary>
+    public bool QuestionIsError { get; private set; }
+
+    /// <summary>The error line of the last failure whose note said to look it up, until the model does.</summary>
+    private string? _noted;
 
     /// <summary>The question was searched for the model: not again, and the clock starts over.</summary>
     public void Searched(string question)
@@ -170,7 +183,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         if (tool is WebSearchTool or FetchPageTool)
         {
             _failures.Clear();
-            (_lookedUp, _worked, _triesSince, _lookedUpAt, _pending) = (true, TimeSpan.Zero, 0, _calls, null);
+            (_lookedUp, _worked, _triesSince, _lookedUpAt, _pending, _noted) = (true, TimeSpan.Zero, 0, _calls, null, null);
             return null;
         }
         // Reading the installed version's own API (inspect.signature, --help) is looking it up too.
@@ -197,18 +210,18 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         var signature = Signature(line);
         var count = _seen[signature] = _seen.GetValueOrDefault(signature) + 1;
         var failed = Failed(count);
-        if (failed is not null)
-            return failed;
-        if (count == 1 && NamesWhatIsNotThere(line))
-            return NameNote;
+        if (failed is null && count == 1 && NamesWhatIsNotThere(line))
+            failed = NameNote;
         // The first script or command that fails in a task, before anything was looked up: in the
         // Blender runs the first script was written from memory, and more failed before a search.
-        if (!_lookedUp && !_firstSaid && ErrorsInText(tool))
+        if (failed is null && !_lookedUp && !_firstSaid && ErrorsInText(tool))
         {
             _firstSaid = true;
-            return FirstNote;
+            failed = FirstNote;
         }
-        return pending;
+        if (failed is not null)
+            _noted = ErrorQuery(line);
+        return failed ?? pending;
     }
 
     /// <summary>Counts a failed try; the note for a failure seen before or for one too many since the last look-up, or null.</summary>
@@ -306,9 +319,21 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     internal static string? MeansToLookUp(string clause) =>
         LookUpIntent().Match(clause) is { Success: true } m && !LocalThing().IsMatch(m.Groups["what"].Value) ? m.Groups["what"].Value : null;
 
+    /// <summary>An error line as it is searched: without paths, which no page shares, and not too long.</summary>
+    internal static string ErrorQuery(string line)
+    {
+        var q = Spaces().Replace(LocalPath().Replace(line, ""), " ").Trim();
+        return q.Length <= 150 ? q : q[..q.LastIndexOf(' ', 150)];
+    }
+
+    [GeneratedRegex(@"(?i)\b[a-z]:\\[^\s'"",)]*|(?<=\s|^)/(home|users|tmp|usr|var)/[^\s'"",)]*")]
+    private static partial Regex LocalPath();
+
     /// <summary>What BlackBox found for the model's question, said with the step's last result.</summary>
-    internal static string Found(string question, IReadOnlyList<SearchHit> hits) =>
-        $"[BlackBox] You thought: \"{question}\" Rather than go by memory, here is what a web search for it found:\n" +
+    internal static string Found(string question, IReadOnlyList<SearchHit> hits, bool error = false) =>
+        (error
+            ? $"[BlackBox] You went on without looking up the error \"{question}\". Here is what a web search for it found:\n"
+            : $"[BlackBox] You thought: \"{question}\" Rather than go by memory, here is what a web search for it found:\n") +
         WebSearchTool.Format(hits) +
         "\nRead the page that answers it with fetch_page (find= the part you need) before your next try; " +
         "if none does, search again with the exact program or model and its version.";
