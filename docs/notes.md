@@ -652,7 +652,11 @@ director dropped shot 1's last frame and started shot 2 on a frame of s1's end, 
 out seamless at the cut (8 s, made in about an hour with the looks and their fixes). Laying out "a
 boy runs across a park from the left to a big oak tree on the right, climbs onto its lowest branch,
 then sits on it and waves" afresh, it gave the run and the climb-and-wave no last frame, and wrote
-each shot camera first, the run from the left edge to the trunk, and what stays still.
+each shot camera first, the run from the left edge to the trunk, and what stays still. Made from
+there, the looks asked for redos that the frames bear out: the camera panning and tilting though the
+prompt locked it, a run that glided with feet not planting, and the boy holding his sitting pose for
+2 s before the wave began. Even without a last frame, LTX often holds the opening picture for a
+second or two before anything moves; that hold is now the most common fault the looks find.
 
 **Takes**: before a piece is made again, the one there is kept beside it (`frames/f2.v1.png` and
 `.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it was made with
