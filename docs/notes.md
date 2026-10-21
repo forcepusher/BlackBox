@@ -1153,7 +1153,12 @@ I know", wrote its first script from memory (`GeometryNodeRandomValue`, which is
 `FunctionNodeRandomValue`), and was still checking its scene at 15 minutes, 10 of 20 scripts
 failed; with the new prompt it searched before its first script, read the pages for Random Value
 and the node group interface, and finished in 8.5 minutes, 5 of 8 scripts failed (setting the
-modifier's inputs, which it then looked up too). Both scenes were right.
+modifier's inputs, which it then looked up too). Both scenes were right. A second pair was mixed:
+both searched before their first script (the old prompt asks that too, and this time it did), the
+old one had the scene right with 5 of 9 scripts failed but was still checking it at 13 minutes,
+and the new one read 5.2's release notes, failed 5 of 20 scripts probing how 5.2 sets a modifier's
+inputs, and hadn't saved the file at 13 minutes. So searching first now happens every time, but
+how long the task takes still turns on the model.
 
 No API key and nothing to install. `web_search` asks DuckDuckGo's HTML page through the system's
 `curl` (built into Windows 10 and later; a fraction of a second): DuckDuckGo recognizes .NET's own
