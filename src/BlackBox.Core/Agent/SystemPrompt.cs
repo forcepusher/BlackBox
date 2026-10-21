@@ -118,8 +118,11 @@ public static class SystemPrompt
         // the viewport once in two runs, and took the camera for "a cluster of cubes". Told to check,
         // it rendered the scene three times, saw it empty, and put that down to the lights. A
         // guideline, not a check after the answer: a request BlackBox added there read as a bug.
+        // Made from the command line, Nemotron "fully verified" its scene by printing every node
+        // and link: the group had no Geometry input, so not one cube was made.
         sb.AppendLine("- Do one step at a time and keep going until the task is finished. Before you say it is, check the result itself, not just that your steps " +
-                      "ran without errors: look at it (a screenshot, or the program's own view through its MCP server), open the file you made, or run what you built. " +
+                      "ran without errors or that its parts are set up as you planned: look at it (a screenshot, or the program's own view through its MCP server), " +
+                      "or measure what it does (count what a scene or file holds once it is worked out, play what you made, run what you built). " +
                       "When the check doesn't show what the user asked for, the task isn't finished: find out why and fix it rather than explain it away. " +
                       "Then reply with a short summary of what you did and how you checked it.");
         sb.AppendLine("- The user can write to you while you work; such a message arrives between your steps. Take it into account at once: it may change the task, add to it or ask you something. " +
