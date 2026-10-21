@@ -70,7 +70,7 @@ public class GuessworkTests
         Assert.Equal(Guesswork.FirstNote, guesswork.Check(Shell, ToolResult.Error("Exit code 1\nFirst failure of the task.")));
         Assert.Null(guesswork.Check(Shell, ToolResult.Error("Exit code 1\nSecond failure of the task.")));
         for (var i = 0; i < 20; i++)
-            Assert.Null(guesswork.Check(Shell, new ToolResult("Exit code 0\nfine")));
+            Assert.Null(guesswork.Check(Read, new ToolResult("fine")));
         Assert.Null(guesswork.Check(Shell, ToolResult.Error(AgentSession.DeclinedText)));
         Assert.Null(guesswork.Check(Shell, ToolResult.Error("Exit code 1\nThird failure, long after the others.")));
     }
@@ -313,6 +313,22 @@ public class GuessworkTests
         now += TimeSpan.FromMinutes(1);
         Assert.Null(guesswork.Check(Write, Wrote));
         Assert.Null(guesswork.Check(Write, Wrote));
+    }
+
+    [Fact]
+    public void Eight_quick_tries_with_nothing_looked_up_make_it_time_to_look_too()
+    {
+        var now = new DateTime(2026, 10, 21, 8, 34, 0, DateTimeKind.Utc);
+        var guesswork = new Guesswork(() => now);
+        guesswork.StartRun("Make scatter.blend with Blender 5.2");
+        for (var i = 1; i < Guesswork.CheckBurst; i++)
+        {
+            now += TimeSpan.FromSeconds(20);
+            Assert.Null(guesswork.Check(Shell, new ToolResult("Exit code 0\nprobing")));
+        }
+        now += TimeSpan.FromSeconds(20);
+        Assert.Equal(Guesswork.CheckNote(TimeSpan.FromSeconds(160), 8), guesswork.Check(Shell, new ToolResult("Exit code 0\nprobing")));
+        Assert.StartsWith("[BlackBox] Time to look things up: 8 tries and 2 minutes since", Guesswork.CheckNote(TimeSpan.FromSeconds(160), 8));
     }
 
     [Theory]

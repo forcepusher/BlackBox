@@ -42,6 +42,13 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     /// <summary>Tries in that time it takes as well: a long wait or one long render is no guesswork.</summary>
     internal const int CheckTries = 3;
 
+    /// <summary>
+    /// Tries with nothing looked up that make it time to look however quick they were: probing
+    /// Blender 5.2 for how a modifier's inputs are set, qwen3.8 ran 17 scripts in 7 minutes after
+    /// its last search and ran out of time without the file.
+    /// </summary>
+    internal const int CheckBurst = 8;
+
     /// <summary>Calls after a look-up before a question of the model's is searched for it: it is reading what it found.</summary>
     internal const int SearchGap = 4;
 
@@ -73,7 +80,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         "rather than trying variations of what didn't work.";
 
     internal static string CheckNote(TimeSpan worked, int tries) =>
-        $"[BlackBox] Time to look things up: {(int)worked.TotalMinutes} minutes and {tries} tries since anything was last looked up. " +
+        $"[BlackBox] Time to look things up: {tries} tries{(worked.TotalMinutes >= 1 ? $" and {(int)worked.TotalMinutes} minutes" : "")} since anything was last looked up. " +
         "Search the web for guidance on what you are doing now (the official documentation, the makers' guides and examples, " +
         "for the version in use) before your next try: a better way is often one search away, even when things seem to work.";
 
@@ -173,7 +180,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         if (ErrorLine(result, ErrorsInText(tool)) is not { } line)
         {
             _tried = isTry;
-            return pending ?? (isTry && _worked >= CheckAfter && _triesSince >= CheckTries ? CheckNote(_worked, _triesSince) : null);
+            return pending ?? (isTry && (_worked >= CheckAfter && _triesSince >= CheckTries || _triesSince >= CheckBurst) ? CheckNote(_worked, _triesSince) : null);
         }
 
         var signature = Signature(line);

@@ -1140,7 +1140,9 @@ things up is now something BlackBox makes happen, not only asks for:
   does, as errors do. A try is a call that does something: a command, a script, a file written, a
   ComfyUI job, a piece of a film.
 - After ten minutes of tries with nothing looked up (three tries at least, and only time in a run:
-  not while the user is away between messages), every next try's result says it is time to look
+  not while the user is away between messages), or eight tries however quick (probing how Blender
+  5.2 sets a modifier's inputs, qwen3.8 ran 17 scripts in 7 minutes after its last search and ran
+  out of time), every next try's result says it is time to look
   things up, until the model does. The record is kept for the chat, so "still wrong" in the next
   message counts against the tries before it. A command that reads the installed version's own API
   (`inspect.signature`, `--help`, `Get-Help`, `pip show`) counts as looking it up for this, and a
