@@ -30,6 +30,8 @@ public static partial class ToolCallRepair
         ["write"] = "write_file", ["create_file"] = "write_file", ["save_file"] = "write_file",
         ["edit"] = "edit_file", ["replace_in_file"] = "edit_file", ["str_replace"] = "edit_file",
         ["ls"] = "list_directory", ["list_files"] = "list_directory", ["list_dir"] = "list_directory", ["dir"] = "list_directory",
+        ["index"] = "index_folder", ["index_project"] = "index_folder", ["index_directory"] = "index_folder", ["index_codebase"] = "index_folder",
+        ["codebase_search"] = "index_folder", ["search_codebase"] = "index_folder", ["search_project"] = "index_folder", ["search_index"] = "index_folder",
         ["scp"] = "copy", ["copy_file"] = "copy", ["copy_files"] = "copy", ["upload"] = "copy", ["download"] = "copy",
         ["ssh_run"] = "ssh", ["ssh_command"] = "ssh", ["remote_shell"] = "ssh", ["run_ssh"] = "ssh",
     };
@@ -53,6 +55,7 @@ public static partial class ToolCallRepair
         ["from"] = ["source", "src", "local_path", "remote_path"],
         ["to"] = ["destination", "dest", "target_path"],
         ["host"] = ["server", "hostname", "ssh_host"],
+        ["query"] = ["q", "search_query", "search_term", "keywords"],
     };
 
     /// <summary>Maps a tool name the model produced to a registered tool, or returns null.</summary>

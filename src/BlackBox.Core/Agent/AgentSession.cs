@@ -475,6 +475,8 @@ public sealed partial class AgentSession(
                         result = result with { Text = result.Text + "\n" + warning };
                     if (!calls.Interrupted(ct) && guesswork?.Check(ToolCallRepair.ResolveTool(call.Name, tools), result, call.Arguments) is { } lookItUp)
                         result = result with { Text = result.Text + "\n" + lookItUp };
+                    if (tools.Find("index_folder") is not null && _projects.Check(ToolCallRepair.ResolveTool(call.Name, tools), call.Arguments, result, toolContext) is { } indexIt)
+                        result = result with { Text = result.Text + "\n" + indexIt };
                     // A model that can't see gets no picture (an MCP tool's, say): its server
                     // refused that request and every one after it, since the conversation keeps it.
                     if (result.Image is not null && !toolContext.SeesImages)
@@ -612,6 +614,9 @@ public sealed partial class AgentSession(
 
     /// <summary>Guesswork seen in this chat (see <see cref="Guesswork"/>); null without web_search.</summary>
     private Guesswork? _guesswork;
+
+    /// <summary>The projects indexed in this chat, and those the model was told to index (see <see cref="ProjectNudge"/>).</summary>
+    private readonly ProjectNudge _projects = new();
 
     /// <summary>The web search BlackBox runs for a question of the model's: five results, as web_search finds them.</summary>
     internal Func<string, CancellationToken, Task<IReadOnlyList<Web.SearchHit>>>? SearchWeb { get; set; }

@@ -38,6 +38,7 @@ public static class AgentSetup
             ScratchDirectory = paths.ScratchDir,
             FilmsDirectory = paths.FilmsDir,
             ToolsDirectory = paths.ToolsDir,
+            IndexDirectory = paths.IndexDir,
         };
 
         // A model that can't see gets no screen tools, nor does an OS without desktop control.

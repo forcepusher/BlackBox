@@ -117,6 +117,9 @@ public sealed class ToolContext
     /// <summary>Where films go, a folder each (BlackBox's Data/films, where the Filmmaking window finds them); null when there is none.</summary>
     public string? FilmsDirectory { get; init; }
 
+    /// <summary>Where folder indexes are kept (BlackBox's Data/index, see <see cref="IndexFolderTool"/>); null to keep them in memory only.</summary>
+    public string? IndexDirectory { get; init; }
+
     /// <summary>Where helper files for a task go (BlackBox's Data/scratch); null to use the system's temp folder.</summary>
     public string? ScratchDirectory { get; init; }
 
