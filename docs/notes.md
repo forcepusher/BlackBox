@@ -1546,7 +1546,8 @@ run, the line saying so in the chat has a Continue button: the task carries on w
 as if "Continue." had been sent (a stop before the model had the message runs that message again).
 A chat that ended stopped shows it again when opened from History. BlackBox
 stays on screen while it works but is left out of the agent's screenshots, and steps behind other
-windows for the moment a click lands on it. It is left out only for the instant each screenshot is
+windows for the moment a click lands on it: all of its windows (the viewer, Filmmaking, a dialog),
+found by their process, and those of other BlackBox windows too (see Several windows). It is left out only for the instant each screenshot is
 taken, so screen recorders and screen sharing show it the rest of the time (before, an option hid
 it from them for good). Every click and key press the agent makes shows up in a
 log in the bottom-right corner that fades after 15 seconds, with a ring where it clicked. The agent
