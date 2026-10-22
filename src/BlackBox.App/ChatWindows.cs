@@ -87,6 +87,14 @@ public sealed class ChatWindows
         window.Activate();
     }
 
+    /// <summary>Settings saved in <paramref name="from"/>'s Settings dialog: the other windows take them too.</summary>
+    public void SettingsApplied(MainWindowViewModel from, AppSettings settings, bool mcpChanged)
+    {
+        foreach (var (vm, _) in _open)
+            if (vm != from)
+                vm.TakeSettings(settings, mcpChanged);
+    }
+
     /// <summary>The user is writing a message to one of the agents, in any window: every agent's clicks and key presses wait.</summary>
     public bool UserComposing() => _open.Any(o => o.Vm.TypingHere());
 

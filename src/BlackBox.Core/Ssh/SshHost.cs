@@ -480,13 +480,16 @@ public sealed partial class SshHost : IDisposable
             var r = await ExecAsync($"s=$(cat {_dir}/pid); {list}", null, TimeSpan.FromSeconds(10), ct).ConfigureAwait(false);
             var parts = r.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
                 .Select(l => l.Split('\t', 2)).Where(p => p.Length == 2 && int.TryParse(p[0], out _))
-                .Select(p => $"{p[1].Trim()} ({Chats.ChatTimes.Duration(TimeSpan.FromSeconds(int.Parse(p[0])))})").ToList();
+                .Select(p => $"{p[1].Trim()} ({Seconds(int.Parse(p[0]))})").ToList();
             return parts.Count == 0 ? null : "Running now: " + string.Join(", ", parts) + ".";
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
             return null;
         }
+
+        // ps counts whole seconds: "0 ms" or "5.0 s" for them read oddly.
+        static string Seconds(int s) => s < 60 ? $"{s} s" : Chats.ChatTimes.Duration(TimeSpan.FromSeconds(s));
     }
 
     // ---- side channels -------------------------------------------------------------------

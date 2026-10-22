@@ -856,7 +856,10 @@ What they share, and how they keep out of each other's way:
 - **Settings.** Each window has them in memory, with a store of its own that writes only what the
   window changed since it last read or wrote `settings.json` (a three-way merge, key by key, one
   window at a time): a model picked in one window stayed picked when another closed and saved
-  where it was. Each window keeps using what it has; a new window starts with what was saved last.
+  where it was. The server, key, model and context in the top bar are each window's own; what the
+  Settings dialog saves ("Ask me first", the instructions, the MCP servers) goes to every window at
+  once, from its next task, as in the window it was saved in: "Ask me first" turned on in one window
+  left the other's agent acting without asking. A new window starts with what was saved last.
 - **Chats.** A chat is open in one window at a time: two saving their own runs into one file lost
   one of them. One another window has open says so in History ("Open in another window", no trash
   button), and picking it brings that window forward. History rereads the folder whenever it opens,

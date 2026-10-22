@@ -43,6 +43,7 @@ public sealed partial class MainWindowViewModel
         SaveSettings();
         // Written only when the user changed the list: a dialog left open while the agent added a
         // server would otherwise save the list without it.
+        var mcpSaved = false;
         if (dialog.McpConfigText != dialog.McpConfigBase)
         {
             try
@@ -50,15 +51,40 @@ public sealed partial class MainWindowViewModel
                 // What changed in the file meanwhile stays, unless the user changed the same server.
                 var text = McpConfig.Merge(dialog.McpConfigBase, McpConfig.Load(_paths.McpConfigFile), dialog.McpConfigText);
                 McpConfig.Save(_paths.McpConfigFile, text);
-                if (IsBusy) _mcpRestartPending = true;
-                else _mcpConnect = ConnectMcpAsync();
+                mcpSaved = true;
+                RestartMcp();
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 AddNotice($"The MCP server list could not be saved: {ex.Message}", isError: true);
             }
         }
+        // They are BlackBox's settings, not this window's: "Ask me first" turned on here holds the
+        // other windows' agents too.
+        _windows.SettingsApplied(this, updated, mcpSaved);
         await CheckServerAsync();
+    }
+
+    /// <summary>
+    /// The settings another window's Settings dialog saved: this window takes them, but for its own
+    /// server, model and place, from its next task on (as the window they were changed in does).
+    /// </summary>
+    internal void TakeSettings(AppSettings applied, bool mcpChanged)
+    {
+        var taken = applied.Clone();
+        taken.Server = _settings.Server;
+        taken.Window = _settings.Window;
+        _settings = taken;
+        OnPropertyChanged(nameof(ApprovalNote));
+        if (mcpChanged)
+            RestartMcp();
+    }
+
+    /// <summary>The MCP servers started again from mcp.json: now, or once the task going on is over, not to pull its tools from under it.</summary>
+    private void RestartMcp()
+    {
+        if (IsBusy) _mcpRestartPending = true;
+        else _mcpConnect = ConnectMcpAsync();
     }
 
     /// <summary>Keeps the window's size and place for the next start (see <see cref="Views.MainWindow.Restore"/>).</summary>
