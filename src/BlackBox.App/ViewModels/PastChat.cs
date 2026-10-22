@@ -18,11 +18,17 @@ public sealed partial class PastChat(ChatHeader header, Action<PastChat> open, A
     [ObservableProperty]
     private bool _isCurrent;
 
-    /// <summary>"14:05" today, "Yesterday", "Oct 3" this year, else "Oct 3, 2025".</summary>
+    /// <summary>Open in another BlackBox window: picking it brings that window forward, and it can't be deleted from here.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(When))]
+    private bool _isElsewhere;
+
+    /// <summary>"14:05" today, "Yesterday", "Oct 3" this year, else "Oct 3, 2025"; or that another window has it.</summary>
     public string When
     {
         get
         {
+            if (IsElsewhere) return "Open in another window";
             var local = Updated.ToLocalTime();
             var today = DateTime.Today;
             if (local.Date == today) return local.ToString("HH:mm");

@@ -1042,7 +1042,6 @@ public class AgentSessionTests
     /// <summary>BlackBox's window, noting among the actions each time it hands the keyboard to the window under it.</summary>
     private sealed class FocusLog(List<string> actions) : IHostWindow
     {
-        public void Attach(nint handle) { }
         public IDisposable StepAside(params (int X, int Y)[] points) => NoHostWindow.Instance.StepAside(points);
         public void YieldFocus() => actions.Add("yield");
     }

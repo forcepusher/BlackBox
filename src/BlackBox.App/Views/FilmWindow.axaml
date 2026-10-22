@@ -400,7 +400,7 @@
     <Grid ColumnDefinitions="*,470">
       <!-- Its margin around the viewer takes clicks too: away from the piece, they pick the whole film. -->
       <DockPanel Background="Transparent" PointerPressed="OnAwayPressed">
-        <Panel Margin="16,14,16,12">
+        <Panel x:Name="ViewerBox" Margin="16,14,16,12">
           <ContentControl Content="{Binding Viewer}" IsVisible="{Binding !IsPlaying}" />
           <Border Classes="thumb" Background="#000000" IsVisible="{Binding IsPlaying}">
             <Panel>

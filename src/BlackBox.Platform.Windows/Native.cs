@@ -275,6 +275,11 @@ internal static partial class Native
     [LibraryImport("user32.dll")]
     public static partial nint GetForegroundWindow();
 
+    /// <summary>Lets the process bring a window of its own to the front, which the process in the foreground may allow.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool AllowSetForegroundWindow(uint processId);
+
     /// <summary>The window's open modal dialog or other popup that was active last; the window itself if it has none.</summary>
     [LibraryImport("user32.dll")]
     public static partial nint GetLastActivePopup(nint hWnd);

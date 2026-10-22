@@ -67,16 +67,11 @@ public interface IInputController
 /// <summary>
 /// BlackBox's own window. It stays on screen while the agent works, so it is kept out of the
 /// agent's way: left out of its screenshots by <see cref="IScreenCapture"/> where the OS allows,
-/// and pushed behind other windows for the moment an action lands on it.
+/// and pushed behind other windows for the moment an action lands on it: all of BlackBox's
+/// windows (every chat window, the viewer, Filmmaking, a dialog).
 /// </summary>
 public interface IHostWindow
 {
-    /// <summary>Registers a native window handle: the main window, or another of BlackBox's over the screen (the full-screen viewer).</summary>
-    void Attach(nint handle);
-
-    /// <summary>A window registered with <see cref="Attach"/> has closed.</summary>
-    void Detach(nint handle) { }
-
     /// <summary>If any of the points lie on the window, sends it behind other windows until the result is disposed.</summary>
     IDisposable StepAside(params (int X, int Y)[] points);
 
@@ -87,7 +82,6 @@ public interface IHostWindow
 public sealed class NoHostWindow : IHostWindow
 {
     public static readonly NoHostWindow Instance = new();
-    public void Attach(nint handle) { }
     public IDisposable StepAside(params (int X, int Y)[] points) => Nothing.Instance;
     public void YieldFocus() { }
 

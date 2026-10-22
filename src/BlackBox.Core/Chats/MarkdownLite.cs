@@ -312,9 +312,12 @@ public static partial class MarkdownLite
     [GeneratedRegex(@"^:?-{2,}:?$")]
     private static partial Regex Separator();
 
-    [GeneratedRegex(@"\[([^\]\n]+)\]\(([^)\s]+)\)")]
+    // A target may hold parentheses in pairs: https://en.wikipedia.org/wiki/Python_(programming_language).
+    [GeneratedRegex(@"\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)")]
     private static partial Regex Link();
 
-    [GeneratedRegex(@"\b(?:https?://|www\.)[^\s<>""`]+", RegexOptions.IgnoreCase)]
+    // Not after a Latin letter or digit, but right after Chinese or Japanese text it may be ("访问https://…");
+    // Chinese and Japanese punctuation, curly quotes and an ellipsis end it ("详见 https://example.com/docs。").
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:https?://|www\.)[^\s<>""`。，、；：！？（）「」『』【】《》“”‘’…]+", RegexOptions.IgnoreCase)]
     private static partial Regex BareUrl();
 }

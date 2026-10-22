@@ -41,6 +41,17 @@ public class ContextOverflowException : LlmException
 }
 
 /// <summary>
+/// Anthropic's limit on input tokens a minute is less than one request of the whole context: the
+/// prompt cache expired (an idle while, a long tool call, a reopened chat), and a context near a
+/// million is more than Fable's 500k a minute. Waiting doesn't help; a smaller context does.
+/// </summary>
+public sealed class InputRateException(string serverMessage, int perMinute)
+    : ContextOverflowException($"The account takes {perMinute:N0} input tokens a minute, and one request of this conversation is more than that: {serverMessage}", serverMessage)
+{
+    public int PerMinute { get; } = perMinute;
+}
+
+/// <summary>
 /// The server refused the request for its size in bytes (HTTP 413), which is the screenshots it
 /// carries rather than its tokens: Kilo's gateway takes 20 MB and answers a 22 MB request with
 /// "FUNCTION_PAYLOAD_TOO_LARGE". A smaller context keeps fewer screenshots in each request.

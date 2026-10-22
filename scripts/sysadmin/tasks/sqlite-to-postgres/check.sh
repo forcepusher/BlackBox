@@ -452,7 +452,8 @@ def dump_text(path):
 
 def new_files(since):
     found = []
-    for top in ("/var/backups", "/var/lib/postgresql", "/srv", "/opt", "/root", "/home", "/backup", "/backups", "/mnt"):
+    # Wherever a backup job might write: a service's own folder under /var/lib or /var/local too.
+    for top in ("/var/backups", "/var/lib", "/var/local", "/var/opt", "/srv", "/opt", "/root", "/home", "/backup", "/backups", "/data", "/mnt"):
         for root, dirs, files in os.walk(top):
             dirs[:] = [d for d in dirs if not re.fullmatch(r"\d+", d) or root != "/var/lib/postgresql"]
             if os.path.exists(os.path.join(root, "toc.dat")) and os.path.getmtime(os.path.join(root, "toc.dat")) > since:

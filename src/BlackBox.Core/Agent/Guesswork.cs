@@ -133,7 +133,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         if (userText is not null && SubjectIn(userText) is { } subject)
             Subject = subject;
         Heard(userText);
-        _triedInRun = false;
+        (_triedInRun, _lookUpsSinceTry) = (false, 0);
     }
 
     /// <summary>A message of the user's, at the start of a run or while it goes on: one saying a result isn't right counts as a failed try.</summary>
@@ -203,11 +203,15 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
             _failures.Clear();
             (_lookedUp, _worked, _triesSince, _lookedUpAt, _pending, _noted) = (true, TimeSpan.Zero, 0, _calls, null, null);
             _lookUpsSinceTry++;
-            return _lookUpsSinceTry >= LongSearch && (_lookUpsSinceTry - LongSearch) % 6 == 0 ? LongSearchNote(_lookUpsSinceTry) : null;
+            // Only where there is something installed to ask: tries made in the task, or a request that
+            // names a program's version. One that is all research (laptops compared) has none.
+            return (_triedInRun || Subject is not null) && _lookUpsSinceTry >= LongSearch && (_lookUpsSinceTry - LongSearch) % 6 == 0
+                ? LongSearchNote(_lookUpsSinceTry) : null;
         }
-        // Reading the installed version's own API (inspect.signature, --help) is looking it up too.
+        // Reading the installed version's own API (inspect.signature, --help) is looking it up too,
+        // and what the note on a long search asks for.
         if (Reads(tool, arguments))
-            (_worked, _triesSince) = (TimeSpan.Zero, 0);
+            (_worked, _triesSince, _lookUpsSinceTry) = (TimeSpan.Zero, 0, 0);
         var isTry = IsTry(tool, arguments is null ? null : ActionOf(arguments)) && !Reads(tool, arguments);
         if (isTry)
         {
@@ -297,9 +301,12 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         string? found = null;
         foreach (var sentence in Sentences().Split(Plain(text)))
         {
-            // A search it means to make is the whole sentence: what it would search often follows a colon.
-            // A question is the part of a sentence that asks: "Node 1 loads Pony — wait, which checkpoint should I use?"
-            var asked = MeansToLookUp(sentence) is { } what && Words(what).Count >= 2 ? sentence.Trim().Trim('*', '_', '-', ' ')
+            // A search it means to make is the sentence from where it says so: what it would search often
+            // follows a colon, and what came before ("The value on screen didn't change: let me search
+            // the web for...") is no part of it. A question is the part of a sentence that asks: "Node 1
+            // loads Pony — wait, which checkpoint should I use?"
+            var asked = LookUpIntent().Match(sentence) is { Success: true } intent && MeansToLookUp(sentence) is { } what && Words(what).Count >= 2
+                ? sentence[intent.Index..].Trim().Trim('*', '_', '-', ' ')
                 : Clauses().Split(sentence).Select(c => c.Trim().Trim('*', '_', '`', '-', ' ', '"', '\''))
                     .LastOrDefault(c => (c.EndsWith('?') && Asks().IsMatch(c)) || DoesntKnow().IsMatch(c));
             // "How should I proceed with this?" names nothing to search for.
@@ -555,8 +562,9 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     [GeneratedRegex(@",\s*(so|and|but|then|because|which|i'll|i will)\b.*$", RegexOptions.IgnoreCase)]
     private static partial Regex AfterThought();
 
-    // A search written out in quotes, three words at least.
-    [GeneratedRegex(@"[""“]([^""”]*\s[^""”]*\s[^""”]*)[""”]")]
+    // A search written out in quotes, three words at least; the quote opens after a space or a colon,
+    // so the words between two quoted names (" vs ") are none.
+    [GeneratedRegex(@"(?<=^|[\s:(])[""“](\S[^""”]*\s[^""”]*\s[^""”]*\S)[""”]")]
     private static partial Regex Quoted();
 
     // Thinking's fillers before a question: "Hmm, so", "But wait,", "OK".

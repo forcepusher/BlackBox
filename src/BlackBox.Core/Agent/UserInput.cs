@@ -62,7 +62,7 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
     private static string Describe(string file)
     {
         string size;
-        try { size = MediaPreview.Size(new FileInfo(file).Length); }
+        try { size = Strings.Bytes(new FileInfo(file).Length); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return "can't be read: " + ex.Message; }
         var kind = MediaPreview.KindOf(file);
         if (kind is "image" or "animation")

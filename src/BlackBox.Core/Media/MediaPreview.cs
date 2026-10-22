@@ -59,7 +59,7 @@ public static class MediaPreview
         string size;
         try
         {
-            size = Size(new FileInfo(path).Length);
+            size = Strings.Bytes(new FileInfo(path).Length);
         }
         // Gone (or never there): deleted after a look found it threw out of the whole look.
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -92,7 +92,6 @@ public static class MediaPreview
 
     public static string KindOf(string path) => Comfy.ComfyOutput.KindOf(path);
 
-    internal static string Size(long bytes) => bytes >= 1 << 20 ? $"{bytes / 1048576.0:0.0} MB" : bytes >= 1024 ? $"{bytes / 1024.0:0} KB" : $"{bytes} bytes";
 
     // ---- pictures and animations --------------------------------------------------------------
 

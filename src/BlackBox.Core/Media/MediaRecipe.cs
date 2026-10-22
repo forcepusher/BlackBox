@@ -136,12 +136,21 @@ public sealed partial record MediaRecipe(IReadOnlyList<RecipeText> Texts, IReadO
         return Encoding.UTF8.GetString(compressed ? Inflate(rest) : rest);
     }
 
+    /// <summary>The most a compressed text chunk may grow to: a workflow is kilobytes; a few MB of zeros grew to 2 GB.</summary>
+    private const int MaxInflated = 16 << 20;
+
     private static byte[] Inflate(ReadOnlySpan<byte> data)
     {
         using var input = new MemoryStream(data.ToArray());
         using var z = new ZLibStream(input, CompressionMode.Decompress);
         using var output = new MemoryStream();
-        z.CopyTo(output);
+        var buffer = new byte[81920];
+        for (int read; (read = z.Read(buffer)) > 0;)
+        {
+            if (output.Length + read > MaxInflated)
+                throw new InvalidDataException("A text chunk larger than any workflow.");
+            output.Write(buffer, 0, read);
+        }
         return output.ToArray();
     }
 
@@ -197,6 +206,9 @@ public sealed partial record MediaRecipe(IReadOnlyList<RecipeText> Texts, IReadO
         var lines = parameters.ReplaceLineEndings("\n").Split('\n').ToList();
         var settingsAt = lines.FindLastIndex(l => l.StartsWith("Steps: ", StringComparison.Ordinal));
         var settingsLine = settingsAt >= 0 ? string.Join(" ", lines.Skip(settingsAt)) : "";
+        // A real one is a line or two; the pairs' pattern takes time that grows with the square of a long run without a colon.
+        if (settingsLine.Length > 8000)
+            settingsLine = settingsLine[..8000];
         if (settingsAt >= 0)
             lines.RemoveRange(settingsAt, lines.Count - settingsAt);
         var negativeAt = lines.FindIndex(l => l.StartsWith("Negative prompt:", StringComparison.Ordinal));
@@ -368,6 +380,14 @@ public sealed partial record MediaRecipe(IReadOnlyList<RecipeText> Texts, IReadO
     /// <summary>The workflow's nodes, and how a value is found by following the links between them.</summary>
     private sealed class Graph(JsonObject nodes)
     {
+        /// <summary>
+        /// Values followed so far: a chain of switches each linked to the next, in a file made to,
+        /// went two ways at each of its 40 steps (2^40 calls), and the preview's read never ended.
+        /// </summary>
+        private int _followed;
+
+        private const int MostFollowed = 100_000;
+
         /// <summary>The node a link (["id", output]) comes from.</summary>
         public JsonObject? Node(JsonNode? link) => link is JsonArray { Count: 2 } a && Text(a[0]) is { } id ? nodes[id] as JsonObject : null;
 
@@ -388,7 +408,7 @@ public sealed partial record MediaRecipe(IReadOnlyList<RecipeText> Texts, IReadO
         /// <summary>A plain value: as given, or what a primitive or a switch it is linked to gives.</summary>
         public JsonNode? Value(JsonNode? value, int depth = 0)
         {
-            if (value is not JsonArray || depth > Deepest)
+            if (value is not JsonArray || depth > Deepest || ++_followed > MostFollowed)
                 return value is JsonArray ? null : value;
             if (Node(value) is not { } node)
                 return null;

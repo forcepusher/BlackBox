@@ -67,7 +67,7 @@ public sealed partial class FrameItem(FilmViewModel film, FilmFrame frame) : Obs
     public void TakeOwnPicture(string path)
     {
         Frame.File = path;
-        film.Changed(this);
+        film.Changed();
     }
 
     public void Report(string state, bool error = false) => Dispatcher.UIThread.Post(() => (State, IsError) = (state, error));
@@ -132,7 +132,7 @@ public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : Observ
     }
 
     /// <summary>The drag ended: the new length is saved.</summary>
-    public void Stretched() => film.Changed(this);
+    public void Stretched() => film.Changed();
 
     [ObservableProperty]
     private FilePreview? _clip;
@@ -171,7 +171,7 @@ public sealed partial class SoundItem(FilmViewModel film, FilmSound sound) : Obs
         Sound.Source = FilmSound.FromFile;
         Sound.File = path;
         OnPropertyChanged(string.Empty);
-        film.Changed(this);
+        film.Changed();
     }
 
     [ObservableProperty]

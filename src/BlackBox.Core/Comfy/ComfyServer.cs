@@ -225,7 +225,7 @@ public static partial class ComfyProcess
     public const int DefaultPort = 8188, DesktopPort = 8000;
 
     /// <summary>
-    /// Starts <paramref name="install"/> listening on <paramref name="port"/> and waits until it
+    /// Starts <paramref name="install"/> listening on <paramref name="api"/>'s port and waits until it
     /// answers. <paramref name="arguments"/> replaces the usual ones (a restart keeps what the
     /// server ran with). Throws with the end of its log when it doesn't come up.
     /// </summary>

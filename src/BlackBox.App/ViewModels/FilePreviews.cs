@@ -125,11 +125,10 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
 
     internal static string Size(string path)
     {
-        try { return Sized(new FileInfo(path).Length); }
+        try { return Core.Strings.Bytes(new FileInfo(path).Length); }
         catch (IOException) { return ""; }
     }
 
-    private static string Sized(long bytes) => bytes >= 1 << 20 ? $"{bytes / 1048576.0:0.0} MB" : bytes >= 1024 ? $"{bytes / 1024.0:0} KB" : $"{bytes} bytes";
 
     /// <summary>Runs <paramref name="work"/> off the UI thread; a file that can't be read says so in <see cref="Details"/>.</summary>
     protected void Background(Action work) => Task.Run(() =>
@@ -152,8 +151,6 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
         var b = bgra ?? source;
         return new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, b.GetPixels(), new PixelSize(b.Width, b.Height), new Vector(96, 96), b.RowBytes);
     }
-
-    internal static string Clock(TimeSpan t) => t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
 }
 
 /// <summary>A picture, at the chat's width.</summary>
@@ -195,7 +192,10 @@ public sealed partial class AnimationPreview(string path, int width = FilePrevie
         using var codec = SKCodec.Create(Path) ?? throw new InvalidDataException("not a picture");
         var info = codec.FrameInfo;
         var count = Math.Max(1, Math.Min(codec.FrameCount, 400));
-        var scale = Math.Min(1.0, (double)width / codec.Info.Width);
+        // Every frame is kept, so all of them together within 256 MB: full screen, a 16 s 1080p
+        // animation of 384 frames took 3.2 GB.
+        var fits = Math.Sqrt(256.0 * 1024 * 1024 / (4.0 * count * codec.Info.Width * Math.Max(1, codec.Info.Height)));
+        var scale = Math.Min(1.0, Math.Min((double)width / codec.Info.Width, fits));
         var size = new SKImageInfo(Math.Max(1, (int)(codec.Info.Width * scale)), Math.Max(1, (int)(codec.Info.Height * scale)), SKColorType.Bgra8888, SKAlphaType.Premul);
         using var full = new SKBitmap(new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
         var frames = new List<(Bitmap, int)>();
@@ -433,7 +433,7 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
     [NotifyPropertyChangedFor(nameof(TimeText))]
     private double _position;
 
-    public string TimeText => $"{Clock(TimeSpan.FromSeconds(Position))} / {Clock(TimeSpan.FromSeconds(Length))}";
+    public string TimeText => $"{Core.Chats.ChatTimes.Stopwatch(TimeSpan.FromSeconds(Position))} / {Core.Chats.ChatTimes.Stopwatch(TimeSpan.FromSeconds(Length))}";
 
     private int _seek;
 
@@ -615,16 +615,27 @@ public sealed partial class VideoPreview(string path, PreviewServices services, 
 
     protected override void UserPlayed(bool playing) => _userPaused = !playing;
 
-    /// <summary>On screen in the chat it starts again, as a GIF would.</summary>
+    /// <summary>Frames shown since it last started again by itself: none, and it doesn't start again.</summary>
+    private int _shown;
+
+    /// <summary>
+    /// On screen in the chat it starts again, as a GIF would; unless nothing played (the file
+    /// deleted or no longer readable), when it started again at once, for ever, opening the
+    /// decoder (and ffmpeg) each time.
+    /// </summary>
     protected override void Ended()
     {
-        if (PlaysInView && _inView && !_userPaused && !Disposed)
+        if (PlaysInView && _inView && !_userPaused && !Disposed && Interlocked.Exchange(ref _shown, 0) > 0)
             Start(TimeSpan.Zero);
         else
             base.Ended();
     }
 
-    protected override void ShowFrame(RawImage frame) => Show(() => ShowFrameNow(frame));
+    protected override void ShowFrame(RawImage frame)
+    {
+        Interlocked.Increment(ref _shown);
+        Show(() => ShowFrameNow(frame));
+    }
 
     /// <summary>A bitmap of its own for each frame (the Image redraws when its source changes); the one before is let go.</summary>
     private void ShowFrameNow(RawImage frame)

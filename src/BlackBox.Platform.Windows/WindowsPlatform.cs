@@ -29,6 +29,12 @@ public sealed class WindowsPlatform : IPlatformServices
     public Core.Media.IMediaDecoder? Media { get; } = new MediaFoundationDecoder();
     public Core.Media.IAudioOutput? CreateAudioOutput() => new WaveOutPlayer();
 
+    /// <summary>
+    /// Lets <paramref name="processId"/> bring its window to the front: called by the program the
+    /// user just started, which has the foreground, for the one it hands over to.
+    /// </summary>
+    public static void AllowToFront(int processId) => AllowSetForegroundWindow((uint)processId);
+
     public ProcessStartInfo CreateShellStartInfo(string command)
     {
         // -EncodedCommand sidesteps every quoting problem; forcing UTF-8 output keeps
@@ -63,7 +69,7 @@ public sealed class WindowsPlatform : IPlatformServices
 
     /// <summary>
     /// The exit code after the command, when its last statement failed: a program's own (git's 128,
-    /// not just 1), or 0 when all that failed was a program's messages on stderr taken in with 2>&1,
+    /// not just 1), or 0 when all that failed was a program's messages on stderr taken in with 2&gt;&amp;1,
     /// which Windows PowerShell 5.1 counts as errors although the program succeeded: every ffmpeg
     /// call (it writes its progress there) came back as "Exit code 1" and counted as a failure.
     /// </summary>

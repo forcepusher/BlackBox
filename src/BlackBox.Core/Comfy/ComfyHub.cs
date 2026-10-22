@@ -366,6 +366,10 @@ public sealed class ComfyHub(string stateDirectory)
                 await api.FreeAsync(CancellationToken.None).ConfigureAwait(false);
             return;
         }
+        // Another BlackBox (the command line, another build) may be between two of its jobs, and each
+        // counts only its own tasks: the server is left running, for the next start to close.
+        if (OthersRunForTests?.Invoke() ?? OtherBlackBoxRuns())
+            return;
         var wait = new CancellationTokenSource();
         Interlocked.Exchange(ref _waitForQueue, wait)?.Cancel();
         _closing = CloseWhenIdleAsync(api, wait.Token);
@@ -387,7 +391,7 @@ public sealed class ComfyHub(string stateDirectory)
             return;
         _closing = Task.Run(async () =>
         {
-            // Not while another BlackBox runs (a second window, the command line): it may be
+            // Not while another BlackBox runs (the command line, another build): it may be
             // between two of its jobs, and each BlackBox counts only its own tasks.
             if (OthersRunForTests?.Invoke() ?? OtherBlackBoxRuns())
                 return;
@@ -397,7 +401,7 @@ public sealed class ComfyHub(string stateDirectory)
         });
     }
 
-    /// <summary>Stand-in for tests: whether another BlackBox runs.</summary>
+    /// <summary>Stand-in for tests: whether another BlackBox process runs.</summary>
     internal Func<bool>? OthersRunForTests { get; set; }
 
     private static bool OtherBlackBoxRuns()
@@ -444,8 +448,10 @@ public sealed class ComfyHub(string stateDirectory)
             await _gate.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                // Still the one BlackBox started, and still nobody's (a task that starts using it cancels this).
-                if (ct.IsCancellationRequested || !(OwnsForTests?.Invoke(api) ?? IsOurs(api)))
+                // Still the one BlackBox started, and still nobody's: a task that starts using it cancels
+                // this, but one that started while the last one's end was still finding out whose the
+                // server is found nothing to cancel.
+                if (ct.IsCancellationRequested || Volatile.Read(ref _users) > 0 || !(OwnsForTests?.Invoke(api) ?? IsOurs(api)))
                     return;
                 if (StopForTests is { } stop)
                     await stop(api, ct).ConfigureAwait(false);

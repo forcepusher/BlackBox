@@ -60,6 +60,9 @@ public partial class MainWindow : Window
             if (!_pinning && e.OffsetDelta.Y != 0 && e.ExtentDelta.Y == 0 && e.ViewportDelta.Y == 0)
                 UpdateStickiness();
         };
+        // Other windows add chats while this one is open, and have some open themselves.
+        ((Avalonia.Controls.Primitives.PopupFlyoutBase)HistoryButton.Flyout!).Opening += (_, _) => Vm.RefreshPastChats();
+
         // What Tab or the arrow keys move to is scrolled into view; what a click focuses stays where
         // it is under the mouse (the chat's ScrollViewer does neither by itself, see its markup).
         ChatScroll.AddHandler(GotFocusEvent, (_, e) =>
@@ -97,33 +100,54 @@ public partial class MainWindow : Window
     /// <summary>The last size and place while the window was neither maximized nor minimized.</summary>
     private (PixelPoint Position, double Width, double Height)? _normal;
 
+    /// <summary>Opened a step from another window: closed where it opened, it doesn't save its place.</summary>
+    private (PixelPoint Position, double Width, double Height)? _cascaded;
+
     /// <summary>
     /// Puts the window where it was when last closed (it used to open in the middle at its default
     /// size every time), unless that place is no longer on any screen: a monitor unplugged since.
-    /// Called before the window is first shown.
+    /// With another window open already (<paramref name="beside"/>), it opens a step down and to the
+    /// right of that one, at its size, as Windows cascades windows: right on top of it, a second
+    /// window looked as if nothing had opened. Called before the window is first shown.
     /// </summary>
-    public void Restore(Core.Settings.WindowPlacement? placement)
+    public void Restore(Core.Settings.WindowPlacement? placement, MainWindow? beside = null)
     {
         // Read once the move or resize is through: a window being minimized moves off screen
         // before it reports being minimized.
         PositionChanged += (_, _) => Dispatcher.UIThread.Post(Remember);
         SizeChanged += (_, _) => Dispatcher.UIThread.Post(Remember);
-        if (Screens.Primary is { } primary)
-            FitTo(primary);
-        if (placement is null || placement.Width < MinWidth || placement.Height < MinHeight)
+        if (Screens.Primary is not { } primary)
             return;
+        FitTo(primary);
+        beside?.Remember();
+        if (beside?._normal is { } other)
+            placement = new Core.Settings.WindowPlacement { X = other.Position.X, Y = other.Position.Y, Width = other.Width, Height = other.Height };
         // Some of the title bar must be on a screen, or the window can't even be dragged back.
-        var titleBar = new PixelRect(placement.X + 40, placement.Y + 4, 160, 24);
-        if (Screens.All.FirstOrDefault(s => s.WorkingArea.Intersects(titleBar)) is not { } screen)
+        if (placement is not { } p || p.Width < MinWidth || p.Height < MinHeight
+            || Screens.All.FirstOrDefault(s => s.WorkingArea.Intersects(new PixelRect(p.X + 40, p.Y + 4, 160, 24))) is not { } screen)
             return;
         WindowStartupLocation = WindowStartupLocation.Manual;
-        Position = new PixelPoint(placement.X, placement.Y);
-        Width = placement.Width;
-        Height = placement.Height;
+        Position = new PixelPoint(p.X, p.Y);
+        Width = p.Width;
+        Height = p.Height;
         FitTo(screen);
-        _normal = (Position, Width, Height);
-        if (placement.Maximized)
+        if (beside is not null)
+            Cascade(screen);
+        else if (p.Maximized)
             WindowState = WindowState.Maximized;
+        _normal = (Position, Width, Height);
+        if (beside is not null)
+            _cascaded = _normal;
+    }
+
+    /// <summary>A step down and to the right, kept on the screen.</summary>
+    private void Cascade(Avalonia.Platform.Screen screen)
+    {
+        var area = screen.WorkingArea;
+        var (width, height) = ((int)(Width * screen.Scaling), (int)(Height * screen.Scaling));
+        var step = (int)Math.Round(32 * screen.Scaling);
+        Position = new PixelPoint(Math.Max(area.X, Math.Min(Position.X + step, area.Right - width)),
+                                  Math.Max(area.Y, Math.Min(Position.Y + step, area.Bottom - height)));
     }
 
     /// <summary>
@@ -145,10 +169,26 @@ public partial class MainWindow : Window
             _normal = (Position, ClientSize.Width, ClientSize.Height);
     }
 
+    protected override void OnClosed(EventArgs e)
+    {
+        base.OnClosed(e);
+        // Its own: BlackBox goes on with the other windows, where these were left behind.
+        _film?.Close();
+        // Let go of first: closing, it would bring this window forward and hold its videos again.
+        var viewer = _viewer;
+        _viewer = null;
+        viewer?.Close();
+        InView.Hold(this, false);
+    }
+
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         base.OnClosing(e);
         Remember();
+        // A window opened beside another and neither moved nor resized: the place where BlackBox
+        // opens stays where it was, rather than creeping down a step with every second window.
+        if (_cascaded is not null && _normal == _cascaded && WindowState != WindowState.Maximized)
+            return;
         if (!e.Cancel && _normal is { } normal)
             Vm.SavePlacement(new Core.Settings.WindowPlacement
             {
@@ -357,21 +397,22 @@ public partial class MainWindow : Window
             if (change.PropertyName == nameof(MainWindowViewModel.ShowIntro) && !vm.ShowIntro)
                 _stickToBottom = true;
         };
-        // Stay visible while the agent works, but out of its way when it clicks or types here.
-        if (TryGetPlatformHandle()?.Handle is { } handle)
-            vm.AttachHostWindow(handle);
+        vm.ShowInputOverlay();
     }
 
     /// <summary>A chat picked in the History dropdown (its command opens it): close the list and get back to typing.</summary>
     private void OnPastChatClick(object? sender, RoutedEventArgs e)
     {
         _stickToBottom = true;
+        var row = (sender as Control)?.DataContext as PastChat;
         // Closed afterwards: the Click event comes before the command, and closing detaches the
         // row, which unbinds its command.
         Dispatcher.UIThread.Post(() =>
         {
             HistoryButton.Flyout?.Hide();
-            InputBox.Focus();
+            // Open in another window, which came forward: the focus stays there.
+            if (row is not { IsElsewhere: true })
+                InputBox.Focus();
         });
     }
 
@@ -428,17 +469,8 @@ public partial class MainWindow : Window
         viewer.Position = screen.Bounds.Position;
         viewer.Width = screen.Bounds.Width / screen.Scaling;
         viewer.Height = screen.Bounds.Height / screen.Scaling;
-        nint handle = 0;
-        viewer.Opened += (_, _) =>
-        {
-            // Out of the agent's way as the chat is: a click of its lands behind it.
-            if (viewer.TryGetPlatformHandle()?.Handle is { } h)
-                Vm.AttachViewer(handle = h);
-        };
         viewer.Closed += (_, _) =>
         {
-            if (handle != 0)
-                Vm.DetachViewer(handle);
             if (ReferenceEquals(_viewer, viewer))
             {
                 _viewer = null;
@@ -452,7 +484,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>The chat's videos play while they can be seen: not under the viewer, nor with the window minimized.</summary>
-    private void HoldVideos() => InView.Hold(_viewer is not null || WindowState == WindowState.Minimized);
+    private void HoldVideos() => InView.Hold(this, _viewer is not null || WindowState == WindowState.Minimized);
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {

@@ -185,8 +185,9 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   start, template list and model search: SD 1.5 checkpoints at about 512 pixels, since anything much
   bigger takes very long or doesn't fit in memory. Once the
   task is over it is closed, after the jobs still in its queue (the CLI waits for them before it
-  exits; one the window was closed on is closed at the next start, once its jobs are done, unless
-  another BlackBox runs then); a ComfyUI the user started keeps running, and only lets go of the models the task's jobs
+  exits; one the window was closed on is closed at the next start, once its jobs are done), unless
+  another BlackBox process runs then (the command line, another build), which may be between two of
+  its jobs: each counts only its own tasks. A ComfyUI the user started keeps running, and only lets go of the models the task's jobs
   loaded, so the GPU is free. BlackBox tells its own from the user's by the process it started,
   kept in `Data/comfyui/state.json`, and by the port it listens on, whatever language Windows
   writes netstat's LISTENING in. One it started that doesn't come up (too slow, or the user
@@ -292,6 +293,14 @@ Right-click → Copy on any picture in the chat (a preview, a picture in your me
 box, a tool's screenshot) puts it on the clipboard at its full size, not the chat's, together with
 its file: Paint, Word or a chat app's box paste the picture, Explorer and mail paste the file. A
 video gives the frame on screen with its file; a screenshot, which has no file, the picture alone.
+
+A chat video that played nothing (its file deleted or no longer readable) no longer starts again
+by itself, which it did at once, for ever, opening the decoder and ffmpeg each time. Opening the
+full-screen viewer looks at the disk only for paths on this PC's own drives, as a share whose server
+was off held the window. An animation in the viewer keeps all its frames within 256 MB, and reading
+how a file was made (Prompt) is bounded against files made to hang it: a compressed text chunk
+grows to 16 MB at most, the settings line is read to 8,000 characters, and a workflow's links are
+followed 100,000 times at most.
 
 ### How it does
 qwen3.8 27B (q6_k_xl, on the LM Studio server) with the ComfyUI on an RTX 5070 Ti (16 GB), each
@@ -561,7 +570,9 @@ sideways, Ctrl+wheel zooms. Above the timeline are a viewer (the piece picked: a
 song; with nothing picked, the joined film) and a panel. A click away from every piece (on the
 timeline's empty space, around the viewer, on the bar at the top) or Esc (not while typing) picks
 the whole film again, so what is said next is about the film; a click on the ruler moves the
-playhead and keeps the pick, and so does a click in the panel, which acts on what is picked.
+playhead and keeps the pick, and so does a click in the panel, which acts on what is picked, or on
+the picked piece's own view (a frame not made yet, whose disabled full-screen button let the click
+through to "away", the song's card). A soundtrack that is a video opens full screen on its own.
 
 **The user never writes a prompt** (their rule): there are no prompt fields. They pick a piece (a
 reference, a shot or one of its frames, the sound) or nothing (the whole film), and say in the
@@ -653,7 +664,9 @@ walking back from the mailbox twice, one with a see-through double; a wave froze
 splash from nowhere; a café cup vanishing; the boy holding still 2 s before his wave) and four good:
 the four looks together failed all six bad ones. Of the good ones they failed one where a girl
 walking right read as the mailbox drifting (the measured movement now says outright when the camera
-holds, and the steadiness look that someone walking across is not the things behind them moving),
+holds, and the steadiness look that someone walking across is not the things behind them moving;
+"holds" only when most steps were measured and the whole picture's path stayed under 2% however it
+turned: added up, a pan there and back came to nothing and a plain night sky measured nothing),
 and one where a 1.6 s sip read as a freeze (the behaviour look is now told that a sip, a look or an
 asked-for pause holds still by its nature); both pass now, and the bad ones still fail. The reasons
 weren't always the right ones: the vanishing cup was failed for a freeze at the lips.
@@ -725,6 +738,21 @@ the camera" on shot 3 rewrote its prompt in 15 s and made it again in two minute
 film** still hands the storyboard to the agent in the chat. A ComfyUI BlackBox started for the
 window is closed once the window is.
 
+**What a review found (2026-10-23).** A piece's stamp is written once its output is in place, not
+when its job is queued: a remake that failed or was stopped left the old picture or clip with the
+new settings' stamp, read as made from them, and skipped by Make what's missing. The song's stamp
+carries its length after a colon (`hash:72`), and a song stays made while it covers the film, as
+one made before (its length in the hash) does too: a shot a second shorter remade a long film's
+song with other music. The lines keep a seed of their own (`sound.voiceSeed`, the song's until a
+song is made): remaking the song changed the voice. A take that failed puts the song's seed back. A
+restored take is made now as far as what is made from it goes, and brings back the settings that
+were at their defaults when it was made. Ids given in a change are kept and new ones come after them
+(shots before frames when two collide). A frame listed in its own `from`, a title of 79 or more
+characters (the tool went round for ever finding a free folder) and names like "Con" no longer
+break anything. A template a shot was pinned to by an upgraded storyboard gives way to one that can
+do the shot's job once it has a last frame or a line. The film tool saves only the seed a long job
+settled onto the storyboard as it is then, and numbers in stamps are written in the invariant culture.
+
 ### How films did
 On this PC (RTX 5070 Ti 16 GB, ComfyUI 0.41.3), at 1280x720 and 24 fps: a frame from words took
 about 20 s (Z-Image Turbo), one made from other frames 25 to 45 s (Qwen-Image-Edit 2509), a 5 s shot
@@ -789,6 +817,87 @@ its line too. A call that runs past a few seconds counts its time like the wait 
 and the line a task ended with says under it how long the whole task took ("Worked for 25 min 13 s").
 The times are saved with the chat; a chat saved before they were kept shows none.
 
+## Several windows
+**New window** in the top bar or Ctrl+Shift+N opens another chat window, with its own chat, agent
+and MCP servers. (It was an icon at first, to keep the bar within the narrowest window, and went
+unnoticed; now the server's status text is what gets shorter in a narrow window.) Starting BlackBox
+again does the same: one BlackBox runs per `Data` folder (`SingleInstance`), and a second start of
+the exe asks it for another window and ends at once. All the windows are one process
+(`ChatWindows` keeps them), so what they share needs no talk between programs; BlackBox ends with
+its last chat window. Until the user chose this (2026-10-23, "I prefer simple solutions"), each
+window was a process of its own, and that took a hidden message window per process to hide each
+other's windows from screenshots and to ask "typing?", named mutexes for the mouse and keyboard and
+the captures, claim files for open chats, and a Pause/Break passed on from process to process.
+
+How a second start finds the first: a named mutex `Local\BlackBox-<hash>` says one runs, and it is
+asked over a named pipe of the same name, open to this Windows user only. The hash stands for the
+user, the Windows session, the `Data` folder and the build (the exe's module id): another build in
+the same folder (a newer download started beside the old one, "BlackBox (1).exe") runs on its own,
+as before. The pipe is listened on from the first line of `Main`, so a start a moment after another
+waits for it (two started at once made one process with two windows); one that started before the
+first window was up gets its window once it is. The running one sends its process id first, and
+the new start, which has the foreground as the program the user just opened, lets it bring the new
+window to the front (`AllowSetForegroundWindow`); Windows doesn't let a program in the background
+do that by itself. A running one that doesn't answer in 10 s (hung, or ending) is left be, and the
+new start runs beside it.
+
+The first window opens where BlackBox was last closed, every later one 32 px down and right of the
+window in front, at its size, kept on the screen, as Windows cascades windows: right on top of it,
+a second window looked as if nothing had opened. A window closed where it opened beside another
+doesn't save its place, so BlackBox doesn't creep down a step with every second window. The title
+bar names the chat ("keys 6 - BlackBox"), to tell the windows apart on the taskbar. A window's
+Filmmaking window and full-screen viewer close with it, and so does all it had going: its run
+stops (the chat says so, with Continue, when it is opened again; it ended without a word before),
+what that run still reports is dropped (another window may open the chat meanwhile), the
+sounds in its chat stop, and no run or MCP server of its starts again. Its videos hold still while
+it is minimized or its viewer is open, not those of the other windows.
+
+What they share, and how they keep out of each other's way:
+- **Settings.** Each window has them in memory, with a store of its own that writes only what the
+  window changed since it last read or wrote `settings.json` (a three-way merge, key by key, one
+  window at a time): a model picked in one window stayed picked when another closed and saved
+  where it was. The server, key, model and context in the top bar are each window's own; what the
+  Settings dialog saves ("Ask me first", the instructions, the MCP servers) goes to every window at
+  once, from its next task, as in the window it was saved in: "Ask me first" turned on in one window
+  left the other's agent acting without asking. A new window starts with what was saved last.
+- **Chats.** A chat is open in one window at a time: two saving their own runs into one file lost
+  one of them. One another window has open says so in History ("Open in another window", no trash
+  button), and picking it brings that window forward. History rereads the folder whenever it opens,
+  for the chats other windows started. One saver writes every window's chats, so a window opening a
+  chat another just left waits for its last version.
+- **The screen.** Every window, Filmmaking, the viewer and a dialog is the process's own, so all of
+  them are left out of every agent's screenshots, and a click that lands on any of them pushes it to
+  the bottom for the click, as for the chat alone.
+- **The mouse and keyboard.** One agent at a time (`DesktopTurn`): from its first click or key
+  press until its task ends, or until it has left them alone for 60 s while another window's agent
+  waits (longer than a model thinks between two clicks); never in the middle of an action. An
+  action whose agent hasn't seen the screen since another agent acted (it waited for them, or the
+  other's task ended a moment before) does nothing and gives the model the screen as it is now:
+  what it aimed at may have moved. Its own actions and plain looks don't count. One that waited
+  5 minutes says so and suggests work that doesn't need them. Typing in any window's box pauses
+  every window's clicks and keys, as typing in its own does ("Paused while you type in another
+  BlackBox window", without Resume, which only ends its own pause). One keyboard hook watches
+  Pause/Break for all of them, and one press stops every window's run; with a hook each, the first
+  that stopped its run swallowed the press, and the others never saw it.
+- **ComfyUI and the headless browser** are the process's: the server BlackBox started is closed by
+  the last task done with it (checked again just before it stops: a task that started while the last
+  one was ending kept it), and the browser loads one page at a time on its profile.
+
+A start that asks for a window is answered once the first window is up, and never with a window
+that won't open: while BlackBox ends, or after it failed to start, a start runs by itself.
+
+Checked on the desktop PC with a stand-in model server (2026-10-23): starting the exe again ended
+that start in 0.1 s and opened a second window in the first process, in front, 32 px down and
+right; New window there opened a third a step further. "keys 4" in one window with text typed in
+another's box paused it ("Paused while you type in another BlackBox window", 25 s instead of 12);
+one Pause stopped two runs; picking a chat another window had open brought that window forward.
+"keys 3" sent in two windows half a second apart: the second showed "Waiting for another BlackBox
+window to finish with the mouse and keyboard", got them when the first was done, and its first
+press was "Nothing was done" with the screen as it was. No BlackBox window showed in any screenshot.
+Two starts at the same moment made one process with two windows; a start with another `Data`
+folder ran as a process of its own. Closing the first window left the others; closing the last
+ended the process.
+
 ## Files in a message
 Drop files or folders anywhere on the window, paste them with Ctrl+V (a screenshot, a picture
 copied in a browser, files copied in Explorer), or pick them with the paperclip next to the box.
@@ -808,7 +917,8 @@ picture again with `read_file`. The command-line runner takes files with `--atta
 Until a chat is used, it shows first that Pause/Break stops it and that corrections and hints can be
 typed to it while it works, that it uses the mouse and keyboard but pauses while you type and what it
 asks before it acts, then that Ctrl+V pastes a screenshot or files into a message and that files can
-be dropped on the window (the empty box says so too), then what BlackBox can do (apps, pictures,
+be dropped on the window (the empty box says so too), that Ctrl+Shift+N or New window opens another window for
+another task at the same time (see [Several windows](#several-windows)), then what BlackBox can do (apps, pictures,
 video and sound, game development in any game engine, getting the programs and MCP servers a job
 needs, servers, documents, the web, chatting for you, long jobs, and files and commands). It says
 so when the model in use can't see images. Notices such as an MCP server that failed to start show
@@ -870,7 +980,9 @@ otherwise, saying why in its tooltip:
 - Anthropic's model list says each model's levels (`capabilities.effort`); without it, the
   version does (4.7 on: low to max; 4.6: no xhigh; Opus 4.5: low to high; Haiku 4.5: none).
 - OpenRouter and Kilo list `reasoning` among a model's `supported_parameters`; the effort goes as
-  their `reasoning: {effort}`.
+  their `reasoning: {effort}`. Not for Claude or Gemini through them: with thinking on, a tool call
+  wants the signed thinking before it back (their `reasoning_details`), which BlackBox doesn't keep,
+  so those run with thinking off as before (a review found it; not tried against OpenRouter).
 - LM Studio 0.4 lists `capabilities.reasoning.allowed_options` (gpt-oss: low, medium, high; a model
   that only turns thinking on and off takes none); it goes as `reasoning_effort`. The test server's
   LM Studio lists no reasoning options for qwen3.8 (its switches, `reasoning_effort` among them,
@@ -899,7 +1011,11 @@ Claude unchanged. A gateway in front of Anthropic whose address has an `anthropi
   uses the whole 1M (the user's call, 22 October 2026: what a long context costs is the user's to
   weigh), where OpenRouter's and Kilo's 1M gets 100k. Checked then against Anthropic's documents:
   reading earlier steps from the cache doesn't count toward the input tokens a minute (Opus 5.5
-  takes 2M a minute even on the lowest paid tier, Fable 500k), so the limits hold; the cost grows
+  takes 2M a minute even on the lowest paid tier, Fable 500k), so the limits hold while the cache
+does; after it expires a request of a context bigger than the minute's input tokens would wait for
+ever, so a 429 for input tokens that comes with the minute's budget all but unspent
+(`anthropic-ratelimit-input-tokens-remaining`) is taken as the context being too long: four fifths
+of the limit from then on, after a handoff note; the cost grows
   with the context, as every step reads all of it again: on Opus 5.5 $0.02 a step at 100k, $0.16
   at 800k, about $7 against $28 of input over a 300-step job, and a step after more than 5 minutes
   without one writes the whole context to the cache again ($4 at 800k). A request over 32 MB,
@@ -966,6 +1082,17 @@ run, and a screenshot question in the app. All 54 requests kept the API's rules,
 and from the second step on each read everything before it from the cache; screenshots of the
 2560x1080 screen went at 1984x832, and the model list, "Picked by BlackBox: Claude Opus 5.5" and
 the slider's 1M showed in the window.
+
+A review on 2026-10-23 against the API's rules found: an MCP tool whose schema is a union at the top
+(`anyOf`, as zod writes one) was refused in every request, so such schemas are made one object (the
+alternatives' properties together; required what all of them require); the parts of a request the
+API turned down are now learnt per model, not per address; past 100 pictures in a request the oldest
+are left out fifty at a time, so the cache breaks once in fifty steps (about 120 steps into a task
+on Haiku 4.5 every request was refused); thinking cut off before its signature isn't sent back;
+screenshots for models before 4.7 go at 1184 px, so a 4:3 or 5:4 screen's picture stays under the
+1.15 megapixels those models take whole; and the handoff note after a request refused as too long
+is asked for on the latest part of the conversation without pictures, which fits, instead of the
+whole of it again.
 
 ### Without a model server: Kilo's free models
 A new BlackBox's address is Kilo's AI gateway (`https://ai-gateway.kilo.ai/api/v1`), whose free
@@ -1293,11 +1420,16 @@ Then it looked things up too long. On develop, the same task had qwen3.8 read Bl
 notes, its manual and then its source on GitHub's main branch for 13 minutes, 40 pages with no
 script in between, asking itself whether Group Input had been renamed in 5.2, and it hadn't
 finished at 20 minutes. So after eight look-ups with no try between them, and every six after
-that, the result says the installed version can settle it: a short script that lists or prints
+that, where there is something installed to ask (a try made in the task, or a request naming a
+program's version; a request that is all research gets no such note), the result says the installed version can settle it: a short script that lists or prints
 what it has, then the likeliest answer tried. With that, the next run read for four minutes, went
 to scripts, and had the scene right (100 cubes) in 16 minutes. A search the model says it will
 make and then doesn't is searched as it wrote it when it wrote it out in quotes after a colon
-("this specific problem: "Blender 5.2 geometry nodes modifier input…"").
+("this specific problem: "Blender 5.2 geometry nodes modifier input…""), but not the words between
+two quoted names (`"GeometryNodeGroup" vs "NodeGroupInput"`). The count starts over with each
+message of the user's and with a call that asks the installed version (help(), --help). A sentence
+saying it will search is taken from where it says so: before, what came before its colon ("the value
+on screen didn't change: let me search the web for…") named the screen and the search was dropped.
 
 No API key and nothing to install. `web_search` asks DuckDuckGo's HTML page through the system's
 `curl` (built into Windows 10 and later; a fraction of a second): DuckDuckGo recognizes .NET's own
@@ -1441,7 +1573,8 @@ run, the line saying so in the chat has a Continue button: the task carries on w
 as if "Continue." had been sent (a stop before the model had the message runs that message again).
 A chat that ended stopped shows it again when opened from History. BlackBox
 stays on screen while it works but is left out of the agent's screenshots, and steps behind other
-windows for the moment a click lands on it. It is left out only for the instant each screenshot is
+windows for the moment a click lands on it: all of its windows (every chat window, the viewer,
+Filmmaking, a dialog), found by their process (see Several windows). It is left out only for the instant each screenshot is
 taken, so screen recorders and screen sharing show it the rest of the time (before, an option hid
 it from them for good). Every click and key press the agent makes shows up in a
 log in the bottom-right corner that fades after 15 seconds, with a ring where it clicked. The agent
@@ -1653,7 +1786,8 @@ dotnet test --filter SshIntegrationTests  # ssh, file tools and copy; BB_SSH_TES
 - `src/BlackBox.Core`: OpenAI-compatible streaming client, server probe, agent loop, tools,
   settings. Platform-neutral.
 - `src/BlackBox.Platform.Windows` (net10.0-windows): screen capture (GDI), input (SendInput),
-  host-window handling. Only referenced when building on Windows.
+  host-window handling, Pause/Break.
+  Only referenced when building on Windows.
 - `src/BlackBox.Cli`: headless runner for trying tasks and models.
 - `src/BlackBox.App`: Avalonia 11 UI with CommunityToolkit.Mvvm.
 - `tests/BlackBox.Core.Tests`: xUnit tests (unit tests plus opt-in server integration tests).

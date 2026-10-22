@@ -151,8 +151,10 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             Prefix = Prefix(board, frame.Id),
         };
         var job = pictures.Count > 0 ? FilmJob.Edit : FilmJob.Frame;
-        var run = await RunAsync(board, job, ModelOf(board, frame), inputs, frame.Set, board.FrameWorkflow(frame), FrameStamp(board, frame), "image", progress, userMessage, ct).ConfigureAwait(false);
+        var stamp = FrameStamp(board, frame);
+        var run = await RunAsync(job, ModelOf(board, frame), inputs, frame.Set, board.FrameWorkflow(frame), stamp, "image", progress, userMessage, ct).ConfigureAwait(false);
         await Task.Run(() => SaveFrame(run.Output, target, board.Width, board.Height), ct).ConfigureAwait(false);
+        Restamp(board.FrameWorkflow(frame), stamp);
         FilmTakes.Remember(board.FrameWorkflow(frame), FilmPiece.Of(frame).Settings(board));
         return new FilmMade(target, board.FrameWorkflow(frame), run.Template, run.Took, run.Notes);
     }
@@ -231,11 +233,13 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         };
         var target = take ?? board.ShotVideo(shot);
         var workflow = take is null ? board.ShotWorkflow(shot) : Path.ChangeExtension(take, ".json");
-        var run = await RunAsync(board, job, ModelOf(board, shot), inputs, shot.Set, workflow, ShotStamp(board, shot), "video", progress, userMessage, ct).ConfigureAwait(false);
+        var stamp = ShotStamp(board, shot);
+        var run = await RunAsync(job, ModelOf(board, shot), inputs, shot.Set, workflow, stamp, "video", progress, userMessage, ct).ConfigureAwait(false);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         File.Copy(run.Output, target, overwrite: true);
         if (VideoSteady.AsksStill(shot.Camera + "\n" + shot.Prompt) && await HoldStillAsync(target, ct).ConfigureAwait(false) is { } held)
             notes.Add(held);
+        Restamp(workflow, stamp);
         FilmTakes.Remember(workflow, FilmPiece.Of(shot).Settings(board));
         return new FilmMade(target, workflow, run.Template, run.Took, [.. notes, .. run.Notes]);
     }
@@ -301,7 +305,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         var notes = new List<string>();
         var api = await hub.ConnectAsync(null, notes, progress, ct).ConfigureAwait(false);
         var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
-        var workflow = SpeechWorkflow(library, shot.Line.Trim(), board.Sound.Voice.Trim(), board.Sound.Seed, reference, firstSpeaker.Line.Trim(), Prefix(board, shot.Id + "-line"))
+        var workflow = SpeechWorkflow(library, shot.Line.Trim(), board.Sound.Voice.Trim(), VoiceSeed(board), reference, firstSpeaker.Line.Trim(), Prefix(board, shot.Id + "-line"))
                        ?? throw new FilmException("Saying a line needs VoxCPM2's nodes in ComfyUI (the ComfyUI-VoxCPM custom node pack), and they aren't installed: " +
                                                   "install the pack (it downloads its model on first use), or give the film a soundtrack of its own to lip-sync to.");
         workflow.FillAdvancedDefaults(library);
@@ -309,6 +313,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         var run = await RunWorkflowAsync(api, library, workflow, board.ShotLineWorkflow(shot), stamp, "VoxCPM2", "audio", progress, userMessage, ct).ConfigureAwait(false);
         Directory.CreateDirectory(Path.GetDirectoryName(board.ShotLine(shot))!);
         File.Copy(run.Output, board.ShotLine(shot), overwrite: true);
+        Restamp(board.ShotLineWorkflow(shot), stamp);
         return new FilmMade(board.ShotLine(shot), board.ShotLineWorkflow(shot), "VoxCPM2", run.Took, [.. notes, .. run.Notes]);
     }
 
@@ -355,8 +360,14 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     {
         var first = board.Shots.FirstOrDefault(Storyboard.Speaks);
         var reference = first is null || first == shot ? "" : $"{first.Line.Trim()}|{FileStamp(board.ShotLine(first))}";
-        return Hash($"{shot.Line.Trim()}|{board.Sound.Voice.Trim()}|{board.Sound.Seed}|{reference}");
+        return Hash($"{shot.Line.Trim()}|{board.Sound.Voice.Trim()}|{VoiceSeed(board)}|{reference}");
     }
+
+    /// <summary>
+    /// The seed the lines are said with: the song's until a song was made with a seed of its own
+    /// (<see cref="FilmSound.VoiceSeed"/>); remaking the song changed the voice and put every line out of date.
+    /// </summary>
+    private static long VoiceSeed(Storyboard board) => board.Sound.VoiceSeed is > 0 and var voice ? voice : board.Sound.Seed;
 
     /// <summary>
     /// A sound placed <paramref name="at"/> seconds into a WAV <paramref name="seconds"/> long, silence
@@ -414,26 +425,42 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         if (python is null || ffmpeg is null)
             takes = 1;
         var made = new List<(long Seed, string File, string Workflow, Run Run)>();
-        for (var take = 1; take <= Math.Max(1, takes); take++)
+        // The lines keep the voice they were said with, whatever seed the song ends up with.
+        if (sound.VoiceSeed <= 0)
+            sound.VoiceSeed = sound.Seed;
+        var seedBefore = sound.Seed;
+        try
         {
-            if (take > 1)
-                sound.Seed = Storyboard.NewSeed();
-            var inputs = new FilmInputs
+            for (var take = 1; take <= Math.Max(1, takes); take++)
             {
-                Tags = sound.Tags.Trim(),
-                Lyrics = sound.Lyrics.Trim().Length > 0 ? sound.Lyrics.Trim() : "[Instrumental]",
-                Bpm = Bpm(sound.Tags),
-                Seed = sound.Seed,
-                Seconds = SongSeconds(board),
-                Prefix = Prefix(board, "song"),
-            };
-            var (file, workflow) = takes <= 1 ? (board.SongFile, board.SongWorkflow)
-                : (Path.Combine(board.Folder, "sound", $"song.take{take}.mp3"), Path.Combine(board.Folder, "sound", $"song.take{take}.json"));
-            var run = await RunAsync(board, FilmJob.Song, SongModelOf(board), inputs, sound.Set, workflow, SongStamp(board), "audio",
-                takes <= 1 ? progress : s => progress?.Invoke($"Song {take} of {takes}: {s}"), userMessage, ct).ConfigureAwait(false);
-            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-            File.Copy(run.Output, file, overwrite: true);
-            made.Add((sound.Seed, file, workflow, run));
+                if (take > 1)
+                    sound.Seed = Storyboard.NewSeed();
+                var inputs = new FilmInputs
+                {
+                    Tags = sound.Tags.Trim(),
+                    Lyrics = sound.Lyrics.Trim().Length > 0 ? sound.Lyrics.Trim() : "[Instrumental]",
+                    Bpm = Bpm(sound.Tags),
+                    Seed = sound.Seed,
+                    Seconds = SongSeconds(board),
+                    Prefix = Prefix(board, "song"),
+                };
+                var (file, workflow) = takes <= 1 ? (board.SongFile, board.SongWorkflow)
+                    : (Path.Combine(board.Folder, "sound", $"song.take{take}.mp3"), Path.Combine(board.Folder, "sound", $"song.take{take}.json"));
+                var stamp = SongStamp(board);
+                var run = await RunAsync(FilmJob.Song, SongModelOf(board), inputs, sound.Set, workflow, stamp, "audio",
+                    takes <= 1 ? progress : s => progress?.Invoke($"Song {take} of {takes}: {s}"), userMessage, ct).ConfigureAwait(false);
+                Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+                File.Copy(run.Output, file, overwrite: true);
+                Restamp(workflow, stamp);
+                made.Add((sound.Seed, file, workflow, run));
+            }
+        }
+        catch
+        {
+            // A take that failed (or was stopped) leaves the board as it was: the song made before
+            // still matches it, rather than being out of date for a seed nothing was made with.
+            sound.Seed = seedBefore;
+            throw;
         }
 
         // Each heard for the part of it the film uses.
@@ -485,7 +512,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     /// result (with the files it loads by their full paths, so the comfyui tool can run it again).
     /// </summary>
     /// <param name="model">What it is to be made with, in words or by name (<see cref="FilmFrame.Model"/>); null: the best installed.</param>
-    private async Task<Run> RunAsync(Storyboard board, FilmJob job, string? model, FilmInputs inputs, JsonObject? extra, string workflowFile, string stamp, string kind,
+    private async Task<Run> RunAsync(FilmJob job, string? model, FilmInputs inputs, JsonObject? extra, string workflowFile, string stamp, string kind,
         Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
     {
         Use();
@@ -538,7 +565,9 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             try { await api.CancelAsync(pending.PromptId, ct).ConfigureAwait(false); }
             catch (ComfyApiException) { }
         }
-        WriteStamp(workflowFile, stamp, templateName, workflow);
+        // No stamp until what it makes is in place (the caller writes it then): a job that failed or
+        // was stopped left the piece made before with the new settings' stamp, as if made from them.
+        WriteStamp(workflowFile, "", templateName, workflow);
 
         // The files it loads go into ComfyUI's input folder.
         var uploaded = new HashSet<string>();
@@ -581,7 +610,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             throw;
         }
         if (job.Status is "running" or "queued")
-            throw new FilmStillRunningException($"It is still being made in ComfyUI ({job.Progress ?? job.Status}, {ComfyRunner.Clock(DateTime.UtcNow - pending.Queued)} so far)" +
+            throw new FilmStillRunningException($"It is still being made in ComfyUI ({job.Progress ?? job.Status}, {Chats.ChatTimes.Stopwatch(DateTime.UtcNow - pending.Queued)} so far)" +
                                                 ": asking for the same thing again waits for it.");
         Running.TryRemove(workflowFile, out _);
         if (job.Status != "success")
@@ -614,7 +643,8 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         {
             sb.Append(FramePrompt(board, frame)).Append('|').Append(frame.Seed).Append('|')
               .Append(ModelOf(board, frame)).Append('|').Append(frame.Set?.ToJsonString());
-            foreach (var id in frame.From)
+            // Not itself, which making it skips: its own picture changes with every make, and it was never up to date.
+            foreach (var id in frame.From.Where(id => id != frame.Id))
                 sb.Append("|from ").Append(id).Append(' ').Append(board.Frame(id) is { } from ? FileStamp(board.FramePicture(from)) : "");
         }
         sb.Append('|').Append(board.Width).Append('x').Append(board.Height);
@@ -624,22 +654,35 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     public static string ShotStamp(Storyboard board, FilmShot shot)
     {
         var sb = new StringBuilder();
-        sb.Append(ShotPrompt(board, shot)).Append('|').Append(shot.Seed).Append('|').Append(shot.Seconds).Append('|').Append(board.Fps).Append('|')
+        // Numbers as the invariant culture writes them: a film moved to a PC that writes 5,5 for 5.5 stays made.
+        sb.Append(ShotPrompt(board, shot)).Append('|').Append(shot.Seed).Append('|').Append(shot.Seconds.ToString(CultureInfo.InvariantCulture)).Append('|').Append(board.Fps).Append('|')
           .Append(board.Width).Append('x').Append(board.Height).Append('|').Append(shot.LipSync).Append('|').Append(shot.Set?.ToJsonString());
         foreach (var id in new[] { shot.First, shot.LipSync ? null : shot.Last })
             sb.Append('|').Append(board.Frame(id) is { } frame ? FileStamp(board.FramePicture(frame)) : "none");
         sb.Append('|').Append(ModelOf(board, shot));
         if (Storyboard.Speaks(shot))
-            sb.Append("|line ").Append(LineStamp(board, shot)).Append(' ').Append(LineLead);
+            sb.Append("|line ").Append(LineStamp(board, shot)).Append(' ').Append(LineLead.ToString(CultureInfo.InvariantCulture));
         else if (shot.LipSync)
         {
             var (starts, _) = board.Timing();
-            sb.Append("|sound ").Append(board.SoundtrackFile is { } s ? FileStamp(s) : "").Append(' ').Append(starts[Math.Max(0, board.Shots.IndexOf(shot))]);
+            sb.Append("|sound ").Append(board.SoundtrackFile is { } s ? FileStamp(s) : "").Append(' ').Append(starts[Math.Max(0, board.Shots.IndexOf(shot))].ToString(CultureInfo.InvariantCulture));
         }
         return Hash(sb.ToString());
     }
 
+    /// <summary>
+    /// What the song is made from, and after a colon how long it was made: a song stays up to date
+    /// while it covers the film. With the length in the hash, any change of a film over a minute
+    /// (a shot a second shorter) put the song out of date, and remaking it changed the music.
+    /// </summary>
     public static string SongStamp(Storyboard board) =>
+        SongHash(board) + ":" + SongSeconds(board).ToString(CultureInfo.InvariantCulture);
+
+    private static string SongHash(Storyboard board) =>
+        Hash($"{board.Sound.Tags}|{board.Sound.Lyrics}|{board.Sound.Seed}|{SongModelOf(board)}|{board.Sound.Set?.ToJsonString()}");
+
+    /// <summary>The stamp songs were made with before 2026-10-23, the length in the hash: theirs stay up to date as before.</summary>
+    private static string OldSongStamp(Storyboard board) =>
         Hash($"{board.Sound.Tags}|{board.Sound.Lyrics}|{board.Sound.Seed}|{SongSeconds(board)}|{SongModelOf(board)}|{board.Sound.Set?.ToJsonString()}");
 
     /// <summary>
@@ -723,7 +766,10 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         File.Exists(board.ShotVideo(shot)) && MadeStamp(board.ShotWorkflow(shot)) is { } made && made == ShotStamp(board, shot);
 
     public static bool SongIsCurrent(Storyboard board) =>
-        File.Exists(board.SongFile) && MadeStamp(board.SongWorkflow) is { } made && made == SongStamp(board);
+        File.Exists(board.SongFile) && MadeStamp(board.SongWorkflow) is { } made
+        && (made.Split(':') is [var hash, var length] && hash == SongHash(board)
+            && double.TryParse(length, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds >= SongSeconds(board)
+            || made == OldSongStamp(board));
 
     // ---- pictures and sound --------------------------------------------------------------------------------
 

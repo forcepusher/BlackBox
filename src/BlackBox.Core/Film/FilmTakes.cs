@@ -155,6 +155,9 @@ public static class FilmTakes
             return board;
         Keep(board, piece);
         System.IO.File.Copy(take.File, file, overwrite: true);
+        // Made now, as far as what is made from it goes: with the take's own time, the film joined
+        // since with the piece it replaced still read as made after everything in it.
+        System.IO.File.SetLastWriteTimeUtc(file, DateTime.UtcNow);
         if (System.IO.File.Exists(take.Workflow))
             System.IO.File.Copy(take.Workflow, workflow, overwrite: true);
         System.IO.File.Delete(take.File);
@@ -163,6 +166,17 @@ public static class FilmTakes
         if (take.Settings is not { } settings)
             return board;
         var item = (JsonObject)settings.DeepClone();
+        // What was at its default then (no last frame, no model: null, false, 0) wasn't written with
+        // the take: put back as such too, or the piece's settings since stayed and it read as changed.
+        if (piece.Settings(board) is JsonObject now)
+            foreach (var (key, value) in now)
+                if (key != "id" && !item.ContainsKey(key))
+                    item[key] = value is JsonValue v ? v.GetValueKind() switch
+                    {
+                        System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False => JsonValue.Create(false),
+                        System.Text.Json.JsonValueKind.Number => JsonValue.Create(0),
+                        _ => null,
+                    } : null;
         if (piece.Kind != FilmPieceKind.Song)
             item["id"] = piece.Id;
         var change = piece.Kind switch

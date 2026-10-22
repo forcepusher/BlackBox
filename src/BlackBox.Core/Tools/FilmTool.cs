@@ -29,7 +29,7 @@ public sealed class FilmTool : Tool
         "of: a shot's id, for a frame taken from where that shot's clip ends, so the shot that starts on it goes on from that moment (after a shot without a last frame)}], " +
         "shots:[{id, first, last (frame ids), seconds, prompt (what happens, and its look), camera, model, transition: cut|dissolve|fade, " +
         "line (what is said in it, lip-synced, in the voice sound.voice describes; it starts 0.4 s in, so leave time for it), lipSync (without a line: sings the soundtrack's part under it), seed}], " +
-        "sound:{source: none|file|song, file, tags (the song's style), lyrics, voice (who says the lines: age, voice, manner), model, seed}. Frames and shots are matched by id; {\"id\": …, \"delete\": true} removes one. " +
+        "sound:{source: none|file|song, file, tags (the song's style), lyrics, voice (who says the lines: age, voice, manner), model, seed}. Frames and shots are matched by id; {\"id\": …, \"delete\": true} removes one, and a field set to null is taken out (a shot's \"last\": null). " +
         "Nothing is film-wide, so a change remakes only what it changes: write the film's look into every frame's and shot's prompt. " +
         "model is what one is made with: a model or workflow in words (\"z image turbo\", \"juggernaut xl\", \"my pony workflow\"), matched against what ComfyUI has installed, " +
         "or none for the best installed one; action=models lists what is installed for each kind of picture, video and song. " +
@@ -100,7 +100,7 @@ public sealed class FilmTool : Tool
             }
             return action switch
             {
-                "storyboard" => Show(board, args["storyboard"] is JsonObject, ctx),
+                "storyboard" => Show(board, args["storyboard"] is JsonObject),
                 "frame" => await FrameAsync(board, RequireId(args), ctx, ct).ConfigureAwait(false),
                 "shot" => await ShotAsync(board, RequireId(args), (int)Math.Clamp(GetNumber(args, "tries") ?? 1, 1, 8), ctx, ct).ConfigureAwait(false),
                 "sound" or "song" => await SoundAsync(board, (int)Math.Clamp(GetNumber(args, "tries") ?? 3, 1, 8), ctx, ct).ConfigureAwait(false),
@@ -150,10 +150,13 @@ public sealed class FilmTool : Tool
                 (films.Count > 0 ? $" The films in {root}, the latest first: {string.Join("; ", films.Take(12))}." : ""));
         }
         var title = (string?)change["title"] ?? "Untitled film";
-        var folder = given ?? Path.Combine(root, Storyboard.Safe(title));
-        // Another film of the same title is another film: it isn't written over.
+        var name = Storyboard.Safe(title);
+        var folder = given ?? Path.Combine(root, name);
+        // Another film of the same title is another film: it isn't written over. Its number goes
+        // after a name cut short enough to keep it: cut at 80 characters with the number, a long
+        // title gave the same folder for every number, and the tool went round for ever.
         for (var n = 2; given is null && File.Exists(Path.Combine(folder, Storyboard.FileName)); n++)
-            folder = Path.Combine(root, Storyboard.Safe($"{title} {n}"));
+            folder = Path.Combine(root, $"{(name.Length > 72 ? name[..72].TrimEnd() : name)} {n}");
         if (given is not null && Path.GetFileName(given).Equals(Storyboard.FileName, StringComparison.OrdinalIgnoreCase))
             folder = Path.GetDirectoryName(given)!;
         Directory.CreateDirectory(folder);
@@ -205,7 +208,7 @@ public sealed class FilmTool : Tool
 
     // ---- the storyboard -------------------------------------------------------------------------------
 
-    private static ToolResult Show(Storyboard board, bool changed, ToolContext ctx)
+    private static ToolResult Show(Storyboard board, bool changed)
     {
         var text = Overview(board);
         var line = changed ? $"Saved the storyboard: {board.FilePath}. The user can open it in the Filmmaking window (the button at the top of BlackBox).\n" : "";
@@ -326,7 +329,7 @@ public sealed class FilmTool : Tool
         var made = await Maker(ctx).MakeFrameAsync(board, frame, ctx.Progress, ctx.UserMessage, ct).ConfigureAwait(false);
         var preview = MediaPreview.ForFiles([made.File], ctx.Media, ctx.SeesImages);
         var sb = new StringBuilder();
-        sb.AppendLine($"Frame {frame.Id} made in {Clock(made.Took)}" + (made.Template is { } t ? $" with {t}" : " from the user's picture") + $": {made.File}");
+        sb.AppendLine($"Frame {frame.Id} made in {Chats.ChatTimes.Stopwatch(made.Took)}" + (made.Template is { } t ? $" with {t}" : " from the user's picture") + $": {made.File}");
         if (made.Workflow is { } wf) sb.AppendLine($"Its workflow (fixed seed {frame.Seed}): {wf}");
         foreach (var note in made.Notes.Where(n => !n.Contains("no place for the size", StringComparison.Ordinal)))
             sb.AppendLine("Note: " + note);
@@ -340,6 +343,20 @@ public sealed class FilmTool : Tool
         return new ToolResult(sb.ToString(), preview.Image, ImageCaption: preview.Image is null ? null : $"Frame {frame.Id}:", Files: [made.File]);
     }
 
+    /// <summary>
+    /// Saves what a long job settled (a seed) onto the storyboard as it is on the disk now: saved
+    /// whole, the board read at the call's start wrote over what the user changed in the Filmmaking
+    /// window during minutes of takes, and the window then showed the tool's version.
+    /// </summary>
+    private static void SaveSettled(Storyboard board, Action<Storyboard> settle)
+    {
+        Storyboard fresh;
+        try { fresh = Storyboard.Load(board.Folder); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException or System.Text.Json.JsonException) { fresh = board; }
+        settle(fresh);
+        fresh.Save();
+    }
+
     private async Task<ToolResult> SoundAsync(Storyboard board, int tries, ToolContext ctx, CancellationToken ct)
     {
         if (board.Sound.Source == FilmSound.FromFile)
@@ -347,10 +364,11 @@ public sealed class FilmTool : Tool
         if (board.Sound.Source != FilmSound.Song)
             throw new FilmException("The storyboard has no song to make: set sound {\"source\": \"song\", \"tags\": …, \"lyrics\": …} first.");
         var made = await Maker(ctx).MakeSongAsync(board, ctx.Progress, ctx.UserMessage, ct, tries).ConfigureAwait(false);
-        board.Save(); // the seed of the song kept
+        // The seed of the song kept, and the voice the lines keep.
+        SaveSettled(board, fresh => (fresh.Sound.Seed, fresh.Sound.VoiceSeed) = (board.Sound.Seed, board.Sound.VoiceSeed));
         var preview = MediaPreview.ForFiles([made.File], ctx.Media, ctx.SeesImages);
         var sb = new StringBuilder();
-        sb.AppendLine($"The song is made in {Clock(made.Took)} with {made.Template}: {made.File} (a minute long at least: shorter songs come out badly; the film uses its start).");
+        sb.AppendLine($"The song is made in {Chats.ChatTimes.Stopwatch(made.Took)} with {made.Template}: {made.File} (a minute long at least: shorter songs come out badly; the film uses its start).");
         sb.AppendLine(string.Join("\n", preview.Lines));
         if (made.Score is { } score)
             sb.AppendLine($"How it sounds to SongEval, a judge trained on musicians' ratings, for the part the film uses: {score.Describe()}." +
@@ -384,7 +402,7 @@ public sealed class FilmTool : Tool
         {
             var made = await Maker(ctx).MakeShotAsync(board, shot, ctx.Progress, ctx.UserMessage, ct).ConfigureAwait(false);
             var look = await LookAtShotAsync(board, shot, made.File, ctx, ct).ConfigureAwait(false);
-            return Result($"Shot {shot.Id} made in {Clock(made.Took)} with {made.Template}: {made.File}\nIts workflow (fixed seed {shot.Seed}): {made.Workflow}", [.. first, .. made.Notes], look, made.File);
+            return Result($"Shot {shot.Id} made in {Chats.ChatTimes.Stopwatch(made.Took)} with {made.Template}: {made.File}\nIts workflow (fixed seed {shot.Seed}): {made.Workflow}", [.. first, .. made.Notes], look, made.File);
         }
 
         // Takes with new seeds until a check passes; the best one is kept as the shot's clip.
@@ -407,7 +425,11 @@ public sealed class FilmTool : Tool
         }
         var best = takes.MaxBy(t => t.Score);
         shot.Seed = best.Seed;
-        board.Save();
+        SaveSettled(board, fresh =>
+        {
+            if (fresh.Shot(shot.Id) is { } kept)
+                kept.Seed = best.Seed;
+        });
         File.Copy(best.File, board.ShotVideo(shot), overwrite: true);
         File.Copy(Path.ChangeExtension(best.File, ".json"), board.ShotWorkflow(shot), overwrite: true);
         var head = $"Shot {shot.Id}: {takes.Count} take(s); " +
@@ -541,7 +563,7 @@ public sealed class FilmTool : Tool
         var made = await FilmMontage.JoinAsync(board, ctx.Media?.Ffmpeg, ctx.Media, ctx.Progress, ct).ConfigureAwait(false);
         var preview = MediaPreview.ForFiles([made.File], ctx.Media, ctx.SeesImages);
         var sb = new StringBuilder();
-        sb.AppendLine($"Joined the film in {Clock(made.Took)}: {made.File}");
+        sb.AppendLine($"Joined the film in {Chats.ChatTimes.Stopwatch(made.Took)}: {made.File}");
         sb.AppendLine(string.Join("\n", preview.Lines));
         sb.AppendLine($"It fades in from black over its first {N(FilmMontage.FadeIn)} s and out over its last {N(FilmMontage.FadeOut)} s on purpose, so a dark first or last frame is that, not a fault.");
         foreach (var note in made.Notes)
@@ -552,7 +574,6 @@ public sealed class FilmTool : Tool
         return new ToolResult(sb.ToString(), preview.Image, ImageCaption: preview.Image is null ? null : "The film:", Files: [made.File]);
     }
 
-    private static string Clock(TimeSpan t) => ComfyRunner.Clock(t);
 
     private static string N(double d) => d.ToString("0.##", CultureInfo.InvariantCulture);
 }

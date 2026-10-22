@@ -337,6 +337,24 @@ public class AnthropicTests
     }
 
     [Fact]
+    public void A_request_bigger_than_the_input_tokens_a_minute_is_no_wait_but_too_long()
+    {
+        const string said = "This request would exceed the rate limit for your organization of 500,000 input tokens per minute.";
+        static System.Net.Http.Headers.HttpResponseHeaders Left(long remaining)
+        {
+            var headers = new HttpResponseMessage().Headers;
+            headers.Add("anthropic-ratelimit-input-tokens-limit", "500000");
+            headers.Add("anthropic-ratelimit-input-tokens-remaining", remaining.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            return headers;
+        }
+        // The minute's budget all there, and still too many: the request alone is more than it.
+        Assert.Equal(500_000, OpenAiChatClient.InputPerMinute(Left(500_000), said));
+        // Spent by other requests: a wait ends it.
+        Assert.Null(OpenAiChatClient.InputPerMinute(Left(1_000), said));
+        Assert.Null(OpenAiChatClient.InputPerMinute(Left(500_000), "Number of request tokens has exceeded your per-minute rate limit"));
+    }
+
+    [Fact]
     public async Task Parts_the_API_does_not_take_are_left_out_and_the_request_sent_again()
     {
         var (client, api) = Connect();
@@ -530,7 +548,11 @@ public class AnthropicTests
         var space = ctx.GetScreenSpace();
         Assert.True(space.ImageWidth <= 2000, $"{space.ImageWidth}");
         Assert.Equal((2559, 1079), space.ToScreen(space.ImageWidth, space.ImageHeight));
-        Assert.Equal(1280, ClaudeModel.FromName("claude-sonnet-4-6").ScreenshotSide);
+        // Before 4.7, small enough that a 5:4 screen's picture stays under 1.15 megapixels too.
+        Assert.Equal(1184, ClaudeModel.FromName("claude-sonnet-4-6").ScreenshotSide);
+        var square = new ToolContext { Platform = new FakePlatform { ScreenBounds = new(0, 0, 1280, 1024) }, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(),
+            MaxScreenshotSide = ClaudeModel.FromName("claude-sonnet-4-6").ScreenshotSide }.GetScreenSpace();
+        Assert.True(square.ImageWidth * square.ImageHeight <= 1_150_000, $"{square.ImageWidth}x{square.ImageHeight}");
         // Other servers get the screen as it is.
         var native = new ToolContext { Platform = platform, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() }.GetScreenSpace();
         Assert.Equal(2560, native.ImageWidth);

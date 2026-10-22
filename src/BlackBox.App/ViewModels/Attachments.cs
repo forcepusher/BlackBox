@@ -36,7 +36,7 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
         try
         {
             folder = Directory.Exists(Path);
-            details = folder ? "folder" : File.Exists(Path) ? Size(Path) : "no longer there";
+            details = folder ? "folder" : File.Exists(Path) ? FilePreview.Size(Path) : "no longer there";
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -106,19 +106,6 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // Not a picture after all (or gone): it shows as a file.
-        }
-    }
-
-    private static string Size(string path)
-    {
-        try
-        {
-            var bytes = new FileInfo(path).Length;
-            return bytes >= 1 << 20 ? $"{bytes / 1048576.0:0.0} MB" : bytes >= 1024 ? $"{bytes / 1024.0:0} KB" : $"{bytes} bytes";
-        }
-        catch (IOException)
-        {
-            return "";
         }
     }
 

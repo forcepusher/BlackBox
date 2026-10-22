@@ -730,6 +730,8 @@ public class ComfyToolTests : IDisposable
         Directory.CreateDirectory(paths.ComfyDir);
         File.WriteAllText(Path.Combine(paths.ComfyDir, "state.json"), new JsonObject { ["url"] = _server.Url.ToString() }.ToJsonString());
         _hub = ComfyHub.For(paths.ComfyDir);
+        // Not the BlackBoxes running beside the tests (a UI check, the command line): with one, the server is left running.
+        _hub.OthersRunForTests = () => false;
         _ctx = new ToolContext
         {
             Platform = new FakePlatform(),
@@ -919,13 +921,27 @@ public class ComfyToolTests : IDisposable
     [Fact]
     public async Task A_comfyui_is_left_running_at_start_while_another_blackbox_runs()
     {
-        // A second window, or the command line, may be between two of its jobs.
+        // The command line, or another build, may be between two of its jobs.
         var stops = 0;
         _hub.OwnsForTests = _ => true;
         _hub.StopForTests = (_, _) => { stops++; return Task.CompletedTask; };
         _hub.OthersRunForTests = () => true;
         _hub.CloseLeftover();
         await _hub.Closing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal(0, stops);
+    }
+
+    [Fact]
+    public async Task A_comfyui_is_left_running_after_a_task_while_another_blackbox_runs()
+    {
+        // The command line, or another build, may be between two of its jobs: each counts only its own tasks.
+        var stops = 0;
+        _hub.OwnsForTests = _ => true;
+        _hub.StopForTests = (_, _) => { stops++; return Task.CompletedTask; };
+        _hub.OthersRunForTests = () => true;
+        await Call("""{"action": "status"}""");
+        await _ctx.FinishRunAsync();
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
         Assert.Equal(0, stops);
     }
 

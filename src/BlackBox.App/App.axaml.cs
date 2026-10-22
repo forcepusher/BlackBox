@@ -1,11 +1,9 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
-using BlackBox.App.ViewModels;
-using BlackBox.App.Views;
 using BlackBox.Core.Platform;
-using BlackBox.Core.Settings;
 
 namespace BlackBox.App;
 
@@ -19,27 +17,25 @@ public partial class App : Application
         {
             var paths = PortableRuntime.FindPaths();
             paths.EnsureCreated();
-            var store = new SettingsStore(paths);
-            var platform = CreatePlatform();
-
-            var settings = store.Load();
-            var vm = new MainWindowViewModel(paths, store, settings, platform);
-            var window = new MainWindow { DataContext = vm };
-            window.Restore(settings.Window);
-            desktop.MainWindow = window;
+            // Ends with the last chat window, not with whichever window was opened first.
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var windows = new ChatWindows(paths, CreatePlatform(), desktop);
+            var first = windows.Open();
+            desktop.MainWindow = first;
             // Stops the MCP server processes with the app; otherwise they would outlive it.
-            desktop.Exit += (_, _) => vm.Shutdown();
-            // An exception nothing caught on the window's thread is written down and said in the
-            // chat, and the window goes on, with the run in progress: it closed with them before.
+            desktop.Exit += (_, _) => windows.Exit();
+            // An exception nothing caught on the windows' thread is written down and said in the
+            // chat in front, and the windows go on, with their runs: they closed with them before.
             Dispatcher.UIThread.UnhandledException += (_, e) =>
             {
                 CrashLog.Write("the window", e.Exception);
                 e.Handled = true;
-                vm.ShowProblem($"Something went wrong in BlackBox's window: {CrashLog.Summary(e.Exception)}");
+                windows.Front()?.Vm.ShowProblem($"Something went wrong in BlackBox's window: {CrashLog.Summary(e.Exception)}");
             };
-            vm.OnStartup();
             if (CrashLog.TakeLastCrash(paths) is { } crash)
-                vm.ShowProblem($"BlackBox closed unexpectedly last time ({crash}).");
+                windows.Front()?.Vm.ShowProblem($"BlackBox closed unexpectedly last time ({crash}).");
+            // BlackBox started again: another window here.
+            SingleInstance.OnOpenWindow(() => Dispatcher.UIThread.Post(() => windows.Open()));
             Program.Started = true;
         }
 

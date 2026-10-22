@@ -11,8 +11,43 @@ public abstract class DesktopActionTool : Tool
     /// <summary>The longest an action waits for the user to finish typing a message to the agent.</summary>
     internal static TimeSpan MaxUserPause = TimeSpan.FromSeconds(60);
 
+    /// <summary>The longest an action waits for another BlackBox window's agent to be done with the mouse and keyboard.</summary>
+    internal static TimeSpan MaxTurnWait = TimeSpan.FromMinutes(5);
+
     public sealed override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
+        if (ctx.DesktopTurn is not { } desktop)
+            return await ActAndLookAsync(args, ctx, screenChanged: false, ct).ConfigureAwait(false);
+        // Another window's agent may be using the mouse and keyboard: one at a time.
+        var turn = await desktop.TakeAsync(ctx, MaxTurnWait,
+            waited => ctx.Progress?.Invoke($"Waiting for another BlackBox window to finish with the mouse and keyboard · {Chats.ChatTimes.Stopwatch(waited)}"), ct).ConfigureAwait(false);
+        if (turn is null)
+            return new ToolResult($"Nothing was done: another BlackBox window's agent has been using the mouse and keyboard for {MaxTurnWait.TotalMinutes:0} minutes. " +
+                                  "Do what doesn't need them meanwhile (files, commands), or try again.");
+        ctx.AfterRun("desktop turn", () =>
+        {
+            desktop.Release(ctx);
+            return Task.CompletedTask;
+        });
+        // Not handed to another window while the action goes on, however long it waits for the user's typing.
+        try { return await ActAndLookAsync(args, ctx, screenChanged: turn == true, ct).ConfigureAwait(false); }
+        finally { desktop.Done(ctx, acted: turn == false); }
+    }
+
+    private async Task<ToolResult> ActAndLookAsync(JsonObject args, ToolContext ctx, bool screenChanged, CancellationToken ct)
+    {
+        if (screenChanged)
+        {
+            // What the model aimed at may have moved, been covered or closed meanwhile.
+            ctx.Seen = null;
+            var now = ScreenshotTool.Take(ctx);
+            return now with
+            {
+                Text = "Nothing was done: another BlackBox window's agent has used the mouse and keyboard, so the screen may have changed since you last saw it. " +
+                       "This is the screen now; do it again if it still applies.\n" + now.Text,
+            };
+        }
+
         // The user is typing to the agent in its window: a click or key press now would take the
         // focus from under their typing, or their keys would land in the agent's window.
         var paused = System.Diagnostics.Stopwatch.StartNew();
@@ -128,6 +163,7 @@ public sealed class ScreenshotTool : Tool
         var space = ctx.GetScreenSpace();
         var frame = ctx.Platform.Screen.Capture(space.Screen, includeCursor: true);
         ctx.LastShot = (space.Screen, frame);
+        ctx.DesktopTurn?.Looked(ctx);
         var jpeg = space.Encode(frame);
         var count = ctx.Screens.Count;
         var which = count > 1 ? $"Screenshot of screen {ctx.CurrentScreen + 1} of {count}" : "Screenshot";

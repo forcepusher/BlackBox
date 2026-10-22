@@ -11,6 +11,9 @@ internal static class Program
     public static void Main(string[] args)
     {
         var paths = PortableRuntime.FindPaths();
+        // BlackBox runs from this folder already: that one opens another window, and this one is done.
+        if (SingleInstance.HandedOff(paths.DataDir))
+            return;
         CrashLog.Watch(paths);
         try
         {
@@ -20,6 +23,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
+            SingleInstance.Ending();
             if (Started) CrashLog.Ended(ex);
             else CrashLog.ShowCouldNotStart(ex);
         }
