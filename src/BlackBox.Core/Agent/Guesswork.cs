@@ -504,7 +504,9 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
                     @"(do|does|should|would|can|could|is|are|was|were|to|i|we|handles?|supports?|controls?|makes?|gives?)\b|" +
                     @"\bis there (a|an|any) (way|node|setting|option|parameter|function|method|api|built-in|builtin|tool|template|model|lora|flag|feature|command|official|example)\b|" +
                     @"\bdoes (?!(it|this|that|they)\b)(the \w+|\w+) (support|accept|allow|handle|have an?|expose|provide)\b|" +
-                    @"\b((is|are) (it|they|these|those|the \w+)|it's|they're|it is|they are) (built into|part of|included in|supported (by|in))\b",
+                    @"\b((is|are) (it|they|these|those|the \w+)|it's|they're|it is|they are) (built into|part of|included in|supported (by|in))\b|" +
+                    // A library's default, which the model then answers from memory: "the default for the axis's `delete` attribute is True?"
+                    @"\bdefault (value |setting )?(for|of) [^?]{3,80}\b(is|be)\b|\bdefaults? to\b",
         RegexOptions.IgnoreCase)]
     private static partial Regex Asks();
 

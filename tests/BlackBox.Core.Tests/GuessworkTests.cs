@@ -205,6 +205,10 @@ public class GuessworkTests
     [InlineData("So how do we determine whether it's Juggernaut XL or SnowPony?", null)]
     [InlineData("Now, how does the film tool handle lip-sync?", null)]
     [InlineData("Hmm, write_videofile: does it have an audio parameter?", null)]
+    // qwen3.8 in Excel, then answering itself wrongly: "No, the default is None, and Excel displays it."
+    [InlineData("Also, maybe I should set delete=False on the x-axis (openpyxl's default axis delete is… in some versions, the default for the axis's `delete` attribute is True?",
+        "Also, maybe I should set delete=False on the x-axis (openpyxl's default axis delete is… in some versions, the default for the axis's `delete` attribute is True?")]
+    [InlineData("What does openpyxl's TextAxis.delete default to?", "What does openpyxl's TextAxis.delete default to?")]
     [InlineData("Does LoadAudio support flac files?", "Does LoadAudio support flac files?")]
     // Questions the web can't answer: the screen, the user, how a result looks, or nothing named.
     [InlineData("Did the click on the Export button work?", null)]
