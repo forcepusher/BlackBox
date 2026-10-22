@@ -180,14 +180,19 @@ public static partial class ServerProbe
             Vision = inputs is null ? name.Vision : inputs.Contains("image"),
             Tools = parameters is null ? name.Tools : parameters.Contains("tools"),
             Free = pricing is null ? name.Free : Price(pricing["prompt"]) is { } input && Price(pricing["completion"]) is { } output ? input == 0 && output == 0 : null,
-            Efforts = ClaudeEfforts(entry) ?? ListedEfforts(parameters) ?? EffortsByName(name.Id),
+            Efforts = ClaudeEfforts(entry) ?? ListedEfforts(parameters, name.Id) ?? EffortsByName(name.Id),
         };
 
         static List<string>? Strings(JsonNode? node) => node is JsonArray a ? a.Select(Str).OfType<string>().ToList() : null;
 
-        // OpenRouter routes "reasoning" to every model that thinks on request, as low to high.
-        static IReadOnlyList<string>? ListedEfforts(List<string>? parameters) =>
-            parameters is null ? null : parameters.Contains("reasoning") || parameters.Contains("reasoning_effort") ? OpenAiEfforts : [];
+        // OpenRouter routes "reasoning" to every model that thinks on request, as low to high. Not
+        // Claude's or Gemini's through it: with thinking on, a tool call wants the signed thinking
+        // before it back (OpenRouter's reasoning_details), which BlackBox doesn't keep, and the
+        // request is refused; they ran with thinking off before there was an effort to pick.
+        static IReadOnlyList<string>? ListedEfforts(List<string>? parameters, string id) =>
+            parameters is null ? null
+            : id.StartsWith("anthropic/", StringComparison.OrdinalIgnoreCase) || id.StartsWith("google/gemini", StringComparison.OrdinalIgnoreCase) ? []
+            : parameters.Contains("reasoning") || parameters.Contains("reasoning_effort") ? OpenAiEfforts : [];
 
         // Prices come as text ("0", "0.0000003" per token) or as numbers.
         static decimal? Price(JsonNode? node) => node is JsonValue v

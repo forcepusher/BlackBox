@@ -107,6 +107,25 @@ public class MarkdownLiteTests
     }
 
     [Fact]
+    public void A_link_whose_address_holds_parentheses_opens_all_of_it()
+    {
+        var line = Assert.Single(MarkdownLite.Render("See [Python](https://en.wikipedia.org/wiki/Python_(programming_language)) and [the API](https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ms123401(v=vs.85))."));
+
+        Assert.Equal("See Python and the API.", Text(line));
+        Assert.Equal(["https://en.wikipedia.org/wiki/Python_(programming_language)", "https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ms123401(v=vs.85)"],
+            line.Where(s => s.Url != null).Select(s => s.Url));
+    }
+
+    [Theory]
+    [InlineData("详见 https://example.com/docs。", "https://example.com/docs")]
+    [InlineData("（https://x.com）", "https://x.com")]
+    [InlineData("访问https://example.com/zh，谢谢", "https://example.com/zh")]
+    [InlineData("the page https://example.com/a-long-address…", "https://example.com/a-long-address")]
+    [InlineData("“https://example.com/quoted”", "https://example.com/quoted")]
+    public void An_address_ends_before_chinese_and_japanese_punctuation(string text, string url) =>
+        Assert.Equal(url, Assert.Single(Assert.Single(MarkdownLite.Render(text)), s => s.Url != null).Url);
+
+    [Fact]
     public void Addresses_in_code_bold_and_plain_text_are_links_too()
     {
         var lines = MarkdownLite.Render("Check **https://x.dev/health** with `curl http://127.0.0.1:8080/health`.\n```\nwget https://example.com/a.tar.gz\n```");

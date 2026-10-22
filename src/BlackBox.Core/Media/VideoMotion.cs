@@ -53,7 +53,9 @@ public static class VideoMotion
     /// the whole picture's shift and growth (1 for none), and what moves against it in each ninth of
     /// the picture (0 to 8, left to right, top to bottom), with how many blocks of it move.
     /// </summary>
-    public sealed record Step(double From, double To, double ShiftX, double ShiftY, double Grow, IReadOnlyDictionary<int, (double X, double Y, int Blocks)> Moving);
+    /// <param name="Measured">False when too little of the picture had detail to tell (night sky, fog, a plain wall): the zeros say nothing.</param>
+    public sealed record Step(double From, double To, double ShiftX, double ShiftY, double Grow, IReadOnlyDictionary<int, (double X, double Y, int Blocks)> Moving,
+        bool Measured = true);
 
     /// <summary>The movement between frames about <paramref name="every"/> seconds apart.</summary>
     public static IReadOnlyList<Step> Measure(IReadOnlyList<Frame> frames, double every = 0.25)
@@ -77,7 +79,7 @@ public static class VideoMotion
                 if (Match(a.Gray, b.Gray, bx * Block, by * Block) is { } d)
                     found.Add((bx * Block + Block / 2.0, by * Block + Block / 2.0, d.Dx, d.Dy));
         if (found.Count < 6)
-            return new Step(a.Time, b.Time, 0, 0, 1, new Dictionary<int, (double, double, int)>());
+            return new Step(a.Time, b.Time, 0, 0, 1, new Dictionary<int, (double, double, int)>(), Measured: false);
         // The camera: what most of the picture does (a moving subject is the smaller part).
         var shiftX = Median(found.Select(f => f.Dx));
         var shiftY = Median(found.Select(f => f.Dy));
@@ -189,8 +191,24 @@ public static class VideoMotion
         // Said outright when the camera held: a girl walking right read as "the mailbox drifts right" to
         // a look that had only "something moves right" against the rest.
         var whole = Said(steps, 2.0);
-        sb.Append($"Over the whole clip: {(whole.StartsWith("the whole picture", StringComparison.Ordinal) ? "" : "the camera holds still (the whole picture doesn't move); ")}{whole}");
+        sb.Append($"Over the whole clip: {(whole.StartsWith("the whole picture", StringComparison.Ordinal) || !Held(steps) ? "" : "the camera holds still (the whole picture doesn't move); ")}{whole}");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Whether the camera held, which is said only when it is known: most steps measured, and the
+    /// way the whole picture went short however it turned. Added up, a pan there and back came to
+    /// nothing, a handheld sway too, and a plain picture measured nothing at all.
+    /// </summary>
+    private static bool Held(IReadOnlyList<Step> steps)
+    {
+        var measured = steps.Where(s => s.Measured).ToList();
+        if (measured.Count == 0 || measured.Count < steps.Count * 2 / 3.0)
+            return false;
+        var travelX = measured.Sum(s => Math.Abs(s.ShiftX)) / Width * 100;
+        var travelY = measured.Sum(s => Math.Abs(s.ShiftY)) / Height * 100;
+        var zoom = measured.Sum(s => Math.Abs(s.Grow - 1)) * 100;
+        return travelX < 2 && travelY < 2 && zoom < 2;
     }
 
     /// <summary>What happens over some steps, in words; <paramref name="least"/> is the least share (in %) worth saying.</summary>

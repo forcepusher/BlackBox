@@ -847,6 +847,22 @@ public sealed class FilmCheckTests
         Assert.Contains("in the middle something moves up", said);
     }
 
+    [Fact]
+    public void A_camera_is_said_to_hold_still_only_when_it_is_known()
+    {
+        // A pan there and back adds up to nothing, but the camera moved.
+        var there = Moving(1, 0);
+        var back = there.AsEnumerable().Reverse().Select((f, i) => f with { Time = (there.Count + i) / 24.0 });
+        var swayed = VideoMotion.Describe(VideoMotion.Measure([.. there, .. back]));
+        Assert.DoesNotContain("holds still", swayed);
+        Assert.Contains("the whole picture moves left", swayed);
+        Assert.Contains("the whole picture moves right", swayed);
+
+        // A plain picture (night sky, fog) measures nothing: no word on the camera.
+        var plain = Enumerable.Range(0, 25).Select(f => new VideoMotion.Frame(f / 24.0, Enumerable.Repeat(100f, VideoMotion.Width * VideoMotion.Height).ToArray())).ToList();
+        Assert.DoesNotContain("holds still", VideoMotion.Describe(VideoMotion.Measure(plain)));
+    }
+
     private static SKBitmap Picture(int width, int height, Action<SKCanvas> draw)
     {
         var bitmap = new SKBitmap(width, height);

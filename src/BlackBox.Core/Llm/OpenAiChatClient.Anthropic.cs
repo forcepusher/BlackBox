@@ -172,6 +172,8 @@ public sealed partial class OpenAiChatClient
                     // the month is over, so it isn't waited out like a rate limit.
                     if (status is 400 or 429 && SpendWords().IsMatch(said + err))
                         throw new KeyRefusedException($"The Anthropic account behind the API key has reached its spend limit (it says \"{said.Clip(300)}\"). Raise it in Anthropic's Console, or pick another server at the top.");
+                    if (status == 429 && InputPerMinute(resp.Headers, said) is { } perMinute)
+                        throw new InputRateException(said.Clip(300), perMinute);
                     if (status == 429)
                         throw new RateLimitedException($"{_baseUrl} answered 429: {said.Clip(300)}", RetryAfter(resp.Headers, err, DateTimeOffset.UtcNow));
                     // 529: Anthropic is overloaded. Sent again after growing waits, like a model
@@ -230,6 +232,22 @@ public sealed partial class OpenAiChatClient
         if (wire.MaxImageSide > AnthropicMessages.ManyImagesSide && ManyImagesWords().IsMatch(said))
             return wire with { MaxImageSide = AnthropicMessages.ManyImagesSide };
         return null;
+    }
+
+    /// <summary>
+    /// The account's input tokens a minute, when a 429 for them came with that minute's budget all
+    /// but unspent: the request alone is more than it, and no wait makes it fit. Null for a rate
+    /// limit that waiting ends (other requests spent the budget).
+    /// </summary>
+    internal static int? InputPerMinute(System.Net.Http.Headers.HttpResponseHeaders headers, string said)
+    {
+        if (!said.Contains("input tokens per minute", StringComparison.OrdinalIgnoreCase))
+            return null;
+        static long? Header(System.Net.Http.Headers.HttpResponseHeaders h, string name) =>
+            h.TryGetValues(name, out var values) && long.TryParse(values.FirstOrDefault(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : null;
+        return Header(headers, "anthropic-ratelimit-input-tokens-limit") is { } limit and > 0 and <= int.MaxValue
+               && Header(headers, "anthropic-ratelimit-input-tokens-remaining") is { } left && left >= limit * 9 / 10
+            ? (int)limit : null;
     }
 
     // "max_tokens: 64000 > 32000, which is the maximum allowed number of output tokens for claude-opus-4-1"

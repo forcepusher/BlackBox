@@ -777,7 +777,17 @@ public sealed partial class AgentSession(
             }
             catch (ContextOverflowException ex) when (attempt < 2)
             {
-                if (ex is RequestTooLargeException tooLarge)
+                if (ex is InputRateException rate)
+                {
+                    // Four fifths of it, so a request with its new screenshots and replies still fits.
+                    var fits = Math.Max(16_384, rate.PerMinute * 4 / 5);
+                    if (contextTokens == 0 || fits < contextTokens)
+                    {
+                        observer.OnNotice($"The API key's account takes {rate.PerMinute / 1000}k input tokens a minute, and one request of the whole conversation was more than that; working with {fits / 1000}k tokens of context from now on.");
+                        contextTokens = fits;
+                    }
+                }
+                else if (ex is RequestTooLargeException tooLarge)
                 {
                     // Too many bytes, not tokens: the screenshots in it. A context a quarter smaller
                     // resets before a request gets that large again.

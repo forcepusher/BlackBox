@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using BlackBox.App.ViewModels;
 
 namespace BlackBox.App.Views;
@@ -47,6 +48,11 @@ public partial class FilmWindow : Window
     /// </summary>
     private void OnAwayPressed(object? sender, PointerPressedEventArgs e)
     {
+        // On the picked piece's own view, which isn't all buttons: the place of a frame or shot not
+        // made yet (its full-screen button is disabled, and the click falls through to here), the
+        // song's card, a video's time. The pick stays; what is said next is about it.
+        if (e.Source is Visual source && (source == ViewerBox || ViewerBox.IsVisualAncestorOf(source)))
+            return;
         if (!e.Handled && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             Vm.Select(null);
     }
@@ -169,6 +175,9 @@ public partial class FilmWindow : Window
             return;
         var entries = Vm.MediaInFilm();
         var index = Vm.MediaIndex(entries, clicked);
+        // A video the film's pieces don't hold (a music video picked as the soundtrack): on its own.
+        if (index < 0 && clicked is FilePreview { Path: var path } preview && MainWindowViewModel.Viewable(path))
+            (entries, index) = ([new MediaEntry(preview, path, null, preview.FileName)], 0);
         if (index < 0 || (Screens.ScreenFromWindow(this) ?? Screens.Primary) is not { } screen)
             return;
         if (clicked is PlayerPreview { IsPlaying: true } playing)
