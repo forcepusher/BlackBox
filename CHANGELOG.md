@@ -74,7 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Films: a failed remake no longer leaves a piece looking made; remaking the song keeps the lines'
   voice and doesn't redo a song that still covers the film; restoring a take restores all of its
   settings; long titles and names like "Con" work; the film tool no longer writes over changes made
-  in the Filmmaking window during a long job.
+  in the Filmmaking window during a long job. A frame changed to be taken from where a shot ends
+  is no longer dropped back to its old prompt while the shot still ends on it.
 
 ## [1.0.0] - 2026-10-19
 The first release.

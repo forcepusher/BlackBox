@@ -110,12 +110,16 @@ public sealed class ChatWindows
         _open = [.. open.Where(o => o.Vm != vm)];
         _ending.Add(vm.Shutdown());
         if (_open.Length == 0)
+        {
+            SingleInstance.Ending();
             _desktop.Shutdown();
+        }
     }
 
     /// <summary>BlackBox ends: what the windows handed over is written, and their servers stopped, for a few seconds at most.</summary>
     internal void Exit()
     {
+        SingleInstance.Ending();
         var open = _open;
         _open = [];
         foreach (var (vm, _) in open)

@@ -475,6 +475,14 @@ public sealed partial class Storyboard
             else
                 json[name] = value?.DeepClone();
         }
+        // A frame given "of" is where that shot's clip ends, taken from it: the shot stops ending on
+        // it as its last frame, unless the change says it does. Kept, the frame lost its "of" instead,
+        // and a model that had left "last" out of the shot to take it away edited the file by hand.
+        foreach (var frame in Given(change, "frames"))
+            if (Text(Field(frame, "of")) is { } of && Text(Field(frame, "id")) is { } id
+                && (json["shots"] as JsonArray)?.OfType<JsonObject>().FirstOrDefault(s => Same(s["id"], of)) is { } shot && Same(shot["last"], id)
+                && !Given(change, "shots").Any(s => Same(Field(s, "id"), of) && Field(s, "last") is not null))
+                shot.Remove("last");
         var merged = Parse(json.ToJsonString());
         merged.Folder = board.Folder;
         return merged;
@@ -555,6 +563,15 @@ public sealed partial class Storyboard
         }
 
         static bool Said(JsonNode? line) => line is JsonValue v && v.TryGetValue<string>(out var s) && s.Trim().Length > 0;
+
+        static IEnumerable<JsonObject> Given(JsonObject change, string list) =>
+            change.Where(p => JsonKey(p.Key) == list).SelectMany(p => (p.Value as JsonArray ?? []).OfType<JsonObject>());
+
+        static JsonNode? Field(JsonObject item, string key) => item.FirstOrDefault(p => JsonKey(p.Key) == key).Value;
+
+        static string? Text(JsonNode? node) => node is JsonValue v && v.TryGetValue<string>(out var s) && s.Trim().Length > 0 ? s.Trim() : null;
+
+        static bool Same(JsonNode? node, string id) => string.Equals(Text(node), id, StringComparison.OrdinalIgnoreCase);
 
         // Written as the file has them (camelCase), whatever case the change used.
         static string JsonKey(string key) => key.Length == 0 ? key : char.ToLowerInvariant(key[0]) + key[1..];

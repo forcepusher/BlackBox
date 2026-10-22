@@ -30,6 +30,9 @@ internal static class SingleInstance
 
     private static Action? _openWindow;
 
+    /// <summary>Set once BlackBox is ending: a start then runs by itself, rather than wait for a window that would never open.</summary>
+    private static volatile bool _ending;
+
     /// <summary>
     /// True when a BlackBox runs from the Data folder already and has opened another window: this
     /// one is done. Otherwise this one is the BlackBox for the folder, and takes the next starts'
@@ -58,6 +61,9 @@ internal static class SingleInstance
         for (; early > 0; early--)
             open();
     }
+
+    /// <summary>BlackBox is ending (its last window closed): starts are no longer answered.</summary>
+    public static void Ending() => _ending = true;
 
     private static string Name(string dataDir)
     {
@@ -105,7 +111,7 @@ internal static class SingleInstance
                 using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
                 await using var writer = new StreamWriter(pipe, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
                 await writer.WriteLineAsync(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture).AsMemory(), talk.Token).ConfigureAwait(false);
-                if (await reader.ReadLineAsync(talk.Token).ConfigureAwait(false) != "window")
+                if (await reader.ReadLineAsync(talk.Token).ConfigureAwait(false) != "window" || _ending)
                     continue;
                 Action? open;
                 lock (Gate)

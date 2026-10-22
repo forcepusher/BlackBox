@@ -229,6 +229,33 @@ public sealed class StoryboardTests : IDisposable
     }
 
     [Fact]
+    public void A_frame_made_where_a_shot_ends_stops_being_that_shots_last_frame()
+    {
+        // As a model wrote it on a film run: f2 to be taken from where s1 ends, and s1 given without
+        // its last frame to take it away. f2 lost its "of" instead, and s1 still ended on it.
+        var board = Storyboard.Parse("""
+            {"frames": [{"id": "f1", "prompt": "a fox"}, {"id": "f2", "prompt": "the fox stops", "from": ["f1"]}],
+             "shots": [{"id": "s1", "first": "f1", "last": "f2", "prompt": "it trots"}, {"id": "s2", "first": "f2", "prompt": "it looks up"}]}
+            """);
+        var merged = Storyboard.Merge(board, (JsonObject)JsonNode.Parse("""
+            {"frames": [{"id": "f2", "of": "s1"}], "shots": [{"id": "s1", "first": "f1", "prompt": "it trots to the left"}]}
+            """)!);
+        Assert.Equal("s1", merged.Frame("f2")!.Of);
+        Assert.Null(merged.Shot("s1")!.Last);
+
+        // A field set to null is taken out too.
+        merged = Storyboard.Merge(board, (JsonObject)JsonNode.Parse("""{"shots": [{"id": "s1", "last": null}]}""")!);
+        Assert.Null(merged.Shot("s1")!.Last);
+
+        // Said both ways in one change, the shot's last frame stays, as before.
+        merged = Storyboard.Merge(board, (JsonObject)JsonNode.Parse("""
+            {"frames": [{"id": "f2", "of": "s1"}], "shots": [{"id": "s1", "last": "f2"}]}
+            """)!);
+        Assert.Equal("f2", merged.Shot("s1")!.Last);
+        Assert.Null(merged.Frame("f2")!.Of);
+    }
+
+    [Fact]
     public void A_new_film_is_saved_only_when_asked_and_loads_back_the_same()
     {
         var board = Storyboard.New(_dir, "Keeper");
