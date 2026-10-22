@@ -20,7 +20,8 @@ public static class InView
     /// <summary>The part of each watched preview the chat shows, in the preview's own coordinates.</summary>
     private static readonly Dictionary<Control, Rect> Watched = [];
 
-    private static bool _held;
+    /// <summary>The windows whose videos hold still: each chat window's own, by its viewer and whether it is minimized.</summary>
+    private static readonly HashSet<TopLevel> Held = [];
 
     static InView()
     {
@@ -70,15 +71,20 @@ public static class InView
         if (Preview(control) is not { } preview || !Watched.TryGetValue(control, out var viewport))
             return;
         var shown = viewport.Intersect(new Rect(control.Bounds.Size));
-        var visible = !_held && control.IsEffectivelyVisible && shown.Width > 0 && shown.Height >= Math.Min(120, control.Bounds.Height / 3);
+        var visible = !(TopLevel.GetTopLevel(control) is { } window && Held.Contains(window)) && control.IsEffectivelyVisible && shown.Width > 0 && shown.Height >= Math.Min(120, control.Bounds.Height / 3);
         preview.SetInView(visible);
     }
 
-    /// <summary>Holds every chat video still (the full-screen viewer is open, the window minimized), or lets those on screen go on.</summary>
-    public static void Hold(bool held)
+    /// <summary>
+    /// Holds the videos in <paramref name="window"/> still (its full-screen viewer is open, it is
+    /// minimized or closed), or lets those on screen go on. Not every window's: minimizing one
+    /// stopped the videos in another on screen.
+    /// </summary>
+    public static void Hold(TopLevel window, bool held)
     {
-        _held = held;
-        foreach (var control in Watched.Keys.ToList())
+        if (!(held ? Held.Add(window) : Held.Remove(window)))
+            return;
+        foreach (var control in Watched.Keys.Where(c => TopLevel.GetTopLevel(c) == window).ToList())
             Update(control);
     }
 }

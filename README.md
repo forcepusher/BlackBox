@@ -44,8 +44,8 @@ private or long work, use your own model.
   (or AUTOMATIC1111) shows the prompts and settings it was made with.
 - Paste a screenshot or files with Ctrl+V, or drop them on the window, to send them with a message.
 - **History** keeps every chat, so you can come back to one and carry on.
-- **Several tasks at once:** the new-window button at the top (or Ctrl+Shift+N, or starting
-  BlackBox again) opens another window with a chat of its own. The windows take turns with the
+- **Several tasks at once:** **New window** at the top (or Ctrl+Shift+N, or starting BlackBox
+  again) opens another window with a chat of its own. The windows take turns with the
   mouse and keyboard, and Pause/Break stops them all.
 - It doesn't ask before it acts. To approve each step, use "Ask me first" in Settings.
 

@@ -185,8 +185,9 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   start, template list and model search: SD 1.5 checkpoints at about 512 pixels, since anything much
   bigger takes very long or doesn't fit in memory. Once the
   task is over it is closed, after the jobs still in its queue (the CLI waits for them before it
-  exits; one the window was closed on is closed at the next start, once its jobs are done, unless
-  another BlackBox runs then); a ComfyUI the user started keeps running, and only lets go of the models the task's jobs
+  exits; one the window was closed on is closed at the next start, once its jobs are done), unless
+  another BlackBox process runs then (the command line, another build), which may be between two of
+  its jobs: each counts only its own tasks. A ComfyUI the user started keeps running, and only lets go of the models the task's jobs
   loaded, so the GPU is free. BlackBox tells its own from the user's by the process it started,
   kept in `Data/comfyui/state.json`, and by the port it listens on, whatever language Windows
   writes netstat's LISTENING in. One it started that doesn't come up (too slow, or the user
@@ -817,8 +818,9 @@ and the line a task ended with says under it how long the whole task took ("Work
 The times are saved with the chat; a chat saved before they were kept shows none.
 
 ## Several windows
-The new-window button in the top bar (an icon, so the bar still fits the narrowest window) or
-Ctrl+Shift+N opens another chat window, with its own chat, agent and MCP servers. Starting BlackBox
+**New window** in the top bar or Ctrl+Shift+N opens another chat window, with its own chat, agent
+and MCP servers. (It was an icon at first, to keep the bar within the narrowest window, and went
+unnoticed; now the server's status text is what gets shorter in a narrow window.) Starting BlackBox
 again does the same: one BlackBox runs per `Data` folder (`SingleInstance`), and a second start of
 the exe asks it for another window and ends at once. All the windows are one process
 (`ChatWindows` keeps them), so what they share needs no talk between programs; BlackBox ends with
@@ -844,7 +846,10 @@ window in front, at its size, kept on the screen, as Windows cascades windows: r
 a second window looked as if nothing had opened. A window closed where it opened beside another
 doesn't save its place, so BlackBox doesn't creep down a step with every second window. The title
 bar names the chat ("keys 6 - BlackBox"), to tell the windows apart on the taskbar. A window's
-Filmmaking window and full-screen viewer close with it.
+Filmmaking window and full-screen viewer close with it, and so does all it had going: its run
+stops, what that run still reports is dropped (another window may open the chat meanwhile), the
+sounds in its chat stop, and no run or MCP server of its starts again. Its videos hold still while
+it is minimized or its viewer is open, not those of the other windows.
 
 What they share, and how they keep out of each other's way:
 - **Settings.** Each window has them in memory, with a store of its own that writes only what the
@@ -871,7 +876,11 @@ What they share, and how they keep out of each other's way:
   Pause/Break for all of them, and one press stops every window's run; with a hook each, the first
   that stopped its run swallowed the press, and the others never saw it.
 - **ComfyUI and the headless browser** are the process's: the server BlackBox started is closed by
-  the last task done with it, and the browser loads one page at a time on its profile.
+  the last task done with it (checked again just before it stops: a task that started while the last
+  one was ending kept it), and the browser loads one page at a time on its profile.
+
+A start that asks for a window is answered once the first window is up, and never with a window
+that won't open: while BlackBox ends, or after it failed to start, a start runs by itself.
 
 Checked on the desktop PC with a stand-in model server (2026-10-23): starting the exe again ended
 that start in 0.1 s and opened a second window in the first process, in front, 32 px down and
@@ -904,7 +913,7 @@ picture again with `read_file`. The command-line runner takes files with `--atta
 Until a chat is used, it shows first that Pause/Break stops it and that corrections and hints can be
 typed to it while it works, that it uses the mouse and keyboard but pauses while you type and what it
 asks before it acts, then that Ctrl+V pastes a screenshot or files into a message and that files can
-be dropped on the window (the empty box says so too), that Ctrl+Shift+N opens another window for
+be dropped on the window (the empty box says so too), that Ctrl+Shift+N or New window opens another window for
 another task at the same time (see [Several windows](#several-windows)), then what BlackBox can do (apps, pictures,
 video and sound, game development in any game engine, getting the programs and MCP servers a job
 needs, servers, documents, the web, chatting for you, long jobs, and files and commands). It says

@@ -35,6 +35,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private Core.Ssh.SshHosts _ssh;
     private Task _mcpConnect = Task.CompletedTask;
     private bool _mcpRestartPending;
+
+    /// <summary>
+    /// The window has closed. BlackBox goes on with its other windows, so nothing here may start
+    /// again: no run, no MCP servers, no chat saved over what another window opened meanwhile.
+    /// </summary>
+    private bool _closed;
     private AppSettings _settings;
     private CancellationTokenSource? _runCts;
     private AgentSession? _session;
@@ -209,8 +215,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// didn't answer kept the process alive five seconds more.</returns>
     public Task Shutdown()
     {
-        // A chat is saved at every step and when its run ends, so only one in progress needs it here.
-        if (IsBusy) SaveChat(SnapshotHistory());
+        if (_closed)
+            return Task.CompletedTask;
+        _closed = true;
+        // A chat is saved at every step and when its run ends, so only one in progress needs it here;
+        // what the stopped run still reports is dropped, as the chat may be opened in another window.
+        if (IsBusy)
+        {
+            SaveChat(SnapshotHistory());
+            _runDetached = true;
+        }
         if (_settingsSave?.IsEnabled == true)
         {
             _settingsSave.Stop();
@@ -218,6 +232,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         _runCts?.Cancel();
         _tick.Stop();
+        // A sound playing in the chat stops with it.
+        foreach (var item in Items)
+            item.DisposePreviews();
+        ClearAttachments();
         return Task.WhenAll(Task.Run(_ssh.Dispose), _mcp.DisposeAsync().AsTask());
     }
 
@@ -332,6 +350,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     private async Task SendAsync(UserInput input)
     {
+        if (_closed)
+            return;
         if (IsBusy)
         {
             // Above the box until the model reads it; then into the chat, where it reads it.
@@ -603,7 +623,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             IsBusy = false;
             _runCts.Dispose();
             _runCts = null;
-            if (_mcpRestartPending)
+            if (_mcpRestartPending && !_closed)
             {
                 // Changed in Settings during the run; restarting then would have pulled the tools from under it.
                 _mcpRestartPending = false;
@@ -613,7 +633,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
         if (_runDetached)
         {
-            if (_forNextRun.Count == 0)
+            if (_forNextRun.Count == 0 || _closed)
                 return null;
             var next = UserInput.Join(_forNextRun);
             foreach (var message in _forNextRun)

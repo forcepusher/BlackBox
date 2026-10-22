@@ -174,7 +174,11 @@ public partial class MainWindow : Window
         base.OnClosed(e);
         // Its own: BlackBox goes on with the other windows, where these were left behind.
         _film?.Close();
-        _viewer?.Close();
+        // Let go of first: closing, it would bring this window forward and hold its videos again.
+        var viewer = _viewer;
+        _viewer = null;
+        viewer?.Close();
+        InView.Hold(this, false);
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
@@ -480,7 +484,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>The chat's videos play while they can be seen: not under the viewer, nor with the window minimized.</summary>
-    private void HoldVideos() => InView.Hold(_viewer is not null || WindowState == WindowState.Minimized);
+    private void HoldVideos() => InView.Hold(this, _viewer is not null || WindowState == WindowState.Minimized);
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {

@@ -18,17 +18,13 @@ namespace BlackBox.App;
 /// </remarks>
 internal static class SingleInstance
 {
-    /// <summary>Kept for as long as the process runs: while it exists, BlackBox runs from the folder.</summary>
+    /// <summary>Kept until BlackBox ends (see <see cref="Ending"/>): while it exists, BlackBox runs from the folder.</summary>
     private static Mutex? _running;
 
     private static string _name = "";
 
-    private static readonly Lock Gate = new();
-
-    /// <summary>Asked for a window before the first one was up: opened once it is.</summary>
-    private static int _early;
-
-    private static Action? _openWindow;
+    /// <summary>Opens another window; null until the first one is up.</summary>
+    private static volatile Action? _openWindow;
 
     /// <summary>Set once BlackBox is ending: a start then runs by itself, rather than wait for a window that would never open.</summary>
     private static volatile bool _ending;
@@ -52,18 +48,16 @@ internal static class SingleInstance
         return false;
     }
 
-    /// <summary>What opens another window when a start asks for one; called on the thread pool.</summary>
-    public static void OnOpenWindow(Action open)
-    {
-        int early;
-        lock (Gate)
-            (_openWindow, early, _early) = (open, _early, 0);
-        for (; early > 0; early--)
-            open();
-    }
+    /// <summary>What opens another window when a start asks for one, once the first is up; called on the thread pool.</summary>
+    public static void OnOpenWindow(Action open) => _openWindow = open;
 
-    /// <summary>BlackBox is ending (its last window closed): starts are no longer answered.</summary>
-    public static void Ending() => _ending = true;
+    /// <summary>BlackBox is ending (its last window closed, or it could not start): starts are no longer answered.</summary>
+    public static void Ending()
+    {
+        _ending = true;
+        // A start from now on runs at once, rather than ask this one first.
+        Interlocked.Exchange(ref _running, null)?.Dispose();
+    }
 
     private static string Name(string dataDir)
     {
@@ -79,9 +73,9 @@ internal static class SingleInstance
         try
         {
             using var pipe = new NamedPipeClientStream(".", _name, PipeDirection.InOut, PipeOptions.CurrentUserOnly | PipeOptions.Asynchronous);
-            // It may be starting up itself.
+            // It may be starting up itself, and it answers once its first window is up.
             pipe.Connect(10_000);
-            using var answers = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            using var answers = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
             using var writer = new StreamWriter(pipe, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
             // This start has the foreground, being what the user just opened: it lets the one that
@@ -111,14 +105,16 @@ internal static class SingleInstance
                 using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
                 await using var writer = new StreamWriter(pipe, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
                 await writer.WriteLineAsync(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture).AsMemory(), talk.Token).ConfigureAwait(false);
-                if (await reader.ReadLineAsync(talk.Token).ConfigureAwait(false) != "window" || _ending)
+                if (await reader.ReadLineAsync(talk.Token).ConfigureAwait(false) != "window")
                     continue;
-                Action? open;
-                lock (Gate)
-                    if ((open = _openWindow) is null)
-                        _early++;
-                open?.Invoke();
-                await writer.WriteLineAsync("ok".AsMemory(), talk.Token).ConfigureAwait(false);
+                // Asked before the first window is up: answered once it is. Never "ok" for a window
+                // that won't open (BlackBox ending, or failing to start): that start runs by itself.
+                for (var waited = 0; _openWindow is null && !_ending && waited < 250; waited++)
+                    await Task.Delay(100).ConfigureAwait(false);
+                if (_ending || _openWindow is not { } open)
+                    continue;
+                open();
+                await writer.WriteLineAsync("ok".AsMemory(), CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is IOException or OperationCanceledException)
             {
@@ -128,6 +124,12 @@ internal static class SingleInstance
             {
                 // The name is another user's: no start of this user's finds this one then either.
                 return;
+            }
+            catch (Exception ex)
+            {
+                // Whatever it was, the next start is still listened for.
+                CrashLog.Write("waiting for BlackBox to be started again", ex);
+                await Task.Delay(1000).ConfigureAwait(false);
             }
         }
     }

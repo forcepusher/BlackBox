@@ -250,20 +250,13 @@
 
     <!-- Header -->
     <Border Grid.Row="0" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,8">
-      <DockPanel LastChildFill="False">
+      <DockPanel>
         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
           <Image Source="/Assets/blackbox.png" Width="22" Height="22" RenderOptions.BitmapInterpolationMode="HighQuality" />
           <TextBlock Text="BlackBox" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" />
         </StackPanel>
 
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,10,0">
-            <Ellipse Classes="status" Classes.checking="{Binding IsChecking}" Classes.connected="{Binding IsConnected}" Classes.failed="{Binding IsFailed}"
-                     Width="9" Height="9" VerticalAlignment="Center" />
-            <TextBlock Classes="muted" Text="{Binding ServerStatusText}" VerticalAlignment="Center" />
-            <TextBlock Classes="muted" Text="{Binding ContextUsage, StringFormat='· {0}'}" IsVisible="{Binding HasContextUsage}"
-                       ToolTip.Tip="{Binding ContextUsageTip}" VerticalAlignment="Center" />
-          </StackPanel>
           <!-- Films planned shot by shot (see FilmWindow): beside the chat, which "Make the film" hands it to. -->
           <Button Classes="ghost" Content="Filmmaking" Click="OnFilmmakingClick"
                   ToolTip.Tip="Plan a film shot by shot, with its frames and soundtrack, and make it with ComfyUI" />
@@ -304,14 +297,22 @@
             </Button.Flyout>
           </Button>
           <Button Classes="ghost" Content="New chat" Command="{Binding NewChatCommand}" />
-          <!-- Another BlackBox beside this one, for a task of its own at the same time. An icon: with
-               its name, the top bar no longer fit the window's narrowest width. -->
-          <Button Classes="ghost" Command="{Binding NewWindowCommand}" AutomationProperties.Name="New window"
-                  ToolTip.Tip="New window: another BlackBox, to work on another task at the same time (Ctrl+Shift+N)">
-            <PathIcon Width="16" Height="16" Data="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9h-4v4h-2v-4H9V9h4V5h2v4h4v2z" />
-          </Button>
+          <!-- Another window beside this one, with a chat and an agent of its own, for another task at
+               the same time. Named: as an icon alone, it went unnoticed. -->
+          <Button Classes="ghost" Content="New window" Command="{Binding NewWindowCommand}"
+                  ToolTip.Tip="Another window, with a chat of its own, to work on another task at the same time (Ctrl+Shift+N)" />
           <Button Classes="ghost" Content="Settings" Click="OnSettingsClick" />
         </StackPanel>
+        <!-- The server's state, between the name and the buttons: what gets shorter in a narrow window,
+             so the buttons keep their names. -->
+        <DockPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0">
+          <Ellipse DockPanel.Dock="Left" Classes="status" Classes.checking="{Binding IsChecking}" Classes.connected="{Binding IsConnected}" Classes.failed="{Binding IsFailed}"
+                   Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,6,0" />
+          <TextBlock DockPanel.Dock="Left" Classes="muted" Text="{Binding ServerStatusText}" TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding ServerStatusText}" VerticalAlignment="Center" />
+          <TextBlock Classes="muted" Text="{Binding ContextUsage, StringFormat='· {0}'}" IsVisible="{Binding HasContextUsage}" TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding ContextUsageTip}" VerticalAlignment="Center" Margin="6,0,0,0" />
+        </DockPanel>
       </DockPanel>
     </Border>
 
@@ -597,7 +598,7 @@
                 </Border>
               </StackPanel>
               <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
-                         Text="opens another window, so I can work on several tasks at once." />
+                         Text="or New window at the top opens another window, so I can work on several tasks at once." />
             </DockPanel>
           </Border>
 

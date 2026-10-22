@@ -23,6 +23,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
+            SingleInstance.Ending();
             if (Started) CrashLog.Ended(ex);
             else CrashLog.ShowCouldNotStart(ex);
         }

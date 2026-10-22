@@ -46,9 +46,6 @@ public sealed class ChatWindows
     /// <summary>Writes every window's chats, so one opening a chat another just left waits for its last version.</summary>
     public ChatSaver Saver { get; }
 
-    /// <summary>The windows' chats and agents, oldest first.</summary>
-    public IEnumerable<MainWindowViewModel> All => _open.Select(o => o.Vm);
-
     /// <summary>
     /// Opens another chat window: where BlackBox was last closed for the first one, a step down and
     /// to the right of the window in front for the next.

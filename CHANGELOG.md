@@ -6,8 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- Several BlackBox windows at once: the new-window button at the top, Ctrl+Shift+N, or starting
-  BlackBox again opens another window with a chat and an agent of its own, a step down and to the
+- Several BlackBox windows at once: **New window** at the top, Ctrl+Shift+N, or starting BlackBox
+  again opens another window with a chat and an agent of its own, a step down and to the
   right of the one in front. The windows take turns with the mouse and keyboard, stay out of each
   other's screenshots, all pause while you type in any of them, and one Pause/Break stops them all.
   A chat open in one window brings that window forward when picked in another's History.
@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its tool calls.
 - A Claude request bigger than the account's input tokens a minute no longer waits for ever: the
   context gets smaller.
+- A ComfyUI BlackBox started is no longer closed at the end of a task while another BlackBox (the
+  command line) may be between two of its jobs.
 - The sysadmin migration ticket finds backups written under /var/lib and /var/local too.
 - BlackBox.exe and the MCP servers it starts say version 1.0.0, as released, not 0.1.0.
 - Claude: MCP tools whose argument schema is a union work; a long task no longer stops on more than

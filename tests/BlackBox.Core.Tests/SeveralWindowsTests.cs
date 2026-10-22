@@ -171,13 +171,13 @@ public class SeveralWindowsTests : IDisposable
 
         var waits = new List<TimeSpan>();
         var waiting = turn.TakeAsync(b, TimeSpan.FromSeconds(30), waits.Add, CancellationToken.None);
-        await Task.Delay(300);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
         Assert.False(waiting.IsCompleted);
         Assert.NotEmpty(waits);
 
         turn.Done(a, acted: true);
         turn.Release(a);
-        Assert.True(await waiting.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.True(await waiting.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
     }
 
     [Fact]
