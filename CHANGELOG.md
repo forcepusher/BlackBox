@@ -65,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A Claude request bigger than the account's input tokens a minute no longer waits for ever: the
   context gets smaller.
 - The sysadmin migration ticket finds backups written under /var/lib and /var/local too.
+- BlackBox.exe and the MCP servers it starts say version 1.0.0, as released, not 0.1.0.
 
 ## [1.0.0] - 2026-10-19
 The first release.

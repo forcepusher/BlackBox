@@ -115,7 +115,7 @@ public sealed class McpHost : IAsyncDisposable
         try
         {
             var transport = TransportFactory?.Invoke(c.Config) ?? CreateTransport(c.Config, stderr);
-            var options = new McpClientOptions { ClientInfo = new() { Name = "BlackBox", Version = "0.1" } };
+            var options = new McpClientOptions { ClientInfo = new() { Name = "BlackBox", Version = typeof(McpHost).Assembly.GetName().Version?.ToString(3) ?? "1.0.0" } };
             var client = await McpClient.CreateAsync(transport, options, cancellationToken: timeout.Token).ConfigureAwait(false);
             try
             {
