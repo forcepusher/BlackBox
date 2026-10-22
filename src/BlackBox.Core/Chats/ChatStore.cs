@@ -155,6 +155,33 @@ public sealed class ChatStore(string dir)
     private string PathOf(string id) => Path.Combine(Folder, Path.GetFileName(id) + ".json");
 
     /// <summary>
+    /// Claims the chat for the window that has it on screen, until disposed (see
+    /// <see cref="InterProcess.TryClaim"/>); null when another BlackBox window has it open. Two
+    /// windows each saving their own run into one file would lose one of them.
+    /// </summary>
+    public IDisposable? Claim(string id) => InterProcess.TryClaim(ClaimOf(id));
+
+    /// <summary>The chats other BlackBox windows have open, with the process of each.</summary>
+    public Dictionary<string, int> OpenElsewhere()
+    {
+        var open = new Dictionary<string, int>();
+        if (!Directory.Exists(Folder))
+            return open;
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(Folder, "*" + ClaimExtension))
+                if (InterProcess.ClaimedBy(file) is { } process)
+                    open[Path.GetFileNameWithoutExtension(file)] = process;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        return open;
+    }
+
+    private const string ClaimExtension = ".open";
+
+    private string ClaimOf(string id) => Path.Combine(Folder, Path.GetFileName(id) + ClaimExtension);
+
+    /// <summary>
     /// A copy of the model's conversation fit for saving: screenshots replaced by a note, and tool
     /// calls a stop left unanswered given placeholder results, so carrying on is a valid request.
     /// The pictures a user's message came with are left out too: their paths are in its text.
@@ -211,6 +238,26 @@ public sealed class ChatSaver(ChatStore store)
             _pending.Remove(id);
     }
 
+    /// <summary>Claims let go of once what waits to be written now is on the disk (see <see cref="Release"/>).</summary>
+    private readonly List<IDisposable> _releases = [];
+
+    /// <summary>
+    /// Lets go of a chat's claim (see <see cref="ChatStore.Claim"/>) once what is waiting to be
+    /// written is on the disk: another window opening the chat then finds its last version.
+    /// </summary>
+    public void Release(IDisposable claim)
+    {
+        lock (_gate)
+        {
+            if (_writing)
+            {
+                _releases.Add(claim);
+                return;
+            }
+        }
+        claim.Dispose();
+    }
+
     /// <summary>Waits until what was handed over is on the disk, for up to <paramref name="timeout"/>; false when it isn't yet.</summary>
     public bool Flush(TimeSpan timeout)
     {
@@ -240,6 +287,9 @@ public sealed class ChatSaver(ChatStore store)
                 if (_pending.Count == 0)
                 {
                     _writing = false;
+                    foreach (var claim in _releases)
+                        claim.Dispose();
+                    _releases.Clear();
                     return;
                 }
                 var (id, next) = _pending.First();

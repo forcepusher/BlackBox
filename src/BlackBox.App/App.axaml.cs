@@ -25,7 +25,7 @@ public partial class App : Application
             var settings = store.Load();
             var vm = new MainWindowViewModel(paths, store, settings, platform);
             var window = new MainWindow { DataContext = vm };
-            window.Restore(settings.Window);
+            window.Restore(settings.Window, WindowSlot.Take());
             desktop.MainWindow = window;
             // Stops the MCP server processes with the app; otherwise they would outlive it.
             desktop.Exit += (_, _) => vm.Shutdown();

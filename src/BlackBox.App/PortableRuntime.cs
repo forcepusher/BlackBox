@@ -38,6 +38,8 @@ internal static class PortableRuntime
 
             var moduleId = Assembly.GetExecutingAssembly().ManifestModule.ModuleVersionId;
             var version = $"{moduleId}:{payload.Length}";
+            // Two windows started at once after an update: one deleted what the other was unpacking.
+            using var unpacking = InterProcess.Lock(dir, TimeSpan.FromSeconds(30));
             if (!Unpacked(dir, version))
             {
                 try

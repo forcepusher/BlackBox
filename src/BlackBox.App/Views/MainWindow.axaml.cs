@@ -60,6 +60,9 @@ public partial class MainWindow : Window
             if (!_pinning && e.OffsetDelta.Y != 0 && e.ExtentDelta.Y == 0 && e.ViewportDelta.Y == 0)
                 UpdateStickiness();
         };
+        // Other BlackBox windows add chats while this one is open, and have some open themselves.
+        ((Avalonia.Controls.Primitives.PopupFlyoutBase)HistoryButton.Flyout!).Opening += (_, _) => Vm.RefreshPastChats();
+
         // What Tab or the arrow keys move to is scrolled into view; what a click focuses stays where
         // it is under the mouse (the chat's ScrollViewer does neither by itself, see its markup).
         ChatScroll.AddHandler(GotFocusEvent, (_, e) =>
@@ -97,33 +100,62 @@ public partial class MainWindow : Window
     /// <summary>The last size and place while the window was neither maximized nor minimized.</summary>
     private (PixelPoint Position, double Width, double Height)? _normal;
 
+    /// <summary>Which of the BlackBox windows on the PC this is (see <see cref="WindowSlot"/>); 0 for the first.</summary>
+    private int _slot;
+
+    /// <summary>The size and place the window opened with: one opened beside another and left there doesn't save it.</summary>
+    private (PixelPoint Position, double Width, double Height)? _opened;
+
     /// <summary>
     /// Puts the window where it was when last closed (it used to open in the middle at its default
     /// size every time), unless that place is no longer on any screen: a monitor unplugged since.
+    /// Another BlackBox window open already, it opens a step down and to the right of that.
     /// Called before the window is first shown.
     /// </summary>
-    public void Restore(Core.Settings.WindowPlacement? placement)
+    public void Restore(Core.Settings.WindowPlacement? placement, int slot)
     {
+        _slot = slot;
         // Read once the move or resize is through: a window being minimized moves off screen
         // before it reports being minimized.
         PositionChanged += (_, _) => Dispatcher.UIThread.Post(Remember);
         SizeChanged += (_, _) => Dispatcher.UIThread.Post(Remember);
-        if (Screens.Primary is { } primary)
-            FitTo(primary);
-        if (placement is null || placement.Width < MinWidth || placement.Height < MinHeight)
+        if (Screens.Primary is not { } primary)
             return;
+        FitTo(primary);
+        var screen = primary;
         // Some of the title bar must be on a screen, or the window can't even be dragged back.
-        var titleBar = new PixelRect(placement.X + 40, placement.Y + 4, 160, 24);
-        if (Screens.All.FirstOrDefault(s => s.WorkingArea.Intersects(titleBar)) is not { } screen)
-            return;
-        WindowStartupLocation = WindowStartupLocation.Manual;
-        Position = new PixelPoint(placement.X, placement.Y);
-        Width = placement.Width;
-        Height = placement.Height;
-        FitTo(screen);
-        _normal = (Position, Width, Height);
-        if (placement.Maximized)
-            WindowState = WindowState.Maximized;
+        if (placement is { } p && p.Width >= MinWidth && p.Height >= MinHeight
+            && Screens.All.FirstOrDefault(s => s.WorkingArea.Intersects(new PixelRect(p.X + 40, p.Y + 4, 160, 24))) is { } shown)
+        {
+            screen = shown;
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Position = new PixelPoint(p.X, p.Y);
+            Width = p.Width;
+            Height = p.Height;
+            FitTo(screen);
+            if (p.Maximized)
+                WindowState = WindowState.Maximized;
+        }
+        if (slot > 0)
+            Cascade(screen, slot);
+        if (WindowStartupLocation == WindowStartupLocation.Manual)
+            _normal = _opened = (Position, Width, Height);
+    }
+
+    /// <summary>A step down and to the right per window open before this one, kept on the screen.</summary>
+    private void Cascade(Avalonia.Platform.Screen screen, int slot)
+    {
+        var area = screen.WorkingArea;
+        var (width, height) = ((int)(Width * screen.Scaling), (int)(Height * screen.Scaling));
+        if (WindowStartupLocation != WindowStartupLocation.Manual)
+        {
+            // Where CenterScreen would have put it.
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Position = new PixelPoint(area.X + (area.Width - width) / 2, area.Y + (area.Height - height) / 2);
+        }
+        var step = (int)Math.Round(32 * screen.Scaling) * slot;
+        Position = new PixelPoint(Math.Max(area.X, Math.Min(Position.X + step, area.Right - width)),
+                                  Math.Max(area.Y, Math.Min(Position.Y + step, area.Bottom - height)));
     }
 
     /// <summary>
@@ -149,6 +181,10 @@ public partial class MainWindow : Window
     {
         base.OnClosing(e);
         Remember();
+        // A window opened beside another and neither moved nor resized: the place where BlackBox
+        // opens stays where it was, rather than creeping down a step with every second window.
+        if (_slot > 0 && _normal == _opened && WindowState != WindowState.Maximized)
+            return;
         if (!e.Cancel && _normal is { } normal)
             Vm.SavePlacement(new Core.Settings.WindowPlacement
             {
@@ -357,9 +393,7 @@ public partial class MainWindow : Window
             if (change.PropertyName == nameof(MainWindowViewModel.ShowIntro) && !vm.ShowIntro)
                 _stickToBottom = true;
         };
-        // Stay visible while the agent works, but out of its way when it clicks or types here.
-        if (TryGetPlatformHandle()?.Handle is { } handle)
-            vm.AttachHostWindow(handle);
+        vm.ShowInputOverlay();
     }
 
     /// <summary>A chat picked in the History dropdown (its command opens it): close the list and get back to typing.</summary>
@@ -428,17 +462,8 @@ public partial class MainWindow : Window
         viewer.Position = screen.Bounds.Position;
         viewer.Width = screen.Bounds.Width / screen.Scaling;
         viewer.Height = screen.Bounds.Height / screen.Scaling;
-        nint handle = 0;
-        viewer.Opened += (_, _) =>
-        {
-            // Out of the agent's way as the chat is: a click of its lands behind it.
-            if (viewer.TryGetPlatformHandle()?.Handle is { } h)
-                Vm.AttachViewer(handle = h);
-        };
         viewer.Closed += (_, _) =>
         {
-            if (handle != 0)
-                Vm.DetachViewer(handle);
             if (ReferenceEquals(_viewer, viewer))
             {
                 _viewer = null;

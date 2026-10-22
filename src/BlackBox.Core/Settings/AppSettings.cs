@@ -321,8 +321,16 @@ public sealed class AppSettings
         JsonSerializer.Deserialize(JsonSerializer.Serialize(this, SettingsJson.Default.AppSettings), SettingsJson.Default.AppSettings)!;
 }
 
+/// <summary>
+/// settings.json. Every BlackBox window is a process of its own with the settings in memory, so
+/// each one writes only what it changed since it last read or wrote the file: a model picked in
+/// one window stays picked when another closes and saves where it was.
+/// </summary>
 public sealed class SettingsStore(AppPaths paths)
 {
+    /// <summary>The settings as this BlackBox last read or wrote them; what differs from them is what it changed.</summary>
+    private JsonObject? _base;
+
     public AppSettings Load()
     {
         try
@@ -335,10 +343,12 @@ public sealed class SettingsStore(AppPaths paths)
             // A hand-edited "server": null left the window without a server to show, and it closed at start.
             settings.Server ??= new();
             settings.Agent ??= new();
+            var loaded = JsonSerializer.Serialize(settings, SettingsJson.Default.AppSettings);
+            _base = JsonNode.Parse(loaded) as JsonObject;
             // Rewrite the file if it still has keys from older versions, so it only ever holds
             // settings that exist. A folder that can't be written to (a read-only stick) can wait.
-            if (JsonSerializer.Serialize(settings, SettingsJson.Default.AppSettings) != text)
-                TryWrite(() => Save(settings));
+            if (loaded != text)
+                TryWrite(() => AtomicFile.Write(paths.SettingsFile, loaded));
             return settings;
         }
         catch (JsonException)
@@ -375,7 +385,54 @@ public sealed class SettingsStore(AppPaths paths)
         return root.ToJsonString();
     }
 
-    public void Save(AppSettings settings) => AtomicFile.Write(paths.SettingsFile, JsonSerializer.Serialize(settings, SettingsJson.Default.AppSettings));
+    /// <summary>
+    /// Writes what changed in <paramref name="settings"/> since this BlackBox last read or wrote
+    /// the file, over what is in the file now: another window's changes meanwhile stay.
+    /// </summary>
+    public void Save(AppSettings settings)
+    {
+        var mine = (JsonObject)JsonSerializer.SerializeToNode(settings, SettingsJson.Default.AppSettings)!;
+        // Read and written by one window at a time; one that hangs holding it is waited for a second at most.
+        using (InterProcess.Lock(paths.SettingsFile, TimeSpan.FromSeconds(1)))
+        {
+            var merged = _base is { } @base && ReadFile() is { } theirs ? Merge(@base, mine, theirs) : mine;
+            using var text = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(text, new JsonWriterOptions { Indented = true }))
+                merged.WriteTo(writer);
+            AtomicFile.Write(paths.SettingsFile, System.Text.Encoding.UTF8.GetString(text.ToArray()));
+        }
+        _base = (JsonObject)mine.DeepClone();
+    }
+
+    /// <summary>settings.json as it is now; null when it isn't there or doesn't parse.</summary>
+    private JsonObject? ReadFile()
+    {
+        try { return File.Exists(paths.SettingsFile) ? JsonNode.Parse(File.ReadAllText(paths.SettingsFile)) as JsonObject : null; }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>
+    /// <paramref name="theirs"/> with what differs between <paramref name="base"/> and
+    /// <paramref name="mine"/> put over it, key by key within the objects (the server's address
+    /// changed here, its model there: both stay).
+    /// </summary>
+    internal static JsonObject Merge(JsonObject @base, JsonObject mine, JsonObject theirs)
+    {
+        var merged = (JsonObject)theirs.DeepClone();
+        foreach (var key in mine.Select(p => p.Key).Union(@base.Select(p => p.Key)).ToList())
+        {
+            var (now, before) = (mine[key], @base[key]);
+            if (JsonNode.DeepEquals(now, before))
+                continue; // not changed here: what is there stands
+            if (now is JsonObject nowObject && before is JsonObject beforeObject && merged[key] is JsonObject thereObject)
+                merged[key] = Merge(beforeObject, nowObject, thereObject);
+            else if (mine.ContainsKey(key))
+                merged[key] = now?.DeepClone();
+            else
+                merged.Remove(key);
+        }
+        return merged;
+    }
 }
 
 /// <summary>settings.json's format, generated at build time so trimmed builds can read and write it without reflection.</summary>

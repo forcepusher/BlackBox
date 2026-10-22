@@ -62,8 +62,11 @@ public sealed class HeadlessBrowser(string executable, string profileDirectory)
     public async Task<string> GetDomAsync(Uri url, bool runScripts, CancellationToken ct)
     {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
+        // And one at a time among the BlackBox windows, which share the profile and its lock.
+        IDisposable? claim = null;
         try
         {
+            claim = await Settings.InterProcess.ClaimAsync(profileDirectory.TrimEnd('\\', '/') + ".lock", ct).ConfigureAwait(false);
             Directory.CreateDirectory(profileDirectory);
             var psi = new ProcessStartInfo(executable)
             {
@@ -121,6 +124,7 @@ public sealed class HeadlessBrowser(string executable, string profileDirectory)
         }
         finally
         {
+            claim?.Dispose();
             _gate.Release();
         }
     }

@@ -4,10 +4,14 @@
         xmlns:views="using:BlackBox.App.Views"
         x:Class="BlackBox.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="BlackBox"
+        Title="{Binding WindowTitle}"
         Icon="/Assets/blackbox.ico"
         Width="900" Height="760" MinWidth="660" MinHeight="480"
         WindowStartupLocation="CenterScreen">
+
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+Shift+N" Command="{Binding NewWindowCommand}" />
+  </Window.KeyBindings>
 
   <Window.Styles>
     <!-- The intro in an unused chat: the cards on what BlackBox can do, and Pause/Break drawn as a key. -->
@@ -263,7 +267,8 @@
           <!-- Films planned shot by shot (see FilmWindow): beside the chat, which "Make the film" hands it to. -->
           <Button Classes="ghost" Content="Filmmaking" Click="OnFilmmakingClick"
                   ToolTip.Tip="Plan a film shot by shot, with its frames and soundtrack, and make it with ComfyUI" />
-          <!-- Earlier chats, newest first: a row opens one, its trash button deletes it. -->
+          <!-- Earlier chats, newest first: a row opens one, its trash button deletes it. A chat another
+               BlackBox window has open says so, and its row brings that window forward. -->
           <Button x:Name="HistoryButton" Classes="ghost" ToolTip.Tip="Earlier chats" AutomationProperties.Name="History">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock Text="History" VerticalAlignment="Center" />
@@ -285,7 +290,8 @@
                                 <TextBlock Classes="muted" Text="{Binding When}" />
                               </StackPanel>
                             </Button>
-                            <Button Grid.Column="1" Classes="deleteChat" Command="{Binding DeleteCommand}" ToolTip.Tip="Delete this chat" AutomationProperties.Name="Delete chat">
+                            <Button Grid.Column="1" Classes="deleteChat" Command="{Binding DeleteCommand}" ToolTip.Tip="Delete this chat" AutomationProperties.Name="Delete chat"
+                                    IsVisible="{Binding !IsElsewhere}">
                               <PathIcon Width="16" Height="16" Data="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
                             </Button>
                           </Grid>
@@ -298,6 +304,9 @@
             </Button.Flyout>
           </Button>
           <Button Classes="ghost" Content="New chat" Command="{Binding NewChatCommand}" />
+          <!-- Another BlackBox beside this one, for a task of its own at the same time. -->
+          <Button Classes="ghost" Content="New window" Command="{Binding NewWindowCommand}"
+                  ToolTip.Tip="Open another BlackBox window, to work on another task at the same time (Ctrl+Shift+N)" />
           <Button Classes="ghost" Content="Settings" Click="OnSettingsClick" />
         </StackPanel>
       </DockPanel>
@@ -570,6 +579,25 @@
             </DockPanel>
           </Border>
 
+          <!-- Several tasks at once, a window each (New window at the top does the same). -->
+          <Border Classes="card">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" Margin="0,0,8,0" VerticalAlignment="Top">
+                <Border Classes="key">
+                  <TextBlock Text="Ctrl" />
+                </Border>
+                <Border Classes="key">
+                  <TextBlock Text="Shift" />
+                </Border>
+                <Border Classes="key">
+                  <TextBlock Text="N" />
+                </Border>
+              </StackPanel>
+              <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
+                         Text="opens another window, so I can work on several tasks at once." />
+            </DockPanel>
+          </Border>
+
           <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
             <Border Grid.Row="0" Grid.Column="0" Classes="card">
               <DockPanel>
@@ -712,6 +740,7 @@
                     VerticalAlignment="Center" Data="M3,2 H6 V14 H3 Z M10,2 H13 V14 H10 Z" />
           <!-- Resume lets the agent go on at once and keeps the draft, for someone who started typing and changed their mind. -->
           <Button DockPanel.Dock="Right" Classes="ghost" Content="Resume" Command="{Binding ResumeCommand}" Margin="8,0,0,0" Padding="10,2"
+                  IsVisible="{Binding TypingPauseHere}"
                   VerticalAlignment="Center" ToolTip.Tip="Let me carry on now; what you typed stays in the box." />
           <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BbAccent}" VerticalAlignment="Center" Text="{Binding TypingPauseText}" />
         </DockPanel>

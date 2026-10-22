@@ -343,9 +343,32 @@ public sealed class ComfyHub(string stateDirectory)
     /// <summary>A task starts using the server; it calls <see cref="ReleaseAsync"/> when it is over.</summary>
     public void Use()
     {
-        Interlocked.Increment(ref _users);
+        if (Interlocked.Increment(ref _users) == 1)
+            lock (_inUseGate)
+                _inUse ??= Settings.InterProcess.TryClaim(InUseFile);
         Interlocked.Exchange(ref _waitForQueue, null)?.Cancel();
     }
+
+    /// <summary>
+    /// Held while a task of this BlackBox uses the server, for the other BlackBox windows to see:
+    /// the first one's task ended and closed the server between two jobs of the second's.
+    /// </summary>
+    private IDisposable? _inUse;
+    private readonly Lock _inUseGate = new();
+
+    private string InUseFile => Path.Combine(stateDirectory, $"in-use-{Environment.ProcessId}.lock");
+
+    /// <summary>Whether a task of another BlackBox window (or the command line) uses the server now.</summary>
+    private bool InUseElsewhere()
+    {
+        if (InUseElsewhereForTests is { } stub)
+            return stub();
+        try { return Directory.EnumerateFiles(stateDirectory, "in-use-*.lock").Any(f => Settings.InterProcess.ClaimedBy(f) is not null); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
+    }
+
+    /// <summary>Stand-in for tests: whether another BlackBox's task uses the server.</summary>
+    internal Func<bool>? InUseElsewhereForTests { get; set; }
 
     /// <summary>
     /// A task that used the server is over. When no other task uses it, a server BlackBox started is
@@ -359,6 +382,13 @@ public sealed class ComfyHub(string stateDirectory)
             return;
         if (left < 0)
             Interlocked.Exchange(ref _users, 0);
+        IDisposable? mine;
+        lock (_inUseGate)
+            (_inUse, mine) = (null, _inUse);
+        mine?.Dispose();
+        // Another window's task still at it: the server and its models stay; the last one to finish closes it.
+        if (InUseElsewhere())
+            return;
         var api = new ComfyApi(Address);
         if (!(OwnsForTests?.Invoke(api) ?? IsOurs(api)))
         {
@@ -387,9 +417,9 @@ public sealed class ComfyHub(string stateDirectory)
             return;
         _closing = Task.Run(async () =>
         {
-            // Not while another BlackBox runs (a second window, the command line): it may be
-            // between two of its jobs, and each BlackBox counts only its own tasks.
-            if (OthersRunForTests?.Invoke() ?? OtherBlackBoxRuns())
+            // Not while a task of another BlackBox (a second window, the command line) uses it:
+            // it may be between two of its jobs.
+            if (OthersRunForTests?.Invoke() ?? InUseElsewhere())
                 return;
             var api = new ComfyApi(Address);
             if (OwnsForTests?.Invoke(api) ?? IsOurs(api))
@@ -397,26 +427,8 @@ public sealed class ComfyHub(string stateDirectory)
         });
     }
 
-    /// <summary>Stand-in for tests: whether another BlackBox runs.</summary>
+    /// <summary>Stand-in for tests: whether another BlackBox's task uses the server, at start.</summary>
     internal Func<bool>? OthersRunForTests { get; set; }
-
-    private static bool OtherBlackBoxRuns()
-    {
-        var found = false;
-        foreach (var process in System.Diagnostics.Process.GetProcesses())
-        {
-            try
-            {
-                found |= process.Id != Environment.ProcessId && process.ProcessName.StartsWith("BlackBox", StringComparison.OrdinalIgnoreCase);
-            }
-            catch (InvalidOperationException) { } // ended meanwhile
-            finally
-            {
-                process.Dispose();
-            }
-        }
-        return found;
-    }
 
     private async Task CloseWhenIdleAsync(ComfyApi api, CancellationToken ct)
     {

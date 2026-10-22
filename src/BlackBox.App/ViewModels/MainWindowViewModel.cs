@@ -143,9 +143,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _ => "I don't ask before I act. \"Ask me first\" in Settings changes that.",
     };
 
-    public void AttachHostWindow(nint handle)
+    /// <summary>The window is up: from now on the agent's inputs show in the screen corner, and a ring where it clicks.</summary>
+    public void ShowInputOverlay()
     {
-        _platform.HostWindow.Attach(handle);
         _platform.InputOverlay.Duration = TimeSpan.FromSeconds(AgentSettings.InputLogSeconds);
         _platform.InputOverlay.Enabled = true;
     }
@@ -154,11 +154,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     /// <summary>Decoders and speakers, for the full-screen viewer's videos.</summary>
     public PreviewServices Previews => _previews;
-
-    /// <summary>The full-screen viewer, kept out of the agent's way while it is open, as the chat is.</summary>
-    public void AttachViewer(nint handle) => _platform.HostWindow.Attach(handle);
-
-    public void DetachViewer(nint handle) => _platform.HostWindow.Detach(handle);
 
     /// <summary>
     /// The chat's pictures and videos from the top, for the full-screen viewer to go through: those
@@ -185,6 +180,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         Items.CollectionChanged += (_, _) => ShowIntro = Items.All(i => i is NoticeItem);
         _stopKey = _platform.StopKey.Watch(OnStopKey);
+        _platform.HostWindow.AnswerTyping(TypingHere);
         foreach (var header in _chats.List())
             PastChats.Add(NewRow(header));
         OnPropertyChanged(nameof(HasPastChats));
@@ -203,6 +199,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             _settingsSave.Stop();
             SaveSettings(); // what was typed just before closing
         }
+        _chatClaim?.Dispose(); // written: another window may open it
         _runCts?.Cancel();
         _stopKey?.Dispose();
         // Logging out of the SSH servers and stopping the MCP ones, at the same time and for five
@@ -905,6 +902,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private void OnTypingPauseChanged()
     {
         OnPropertyChanged(nameof(TypingPause));
+        OnPropertyChanged(nameof(TypingPauseHere));
         OnPropertyChanged(nameof(TypingPauseText));
     }
 
@@ -914,13 +912,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>The agent's clicks and key presses are on hold because the user is typing to it (see <see cref="UserComposing"/>).</summary>
     public bool TypingPause => IsBusy && UserComposing();
 
+    /// <summary>The pause is for typing in this window's box, which Resume can end; typing in another window it can't.</summary>
+    public bool TypingPauseHere => TypingHere();
+
     /// <summary>
     /// What the pause line says: that the agent waits, and the three ways it goes on again, with
     /// the seconds left until it does by itself. Someone who started typing and changed their mind
     /// had no way to tell how to let it carry on.
     /// </summary>
-    public string TypingPauseText =>
-        $"Paused while you type: my clicks and key presses wait. I carry on when you send this (Enter), click Resume, or in {Math.Max(1, (int)Math.Ceiling((TypingQuiet - (DateTime.UtcNow - _lastTyped)).TotalSeconds))} s without a key press.";
+    public string TypingPauseText => TypingHere()
+        ? $"Paused while you type: my clicks and key presses wait. I carry on when you send this (Enter), click Resume, or in {Math.Max(1, (int)Math.Ceiling((TypingQuiet - (DateTime.UtcNow - _lastTyped)).TotalSeconds))} s without a key press."
+        : "Paused while you type in another BlackBox window: my clicks and key presses wait until you send it there, or stop typing for 15 s.";
 
     /// <summary>Lets the agent carry on at once; what was typed stays in the box, to finish and send later.</summary>
     [RelayCommand]
@@ -931,11 +933,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     }
 
     /// <summary>
-    /// The user is writing a message in the box: text in it, typed in the last 15 seconds. The
+    /// The user is writing a message, in this window's box or another BlackBox window's. The
     /// agent's clicks and key presses wait meanwhile, so neither ends up in the other's window.
     /// Read from the agent's thread.
     /// </summary>
-    private bool UserComposing() => Input.Length > 0 && DateTime.UtcNow - _lastTyped < TypingQuiet;
+    private bool UserComposing() => TypingHere() || _platform.HostWindow.OtherWindowTyping();
+
+    /// <summary>
+    /// The user is writing a message in this window's box: text in it, typed in the last 15
+    /// seconds. Also what other BlackBox windows are told when they ask, from a thread of the platform's.
+    /// </summary>
+    private bool TypingHere() => Input.Length > 0 && DateTime.UtcNow - _lastTyped < TypingQuiet;
 
     /// <summary>The hint in the empty box: what Enter does now, and that pictures and files can go in too.</summary>
     public string InputHint => IsBusy
@@ -1116,6 +1124,29 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         MarkCurrentChat();
     }
 
+    /// <summary>
+    /// New window (Ctrl+Shift+N): another BlackBox, a window of its own with its own chat and
+    /// agent, for another task at the same time. The agents take turns with the mouse and keyboard.
+    /// </summary>
+    [RelayCommand]
+    private void NewWindow()
+    {
+        try
+        {
+            var exe = Environment.ProcessPath ?? throw new InvalidOperationException("BlackBox's program file is not known.");
+            // The same folder (BLACKBOX_HOME comes along in the environment), so the same settings and chats.
+            var start = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory };
+            // Run as "dotnet BlackBox.App.dll": the same again.
+            if (Path.GetFileNameWithoutExtension(exe).Equals("dotnet", StringComparison.OrdinalIgnoreCase) && Environment.GetCommandLineArgs() is [var dll, ..])
+                start.ArgumentList.Add(dll);
+            System.Diagnostics.Process.Start(start)?.Dispose();
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            AddNotice($"Another window could not be opened: {ex.Message}", isError: true);
+        }
+    }
+
     // ---- saved chats (the History dropdown) --------------------------------------------
 
     /// <summary>Saved chats, the most recently changed first.</summary>
@@ -1126,6 +1157,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>The file the chat on screen is saved in; null until its first message.</summary>
     private string? _chatId;
     private string? _chatTitle;
+
+    /// <summary>The chat on screen, claimed for this window (see <see cref="ChatStore.Claim"/>): another BlackBox window brings this one forward instead of opening it too.</summary>
+    private IDisposable? _chatClaim;
+
+    /// <summary>The window's title: the chat's, so several BlackBox windows can be told apart on the taskbar.</summary>
+    public string WindowTitle => _chatTitle is { } title ? $"{title} - BlackBox" : "BlackBox";
 
     /// <summary>
     /// The run in progress belongs to a chat that is no longer on screen (New chat or another chat
@@ -1167,8 +1204,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             item.DisposePreviews();
         Items.Clear();
         _current = null;
+        // Let go of once its last version is on the disk.
+        if (_chatClaim is { } claim)
+            _chatSaver.Release(claim);
+        _chatClaim = null;
         _chatId = null;
         _chatTitle = null;
+        OnPropertyChanged(nameof(WindowTitle));
         ContextUsage = "";
     }
 
@@ -1176,17 +1218,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         if (row.Id == _chatId)
             return;
+        // Open in another BlackBox window: that one comes forward, with the chat as it goes on there.
+        if (_chats.Claim(row.Id) is not { } claim)
+        {
+            ShowElsewhere(row);
+            return;
+        }
         // A chat left a moment ago may still be on its way to the disk.
         _chatSaver.Flush(TimeSpan.FromSeconds(10));
         if (_chats.Load(row.Id) is not { } chat)
         {
+            claim.Dispose();
             PastChats.Remove(row);
             OnPropertyChanged(nameof(HasPastChats));
             return;
         }
         LeaveChat(save: true);
+        _chatClaim = claim;
         _chatId = chat.Id;
         _chatTitle = chat.Title;
+        OnPropertyChanged(nameof(WindowTitle));
         _history = chat.History;
         var withFiles = new List<(ChatItemViewModel, Func<IReadOnlyList<string>>)>();
         foreach (var entry in chat.Entries)
@@ -1210,8 +1261,24 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         MarkCurrentChat();
     }
 
+    /// <summary>A chat another BlackBox window has open: that window comes forward, or the row says where it is.</summary>
+    private void ShowElsewhere(PastChat row)
+    {
+        var process = _chats.OpenElsewhere().TryGetValue(row.Id, out var p) ? p : (int?)null;
+        row.IsElsewhere = process is not null;
+        if (process is { } other && _platform.HostWindow.BringForward(other))
+            return;
+        AddNotice($"\"{row.Title}\" is open in another BlackBox window.", isError: false);
+    }
+
     private void DeleteChat(PastChat row)
     {
+        // Another window's run would only write it back.
+        if (row.Id != _chatId && _chats.OpenElsewhere().ContainsKey(row.Id))
+        {
+            row.IsElsewhere = true;
+            return;
+        }
         // Its last version on the disk, for its pictures; and none still on its way there afterwards.
         _chatSaver.Flush(TimeSpan.FromSeconds(10));
         // The pictures pasted into it go with it; files dropped on the window were the user's own and stay.
@@ -1236,6 +1303,39 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             row.IsCurrent = row.Id == _chatId;
     }
 
+    /// <summary>
+    /// The History list as the chats folder has it now, when it opens: other BlackBox windows add
+    /// chats to it as they go, and those they have open are marked.
+    /// </summary>
+    public void RefreshPastChats()
+    {
+        var headers = _chats.List();
+        var elsewhere = _chats.OpenElsewhere();
+        var rows = headers.Select(h =>
+        {
+            if (PastChats.FirstOrDefault(r => r.Id == h.Id) is not { } row)
+                return NewRow(h);
+            // The chat on screen may be newer here than on the disk.
+            if (row.Id != _chatId) row.Updated = h.Updated;
+            return row;
+        }).ToList();
+        // On its way to the disk for the first time.
+        if (_chatId is not null && rows.All(r => r.Id != _chatId) && PastChats.FirstOrDefault(r => r.Id == _chatId) is { } current)
+            rows.Insert(0, current);
+        rows = rows.OrderByDescending(r => r.Updated).ToList();
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var at = PastChats.IndexOf(rows[i]);
+            if (at < 0) PastChats.Insert(i, rows[i]);
+            else if (at != i) PastChats.Move(at, i);
+            rows[i].IsElsewhere = elsewhere.ContainsKey(rows[i].Id);
+        }
+        while (PastChats.Count > rows.Count)
+            PastChats.RemoveAt(PastChats.Count - 1);
+        OnPropertyChanged(nameof(HasPastChats));
+        MarkCurrentChat();
+    }
+
     /// <summary>A copy of the model's conversation to save; null if a run changed it while it was being copied.</summary>
     private List<ChatMessage>? SnapshotHistory()
     {
@@ -1252,9 +1352,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var first = Items.OfType<UserMessageItem>().FirstOrDefault();
         if (history is null || first is null && _chatTitle is null)
             return;
-        _chatId ??= ChatStore.NewId();
-        // A message that is only a file is named after it.
-        _chatTitle ??= ChatStore.TitleFrom(first!.HasText ? first.Text : string.Join(", ", first.Attachments.Select(a => a.FileName)));
+        if (_chatId is null)
+        {
+            _chatId = ChatStore.NewId();
+            _chatClaim = _chats.Claim(_chatId);
+        }
+        if (_chatTitle is null)
+        {
+            // A message that is only a file is named after it.
+            _chatTitle = ChatStore.TitleFrom(first!.HasText ? first.Text : string.Join(", ", first.Attachments.Select(a => a.FileName)));
+            OnPropertyChanged(nameof(WindowTitle));
+        }
         var chat = new SavedChat
         {
             Id = _chatId,

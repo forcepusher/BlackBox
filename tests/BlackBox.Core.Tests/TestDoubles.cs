@@ -242,6 +242,7 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
 {
     public IHostWindow HostWindow { get; set; } = NoHostWindow.Instance;
     public IInputOverlay InputOverlay => NoInputOverlay.Instance;
+    public IDesktopTurn DesktopTurn { get; set; } = NoDesktopTurn.Instance;
 
     public List<string> Actions { get; } = [];
     public (int X, int Y) Cursor { get; set; } = (50, 50);

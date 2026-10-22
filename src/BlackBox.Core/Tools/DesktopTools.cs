@@ -11,8 +11,34 @@ public abstract class DesktopActionTool : Tool
     /// <summary>The longest an action waits for the user to finish typing a message to the agent.</summary>
     internal static TimeSpan MaxUserPause = TimeSpan.FromSeconds(60);
 
+    /// <summary>The longest an action waits for another BlackBox window's agent to be done with the mouse and keyboard.</summary>
+    internal static TimeSpan MaxTurnWait = TimeSpan.FromMinutes(5);
+
     public sealed override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
+        // Another BlackBox window's agent may be using the mouse and keyboard: one at a time.
+        var turn = await ctx.Platform.DesktopTurn.TakeAsync(MaxTurnWait,
+            waited => ctx.Progress?.Invoke($"Waiting for another BlackBox window to finish with the mouse and keyboard · {(int)waited.TotalMinutes}:{waited.Seconds:00}"), ct).ConfigureAwait(false);
+        if (turn is null)
+            return new ToolResult($"Nothing was done: another BlackBox window's agent has been using the mouse and keyboard for {MaxTurnWait.TotalMinutes:0} minutes. " +
+                                  "Do what doesn't need them meanwhile (files, commands), or try again.");
+        ctx.AfterRun("desktop turn", () =>
+        {
+            ctx.Platform.DesktopTurn.Release();
+            return Task.CompletedTask;
+        });
+        if (turn == true)
+        {
+            // What the model aimed at may have moved, been covered or closed meanwhile.
+            ctx.Seen = null;
+            var now = ScreenshotTool.Take(ctx);
+            return now with
+            {
+                Text = "Nothing was done: another BlackBox window's agent was using the mouse and keyboard, so the screen may have changed since you last saw it. " +
+                       "This is the screen now; do it again if it still applies.\n" + now.Text,
+            };
+        }
+
         // The user is typing to the agent in its window: a click or key press now would take the
         // focus from under their typing, or their keys would land in the agent's window.
         var paused = System.Diagnostics.Stopwatch.StartNew();
