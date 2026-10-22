@@ -293,6 +293,14 @@ box, a tool's screenshot) puts it on the clipboard at its full size, not the cha
 its file: Paint, Word or a chat app's box paste the picture, Explorer and mail paste the file. A
 video gives the frame on screen with its file; a screenshot, which has no file, the picture alone.
 
+A chat video that played nothing (its file deleted or no longer readable) no longer starts again
+by itself, which it did at once, for ever, opening the decoder and ffmpeg each time. Opening the
+full-screen viewer looks at the disk only for paths on this PC's own drives, as a share whose server
+was off held the window. An animation in the viewer keeps all its frames within 256 MB, and reading
+how a file was made (Prompt) is bounded against files made to hang it: a compressed text chunk
+grows to 16 MB at most, the settings line is read to 8,000 characters, and a workflow's links are
+followed 100,000 times at most.
+
 ### How it does
 qwen3.8 27B (q6_k_xl, on the LM Studio server) with the ComfyUI on an RTX 5070 Ti (16 GB), each
 task one plain message and nothing more, ComfyUI stopped before the first
@@ -729,6 +737,21 @@ the camera" on shot 3 rewrote its prompt in 15 s and made it again in two minute
 film** still hands the storyboard to the agent in the chat. A ComfyUI BlackBox started for the
 window is closed once the window is.
 
+**What a review found (2026-10-23).** A piece's stamp is written once its output is in place, not
+when its job is queued: a remake that failed or was stopped left the old picture or clip with the
+new settings' stamp, read as made from them, and skipped by Make what's missing. The song's stamp
+carries its length after a colon (`hash:72`), and a song stays made while it covers the film, as
+one made before (its length in the hash) does too: a shot a second shorter remade a long film's
+song with other music. The lines keep a seed of their own (`sound.voiceSeed`, the song's until a
+song is made): remaking the song changed the voice. A take that failed puts the song's seed back. A
+restored take is made now as far as what is made from it goes, and brings back the settings that
+were at their defaults when it was made. Ids given in a change are kept and new ones come after them
+(shots before frames when two collide). A frame listed in its own `from`, a title of 79 or more
+characters (the tool went round for ever finding a free folder) and names like "Con" no longer
+break anything. A template a shot was pinned to by an upgraded storyboard gives way to one that can
+do the shot's job once it has a last frame or a line. The film tool saves only the seed a long job
+settled onto the storyboard as it is then, and numbers in stamps are written in the invariant culture.
+
 ### How films did
 On this PC (RTX 5070 Ti 16 GB, ComfyUI 0.41.3), at 1280x720 and 24 fps: a frame from words took
 about 20 s (Z-Image Turbo), one made from other frames 25 to 45 s (Qwen-Image-Edit 2509), a 5 s shot
@@ -1032,6 +1055,17 @@ run, and a screenshot question in the app. All 54 requests kept the API's rules,
 and from the second step on each read everything before it from the cache; screenshots of the
 2560x1080 screen went at 1984x832, and the model list, "Picked by BlackBox: Claude Opus 5.5" and
 the slider's 1M showed in the window.
+
+A review on 2026-10-23 against the API's rules found: an MCP tool whose schema is a union at the top
+(`anyOf`, as zod writes one) was refused in every request, so such schemas are made one object (the
+alternatives' properties together; required what all of them require); the parts of a request the
+API turned down are now learnt per model, not per address; past 100 pictures in a request the oldest
+are left out fifty at a time, so the cache breaks once in fifty steps (about 120 steps into a task
+on Haiku 4.5 every request was refused); thinking cut off before its signature isn't sent back;
+screenshots for models before 4.7 go at 1184 px, so a 4:3 or 5:4 screen's picture stays under the
+1.15 megapixels those models take whole; and the handoff note after a request refused as too long
+is asked for on the latest part of the conversation without pictures, which fits, instead of the
+whole of it again.
 
 ### Without a model server: Kilo's free models
 A new BlackBox's address is Kilo's AI gateway (`https://ai-gateway.kilo.ai/api/v1`), whose free

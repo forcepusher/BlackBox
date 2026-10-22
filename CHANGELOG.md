@@ -66,6 +66,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   context gets smaller.
 - The sysadmin migration ticket finds backups written under /var/lib and /var/local too.
 - BlackBox.exe and the MCP servers it starts say version 1.0.0, as released, not 0.1.0.
+- Claude: MCP tools whose argument schema is a union work; a long task no longer stops on more than
+  100 pictures in a request; a reply cut off mid-thought no longer breaks the next request; older
+  Claude models point accurately on 4:3 and 5:4 screens.
+- A chat video whose file was deleted no longer restarts over and over, and opening the full-screen
+  viewer no longer freezes on a chat that names files on a share that is off.
+- Films: a failed remake no longer leaves a piece looking made; remaking the song keeps the lines'
+  voice and doesn't redo a song that still covers the film; restoring a take restores all of its
+  settings; long titles and names like "Con" work; the film tool no longer writes over changes made
+  in the Filmmaking window during a long job.
 
 ## [1.0.0] - 2026-10-19
 The first release.
