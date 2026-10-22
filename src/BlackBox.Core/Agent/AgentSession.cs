@@ -197,6 +197,22 @@ public sealed partial class AgentSession(
 
     public const string NotRunResult = "Not run: the user's message (below) came in first, and the user asked for it to be read at once.";
 
+    // The same where the user took the message back after Interrupt, as the step was already being cut short.
+    public const string TakenBackResult = "Interrupted: the user asked for a message of theirs to be read at once, then took it back. " +
+                                          "It may have done part of its work: check before doing it again.";
+
+    public const string TakenBackNotRunResult = "Not run: the user asked for a message of theirs to be read at once, then took it back. Run it if it is still needed.";
+
+    /// <summary>The result of a call Interrupt stopped (or kept from running), saying whether the message it was for is still there to read.</summary>
+    private string CutShort(bool ran)
+    {
+        lock (_incoming)
+            return _incoming.Count > 0 ? ran ? InterruptedResult : NotRunResult : ran ? TakenBackResult : TakenBackNotRunResult;
+    }
+
+    /// <summary>Whether a call's result is one Interrupt left: it stopped, rather than failed or was declined.</summary>
+    public static bool IsCutShort(string text) => text is InterruptedResult or NotRunResult or TakenBackResult or TakenBackNotRunResult;
+
     /// <summary>Adds the user's messages that arrived since the last step, as user messages: the history only grows.</summary>
     /// <param name="turnEnded">
     /// The model's last reply ended its turn: the messages are what it works on next, as if sent
@@ -450,7 +466,7 @@ public sealed partial class AgentSession(
                     // Interrupt: the rest of the reply's calls give way to the user's message.
                     if (calls.Interrupted(ct))
                     {
-                        History.Add(last = ChatMessage.ToolResult(call.Id, NotRunResult));
+                        History.Add(last = ChatMessage.ToolResult(call.Id, CutShort(ran: false)));
                         continue;
                     }
                     var result = await RunToolAsync(call, observer, ct, calls.Token).ConfigureAwait(false);
@@ -671,7 +687,7 @@ public sealed partial class AgentSession(
             // A stop while the call waited for an OK is no answer to it. Taken for a no, it went into
             // the conversation as declined, and after Continue the model asked what to do instead.
             ct.ThrowIfCancellationRequested();
-            var denied = step.IsCancellationRequested ? ToolResult.Error(NotRunResult) : ToolResult.Error(DeclinedText);
+            var denied = step.IsCancellationRequested ? ToolResult.Error(CutShort(ran: false)) : ToolResult.Error(DeclinedText);
             observer.OnToolFinished(call, denied);
             return denied;
         }
@@ -689,7 +705,7 @@ public sealed partial class AgentSession(
         }
         catch (OperationCanceledException) when (step.IsCancellationRequested && !ct.IsCancellationRequested)
         {
-            result = ToolResult.Error(InterruptedResult);
+            result = ToolResult.Error(CutShort(ran: true));
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
@@ -804,7 +820,7 @@ public sealed partial class AgentSession(
                     observer.OnNotice($"The server's context is {limit / 1000}k tokens, not {contextTokens / 1000}k; working with that from now on.");
                     contextTokens = limit;
                 }
-                await ResetContextAsync(observer, ct).ConfigureAwait(false);
+                await ResetContextAsync(observer, ct, overflowed: true).ConfigureAwait(false);
                 request.Clear();
                 request.Add(ChatMessage.System(systemPrompt));
                 request.AddRange(History);

@@ -172,7 +172,24 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     }
 
     /// <summary>A picture, animation or video the full-screen viewer shows.</summary>
-    public static bool Viewable(string path) => Core.Media.MediaPreview.KindOf(path) is "image" or "animation" or "video" && !Directory.Exists(path);
+    public static bool Viewable(string path) => Core.Media.MediaPreview.KindOf(path) is "image" or "animation" or "video" && !LocalFolder(path);
+
+    /// <summary>
+    /// A folder named like a picture, looked for on this PC's own drives only: on the window's
+    /// thread, a path on a share whose server was off held the window for half a minute.
+    /// </summary>
+    private static bool LocalFolder(string path)
+    {
+        try
+        {
+            return !path.StartsWith(@"\\", StringComparison.Ordinal) && Path.GetPathRoot(path) is { Length: > 0 } root
+                   && new DriveInfo(root).DriveType is DriveType.Fixed or DriveType.Removable && Directory.Exists(path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
 
     public void OnStartup()
     {

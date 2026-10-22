@@ -150,10 +150,13 @@ public sealed class FilmTool : Tool
                 (films.Count > 0 ? $" The films in {root}, the latest first: {string.Join("; ", films.Take(12))}." : ""));
         }
         var title = (string?)change["title"] ?? "Untitled film";
-        var folder = given ?? Path.Combine(root, Storyboard.Safe(title));
-        // Another film of the same title is another film: it isn't written over.
+        var name = Storyboard.Safe(title);
+        var folder = given ?? Path.Combine(root, name);
+        // Another film of the same title is another film: it isn't written over. Its number goes
+        // after a name cut short enough to keep it: cut at 80 characters with the number, a long
+        // title gave the same folder for every number, and the tool went round for ever.
         for (var n = 2; given is null && File.Exists(Path.Combine(folder, Storyboard.FileName)); n++)
-            folder = Path.Combine(root, Storyboard.Safe($"{title} {n}"));
+            folder = Path.Combine(root, $"{(name.Length > 72 ? name[..72].TrimEnd() : name)} {n}");
         if (given is not null && Path.GetFileName(given).Equals(Storyboard.FileName, StringComparison.OrdinalIgnoreCase))
             folder = Path.GetDirectoryName(given)!;
         Directory.CreateDirectory(folder);
@@ -340,6 +343,20 @@ public sealed class FilmTool : Tool
         return new ToolResult(sb.ToString(), preview.Image, ImageCaption: preview.Image is null ? null : $"Frame {frame.Id}:", Files: [made.File]);
     }
 
+    /// <summary>
+    /// Saves what a long job settled (a seed) onto the storyboard as it is on the disk now: saved
+    /// whole, the board read at the call's start wrote over what the user changed in the Filmmaking
+    /// window during minutes of takes, and the window then showed the tool's version.
+    /// </summary>
+    private static void SaveSettled(Storyboard board, Action<Storyboard> settle)
+    {
+        Storyboard fresh;
+        try { fresh = Storyboard.Load(board.Folder); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException or System.Text.Json.JsonException) { fresh = board; }
+        settle(fresh);
+        fresh.Save();
+    }
+
     private async Task<ToolResult> SoundAsync(Storyboard board, int tries, ToolContext ctx, CancellationToken ct)
     {
         if (board.Sound.Source == FilmSound.FromFile)
@@ -347,7 +364,8 @@ public sealed class FilmTool : Tool
         if (board.Sound.Source != FilmSound.Song)
             throw new FilmException("The storyboard has no song to make: set sound {\"source\": \"song\", \"tags\": …, \"lyrics\": …} first.");
         var made = await Maker(ctx).MakeSongAsync(board, ctx.Progress, ctx.UserMessage, ct, tries).ConfigureAwait(false);
-        board.Save(); // the seed of the song kept
+        // The seed of the song kept, and the voice the lines keep.
+        SaveSettled(board, fresh => (fresh.Sound.Seed, fresh.Sound.VoiceSeed) = (board.Sound.Seed, board.Sound.VoiceSeed));
         var preview = MediaPreview.ForFiles([made.File], ctx.Media, ctx.SeesImages);
         var sb = new StringBuilder();
         sb.AppendLine($"The song is made in {Chats.ChatTimes.Stopwatch(made.Took)} with {made.Template}: {made.File} (a minute long at least: shorter songs come out badly; the film uses its start).");
@@ -407,7 +425,11 @@ public sealed class FilmTool : Tool
         }
         var best = takes.MaxBy(t => t.Score);
         shot.Seed = best.Seed;
-        board.Save();
+        SaveSettled(board, fresh =>
+        {
+            if (fresh.Shot(shot.Id) is { } kept)
+                kept.Seed = best.Seed;
+        });
         File.Copy(best.File, board.ShotVideo(shot), overwrite: true);
         File.Copy(Path.ChangeExtension(best.File, ".json"), board.ShotWorkflow(shot), overwrite: true);
         var head = $"Shot {shot.Id}: {takes.Count} take(s); " +

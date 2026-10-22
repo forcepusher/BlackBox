@@ -34,15 +34,16 @@ internal sealed partial record ClaudeModel(string Id, int MaxTokens, bool Adapti
     /// <summary>
     /// The longest side screenshots are sent at, so that Claude points on the picture BlackBox sent:
     /// 2000 px for the models that see up to 2576 px (Claude 4.7 and later), the most a picture may
-    /// have in a request with more than 20; 1280 for the ones before, which make a picture over
-    /// 1568 px or 1568 patches of 28x28 px smaller.
+    /// have in a request with more than 20; 1184 for the ones before, which make a picture over
+    /// 1568 px or about 1.15 megapixels (1,600 tokens) smaller. At 1280, a 4:3 screen's 1280x960
+    /// and a 5:4 one's 1280x1024 were over it, shrunk by Claude, and its points off by up to 4%.
     /// </summary>
     public int ScreenshotSide
     {
         get
         {
             var (family, version) = Parse(Id);
-            return version >= 4.7 || family is null ? AnthropicMessages.ManyImagesSide : 1280;
+            return version >= 4.7 || family is null ? AnthropicMessages.ManyImagesSide : 1184;
         }
     }
 
@@ -132,6 +133,9 @@ public static partial class AnthropicMessages
     internal const int ManyImages = 20;
     internal const int ManyImagesSide = 2000;
 
+    /// <summary>The most pictures the API takes in one request.</summary>
+    internal const int MaxImages = 100;
+
     /// <summary>The request body; <paramref name="betas"/> gets the beta features it uses, for the anthropic-beta header.</summary>
     internal static JsonObject BuildRequest(IReadOnlyList<ChatMessage> messages, IReadOnlyList<ToolDefinition> tools, ChatRequestOptions options,
         ClaudeModel model, Wire wire, List<string> betas)
@@ -204,7 +208,13 @@ public static partial class AnthropicMessages
     private static JsonArray Messages(IReadOnlyList<ChatMessage> history, Wire wire)
     {
         var images = history.Sum(m => m.Parts?.Count(p => p.IsImage) ?? 0);
-        var maxSide = images > ManyImages ? Math.Min(wire.MaxImageSide, ManyImagesSide) : wire.MaxImageSide;
+        // A request takes 100 pictures at most (a 1M model 600, but 32 MB comes first): past that,
+        // the oldest are left out, fifty at a time, so the prompt cache breaks once every fifty
+        // steps rather than at every one. Some 120 steps into a task on Haiku 4.5, every request
+        // was refused, and so was every later message in the chat.
+        var leftOut = images > MaxImages ? (images - MaxImages + 49) / 50 * 50 : 0;
+        var maxSide = images - leftOut > ManyImages ? Math.Min(wire.MaxImageSide, ManyImagesSide) : wire.MaxImageSide;
+        var seen = 0;
 
         var turns = new List<(string Role, List<JsonObject> Blocks)>();
         void Add(string role, List<JsonObject> blocks)
@@ -239,7 +249,9 @@ public static partial class AnthropicMessages
                     var blocks = new List<JsonObject>();
                     if (m.Parts is { Count: > 0 } parts)
                         foreach (var part in parts)
-                            blocks.AddRange(part.IsImage ? [ImageBlock(part, maxSide)] : TextBlocks(part.Text));
+                            blocks.AddRange(!part.IsImage ? TextBlocks(part.Text)
+                                : seen++ < leftOut ? TextBlocks("(An earlier picture, left out: a request takes 100 at most.)")
+                                : [ImageBlock(part, maxSide)]);
                     else
                         blocks.AddRange(TextBlocks(m.Content));
                     Add(ChatRole.User, blocks);
@@ -309,7 +321,11 @@ public static partial class AnthropicMessages
             {
                 switch (Type(block))
                 {
-                    case "thinking" or "redacted_thinking" when !stripThinking:
+                    // Not thinking cut off before its signature came (a reply that ran out of room
+                    // mid-thought): sent back, it is refused, and dropping the latest reply's thinking
+                    // alone keeps it.
+                    case "thinking" when !stripThinking && block["signature"] is JsonValue signature && signature.TryGetValue<string>(out var signed) && signed.Length > 0:
+                    case "redacted_thinking" when !stripThinking:
                         blocks.Add((JsonObject)block.DeepClone());
                         break;
                     case "text" when block["text"]?.GetValue<string>() is { } text && text.Trim().Length > 0:

@@ -115,7 +115,43 @@ public sealed partial class McpTool : Tools.Tool
         if (obj["required"] is not null && obj["required"] is not JsonArray)
             obj.Remove("required");
         obj.Remove("$schema");
+        FlattenAlternatives(obj);
         return obj;
+    }
+
+    /// <summary>
+    /// A schema whose top is anyOf, oneOf or allOf (as zod writes one for a union of argument
+    /// sets) made one object: Anthropic refuses such a tool outright ("input_schema does not
+    /// support oneOf, allOf, or anyOf at the top level"), and every request with it failed. The
+    /// alternatives' properties are put together; required are those all of anyOf's or oneOf's
+    /// require, and every one of allOf's.
+    /// </summary>
+    private static void FlattenAlternatives(JsonObject schema)
+    {
+        foreach (var key in new[] { "allOf", "anyOf", "oneOf" })
+        {
+            if (schema[key] is not JsonArray alternatives)
+                continue;
+            schema.Remove(key);
+            var properties = (JsonObject)schema["properties"]!;
+            var requiredBy = new List<HashSet<string>>();
+            foreach (var alternative in alternatives.OfType<JsonObject>())
+            {
+                if (alternative["properties"] is JsonObject more)
+                    foreach (var (name, property) in more)
+                        if (!properties.ContainsKey(name))
+                            properties[name] = property?.DeepClone();
+                requiredBy.Add(Names(alternative["required"]));
+            }
+            var required = Names(schema["required"]);
+            if (requiredBy.Count > 0)
+                required.UnionWith(key == "allOf" ? requiredBy.SelectMany(r => r) : requiredBy.Skip(1).Aggregate(requiredBy[0], (all, r) => [.. all.Intersect(r)]));
+            if (required.Count > 0)
+                schema["required"] = new JsonArray([.. required.Select(r => JsonValue.Create(r))]);
+        }
+
+        static HashSet<string> Names(JsonNode? node) =>
+            node is JsonArray names ? names.Select(n => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : null).OfType<string>().ToHashSet() : [];
     }
 
     /// <summary>Text blocks become the result text; the first image travels with it like a screenshot does.</summary>

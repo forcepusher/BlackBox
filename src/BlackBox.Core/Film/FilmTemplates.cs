@@ -150,15 +150,25 @@ public static partial class FilmTemplates
         if (model?.Trim() is { Length: > 0 } words)
         {
             var all = await hub.TemplatesAsync(api, ct).ConfigureAwait(false);
-            if (words.StartsWith(CheckpointPrefix, StringComparison.OrdinalIgnoreCase) || all.Any(t => t.Name.Equals(words, StringComparison.OrdinalIgnoreCase)))
-                return (await LoadAsync(hub, api, words, ct).ConfigureAwait(false), null);
             var options = await OptionsAsync(hub, api, job, ct).ConfigureAwait(false);
-            if (Match(options, words) is { } option)
+            var named = words.StartsWith(CheckpointPrefix, StringComparison.OrdinalIgnoreCase) || all.Any(t => t.Name.Equals(words, StringComparison.OrdinalIgnoreCase));
+            if (named && options.Any(o => o.Name.Equals(words, StringComparison.OrdinalIgnoreCase)))
+                return (await LoadAsync(hub, api, words, ct).ConfigureAwait(false), null);
+            if (!named && Match(options, words) is { } option)
                 return (await LoadAsync(hub, api, option.Name, ct).ConfigureAwait(false), null);
-            // Installed, but for another kind of job: a picture from words for a frame made from others.
+            // Installed, but for another kind of job: a picture from words for a frame made from others;
+            // a shot that kept the template its job had once (an upgraded storyboard's) and has a last
+            // frame or a line since, which that template has no place for.
             FilmOption? elsewhere = null;
             foreach (var other in Siblings(job).Where(j => j != job))
-                elsewhere ??= Match(await OptionsAsync(hub, api, other, ct).ConfigureAwait(false), words) is { } o ? o with { About = Describe(other) } : null;
+            {
+                var theirs = await OptionsAsync(hub, api, other, ct).ConfigureAwait(false);
+                elsewhere ??= (named ? theirs.FirstOrDefault(o => o.Name.Equals(words, StringComparison.OrdinalIgnoreCase)) : Match(theirs, words)) is { } o
+                    ? o with { About = Describe(other) } : null;
+            }
+            // Named exactly, and known for no job: the user's own, used as they say.
+            if (named && elsewhere is null)
+                return (await LoadAsync(hub, api, words, ct).ConfigureAwait(false), null);
             if (elsewhere is null)
                 throw new FilmException($"Nothing installed for {Describe(job)} matches \"{words}\". " +
                                         (options.Count == 0 ? "Nothing installed does this job." : $"What is installed for it: {string.Join("; ", options.Take(25).Select(o => o.Label))}.") +

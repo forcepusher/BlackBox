@@ -12,7 +12,7 @@ namespace BlackBox.Core.Film;
 /// it (frames/&lt;id&gt;.png, shots/&lt;id&gt;.mp4, sound/song.mp3), each with the workflow that made it,
 /// so the window and the agent can't overwrite each other's results.
 /// </summary>
-public sealed class Storyboard
+public sealed partial class Storyboard
 {
     public const string FileName = "storyboard.json";
 
@@ -98,13 +98,20 @@ public sealed class Storyboard
     /// <summary>The joined film: named after it, in its folder.</summary>
     public string FilmFile => Path.Combine(Folder, Safe(Title.Length > 0 ? Title : "film") + ".mp4");
 
-    /// <summary>A name made safe as a file name.</summary>
+    /// <summary>
+    /// A name made safe as a file name: no character Windows forbids, at most 80 long, and not a
+    /// device's name (a film called "Con" got the console for its folder, and nothing saved).
+    /// </summary>
     public static string Safe(string name)
     {
         var bad = Path.GetInvalidFileNameChars();
         var safe = string.Concat(name.Trim().Select(c => bad.Contains(c) ? '_' : c)).Trim('.', ' ');
-        return safe.Length == 0 ? "film" : safe.Length > 80 ? safe[..80].Trim() : safe;
+        safe = safe.Length == 0 ? "film" : safe.Length > 80 ? safe[..80].Trim() : safe;
+        return Device().IsMatch(safe) ? safe + "_" : safe;
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(\.|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex Device();
 
     /// <summary>
     /// When each shot starts in the film and how long the film is: shots follow each other, and
@@ -332,11 +339,19 @@ public sealed class Storyboard
         SoundVolume = Math.Clamp(SoundVolume, 0, 2);
         if (ShotVolume is { } v)
             ShotVolume = Math.Clamp(v, 0, 2);
+        // The ids given first, shots before frames, and new ones after them: numbered in list order,
+        // a frame without one took the id a later frame in the same change was given (and a shot's
+        // first frame named by it was the wrong one), and a frame given a shot's id renamed that shot
+        // and every one after it, their clips then matched to the wrong ids.
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var renamed = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        foreach (var (item, id) in Shots.Select(s => ((object)s, s.Id)).Concat(Frames.Select(f => ((object)f, f.Id))))
+            if (string.IsNullOrWhiteSpace(id) || !seen.Add(id.Trim()))
+                renamed.Add(item);
         foreach (var f in Frames)
         {
             f.From ??= [];
-            if (string.IsNullOrWhiteSpace(f.Id) || !seen.Add(f.Id.Trim()))
+            if (renamed.Contains(f))
                 f.Id = NextFree("f", seen);
             f.Id = f.Id.Trim();
             if (f.Seed <= 0)
@@ -346,7 +361,7 @@ public sealed class Storyboard
         }
         foreach (var s in Shots)
         {
-            if (string.IsNullOrWhiteSpace(s.Id) || !seen.Add(s.Id.Trim()))
+            if (renamed.Contains(s))
                 s.Id = NextFree("s", seen);
             s.Id = s.Id.Trim();
             if (s.Seed <= 0)
@@ -651,6 +666,9 @@ public sealed class FilmSound
     public string? Model { get; set; }
 
     public long Seed { get; set; }
+
+    /// <summary>The seed the lines are said with, once the song has one of its own (0: the song's).</summary>
+    public long VoiceSeed { get; set; }
 
     public JsonObject? Set { get; set; }
 }

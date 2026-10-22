@@ -154,6 +154,16 @@ public class McpTests
         Assert.Equal("object", bare["type"]!.GetValue<string>());
         Assert.NotNull(bare["properties"]);
         Assert.Empty(bare["properties"]!.AsObject());
+
+        // A union of argument sets, as zod writes one: Anthropic takes no anyOf at the top.
+        var union = McpTool.NormalizeSchema(JsonSerializer.Deserialize<JsonElement>("""
+            {"anyOf": [
+              {"type": "object", "properties": {"path": {"type": "string"}, "mode": {"type": "string"}}, "required": ["path", "mode"]},
+              {"type": "object", "properties": {"url": {"type": "string"}, "mode": {"type": "string"}}, "required": ["url", "mode"]}]}
+            """));
+        Assert.Null(union["anyOf"]);
+        Assert.Equal(["path", "mode", "url"], union["properties"]!.AsObject().Select(p => p.Key));
+        Assert.Equal(["mode"], union["required"]!.AsArray().Select(n => n!.GetValue<string>()));
     }
 
     [Fact]

@@ -66,7 +66,9 @@ public sealed partial class AgentSession
     /// history with the user's messages, the note and the latest screenshot. If the model can't
     /// write the note (no room left, connection gone), a note is assembled from the last steps.
     /// </summary>
-    internal async Task ResetContextAsync(IAgentObserver observer, CancellationToken ct)
+    /// <param name="overflowed">The server refused the conversation as too long (or too big, or more input than a minute takes):
+    /// the note is asked for on its latest part, without pictures, which fits.</param>
+    internal async Task ResetContextAsync(IAgentObserver observer, CancellationToken ct, bool overflowed = false)
     {
         var before = TokensInUse();
         observer.OnNotice("The context is nearly full. Asking the model for a handoff note, then starting fresh…");
@@ -74,7 +76,7 @@ public sealed partial class AgentSession
         string note;
         try
         {
-            note = await WriteHandoffNoteAsync(observer, ct).ConfigureAwait(false);
+            note = await WriteHandoffNoteAsync(observer, overflowed, ct).ConfigureAwait(false);
         }
         catch (LlmException ex)
         {
@@ -104,7 +106,7 @@ public sealed partial class AgentSession
         observer.OnNotice($"Context reset: about {before / 1000}k tokens replaced by a handoff note ({EstimateTokens() / 1000 + 1}k).");
     }
 
-    private async Task<string> WriteHandoffNoteAsync(IAgentObserver observer, CancellationToken ct)
+    private async Task<string> WriteHandoffNoteAsync(IAgentObserver observer, bool overflowed, CancellationToken ct)
     {
         // Same tools and options as every step, so the prompt matches the server's cache up to
         // the request message; only the length limit differs, and it isn't part of the prompt.
@@ -118,7 +120,7 @@ public sealed partial class AgentSession
             Effort = requestOptions.Effort,
         };
         var request = new List<ChatMessage>(History.Count + 2) { ChatMessage.System(systemPrompt) };
-        request.AddRange(History);
+        request.AddRange(overflowed ? LatestPart() : History);
         request.Add(ChatMessage.User(HandoffRequest));
 
         observer.OnStepStarted(0);
@@ -129,6 +131,30 @@ public sealed partial class AgentSession
         // A note cut off by the length limit is still worth keeping; a tool call instead of a
         // note is not.
         return (reply.Content ?? "").Trim();
+    }
+
+    /// <summary>
+    /// The conversation from its end back to half the context, without pictures or thinking, for
+    /// a note after the whole of it was refused: asked on the history that had just failed, plus
+    /// a message, the note failed every time, and only the record of the last steps was left. The
+    /// user's first message comes first, as what the task is.
+    /// </summary>
+    private List<ChatMessage> LatestPart()
+    {
+        var plain = Chats.ChatStore.ForSaving(History);
+        foreach (var m in plain)
+            m.Reasoning = null;
+        var budget = Math.Max(8_192, contextTokens / 2);
+        var start = plain.Count;
+        for (var used = 0; start > 0 && used + EstimateTokens(plain[start - 1]) <= budget; start--)
+            used += EstimateTokens(plain[start - 1]);
+        // Not on a tool's result whose call was left out.
+        while (start < plain.Count && plain[start].Role == ChatRole.Tool)
+            start++;
+        var part = plain.Skip(start).ToList();
+        if (plain.FirstOrDefault(m => m.FromUser) is { } task && !part.Contains(task))
+            part.Insert(0, task);
+        return part;
     }
 
     /// <summary>Drops the thinking of all but the last three replies, oldest first, until under budget.</summary>

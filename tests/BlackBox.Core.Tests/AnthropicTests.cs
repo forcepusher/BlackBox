@@ -548,7 +548,11 @@ public class AnthropicTests
         var space = ctx.GetScreenSpace();
         Assert.True(space.ImageWidth <= 2000, $"{space.ImageWidth}");
         Assert.Equal((2559, 1079), space.ToScreen(space.ImageWidth, space.ImageHeight));
-        Assert.Equal(1280, ClaudeModel.FromName("claude-sonnet-4-6").ScreenshotSide);
+        // Before 4.7, small enough that a 5:4 screen's picture stays under 1.15 megapixels too.
+        Assert.Equal(1184, ClaudeModel.FromName("claude-sonnet-4-6").ScreenshotSide);
+        var square = new ToolContext { Platform = new FakePlatform { ScreenBounds = new(0, 0, 1280, 1024) }, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(),
+            MaxScreenshotSide = ClaudeModel.FromName("claude-sonnet-4-6").ScreenshotSide }.GetScreenSpace();
+        Assert.True(square.ImageWidth * square.ImageHeight <= 1_150_000, $"{square.ImageWidth}x{square.ImageHeight}");
         // Other servers get the screen as it is.
         var native = new ToolContext { Platform = platform, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() }.GetScreenSpace();
         Assert.Equal(2560, native.ImageWidth);

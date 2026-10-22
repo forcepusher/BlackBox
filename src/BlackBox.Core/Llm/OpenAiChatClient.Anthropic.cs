@@ -27,7 +27,8 @@ public sealed partial class OpenAiChatClient
     /// What is learnt of Anthropic's API, for each HttpClient (the app has one; every task and
     /// look makes a client of its own): what each Claude model can do, from the model list (or the
     /// name), by address and model id, and the parts of a request the API turned down, left out
-    /// from then on, by address.
+    /// from then on, by address and model: one model's refusal of the fallbacks or the thinking
+    /// binding turned them off for every model on api.anthropic.com until BlackBox closed.
     /// </summary>
     private sealed class ClaudeFacts
     {
@@ -111,7 +112,7 @@ public sealed partial class OpenAiChatClient
         var model = await ClaudeModelAsync(options.Model, ct).ConfigureAwait(false);
         for (var attempt = 0; ; attempt++)
         {
-            var wire = Wires.GetOrAdd(_baseUrl, _ => new AnthropicMessages.Wire()) with { StripThinking = _stripThinking };
+            var wire = Wires.GetOrAdd(_baseUrl + "|" + model.Id, _ => new AnthropicMessages.Wire()) with { StripThinking = _stripThinking };
             var betas = new List<string>();
             var payload = Encoding.UTF8.GetBytes(AnthropicMessages.BuildRequest(messages, tools, options, model, wire, betas).ToJsonString());
             using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -154,7 +155,7 @@ public sealed partial class OpenAiChatClient
                     // out, and the request sent again.
                     if (status == 400 && attempt < 6 && Adjust(said, wire, ref model) is { } adjusted)
                     {
-                        Wires[_baseUrl] = adjusted with { StripThinking = 0 };
+                        Wires[_baseUrl + "|" + model.Id] = adjusted with { StripThinking = 0 };
                         _stripThinking = adjusted.StripThinking;
                         ClaudeModels[_baseUrl + "|" + model.Id] = model;
                         continue;

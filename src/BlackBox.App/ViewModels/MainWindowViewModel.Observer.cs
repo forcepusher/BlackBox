@@ -215,7 +215,7 @@ public sealed partial class MainWindowViewModel
         {
             item.Ended = at;
             if (item.State is not (ToolItemState.Denied or ToolItemState.Stopped))
-                item.State = result.Text is AgentSession.InterruptedResult or AgentSession.NotRunResult ? ToolItemState.Stopped
+                item.State = AgentSession.IsCutShort(result.Text) ? ToolItemState.Stopped
                     : result.IsError ? ToolItemState.Error : ToolItemState.Done;
         }
     });
