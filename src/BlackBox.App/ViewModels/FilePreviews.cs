@@ -125,11 +125,10 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
 
     internal static string Size(string path)
     {
-        try { return Sized(new FileInfo(path).Length); }
+        try { return Core.Strings.Bytes(new FileInfo(path).Length); }
         catch (IOException) { return ""; }
     }
 
-    private static string Sized(long bytes) => bytes >= 1 << 20 ? $"{bytes / 1048576.0:0.0} MB" : bytes >= 1024 ? $"{bytes / 1024.0:0} KB" : $"{bytes} bytes";
 
     /// <summary>Runs <paramref name="work"/> off the UI thread; a file that can't be read says so in <see cref="Details"/>.</summary>
     protected void Background(Action work) => Task.Run(() =>
@@ -152,8 +151,6 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
         var b = bgra ?? source;
         return new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, b.GetPixels(), new PixelSize(b.Width, b.Height), new Vector(96, 96), b.RowBytes);
     }
-
-    internal static string Clock(TimeSpan t) => t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
 }
 
 /// <summary>A picture, at the chat's width.</summary>
@@ -433,7 +430,7 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
     [NotifyPropertyChangedFor(nameof(TimeText))]
     private double _position;
 
-    public string TimeText => $"{Clock(TimeSpan.FromSeconds(Position))} / {Clock(TimeSpan.FromSeconds(Length))}";
+    public string TimeText => $"{Core.Chats.ChatTimes.Stopwatch(TimeSpan.FromSeconds(Position))} / {Core.Chats.ChatTimes.Stopwatch(TimeSpan.FromSeconds(Length))}";
 
     private int _seek;
 

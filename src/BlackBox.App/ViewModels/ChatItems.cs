@@ -166,8 +166,8 @@ public sealed partial class AssistantMessageItem : ChatItemViewModel
                 return "…";
             var (sent, total) = (Interlocked.Read(ref _sent), Interlocked.Read(ref _total));
             return total > 0 && sent < total
-                ? $"Sending to the server… {sent / 1048576.0:0.0} of {total / 1048576.0:0.0} MB, {waited:m\\:ss}"
-                : $"Waiting for the model… {waited:m\\:ss}";
+                ? $"Sending to the server… {sent / 1048576.0:0.0} of {total / 1048576.0:0.0} MB, {ChatTimes.Stopwatch(waited)}"
+                : $"Waiting for the model… {ChatTimes.Stopwatch(waited)}";
         }
     }
 

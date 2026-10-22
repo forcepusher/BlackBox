@@ -182,7 +182,7 @@ public static class Downloader
             return $"Downloading {name}… {Mb(have)}, {speed}";
         var left = perSecond > 0 ? TimeSpan.FromSeconds((t - have) / perSecond) : TimeSpan.Zero;
         var done = t >= 1L << 30 ? $"{have / 1073741824.0:0.00} of {t / 1073741824.0:0.00} GB" : $"{have / 1048576.0:N0} of {t / 1048576.0:N0} MB";
-        return $"Downloading {name}… {done}, {speed}, {(left.TotalHours >= 1 ? left.ToString(@"h\:mm\:ss") : left.ToString(@"m\:ss"))} left";
+        return $"Downloading {name}… {done}, {speed}, {Chats.ChatTimes.Stopwatch(left)} left";
     }
 
     private static string Mb(long bytes) => bytes >= 1L << 30 ? $"{bytes / 1073741824.0:0.00} GB" : $"{bytes / 1048576.0:N0} MB";

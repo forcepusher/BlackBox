@@ -289,14 +289,10 @@ internal static partial class Native
     [LibraryImport("user32.dll", EntryPoint = "FindWindowExW", StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint FindWindowEx(nint parent, nint childAfter, string? className, string? windowName);
 
-    public const uint SMTO_BLOCK = 0x0001, SMTO_ABORTIFHUNG = 0x0002;
+    public const uint SMTO_ABORTIFHUNG = 0x0002;
 
     [LibraryImport("user32.dll", EntryPoint = "SendMessageTimeoutW", SetLastError = true)]
     public static partial nint SendMessageTimeout(nint hWnd, uint msg, nint wParam, nint lParam, uint flags, uint timeout, out nint result);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool DestroyWindow(nint hWnd);
 
     public const int DWMWA_CLOAKED = 14;
 

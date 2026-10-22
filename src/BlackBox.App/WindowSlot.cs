@@ -9,7 +9,7 @@ namespace BlackBox.App;
 internal static class WindowSlot
 {
     /// <summary>Kept for as long as the process runs: the slot is taken while its mutex exists.</summary>
-    private static Mutex? _held;
+    private static readonly List<Mutex> Held = [];
 
     public static int Take()
     {
@@ -20,7 +20,7 @@ internal static class WindowSlot
                 var mutex = new Mutex(true, $@"Local\BlackBox.Window.{slot}", out var created);
                 if (created)
                 {
-                    _held = mutex;
+                    Held.Add(mutex);
                     return slot;
                 }
                 mutex.Dispose();

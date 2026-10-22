@@ -783,11 +783,6 @@ public static partial class FilmCheck
         return Jpeg(sheet);
     }
 
-    private static byte[] Grid(List<(string Label, SKBitmap Frame)> cells, int width, int height)
-    {
-        using var grid = GridBitmap(cells, width, height, columns: cells.Count <= 4 ? Math.Max(1, cells.Count) : cells.Count <= 9 ? 3 : 4);
-        return Jpeg(grid);
-    }
 
     /// <summary>Pictures in a grid, each with its label in a corner, <see cref="SheetWidth"/> wide unless said.</summary>
     private static SKBitmap GridBitmap(IReadOnlyList<(string Label, SKBitmap Frame)> cells, int width, int height, int columns, int sheetWidth = SheetWidth)

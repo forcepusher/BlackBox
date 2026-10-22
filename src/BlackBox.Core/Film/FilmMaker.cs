@@ -151,7 +151,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             Prefix = Prefix(board, frame.Id),
         };
         var job = pictures.Count > 0 ? FilmJob.Edit : FilmJob.Frame;
-        var run = await RunAsync(board, job, ModelOf(board, frame), inputs, frame.Set, board.FrameWorkflow(frame), FrameStamp(board, frame), "image", progress, userMessage, ct).ConfigureAwait(false);
+        var run = await RunAsync(job, ModelOf(board, frame), inputs, frame.Set, board.FrameWorkflow(frame), FrameStamp(board, frame), "image", progress, userMessage, ct).ConfigureAwait(false);
         await Task.Run(() => SaveFrame(run.Output, target, board.Width, board.Height), ct).ConfigureAwait(false);
         FilmTakes.Remember(board.FrameWorkflow(frame), FilmPiece.Of(frame).Settings(board));
         return new FilmMade(target, board.FrameWorkflow(frame), run.Template, run.Took, run.Notes);
@@ -231,7 +231,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         };
         var target = take ?? board.ShotVideo(shot);
         var workflow = take is null ? board.ShotWorkflow(shot) : Path.ChangeExtension(take, ".json");
-        var run = await RunAsync(board, job, ModelOf(board, shot), inputs, shot.Set, workflow, ShotStamp(board, shot), "video", progress, userMessage, ct).ConfigureAwait(false);
+        var run = await RunAsync(job, ModelOf(board, shot), inputs, shot.Set, workflow, ShotStamp(board, shot), "video", progress, userMessage, ct).ConfigureAwait(false);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         File.Copy(run.Output, target, overwrite: true);
         if (VideoSteady.AsksStill(shot.Camera + "\n" + shot.Prompt) && await HoldStillAsync(target, ct).ConfigureAwait(false) is { } held)
@@ -429,7 +429,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             };
             var (file, workflow) = takes <= 1 ? (board.SongFile, board.SongWorkflow)
                 : (Path.Combine(board.Folder, "sound", $"song.take{take}.mp3"), Path.Combine(board.Folder, "sound", $"song.take{take}.json"));
-            var run = await RunAsync(board, FilmJob.Song, SongModelOf(board), inputs, sound.Set, workflow, SongStamp(board), "audio",
+            var run = await RunAsync(FilmJob.Song, SongModelOf(board), inputs, sound.Set, workflow, SongStamp(board), "audio",
                 takes <= 1 ? progress : s => progress?.Invoke($"Song {take} of {takes}: {s}"), userMessage, ct).ConfigureAwait(false);
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
             File.Copy(run.Output, file, overwrite: true);
@@ -485,7 +485,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     /// result (with the files it loads by their full paths, so the comfyui tool can run it again).
     /// </summary>
     /// <param name="model">What it is to be made with, in words or by name (<see cref="FilmFrame.Model"/>); null: the best installed.</param>
-    private async Task<Run> RunAsync(Storyboard board, FilmJob job, string? model, FilmInputs inputs, JsonObject? extra, string workflowFile, string stamp, string kind,
+    private async Task<Run> RunAsync(FilmJob job, string? model, FilmInputs inputs, JsonObject? extra, string workflowFile, string stamp, string kind,
         Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
     {
         Use();
@@ -581,7 +581,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             throw;
         }
         if (job.Status is "running" or "queued")
-            throw new FilmStillRunningException($"It is still being made in ComfyUI ({job.Progress ?? job.Status}, {ComfyRunner.Clock(DateTime.UtcNow - pending.Queued)} so far)" +
+            throw new FilmStillRunningException($"It is still being made in ComfyUI ({job.Progress ?? job.Status}, {Chats.ChatTimes.Stopwatch(DateTime.UtcNow - pending.Queued)} so far)" +
                                                 ": asking for the same thing again waits for it.");
         Running.TryRemove(workflowFile, out _);
         if (job.Status != "success")

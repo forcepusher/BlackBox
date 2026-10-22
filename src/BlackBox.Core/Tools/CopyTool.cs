@@ -62,8 +62,8 @@ public sealed partial class CopyTool : Tool
             var took = clock.Elapsed;
             var where = to.Host is null ? target.Where : $"{to.Host}:{target.Where}";
             var speed = took > TimeSpan.FromSeconds(10) && source.Bytes > 0
-                ? $" in {Duration(took)} ({Size((long)(source.Bytes / took.TotalSeconds))}/s)" : "";
-            var text = $"Copied {source.Files} file{(source.Files == 1 ? "" : "s")} ({Size(source.Bytes)}) to {where}{(sudo ? " with sudo" : "")}{speed}.";
+                ? $" in {Chats.ChatTimes.Duration(took)} ({Strings.Bytes((long)(source.Bytes / took.TotalSeconds))}/s)" : "";
+            var text = $"Copied {source.Files} file{(source.Files == 1 ? "" : "s")} ({Strings.Bytes(source.Bytes)}) to {where}{(sudo ? " with sudo" : "")}{speed}.";
             if (target.Skipped > 0)
                 text += $" {target.Skipped} link{(target.Skipped == 1 ? "" : "s")} or special file{(target.Skipped == 1 ? "" : "s")} left out (this PC keeps only files and folders).";
             if (target.Renamed > 0)
@@ -224,7 +224,7 @@ public sealed partial class CopyTool : Tool
                 else if (DateTime.UtcNow - since > IdleLimit)
                 {
                     stalled = true;
-                    pipe.Fail(new IOException($"The copy stalled: nothing moved for {Duration(IdleLimit)}."));
+                    pipe.Fail(new IOException($"The copy stalled: nothing moved for {Chats.ChatTimes.Duration(IdleLimit)}."));
                     stop.Cancel();
                     return;
                 }
@@ -250,7 +250,7 @@ public sealed partial class CopyTool : Tool
             await Task.WhenAll(produce.ContinueWith(_ => { }), consume.ContinueWith(_ => { })).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
             if (stalled)
-                throw new IOException($"The copy stalled: nothing moved for {Duration(IdleLimit)}.");
+                throw new IOException($"The copy stalled: nothing moved for {Chats.ChatTimes.Duration(IdleLimit)}.");
             // The end that failed on its own says why; the other one only saw the copy stop.
             var own = new[] { produce, consume }.Select(t => t.Exception?.InnerException)
                 .FirstOrDefault(e => e is not null and not CopyStoppedException and not OperationCanceledException);
@@ -456,10 +456,4 @@ public sealed partial class CopyTool : Tool
         return $"t=\"$(dirname {d})/.blackbox-copy-$$\"; mkdir -p \"$(dirname {d})\" && mkdir \"$t\" && tar -xf - -C \"$t\" --no-same-owner && " +
                $"mv \"$t\"/{SshHost.Quote(s.Top!)} {d} && rmdir \"$t\" || {{ rm -rf \"$t\"; exit 1; }}";
     }
-
-    private static string Size(long bytes) =>
-        bytes < 1024 ? $"{bytes} bytes" : bytes < 1024 * 1024 ? $"{bytes / 1024.0:0.#} KB" : bytes < 1L << 30 ? $"{bytes / 1048576.0:0.#} MB" : $"{bytes / (double)(1L << 30):0.##} GB";
-
-    private static string Duration(TimeSpan t) =>
-        t.TotalSeconds < 60 ? $"{t.TotalSeconds:0} s" : t.TotalMinutes < 60 ? $"{(int)t.TotalMinutes} min {t.Seconds} s" : $"{(int)t.TotalHours} h {t.Minutes} min";
 }

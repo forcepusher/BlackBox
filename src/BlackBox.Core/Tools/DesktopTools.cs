@@ -18,7 +18,7 @@ public abstract class DesktopActionTool : Tool
     {
         // Another BlackBox window's agent may be using the mouse and keyboard: one at a time.
         var turn = await ctx.Platform.DesktopTurn.TakeAsync(MaxTurnWait,
-            waited => ctx.Progress?.Invoke($"Waiting for another BlackBox window to finish with the mouse and keyboard · {(int)waited.TotalMinutes}:{waited.Seconds:00}"), ct).ConfigureAwait(false);
+            waited => ctx.Progress?.Invoke($"Waiting for another BlackBox window to finish with the mouse and keyboard · {Chats.ChatTimes.Stopwatch(waited)}"), ct).ConfigureAwait(false);
         if (turn is null)
             return new ToolResult($"Nothing was done: another BlackBox window's agent has been using the mouse and keyboard for {MaxTurnWait.TotalMinutes:0} minutes. " +
                                   "Do what doesn't need them meanwhile (files, commands), or try again.");

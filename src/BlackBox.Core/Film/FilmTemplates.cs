@@ -482,25 +482,4 @@ public static partial class FilmTemplates
         // A word as one of its words, or a long one written into them ("zimage" in z_image).
         static bool Has(FilmOption o, string t) => o.Words.Contains(t) || t.Length >= 5 && o.Joined.Contains(t, StringComparison.Ordinal);
     }
-
-    /// <summary>
-    /// What a model reads the words as, when they name nothing installed outright ("something for
-    /// anime", "the realistic one"): asked to pick one of the installed ways by name. Null when it
-    /// picks none, or can't be asked.
-    /// </summary>
-    public static async Task<FilmOption?> InterpretAsync(IReadOnlyList<FilmOption> options, string words, FilmJob job,
-        Func<string, CancellationToken, Task<string?>> ask, CancellationToken ct)
-    {
-        if (options.Count == 0)
-            return null;
-        var sb = new StringBuilder();
-        sb.AppendLine($"Someone making a film wants {Describe(job)} made with: \"{words.Trim()}\". These are installed on their PC:");
-        foreach (var o in options.Take(80))
-            sb.AppendLine($"- {o.Name}: {o.Label}" + (o.About.Length > 0 ? $". {o.About.ReplaceLineEndings(" ").Clip(200)}" : ""));
-        sb.Append("Which one do they mean? Reply with only its name, exactly as written before the colon, or with none if none fits.");
-        var reply = await ask(sb.ToString(), ct).ConfigureAwait(false);
-        if (reply is null)
-            return null;
-        return options.Where(o => reply.Contains(o.Name, StringComparison.OrdinalIgnoreCase)).MaxBy(o => o.Name.Length);
-    }
 }

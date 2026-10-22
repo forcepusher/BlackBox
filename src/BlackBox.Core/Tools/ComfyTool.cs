@@ -219,7 +219,7 @@ public sealed partial class ComfyTool : Tool
                 _found[m.Url] = m;
             sb.Append(++n).Append(". ").Append(m.Title).Append(": ").Append(m.Kind)
                 .Append(m.Base is { Length: > 0 } b ? $" for {b}" : "")
-                .Append(m.Size is { } size ? $", {Size(size)}" : "")
+                .Append(m.Size is { } size ? $", {Strings.Bytes(size)}" : "")
                 .Append(popularity ?? (m.Downloads > 0 ? $", {m.Downloads:N0} downloads" : ""))
                 .Append(m.Note is { } note ? $", {note}" : "")
                 .Append($" ({m.Source}, {m.Page})").AppendLine();
@@ -316,7 +316,7 @@ public sealed partial class ComfyTool : Tool
         if (await api.TrySystemStatsAsync(ct).ConfigureAwait(false) is not null)
             await hub.ModelsAsync(api, ct, fresh: true).ConfigureAwait(false);
         var checkedNote = known?.Sha256 is { Length: > 0 } ? ", its SHA-256 checked" : "";
-        return new ToolResult($"Downloaded {name} ({Size(length)} in {ComfyRunner.Clock(took)}{checkedNote}) into {dir}. {use}");
+        return new ToolResult($"Downloaded {name} ({Strings.Bytes(length)} in {Chats.ChatTimes.Stopwatch(took)}{checkedNote}) into {dir}. {use}");
     }
 
     /// <summary>
@@ -331,8 +331,6 @@ public sealed partial class ComfyTool : Tool
               "so load the text encoder and VAE as a template of its base model does (CLIPLoader, VAELoader), or load it with UNETLoader from models/diffusion_models as such a template does."
             : null;
 
-    private static string Size(long bytes) =>
-        bytes >= 1L << 30 ? $"{bytes / 1073741824.0:0.0} GB" : bytes >= 1L << 20 ? $"{bytes / 1048576.0:0} MB" : $"{Math.Max(1, bytes / 1024)} KB";
 
     /// <summary>
     /// Whether a model file already there is all of it: its size as the site gives it, else its
@@ -1183,7 +1181,7 @@ public sealed partial class ComfyTool : Tool
         var (clientId, titles) = hub.JobClient(promptId);
         var job = await ComfyRunner.WaitAsync(api, promptId, clientId, titles, wait, ctx.Progress, ctx.UserMessage, ct).ConfigureAwait(false);
         if (job.Status is "running" or "queued")
-            return new ToolResult($"The job (prompt_id {promptId}) is still {(job.Status == "queued" ? "waiting" : "running")} after {ComfyRunner.Clock(job.Elapsed)}" +
+            return new ToolResult($"The job (prompt_id {promptId}) is still {(job.Status == "queued" ? "waiting" : "running")} after {Chats.ChatTimes.Stopwatch(job.Elapsed)}" +
                                   (job.Progress is { } p ? $": {p}" : "") + ". " +
                                   (ctx.UserMessage.IsCancellationRequested ? "The user wrote to you meanwhile; read that first. " : "") +
                                   $"It goes on in ComfyUI; wait for it with action=status prompt_id={promptId}" +
@@ -1214,9 +1212,9 @@ public sealed partial class ComfyTool : Tool
 
         var sb = new StringBuilder();
         if (job.Status == "success")
-            sb.AppendLine($"Done in {ComfyRunner.Clock(job.Elapsed)}. " + (paths.Count == 0 ? "It made no files." : paths.Count == 1 ? "It made:" : $"It made {paths.Count} files:"));
+            sb.AppendLine($"Done in {Chats.ChatTimes.Stopwatch(job.Elapsed)}. " + (paths.Count == 0 ? "It made no files." : paths.Count == 1 ? "It made:" : $"It made {paths.Count} files:"));
         else
-            sb.AppendLine((job.Status == "interrupted" ? "The job was stopped" : "The job failed") + $" after {ComfyRunner.Clock(job.Elapsed)}. {job.Error}" +
+            sb.AppendLine((job.Status == "interrupted" ? "The job was stopped" : "The job failed") + $" after {Chats.ChatTimes.Stopwatch(job.Elapsed)}. {job.Error}" +
                           (paths.Count > 0 ? "\nIt made these before that:" : ""));
         var preview = MediaPreview.ForFiles(paths, ctx.Media, ctx.SeesImages);
         var sounds = preview.Lines.Select((line, i) => i < shown.Count && shown[i].Kind is "video" or "audio" && HasSound(line) ? NameInComfy(shown[i], dirs) : null).ToList();

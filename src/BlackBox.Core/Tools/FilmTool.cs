@@ -100,7 +100,7 @@ public sealed class FilmTool : Tool
             }
             return action switch
             {
-                "storyboard" => Show(board, args["storyboard"] is JsonObject, ctx),
+                "storyboard" => Show(board, args["storyboard"] is JsonObject),
                 "frame" => await FrameAsync(board, RequireId(args), ctx, ct).ConfigureAwait(false),
                 "shot" => await ShotAsync(board, RequireId(args), (int)Math.Clamp(GetNumber(args, "tries") ?? 1, 1, 8), ctx, ct).ConfigureAwait(false),
                 "sound" or "song" => await SoundAsync(board, (int)Math.Clamp(GetNumber(args, "tries") ?? 3, 1, 8), ctx, ct).ConfigureAwait(false),
@@ -205,7 +205,7 @@ public sealed class FilmTool : Tool
 
     // ---- the storyboard -------------------------------------------------------------------------------
 
-    private static ToolResult Show(Storyboard board, bool changed, ToolContext ctx)
+    private static ToolResult Show(Storyboard board, bool changed)
     {
         var text = Overview(board);
         var line = changed ? $"Saved the storyboard: {board.FilePath}. The user can open it in the Filmmaking window (the button at the top of BlackBox).\n" : "";
@@ -326,7 +326,7 @@ public sealed class FilmTool : Tool
         var made = await Maker(ctx).MakeFrameAsync(board, frame, ctx.Progress, ctx.UserMessage, ct).ConfigureAwait(false);
         var preview = MediaPreview.ForFiles([made.File], ctx.Media, ctx.SeesImages);
         var sb = new StringBuilder();
-        sb.AppendLine($"Frame {frame.Id} made in {Clock(made.Took)}" + (made.Template is { } t ? $" with {t}" : " from the user's picture") + $": {made.File}");
+        sb.AppendLine($"Frame {frame.Id} made in {Chats.ChatTimes.Stopwatch(made.Took)}" + (made.Template is { } t ? $" with {t}" : " from the user's picture") + $": {made.File}");
         if (made.Workflow is { } wf) sb.AppendLine($"Its workflow (fixed seed {frame.Seed}): {wf}");
         foreach (var note in made.Notes.Where(n => !n.Contains("no place for the size", StringComparison.Ordinal)))
             sb.AppendLine("Note: " + note);
@@ -350,7 +350,7 @@ public sealed class FilmTool : Tool
         board.Save(); // the seed of the song kept
         var preview = MediaPreview.ForFiles([made.File], ctx.Media, ctx.SeesImages);
         var sb = new StringBuilder();
-        sb.AppendLine($"The song is made in {Clock(made.Took)} with {made.Template}: {made.File} (a minute long at least: shorter songs come out badly; the film uses its start).");
+        sb.AppendLine($"The song is made in {Chats.ChatTimes.Stopwatch(made.Took)} with {made.Template}: {made.File} (a minute long at least: shorter songs come out badly; the film uses its start).");
         sb.AppendLine(string.Join("\n", preview.Lines));
         if (made.Score is { } score)
             sb.AppendLine($"How it sounds to SongEval, a judge trained on musicians' ratings, for the part the film uses: {score.Describe()}." +
@@ -384,7 +384,7 @@ public sealed class FilmTool : Tool
         {
             var made = await Maker(ctx).MakeShotAsync(board, shot, ctx.Progress, ctx.UserMessage, ct).ConfigureAwait(false);
             var look = await LookAtShotAsync(board, shot, made.File, ctx, ct).ConfigureAwait(false);
-            return Result($"Shot {shot.Id} made in {Clock(made.Took)} with {made.Template}: {made.File}\nIts workflow (fixed seed {shot.Seed}): {made.Workflow}", [.. first, .. made.Notes], look, made.File);
+            return Result($"Shot {shot.Id} made in {Chats.ChatTimes.Stopwatch(made.Took)} with {made.Template}: {made.File}\nIts workflow (fixed seed {shot.Seed}): {made.Workflow}", [.. first, .. made.Notes], look, made.File);
         }
 
         // Takes with new seeds until a check passes; the best one is kept as the shot's clip.
@@ -541,7 +541,7 @@ public sealed class FilmTool : Tool
         var made = await FilmMontage.JoinAsync(board, ctx.Media?.Ffmpeg, ctx.Media, ctx.Progress, ct).ConfigureAwait(false);
         var preview = MediaPreview.ForFiles([made.File], ctx.Media, ctx.SeesImages);
         var sb = new StringBuilder();
-        sb.AppendLine($"Joined the film in {Clock(made.Took)}: {made.File}");
+        sb.AppendLine($"Joined the film in {Chats.ChatTimes.Stopwatch(made.Took)}: {made.File}");
         sb.AppendLine(string.Join("\n", preview.Lines));
         sb.AppendLine($"It fades in from black over its first {N(FilmMontage.FadeIn)} s and out over its last {N(FilmMontage.FadeOut)} s on purpose, so a dark first or last frame is that, not a fault.");
         foreach (var note in made.Notes)
@@ -552,7 +552,6 @@ public sealed class FilmTool : Tool
         return new ToolResult(sb.ToString(), preview.Image, ImageCaption: preview.Image is null ? null : "The film:", Files: [made.File]);
     }
 
-    private static string Clock(TimeSpan t) => ComfyRunner.Clock(t);
 
     private static string N(double d) => d.ToString("0.##", CultureInfo.InvariantCulture);
 }

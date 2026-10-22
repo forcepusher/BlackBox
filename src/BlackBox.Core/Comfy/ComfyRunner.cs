@@ -150,7 +150,7 @@ public static class ComfyRunner
                     {
                         job.Status = "error";
                         job.Error = unanswered > 0
-                            ? $"ComfyUI stopped answering while the job ran (for {Clock(clock.Elapsed)} now): its process may have ended, out of memory or with an error. Its log says why; action=status shows ComfyUI's state."
+                            ? $"ComfyUI stopped answering while the job ran (for {Chats.ChatTimes.Stopwatch(clock.Elapsed)} now): its process may have ended, out of memory or with an error. Its log says why; action=status shows ComfyUI's state."
                             : "The job isn't in ComfyUI's queue or history any more: it was taken out of the queue, or ComfyUI was restarted since. Run it again.";
                         job.Elapsed = clock.Elapsed;
                         return job;
@@ -163,7 +163,7 @@ public static class ComfyRunner
                     job.Status = "running";
                     job.Progress = events.Describe(titles);
                 }
-                progress?.Invoke($"{job.Progress ?? "queued"} · {Clock(clock.Elapsed)}");
+                progress?.Invoke($"{job.Progress ?? "queued"} · {Chats.ChatTimes.Stopwatch(clock.Elapsed)}");
                 if (clock.Elapsed >= maxWait || userMessage.IsCancellationRequested)
                 {
                     job.Elapsed = clock.Elapsed;
@@ -190,8 +190,6 @@ public static class ComfyRunner
                 catch (Exception) { /* the socket closing */ }
         }
     }
-
-    internal static string Clock(TimeSpan t) => t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t:mm\\:ss}" : $"{(int)t.TotalMinutes}:{t:ss}";
 
     /// <summary>The polls in a row after which a server that doesn't answer, or a job that is nowhere, is given up on (about half a minute).</summary>
     internal static int GiveUpAfter { get; set; } = 8;

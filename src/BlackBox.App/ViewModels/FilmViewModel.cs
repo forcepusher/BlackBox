@@ -162,7 +162,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             if (_board.Title == value) return;
             _board.Title = value;
             OnPropertyChanged();
-            Changed(this);
+            Changed();
         }
     }
 
@@ -174,7 +174,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             if (value is not { } v) return;
             _board.Width = Math.Clamp((int)v / 2 * 2, 64, 4096);
             OnPropertyChanged();
-            Changed(this);
+            Changed();
         }
     }
 
@@ -186,7 +186,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             if (value is not { } v) return;
             _board.Height = Math.Clamp((int)v / 2 * 2, 64, 4096);
             OnPropertyChanged();
-            Changed(this);
+            Changed();
         }
     }
 
@@ -198,7 +198,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             if (value is not { } v) return;
             _board.Fps = Math.Clamp((int)v, 1, 120);
             OnPropertyChanged();
-            Changed(this);
+            Changed();
         }
     }
 
@@ -210,7 +210,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         {
             _board.SoundVolume = Math.Clamp(value / 100, 0, 2);
             OnPropertyChanged();
-            Changed(this);
+            Changed();
         }
     }
 
@@ -222,7 +222,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         {
             _board.ShotVolume = Math.Clamp(value / 100, 0, 2);
             OnPropertyChanged();
-            Changed(this);
+            Changed();
         }
     }
 
@@ -1206,7 +1206,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
                     item.State = s;
                 _talk.ReplaceLast(key, $"Making {label}: {s}");
                 if (key == TalkKey && Talk.Count > 0)
-                    Talk[^1] = new TalkItem($"Making {label}: {s} · {FilePreview.Clock(clock.Elapsed)}", false, true);
+                    Talk[^1] = new TalkItem($"Making {label}: {s} · {Core.Chats.ChatTimes.Stopwatch(clock.Elapsed)}", false, true);
             });
             FilmMade made = piece.Kind switch
             {
@@ -1220,7 +1220,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
                 _dirty = true;
                 SaveNow(force: true); // the seed of the song kept
             }
-            var said = $"Made {label} in {FilePreview.Clock(made.Took)}" + (made.Template is { } t ? $" with {Short(t)}" : "") + "." +
+            var said = $"Made {label} in {Core.Chats.ChatTimes.Stopwatch(made.Took)}" + (made.Template is { } t ? $" with {Short(t)}" : "") + "." +
                        (made.Score is { } score ? $" {Capital(score.Describe())}." : "") +
                        string.Concat(made.Notes.Where(Worth).Take(3).Select(n => " " + n));
             Say(key, said, replace: true);
@@ -1603,7 +1603,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     // ---- saving --------------------------------------------------------------------------------------------
 
     /// <summary>Something was changed in the window: saved a moment later, and what it changes shown.</summary>
-    public void Changed(object source)
+    public void Changed()
     {
         if (_loading)
             return;
