@@ -129,11 +129,11 @@
           <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
           <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" Margin="8,-8,0,-8" VerticalAlignment="Center" />
         </DockPanel>
-        <Button Classes="thumb" Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause video" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <Button Classes="thumb" Click="OnMediaClick" ToolTip.Tip="Full screen" AutomationProperties.Name="Video full screen" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
           <Panel Background="#000000">
             <Image Source="{Binding Frame}" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
             <Border Width="56" Height="56" CornerRadius="28" Background="#B0000000" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !IsPlaying}">
-              <PathIcon Data="M8 5v14l11-7z" Width="22" Height="22" Foreground="White" />
+              <PathIcon Data="M4 4h6v2H6v4H4zM14 4h6v6h-2V6h-4zM4 14h2v4h4v2H4zM18 14h2v6h-6v-2h4z" Width="22" Height="22" Foreground="White" />
             </Border>
           </Panel>
         </Button>
@@ -170,7 +170,10 @@
     <DataTemplate DataType="vm:FrameItem">
       <Border Classes="thumb" Background="#000000">
         <Panel>
-          <Image Source="{Binding Picture}" Stretch="Uniform" />
+          <Button Classes="thumb" Click="OnMediaClick" IsEnabled="{Binding IsMade}" ToolTip.Tip="Full screen" AutomationProperties.Name="Picture full screen"
+                  HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Padding="0" Background="Transparent">
+            <Image Source="{Binding Picture}" Stretch="Uniform" />
+          </Button>
           <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="520" Margin="24" IsVisible="{Binding !IsMade}">
             <TextBlock Text="{Binding Label}" FontSize="16" HorizontalAlignment="Center" />
             <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"

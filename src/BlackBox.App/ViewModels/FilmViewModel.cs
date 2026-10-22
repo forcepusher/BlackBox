@@ -805,6 +805,34 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
 
     private JoinedFilm? _filmView;
 
+    /// <summary>The services the film's previews play with, for the full-screen viewer.</summary>
+    public PreviewServices Previews => _previews;
+
+    /// <summary>
+    /// The film's pictures and videos as the full-screen viewer goes through them: the references,
+    /// the frames, the shots' clips in order, then the joined film; only what is made.
+    /// </summary>
+    public List<MediaEntry> MediaInFilm()
+    {
+        var all = new List<MediaEntry>();
+        foreach (var frame in _board.Frames.Where(f => f.Reference).Concat(_board.Frames.Where(f => !f.Reference)))
+            if (_frames.TryGetValue(frame.Id, out var item) && File.Exists(_board.FramePicture(frame)))
+                all.Add(new MediaEntry(item, _board.FramePicture(frame), null, item.Title));
+        foreach (var shot in Shots)
+            if (File.Exists(_board.ShotVideo(shot.Shot)))
+                all.Add(new MediaEntry(shot, _board.ShotVideo(shot.Shot), null, shot.Title));
+        if (HasFilm)
+            all.Add(new MediaEntry((object?)_filmView ?? _board.FilmFile, _board.FilmFile, null, _board.Title.Trim().Length > 0 ? _board.Title.Trim() : "The film"));
+        return all;
+    }
+
+    /// <summary>Where a picture or video clicked in the window is among <see cref="MediaInFilm"/>: by the piece it shows, or its file.</summary>
+    public int MediaIndex(List<MediaEntry> entries, object clicked) => clicked switch
+    {
+        FilePreview preview => entries.FindIndex(e => e.Path is { } p && string.Equals(Path.GetFullPath(p), Path.GetFullPath(preview.Path), StringComparison.OrdinalIgnoreCase)),
+        _ => entries.FindIndex(e => ReferenceEquals(e.Source, clicked)),
+    };
+
     /// <summary>What was said about the piece picked, oldest first.</summary>
     public ObservableCollection<TalkItem> Talk { get; } = [];
 
