@@ -269,7 +269,7 @@ public sealed partial class MainWindowViewModel
         var existing = Items.OfType<ToolCallItem>().LastOrDefault(t => t.CallId == call.Id);
         if (existing is not null)
             return existing;
-        var item = new ToolCallItem(call.Id, call.Name, summary);
+        var item = new ToolCallItem(call.Id, call.Name, summary) { Arguments = call.Arguments };
         Items.Add(item);
         return item;
     }

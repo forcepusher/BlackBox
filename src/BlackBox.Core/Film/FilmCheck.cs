@@ -273,6 +273,90 @@ public static partial class FilmCheck
     [GeneratedRegex(@"VERDICT\s*:\s*\**\s*redo\s*\**\s*[:,\-–]?\s*(.+)", RegexOptions.IgnoreCase)]
     private static partial Regex RedoReason();
 
+    // ---- a frame ------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A fresh look at a frame just made: does it show what its prompt says, without faults a viewer
+    /// would notice, beside the frame a viewer sees just before it (see <see cref="Before"/>). The
+    /// answer ends with a verdict; null when the frame isn't made, is taken from a clip, or the
+    /// look couldn't be had.
+    /// </summary>
+    public static async Task<string?> JudgeFrameAsync(Storyboard board, FilmFrame frame,
+        Func<IReadOnlyList<byte[]>, string, CancellationToken, Task<string?>> ask, CancellationToken ct)
+    {
+        if (frame.Of is not null || !File.Exists(board.FramePicture(frame)))
+            return null;
+        if (await Task.Run(() => Picture(board.FramePicture(frame), 1024), ct).ConfigureAwait(false) is not { } picture)
+            return null;
+        var (before, beside) = Before(board, frame);
+        var other = before is null ? null : await Task.Run(() => Picture(board.FramePicture(before), 768), ct).ConfigureAwait(false);
+        var question = $"This picture is {(frame.Reference ? "a reference sheet" : "a frame")} of a film, made from the prompt: \"{frame.Prompt.Trim()}\"" +
+                       (frame.From.Count > 0 ? $" It was made from other pictures ({string.Join(", ", frame.From.Select(id => board.Frame(id)?.Label ?? id))}) so the same people and places look the same." : "") +
+                       (other is null ? "" : "\n" + beside) +
+                       "\nSay briefly and concretely: does it show what the prompt says? Faults a viewer would notice: warped faces or hands, extra fingers or limbs, " +
+                       "things that couldn't be (food coming out of a head, a body merged with a chair), garbled text, black bars, a person who doesn't match the prompt, " +
+                       "someone in another style than the picture should be (a cartoon or 3D-render face in a photograph, or a whole picture drawn where the prompt and the film are photographic), " +
+                       "a camera much closer or farther than the prompt says (a wide view where it says close-up)" + (other is null ? "" : ", and what doesn't agree with the second picture") + ". " +
+                       "Mark each SEVERE (a viewer would notice it and it spoils the picture) or MINOR.\nThen end with exactly one line: VERDICT: good, or VERDICT: redo: and the main reason. Redo for any SEVERE problem.";
+        return await ask(other is null ? [picture] : [picture, other], question, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The frame a viewer sees just before this one, and what to compare: the frame its shot starts on
+    /// (the shot moves from one to the other, so what differs slides: the fox film's moon in "the upper
+    /// left" and then "directly above" wandered across the sky), or the last frame of the shot before
+    /// (the film cuts from one to the other: the fox film's second shot was made an open clearing with
+    /// the moon on the other side, a jump only the look at the whole film saw, two shots later).
+    /// </summary>
+    private static (FilmFrame? Frame, string Text) Before(Storyboard board, FilmFrame frame)
+    {
+        if (frame.Reference)
+            return (null, "");
+        for (var i = 0; i < board.Shots.Count; i++)
+        {
+            var shot = board.Shots[i];
+            if (!shot.LipSync && shot.Last == frame.Id && board.Frame(shot.First) is { } first && first.Id != frame.Id && File.Exists(board.FramePicture(first)))
+                return (first, $"The second picture is {first.Label}, the frame its shot starts on: the shot moves from that picture to this one" +
+                               (shot.Camera.Trim().Length > 0 ? $" (the camera: {shot.Camera.Trim().TrimEnd('.')})" : "") + $", and shows: \"{shot.Prompt.Trim().ReplaceLineEndings(" ")}\" " +
+                               "So who or what the shot moves should be where the shot takes them by its end (a girl who walks to a mailbox stands beside it), " +
+                               "and everything else stays put: the moon or sun, the horizon, trees, buildings, furniture and props in the same place and the same size in both, " +
+                               "the camera at the same angle and distance unless the shot moves it. Something that should stay put but sits elsewhere or is another size is SEVERE: " +
+                               "the video would slide it across the screen. So is someone not where the shot takes them: the video would walk them back.");
+            if (i > 0 && shot.First == frame.Id && board.Shots[i - 1] is { LipSync: false, Last: { } end } && end != frame.Id && board.Frame(end) is { } last && File.Exists(board.FramePicture(last)))
+                return (last, $"The second picture is {last.Label}, the last frame of the shot before: the film cuts from it to this one. Unless this prompt moves the story to another place " +
+                              "or time, a viewer must take this as the same place a moment later: the same kind of place (not a forest turned into a clearing, not another room), the moon or sun " +
+                              "on the same side and about the same size unless the camera turned around, the same light and weather, the same people looking the same. A jump like that is SEVERE.");
+        }
+        return (null, "");
+    }
+
+    /// <summary>
+    /// What to look at when a shot that moves between two frames fails its looks: whatever the two
+    /// frames disagree on moves during the shot. The fox film's frames put the moon "in the upper
+    /// left" and "directly above", and three takes of rewording the action couldn't hold it still; a
+    /// girl a frame's prompt put beside a mailbox stood two steps from it, so every take walked her
+    /// back there, whatever the shot's words. Null for a shot without both frames.
+    /// </summary>
+    public static string? FramesAdvice(Storyboard board, FilmShot shot) =>
+        shot is { LipSync: false } && board.Frame(shot.First) is { } first && board.Frame(shot.Last) is { } last && first != last
+            ? $"It moves from {first.Id} (\"{first.Prompt.Trim().ReplaceLineEndings(" ")}\") to {last.Id} (\"{last.Prompt.Trim().ReplaceLineEndings(" ")}\"). " +
+              "Compare where the things that stay put (the moon, the trees, the horizon, where someone stands) and the camera's angle are in the two: the shot moves whatever differs, " +
+              $"so if they differ, that is the cause: change {last.Id} to agree with {first.Id}, keeping only the change the shot is for, and keep it made from {first.Id} (in its from, with the references). " +
+              $"The pictures may not show what their prompts say: if {last.Id} doesn't show where the shot takes everyone (someone not where they end up, a prop not in hand), " +
+              $"the video goes there anyway, so make {last.Id} again from {first.Id}."
+            : null;
+
+    /// <summary>
+    /// What to keep when the last frame of a shot fails its look: made afresh from the references, a
+    /// shot's last frame lost the first's framing (a girl's mailbox moved and grew), and a fix that
+    /// dropped the first frame from what it is made from made it worse. Null for any other frame.
+    /// </summary>
+    public static string? FramesAdvice(Storyboard board, FilmFrame frame) =>
+        board.Shots.FirstOrDefault(s => !s.LipSync && s.Last == frame.Id && s.First is not null && s.First != frame.Id) is { } ending
+            ? $"It is the last frame of {ending.Id}, which moves from {ending.First} to it: keep it made from {ending.First} (in its from, with the references), " +
+              $"so it keeps {ending.First}'s framing and everything that stays put, and say in its prompt only what the shot changes."
+            : null;
+
     // ---- the closer look ------------------------------------------------------------------------------
 
     /// <summary>

@@ -110,6 +110,8 @@ public sealed class StoryboardTests : IDisposable
         Assert.DoesNotContain("CFG near 1", brief);
         Assert.Contains("## Poses and bodies", brief);
         Assert.Equal([ComfyGuides.Video], ComfyGuides.Find("video motion"));
+        Assert.Equal([ComfyGuides.Storyboards], ComfyGuides.Find("storyboard"));
+        Assert.Contains(ComfyGuides.Storyboards, ComfyGuides.Find("sheet")); // by its text
         Assert.Empty(ComfyGuides.Find("zebra"));
         var t2v = ComfyWorkflow.FromApi(JsonNode.Parse("""{"1": {"class_type": "EmptyLTXVLatentVideo", "inputs": {}}, "2": {"class_type": "LTXVConditioning", "inputs": {}}}"""));
         var i2v = ComfyWorkflow.FromApi(JsonNode.Parse("""{"1": {"class_type": "LoadImage", "inputs": {"image": "a.png"}}, "2": {"class_type": "LTXVImgToVideoInplace", "inputs": {}}}"""));
@@ -278,7 +280,7 @@ public sealed class StoryboardTests : IDisposable
     }
 }
 
-public sealed class FilmDirectorTests : IDisposable
+public sealed class FilmLookTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-filmdir-" + Guid.NewGuid().ToString("N")[..8]);
 
@@ -297,76 +299,6 @@ public sealed class FilmDirectorTests : IDisposable
             """);
         board.Folder = _dir;
         return board;
-    }
-
-    private static FilmAsk Answer(string json) => (_, _, _, _, _) => Task.FromResult<string?>("Sure!\n```json\n" + json + "\n```");
-
-    [Fact]
-    public async Task A_shots_request_changes_the_shot_and_its_frames_only_and_makes_frames_first()
-    {
-        var board = Board();
-        var direction = await FilmDirector.DirectAsync(board, FilmPiece.Of(board.Shot("s1")!), "slower, and he smiles", FilmTalk.Load(""), [], null, Answer("""
-            {"reply": "Slower now.", "change": {"title": "Other", "shots": [{"id": "s1", "seconds": 7, "seed": "new"}, {"id": "s2", "prompt": "nope"}],
-                                              "frames": [{"id": "f2", "prompt": "smiling"}, {"id": "f3", "prompt": "nope"}]},
-             "make": ["s1", "f2", "s2"]}
-            """), CancellationToken.None);
-        Assert.Equal("Slower now.", direction.Reply);
-        Assert.Equal(7, direction.Board.Shot("s1")!.Seconds);
-        Assert.NotEqual(board.Shot("s1")!.Seed, direction.Board.Shot("s1")!.Seed);
-        Assert.Equal("smiling", direction.Board.Frame("f2")!.Prompt);
-        Assert.Equal("waves roll", direction.Board.Shot("s2")!.Prompt); // not the picked shot's
-        Assert.Equal("the sea", direction.Board.Frame("f3")!.Prompt);
-        Assert.Equal("Keeper", direction.Board.Title);
-        Assert.Equal(["f2", "s1"], direction.Make.Select(p => p.Id));
-        Assert.Contains(direction.Notes, n => n.Contains("f3"));
-        Assert.Equal("he waves", board.Shot("s1")!.Prompt); // the storyboard given is left as it was
-    }
-
-    [Fact]
-    public async Task A_frame_taken_from_where_a_shot_ends_is_made_after_that_shot()
-    {
-        var board = Storyboard.Parse("""
-            {"frames": [{"id": "f1", "prompt": "a girl at the left"}, {"id": "f2", "prompt": "old"}],
-             "shots": [{"id": "s1", "first": "f1", "prompt": "she walks"}, {"id": "s2", "first": "f2", "prompt": "she waves"}]}
-            """);
-        board.Folder = _dir;
-        var direction = await FilmDirector.DirectAsync(board, FilmPiece.Of(board.Shot("s2")!), "start where shot 1 ends", FilmTalk.Load(""), [], null, Answer("""
-            {"reply": "It goes on from shot 1 now.", "change": {"frames": [{"id": "f5", "of": "s1"}], "shots": [{"id": "s2", "first": "f5"}]}, "make": ["f5", "s2"]}
-            """), CancellationToken.None);
-        Assert.Equal("s1", direction.Board.Frame("f5")!.Of);
-        Assert.Equal("f5", direction.Board.Shot("s2")!.First);
-        Assert.Equal(["f5", "s2"], direction.Make.Select(p => p.Id));
-        var whole = await FilmDirector.DirectAsync(board, FilmPiece.Of(board.Shot("s1")!), "again", FilmTalk.Load(""), [], null, Answer("""
-            {"reply": "Again.", "change": {"shots": [{"id": "s1", "seed": "new"}]}, "make": ["s1"]}
-            """), CancellationToken.None);
-        Assert.Equal(["s1"], whole.Make.Select(p => p.Id));
-    }
-
-    [Fact]
-    public async Task A_whole_films_request_may_change_anything_and_makes_nothing()
-    {
-        var board = Board();
-        var direction = await FilmDirector.DirectAsync(board, null, "add a gull", FilmTalk.Load(""), [], null, Answer("""
-            {"reply": "Added a gull.", "change": {"title": "Keeper and Gull", "shots": [{"id": "s3", "first": "f3", "seconds": 4, "prompt": "a gull lands"}]}, "make": ["s3"]}
-            """), CancellationToken.None);
-        Assert.Equal("Keeper and Gull", direction.Board.Title);
-        Assert.Equal(3, direction.Board.Shots.Count);
-        Assert.Empty(direction.Make);
-    }
-
-    [Fact]
-    public async Task An_answer_that_isnt_json_is_asked_again_once()
-    {
-        var asked = 0;
-        FilmAsk ask = (_, question, _, think, _) =>
-        {
-            asked++;
-            Assert.True(think); // a whole film is laid out with thinking
-            return Task.FromResult<string?>(asked == 1 ? "Let me think about that." : """{"reply": "Done.", "change": {}, "make": []}""");
-        };
-        var direction = await FilmDirector.DirectAsync(Board(), null, "anything", FilmTalk.Load(""), [], null, ask, CancellationToken.None);
-        Assert.Equal(2, asked);
-        Assert.Equal("Done.", direction.Reply);
     }
 
     [Fact]
@@ -444,17 +376,58 @@ public sealed class FilmDirectorTests : IDisposable
     }
 
     [Fact]
-    public void What_was_said_is_kept_beside_the_storyboard()
+    public async Task A_shots_last_frame_is_looked_at_beside_its_first_and_a_redo_says_what_to_keep()
     {
-        Directory.CreateDirectory(_dir);
-        var talk = FilmTalk.Load(_dir);
-        talk.Add("s1", FilmTalk.You, "slower");
-        talk.Add("s1", FilmTalk.BlackBox, "Making it…");
-        talk.ReplaceLast("s1", "Made it.");
-        talk.Save(_dir);
-        var back = FilmTalk.Load(_dir);
-        Assert.Equal(["slower", "Made it."], back.About("s1").Select(l => l.Text));
-        Assert.Empty(back.About(FilmTalk.Film));
+        var board = Board();
+        foreach (var id in new[] { "f1", "f2" })
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(board.FramePicture(board.Frame(id)!))!);
+            using var bitmap = new SKBitmap(64, 36);
+            using var file = File.Create(board.FramePicture(board.Frame(id)!));
+            bitmap.Encode(file, SKEncodedImageFormat.Png, 100);
+        }
+        var asked = new List<(int Pictures, string Question)>();
+        var answer = await FilmCheck.JudgeFrameAsync(board, board.Frame("f2")!, (pictures, question, _) =>
+        {
+            asked.Add((pictures.Count, question));
+            return Task.FromResult<string?>("The lighthouse moved. SEVERE.\nVERDICT: redo: the lighthouse is on the other side");
+        }, CancellationToken.None);
+        Assert.Equal(2, asked.Single().Pictures); // the frame, and the one its shot starts on
+        Assert.Contains("the frame its shot starts on", asked[0].Question);
+        Assert.Equal("the lighthouse is on the other side", FilmCheck.Reason(answer!));
+        Assert.Contains("keep it made from f1", FilmCheck.FramesAdvice(board, board.Frame("f2")!));
+        Assert.Null(FilmCheck.FramesAdvice(board, board.Frame("f3")!));
+        Assert.Contains("change f2 to agree with f1", FilmCheck.FramesAdvice(board, board.Shot("s1")!));
+        Assert.Null(FilmCheck.FramesAdvice(board, board.Shot("s2")!)); // no last frame: nothing to agree with
+        Assert.Null(await FilmCheck.JudgeFrameAsync(board, board.Frame("f3")!, (_, _, _) => Task.FromResult<string?>("VERDICT: good"), CancellationToken.None)); // not made
+    }
+
+    [Fact]
+    public void Takes_made_beside_a_piece_join_its_takes_and_one_kept_for_nothing_goes_again()
+    {
+        var board = Board();
+        board.Save();
+        var shot = board.Shot("s2")!;
+        var piece = FilmPiece.Of(shot);
+        Directory.CreateDirectory(Path.GetDirectoryName(board.ShotVideo(shot))!);
+        File.WriteAllText(board.ShotVideo(shot), "the clip");
+        File.WriteAllText(board.ShotWorkflow(shot), new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = "x" } }.ToJsonString());
+        var other = Path.Combine(Path.GetDirectoryName(board.ShotVideo(shot))!, "s2.take2.mp4");
+        File.WriteAllText(other, "another take");
+        File.WriteAllText(Path.ChangeExtension(other, ".json"), new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = "y" } }.ToJsonString());
+        FilmTakes.RememberLook(Path.ChangeExtension(other, ".json"), "redo", "It needs another go: the waves freeze.");
+
+        var added = FilmTakes.Add(board, piece, other, Path.ChangeExtension(other, ".json"));
+        Assert.False(File.Exists(other));
+        Assert.Equal("another take", File.ReadAllText(added!.File));
+        Assert.Equal(("redo", "It needs another go: the waves freeze."), FilmTakes.LookIn(added.Workflow));
+        Assert.Single(FilmTakes.List(board, piece));
+
+        var kept = FilmTakes.Keep(board, piece)!;
+        Assert.Equal(2, FilmTakes.List(board, piece).Count);
+        FilmTakes.Drop(kept); // the make that followed made nothing
+        Assert.Single(FilmTakes.List(board, piece));
+        Assert.Equal("the clip", File.ReadAllText(board.ShotVideo(shot)));
     }
 }
 
@@ -1038,5 +1011,46 @@ public sealed class FilmToolTests : IDisposable
         var board = Storyboard.Load(Path.Combine(_dir, "Keeper"));
         Assert.Equal("he waves at the camera", board.Shots[0].Prompt);
         Assert.Equal(3, board.Shots[0].Seconds);
+    }
+
+    [Fact]
+    public async Task The_storyboard_guide_comes_with_the_first_storyboard_a_chat_reads()
+    {
+        var path = Path.Combine(_dir, "Keeper");
+        JsonObject Call() => new() { ["action"] = "storyboard", ["path"] = path, ["storyboard"] = JsonNode.Parse("""{"title": "Keeper", "shots": [{"id": "s1", "prompt": "he waves"}]}""") };
+        var said = new List<string>();
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, InConversation = t => said.Any(s => s.Contains(t)) };
+        var first = await new FilmTool().ExecuteAsync(Call(), ctx, CancellationToken.None);
+        Assert.Contains(FilmTool.GuideHead, first.Text);
+        Assert.Contains("make the last frame from the first", first.Text); // the storyboard guide
+        Assert.Contains("Direction and distance", first.Text); // and how LTX reads a shot's prompt
+        said.Add(first.Text);
+        // The next run in the same chat: the conversation has it.
+        Assert.DoesNotContain(FilmTool.GuideHead, (await new FilmTool().ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
+    }
+
+    [Fact]
+    public async Task A_frame_is_looked_at_by_its_id_and_what_the_look_found_stays_with_it()
+    {
+        var board = Storyboard.Parse("""
+            {"title": "Keeper", "frames": [{"id": "f1", "prompt": "a lighthouse keeper waves"}], "shots": [{"id": "s1", "first": "f1", "prompt": "he waves"}]}
+            """);
+        board.Folder = Path.Combine(_dir, "Keeper");
+        board.Save();
+        var frame = board.Frame("f1")!;
+        Directory.CreateDirectory(Path.GetDirectoryName(board.FramePicture(frame))!);
+        using (var bitmap = new SKBitmap(64, 36))
+        using (var file = File.Create(board.FramePicture(frame)))
+            bitmap.Encode(file, SKEncodedImageFormat.Png, 100);
+        File.WriteAllText(board.FrameWorkflow(frame), new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = FilmMaker.FrameStamp(board, frame) } }.ToJsonString());
+        var ctx = new ToolContext
+        {
+            Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir,
+            Ask = (_, _, _) => Task.FromResult<string?>("His left hand has six fingers. SEVERE.\nVERDICT: redo: his hand has six fingers"),
+        };
+        var looked = await new FilmTool().ExecuteAsync(new JsonObject { ["action"] = "check", ["id"] = "f1", ["path"] = board.Folder }, ctx, CancellationToken.None);
+        Assert.False(looked.IsError, looked.Text);
+        Assert.Contains("To fix: his hand has six fingers", looked.Text);
+        Assert.Equal(("redo", "It needs another go: his hand has six fingers."), FilmTakes.LookIn(board.FrameWorkflow(frame)));
     }
 }

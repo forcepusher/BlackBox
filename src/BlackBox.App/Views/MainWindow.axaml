@@ -410,6 +410,8 @@
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Right" />
                 <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="12,8" HorizontalAlignment="Right">
                   <StackPanel Spacing="6">
+                    <!-- Written in the Filmmaking window: which film and piece it is about. -->
+                    <TextBlock Classes="muted" Text="{Binding Via}" IsVisible="{Binding HasVia}" FontSize="12" TextWrapping="Wrap" />
                     <!-- The files that came with it: a picture as itself, anything else by its name; a click opens it. -->
                     <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}" Margin="0,4,0,0">
                       <ItemsControl.ItemsPanel>
@@ -727,6 +729,7 @@
                         <PathIcon Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
                       </Button>
                       <StackPanel Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Classes="muted" Text="{Binding Via}" IsVisible="{Binding HasVia}" FontSize="12" TextTrimming="CharacterEllipsis" />
                         <TextBlock Text="{Binding Text}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" IsVisible="{Binding HasText}" />
                         <TextBlock Classes="muted" Text="{Binding FilesText}" IsVisible="{Binding HasFiles}" />
                       </StackPanel>

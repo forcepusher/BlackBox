@@ -9,7 +9,7 @@ public enum FilmPieceKind { Frame, Shot, Song }
 /// <summary>A piece of a film that is made on its own: a frame (a reference too), a shot's clip, or the song.</summary>
 public sealed record FilmPiece(FilmPieceKind Kind, string Id)
 {
-    public static readonly FilmPiece Song = new(FilmPieceKind.Song, FilmTalk.Song);
+    public static readonly FilmPiece Song = new(FilmPieceKind.Song, "song");
 
     public static FilmPiece Of(FilmFrame frame) => new(FilmPieceKind.Frame, frame.Id);
 
@@ -53,8 +53,8 @@ public sealed record FilmTake(int Number, string File, string Workflow, DateTime
 
 /// <summary>
 /// The takes of a piece: each time a frame, clip or song is made again, the one before is kept
-/// beside it (frames/f2.v1.png and .v1.json…) with the settings it was made with, so the user can
-/// put an earlier one back, settings and all.
+/// beside it (frames/f2.v1.png and .v1.json…) with the settings it was made with, and so are the
+/// takes not kept of several made at once, so the user can put an earlier one back, settings and all.
 /// </summary>
 public static class FilmTakes
 {
@@ -143,6 +143,29 @@ public static class FilmTakes
         if (System.IO.File.Exists(workflow))
             System.IO.File.Copy(workflow, TakeFile(workflow, n), overwrite: true);
         return new FilmTake(n, TakeFile(file, n), TakeFile(workflow, n), System.IO.File.GetLastWriteTimeUtc(file), SettingsIn(workflow));
+    }
+
+    /// <summary>
+    /// Moves a file made beside the piece (one take of several, of which another was kept) in among
+    /// its takes, with its workflow file, so the user can put it back.
+    /// </summary>
+    public static FilmTake? Add(Storyboard board, FilmPiece piece, string made, string madeWorkflow)
+    {
+        if (piece.File(board) is not { } file || piece.Workflow(board) is not { } workflow || !System.IO.File.Exists(made))
+            return null;
+        var n = List(board, piece).Select(t => t.Number).DefaultIfEmpty(0).Max() + 1;
+        System.IO.File.Move(made, TakeFile(file, n), overwrite: true);
+        if (System.IO.File.Exists(madeWorkflow))
+            System.IO.File.Move(madeWorkflow, TakeFile(workflow, n), overwrite: true);
+        return new FilmTake(n, TakeFile(file, n), TakeFile(workflow, n), System.IO.File.GetLastWriteTimeUtc(TakeFile(file, n)), SettingsIn(TakeFile(workflow, n)));
+    }
+
+    /// <summary>Takes back a take <see cref="Keep"/> kept for a make that then made nothing: it is the piece as it still is.</summary>
+    public static void Drop(FilmTake take)
+    {
+        System.IO.File.Delete(take.File);
+        if (System.IO.File.Exists(take.Workflow))
+            System.IO.File.Delete(take.Workflow);
     }
 
     /// <summary>

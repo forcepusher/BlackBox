@@ -429,8 +429,10 @@ comfyui-mcp up by itself when the user asks for it.
 A video of more than one shot (a music video, a story, an ad) is planned as a **storyboard** and
 made piece by piece with ComfyUI: one video model run can't hold a story together for more than
 a few seconds, and not every film is one continuous camera shot. The **Filmmaking** button opens a
-window for it beside the chat, and the agent's `film` tool reads and writes the same storyboard,
-so a film can start in either and go on in the other.
+window for it, an add-on of the chat it was opened from: what the user tells the window, and what its
+buttons ask for, go to that chat as messages, and the agent does them there with its `film` tool,
+which reads and writes the same storyboard the window shows. A film can start in either and go on in
+the other.
 
 A storyboard is the `storyboard.json` in the film's folder, `Data/films/<title>` next to the exe
 like the rest of BlackBox's data (the user's choice: it is portable; the first build put films in
@@ -499,8 +501,8 @@ an all-in-one Flux and an Anima model. Words match the option that has most of t
 half) among its name, title, notes, folders and model files, the user's own workflows first among
 equals, then ComfyUI's, then bare checkpoints; a number alone or "my workflow" names nothing. Words
 for a frame made from others that name a picture-from-words model ("furry nova xl" on an edit) make
-it with the best edit model, and the result says why. In the window, words that name nothing are
-read by the chat model, which picks one of the installed options, and its name replaces them.
+it with the best edit model, and the result says why. The agent sets a piece's model only when the
+user names or describes one, to the name of one action=models lists.
 
 A template's inputs are found, not hard-coded: its
 prompt by a title such as "Prompt" (a primitive first), else by following the sampler's positive
@@ -577,22 +579,45 @@ through to "away", the song's card). A soundtrack that is a video opens full scr
 
 **The user never writes a prompt** (their rule): there are no prompt fields. They pick a piece (a
 reference, a shot or one of its frames, the sound) or nothing (the whole film), and say in the
-panel what they want; `FilmDirector` asks the chat model, in a request of its own, with the film's
-storyboard, what was said about that piece before, what is installed for its kind of job and a
-picture of it as it is (a frame, or the sheet of a clip), to answer with a JSON change to the
-storyboard, a reply, and what to make now. A piece's request may change only that piece (a shot,
-its frames too, and the lines' voice); a change it would make elsewhere is left and said. A whole
-film's request may lay the film out or change anything, and makes nothing: each piece is made when
-the user makes it (Make it, Another take) or with **Make what's missing**, which makes every piece
-not made or out of date in the order they need (references, frames, the song, shots), each looked
-at, then joins the film. The model writes prompts as the brief in `FilmDirector` says: who is in a
-frame (repeating what makes each person look like themselves), where, framing, light, and the
-film's look in the same words in every prompt; a shot's action in order in the present tense; lines
-that fit their shot; a model named only when the user names or describes one. A piece's request is
-answered without thinking (11 to 30 s with qwen3.8, against three minutes thinking, and as good on
-the meme); a whole film is laid out with thinking. Each piece made is looked at by fresh looks (see
-below), and what they found is kept in the piece's workflow file (`"look"`) so the state shows it.
-What was said about each piece is in `talk.json` beside the storyboard.
+panel what they want. **It runs in the chat** (the user's call, 2026-10-23: "Filmmaking window
+should execute its prompts visibly in the main chat log window... treat the filmmaking as an addon
+window for the main chat"): the window sends it to the chat it was opened from as a message
+(`UserInput.Via`, shown over it there: "Filmmaking · The Fox and the Moon · shot 2"), saving the
+storyboard first, and the model gets before the words what the chat doesn't show
+(`UserInput.Context`): the film, its storyboard's path, the piece (shot s2, the 2nd of 3, from 5 to
+9 s) and what to do with it. A piece's request: read the storyboard, change that piece alone (a
+shot, its frames too, and the lines' voice) unless they ask for more, and make it again with the
+film tool call it names. A whole film's request may lay the film out or change anything, and makes
+nothing: each piece is made when the user makes it. The buttons send messages of their own words
+("Make it.", "Another take, please.", "Look at it again.", "Make the film.", "Join the clips.",
+"Look at the whole film.") with the tool call to make (Another take sets a new seed in the
+storyboard first; a picture of the user's goes into the storyboard and comes with the message).
+During a run they wait above the box as anything typed in the chat does. The user watches every step
+in the chat, with each frame and clip as it is made, and stops it there or with the window's Stop.
+
+The model writes prompts as BlackBox's storyboard guide says (`Comfy/Guides/storyboards.md`, which
+the film tool shows with the first storyboard a chat reads or writes, together with the video
+guide; a chat that still has it in its conversation, `ToolContext.InConversation`, isn't shown it
+again): who is in a frame (repeating what makes each person look like themselves), where, framing,
+light, and the film's look in the same words in every prompt; references in that look; a shot's
+action in order in the present tense, as long as it takes; first and last frames that agree on what
+stays put; lines that fit their shot; a model named only when the user names or describes one. That
+guide is the brief the window's own director (`FilmDirector`) gave the model in a request of its
+own, which answered a piece's request in 11 to 30 s without thinking; in the chat the same request
+is a few steps of the agent's (read the storyboard, change it, make the piece). Each piece made is
+looked at by fresh looks (see below), and what they found is kept in the piece's workflow file
+(`"look"`, a song's judged sound too) so the window shows it with the piece.
+
+**The window as the chat's add-on.** It reads twice a second what the chat is doing: a line over the
+box ("In the chat: Make shot s2 · KSampler, step 3 of 8") with Show and Stop while a run goes on, and
+on the timeline the piece the film tool is making or looking at, by the call's arguments, with how it
+is getting on. What the agent changes in the storyboard and makes in the film's folder shows as it
+happens (the folder is watched). Its title names the chat (Filmmaking - <chat> - BlackBox), it opens
+beside the chat where a screen has room for both (right or left of it, else on another screen, else
+over it), it closes with the chat's window, and **Show the chat** brings that window forward.
+Changes made by hand (a shot's length, its order, new shots and references, deleting, the film's
+size and levels, a take put back, a sound file of the user's) are saved to the storyboard at once,
+without the chat.
 
 **Looks that don't let slop through.** The user found the judging dismissive: the fox film passed
 with the fox floating up the screen at the cut at 5 s. One question per kind of fault catches more
@@ -603,15 +628,18 @@ to where things move), behaviour over time (frozen or held poses), whether the w
 whether anyone slides or floats), and movement as asked (see below). A frame is looked at beside the frame a viewer sees before it:
 its shot's first frame (what differs between the two, the shot slides across the screen: the fox
 film's moon was "in the upper left" in one and "directly above" in the other) or the last frame of
-the shot before (a cut to another kind of place); and against the shot size its prompt names. What a
-look finds wrong goes back to `FilmDirector` (with thinking, and the two end frames' prompts to
-compare), which changes what the piece is made from; it is made and looked at again, up to twice,
-then the user is told what is left. After Make what's missing joins the film, the whole film gets
-two looks: a frame from the middle of each shot side by side (the same people, the story in order),
-and the cuts, each a picture of the last frame of the shot before above the first of the shot after
-(from the clips, so a fade isn't half through), with the references both shots are made from. The
-shots they name are fixed once, the film joined again and looked at again to say what is left; the
-**Look at the film** chip does the same for a film already joined.
+the shot before (a cut to another kind of place); and against the shot size its prompt names. The
+film tool looks at every frame and shot it makes (`FilmCheck.JudgeFrameAsync`, `JudgeShotAsync`),
+and action=check looks at one again. What a look finds wrong comes back to the agent as "To fix:",
+with what to keep: a shot moving between two frames that fails is told the two frames' prompts and
+to compare what stays put in them (`FilmCheck.FramesAdvice`), a failed last frame to stay made from
+the first. The agent changes what the piece is made from and makes it again; the window's **Make the
+film** asks for up to two fixes a piece, as the window's own loop did, then the join and two looks at
+the whole film: a frame from the middle of each shot side by side (the same people, the story in
+order), and the cuts, each a picture of the last frame of the shot before above the first of the
+shot after (from the clips, so a fade isn't half through), with the references both shots are made
+from. The shots they name are fixed once, the film joined again and looked at again to say what is
+left; the **Look at the film** chip asks for the same for a film already joined.
 
 The two frames of a cut are one above the other: side by side, qwen3.8 measured where the moon was
 across the whole picture and found a moon that hadn't moved jumping from 0.13 to 0.6 of the width
@@ -654,8 +682,8 @@ redo with the measurement as without ("a bent-double, head-in-the-plate pose fro
 
 **Pictures first, LTX's sounds, the song's music.** Every shot starts on a frame a picture model
 makes: a shot written without one gets one from its words and the references of the frames near it
-(`Storyboard.AddFirstFrames`, in the director's change, Make it, Make what's missing and the film
-tool), frames not made yet are made first, and LTX is never asked to draw a shot from words. A
+(`Storyboard.AddFirstFrames`, when the film tool changes a storyboard and when it makes a shot),
+frames not made yet are made first, and LTX is never asked to draw a shot from words. A
 shot's prompt ends with what is heard; LTX is given it with "No music." unless it speaks of music
 (not part of the shot's stamp, so made shots stay up to date), and under a song the shots' own
 sound is kept at half rather than left out.
@@ -725,19 +753,21 @@ clips an arrow key away: the references, the frames, the shots' clips in order, 
 film. A clip playing in the window stops meanwhile; the play button under it still plays it in
 place.
 
-**Takes**: before a piece is made again, the one there is kept beside it (`frames/f2.v1.png` and
-`.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it was made with
-(`"settings"`). Picking an earlier take puts it back in the film with those settings (so it is up
-to date again), and the one it replaces becomes a take.
+**Takes**: before the film tool makes a piece again, the one there is kept beside it
+(`frames/f2.v1.png` and `.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it
+was made with (`"settings"`) and what its look found; a make that fails or is stopped takes that take
+back. The takes not kept of several made at once (a shot's `tries`, the song's three) are takes too.
+Picking an earlier take in the window puts it back in the film with those settings (so it is up to
+date again), and the one it replaces becomes a take.
 
 From one sentence ("a little red fox in a snowy pine forest at night looks up at the full moon,
 then howls at it, gentle piano") the window laid out two references, four frames made from them,
 two shots and a song in about two minutes, and Make what's missing made all nine pieces and joined
 them in 14 minutes; two of the looks found faults worth a retake (a reference with one pose, not a
 sheet; a frame not as close as asked). On the meme, "make him look more surprised when he turns to
-the camera" on shot 3 rewrote its prompt in 15 s and made it again in two minutes. **Make the whole
-film** still hands the storyboard to the agent in the chat. A ComfyUI BlackBox started for the
-window is closed once the window is.
+the camera" on shot 3 rewrote its prompt in 15 s and made it again in two minutes. (Those were the
+window's own director and jobs, before the window's requests went to the chat.) A ComfyUI BlackBox
+started is closed when the chat's task is over, as for any job of the agent's.
 
 **What a review found (2026-10-23).** A piece's stamp is written once its output is in place, not
 when its job is queued: a remake that failed or was stopped left the old picture or clip with the

@@ -20,6 +20,11 @@ public sealed partial class QueuedMessageItem(UserInput input, Action<QueuedMess
     public string Text => Input.Text;
     public bool HasText => Input.Text.Length > 0;
 
+    /// <summary>Where it was written, when not in the chat's box (the Filmmaking window).</summary>
+    public string? Via => Input.Via;
+
+    public bool HasVia => Input.Via is not null;
+
     /// <summary>The files that go with it: "cat.png", "3 files".</summary>
     public string FilesText => Input.Files.Count switch
     {

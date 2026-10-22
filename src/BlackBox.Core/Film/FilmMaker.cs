@@ -479,15 +479,34 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         }
         var best = made.MaxBy(m => scores?.GetValueOrDefault(m.File)?.Musicality ?? 0);
         sound.Seed = best.Seed;
+        // How each sounds, kept with it: the Filmmaking window shows it with the song and its takes.
+        foreach (var m in made)
+            if (scores?.GetValueOrDefault(m.File) is { } heard)
+                FilmTakes.RememberLook(m.Workflow, heard.Musicality < SongScore.Good ? "redo" : "good", heard.Describe());
         if (made.Count > 1)
         {
-            File.Copy(best.File, board.SongFile, overwrite: true);
-            File.Copy(best.Workflow, board.SongWorkflow, overwrite: true);
             notes.Insert(0, $"Kept song {made.IndexOf(best) + 1} of {made.Count} (seed {best.Seed}); musicality of each: " +
                             string.Join(", ", made.Select(m => scores?.GetValueOrDefault(m.File) is { } s ? s.Musicality.ToString("0.0", CultureInfo.InvariantCulture) : "?")) + ".");
+            File.Move(best.File, board.SongFile, overwrite: true);
+            File.Move(best.Workflow, board.SongWorkflow, overwrite: true);
+            FilmTakes.Remember(board.SongWorkflow, FilmPiece.Song.Settings(board));
+            // The others are takes of the song, to put back in the window.
+            foreach (var other in made.Where(m => m != best))
+            {
+                FilmTakes.Remember(other.Workflow, FilmPiece.Song.Settings(board) is JsonObject settings ? With(settings, other.Seed) : null);
+                FilmTakes.Add(board, FilmPiece.Song, other.File, other.Workflow);
+            }
         }
-        FilmTakes.Remember(board.SongWorkflow, FilmPiece.Song.Settings(board));
+        else
+            FilmTakes.Remember(board.SongWorkflow, FilmPiece.Song.Settings(board));
         return new FilmMade(board.SongFile, board.SongWorkflow, best.Run.Template, clock.Elapsed, notes) { Score = scores?.GetValueOrDefault(best.File) };
+
+        // The sound's settings with the seed that take was made with.
+        static JsonObject With(JsonObject settings, long seed)
+        {
+            settings["seed"] = seed;
+            return settings;
+        }
     }
 
     /// <summary>The tempo a song's style names ("70 BPM"), for ACE-Step's own setting.</summary>

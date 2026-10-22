@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using Avalonia.Threading;
 using Avalonia.VisualTree;
 using BlackBox.App.ViewModels;
 
@@ -21,20 +20,12 @@ public partial class FilmWindow : Window
 
     private FilmViewModel Vm => (FilmViewModel)DataContext!;
 
-    protected override void OnDataContextChanged(EventArgs e)
-    {
-        base.OnDataContextChanged(e);
-        // What was said scrolls to its end as it grows.
-        if (DataContext is FilmViewModel vm)
-            vm.Talk.CollectionChanged += (_, _) => Dispatcher.UIThread.Post(() => TalkScroll.ScrollToEnd(), DispatcherPriority.Background);
-    }
-
     protected override void OnClosed(EventArgs e)
     {
         _viewer?.Close();
         base.OnClosed(e);
-        // What it holds goes: players, the watch on the film's folder, a job still running; a
-        // ComfyUI BlackBox started for it is closed once its queue is done.
+        // What it holds goes: players, the watch on the film's folder and on the chat. What the chat
+        // is doing for the film goes on there.
         (DataContext as FilmViewModel)?.Dispose();
     }
 
@@ -219,7 +210,7 @@ public partial class FilmWindow : Window
             FileTypeFilter = [FilePickerFileTypes.ImageAll],
         });
         if (picked.FirstOrDefault()?.TryGetLocalPath() is { } path)
-            await Vm.UseOwnPicture(path);
+            Vm.UseOwnPicture(path);
     }
 
     private async void OnPickSound(object? sender, RoutedEventArgs e)

@@ -11,24 +11,23 @@ using CommunityToolkit.Mvvm.Input;
 namespace BlackBox.App.ViewModels;
 
 /// <summary>
-/// The Filmmaking window: a film on one timeline (its references, its shots, its sound) under one
-/// horizontal scroll, a viewer, and a panel to tell BlackBox in plain words what to make or change
-/// in the piece picked, or in the whole film. BlackBox writes the prompts and picks the models
-/// (<see cref="FilmDirector"/>); each piece is made on its own, looked at, and kept as a take when
-/// it is made again. Everything is kept in the film folder's storyboard.json and talk.json, and what
-/// the agent changes there shows here.
+/// The Filmmaking window, an add-on of a chat: a film on one timeline (its references, its shots,
+/// its sound) under one horizontal scroll, a viewer, and a panel to tell BlackBox in plain words
+/// what to make or change in the piece picked, or in the whole film. What is told, and what the
+/// buttons ask for, goes to the chat as a message: the agent writes the prompts, picks the models
+/// and makes each piece with the film tool there, where the user watches it and can stop it, and
+/// a piece made again is kept as a take. Everything is kept in the film folder's storyboard.json,
+/// and what the agent changes there and makes beside it shows here as it happens.
 /// </summary>
 public sealed partial class FilmViewModel : ObservableObject, IDisposable
 {
     private readonly PreviewServices _previews;
-    private readonly Action<string> _sendToChat;
-    private readonly FilmMaker _maker;
-    private readonly ComfyHub _hub;
+    private readonly MainWindowViewModel _chat;
     private Storyboard _board = new();
-    private FilmTalk _talk = FilmTalk.Load("");
     private readonly Dictionary<string, FrameItem> _frames = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer _saveTimer;
     private readonly DispatcherTimer _refreshTimer;
+    private readonly DispatcherTimer _chatTimer;
     private FileSystemWatcher? _watcher;
     private DateTime _ownWrite;
     private bool _loading;
@@ -36,27 +35,23 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     /// <summary>Where films go, a folder each: BlackBox's Data\films, next to the exe like the rest of its data.</summary>
     private readonly string _filmsRoot;
 
-    /// <summary>Asks the chat model: what the user's words mean for a piece, and how a piece came out.</summary>
-    private readonly FilmAsk? _ask;
-
+    /// <param name="chat">The chat the window belongs to, where what is said in it runs.</param>
     /// <param name="filmsRoot">Where films go (BlackBox's Data\films).</param>
-    /// <param name="toolsDir">BlackBox's Data\tools, where the song judge is set up.</param>
     /// <param name="folder">The film to open; the latest changed one when null.</param>
-    /// <param name="ask">Asks the chat model; without it the panel can only make what is there.</param>
-    public FilmViewModel(PreviewServices previews, ComfyHub hub, Action<string> sendToChat, string filmsRoot, string toolsDir, string? folder, FilmAsk? ask = null)
+    public FilmViewModel(PreviewServices previews, MainWindowViewModel chat, string filmsRoot, string? folder)
     {
         _filmsRoot = filmsRoot;
         _previews = previews;
-        _sendToChat = sendToChat;
-        _ask = ask;
-        _maker = new FilmMaker(hub, previews.Decoder) { Judge = new SongJudge(Path.Combine(toolsDir, "songeval")) };
-        _hub = hub;
+        _chat = chat;
         _saveTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(400), DispatcherPriority.Background, (_, _) => SaveNow());
         _refreshTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) =>
         {
             _refreshTimer!.Stop();
             OnFolderChanged();
         });
+        // What the chat is doing, shown here: in a line, and on the piece the film tool is making.
+        _chatTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Background, (_, _) => WatchChat());
+        _chatTimer.Start();
         RefreshFilms();
         var open = folder ?? Films.FirstOrDefault()?.Folder;
         if (open is not null && File.Exists(Path.Combine(open, Storyboard.FileName)))
@@ -112,7 +107,6 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             Status = $"That film can't be opened: {ex.Message}";
             return;
         }
-        _talk = FilmTalk.Load(_board.Folder);
         Watch();
         Rebuild();
         RefreshFilms();
@@ -133,7 +127,6 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         for (var n = 2; Directory.Exists(Path.Combine(root, name)); n++)
             name = $"New film {n}";
         _board = Storyboard.New(Path.Combine(root, name), name);
-        _talk = FilmTalk.Load("");
         _ownWrite = default;
         _watcher?.Dispose();
         _watcher = null;
