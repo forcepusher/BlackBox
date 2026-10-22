@@ -151,7 +151,8 @@ public static partial class FilmCheck
                                              "and something moving steadily across stretches is not one, whatever two frames side by side suggest.");
         sb.AppendLine("1. For each person or animal, say what they are doing in each frame, and what they must have done between one frame and the next.");
         sb.AppendLine("2. Is there a stretch of more than about 1.5 s where they hold the same pose while the shot calls for action (eating, talking, walking), or a pose no real person would keep that long " +
-                      "(slumped or bent double, mid-fall, mid-jump, an arm stuck in the air)? Give the times.");
+                      "(slumped or bent double, mid-fall, mid-jump, an arm stuck in the air)? Give the times. Some actions hold still a moment by their nature (a sip with the cup at the lips, " +
+                      "a look, a pause the shot asks for): that is a freeze only when it lasts clearly longer than the action needs.");
         sb.AppendLine("3. Is any movement between frames impossible or bizarre for a real person (teleporting, a lunge or twist that makes no sense for what they are doing)?");
         sb.AppendLine("Talking to the camera with small head and mouth movements is normal behaviour, not a frozen pose. With no person or animal in it, say so: that is good.");
         sb.Append("End with exactly one line: VERDICT: good, or VERDICT: redo: and the main reason.");

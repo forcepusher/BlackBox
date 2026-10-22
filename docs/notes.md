@@ -645,6 +645,16 @@ shot's prompt ends with what is heard; LTX is given it with "No music." unless i
 (not part of the shot's stamp, so made shots stay up to date), and under a song the shots' own
 sound is kept at half rather than left out.
 
+**The shot looks scored on takes labelled by eye.** Ten takes from three films, six bad (the girl
+walking back from the mailbox twice, one with a see-through double; a wave frozen at its end; a
+splash from nowhere; a café cup vanishing; the boy holding still 2 s before his wave) and four good:
+the four looks together failed all six bad ones. Of the good ones they failed one where a girl
+walking right read as the mailbox drifting (the measured movement now says outright when the camera
+holds, and the steadiness look that someone walking across is not the things behind them moving),
+and one where a 1.6 s sip read as a freeze (the behaviour look is now told that a sip, a look or an
+asked-for pause holds still by its nature); both pass now, and the bad ones still fail. The reasons
+weren't always the right ones: the vanishing cup was failed for a freeze at the lips.
+
 **A camera held still after the fact** (`VideoSteady`). LTX moved the camera on every
 locked-off shot of a night of films (a push in of 11%, pans and tilts), whatever the prompt said,
 and a negative prompt does nothing at CFG 1. ffmpeg's tripod stabilizer (vid.stab, `tripod=1`)
