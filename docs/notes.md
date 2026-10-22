@@ -692,6 +692,12 @@ the cup just leaving the saucer: the shot's look failed its first take for a sec
 saucer vanishing, the director took that cup out of the picture, and the second take passed every
 look and the film's, its camera still (measured), in 21 minutes.
 
+**Full screen.** A click on the picture or video in the window's viewer opens it in the chat's
+full-screen viewer (`MediaViewer`), on the window's screen, with the film's other pictures and
+clips an arrow key away: the references, the frames, the shots' clips in order, then the joined
+film. A clip playing in the window stops meanwhile; the play button under it still plays it in
+place.
+
 **Takes**: before a piece is made again, the one there is kept beside it (`frames/f2.v1.png` and
 `.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it was made with
 (`"settings"`). Picking an earlier take puts it back in the film with those settings (so it is up

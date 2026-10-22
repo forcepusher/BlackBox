@@ -30,6 +30,7 @@ public partial class FilmWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _viewer?.Close();
         base.OnClosed(e);
         // What it holds goes: players, the watch on the film's folder, a job still running; a
         // ComfyUI BlackBox started for it is closed once its queue is done.
@@ -127,6 +128,42 @@ public partial class FilmWindow : Window
             return;
         e.Handled = true;
         Vm.SendCommand.Execute(null);
+    }
+
+    // ---- the full-screen viewer ---------------------------------------------------------------------
+
+    /// <summary>The full-screen viewer, while it is open.</summary>
+    private MediaViewer? _viewer;
+
+    /// <summary>
+    /// A picture or video in the viewer, clicked: full screen on this window's screen, as the chat's
+    /// are (the user's rule: a click on a picture or video always opens it full screen), with the
+    /// film's other pictures and clips one arrow key away. The clip here stops meanwhile.
+    /// </summary>
+    private void OnMediaClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not { } clicked)
+            return;
+        var entries = Vm.MediaInFilm();
+        var index = Vm.MediaIndex(entries, clicked);
+        if (index < 0 || (Screens.ScreenFromWindow(this) ?? Screens.Primary) is not { } screen)
+            return;
+        if (clicked is PlayerPreview { IsPlaying: true } playing)
+            playing.Stop();
+        _viewer?.Close();
+        var viewer = _viewer = new MediaViewer { DataContext = new MediaViewerViewModel(entries, index, Vm.Previews, screen.Bounds.Width) };
+        viewer.Position = screen.Bounds.Position;
+        viewer.Width = screen.Bounds.Width / screen.Scaling;
+        viewer.Height = screen.Bounds.Height / screen.Scaling;
+        viewer.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_viewer, viewer))
+            {
+                _viewer = null;
+                Activate();
+            }
+        };
+        viewer.Show();
     }
 
     private async void OnOpenClick(object? sender, RoutedEventArgs e)
