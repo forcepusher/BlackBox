@@ -175,7 +175,7 @@ public static partial class FilmCheck
         sb.AppendLine("What the camera should do: " + (shot.Camera.Trim().Length > 0 ? shot.Camera.Trim().TrimEnd('.') + "." : "nothing said (most likely it holds still)."));
         sb.AppendLine("The picture shows " + TopRow(board, shot) + "8 frames spread evenly over the whole shot, with their times.");
         if (motion is { Length: > 0 })
-            sb.AppendLine(motion).AppendLine("The measured movement is reliable about which way and how far things go: the whole picture moving is the camera; something moving against the rest is a person, an animal or a thing.");
+            sb.AppendLine(motion).AppendLine("The measured movement is reliable about which way and how far things go: the whole picture moving is the camera; something moving against the rest is a person, an animal or a thing, and the frames say which: someone walking across moves a part of the picture without the things behind them moving.");
         sb.AppendLine("1. For each frame, say where the fixed things are (the moon or sun, the horizon, trees, buildings, furniture) and how big the moon or sun is (as a share of the frame's width), " +
                       "and where each person's or animal's feet or base touch the ground.");
         sb.AppendLine("2. Given what the camera does, do the fixed things move, grow, shrink, appear or vanish when they shouldn't? A camera that pans or pushes in moves everything together; " +
