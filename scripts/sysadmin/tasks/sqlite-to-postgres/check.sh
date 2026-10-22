@@ -252,7 +252,9 @@ if pg:
             say("PASS", "every seeded row is in PostgreSQL unchanged (" + ", ".join(counts) + "; saves the players changed since are checked below)")
 
         # Every write the API acknowledged. A save may also hold what a later try sent whose answer never came.
+        # Missing rows, and rows there with other content than the API accepted (a NULL become '', say).
         lost = {"player": [], "score": [], "save": [], "friend": []}
+        changed = {"player": [], "score": [], "save": []}
         acked = {"player": 0, "score": 0, "save": 0, "friend": 0}
         saves = {}
         for i, (ok, w, ms) in enumerate(writes):
@@ -267,12 +269,16 @@ if pg:
             if kind == "player":
                 have = data["players"].get(str(w["id"]))
                 want_avatar = w.get("avatar_sha256") or ""
-                if have is None or have[1] != md5(w["name"]) or (types["players"].get("avatar") == "bytea" and have[2] != want_avatar):
+                if have is None:
                     lost["player"].append((w["id"], ms))
+                elif have[1] != md5(w["name"]) or (types["players"].get("avatar") == "bytea" and have[2] != want_avatar):
+                    changed["player"].append((w["id"], ms))
             elif kind == "score":
                 have = data["scores"].get(str(w["id"]))
-                if have is None or have[1] != canon([w["player_id"], w["score"], w.get("level")]):
+                if have is None:
                     lost["score"].append((w["id"], ms))
+                elif have[1] != canon([w["player_id"], w["score"], w.get("level")]):
+                    changed["score"].append((w["id"], ms))
             elif kind == "friend":
                 if "%s,%s" % (w["player_id"], w["friend_id"]) not in data["friendships"]:
                     lost["friend"].append(("%s,%s" % (w["player_id"], w["friend_id"]), ms))
@@ -283,21 +289,27 @@ if pg:
             acked["save"] += 1
             allowed = set(t[1] for t in tries[last:])
             have = data["saves"].get(pid)
-            if have is None or have[1] not in allowed:
+            if have is None:
                 lost["save"].append((pid, tries[last][2]))
+            elif have[1] not in allowed:
+                changed["save"].append((pid, tries[last][2]))
         total = sum(acked.values())
         if traffic is None:
             say("FAIL", "every write the API accepted during the work is in PostgreSQL (no traffic log)")
-        elif any(lost.values()):
+        elif any(lost.values()) or any(changed.values()):
             def when(ms):
                 return time.strftime("%H:%M:%S", time.gmtime(ms / 1000.0)) if ms else "check"
-            parts = []
-            for kind, items in lost.items():
-                if items:
-                    times = [ms for _, ms in items if ms]
-                    span = " between %s and %s UTC" % (when(min(times)), when(max(times))) if times else ""
-                    parts.append("%d of %d %ss%s, e.g. %s" % (len(items), acked[kind], kind, span, " ".join(str(k) for k, _ in items[:3])))
-            say("FAIL", "every write the API accepted during the work is in PostgreSQL (lost: " + "; ".join(parts) + ")")
+
+            def listed(found):
+                parts = []
+                for kind, items in found.items():
+                    if items:
+                        times = [ms for _, ms in items if ms]
+                        span = " between %s and %s UTC" % (when(min(times)), when(max(times))) if times else ""
+                        parts.append("%d of %d %ss%s, e.g. %s" % (len(items), acked[kind], kind, span, " ".join(str(k) for k, _ in items[:3])))
+                return "; ".join(parts)
+            said = [label + ": " + listed(found) for label, found in (("lost", lost), ("there but changed", changed)) if any(found.values())]
+            say("FAIL", "every write the API accepted during the work is in PostgreSQL (" + "; ".join(said) + ")")
         else:
             say("PASS", "every write the API accepted during the work is in PostgreSQL (%d: %s)" % (total, ", ".join("%d %ss" % (v, k) for k, v in acked.items())))
 

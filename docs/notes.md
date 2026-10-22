@@ -1556,6 +1556,22 @@ after a live copy failed only the lost-writes check, and one without `setval` fa
 insert checks. Files scp'd from a Windows folder without Users:RX arrive unreadable for other
 users on the VM, so setup.sh reads `files/` as root.
 
+First runs, 22 October 2026 (feature/chat-effort-migration, medium effort where it applies):
+- Claude Opus 5.5 on Anthropic's API, 1M context: 19 of 19 in 9 minutes, 24 model calls (874k
+  prompt tokens over them, nearly all read from the cache, and 12.7k reply tokens). It copied twice
+  while live with every row compared, then stopped the API for about 12 s for the last rows and
+  the switch, gave PostgreSQL its own login, tested a second copy of the API on PostgreSQL against
+  the live one before switching, and restored its backup into a scratch database. It also rebooted
+  the server to prove the start at boot while the players were on: the longest stretch without an
+  answer, 63 s, is that reboot, over the ticket's minute and inside the check's 75 s.
+- qwen3.8-27b (q6_k_xl, LM Studio): 16 of 19 in 40 minutes, 67 model calls. The outage was 28 s and
+  no write was lost, but its COPY wrote None as an empty field, which COPY's text format reads as
+  '' (a NULL is `\N`): every NULL country and avatar of 2434 players and every score without a
+  level came out as '' or an empty avatar, and so did the rows the players wrote before the
+  switch. It had first sent bytea as `\x...` (COPY reads that as an escaped byte), found it, and
+  doubled the backslash. It didn't reboot, as the players were on. The acknowledged-writes check
+  said those rows were lost; it now tells rows that aren't there from rows there but changed.
+
 The VM is QEMU (from qemu.weilnetz.de, unpacked, not installed) running Debian's cloud image in
 software emulation: portable, no admin rights or Windows features, everything in
 `.dev/sysadmin-lab`. Each task runs on a throwaway disk over the clean one, so a reset takes a
