@@ -1195,7 +1195,10 @@ things up is now something BlackBox makes happen, not only asks for:
   screen, the user or how a result looks are left alone, as are ones that name nothing ("How should
   I proceed?"), a question like one searched before, and any for a few calls after a look-up, while
   the model reads. Without a program's name the search adds the one the step drives (ComfyUI, an
-  MCP server's name) or the one the request names with its version ("Blender 5.2"). So is an error
+  MCP server's name) or the one the request names with its version ("Blender 5.2"). A question
+  about a library's default counts too: making an Excel chart with openpyxl, qwen3.8 asked itself
+  whether an axis's `delete` defaults to True, answered "No, the default is None, and Excel displays
+  it" from memory, and spent ten minutes zooming into a chart whose month labels Excel hid. So is an error
   whose note said to look it up when the model's next step goes on without doing so (without the
   paths in it): Nemotron failed 13 of 29 Blender scripts, many with that note, and never searched.
   With it, BlackBox searched its Python errors for it and the next run made 80 cubes where the two
