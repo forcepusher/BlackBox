@@ -32,6 +32,12 @@ public sealed record ModelInfo(string Id)
 
     /// <summary>Whether it costs nothing, on a service that prices its models (Kilo, OpenRouter); null where nothing is priced.</summary>
     public bool? Free { get; init; }
+
+    /// <summary>
+    /// The effort levels it can be asked to think with (see <see cref="Settings.Efforts"/>): empty when
+    /// it takes none, null when nothing says, which is taken as none.
+    /// </summary>
+    public IReadOnlyList<string>? Efforts { get; init; }
 }
 
 /// <summary>

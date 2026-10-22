@@ -297,6 +297,34 @@ public class ModelChoiceTests
     [InlineData("bge-reranker-v2-m3")]
     public void Models_that_cannot_chat_are_told_by_their_names(string id) => Assert.False(ModelChoice.FromName(id).Chat);
 
+    [Fact]
+    public async Task Servers_say_which_models_take_an_effort()
+    {
+        // LM Studio 0.4 lists a model's reasoning options; one that only turns thinking on and off
+        // takes no effort, nor does one with no reasoning entry (qwen3.8 on the test server).
+        const string lmStudio = """
+            {"models":[
+            {"type":"llm","key":"openai/gpt-oss-20b","params_string":"20B","capabilities":{"vision":false,"trained_for_tool_use":true,"reasoning":{"allowed_options":["low","medium","high"],"default":"medium"}},"loaded_instances":[]},
+            {"type":"llm","key":"google/gemma-4-26b-a4b","params_string":"26B-A4B","capabilities":{"vision":true,"reasoning":{"allowed_options":["off","on"],"default":"on"}},"loaded_instances":[]},
+            {"type":"llm","key":"qwen3.8-27b@q6_k_xl","params_string":"27B","capabilities":{"vision":true,"trained_for_tool_use":true},"loaded_instances":[]}
+            ]}
+            """;
+        var catalog = await ServerProbe.CatalogAsync(new HttpClient(new Routes(new() { ["/api/v1/models"] = lmStudio })),
+            new ServerSettings { BaseUrl = "http://forcepusher.ddns.net:1234/v1" }, ["openai/gpt-oss-20b", "google/gemma-4-26b-a4b", "qwen3.8-27b@q6_k_xl"], CancellationToken.None);
+        Assert.Equal(["low", "medium", "high"], catalog[0].Efforts);
+        Assert.Empty(catalog[1].Efforts!);
+        Assert.Empty(catalog[2].Efforts!);
+
+        // OpenRouter-style lists name "reasoning" among a model's parameters.
+        var thinks = ServerProbe.FromListEntry(new ModelInfo("openai/gpt-5.6"), JsonNode.Parse("""{"id":"openai/gpt-5.6","supported_parameters":["tools","reasoning","include_reasoning"]}""")!.AsObject());
+        Assert.Equal(["low", "medium", "high"], thinks.Efforts);
+        var plain = ServerProbe.FromListEntry(new ModelInfo("nvidia/nemotron-3.5-super-vl:free"), JsonNode.Parse("""{"id":"nvidia/nemotron-3.5-super-vl:free","supported_parameters":["tools","max_tokens"]}""")!.AsObject());
+        Assert.Empty(plain.Efforts!);
+        // A bare list (vLLM, OpenAI) goes by the name.
+        Assert.Equal(["low", "medium", "high"], ServerProbe.FromListEntry(new ModelInfo("gpt-5.6"), JsonNode.Parse("""{"id":"gpt-5.6"}""")!.AsObject()).Efforts);
+        Assert.Empty(ServerProbe.FromListEntry(new ModelInfo("Qwen/Qwen3.8-27B"), JsonNode.Parse("""{"id":"Qwen/Qwen3.8-27B","max_model_len":131072}""")!.AsObject()).Efforts!);
+    }
+
     /// <summary>Kilo's model list on 2026-10-16, a few of its 398 models, trimmed to the fields BlackBox reads.</summary>
     private const string KiloModels = """
         {"data":[

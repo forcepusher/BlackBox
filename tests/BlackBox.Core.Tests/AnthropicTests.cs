@@ -179,6 +179,64 @@ public class AnthropicTests
     }
 
     [Fact]
+    public async Task The_effort_picked_goes_to_Claude_and_to_the_handoff_note_but_not_to_a_quick_look()
+    {
+        var server = new ServerSettings { BaseUrl = Address, ApiKey = "sk-ant-test", Model = "claude-opus-5-5", Effort = "high" };
+        var (_, api) = Connect();
+        var probe = await ServerProbe.CheckAsync(new HttpClient(api), server, CancellationToken.None);
+        server.EffortLevels = probe.Efforts!;
+        var backend = BackendConnection.Create(new HttpClient(api), server);
+        Assert.Equal("high", backend.Options.Effort);
+
+        await backend.Client.CompleteAsync([ChatMessage.User("Open Notepad.")], [Click], backend.Options, null, CancellationToken.None);
+        Assert.Empty(api.Violations);
+        Assert.Equal("high", (string)api.Requests.Last().Body!["output_config"]!["effort"]!);
+
+        // A quick look stays at low whatever is picked.
+        await backend.Client.CompleteAsync([ChatMessage.User("Where is Save?")], [], new ChatRequestOptions { Model = "claude-opus-5-5", QuickAnswer = true, Effort = "high" }, null, CancellationToken.None);
+        Assert.Equal("low", (string)api.Requests.Last().Body!["output_config"]!["effort"]!);
+
+        // Haiku 4.5 takes none: nothing is sent, and the request stays valid.
+        server.Model = "claude-haiku-4-5-20251001";
+        server.EffortLevels = (await ServerProbe.CheckAsync(new HttpClient(api), server, CancellationToken.None)).Efforts!;
+        Assert.Empty(server.EffortLevels);
+        var haiku = BackendConnection.Create(new HttpClient(api), server);
+        Assert.Null(haiku.Options.Effort);
+        await haiku.Client.CompleteAsync([ChatMessage.User("Hi")], [], haiku.Options, null, CancellationToken.None);
+        Assert.Empty(api.Violations);
+        Assert.Null(api.Requests.Last().Body!["output_config"]);
+    }
+
+    [Fact]
+    public void Effort_levels_by_name_where_the_list_says_nothing()
+    {
+        Assert.Equal(Efforts.Levels, ServerProbe.EffortsByName("claude-opus-5-5"));
+        Assert.Equal(["low", "medium", "high", "max"], ServerProbe.EffortsByName("claude-sonnet-4-6"));
+        Assert.Equal(["low", "medium", "high"], ServerProbe.EffortsByName("claude-opus-4-5-20251101"));
+        Assert.Empty(ServerProbe.EffortsByName("claude-haiku-4-5-20251001"));
+        Assert.Equal(Efforts.Levels, ServerProbe.EffortsByName("claude-haiku-5-5"));
+        Assert.Equal(["low", "medium", "high"], ServerProbe.EffortsByName("gpt-5.6"));
+        Assert.Equal(["low", "medium", "high"], ServerProbe.EffortsByName("openai/o4-mini"));
+        Assert.Empty(ServerProbe.EffortsByName("qwen3.8-27b@q6_k_xl"));
+        Assert.Empty(ServerProbe.EffortsByName("gpt-oss-120b"));
+        Assert.Empty(ServerProbe.EffortsByName("gpt-4.1"));
+    }
+
+    [Fact]
+    public void The_effort_asked_for_is_the_nearest_the_model_takes()
+    {
+        Assert.Equal("medium", Efforts.Nearest("medium", Efforts.Levels));
+        Assert.Equal("high", Efforts.Nearest("max", ["low", "medium", "high"]));
+        Assert.Equal("high", Efforts.Nearest("xhigh", ["low", "medium", "high", "max"]));
+        Assert.Equal("low", Efforts.Nearest("low", ["low", "medium", "high"]));
+        Assert.Equal("medium", Efforts.Nearest("nonsense", ["low", "medium", "high"]));
+        Assert.Null(Efforts.Nearest("medium", []));
+        Assert.Equal(["low", "high"], Efforts.Of(["High", "off", "on", "low"]));
+        Assert.Equal("Extra high effort", Efforts.Label("xhigh"));
+        Assert.Equal("Medium effort", Efforts.Label("medium"));
+    }
+
+    [Fact]
     public async Task A_model_without_adaptive_thinking_gets_none_and_its_own_reply_limit()
     {
         var (client, api) = Connect();
@@ -315,8 +373,12 @@ public class AnthropicTests
         Assert.Equal("claude-opus-5-5", probe.Model);
         Assert.True(probe.AutoPicked);
         Assert.Equal(1_000_000, probe.LoadedContext);
-        Assert.True(probe.ContextHosted);
+        // All of it on Auto, unlike a hosted list's 1M (OpenRouter, Kilo), of which 100k is used.
+        Assert.False(probe.ContextHosted);
+        server.SetDetectedContext(probe.LoadedContext, probe.ContextHosted);
+        Assert.Equal(1_000_000, server.ContextSize);
         Assert.True(probe.Vision);
+        Assert.Equal(["low", "medium", "high", "xhigh", "max"], probe.Efforts);
         // Nothing is asked of LM Studio's or Ollama's addresses there.
         Assert.All(api.Requests, r => Assert.StartsWith("/v1/models", r.Path));
 

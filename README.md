@@ -13,8 +13,9 @@ whatever it downloads stay in a `Data` folder next to the exe.
 - **Pictures, video and sound.** It makes them with ComfyUI, installing ComfyUI and the models if needed.
 - **Films.** The **Filmmaking** button opens a film on a timeline: its characters and places, its
   shots and its sound. Say what you want in plain words, for the whole film or for the shot or
-  picture you pick, and BlackBox writes the prompts, picks the models, makes that piece and looks at
-  it; earlier takes are kept. Or just ask for a film in the chat.
+  picture you pick (click away from it, or press Esc, to go back to the whole film), and BlackBox
+  writes the prompts, picks the models, makes that piece and looks at it; earlier takes are kept.
+  Or just ask for a film in the chat.
 - **Game development.** It makes games in any engine (Unity, Unreal, Godot) and play-tests them.
 - **Documents.** It writes and edits Word, Excel, PowerPoint and PDF files, no Office needed.
 - **Servers.** It logs in over SSH to set servers up or fix them.
@@ -37,8 +38,8 @@ private or long work, use your own model.
 ## While it works
 - **Pause/Break** (or the Stop button) stops it at any time, from any window.
 - Type in the box to correct it or add to the task. It holds off the mouse and keyboard while you type.
-  Your message waits above the box until it reads it: × takes it back, and **Interrupt** (or
-  Ctrl+Enter) has it read right away, cutting short what it was thinking or running.
+  Your message waits above the box until it reads it: × takes it back, and **Interrupt the model**
+  (or Ctrl+Enter) has it read right away, cutting short what it was thinking or running.
 - Click a picture or video in the chat to see it full screen. **Prompt** under one made with ComfyUI
   (or AUTOMATIC1111) shows the prompts and settings it was made with.
 - Paste a screenshot or files with Ctrl+V, or drop them on the window, to send them with a message.
@@ -57,7 +58,10 @@ model the server has, or you pick one from the list.
   projector). Most testing was done with Qwen3.8 27B.
 - For Claude, type `api.anthropic.com` and your Anthropic API key. BlackBox speaks Anthropic's own
   API, so Claude keeps its thinking and most of each step comes from its cheaper cache. It uses
-  Claude Opus 5.5 unless you pick another.
+  Claude Opus 5.5 unless you pick another, with its whole 1M context; a long job costs more with
+  a bigger context, so set a smaller one by hand if you prefer.
+- The effort dropdown next to the model says how hard the model thinks (medium unless you pick
+  another). It is greyed out for models whose server doesn't say they take one.
 - Give the model at least 32k of context.
 - In LM Studio, turn off the model's "Image Input: Never exceed 2048 px" option. Otherwise
   screenshots get shrunk and clicks miss more often.

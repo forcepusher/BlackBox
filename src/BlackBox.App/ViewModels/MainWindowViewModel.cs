@@ -16,6 +16,12 @@ namespace BlackBox.App.ViewModels;
 /// <summary>What the last server check found; drawn as the coloured dot in the top bar.</summary>
 public enum ServerState { Unknown, Checking, Connected, Failed }
 
+/// <summary>A level in the effort dropdown ("low" to "max"), shown as "Medium effort".</summary>
+public sealed record EffortOption(string Level)
+{
+    public override string ToString() => Efforts.Label(Level);
+}
+
 public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserver
 {
     private readonly AppPaths _paths;
@@ -425,6 +431,65 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             : $"Picked by BlackBox as the strongest model the server offers{AutoModelDetails}: the best score on an agent benchmark, " +
               "else the most parameters, then the most bits per weight. Pick one yourself to keep using it.";
 
+    /// <summary>
+    /// The effort dropdown's levels: those the model in use takes, least to most; all of them,
+    /// greyed out, for a model that takes none, so the one picked still shows.
+    /// </summary>
+    public ObservableCollection<EffortOption> EffortOptions { get; } = new(Efforts.Levels.Select(l => new EffortOption(l)));
+
+    private bool _refreshingEfforts;
+
+    /// <summary>The effort picked (medium until another is), or the nearest one the model takes. Saved; used from the next message on.</summary>
+    public EffortOption? SelectedEffort
+    {
+        get => new(_settings.Server.EffortInUse ?? _settings.Server.Effort);
+        set
+        {
+            if (_refreshingEfforts || value is null || value == SelectedEffort) return;
+            _settings.Server.Effort = value.Level;
+            SaveSettings();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(EffortToolTip));
+        }
+    }
+
+    /// <summary>The server says the model in use takes an effort; otherwise none is sent and the dropdown is greyed out.</summary>
+    public bool CanSetEffort => _settings.Server.EffortLevels.Count > 0;
+
+    public string EffortToolTip
+    {
+        get
+        {
+            var server = _settings.Server;
+            var model = server.ModelInUse is { Length: > 0 } m ? m : "The model";
+            if (CanSetEffort)
+                return $"How hard {model} thinks before it acts: more effort is slower and, on a paid API, costs more. "
+                       + "Medium unless you pick another; a change applies from your next message.";
+            var lmStudio = !OpenAiChatClient.IsAnthropic(server.BaseUrl) && Uri.TryCreate(OpenAiChatClient.NormalizeBaseUrl(server.BaseUrl), UriKind.Absolute, out var uri) && uri.Port == 1234;
+            return lmStudio
+                ? $"{model} doesn't take an effort setting here: LM Studio lists none for it, so how much it thinks is its model setting in LM Studio."
+                : $"{model} doesn't take an effort setting, or the server doesn't say it does, so BlackBox sends none.";
+        }
+    }
+
+    /// <summary>The levels of the model in use, after a check: the list changes in place, so the dropdown keeps its selection.</summary>
+    private void OnEffortsChanged()
+    {
+        var wanted = CanSetEffort ? _settings.Server.EffortLevels : Efforts.Levels;
+        _refreshingEfforts = true;
+        for (var i = 0; i < wanted.Count; i++)
+            if (EffortOptions.All(o => o.Level != wanted[i]))
+                EffortOptions.Insert(Math.Min(i, EffortOptions.Count), new EffortOption(wanted[i]));
+        OnPropertyChanged(nameof(SelectedEffort));
+        for (var i = EffortOptions.Count - 1; i >= 0; i--)
+            if (!wanted.Contains(EffortOptions[i].Level))
+                EffortOptions.RemoveAt(i);
+        _refreshingEfforts = false;
+        OnPropertyChanged(nameof(SelectedEffort));
+        OnPropertyChanged(nameof(CanSetEffort));
+        OnPropertyChanged(nameof(EffortToolTip));
+    }
+
     private async Task CheckAfterTypingAsync()
     {
         _addressEdit?.Cancel();
@@ -510,6 +575,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         server.SupportsVision = (probe.Vision ?? true) && _imagesRefused != ImagesKey(server);
         OnPropertyChanged(nameof(CanSeeScreen));
+        server.EffortLevels = probe.Efforts ?? [];
+        OnEffortsChanged();
         var status = "Connected" + (!server.SupportsVision ? " · no vision" : "");
         if (probe.AutoPicked && server.Model.Length > 0)
             SetStatus(ServerState.Connected, status,

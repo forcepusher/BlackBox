@@ -96,6 +96,12 @@ public sealed class ChatRequestOptions
     /// always thinks, is asked for low effort; for Qwen the caller begins the reply itself.
     /// </summary>
     public bool QuickAnswer { get; set; }
+
+    /// <summary>
+    /// How hard the model is asked to think ("low" to "max", see <see cref="Settings.Efforts"/>), for a
+    /// model that takes it; null sends nothing and the model thinks as it does by default.
+    /// </summary>
+    public string? Effort { get; set; }
 }
 
 public enum StreamChannel { Content, Reasoning }

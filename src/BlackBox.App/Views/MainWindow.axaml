@@ -328,6 +328,10 @@
         <DockPanel Grid.Row="1" Grid.Column="1">
           <Button DockPanel.Dock="Right" Classes="ghost" Content="↻" Margin="6,0,0,0" VerticalAlignment="Stretch" Command="{Binding CheckServerCommand}"
                   ToolTip.Tip="Ask the server again for its models and context size" />
+          <!-- How hard the model thinks; greyed out for a model whose server lists no effort for it. -->
+          <ComboBox x:Name="EffortBox" DockPanel.Dock="Right" ItemsSource="{Binding EffortOptions}" SelectedItem="{Binding SelectedEffort}" IsEnabled="{Binding CanSetEffort}"
+                    Width="148" Margin="6,0,0,0" VerticalAlignment="Stretch" ToolTip.Tip="{Binding EffortToolTip}" ToolTip.ShowOnDisabled="True"
+                    AutomationProperties.Name="Effort" />
           <ComboBox x:Name="ModelBox" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                     PlaceholderText="No models: check the server address" ToolTip.Tip="{Binding ModelToolTip}" />
         </DockPanel>
@@ -427,7 +431,7 @@
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" />
+                    <SelectableTextBlock views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" />
                   </StackPanel>
                 </Border>
               </StackPanel>
@@ -440,7 +444,7 @@
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Left" />
                 <Expander IsVisible="{Binding HasReasoning}" Header="{Binding ThinkingLabel}" HorizontalAlignment="Stretch" IsExpanded="True"
                           Padding="10,6">
-                  <SelectableTextBlock Classes="muted" Text="{Binding ShownReasoning}" TextWrapping="Wrap" />
+                  <SelectableTextBlock Classes="muted" views:MarkdownText.Plain="{Binding ShownReasoning}" TextWrapping="Wrap" />
                 </Expander>
                 <SelectableTextBlock views:MarkdownText.Source="{Binding ShownText}" TextWrapping="Wrap" IsVisible="{Binding HasText}" LineHeight="21" />
                 <TextBlock Classes="muted" Text="{Binding TypingText}" IsVisible="{Binding ShowTypingDots}" />
@@ -511,7 +515,7 @@
                           ToolTip.Tip="Carry on with the task where I stopped" />
                   <TextBlock DockPanel.Dock="Left" Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}"
                              VerticalAlignment="Center" Margin="0,0,8,0" />
-                  <SelectableTextBlock Classes="muted" Classes.error="{Binding IsError}" Text="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                  <SelectableTextBlock Classes="muted" Classes.error="{Binding IsError}" views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </DockPanel>
               </Border>
             </DataTemplate>
@@ -668,11 +672,11 @@
     <Border Grid.Row="4" Padding="16,8,16,14">
       <StackPanel MaxWidth="860" Spacing="6">
         <!-- Messages sent during the run that the model hasn't read yet, as their bubbles will be: each
-             joins the chat when it is read; × takes one back, Interrupt has them read now. -->
+             joins the chat when it is read; × takes one back, "Interrupt the model" has them read now. -->
         <Border Classes="queued" IsVisible="{Binding HasQueued}">
           <StackPanel Spacing="6">
             <DockPanel>
-              <Button DockPanel.Dock="Right" Classes="ghost" Content="Interrupt" Command="{Binding InterruptCommand}" Padding="10,2" VerticalAlignment="Center"
+              <Button DockPanel.Dock="Right" Classes="ghost" Content="Interrupt the model" Command="{Binding InterruptCommand}" Padding="10,2" VerticalAlignment="Center"
                       ToolTip.Tip="Read them now: I stop thinking, writing or running a tool, and go on from your messages. Ctrl+Enter sends a message this way." />
               <TextBlock Classes="muted" Text="{Binding QueuedTitle}" VerticalAlignment="Center" />
             </DockPanel>

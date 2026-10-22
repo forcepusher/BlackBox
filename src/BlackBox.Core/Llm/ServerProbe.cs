@@ -14,8 +14,9 @@ namespace BlackBox.Core.Llm;
 /// <param name="ModelDetails">For a model chosen here, its size, quantization and benchmark score ("27B, 6-bit, 79.8% on Terminal-Bench 2.1") as far as known.</param>
 /// <param name="ContextHosted"><paramref name="LoadedContext"/> is the most a hosted service takes for the model, not a size a server runs it with (see <see cref="ModelFacts.Hosted"/>).</param>
 /// <param name="KeyRefused">The server answered, but turned the API key down (see <see cref="KeyRefusedException"/>); <paramref name="Message"/> says what to change.</param>
+/// <param name="Efforts">The effort levels <paramref name="Model"/> takes (see <see cref="ModelInfo.Efforts"/>); empty when it takes none or nothing says.</param>
 public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, int? LoadedContext, bool? Vision, string Message, bool? Loaded = null, string? BaseUrl = null,
-    string? Model = null, bool AutoPicked = false, string? ModelDetails = null, bool ContextHosted = false, bool KeyRefused = false);
+    string? Model = null, bool AutoPicked = false, string? ModelDetails = null, bool ContextHosted = false, bool KeyRefused = false, IReadOnlyList<string>? Efforts = null);
 
 /// <summary>What the server says about the model in use; nulls where it doesn't say.</summary>
 /// <param name="Hosted">
@@ -43,7 +44,7 @@ public readonly record struct ModelFacts(int? Context, bool? Loaded, bool? Visio
 /// if that is too big, the server's "too long" error names the real size and the agent adjusts.
 /// OpenRouter-style lists also say which models take images, call tools and cost nothing.
 /// </remarks>
-public static class ServerProbe
+public static partial class ServerProbe
 {
     /// <summary>
     /// The address may be typed in any form (see <see cref="ServerAddress"/>); the first form that
@@ -85,7 +86,8 @@ public static class ServerProbe
             var facts = await TryContextAsync(http, found, ct, models).ConfigureAwait(false);
             return new ProbeResult(true, catalog.Where(m => m.Chat).Select(m => m.Id).ToList(), facts.Context, facts.Vision,
                 models.Count == 0 ? "Connected, but the server lists no models." : "Connected.", facts.Loaded, candidates[i],
-                found.Model.Length > 0 ? found.Model : null, auto, auto ? ModelChoice.Describe(catalog.First(m => m.Id == found.Model)) : null, facts.Hosted);
+                found.Model.Length > 0 ? found.Model : null, auto, auto ? ModelChoice.Describe(catalog.First(m => m.Id == found.Model)) : null, facts.Hosted,
+                Efforts: catalog.FirstOrDefault(m => m.Id == found.Model)?.Efforts ?? []);
         }
         // A server that answered but turned the key down is reachable all right: that is what to fix.
         if (attempts.FirstOrDefault(a => a.Result.KeyRefused) is { } refused)
@@ -161,8 +163,9 @@ public static class ServerProbe
     /// <summary>
     /// What an OpenRouter-style list (OpenRouter, Kilo) says of a model, over what its name tells:
     /// what it takes (architecture.input_modalities), whether it writes text at all
-    /// (output_modalities: a music model writes audio), whether it calls tools
-    /// (supported_parameters) and whether it is free (pricing). A list of ids alone says none of it.
+    /// (output_modalities: a music model writes audio), whether it calls tools and can be asked for
+    /// an effort (supported_parameters) and whether it is free (pricing). A list of ids alone says
+    /// none of it. Anthropic's list says the effort levels in its capabilities.
     /// </summary>
     internal static ModelInfo FromListEntry(ModelInfo name, JsonObject entry)
     {
@@ -177,9 +180,14 @@ public static class ServerProbe
             Vision = inputs is null ? name.Vision : inputs.Contains("image"),
             Tools = parameters is null ? name.Tools : parameters.Contains("tools"),
             Free = pricing is null ? name.Free : Price(pricing["prompt"]) is { } input && Price(pricing["completion"]) is { } output ? input == 0 && output == 0 : null,
+            Efforts = ClaudeEfforts(entry) ?? ListedEfforts(parameters) ?? EffortsByName(name.Id),
         };
 
         static List<string>? Strings(JsonNode? node) => node is JsonArray a ? a.Select(Str).OfType<string>().ToList() : null;
+
+        // OpenRouter routes "reasoning" to every model that thinks on request, as low to high.
+        static IReadOnlyList<string>? ListedEfforts(List<string>? parameters) =>
+            parameters is null ? null : parameters.Contains("reasoning") || parameters.Contains("reasoning_effort") ? OpenAiEfforts : [];
 
         // Prices come as text ("0", "0.0000003" per token) or as numbers.
         static decimal? Price(JsonNode? node) => node is JsonValue v
@@ -190,24 +198,69 @@ public static class ServerProbe
     /// <summary>
     /// A model in LM Studio's /api/v1/models: "type" llm or embedding, "params_string" such as 27B
     /// or 30B-A3B, "quantization" with its "bits_per_weight", "capabilities.vision", "size_bytes"
-    /// and "loaded_instances". What it leaves out comes from the name.
+    /// and "loaded_instances". What it leaves out comes from the name. Its effort levels are those
+    /// of "capabilities.reasoning.allowed_options" (gpt-oss: low, medium, high); a model whose
+    /// thinking only goes on and off there, or that has no such entry, as qwen3.8 on the test
+    /// server, takes none: its thinking is LM Studio's model setting.
     /// </summary>
     private static ModelInfo FromLmStudio(string id, JsonObject m)
     {
         var name = ModelChoice.FromName(id);
         var (total, active) = ModelChoice.ParseSize(Str(m["params_string"]));
         var quantization = m["quantization"] as JsonObject;
+        var caps = m["capabilities"] as JsonObject;
         return name with
         {
             Chat = Str(m["type"]) is { } type ? type is "llm" or "vlm" : name.Chat,
-            Vision = m["capabilities"] is JsonObject caps && caps["vision"] is JsonValue v && v.TryGetValue<bool>(out var vision) ? vision : name.Vision,
+            Vision = caps?["vision"] is JsonValue v && v.TryGetValue<bool>(out var vision) ? vision : name.Vision,
             Params = total ?? name.Params,
             ActiveParams = active ?? name.ActiveParams,
             Bits = Number(quantization?["bits_per_weight"]) ?? ModelChoice.ParseBits(Str(quantization?["name"])) ?? name.Bits,
             SizeBytes = Number(m["size_bytes"]) is { } size ? (long)size : null,
             Loaded = m["loaded_instances"] is JsonArray { Count: > 0 },
+            Efforts = caps?["reasoning"]?["allowed_options"] is JsonArray options ? Efforts.Of(options.Select(Str).OfType<string>()) : [],
         };
     }
+
+    /// <summary>What OpenAI's reasoning models, and services routing to thinking models, take.</summary>
+    private static readonly IReadOnlyList<string> OpenAiEfforts = ["low", "medium", "high"];
+
+    /// <summary>
+    /// For a model of Anthropic's list (its entry kept under "anthropic", see
+    /// <see cref="AnthropicMessages.ModelEntry"/>), the levels its capabilities say ("effort":
+    /// {"supported": true, "low": {"supported": true}, …}), or those of its version where they
+    /// don't; null for any other list's entry.
+    /// </summary>
+    private static IReadOnlyList<string>? ClaudeEfforts(JsonObject entry)
+    {
+        if (entry["anthropic"] is not JsonObject claude)
+            return null;
+        if (claude["capabilities"]?["effort"] is not JsonObject effort)
+            return EffortsByName(Str(claude["id"]) ?? "");
+        if (effort["supported"] is JsonValue s && s.TryGetValue<bool>(out var supported) && !supported)
+            return [];
+        return Efforts.Of(effort.Where(p => p.Value is JsonObject level && level["supported"] is JsonValue v && v.TryGetValue<bool>(out var yes) && yes).Select(p => p.Key));
+    }
+
+    /// <summary>
+    /// For a list that doesn't say: Claude by its version (4.7 on: low to max, 4.6: no xhigh, Opus
+    /// 4.5: low to high; before that none, Haiku 4.5 among them) and OpenAI's reasoning models
+    /// (gpt-5 and the o series: low to high). Anything else takes none.
+    /// </summary>
+    internal static IReadOnlyList<string> EffortsByName(string id)
+    {
+        var (family, version) = ClaudeModel.Parse(id);
+        if (family is not null)
+            return family is "haiku" ? version >= 5 ? Efforts.Levels : []
+                : version >= 4.7 ? Efforts.Levels
+                : version >= 4.6 ? ["low", "medium", "high", "max"]
+                : family is "opus" && version >= 4.5 ? OpenAiEfforts : [];
+        var bare = id[(id.LastIndexOf('/') + 1)..];
+        return OpenAiReasoning().IsMatch(bare) ? OpenAiEfforts : [];
+    }
+
+    [GeneratedRegex(@"^(gpt-5|o[1-9])(\b|[-.])", RegexOptions.IgnoreCase)]
+    private static partial Regex OpenAiReasoning();
 
     /// <summary>A model in LM Studio's older /api/v0/models: "type" llm, vlm or embeddings, "quantization" such as Q6_K_XL, and "state". No size; the name may tell it.</summary>
     private static ModelInfo FromLmStudioV0(string id, JsonObject m)
@@ -342,10 +395,13 @@ public static class ServerProbe
             return default;
         var sees = FromListEntry(new ModelInfo(model), entry).Vision;
         // vLLM's max_model_len is what it serves the model with; context_length is the most a
-        // hosted service takes for it.
+        // hosted service takes for it. Claude's is used whole on Auto (the user, 22 October 2026:
+        // "it's user's responsibility to know what he's doing when it comes to token spending"):
+        // each step reads what came before from its cache, which doesn't count toward the input
+        // tokens a minute, where OpenRouter and Kilo pass the whole request on at full price.
         if (Int(entry["max_model_len"]) is { } served)
             return new ModelFacts(served, null, sees);
-        return Int(entry["context_length"]) is { } most ? new ModelFacts(most, null, sees, Hosted: true) : new ModelFacts(null, null, sees);
+        return Int(entry["context_length"]) is { } most ? new ModelFacts(most, null, sees, Hosted: !OpenAiChatClient.IsAnthropic(v1)) : new ModelFacts(null, null, sees);
     }
 
     /// <summary>The context an Ollama model runs with, and whether it takes images ("vision" among its capabilities).</summary>

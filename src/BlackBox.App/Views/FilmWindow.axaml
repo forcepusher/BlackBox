@@ -215,7 +215,8 @@
 
   <DockPanel>
     <!-- Which film. -->
-    <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,8">
+    <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,8"
+            PointerPressed="OnAwayPressed">
       <DockPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
           <TextBlock Classes="muted" Text="{Binding LengthText}" VerticalAlignment="Center" Margin="0,0,6,0" />
@@ -235,7 +236,9 @@
     </Border>
 
     <!-- The timeline: references, video and sound, under one scroll. -->
-    <Border DockPanel.Dock="Bottom" Background="#15171A" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0">
+    <!-- A click on it away from every piece picks the whole film (OnAwayPressed). -->
+    <Border DockPanel.Dock="Bottom" Background="#15171A" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0"
+            PointerPressed="OnAwayPressed">
       <DockPanel>
         <Grid DockPanel.Dock="Top" Height="42" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="12,0">
           <Button Width="32" Height="32" CornerRadius="16" Padding="0" Background="{StaticResource BbAccent}" VerticalAlignment="Center"
@@ -395,8 +398,9 @@
 
     <!-- The viewer, and the panel to tell BlackBox what to do. -->
     <Grid ColumnDefinitions="*,470">
-      <DockPanel Margin="16,14,16,12">
-        <Panel>
+      <!-- Its margin around the viewer takes clicks too: away from the piece, they pick the whole film. -->
+      <DockPanel Background="Transparent" PointerPressed="OnAwayPressed">
+        <Panel Margin="16,14,16,12">
           <ContentControl Content="{Binding Viewer}" IsVisible="{Binding !IsPlaying}" />
           <Border Classes="thumb" Background="#000000" IsVisible="{Binding IsPlaying}">
             <Panel>

@@ -6,7 +6,8 @@ namespace BlackBox.Core.Llm;
 /// <summary>A ready-to-use client plus the request options for the configured server.</summary>
 /// <remarks>
 /// No sampling parameters are sent: temperature, top-p/k, reply length and thinking are the
-/// server's model configuration (in LM Studio, per model).
+/// server's model configuration (in LM Studio, per model). The effort picked in the top bar goes
+/// to models whose server says they take one.
 /// </remarks>
 public sealed record BackendConnection(OpenAiChatClient Client, ChatRequestOptions Options, bool Vision, int ContextTokens)
 {
@@ -19,6 +20,7 @@ public sealed record BackendConnection(OpenAiChatClient Client, ChatRequestOptio
             // message field and via the template switch that llama-server and vLLM honor.
             SendReasoning = true,
             Extra = new JsonObject { ["chat_template_kwargs"] = new JsonObject { ["preserve_thinking"] = true } },
+            Effort = server.EffortInUse,
         },
         server.SupportsVision,
         server.ContextSize);

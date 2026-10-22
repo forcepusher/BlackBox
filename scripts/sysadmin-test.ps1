@@ -15,8 +15,11 @@
   place of the standard opening, which says to log in as admin with the key), old\ (setup.sh and
   files for an "old server": a second VM at {ip2}, set up before BlackBox starts and switched off
   before the checks, for tasks that move things from one server to another), solution-host.ps1
-  (the reference solution's part on this PC) and setup-host.ps1 (makes per-run files in $tdir\upload,
-  which go to the VM with setup.sh). The scripts see LAB_IP, LAB_USER and a random TOKEN; the
+  (the reference solution's part on this PC), setup-host.ps1 (makes per-run files in $tdir\upload,
+  which go to the VM with setup.sh) and traffic-host.ps1 (a server's live users: started on this PC
+  in the background after setup with -Ip, -Dir $tdir, -Token and -ParentPid, it runs while BlackBox
+  or the reference solution works and stops when $tdir\traffic.stop appears, before the reboot and
+  the checks). The scripts see LAB_IP, LAB_USER and a random TOKEN; the
   PowerShell ones also $token, $tdir and the lab helpers. Nothing of this is left on the VM while
   BlackBox works.
 
@@ -125,6 +128,15 @@ function Fill([string]$text) {
 }
 function Log([string]$text) { Write-Host ("[{0:HH:mm:ss}] {1}" -f (Get-Date), $text) -ForegroundColor Yellow }
 
+# A task's live users (traffic-host.ps1) are asked to stop, so their log ends cleanly; killed if they don't.
+$traffic = $null
+function Stop-Traffic {
+  if (-not $script:traffic) { return }
+  New-Item -ItemType File -Force (Join-Path $tdir "traffic.stop") | Out-Null
+  if (-not $script:traffic.WaitForExit(30000)) { Stop-Process -Id $script:traffic.Id -Force -ErrorAction SilentlyContinue }
+  $script:traffic = $null
+}
+
 # Uploads the named files of a task (and its files\ folder) to /tmp/bb-task and runs one of them as root.
 function Invoke-TaskScript([IO.DirectoryInfo]$task, [string]$script, [string]$vars, [int]$TimeoutSec = 900) {
   Invoke-LabSsh "rm -rf /tmp/bb-task && mkdir -p /tmp/bb-task" | Out-Null
@@ -184,6 +196,12 @@ try {
       $rows += [pscustomobject]@{ Task = $task.Name; Result = "SETUP FAILED"; Checks = ""; Minutes = 0; Steps = 0; Tools = 0; Errors = 0; Done = "" }
       continue
     }
+    $hostTraffic = Join-Path $task.FullName "traffic-host.ps1"
+    if (Test-Path $hostTraffic) {
+      Log "$($task.Name): the server's users start (traffic-host.ps1)"
+      $traffic = Start-Process powershell.exe -WindowStyle Hidden -PassThru -ArgumentList (@("-NoProfile", "-ExecutionPolicy", "Bypass",
+        "-File", $hostTraffic, "-Ip", $LabIp, "-Dir", $tdir, "-Token", $token, "-ParentPid", $PID) | ForEach-Object { Format-LabArg $_ })
+    }
 
     # A task can bring its own preamble (preamble.txt), e.g. one where root logs in with a password.
     $pre = Join-Path $task.FullName "preamble.txt"
@@ -223,6 +241,7 @@ try {
       $reader.Dispose()
     }
     $sw.Stop()
+    Stop-Traffic
     # The old server is switched off, as the ticket says: nothing may depend on it.
     if ($hasOld) { Invoke-OldServer @("-Stop") | Out-Null }
     } # not -Recheck
@@ -266,6 +285,7 @@ try {
     }
   }
 } finally {
+  Stop-Traffic
   # Leave the user's known_hosts as it was (the old server of a two-server task included).
   $added = @($LabIp, $LabIp2 | Where-Object { (Test-Path $userKnown) -and (Invoke-LabExe "ssh-keygen.exe" @("-F", $_, "-f", $userKnown)).Code -eq 0 })
   foreach ($ip in $added) { Invoke-LabExe "ssh-keygen.exe" @("-R", $ip, "-f", $userKnown) | Out-Null }
