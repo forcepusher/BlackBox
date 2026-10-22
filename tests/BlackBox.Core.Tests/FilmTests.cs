@@ -828,7 +828,7 @@ public sealed class FilmCheckTests
     public void Movement_is_measured_from_the_pixels_the_camera_apart_from_what_moves_on_its_own()
     {
         var still = VideoMotion.Describe(VideoMotion.Measure(Moving(0, 0)));
-        Assert.Contains("Over the whole clip: nothing moves much.", still);
+        Assert.Contains("Over the whole clip: the camera holds still (the whole picture doesn't move); nothing moves much.", still);
 
         // A camera panning right moves the whole picture left; a fox rising in the middle moves up against it.
         var steps = VideoMotion.Measure(Moving(1, 1));
@@ -839,7 +839,9 @@ public sealed class FilmCheckTests
         Assert.Contains("the whole picture moves left", said);
         // Someone walking right across the left of a still picture is not the camera pulling back.
         var walking = VideoMotion.Describe(VideoMotion.Measure(Moving(0, 0, walk: 2)));
-        Assert.DoesNotContain("the whole picture", walking);
+        Assert.DoesNotContain("the whole picture moves", walking);
+        Assert.DoesNotContain("the whole picture shrinks", walking);
+        Assert.Contains("the camera holds still", walking);
         Assert.Contains("something moves right", walking);
         Assert.Contains("(as when the camera pans right)", said);
         Assert.Contains("in the middle something moves up", said);

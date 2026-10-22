@@ -186,7 +186,10 @@ public static class VideoMotion
             if (part.Count > 0)
                 sb.AppendLine($"- {N(start)}–{N(Math.Min(part[^1].To, steps[^1].To))} s: {Said(part, 1.0)}");
         }
-        sb.Append($"Over the whole clip: {Said(steps, 2.0)}");
+        // Said outright when the camera held: a girl walking right read as "the mailbox drifts right" to
+        // a look that had only "something moves right" against the rest.
+        var whole = Said(steps, 2.0);
+        sb.Append($"Over the whole clip: {(whole.StartsWith("the whole picture", StringComparison.Ordinal) ? "" : "the camera holds still (the whole picture doesn't move); ")}{whole}");
         return sb.ToString();
     }
 
