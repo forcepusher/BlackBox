@@ -42,7 +42,14 @@ internal sealed class WindowsScreenCapture : IScreenCapture
     /// One capture at a time among all the BlackBoxes on the PC: one asking another to show its
     /// windows again must not do so while a third is taking its picture.
     /// </summary>
-    private static readonly Mutex Everyone = new(false, @"Local\BlackBox.Capture");
+    private static readonly Mutex? Everyone = SharedMutex();
+
+    /// <summary>The captures' mutex; null where a BlackBox run as administrator made it and this one may not open it.</summary>
+    private static Mutex? SharedMutex()
+    {
+        try { return new Mutex(false, @"Local\BlackBox.Capture"); }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or WaitHandleCannotBeOpenedException or IOException) { return null; }
+    }
 
     public RawImage Capture(ScreenRect region, bool includeCursor)
     {
@@ -62,7 +69,7 @@ internal sealed class WindowsScreenCapture : IScreenCapture
                     SetWindowDisplayAffinity(hwnd, WDA_NONE);
                 WindowsNeighbours.ShowOthers(others);
                 if (mine)
-                    Everyone.ReleaseMutex();
+                    Everyone!.ReleaseMutex();
             }
         }
     }
@@ -70,6 +77,8 @@ internal sealed class WindowsScreenCapture : IScreenCapture
     /// <summary>Waits for the other BlackBoxes' captures, a second at most: one that hangs leaves the others to capture with its windows in the picture.</summary>
     private static bool TakeTurn()
     {
+        if (Everyone is null)
+            return false;
         try { return Everyone.WaitOne(TimeSpan.FromSeconds(1)); }
         catch (AbandonedMutexException) { return true; } // a BlackBox that ended mid-capture
     }

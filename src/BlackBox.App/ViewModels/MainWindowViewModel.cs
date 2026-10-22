@@ -1218,14 +1218,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         if (row.Id == _chatId)
             return;
+        // A chat left a moment ago may still be on its way to the disk, and this window let go of it
+        // only once it is there.
+        _chatSaver.Flush(TimeSpan.FromSeconds(10));
         // Open in another BlackBox window: that one comes forward, with the chat as it goes on there.
         if (_chats.Claim(row.Id) is not { } claim)
         {
             ShowElsewhere(row);
             return;
         }
-        // A chat left a moment ago may still be on its way to the disk.
-        _chatSaver.Flush(TimeSpan.FromSeconds(10));
+        row.IsElsewhere = false;
         if (_chats.Load(row.Id) is not { } chat)
         {
             claim.Dispose();

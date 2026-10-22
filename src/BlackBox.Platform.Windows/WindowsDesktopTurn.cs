@@ -9,8 +9,9 @@ namespace BlackBox.Platform.Windows;
 /// Whose turn it is with the mouse and keyboard among the BlackBoxes on the PC: a named mutex,
 /// which Windows lets go of when the process holding it ends, however it ends. A mutex belongs to
 /// the thread that took it, and a tool's wait moves between threads, so one thread of its own
-/// takes and lets go of it. A window that wants the turn says so through a named event; the one
-/// that has it lets go once it has left the mouse and keyboard alone for <see cref="IdleHandover"/>.
+/// takes and lets go of it. A window that wants the turn says so through a named event, twice a
+/// second while it waits; the one that has it lets go once it has left the mouse and keyboard
+/// alone for <see cref="IdleHandover"/>, never in the middle of an action.
 /// </summary>
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsDesktopTurn : IDesktopTurn
@@ -23,19 +24,30 @@ internal sealed class WindowsDesktopTurn : IDesktopTurn
     internal static TimeSpan IdleHandover = TimeSpan.FromSeconds(60);
 
     private readonly BlockingCollection<Action> _work = [];
-    private readonly Mutex _turn = new(false, @"Local\BlackBox.DesktopTurn");
-    private readonly EventWaitHandle _wanted = new(false, EventResetMode.ManualReset, @"Local\BlackBox.DesktopTurnWanted");
+    private readonly Mutex _turn;
+    private readonly EventWaitHandle _wanted;
 
     /// <summary>One take at a time in this process; there is one agent per window, but a reply can hold several actions.</summary>
     private readonly SemaphoreSlim _one = new(1, 1);
 
     // Used on the turn's thread only.
-    private bool _held;
-    private bool _handedOver;
+    private bool _held, _busy, _handedOver, _wantedSeen;
     private long _lastUse;
 
     public WindowsDesktopTurn()
     {
+        // A BlackBox run as administrator made them, and this one may not open them: it goes on
+        // with turns of its own, as the two can't share them.
+        try
+        {
+            _turn = new Mutex(false, @"Local\BlackBox.DesktopTurn");
+            _wanted = new EventWaitHandle(false, EventResetMode.ManualReset, @"Local\BlackBox.DesktopTurnWanted");
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or WaitHandleCannotBeOpenedException or IOException)
+        {
+            _turn = new Mutex(false);
+            _wanted = new EventWaitHandle(false, EventResetMode.ManualReset);
+        }
         new Thread(Run) { IsBackground = true, Name = "BlackBox desktop turn" }.Start();
     }
 
@@ -45,14 +57,31 @@ internal sealed class WindowsDesktopTurn : IDesktopTurn
         {
             if (_work.TryTake(out var job, TimeSpan.FromSeconds(1)))
                 job();
-            // Left alone long enough, and another window waits: its turn.
-            else if (_held && Environment.TickCount64 - _lastUse >= IdleHandover.TotalMilliseconds && _wanted.WaitOne(0))
-            {
-                _turn.ReleaseMutex();
-                _held = false;
-                _handedOver = true;
-            }
+            else if (_held && !_busy && Environment.TickCount64 - _lastUse >= IdleHandover.TotalMilliseconds)
+                HandOverIfWanted();
         }
+    }
+
+    /// <summary>
+    /// Left alone long enough: another window's turn, if one still waits. Its agent sets the event
+    /// twice a second; one that stopped waiting left it set once, so it must be set again after
+    /// being cleared here before the turn goes.
+    /// </summary>
+    private void HandOverIfWanted()
+    {
+        if (!_wanted.WaitOne(0))
+        {
+            _wantedSeen = false;
+            return;
+        }
+        if (!_wantedSeen)
+        {
+            _wantedSeen = true;
+            _wanted.Reset();
+            return;
+        }
+        _turn.ReleaseMutex();
+        (_held, _handedOver, _wantedSeen) = (false, true, false);
     }
 
     private Task<T> OnThread<T>(Func<T> job)
@@ -99,7 +128,7 @@ internal sealed class WindowsDesktopTurn : IDesktopTurn
         }
     }
 
-    /// <summary>On the turn's thread: has it, or takes it if no one else has it.</summary>
+    /// <summary>On the turn's thread: has it, or takes it if no one else has it; an action starts.</summary>
     private bool TryTake()
     {
         if (!_held)
@@ -117,15 +146,21 @@ internal sealed class WindowsDesktopTurn : IDesktopTurn
             // Whoever waited for it has it now; another that still waits says so again.
             _wanted.Reset();
         }
+        (_busy, _wantedSeen) = (true, false);
         _lastUse = Environment.TickCount64;
         return true;
     }
+
+    public void Done() => _work.Add(() =>
+    {
+        _busy = false;
+        _lastUse = Environment.TickCount64;
+    });
 
     public void Release() => _work.Add(() =>
     {
         if (_held)
             _turn.ReleaseMutex();
-        _held = false;
-        _handedOver = false;
+        (_held, _busy, _handedOver) = (false, false, false);
     });
 }

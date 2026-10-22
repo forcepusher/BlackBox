@@ -172,6 +172,9 @@ public interface IDesktopTurn
     /// </summary>
     Task<bool?> TakeAsync(TimeSpan maxWait, Action<TimeSpan>? waiting, CancellationToken ct);
 
+    /// <summary>The action taken for is over: the time the mouse and keyboard are left alone counts from here.</summary>
+    void Done() { }
+
     /// <summary>The task is over: another window's agent may have them.</summary>
     void Release();
 }

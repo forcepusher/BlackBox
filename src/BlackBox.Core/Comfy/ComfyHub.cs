@@ -343,8 +343,10 @@ public sealed class ComfyHub(string stateDirectory)
     /// <summary>A task starts using the server; it calls <see cref="ReleaseAsync"/> when it is over.</summary>
     public void Use()
     {
-        if (Interlocked.Increment(ref _users) == 1)
-            lock (_inUseGate)
+        // The count and the mark change together: a task starting as another ends (the chat's and
+        // the Filmmaking window's) left one counted with no mark for the other windows to see.
+        lock (_inUseGate)
+            if (++_users == 1)
                 _inUse ??= Settings.InterProcess.TryClaim(InUseFile);
         Interlocked.Exchange(ref _waitForQueue, null)?.Cancel();
     }
@@ -377,14 +379,14 @@ public sealed class ComfyHub(string stateDirectory)
     /// </summary>
     public async Task ReleaseAsync(bool ranJobs)
     {
-        var left = Interlocked.Decrement(ref _users);
-        if (left > 0)
-            return;
-        if (left < 0)
-            Interlocked.Exchange(ref _users, 0);
         IDisposable? mine;
         lock (_inUseGate)
+        {
+            if (--_users > 0)
+                return;
+            _users = 0;
             (_inUse, mine) = (null, _inUse);
+        }
         mine?.Dispose();
         // Another window's task still at it: the server and its models stay; the last one to finish closes it.
         if (InUseElsewhere())

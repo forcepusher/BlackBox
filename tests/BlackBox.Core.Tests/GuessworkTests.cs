@@ -427,7 +427,38 @@ public class GuessworkTests
         Assert.Null(guesswork.Check(Shell, new ToolResult("Exit code 0\n['GeometryNodeGroup', 'NodeGroupInput', 'NodeGroupOutput']")));
         for (var i = 1; i < Guesswork.LongSearch; i++)
             Assert.Null(guesswork.Check(new FetchPageTool(), page));
+        // So does asking the installed version, as the note says to, and the user's next message.
+        Assert.Null(guesswork.Check(Shell, new ToolResult("Exit code 0\nHelp on module bpy"), """{"command": "blender -b --python-expr \"help(bpy.types)\""}"""));
+        for (var i = 1; i < Guesswork.LongSearch; i++)
+            Assert.Null(guesswork.Check(new FetchPageTool(), page));
+        guesswork.StartRun("Now add a camera to it");
+        for (var i = 1; i < Guesswork.LongSearch; i++)
+            Assert.Null(guesswork.Check(new FetchPageTool(), page));
     }
+
+    [Fact]
+    public void A_request_that_is_all_research_gets_no_note_to_ask_the_installed_version()
+    {
+        var guesswork = new Guesswork();
+        guesswork.StartRun("Compare these three laptops and tell me which is best for video editing");
+        for (var i = 0; i < 20; i++)
+            Assert.Null(guesswork.Check(i % 2 == 0 ? new WebSearchTool() : new FetchPageTool(), new ToolResult("A review")));
+    }
+
+    [Theory]
+    // The search it means to make, not what came before its colon (which named the screen).
+    [InlineData("The modifier value on screen did not change: let me search the web for Blender 5.2 geometry nodes modifier input python.",
+                "let me search the web for Blender 5.2 geometry nodes modifier input python")]
+    public void A_search_the_model_means_to_make_is_found_after_what_came_before_it(string thinking, string expected) =>
+        Assert.Equal(expected, Guesswork.QuestionIn(thinking)?.TrimEnd('.'));
+
+    [Theory]
+    // The words between two quoted names are no search.
+    [InlineData("""Let me search the web for "GeometryNodeGroup" vs "NodeGroupInput" in Blender 5.2.""", "\"GeometryNodeGroup\" vs \"NodeGroupInput\" in Blender 5.2")]
+    [InlineData("""Let me search the web for "bpy.types" and "Blender 5.2 geometry nodes".""", "Blender 5.2 geometry nodes")]
+    [InlineData("""Let me search the web for this specific problem: "Blender 5.2 modifier input not updating".""", "Blender 5.2 modifier input not updating")]
+    public void Only_a_search_written_out_in_quotes_is_searched_as_written(string sentence, string query) =>
+        Assert.Equal(query, Guesswork.Query(sentence, null));
 
     [Theory]
     [InlineData("run", true)]

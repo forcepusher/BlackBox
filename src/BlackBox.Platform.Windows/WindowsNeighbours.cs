@@ -83,9 +83,18 @@ internal static class WindowsNeighbours
         return all;
     }
 
-    /// <summary>Asks the other BlackBoxes to leave their windows out of screen capture; returns those that did, to be asked back by <see cref="ShowOthers"/>.</summary>
-    public static List<nint> HideOthers() =>
-        Others().Where(o => Ask(o.Window, WM_HIDE) == 1).Select(o => o.Window).ToList();
+    /// <summary>
+    /// Asks the other BlackBoxes to leave their windows out of screen capture; returns them all, to
+    /// be asked back by <see cref="ShowOthers"/>: one that answers too late still hides, and would
+    /// otherwise stay out of recordings and screen sharing.
+    /// </summary>
+    public static List<nint> HideOthers()
+    {
+        var asked = Others().Select(o => o.Window).ToList();
+        foreach (var window in asked)
+            Ask(window, WM_HIDE);
+        return asked;
+    }
 
     /// <summary>
     /// Shows again the windows <see cref="HideOthers"/> hid. Sent and waited for, not posted: a

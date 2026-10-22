@@ -333,6 +333,9 @@ public sealed class SettingsStore(AppPaths paths)
 
     public AppSettings Load()
     {
+        // No file yet (or none that can be read): the defaults are what this window has, so its first
+        // save writes what it changed from them, over a file another window wrote meanwhile.
+        _base = JsonSerializer.SerializeToNode(new AppSettings(), SettingsJson.Default.AppSettings) as JsonObject;
         try
         {
             if (!File.Exists(paths.SettingsFile))
@@ -404,11 +407,17 @@ public sealed class SettingsStore(AppPaths paths)
         _base = (JsonObject)mine.DeepClone();
     }
 
-    /// <summary>settings.json as it is now; null when it isn't there or doesn't parse.</summary>
+    /// <summary>settings.json as it is now; null when it isn't there, doesn't parse or stays locked.</summary>
     private JsonObject? ReadFile()
     {
-        try { return File.Exists(paths.SettingsFile) ? JsonNode.Parse(File.ReadAllText(paths.SettingsFile)) as JsonObject : null; }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException) { return null; }
+        for (var attempt = 1; ; attempt++)
+        {
+            try { return File.Exists(paths.SettingsFile) ? JsonNode.Parse(File.ReadAllText(paths.SettingsFile)) as JsonObject : null; }
+            catch (JsonException) { return null; }
+            // Caught as it is replaced, or held a moment by an antivirus scanner.
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < 5) { Thread.Sleep(50 * attempt); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+        }
     }
 
     /// <summary>

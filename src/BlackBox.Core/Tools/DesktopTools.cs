@@ -27,7 +27,14 @@ public abstract class DesktopActionTool : Tool
             ctx.Platform.DesktopTurn.Release();
             return Task.CompletedTask;
         });
-        if (turn == true)
+        // Not handed to another window while the action goes on, however long it waits for the user's typing.
+        try { return await ActAndLookAsync(args, ctx, screenChanged: turn == true, ct).ConfigureAwait(false); }
+        finally { ctx.Platform.DesktopTurn.Done(); }
+    }
+
+    private async Task<ToolResult> ActAndLookAsync(JsonObject args, ToolContext ctx, bool screenChanged, CancellationToken ct)
+    {
+        if (screenChanged)
         {
             // What the model aimed at may have moved, been covered or closed meanwhile.
             ctx.Seen = null;

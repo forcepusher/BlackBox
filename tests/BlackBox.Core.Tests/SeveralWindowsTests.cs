@@ -164,6 +164,7 @@ public class SeveralWindowsTests : IDisposable
 
         await new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = "enter" }, ctx, CancellationToken.None);
         Assert.NotEmpty(platform.Actions);
+        Assert.Equal(1, turn.Done); // the idle time counts from the end of the action
         Assert.Equal(0, turn.Released);
 
         await ctx.FinishRunAsync();
@@ -173,7 +174,9 @@ public class SeveralWindowsTests : IDisposable
     private sealed class Turn(bool? answer) : IDesktopTurn
     {
         public int Released { get; private set; }
+        public int Done { get; private set; }
         public Task<bool?> TakeAsync(TimeSpan maxWait, Action<TimeSpan>? waiting, CancellationToken ct) => Task.FromResult(answer);
+        void IDesktopTurn.Done() => Done++;
         public void Release() => Released++;
     }
 }

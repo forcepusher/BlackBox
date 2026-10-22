@@ -17,7 +17,10 @@ public static class InterProcess
     /// </summary>
     public static IDisposable Lock(string path, TimeSpan timeout)
     {
-        var mutex = new Mutex(false, MutexName(path));
+        Mutex mutex;
+        try { mutex = new Mutex(false, MutexName(path)); }
+        // Made by a BlackBox run as administrator, which this one may not open: without it.
+        catch (Exception ex) when (ex is UnauthorizedAccessException or WaitHandleCannotBeOpenedException or IOException) { return Unclaimed.Instance; }
         bool held;
         try { held = mutex.WaitOne(timeout); }
         catch (AbandonedMutexException) { held = true; } // a BlackBox that ended while holding it
@@ -46,7 +49,9 @@ public static class InterProcess
     /// <summary>
     /// Claims <paramref name="file"/> for this process until disposed: held open with this
     /// process's id in it, and gone once let go of, also when the process ends however it ends.
-    /// Null when another process has it.
+    /// Null when another process (or this one) has it. Where no claim can be made at all (a
+    /// read-only folder, a full disk), one that holds nothing: the windows can't keep out of each
+    /// other's way there, and waiting for a claim that never comes would hang.
     /// </summary>
     public static IDisposable? TryClaim(string file)
     {
@@ -68,11 +73,25 @@ public static class InterProcess
                 throw;
             }
         }
-        // Held by another process; or let go of a moment ago and not quite gone yet.
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (IOException ex) when (InUse(ex))
         {
             return null;
         }
+        // Let go of a moment ago and not quite gone yet (access denied while it is being deleted), or
+        // nowhere to write one.
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Unclaimed.Instance;
+        }
+    }
+
+    /// <summary>Another handle has the file: a sharing or lock violation.</summary>
+    private static bool InUse(IOException ex) => (ex.HResult & 0xFFFF) is 32 or 33;
+
+    private sealed class Unclaimed : IDisposable
+    {
+        public static readonly Unclaimed Instance = new();
+        public void Dispose() { }
     }
 
     /// <summary>Waits until <paramref name="file"/> can be claimed (see <see cref="TryClaim"/>), trying every 200 ms.</summary>
@@ -89,11 +108,18 @@ public static class InterProcess
     /// <summary>The process that claimed <paramref name="file"/>, if another one has it; null when none does.</summary>
     public static int? ClaimedBy(string file)
     {
-        // A file left behind where it couldn't be deleted on close (a network share) is no claim.
-        if (TryClaim(file) is { } free)
+        // A file left behind where it couldn't be deleted on close (a network share) is no claim: it
+        // goes. One that is held can't be deleted. Claimed to find out, it was held for a moment, and
+        // a window claiming it then was refused.
+        try
         {
-            free.Dispose();
+            File.Delete(file);
             return null;
+        }
+        catch (IOException ex) when (InUse(ex)) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null; // being deleted, its holder gone
         }
         try
         {
