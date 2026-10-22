@@ -186,14 +186,18 @@ public sealed partial class FilmViewModel
 
     /// <summary>What is picked: a frame, a shot, the song, the joined film, or nothing (the whole film).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFilmPicked), nameof(IsShotPicked), nameof(IsFramePicked), nameof(IsSongPicked), nameof(PickedShot), nameof(PickedFrame),
-        nameof(PanelTitle), nameof(PanelSubtitle), nameof(AskLabel), nameof(AskHint), nameof(CanDelete), nameof(Viewer), nameof(DetailsVisible))]
+    [NotifyPropertyChangedFor(nameof(IsFilmPicked), nameof(IsShotPicked), nameof(IsFramePicked), nameof(IsSongPicked), nameof(IsPiecePicked), nameof(CanLookAgain),
+        nameof(PickedShot), nameof(PickedFrame), nameof(PanelTitle), nameof(PanelSubtitle), nameof(AskLabel), nameof(AskHint), nameof(CanDelete), nameof(Viewer))]
     private object? _selected;
 
     public bool IsFilmPicked => Selected is null or JoinedFilm;
     public bool IsShotPicked => Selected is ShotItem;
     public bool IsFramePicked => Selected is FrameItem;
     public bool IsSongPicked => Selected is SoundItem;
+    public bool IsPiecePicked => Selected is IFilmPiece;
+
+    /// <summary>A frame or shot can be looked at again; the song is heard by its judge when it is made.</summary>
+    public bool CanLookAgain => Selected is FrameItem or ShotItem;
     public ShotItem? PickedShot => Selected as ShotItem;
     public FrameItem? PickedFrame => Selected as FrameItem;
     public bool CanDelete => Selected is ShotItem or FrameItem { Frame.Reference: true };
@@ -209,7 +213,7 @@ public sealed partial class FilmViewModel
         _ => "nothing picked: what you say is about the film",
     };
 
-    public string AskLabel => Selected is IFilmPiece piece ? $"Tell BlackBox what to change in {Lower(piece.Title)}" : "Tell BlackBox about the whole film";
+    public string AskLabel => Selected is IFilmPiece piece ? $"Tell BlackBox what to change in {Lower(piece.Title)}: it does it in the chat" : "Tell BlackBox about the whole film: it does it in the chat";
 
     public string AskHint => Selected switch
     {
@@ -222,7 +226,7 @@ public sealed partial class FilmViewModel
             : "Make it 30 seconds, and add a waiter who looks shocked",
     };
 
-    /// <summary>Picks a piece (null: the whole film): the viewer shows it and the panel what was said about it.</summary>
+    /// <summary>Picks a piece (null: the whole film): the viewer shows it, and the panel how it is made and its takes.</summary>
     public void Select(object? item)
     {
         if (Selected is IFilmPiece old)
@@ -234,7 +238,6 @@ public sealed partial class FilmViewModel
         if (item is ShotItem shot && shot.First is { } first)
             LoadPicture(first);
         Selected = item;
-        RefreshTalk();
         RefreshTakes();
         RefreshDetails();
     }
@@ -250,8 +253,8 @@ public sealed partial class FilmViewModel
     {
         null when HasFilm => _filmView ??= new JoinedFilm(_board.FilmFile) { Player = FilePreview.For(_board.FilmFile, _previews) },
         null => new PictureView(null, "Whole film", _board.Shots.All(s => s.Prompt.Trim().Length == 0)
-            ? "Say what film you want in the panel: BlackBox lays out its shots, references and sound on the timeline. Nothing is made until you make it."
-            : "Pick a piece on the timeline to see it and make it, or press Make what's missing."),
+            ? "Say what film you want in the panel: BlackBox lays out its shots, references and sound on the timeline, in the chat. Nothing is made until you make it."
+            : "Pick a piece on the timeline to see it and make it, or press Make the film."),
         _ => Selected,
     };
 
@@ -284,44 +287,6 @@ public sealed partial class FilmViewModel
         FilePreview preview => entries.FindIndex(e => e.Path is { } p && string.Equals(Path.GetFullPath(p), Path.GetFullPath(preview.Path), StringComparison.OrdinalIgnoreCase)),
         _ => entries.FindIndex(e => ReferenceEquals(e.Source, clicked)),
     };
-
-    /// <summary>What was said about the piece picked, oldest first.</summary>
-    public ObservableCollection<TalkItem> Talk { get; } = [];
-
-    private string TalkKey => (Selected as IFilmPiece)?.Piece.Id ?? FilmTalk.Film;
-
-    /// <summary>Nothing was said about the piece picked yet: the panel says what to do.</summary>
-    public bool NoTalk => Talk.Count == 0;
-
-    private void RefreshTalk()
-    {
-        Talk.Clear();
-        foreach (var line in _talk.About(TalkKey))
-            Talk.Add(new TalkItem(line.Text, line.Who == FilmTalk.You, false));
-        if (_jobKey == TalkKey && Talk.Count > 0 && !Talk[^1].Mine)
-            Talk[^1] = Talk[^1] with { Working = true };
-        OnPropertyChanged(nameof(NoTalk));
-    }
-
-    private void Say(string key, string text, bool replace = false)
-    {
-        if (replace)
-            _talk.ReplaceLast(key, text);
-        else
-            _talk.Add(key, FilmTalk.BlackBox, text);
-        if (key == TalkKey)
-            RefreshTalk();
-    }
-
-    private void SaveTalk()
-    {
-        try
-        {
-            if (_board.Folder.Length > 0 && Directory.Exists(_board.Folder))
-                _talk.Save(_board.Folder);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-    }
 
     /// <summary>The takes of the piece picked: those kept from before, and the one in the film.</summary>
     public ObservableCollection<TakeItem> Takes { get; } = [];
@@ -368,7 +333,7 @@ public sealed partial class FilmViewModel
     [RelayCommand]
     private void UseTake(TakeItem? take)
     {
-        if (take?.Take is not { } kept || Selected is not IFilmPiece { Piece: var piece } || IsWorking)
+        if (take?.Take is not { } kept || Selected is not IFilmPiece { Piece: var piece, IsWorking: false })
             return;
         SaveNow(force: true);
         try
@@ -381,27 +346,27 @@ public sealed partial class FilmViewModel
             Status = $"That take couldn't be put back: {ex.Message}";
             return;
         }
-        _talk.Add(piece.Id, FilmTalk.BlackBox, $"Put take {kept.Number} back in the film; the one before it is a take now.");
-        SaveTalk();
+        Status = $"Put take {kept.Number} back in the film; the one before it is a take now.";
         Rebuild();
     }
 
-    /// <summary>"How BlackBox asked for it": the prompt and settings it wrote for the piece, and what made it.</summary>
+    /// <summary>How BlackBox asked for the piece: the prompt and settings it wrote, to read, not to edit.</summary>
     [ObservableProperty]
     private string _details = "";
 
-    /// <summary>Whether the panel shows how BlackBox asked for the piece.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(DetailsVisible))]
-    private bool _showDetails;
-
-    public bool DetailsVisible => ShowDetails && Selected is IFilmPiece;
-
-    [RelayCommand]
-    private void ToggleDetails() => ShowDetails = !ShowDetails;
-
     [ObservableProperty]
     private string _madeWith = "";
+
+    /// <summary>What the last fresh look at the piece found (the song: how it sounds to its judge); empty when it wasn't looked at since it was made.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLook))]
+    private string _look = "";
+
+    public bool HasLook => Look.Length > 0;
+
+    /// <summary>The last look found something wrong, to fix or to make again.</summary>
+    [ObservableProperty]
+    private bool _lookFoundFault;
 
     private void RefreshDetails()
     {
@@ -441,6 +406,9 @@ public sealed partial class FilmViewModel
         MadeWith = Selected is IFilmPiece { Piece: var piece } && Template(piece) is { } template
             ? $"Made with {template}" + (ModelWords(piece) is { } words ? $", for \"{words}\"" : ", picked by BlackBox")
             : "";
+        var look = Selected is IFilmPiece { Piece: var picked } && File.Exists(picked.File(_board)) ? FilmTakes.LookIn(picked.Workflow(_board)) : null;
+        Look = look is not { } l ? "" : Selected is SoundItem ? $"How it sounds: {l.Said}" : $"Looked at: {l.Said}";
+        LookFoundFault = look?.Verdict == "redo";
     }
 
     /// <summary>The template a piece was made with, from its workflow file, shortened to its name.</summary>

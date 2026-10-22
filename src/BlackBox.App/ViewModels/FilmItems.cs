@@ -6,7 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BlackBox.App.ViewModels;
 
-/// <summary>A piece the user picks on the timeline and talks to BlackBox about: a frame, a shot or the song.</summary>
+/// <summary>A piece the user picks on the timeline and tells BlackBox about, in the chat: a frame, a shot or the song.</summary>
 public interface IFilmPiece
 {
     FilmPiece Piece { get; }
@@ -14,15 +14,12 @@ public interface IFilmPiece
     /// <summary>"Shot 3", "Marco", "Start of shot 2", "The song".</summary>
     string Title { get; }
 
-    /// <summary>"Not made yet", "Made · checked", "Making it: KSampler 40%".</summary>
+    /// <summary>"Not made yet", "Made · looked at", or how the chat's making of it is getting on ("KSampler, step 3 of 8").</summary>
     string State { get; set; }
 
     bool IsError { get; set; }
     bool IsWorking { get; set; }
     bool IsSelected { get; set; }
-
-    /// <summary>Says how a job is getting on, or what went wrong, from any thread.</summary>
-    void Report(string state, bool error = false);
 }
 
 /// <summary>A picture of the film: a frame a shot starts or ends on, or a reference (a character, a place) others are made from.</summary>
@@ -63,14 +60,12 @@ public sealed partial class FrameItem(FilmViewModel film, FilmFrame frame) : Obs
     [ObservableProperty]
     private bool _isSelected;
 
-    /// <summary>The user picked a picture of their own for this frame: it is taken at once, cut to the film's frame.</summary>
+    /// <summary>The user picked a picture of their own for this frame: it is the frame's file now, which making it cuts to the film's frame.</summary>
     public void TakeOwnPicture(string path)
     {
         Frame.File = path;
         film.Changed();
     }
-
-    public void Report(string state, bool error = false) => Dispatcher.UIThread.Post(() => (State, IsError) = (state, error));
 }
 
 /// <summary>A shot: a block on the timeline from where it starts for as long as it lasts, its clip's frames inside once made.</summary>
@@ -154,8 +149,6 @@ public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : Observ
 
     public void Refresh() =>
         OnPropertyChanged(string.Empty);
-
-    public void Report(string state, bool error = false) => Dispatcher.UIThread.Post(() => (State, IsError) = (state, error));
 }
 
 /// <summary>The film's soundtrack: none, a file of the user's, or a song made for it.</summary>
@@ -191,8 +184,6 @@ public sealed partial class SoundItem(FilmViewModel film, FilmSound sound) : Obs
 
     [ObservableProperty]
     private bool _isSelected;
-
-    public void Report(string state, bool error = false) => Dispatcher.UIThread.Post(() => (State, IsError) = (state, error));
 }
 
 /// <summary>A reference's row on the timeline: its picture and name, and a bar under each run of shots made from it.</summary>
@@ -207,9 +198,6 @@ public sealed record RefSegment(FrameItem Frame, double X, double Width, string 
 
 /// <summary>A line said in a shot, where it is heard on the timeline.</summary>
 public sealed record LineItem(ShotItem Shot, double X, double Width, string Text);
-
-/// <summary>One thing said in the panel, by the user or by BlackBox.</summary>
-public sealed record TalkItem(string Text, bool Mine, bool Working);
 
 /// <summary>A take of the piece picked: one kept from before, or the one in the film.</summary>
 public sealed record TakeItem(FilmTake? Take, string Label, Bitmap? Thumbnail, bool InFilm);

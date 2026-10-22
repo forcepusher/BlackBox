@@ -496,6 +496,11 @@ public partial class MainWindow : Window
     /// <summary>The Filmmaking window, while it is open: the button brings it forward rather than opening a second one.</summary>
     private FilmWindow? _film;
 
+    /// <summary>
+    /// Filmmaking, an add-on of this chat: what is told in it runs here. A window of its own, not one
+    /// kept in front of the chat, and beside it where a screen has room: the user watches the work in
+    /// the chat while the film changes in the window.
+    /// </summary>
     private void OnFilmmakingClick(object? sender, RoutedEventArgs e)
     {
         if (_film is { } open)
@@ -503,11 +508,52 @@ public partial class MainWindow : Window
             open.Activate();
             return;
         }
-        // "Make the film" brings the chat forward, where the agent's work on it shows.
-        _film = new FilmWindow { DataContext = Vm.CreateFilmViewModel(sent: () => Activate()) };
+        _film = new FilmWindow { DataContext = Vm.CreateFilmViewModel() };
         _film.Closed += (_, _) => _film = null;
-        // A window of its own, not one kept in front of the chat: the user watches both while the film is made.
+        PlaceBeside(_film);
         _film.Show();
+    }
+
+    /// <summary>
+    /// Puts the Filmmaking window right or left of the chat on its screen, where there is room for
+    /// it, else on another screen; else it opens where it did before, over the chat in the middle.
+    /// Called before it is first shown.
+    /// </summary>
+    private void PlaceBeside(FilmWindow film)
+    {
+        if (Screens.ScreenFromWindow(this) is not { } here)
+            return;
+        if (WindowState == WindowState.Normal)
+        {
+            var frame = FrameSize ?? ClientSize;
+            var (left, right) = (Position.X, Position.X + (int)(frame.Width * here.Scaling));
+            var area = here.WorkingArea;
+            var rooms = new[]
+            {
+                (Room: new PixelRect(right, area.Y, Math.Max(0, area.Right - right), area.Height), Align: -1),
+                (Room: new PixelRect(area.X, area.Y, Math.Max(0, left - area.X), area.Height), Align: 1),
+            };
+            foreach (var (room, align) in rooms.OrderByDescending(r => r.Room.Width))
+                if (Fit(room, here.Scaling, align))
+                    return;
+        }
+        foreach (var other in Screens.All.Where(s => s.Bounds != here.Bounds).OrderByDescending(s => (long)s.WorkingArea.Width * s.WorkingArea.Height))
+            if (Fit(other.WorkingArea, other.Scaling, 0))
+                return;
+
+        // Width and Height are the client area; the borders and title bar take about 16 and 40 more.
+        bool Fit(PixelRect room, double scaling, int align)
+        {
+            var (width, height) = (room.Width / scaling - 16, room.Height / scaling - 40);
+            if (width < film.MinWidth || height < film.MinHeight)
+                return false;
+            film.Width = Math.Min(film.Width, width);
+            film.Height = Math.Min(film.Height, height);
+            var outer = (int)((film.Width + 16) * scaling);
+            film.WindowStartupLocation = WindowStartupLocation.Manual;
+            film.Position = new PixelPoint(align < 0 ? room.X : align > 0 ? room.Right - outer : room.X + (room.Width - outer) / 2, room.Y);
+            return true;
+        }
     }
 
     private async void OnSettingsClick(object? sender, RoutedEventArgs e)

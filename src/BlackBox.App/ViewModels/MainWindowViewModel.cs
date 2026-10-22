@@ -241,23 +241,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         return Task.WhenAll(Task.Run(_ssh.Dispose), _mcp.DisposeAsync().AsTask());
     }
 
-    // ---- filmmaking ------------------------------------------------------------------
-
-    /// <summary>
-    /// The Filmmaking window's model. Its "Make the film" sends a message to this chat as if the user
-    /// had typed it, so the agent's work on the film shows here, with every clip it makes.
-    /// </summary>
-    /// <param name="sent">Called once such a message is in the chat (the window brings the chat forward).</param>
-    public FilmViewModel CreateFilmViewModel(Action? sent = null) =>
-        new(_previews, Core.Comfy.ComfyHub.For(_paths.ComfyDir), text => Dispatcher.UIThread.Post(() =>
-        {
-            _ = SendAsync(new UserInput(text));
-            sent?.Invoke();
-        }), _paths.FilmsDir, _paths.ToolsDir, null,
-        // The model in use, asked in requests of its own: what the user's words mean for a piece, how a piece came out.
-        (system, question, pictures, think, ct) => Core.Agent.ModelQuestion.AskAsync(Core.Llm.BackendConnection.Create(_http, _settings.Server),
-            system, question, pictures, 16000, TimeSpan.FromMinutes(6), ct, think));
-
     // ---- files going with the next message ------------------------------------------
 
     /// <summary>Files for the next message: dropped on the window, pasted or picked with the paperclip. Shown under the box until it is sent.</summary>
@@ -363,7 +346,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             else _steerPending.Add(input);
             return;
         }
-        Items.Add(new UserMessageItem(input.Text, input.Files));
+        Items.Add(new UserMessageItem(input.Text, input.Files) { Via = input.Via });
         SaveChat(SnapshotHistory());
         // What arrived just as a run ended, too late for it, starts the next one.
         for (UserInput? next = input; next is not null;)
@@ -389,7 +372,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var queued = Queued.FirstOrDefault(q => ReferenceEquals(q.Input, input));
         if (queued is not null)
             Queued.Remove(queued);
-        Items.Add(new UserMessageItem(input.Text, input.Files) { At = queued?.SentAt ?? DateTime.UtcNow });
+        Items.Add(new UserMessageItem(input.Text, input.Files) { At = queued?.SentAt ?? DateTime.UtcNow, Via = input.Via });
     }
 
     /// <summary>× on a queued message: taken back unsent, unless the model has just read it, and then it joins the chat as any other.</summary>

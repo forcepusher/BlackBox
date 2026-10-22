@@ -98,7 +98,8 @@ public sealed partial class FilmViewModel
         var song = _board.Sound.Source switch { FilmSound.Song => _board.SongFile, FilmSound.FromFile => _board.Sound.File, _ => null };
         var songMade = song is not null && File.Exists(song);
         Sound.IsMade = songMade;
-        var heard = songMade && _songScore.File == song && _songScore.Stamp == File.GetLastWriteTimeUtc(song!) && _songScore.Score is { } s ? " · " + s.Describe() : "";
+        // How the song sounds to its judge, kept with it when it was made.
+        var heard = songMade && FilmTakes.LookIn(_board.SongWorkflow) is { } judged ? " · " + judged.Said : "";
         if (!Sound.IsWorking)
             Sound.State = _board.Sound.Source switch
             {
@@ -130,12 +131,10 @@ public sealed partial class FilmViewModel
         OnPropertyChanged(nameof(Viewer));
         RefreshSound();
         Relayout();
+        RefreshDetails();
     }
 
     private DateTime _filmStamp;
-
-    /// <summary>How the song made last sounded to the judge, while it is the song in the folder.</summary>
-    private (string? File, DateTime Stamp, SongScore? Score) _songScore;
 
     private static string Capital(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
@@ -255,22 +254,27 @@ public sealed partial class FilmViewModel
     }
 
     /// <summary>
-    /// Something in the film's folder changed: the agent changed the storyboard (it is read again),
-    /// or a frame, clip or song was made (it is shown).
+    /// Something in the film's folder changed: the agent changed the storyboard in the chat (it is
+    /// read again, unless a change made here is still to be saved), or a frame, clip or song was made
+    /// (it is shown), or put away as a take.
     /// </summary>
     private void OnFolderChanged()
     {
         try
         {
             var written = File.GetLastWriteTimeUtc(_board.FilePath);
-            if (written != _ownWrite && !_saveTimer.IsEnabled && !IsWorking && File.Exists(_board.FilePath))
+            if (written != _ownWrite && !_saveTimer.IsEnabled && File.Exists(_board.FilePath))
             {
                 var fresh = Storyboard.Load(_board.Folder);
                 if (fresh.ToJson() != _board.ToJson())
                 {
+                    var title = _board.Title;
                     _board = fresh;
                     _ownWrite = written;
                     Rebuild();
+                    // Named in the chat: the list of films shows the new title.
+                    if (_board.Title != title)
+                        RefreshFilms();
                     return;
                 }
                 _ownWrite = written;
@@ -278,15 +282,16 @@ public sealed partial class FilmViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException) { }
         RefreshStates();
+        if (Selected is IFilmPiece)
+            RefreshTakes();
     }
 
     public void Dispose()
     {
+        _chatTimer.Stop();
         StopPlaying();
         SaveNow();
-        SaveTalk();
         _watcher?.Dispose();
-        _job?.Cancel();
         foreach (var shot in Shots)
         {
             shot.Clip?.Dispose();
@@ -296,6 +301,5 @@ public sealed partial class FilmViewModel
         _filmView?.Player?.Dispose();
         foreach (var take in Takes)
             take.Thumbnail?.Dispose();
-        _ = _maker.ReleaseAsync();
     }
 }

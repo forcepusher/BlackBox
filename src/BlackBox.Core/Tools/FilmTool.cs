@@ -22,9 +22,9 @@ public sealed class FilmTool : Tool
 
     public override string Description =>
         "Make a film (a music video, a short story, an ad: anything longer than one shot) from a storyboard, with ComfyUI on this PC. " +
-        "The storyboard is the film's storyboard.json, which the user also edits in BlackBox's Filmmaking window: shots in order, each going from a first frame " +
-        "to an optional last frame in so many seconds, the pictures they start and end on, and the soundtrack. " +
-        "action=storyboard shows it (path: the film's folder), or makes or changes it with storyboard={...}: title, " +
+        "The storyboard is the film's storyboard.json, which the user also sees and edits in BlackBox's Filmmaking window, from where they send you what to do: shots in order, " +
+        "each going from a first frame to an optional last frame in so many seconds, the pictures they start and end on, and the soundtrack. " +
+        "action=storyboard shows it (path: the film's folder), with BlackBox's guide to writing one the first time in a chat, or makes or changes it with storyboard={...}: title, " +
         "width, height, fps, frames:[{id, prompt (what it shows and its look), model, seed, from: [ids of frames it is made from, to keep people and places the same], file (a picture of the user's), name, reference: true for a character or place sheet, " +
         "of: a shot's id, for a frame taken from where that shot's clip ends, so the shot that starts on it goes on from that moment (after a shot without a last frame)}], " +
         "shots:[{id, first, last (frame ids), seconds, prompt (what happens, and its look), camera, model, transition: cut|dissolve|fade, " +
@@ -39,11 +39,12 @@ public sealed class FilmTool : Tool
         "a new first frame is a cut to another scene or angle. Every shot starts on a frame: the video model animates a picture well and draws one badly. " +
         "Keep one clear action per shot, as many seconds as it takes (2 to 8; a longer clip holds its opening pose, then rushes): say which way things move on screen, from where to where, and what stays still, " +
         "and what is heard (the shot's own sound is kept under the song at half; music comes from the song, not the video model). " +
-        "action=frame id= makes a frame's picture; action=sound makes the song, a minute long at least (the film uses its start), the best of tries=3 by a judge " +
+        "action=frame id= makes a frame's picture and has a fresh look at it; action=sound makes the song, a minute long at least (the film uses its start), the best of tries=3 by a judge " +
         "of how good music sounds (SongEval); write lyrics for the part the film uses. action=shot id= makes a shot's clip and checks it (does it start and end on its frames, " +
         "how it moves, and a fresh look at what happens, faults and whether people stay the same); tries=N makes up to N takes with new seeds until one passes. " +
-        "Fix a shot the check finds wrong: a plainer prompt, another seed, frames closer to each other, or a new frame. " +
-        "action=join puts the shots and the soundtrack together into the film; action=check looks at a shot (id) or, without id, the whole film. " +
+        "What is made again keeps the one before as a take, which the user can put back in the Filmmaking window. " +
+        "Fix a frame or shot the look finds wrong: a plainer prompt, another seed, frames closer to each other, or a new frame. " +
+        "action=join puts the shots and the soundtrack together into the film; action=check looks at a frame or shot (id) or, without id, the whole film. " +
         "Order: frames (those others are made from first), the song when a shot is lip-synced, the shots, then join and check the film. " +
         "prompt, camera, seconds, seed, model and from given with action=frame or shot change the storyboard before it is made.";
 
@@ -52,7 +53,7 @@ public sealed class FilmTool : Tool
     public override JsonObject Parameters => Schema(
         ("action", Str("What to do", "storyboard", "frame", "shot", "sound", "join", "check", "models"), true),
         ("path", Str("The film's folder (or its storyboard.json, or the name of a film in the films folder); a new film's folder for action=storyboard"), false),
-        ("id", Str("A frame's id (action=frame) or a shot's (action=shot, check)"), false),
+        ("id", Str("A frame's id (action=frame, check) or a shot's (action=shot, check)"), false),
         ("storyboard", new JsonObject { ["type"] = "object", ["description"] = "action=storyboard: the storyboard, or the parts of it to change (frames and shots by id)" }, false),
         ("prompt", Str("action=frame or shot: a new prompt for it"), false),
         ("camera", Str("action=shot: what the camera does"), false),
@@ -73,7 +74,7 @@ public sealed class FilmTool : Tool
             "shot" => $"Make shot {id}" + (GetNumber(args, "tries") is > 1 and var t ? $" ({t} tries at most)" : ""),
             "sound" => "Make the film's song",
             "join" => "Join the film",
-            "check" => id is null ? "Check the film" : $"Check shot {id}",
+            "check" => id is null ? "Check the film" : $"Check {id}",
             "models" => "List the installed models for films",
             _ => "film " + action,
         };
@@ -100,7 +101,7 @@ public sealed class FilmTool : Tool
             }
             return action switch
             {
-                "storyboard" => Show(board, args["storyboard"] is JsonObject),
+                "storyboard" => Show(board, args["storyboard"] is JsonObject, GuideFor(ctx)),
                 "frame" => await FrameAsync(board, RequireId(args), ctx, ct).ConfigureAwait(false),
                 "shot" => await ShotAsync(board, RequireId(args), (int)Math.Clamp(GetNumber(args, "tries") ?? 1, 1, 8), ctx, ct).ConfigureAwait(false),
                 "sound" or "song" => await SoundAsync(board, (int)Math.Clamp(GetNumber(args, "tries") ?? 3, 1, 8), ctx, ct).ConfigureAwait(false),
@@ -208,11 +209,41 @@ public sealed class FilmTool : Tool
 
     // ---- the storyboard -------------------------------------------------------------------------------
 
-    private static ToolResult Show(Storyboard board, bool changed)
+    private static ToolResult Show(Storyboard board, bool changed, string? guide)
     {
-        var text = Overview(board);
-        var line = changed ? $"Saved the storyboard: {board.FilePath}. The user can open it in the Filmmaking window (the button at the top of BlackBox).\n" : "";
-        return new ToolResult(line + text);
+        var line = "";
+        if (changed)
+        {
+            // Every shot starts on a picture a picture model makes: one written without gets its own
+            // now, so the Filmmaking window shows it, and it can be changed before it is made.
+            var added = board.AddFirstFrames();
+            if (added.Count > 0)
+                board.Save();
+            line = $"Saved the storyboard: {board.FilePath}. The user can open it in the Filmmaking window (the button at the top of BlackBox).\n" +
+                   (added.Count == 0 ? "" : $"Shots without a first frame got one each from their prompts ({string.Join(", ", added.Select(f => f.Id))}): " +
+                                            "rewrite each as the still picture the shot starts on, with who is in it as the references show them.\n");
+        }
+        return new ToolResult(line + Overview(board) + (guide is null ? "" : "\n\n" + guide));
+    }
+
+    /// <summary>How the storyboard guide starts as the tool shows it, by which a chat that has it is told.</summary>
+    internal const string GuideHead = "BlackBox's guide to writing a storyboard";
+
+    private bool _guideShown;
+
+    /// <summary>
+    /// The guide to writing a storyboard, and how the video model reads a shot's prompt, with the
+    /// first storyboard a chat reads or writes: the user never writes a prompt, so what the models
+    /// are given is what the agent writes. Null when the chat has it already (a context reset drops it).
+    /// </summary>
+    private string? GuideFor(ToolContext ctx)
+    {
+        if (_guideShown || ctx.InConversation?.Invoke(GuideHead) == true)
+            return null;
+        _guideShown = true;
+        return $"{GuideHead}, to follow when you write or change one:\n\n" + ComfyGuides.Text(ComfyGuides.Storyboards) +
+               "\n\nHow the video model (LTX) reads a shot's prompt, which is how to write one:\n\n" +
+               ComfyGuides.Without(ComfyGuides.Video, "Pictures first", "Sound and music", "Exact motion: tracks and controls", "Settings");
     }
 
     /// <summary>The storyboard as the model reads it: each frame and shot, what is made and what is out of date, and what to do next.</summary>
@@ -326,21 +357,73 @@ public sealed class FilmTool : Tool
     private async Task<ToolResult> FrameAsync(Storyboard board, string id, ToolContext ctx, CancellationToken ct)
     {
         var frame = board.Frame(id) ?? throw new FilmException($"There is no frame \"{id}\" in this film; its frames are {string.Join(", ", board.Frames.Select(f => f.Id))}.");
-        var made = await Maker(ctx).MakeFrameAsync(board, frame, ctx.Progress, ctx.UserMessage, ct).ConfigureAwait(false);
+        var made = await KeepingTakeAsync(board, FilmPiece.Of(frame), () => Maker(ctx).MakeFrameAsync(board, frame, ctx.Progress, ctx.UserMessage, ct)).ConfigureAwait(false);
         var preview = MediaPreview.ForFiles([made.File], ctx.Media, ctx.SeesImages);
         var sb = new StringBuilder();
-        sb.AppendLine($"Frame {frame.Id} made in {Chats.ChatTimes.Stopwatch(made.Took)}" + (made.Template is { } t ? $" with {t}" : " from the user's picture") + $": {made.File}");
+        sb.AppendLine($"Frame {frame.Id} made in {Chats.ChatTimes.Stopwatch(made.Took)}" + (made.Template is { } t ? $" with {t}" : frame.Of is { } of ? $" from where {of}'s clip ends" : " from the user's picture") + $": {made.File}");
         if (made.Workflow is { } wf) sb.AppendLine($"Its workflow (fixed seed {frame.Seed}): {wf}");
         foreach (var note in made.Notes.Where(n => !n.Contains("no place for the size", StringComparison.Ordinal)))
             sb.AppendLine("Note: " + note);
         // A frame made from its prompt alone draws its people anew; in a film with a character sheet that drifts.
         var sheets = board.Frames.Where(f => f.Reference && f != frame).Select(f => f.Name is { Length: > 0 } n ? $"{f.Id} (\"{n}\")" : f.Id).ToList();
-        if (frame.From.Count == 0 && frame.File is not { Length: > 0 } && !frame.Reference && sheets.Count > 0)
+        if (frame.From.Count == 0 && frame.File is not { Length: > 0 } && frame.Of is null && !frame.Reference && sheets.Count > 0)
             sb.AppendLine($"It is made from its prompt alone, so whoever is in it is drawn anew; if it shows someone or somewhere of {string.Join(", ", sheets)}, " +
                           $"make it again with from=[{string.Join(", ", board.Frames.Where(f => f.Reference && f != frame).Select(f => f.Id))}] to keep them the same.");
-        sb.Append("Look at it: does it show what its prompt says, in the film's look, with the same people and places as the frames it is made from? " +
-                  "If not, change the prompt or the seed and make it again.");
-        return new ToolResult(sb.ToString(), preview.Image, ImageCaption: preview.Image is null ? null : $"Frame {frame.Id}:", Files: [made.File]);
+        if (await LookAtFrameAsync(board, frame, ctx, ct).ConfigureAwait(false) is { } look)
+            sb.Append(look);
+        else if (frame.Of is null)
+            sb.Append("Look at it: does it show what its prompt says, in the film's look, with the same people and places as the frames it is made from? " +
+                      "If not, change the prompt or the seed and make it again.");
+        return new ToolResult(sb.ToString().TrimEnd(), preview.Image, ImageCaption: preview.Image is null ? null : $"Frame {frame.Id}:", Files: [made.File]);
+    }
+
+    /// <summary>
+    /// A fresh look at a frame (the model that wrote its prompt judges it too kindly), kept in its
+    /// workflow file for the Filmmaking window to show, with what to fix; null when it couldn't be had.
+    /// </summary>
+    private static async Task<string?> LookAtFrameAsync(Storyboard board, FilmFrame frame, ToolContext ctx, CancellationToken ct)
+    {
+        if (ctx.Ask is not { } ask)
+            return null;
+        ctx.Progress?.Invoke($"Looking at {frame.Label}…");
+        if (await FilmCheck.JudgeFrameAsync(board, frame, ask, ct).ConfigureAwait(false) is not { } answer)
+            return null;
+        RememberLook(board.FrameWorkflow(frame), answer, []);
+        var text = $"A fresh look at it: {answer.Trim()}";
+        if (FilmCheck.Verdict(answer) == "redo")
+            text += $"\nTo fix: {FilmCheck.Reason(answer)}. Change its prompt, what it is made from or its seed, and make it again." +
+                    (FilmCheck.FramesAdvice(board, frame) is { } advice ? " " + advice : "");
+        return text;
+    }
+
+    /// <summary>
+    /// What a fresh look found, kept in the piece's workflow file: the Filmmaking window shows it with
+    /// the piece, and it goes when the piece is made again.
+    /// </summary>
+    private static void RememberLook(string? workflow, string answer, IReadOnlyList<string> faults)
+    {
+        if (workflow is null || FilmCheck.Verdict(answer) is not { } verdict)
+            return;
+        var said = verdict == "redo" ? $"It needs another go: {FilmCheck.Reason(answer)}." : faults.Count > 0 ? $"It looks right, though {string.Join("; ", faults)}." : "It looks right.";
+        FilmTakes.RememberLook(workflow, verdict, said);
+    }
+
+    /// <summary>
+    /// Makes a piece again with the one there kept as a take first, so the user can put it back; a
+    /// make that fails or is stopped leaves the piece as it was, and takes that take back.
+    /// </summary>
+    private static async Task<T> KeepingTakeAsync<T>(Storyboard board, FilmPiece piece, Func<Task<T>> make)
+    {
+        var kept = FilmTakes.Keep(board, piece);
+        try
+        {
+            return await make().ConfigureAwait(false);
+        }
+        catch when (kept is not null)
+        {
+            FilmTakes.Drop(kept);
+            throw;
+        }
     }
 
     /// <summary>
@@ -363,7 +446,7 @@ public sealed class FilmTool : Tool
             return new ToolResult(board.SoundtrackFile is { } f && File.Exists(f) ? $"The soundtrack is the user's file {f}; nothing to make." : "The soundtrack is to be a file of the user's, and it isn't there.");
         if (board.Sound.Source != FilmSound.Song)
             throw new FilmException("The storyboard has no song to make: set sound {\"source\": \"song\", \"tags\": …, \"lyrics\": …} first.");
-        var made = await Maker(ctx).MakeSongAsync(board, ctx.Progress, ctx.UserMessage, ct, tries).ConfigureAwait(false);
+        var made = await KeepingTakeAsync(board, FilmPiece.Song, () => Maker(ctx).MakeSongAsync(board, ctx.Progress, ctx.UserMessage, ct, tries)).ConfigureAwait(false);
         // The seed of the song kept, and the voice the lines keep.
         SaveSettled(board, fresh => (fresh.Sound.Seed, fresh.Sound.VoiceSeed) = (board.Sound.Seed, board.Sound.VoiceSeed));
         var preview = MediaPreview.ForFiles([made.File], ctx.Media, ctx.SeesImages);
@@ -395,52 +478,71 @@ public sealed class FilmTool : Tool
         foreach (var frame in new[] { shot.First, shot.LipSync ? null : shot.Last }.Distinct().Select(board.Frame).OfType<FilmFrame>())
             if (!FilmMaker.IsCurrent(board, frame))
             {
-                var picture = await Maker(ctx).MakeFrameAsync(board, frame, ctx.Progress, ctx.UserMessage, ct).ConfigureAwait(false);
-                first.Add($"Made {frame.Label} first: {picture.File}.");
+                var picture = await KeepingTakeAsync(board, FilmPiece.Of(frame), () => Maker(ctx).MakeFrameAsync(board, frame, ctx.Progress, ctx.UserMessage, ct)).ConfigureAwait(false);
+                first.Add($"Made {frame.Label} first: {picture.File}." +
+                          (await LookAtFrameAsync(board, frame, ctx, ct).ConfigureAwait(false) is { } seen && seen.Contains("To fix:", StringComparison.Ordinal) ? " " + seen.ReplaceLineEndings(" ") : ""));
             }
+        var piece = FilmPiece.Of(shot);
         if (tries <= 1)
         {
-            var made = await Maker(ctx).MakeShotAsync(board, shot, ctx.Progress, ctx.UserMessage, ct).ConfigureAwait(false);
+            var made = await KeepingTakeAsync(board, piece, () => Maker(ctx).MakeShotAsync(board, shot, ctx.Progress, ctx.UserMessage, ct)).ConfigureAwait(false);
             var look = await LookAtShotAsync(board, shot, made.File, ctx, ct).ConfigureAwait(false);
-            return Result($"Shot {shot.Id} made in {Chats.ChatTimes.Stopwatch(made.Took)} with {made.Template}: {made.File}\nIts workflow (fixed seed {shot.Seed}): {made.Workflow}", [.. first, .. made.Notes], look, made.File);
+            RememberLook(made.Workflow, look.Text, look.Faults);
+            return Result(board, shot, $"Shot {shot.Id} made in {Chats.ChatTimes.Stopwatch(made.Took)} with {made.Template}: {made.File}\nIts workflow (fixed seed {shot.Seed}): {made.Workflow}", [.. first, .. made.Notes], look, made.File);
         }
 
-        // Takes with new seeds until a check passes; the best one is kept as the shot's clip.
+        // Takes with new seeds until a check passes; the best one is kept as the shot's clip, and
+        // the others (and the clip there was before) as takes of the shot, to put back in the window.
         var takes = new List<(long Seed, string File, FilmLook Look, string? Verdict, double Score)>();
         var notes = first;
-        for (var take = 1; take <= tries; take++)
+        var before = FilmTakes.Keep(board, piece);
+        (long Seed, string File, FilmLook Look, string? Verdict, double Score) best;
+        try
         {
-            if (take > 1)
-                shot.Seed = Storyboard.NewSeed();
-            ctx.Progress?.Invoke($"Take {take} of {tries}…");
-            var file = Path.Combine(board.Folder, "shots", $"{Storyboard.Safe(shot.Id)}.take{take}.mp4");
-            var made = await Maker(ctx).MakeShotAsync(board, shot, s => ctx.Progress?.Invoke($"Take {take} of {tries}: {s}"), ctx.UserMessage, ct, take: file).ConfigureAwait(false);
-            notes.AddRange(made.Notes.Where(n => !notes.Contains(n)));
-            var look = await LookAtShotAsync(board, shot, file, ctx, ct).ConfigureAwait(false);
-            var verdict = FilmCheck.Verdict(look.Text);
-            var score = (verdict == "good" ? 10 : verdict is null ? 5 : 0) - 3 * look.Faults.Count;
-            takes.Add((shot.Seed, file, look, verdict, score));
-            if (verdict == "good" && look.Faults.Count == 0 || ctx.UserMessage.IsCancellationRequested)
-                break;
+            for (var take = 1; take <= tries; take++)
+            {
+                if (take > 1)
+                    shot.Seed = Storyboard.NewSeed();
+                ctx.Progress?.Invoke($"Take {take} of {tries}…");
+                var file = Path.Combine(board.Folder, "shots", $"{Storyboard.Safe(shot.Id)}.take{take}.mp4");
+                var made = await Maker(ctx).MakeShotAsync(board, shot, s => ctx.Progress?.Invoke($"Take {take} of {tries}: {s}"), ctx.UserMessage, ct, take: file).ConfigureAwait(false);
+                notes.AddRange(made.Notes.Where(n => !notes.Contains(n)));
+                var look = await LookAtShotAsync(board, shot, file, ctx, ct).ConfigureAwait(false);
+                RememberLook(made.Workflow, look.Text, look.Faults);
+                var verdict = FilmCheck.Verdict(look.Text);
+                var score = (verdict == "good" ? 10 : verdict is null ? 5 : 0) - 3 * look.Faults.Count;
+                takes.Add((shot.Seed, file, look, verdict, score));
+                if (verdict == "good" && look.Faults.Count == 0 || ctx.UserMessage.IsCancellationRequested)
+                    break;
+            }
+            best = takes.MaxBy(t => t.Score);
+            shot.Seed = best.Seed;
+            SaveSettled(board, fresh =>
+            {
+                if (fresh.Shot(shot.Id) is { } kept)
+                    kept.Seed = best.Seed;
+            });
+            File.Move(best.File, board.ShotVideo(shot), overwrite: true);
+            File.Move(Path.ChangeExtension(best.File, ".json"), board.ShotWorkflow(shot), overwrite: true);
         }
-        var best = takes.MaxBy(t => t.Score);
-        shot.Seed = best.Seed;
-        SaveSettled(board, fresh =>
+        finally
         {
-            if (fresh.Shot(shot.Id) is { } kept)
-                kept.Seed = best.Seed;
-        });
-        File.Copy(best.File, board.ShotVideo(shot), overwrite: true);
-        File.Copy(Path.ChangeExtension(best.File, ".json"), board.ShotWorkflow(shot), overwrite: true);
+            // Stopped half way, the takes made so far are kept too; with none made, the shot is as it was.
+            if (takes.Count == 0 && before is not null)
+                FilmTakes.Drop(before);
+            foreach (var other in takes.Where(t => File.Exists(t.File)))
+                FilmTakes.Add(board, piece, other.File, Path.ChangeExtension(other.File, ".json"));
+        }
         var head = $"Shot {shot.Id}: {takes.Count} take(s); " +
                    (best.Verdict == "good" && best.Look.Faults.Count == 0 ? $"take {takes.IndexOf(best) + 1} passed" : $"none passed, take {takes.IndexOf(best) + 1} was the best") +
-                   $" and is the shot's clip now: {board.ShotVideo(shot)} (seed {best.Seed}, saved in the storyboard). The other takes are beside it." +
-                   (takes.Count > 1 ? "\nEarlier takes: " + string.Join("; ", takes.Where(t => t != best).Select(t => $"{Path.GetFileName(t.File)} {t.Verdict ?? "no verdict"}" +
-                                                                                                   (t.Look.Faults.Count > 0 ? $" ({string.Join(", ", t.Look.Faults)})" : ""))) : "");
-        return Result(head, notes, best.Look, board.ShotVideo(shot));
+                   $" and is the shot's clip now: {board.ShotVideo(shot)} (seed {best.Seed}, saved in the storyboard)." +
+                   (takes.Count > 1 ? " The others are kept as takes of the shot, which the user can put back in the Filmmaking window: " +
+                                      string.Join("; ", takes.Where(t => t != best).Select(t => $"take {takes.IndexOf(t) + 1} {t.Verdict ?? "no verdict"}" +
+                                                                                                (t.Look.Faults.Count > 0 ? $" ({string.Join(", ", t.Look.Faults)})" : ""))) + "." : "");
+        return Result(board, shot, head, notes, best.Look, board.ShotVideo(shot));
     }
 
-    private ToolResult Result(string head, IReadOnlyList<string> notes, FilmLook look, string clip)
+    private static ToolResult Result(Storyboard board, FilmShot shot, string head, IReadOnlyList<string> notes, FilmLook look, string clip)
     {
         var sb = new StringBuilder();
         sb.AppendLine(head);
@@ -449,6 +551,8 @@ public sealed class FilmTool : Tool
         sb.AppendLine(look.Text);
         if (look.Faults.Count > 0)
             sb.AppendLine("To fix: " + string.Join("; ", look.Faults) + ".");
+        if (FilmCheck.Verdict(look.Text) == "redo" && FilmCheck.FramesAdvice(board, shot) is { } frames)
+            sb.AppendLine(frames);
         sb.Append(FixAdvice);
         return new ToolResult(sb.ToString(), look.Sheet, ImageCaption: look.Sheet is null ? null : "The storyboard's frames (top) and the clip's frames with their times:", Files: [clip]);
     }
@@ -462,16 +566,19 @@ public sealed class FilmTool : Tool
 
     private async Task<ToolResult> CheckAsync(Storyboard board, string? id, ToolContext ctx, CancellationToken ct)
     {
+        if (id is { Length: > 0 } && board.Shot(id) is null && board.Frame(id) is { } frame)
+            return await CheckFrameAsync(board, frame, ctx, ct).ConfigureAwait(false);
         if (ctx.Media is not { } decoder)
             throw new FilmException("Nothing on this PC can read video to check it (ffmpeg in BlackBox's Data\\tools would).");
         if (id is { Length: > 0 })
         {
-            var shot = board.Shot(id) ?? throw new FilmException($"There is no shot \"{id}\" in this film.");
+            var shot = board.Shot(id) ?? throw new FilmException($"There is no frame or shot \"{id}\" in this film.");
             var clip = board.ShotVideo(shot);
             if (!File.Exists(clip))
                 throw new FilmException($"Shot {shot.Id} has no clip yet: make it with action=shot.");
             var look = await LookAtShotAsync(board, shot, clip, ctx, ct).ConfigureAwait(false);
-            return Result($"Shot {shot.Id}: {clip}" + (FilmMaker.IsCurrent(board, shot) ? "" : " (made before the storyboard's latest changes to it)"), [], look, clip);
+            RememberLook(board.ShotWorkflow(shot), look.Text, look.Faults);
+            return Result(board, shot, $"Shot {shot.Id}: {clip}" + (FilmMaker.IsCurrent(board, shot) ? "" : " (made before the storyboard's latest changes to it)"), [], look, clip);
         }
         var film = board.FilmFile;
         if (!File.Exists(film))
@@ -498,6 +605,21 @@ public sealed class FilmTool : Tool
         text.Append("Fix what a viewer would notice (a frame first when a person or place differs, then its shots), then join again. " +
                     "Each round costs minutes per shot: after two rounds, finish unless something is still clearly wrong, and tell the user what is left.");
         return new ToolResult(text.ToString(), check.Sheet, ImageCaption: check.Sheet is null ? null : "One frame from the middle of each shot, in order:", Files: [film]);
+    }
+
+    /// <summary>A fresh look at a frame as it is: action=check with a frame's id.</summary>
+    private static async Task<ToolResult> CheckFrameAsync(Storyboard board, FilmFrame frame, ToolContext ctx, CancellationToken ct)
+    {
+        var picture = board.FramePicture(frame);
+        if (!File.Exists(picture))
+            throw new FilmException($"{frame.Label} isn't made yet: make it with action=frame.");
+        if (frame.Of is { } of)
+            return new ToolResult($"{frame.Label} is where {of}'s clip ends, taken from it: check shot {of} instead.");
+        var preview = MediaPreview.ForFiles([picture], ctx.Media, ctx.SeesImages);
+        var look = await LookAtFrameAsync(board, frame, ctx, ct).ConfigureAwait(false)
+                   ?? "It couldn't be looked at: the model doesn't see pictures here. Look at it yourself.";
+        return new ToolResult($"Frame {frame.Id}: {picture}" + (FilmMaker.IsCurrent(board, frame) ? "" : " (made before the storyboard's latest changes to it)") + "\n" + look,
+            preview.Image, ImageCaption: preview.Image is null ? null : $"Frame {frame.Id}:", Files: [picture]);
     }
 
     /// <summary>The numbers and the fresh look at a shot's clip, and for a lip-synced one what is sung under it.</summary>

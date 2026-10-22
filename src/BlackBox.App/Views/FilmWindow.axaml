@@ -4,7 +4,7 @@
         xmlns:views="using:BlackBox.App.Views"
         x:Class="BlackBox.App.Views.FilmWindow"
         x:DataType="vm:FilmViewModel"
-        Title="Filmmaking"
+        Title="{Binding WindowTitle}"
         Icon="/Assets/blackbox.ico"
         Width="1440" Height="900" MinWidth="1000" MinHeight="640"
         WindowStartupLocation="CenterScreen">
@@ -61,14 +61,6 @@
       <Setter Property="BorderBrush" Value="#80E0A64B" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="4" />
-    </Style>
-    <!-- Something the user said, and what BlackBox said back. -->
-    <Style Selector="Border.mine">
-      <Setter Property="Background" Value="{StaticResource BbUserBubble}" />
-      <Setter Property="CornerRadius" Value="10,10,2,10" />
-      <Setter Property="Padding" Value="10,7" />
-      <Setter Property="HorizontalAlignment" Value="Right" />
-      <Setter Property="MaxWidth" Value="380" />
     </Style>
     <!-- What is picked on the timeline by a click: no look of a button's own. -->
     <Style Selector="Button.pick">
@@ -220,10 +212,10 @@
       <DockPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
           <TextBlock Classes="muted" Text="{Binding LengthText}" VerticalAlignment="Center" Margin="0,0,6,0" />
-          <Button Classes="ghost" Content="Make what's missing" Command="{Binding MakeMissingCommand}"
-                  ToolTip.Tip="Makes every piece not made yet or changed since, one after another, looks at each, then joins the film" />
-          <Button Classes="primary" Content="Make the whole film" Command="{Binding MakeFilmCommand}"
-                  ToolTip.Tip="BlackBox makes the film in the chat: what isn't made, each shot checked and fixed, joined and checked" />
+          <Button Classes="ghost" Content="Show the chat" Command="{Binding ShowChatCommand}"
+                  ToolTip.Tip="The chat this window belongs to, where BlackBox does what you tell it here" />
+          <Button Classes="primary" Content="Make the film" Command="{Binding MakeFilmCommand}"
+                  ToolTip.Tip="BlackBox makes in the chat what isn't made yet or has changed, looks at each piece and fixes what it finds, then joins the film and looks at it" />
         </StackPanel>
         <StackPanel Orientation="Horizontal" Spacing="8">
           <TextBlock Text="Filmmaking" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0" />
@@ -432,7 +424,7 @@
               <TextBlock Classes="muted" Text="{Binding PanelSubtitle}" FontSize="12" TextWrapping="Wrap" />
               <!-- A shot's frames, to pick and change on their own. -->
               <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsShotPicked}" Margin="0,6,0,0">
-                <Button Classes="thumb" Click="OnPickFirstFrame" ToolTip.Tip="The frame it starts on: pick it to change it" IsVisible="{Binding PickedShot.First, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}">
+                <Button Classes="thumb" Click="OnPickFirstFrame" ToolTip.Tip="The frame it starts on: pick it to change it" AutomationProperties.Name="The frame it starts on" IsVisible="{Binding PickedShot.First, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}">
                   <StackPanel Spacing="2">
                     <Border Classes="thumb" Width="96" Height="54">
                       <Image Source="{Binding PickedShot.First.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
@@ -440,7 +432,7 @@
                     <TextBlock Classes="label" Text="Starts on" FontSize="11" />
                   </StackPanel>
                 </Button>
-                <Button Classes="thumb" Click="OnPickLastFrame" ToolTip.Tip="The frame it ends on: pick it to change it" IsVisible="{Binding PickedShot.EndsOnFrame, FallbackValue=False}">
+                <Button Classes="thumb" Click="OnPickLastFrame" ToolTip.Tip="The frame it ends on: pick it to change it" AutomationProperties.Name="The frame it ends on" IsVisible="{Binding PickedShot.EndsOnFrame, FallbackValue=False}">
                   <StackPanel Spacing="2">
                     <Border Classes="thumb" Width="96" Height="54">
                       <Image Source="{Binding PickedShot.Last.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
@@ -456,111 +448,104 @@
             </StackPanel>
           </Border>
 
-          <!-- Telling BlackBox. -->
+          <!-- Telling BlackBox: what is said here, and the chips, go to the chat this window belongs to. -->
           <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0" Padding="14,10,14,12">
             <StackPanel Spacing="8">
-              <!-- How BlackBox asked for the piece: the prompt and settings it wrote, to look at, not to edit. -->
-              <Border Classes="card" Padding="10,8" IsVisible="{Binding DetailsVisible}">
-                <StackPanel Spacing="6">
-                  <SelectableTextBlock Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" FontSize="12" MaxHeight="160" />
-                  <TextBlock Classes="muted" Text="{Binding MadeWith}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding MadeWith, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                </StackPanel>
+              <!-- What the chat is doing now, while it works: what was sent from here runs there. -->
+              <Border Classes="card" Padding="10,6" IsVisible="{Binding ChatBusy}">
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Classes="ghost" Content="Stop" Padding="10,2" Margin="6,0,0,0" Command="{Binding StopCommand}" VerticalAlignment="Center"
+                          ToolTip.Tip="Stop what BlackBox is doing in the chat" />
+                  <Button DockPanel.Dock="Right" Classes="ghost" Content="Show" Padding="10,2" Command="{Binding ShowChatCommand}" VerticalAlignment="Center"
+                          ToolTip.Tip="Bring the chat forward, to watch it work" />
+                  <StackPanel Spacing="4" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ChatActivity}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ChatActivity}" />
+                    <ProgressBar IsIndeterminate="True" Height="3" MinHeight="3" HorizontalAlignment="Stretch" />
+                  </StackPanel>
+                </DockPanel>
               </Border>
-              <ItemsControl ItemsSource="{Binding Takes}" IsVisible="{Binding HasTakes}">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <WrapPanel />
-                  </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:TakeItem">
-                    <Button Classes="thumb" Margin="0,0,8,4" Command="{Binding $parent[Window].((vm:FilmViewModel)DataContext).UseTakeCommand}" CommandParameter="{Binding}"
-                            ToolTip.Tip="Put this take in the film (the one in it now is kept as a take)">
-                      <StackPanel Spacing="2">
-                        <Border Classes="thumb" Classes.selected="{Binding InFilm}" Width="80" Height="45">
-                          <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
-                        </Border>
-                        <TextBlock Classes="label" Text="{Binding Label}" FontSize="11" HorizontalAlignment="Center" />
-                      </StackPanel>
-                    </Button>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-              <TextBlock Classes="label" Text="{Binding AskLabel}" />
+              <TextBlock Classes="label" Text="{Binding AskLabel}" TextWrapping="Wrap" />
               <DockPanel>
-                <Panel DockPanel.Dock="Right" Margin="8,0,0,0" VerticalAlignment="Bottom">
-                  <Button Width="44" Height="44" CornerRadius="8" Padding="0" Background="{StaticResource BbAccent}" Command="{Binding SendCommand}" IsVisible="{Binding !IsWorking}"
-                          HorizontalContentAlignment="Center" VerticalContentAlignment="Center" AutomationProperties.Name="Send" ToolTip.Tip="Send (Enter)">
-                    <PathIcon Data="M5 12h14M13 6l6 6-6 6" Width="18" Height="18" Foreground="#111214" />
-                  </Button>
-                  <Button Width="44" Height="44" CornerRadius="8" Padding="0" Command="{Binding StopCommand}" IsVisible="{Binding IsWorking}"
-                          HorizontalContentAlignment="Center" VerticalContentAlignment="Center" AutomationProperties.Name="Stop" ToolTip.Tip="Stop what BlackBox is doing">
-                    <PathIcon Data="M6 6h12v12H6z" Width="14" Height="14" />
-                  </Button>
-                </Panel>
+                <Button DockPanel.Dock="Right" Width="44" Height="44" CornerRadius="8" Padding="0" Margin="8,0,0,0" VerticalAlignment="Bottom" Background="{StaticResource BbAccent}"
+                        Command="{Binding SendCommand}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" AutomationProperties.Name="Send"
+                        ToolTip.Tip="Send it to the chat (Enter)">
+                  <PathIcon Data="M5 12h14M13 6l6 6-6 6" Width="18" Height="18" Foreground="#111214" />
+                </Button>
                 <TextBox x:Name="Ask" AutomationProperties.Name="What to tell BlackBox" Text="{Binding Request}" Watermark="{Binding AskHint}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="44" MaxHeight="140"
                          KeyDown="OnAskKeyDown" />
               </DockPanel>
               <WrapPanel>
-                <Button Classes="chip" Margin="0,0,6,6" Content="Make it" Command="{Binding MakePickedCommand}" IsVisible="{Binding !IsFilmPicked}" ToolTip.Tip="Make it as it is now" />
-                <Button Classes="chip" Margin="0,0,6,6" Content="Another take" Command="{Binding AnotherTakeCommand}" IsVisible="{Binding !IsFilmPicked}" ToolTip.Tip="The same, with a new seed; the one there now is kept as a take" />
-                <Button Classes="chip" Margin="0,0,6,6" Content="Look at it again" Command="{Binding CheckAgainCommand}" IsVisible="{Binding !IsFilmPicked}" />
+                <Button Classes="chip" Margin="0,0,6,6" Content="Make it" Command="{Binding MakePickedCommand}" IsVisible="{Binding IsPiecePicked}" ToolTip.Tip="Make it as it is now, in the chat" />
+                <Button Classes="chip" Margin="0,0,6,6" Content="Another take" Command="{Binding AnotherTakeCommand}" IsVisible="{Binding IsPiecePicked}" ToolTip.Tip="The same, with a new seed; the one there now is kept as a take" />
+                <Button Classes="chip" Margin="0,0,6,6" Content="Look at it again" Command="{Binding CheckAgainCommand}" IsVisible="{Binding CanLookAgain}" ToolTip.Tip="A fresh look at it as it is, in the chat" />
                 <Button Classes="chip" Margin="0,0,6,6" Content="Use a picture of mine…" Click="OnPickPicture" IsVisible="{Binding IsFramePicked}" />
                 <Button Classes="chip" Margin="0,0,6,6" Content="Use a sound file of mine…" Click="OnPickSound" IsVisible="{Binding IsSongPicked}" />
-                <Button Classes="chip" Margin="0,0,6,6" Content="How it was asked" Command="{Binding ToggleDetailsCommand}" IsVisible="{Binding !IsFilmPicked}" />
                 <Button Classes="chip" Margin="0,0,6,6" Content="Delete it" Command="{Binding DeletePickedCommand}" IsVisible="{Binding CanDelete}" />
-                <Button Classes="chip" Margin="0,0,6,6" Content="Make what's missing" Command="{Binding MakeMissingCommand}" IsVisible="{Binding IsFilmPicked}" />
+                <Button Classes="chip" Margin="0,0,6,6" Content="Make the film" Command="{Binding MakeFilmCommand}" IsVisible="{Binding IsFilmPicked}"
+                        ToolTip.Tip="Makes in the chat what isn't made yet or has changed, looks at each piece, then joins the film and looks at it" />
                 <Button Classes="chip" Margin="0,0,6,6" Content="Join the clips" Command="{Binding JoinCommand}" IsVisible="{Binding IsFilmPicked}" ToolTip.Tip="Puts the clips made so far together with the soundtrack" />
                 <Button Classes="chip" Margin="0,0,6,6" Content="Look at the film" Command="{Binding LookAtFilmCommand}" IsVisible="{Binding IsFilmPicked}" ToolTip.Tip="Looks at the joined film's shots side by side and at each cut, and fixes what it finds" />
               </WrapPanel>
-              <Expander Header="The film's size, frame rate and sound levels" IsVisible="{Binding IsFilmPicked}" HorizontalAlignment="Stretch" Padding="0,6,0,0">
-                <StackPanel Spacing="8">
-                  <DockPanel>
-                    <TextBlock Classes="label" Text="Title" Width="90" VerticalAlignment="Center" />
-                    <TextBox Text="{Binding Title}" />
-                  </DockPanel>
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <TextBlock Classes="label" Text="Frame" Width="90" VerticalAlignment="Center" />
-                    <NumericUpDown Value="{Binding FrameWidth}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="80" ShowButtonSpinner="False" />
-                    <TextBlock Text="×" VerticalAlignment="Center" />
-                    <NumericUpDown Value="{Binding FrameHeight}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="80" ShowButtonSpinner="False" />
-                    <NumericUpDown Value="{Binding Fps}" Minimum="1" Maximum="120" Increment="1" FormatString="0" Width="56" Margin="8,0,0,0" ShowButtonSpinner="False" />
-                    <TextBlock Classes="muted" Text="fps" VerticalAlignment="Center" />
-                  </StackPanel>
-                  <DockPanel>
-                    <TextBlock Classes="label" Text="Soundtrack" Width="90" VerticalAlignment="Center" />
-                    <Slider Minimum="0" Maximum="150" Value="{Binding SoundVolume}" />
-                  </DockPanel>
-                  <DockPanel>
-                    <TextBlock Classes="label" Text="Shots' own sound" Width="90" VerticalAlignment="Center" TextWrapping="Wrap" />
-                    <Slider Minimum="0" Maximum="150" Value="{Binding ShotVolume}" />
-                  </DockPanel>
-                </StackPanel>
-              </Expander>
             </StackPanel>
           </Border>
 
-          <!-- What was said about it. -->
-          <ScrollViewer x:Name="TalkScroll" HorizontalScrollBarVisibility="Disabled">
+          <!-- How the piece picked is made: the prompt and settings BlackBox wrote, what made it, what the look found, its takes. -->
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
             <StackPanel Spacing="10" Margin="14,10">
-              <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding NoTalk}"
-                         Text="Say what you want in plain words: BlackBox writes the prompts, picks the models, makes it and looks at it. Nothing else in the film changes." />
-              <ItemsControl ItemsSource="{Binding Talk}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:TalkItem">
-                    <Panel Margin="0,0,0,10">
-                      <Border Classes="mine" IsVisible="{Binding Mine}">
-                        <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" />
-                      </Border>
-                      <StackPanel Spacing="3" IsVisible="{Binding !Mine}" MaxWidth="420" HorizontalAlignment="Left">
-                        <TextBlock Text="BlackBox" Foreground="{StaticResource BbAccent}" FontSize="12" FontWeight="SemiBold" />
-                        <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" />
-                        <ProgressBar IsIndeterminate="True" Height="3" MinHeight="3" Width="200" HorizontalAlignment="Left" IsVisible="{Binding Working}" />
-                      </StackPanel>
-                    </Panel>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
+              <StackPanel Spacing="10" IsVisible="{Binding IsPiecePicked}">
+                <SelectableTextBlock Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" FontSize="12" />
+                <TextBlock Classes="muted" Text="{Binding MadeWith}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding MadeWith, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <SelectableTextBlock Text="{Binding Look}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding HasLook}"
+                                     Classes="muted" Classes.error="{Binding LookFoundFault}" />
+                <ItemsControl ItemsSource="{Binding Takes}" IsVisible="{Binding HasTakes}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TakeItem">
+                      <Button Classes="thumb" Margin="0,0,8,4" Command="{Binding $parent[Window].((vm:FilmViewModel)DataContext).UseTakeCommand}" CommandParameter="{Binding}"
+                              ToolTip.Tip="Put this take in the film (the one in it now is kept as a take)">
+                        <StackPanel Spacing="2">
+                          <Border Classes="thumb" Classes.selected="{Binding InFilm}" Width="80" Height="45">
+                            <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                          </Border>
+                          <TextBlock Classes="label" Text="{Binding Label}" FontSize="11" HorizontalAlignment="Center" />
+                        </StackPanel>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+              <StackPanel Spacing="10" IsVisible="{Binding IsFilmPicked}">
+                <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="12"
+                           Text="Say what film you want, or what to change in it, in plain words: BlackBox writes the prompts and picks the models in the chat this window belongs to, where you can watch every step and stop it. Pick a piece on the timeline to change or make it alone." />
+                <Expander Header="The film's size, frame rate and sound levels" HorizontalAlignment="Stretch" Padding="0,6,0,0">
+                  <StackPanel Spacing="8">
+                    <DockPanel>
+                      <TextBlock Classes="label" Text="Title" Width="90" VerticalAlignment="Center" />
+                      <TextBox Text="{Binding Title}" />
+                    </DockPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Classes="label" Text="Frame" Width="90" VerticalAlignment="Center" />
+                      <NumericUpDown Value="{Binding FrameWidth}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="80" ShowButtonSpinner="False" />
+                      <TextBlock Text="×" VerticalAlignment="Center" />
+                      <NumericUpDown Value="{Binding FrameHeight}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="80" ShowButtonSpinner="False" />
+                      <NumericUpDown Value="{Binding Fps}" Minimum="1" Maximum="120" Increment="1" FormatString="0" Width="56" Margin="8,0,0,0" ShowButtonSpinner="False" />
+                      <TextBlock Classes="muted" Text="fps" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <DockPanel>
+                      <TextBlock Classes="label" Text="Soundtrack" Width="90" VerticalAlignment="Center" />
+                      <Slider Minimum="0" Maximum="150" Value="{Binding SoundVolume}" />
+                    </DockPanel>
+                    <DockPanel>
+                      <TextBlock Classes="label" Text="Shots' own sound" Width="90" VerticalAlignment="Center" TextWrapping="Wrap" />
+                      <Slider Minimum="0" Maximum="150" Value="{Binding ShotVolume}" />
+                    </DockPanel>
+                  </StackPanel>
+                </Expander>
+              </StackPanel>
             </StackPanel>
           </ScrollViewer>
         </DockPanel>

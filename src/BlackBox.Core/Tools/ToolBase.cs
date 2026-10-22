@@ -81,6 +81,12 @@ public sealed class ToolContext
     /// </summary>
     public Func<IReadOnlyList<byte[]>, string, CancellationToken, Task<string?>>? Ask { get; set; }
 
+    /// <summary>
+    /// Whether the conversation still holds this text: a guide a tool showed earlier in the chat
+    /// isn't shown again until a context reset drops it. Set by the agent session; null outside one.
+    /// </summary>
+    public Func<string, bool>? InConversation { get; set; }
+
     /// <summary>The latest screenshot taken for the model (screen and frame).</summary>
     public (ScreenRect Screen, RawImage Frame)? LastShot { get; set; }
 

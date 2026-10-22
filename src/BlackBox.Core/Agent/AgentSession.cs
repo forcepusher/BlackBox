@@ -337,6 +337,8 @@ public sealed partial class AgentSession(
             var eyes = new FreshLook(client, requestOptions);
             toolContext.Ask = (images, question, ct2) => toolContext.SeesImages ? eyes.AskAsync(images, question, ct2) : Task.FromResult<string?>(null);
         }
+        toolContext.InConversation ??= text => History.Any(m => m.Content?.Contains(text, StringComparison.Ordinal) == true ||
+                                                                m.Parts?.Any(p => p.Text?.Contains(text, StringComparison.Ordinal) == true) == true);
         var nudges = 0;
         var cutCalls = 0;
         var loops = new LoopDetector();

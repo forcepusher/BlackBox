@@ -61,6 +61,11 @@ public sealed class UserMessageItem(string text, IReadOnlyList<string>? files = 
     public string Text { get; } = text;
     public bool HasText => Text.Length > 0;
 
+    /// <summary>Where it was written, when not in the chat's box ("Filmmaking · The Fox and the Moon · shot 2"): shown over its words.</summary>
+    public string? Via { get; init; }
+
+    public bool HasVia => Via is not null;
+
     public IReadOnlyList<AttachmentItem> Attachments { get; } = (files ?? []).Select(f => new AttachmentItem(f)).ToList();
     public bool HasAttachments => Attachments.Count > 0;
 
@@ -260,6 +265,9 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
 
     public string CallId { get; } = callId;
     public string Name { get; } = name;
+
+    /// <summary>What the call was given (JSON), while the run goes on: the Filmmaking window reads which piece the film tool is making.</summary>
+    public string Arguments { get; init; } = "";
 
     [ObservableProperty]
     private string _summary = summary;

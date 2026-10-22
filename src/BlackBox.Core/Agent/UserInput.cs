@@ -13,6 +13,21 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
 {
     public UserInput(string text) : this(text, []) { }
 
+    /// <summary>
+    /// Where it was written, when not in the chat's own box ("Filmmaking · The Fox and the Moon ·
+    /// shot 2"): shown over it in the chat. Null for a message typed in the chat.
+    /// </summary>
+    public string? Via { get; init; }
+
+    /// <summary>
+    /// What the model is told with it, before the user's words, and the chat doesn't show: where it
+    /// was written and what it is about (the film and the piece picked in the Filmmaking window).
+    /// </summary>
+    public string? Context { get; init; }
+
+    /// <summary>The words as the model reads them: the context first, when there is one.</summary>
+    private string ModelText => Context is null ? Text : Text.Trim().Length == 0 ? Context : $"{Context}\n{Text}";
+
     /// <summary>How many attached pictures the model sees in one message; the others it opens with read_file.</summary>
     private const int MaxShown = 6;
 
@@ -26,8 +41,8 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
     public ChatMessage ToMessage(bool seesImages, int? grid = null)
     {
         if (Files.Count == 0)
-            return new ChatMessage { Role = ChatRole.User, Content = Text, FromUser = true };
-        var list = new StringBuilder(Text.Trim());
+            return new ChatMessage { Role = ChatRole.User, Content = ModelText, FromUser = true };
+        var list = new StringBuilder(ModelText.Trim());
         if (list.Length > 0)
             list.Append("\n\n");
         list.Append(Files.Count == 1 ? "[The user attached this file:]" : "[The user attached these files:]");
@@ -105,11 +120,13 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
         return [];
     }
 
-    /// <summary>Several messages sent together, as one: their texts one after another, and all their files.</summary>
+    /// <summary>Several messages sent together, as one: their texts one after another (each with its context), and all their files.</summary>
     public static UserInput Join(IEnumerable<UserInput> inputs)
     {
         var all = inputs.ToList();
-        return new UserInput(string.Join("\n\n", all.Select(i => i.Text).Where(t => t.Length > 0)),
+        if (all.Count == 1)
+            return all[0];
+        return new UserInput(string.Join("\n\n", all.Select(i => i.ModelText).Where(t => t.Length > 0)),
             all.SelectMany(i => i.Files).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
     }
 }

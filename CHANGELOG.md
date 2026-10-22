@@ -49,8 +49,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This changelog.
 
 ### Changed
+- Filmmaking is an add-on of the chat it was opened from: what you tell it, and what its buttons ask
+  for, go to that chat as messages, where you watch BlackBox do them, step by step, and can stop
+  them. The window shows what the chat is doing and the film as it changes, opens beside the chat
+  when a screen has room, and names the chat in its title. **Make what's missing** and **Make the
+  whole film** are one button now, **Make the film**.
+- A frame the film tool makes gets a fresh look, and every piece it makes again keeps the one before
+  as a take, as the Filmmaking window did; a shot's or song's other tries are takes too.
 - The context slider goes up to 1M.
 - A click away from a piece in Filmmaking, or Esc, goes back to the whole film.
+
+### Removed
+- The conversation beside each piece in Filmmaking: what was said about a piece is in the chat now.
 
 ### Fixed
 - A click of the agent's that lands on the Filmmaking window or a dialog of BlackBox's goes to what

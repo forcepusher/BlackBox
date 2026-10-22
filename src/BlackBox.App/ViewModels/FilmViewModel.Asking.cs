@@ -1,6 +1,6 @@
-using System.Diagnostics;
-using Avalonia.Threading;
-using BlackBox.Core.Comfy;
+using System.Globalization;
+using System.Text.Json.Nodes;
+using BlackBox.Core.Agent;
 using BlackBox.Core.Film;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -9,84 +9,42 @@ namespace BlackBox.App.ViewModels;
 
 public sealed partial class FilmViewModel
 {
-    // ---- telling BlackBox what to do ----------------------------------------------------------------------------
+    // ---- telling BlackBox what to do: in the chat the window belongs to ------------------------------
 
     /// <summary>What the user is typing to BlackBox about the piece picked.</summary>
     [ObservableProperty]
     private string _request = "";
 
-    /// <summary>Sends what the user typed: BlackBox changes the piece (or the film) and makes what it should.</summary>
+    /// <summary>
+    /// Sends what the user typed to the chat, about the piece picked (or the whole film): the agent
+    /// changes it there and makes it again, in view. During a run it waits until the model reads it.
+    /// </summary>
     [RelayCommand]
-    private async Task Send()
+    private void Send()
     {
         var text = Request.Trim();
         if (text.Length == 0)
             return;
-        if (IsWorking)
-        {
-            Status = "BlackBox is still busy with the last thing: wait for it, or stop it.";
-            return;
-        }
-        if (_ask is null)
-        {
-            Status = "BlackBox's chat model isn't set up, so it can't be asked: set a server in the main window first.";
-            return;
-        }
-        var ask = _ask;
         Request = "";
-        var picked = Selected as IFilmPiece;
-        var piece = picked?.Piece;
-        var key = piece?.Id ?? FilmTalk.Film;
-        _talk.Add(key, FilmTalk.You, text);
-        Say(key, "Thinking it over…");
-        SaveNow(force: true);
-        SaveTalk();
-        await RunJobAsync(key, picked, async (progress, ct) =>
-        {
-            IReadOnlyList<FilmOption> installed = [];
-            if (piece is not null)
-            {
-                progress("Looking at what ComfyUI has installed…");
-                installed = await InstalledAsync(piece, progress, ct);
-            }
-            var picture = await Task.Run(() => PictureOf(piece), ct);
-            progress("Thinking it over…");
-            var direction = await FilmDirector.DirectAsync(_board, piece, text, _talk, installed, picture, ask, ct);
-            var changed = direction.Board != _board;
-            if (changed)
-            {
-                var title = _board.Title;
-                _board = direction.Board;
-                _dirty = true;
-                SaveNow(force: true);
-                Rebuild();
-                if (_board.Title != title)
-                    RefreshFilms();
-            }
-            var reply = direction.Reply + (direction.Notes.Count > 0 ? " " + string.Join(" ", direction.Notes.Distinct()) : "");
-            if (piece is null && changed && Missing() is not null)
-                reply += " Pick a piece to make it, or press Make what's missing.";
-            Say(key, reply, replace: true);
-            SaveTalk();
-            foreach (var next in direction.Make)
-                await MakePieceAsync(next, key, ct);
-        });
+        var piece = (Selected as IFilmPiece)?.Piece;
+        ToChat(text, piece, piece is null ? WholeFilmNote() : PieceNote(piece));
     }
 
     /// <summary>Makes the piece picked as it is (no change asked for), or again.</summary>
     [RelayCommand]
-    private async Task MakePicked()
+    private void MakePicked()
     {
-        if (Selected is not IFilmPiece picked || IsWorking)
+        if (Selected is not IFilmPiece { Piece: var piece })
             return;
-        await RunJobAsync(picked.Piece.Id, picked, (_, ct) => MakePieceAsync(picked.Piece, picked.Piece.Id, ct));
+        ToChat(piece.Kind == FilmPieceKind.Song ? "Make the song." : "Make it.", piece,
+            $"Make it as the storyboard has it now: {Call(piece)}. Then say in a sentence or two how it came out.");
     }
 
-    /// <summary>Another take of the piece picked: the same settings with a new seed.</summary>
+    /// <summary>Another take of the piece picked: the same settings with a new seed, set here; the one there is kept as a take.</summary>
     [RelayCommand]
-    private async Task AnotherTake()
+    private void AnotherTake()
     {
-        if (Selected is not IFilmPiece picked || IsWorking)
+        if (Selected is not IFilmPiece picked)
             return;
         switch (picked)
         {
@@ -94,397 +52,153 @@ public sealed partial class FilmViewModel
             case ShotItem s: s.Shot.Seed = Storyboard.NewSeed(); break;
             case SoundItem: _board.Sound.Seed = Storyboard.NewSeed(); break;
         }
-        _talk.Add(picked.Piece.Id, FilmTalk.You, "Another take, please.");
-        SaveNow(force: true);
-        await RunJobAsync(picked.Piece.Id, picked, (_, ct) => MakePieceAsync(picked.Piece, picked.Piece.Id, ct));
-    }
-
-    /// <summary>The user picked a picture of their own for the frame picked: it is taken at once, cut to the film's frame.</summary>
-    public async Task UseOwnPicture(string path)
-    {
-        if (Selected is not FrameItem frame || IsWorking)
-            return;
-        frame.TakeOwnPicture(path);
-        _talk.Add(frame.Id, FilmTalk.You, $"Use my picture {Path.GetFileName(path)}.");
-        SaveNow(force: true);
-        await RunJobAsync(frame.Id, frame, (_, ct) => MakePieceAsync(frame.Piece, frame.Id, ct));
-    }
-
-    /// <summary>The user picked a sound file of their own as the film's soundtrack.</summary>
-    public void UseOwnSound(string path)
-    {
-        Sound.TakeOwnSound(path);
-        _talk.Add(FilmTalk.Song, FilmTalk.You, $"Use my sound file {Path.GetFileName(path)}.");
-        SaveNow(force: true);
-        SaveTalk();
-        RefreshStates();
-        RefreshTalk();
-        RefreshDetails();
+        _dirty = true;
+        ToChat("Another take, please.", picked.Piece,
+            $"Its seed in the storyboard is a new one already, so make it again as it is: {Call(picked.Piece)}. The one there now is kept as a take. Then say in a sentence or two how it came out.");
     }
 
     /// <summary>Looks at the piece picked again, as it is.</summary>
     [RelayCommand]
-    private async Task CheckAgain()
+    private void CheckAgain()
     {
-        if (Selected is not IFilmPiece picked || IsWorking || _ask is null)
+        if (Selected is not IFilmPiece { Piece: var piece } || piece.Kind == FilmPieceKind.Song)
             return;
-        var key = picked.Piece.Id;
-        Say(key, "Looking at it…");
-        await RunJobAsync(key, picked, async (_, ct) =>
-        {
-            var check = await FilmDirector.CheckAsync(_board, picked.Piece, _previews.Decoder, _ask, ct);
-            if (check is { } c && picked.Piece.Workflow(_board) is { } wf)
-                FilmTakes.RememberLook(wf, c.Verdict, c.Said);
-            if (check?.Reason is not null)
-                Say(key, check.Value.Said + " Say what to change, or ask for another take.", replace: true);
-            else
-                Say(key, check?.Said ?? "It couldn't be looked at: it isn't made yet, or the chat model doesn't see pictures.", replace: true);
-            SaveTalk();
-        });
+        ToChat("Look at it again.", piece,
+            $"Have a fresh look at it as it is: film action=check id={piece.Id} path=\"{_board.Folder}\". Say what the look found; change or make nothing unless they ask.");
     }
 
-    /// <summary>Looks at the joined film again (its shots side by side and each cut) and fixes what the looks find.</summary>
-    [RelayCommand]
-    private async Task LookAtFilm()
+    /// <summary>The user picked a picture of their own for the frame picked: it goes in the storyboard, and the chat makes the frame from it.</summary>
+    public void UseOwnPicture(string path)
     {
-        if (IsWorking || _ask is null)
+        if (Selected is not FrameItem frame)
             return;
-        if (!HasFilm)
-        {
-            Status = "The film isn't joined yet: Make what's missing makes and joins it.";
-            return;
-        }
-        await RunJobAsync(FilmTalk.Film, null, async (_, ct) =>
-        {
-            await LookAtFilmAsync(ct);
-            SaveTalk();
-        });
+        frame.TakeOwnPicture(path);
+        ToChat("Use this picture of mine for it.", frame.Piece,
+            $"The storyboard has their picture as the frame's file now: make the frame from it with {Call(frame.Piece)}, which cuts it to the film's frame. " +
+            "Make again what starts or ends on it only if they ask.", [path]);
     }
 
-    /// <summary>How many times a piece the look finds wrong is fixed and made again before the user is told what is left.</summary>
-    private const int Fixes = 2;
-
-    /// <summary>
-    /// Makes a piece: the one there kept as a take, the new one made as the storyboard says, and a
-    /// fresh look at it, all said in the piece's talk (and <paramref name="key"/>'s, where the request was).
-    /// What the look finds wrong is fixed and made again, up to <see cref="Fixes"/> times: the user
-    /// found a pass the look should have failed dismissive, and a flagged piece left for them lenient.
-    /// </summary>
-    /// <param name="round">How many fixes came before this make.</param>
-    private async Task MakePieceAsync(FilmPiece piece, string key, CancellationToken ct, int round = 0)
+    /// <summary>The user picked a sound file of their own as the film's soundtrack: nothing to make, so it is only kept in the storyboard.</summary>
+    public void UseOwnSound(string path)
     {
-        // A shot starts on a picture a picture model makes: one without gets a first frame, and its frames are made first.
-        if (piece.Kind == FilmPieceKind.Shot && _board.Shot(piece.Id) is { } shot)
-        {
-            if (_board.Frame(shot.First) is null && _board.AddFirstFrames().Count > 0)
-            {
-                _dirty = true;
-                SaveNow(force: true);
-                Rebuild();
-            }
-            foreach (var id in new[] { shot.First, shot.LipSync ? null : shot.Last }.OfType<string>().Distinct())
-                if (_board.Frame(id) is { } frame && !FilmMaker.IsCurrent(_board, frame) && (frame.File is { Length: > 0 } || frame.Prompt.Trim().Length > 0 || frame.Of is not null))
-                    await MakePieceAsync(FilmPiece.Of(frame), key, ct, Fixes);
-        }
-        string? fix = null;
-        var item = ItemOf(piece);
-        var label = Lower(item?.Title ?? piece.Id);
-        if (item is not null)
-            item.IsWorking = true;
-        try
-        {
-            FilmTakes.Keep(_board, piece);
-            Say(key, $"Making {label}…");
-            var clock = Stopwatch.StartNew();
-            void Progress(string s) => Dispatcher.UIThread.Post(() =>
-            {
-                if (item is not null)
-                    item.State = s;
-                _talk.ReplaceLast(key, $"Making {label}: {s}");
-                if (key == TalkKey && Talk.Count > 0)
-                    Talk[^1] = new TalkItem($"Making {label}: {s} · {Core.Chats.ChatTimes.Stopwatch(clock.Elapsed)}", false, true);
-            });
-            FilmMade made = piece.Kind switch
-            {
-                FilmPieceKind.Frame => await _maker.MakeFrameAsync(_board, _board.Frame(piece.Id)!, Progress, CancellationToken.None, ct),
-                FilmPieceKind.Shot => await _maker.MakeShotAsync(_board, _board.Shot(piece.Id)!, Progress, CancellationToken.None, ct),
-                _ => await _maker.MakeSongAsync(_board, Progress, CancellationToken.None, ct, takes: 3),
-            };
-            if (piece.Kind == FilmPieceKind.Song)
-            {
-                _songScore = (made.File, File.GetLastWriteTimeUtc(made.File), made.Score);
-                _dirty = true;
-                SaveNow(force: true); // the seed of the song kept
-            }
-            var said = $"Made {label} in {Core.Chats.ChatTimes.Stopwatch(made.Took)}" + (made.Template is { } t ? $" with {Short(t)}" : "") + "." +
-                       (made.Score is { } score ? $" {Capital(score.Describe())}." : "") +
-                       string.Concat(made.Notes.Where(Worth).Take(3).Select(n => " " + n));
-            Say(key, said, replace: true);
-            if (_ask is not null && piece.Kind != FilmPieceKind.Song)
-            {
-                Say(key, said + " Looking at it…", replace: true);
-                if (item is not null)
-                    item.State = "Looking at it…";
-                var check = await FilmDirector.CheckAsync(_board, piece, _previews.Decoder, _ask, ct);
-                if (check is { } c)
-                {
-                    if (piece.Workflow(_board) is { } wf)
-                        FilmTakes.RememberLook(wf, c.Verdict, c.Said);
-                    fix = c.Reason;
-                    Say(key, said + " " + c.Said + (fix is null ? "" : round < Fixes ? $" Fixing it ({round + 1} of {Fixes})…" :
-                        $" It still isn't right after {Fixes} fixes: say what to change, or pick an earlier take."), replace: true);
-                }
-                else
-                    Say(key, said, replace: true);
-            }
-            if (key != piece.Id)
-                _talk.Add(piece.Id, FilmTalk.BlackBox, _talk.About(key)[^1].Text);
-        }
-        finally
-        {
-            if (item is not null)
-                item.IsWorking = false;
-            SaveTalk();
-            RefreshStates();
-            if (Selected is IFilmPiece { Piece: var picked } && picked == piece)
-            {
-                RefreshTakes();
-                RefreshDetails();
-            }
-        }
-        if (fix is not null && round < Fixes && !ct.IsCancellationRequested)
-            await FixAsync(piece, key, fix, ct, round);
-    }
-
-    /// <summary>
-    /// What the look found wrong with a piece, handed to BlackBox to change what it is made from
-    /// (its prompt, its frames, a new seed), then made again and looked at again.
-    /// </summary>
-    /// <param name="seen">What the look saw it on, when not the piece alone (the film's cuts), and what that picture is.</param>
-    private async Task FixAsync(FilmPiece piece, string key, string found, CancellationToken ct, int round, (byte[] Picture, string Text)? seen = null)
-    {
-        if (_ask is not { } ask)
-            return;
-        var installed = await InstalledAsync(piece, _ => { }, ct);
-        var picture = seen?.Picture ?? await Task.Run(() => PictureOf(piece), ct);
-        // A shot between two frames that disagree on what stays put moves it: the fox film's frames put
-        // the moon "in the upper left" and "directly above", and three takes of rewording the action
-        // couldn't hold it still.
-        var frames = piece.Kind == FilmPieceKind.Shot && _board.Shot(piece.Id) is { LipSync: false } shot && _board.Frame(shot.First) is { } first && _board.Frame(shot.Last) is { } last
-            ? $" Its first frame ({first.Id}) is: \"{first.Prompt.Trim()}\". Its last frame ({last.Id}) is: \"{last.Prompt.Trim()}\". Compare where the things that stay put " +
-              "(the moon, the trees, the horizon, where someone stands) and the camera's angle are in the two: the shot moves whatever differs, so if they differ, " +
-              $"that is the cause: change the last frame ({last.Id}) to agree with the first, keeping only the change the shot is for. " +
-              // The picture model may not draw what a frame's prompt says: a girl the prompt put beside a mailbox
-              // stood two steps from it, so every take walked her back there, whatever the shot's words.
-              "The picture's top row shows the two frames as they were made, which may not be what their prompts say: if the last one doesn't show where the shot " +
-              $"takes everyone (someone not where they end up, a prop not in hand), the video goes there anyway, so make the last frame ({last.Id}) again, from the first."
-            // A shot's last frame made afresh from the references lost the first's framing: a girl's
-            // mailbox moved and grew, and the fix that dropped the first frame from "from" made it worse.
-            : piece.Kind == FilmPieceKind.Frame && _board.Shots.FirstOrDefault(s => !s.LipSync && s.Last == piece.Id && s.First is not null && s.First != piece.Id) is { } ending
-            ? $" It is the last frame of {ending.Id}, which moves from {ending.First} to it: keep it made from {ending.First} (in its \"from\", with the references), " +
-              $"so it keeps {ending.First}'s framing and everything that stays put, and say in its prompt only what the shot changes."
-            : "";
-        var direction = await FilmDirector.DirectAsync(_board, piece,
-            $"A fresh look at it as just made found this wrong: {found}. Change what it is made from so that it doesn't happen again, keeping what was asked for." + (seen is { Text: var text } ? " " + text : "") + frames +
-            " Otherwise write the action so a video model can't get it wrong, or only give it a new seed if nothing else would help. Keep the model it is made with unless the user asked for another.",
-            _talk, installed, picture, ask, ct, think: true);
-        var board = direction.Board;
-        // Made again whatever was changed: with no change, at least another seed.
-        if (piece.IsCurrent(board))
-        {
-            switch (piece.Kind)
-            {
-                case FilmPieceKind.Frame when board.Frame(piece.Id) is { } f: f.Seed = Storyboard.NewSeed(); break;
-                case FilmPieceKind.Shot when board.Shot(piece.Id) is { } s: s.Seed = Storyboard.NewSeed(); break;
-            }
-        }
-        _board = board;
-        _dirty = true;
+        Sound.TakeOwnSound(path);
         SaveNow(force: true);
-        Rebuild();
-        Say(key, direction.Reply);
-        SaveTalk();
-        foreach (var other in direction.Make.Where(p => p != piece && !p.IsCurrent(_board)))
-            await MakePieceAsync(other, key, ct, Fixes);
-        await MakePieceAsync(piece, key, ct, round + 1);
+        Status = $"The soundtrack is your file {Path.GetFileName(path)} now.";
+        RefreshStates();
+        RefreshDetails();
     }
 
-    /// <summary>A note from making a piece worth telling the user: not what is so by design (a lip-synced shot made from its first frame alone).</summary>
-    private static bool Worth(string note) =>
-        !note.Contains("no place for the size", StringComparison.Ordinal) && !note.Contains("made from its first frame only", StringComparison.Ordinal) &&
-        !note.StartsWith("Using the ComfyUI", StringComparison.Ordinal) && !note.StartsWith("Started ComfyUI", StringComparison.Ordinal);
-
-    /// <summary>The next piece not made or out of date, in the order they have to be made: references, frames, the song, shots.</summary>
-    private FilmPiece? Missing()
-    {
-        bool Stale(FilmFrame f) => !FilmMaker.IsCurrent(_board, f);
-        // A frame taken from where a shot's clip ends, once that shot is made as it is now.
-        bool Taken(FilmFrame f) => f.Of is { } of && _board.Shot(of) is { } before && FilmMaker.IsCurrent(_board, before);
-        var needed = _board.Shots.SelectMany(s => new[] { s.First, s.LipSync ? null : s.Last }).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
-        // The frames shots need, and what those are made from, a reference before what is made from it.
-        var frames = new List<FilmFrame>();
-        void Need(string id, int depth)
-        {
-            if (depth > 6 || _board.Frame(id) is not { } f || frames.Contains(f))
-                return;
-            foreach (var from in f.From)
-                Need(from, depth + 1);
-            frames.Add(f);
-        }
-        foreach (var id in needed)
-            Need(id, 0);
-        foreach (var f in _board.Frames.Where(f => f.Reference))
-            Need(f.Id, 0);
-        if (frames.FirstOrDefault(f => Stale(f) && (f.File is { Length: > 0 } || f.Prompt.Trim().Length > 0 || Taken(f)) && f.From.All(id => _board.Frame(id) is not { } src || !Stale(src))) is { } frame)
-            return FilmPiece.Of(frame);
-        if (_board.Sound.Source == FilmSound.Song && _board.Sound.Tags.Trim().Length > 0 && !FilmMaker.SongIsCurrent(_board))
-            return FilmPiece.Song;
-        return _board.Shots.FirstOrDefault(s => !FilmMaker.IsCurrent(_board, s) && s.Prompt.Trim().Length > 0 &&
-                                                new[] { s.First, s.LipSync ? null : s.Last }.OfType<string>().All(id => _board.Frame(id) is not { } f || !Stale(f))) is { } shot
-            ? FilmPiece.Of(shot) : null;
-    }
-
-    /// <summary>Makes every piece not made or out of date, one after another, each looked at, then joins the film.</summary>
+    /// <summary>Makes every piece not made or out of date, each looked at and fixed, then joins the film and looks at it: in the chat.</summary>
     [RelayCommand]
-    private async Task MakeMissing()
+    private void MakeFilm()
     {
-        if (IsWorking)
-            return;
-        if (_board.Shots.Any(s => s.Prompt.Trim().Length == 0))
+        if (_board.Shots.Count == 0 || _board.Shots.Any(s => s.Prompt.Trim().Length == 0))
         {
-            Status = "Some shots don't say what happens in them yet: pick them and say it.";
+            Status = _board.Shots.Count == 0 ? "The film has no shots yet: say what film you want first." : "Some shots don't say what happens in them yet: pick them and say it.";
             return;
         }
-        // Every shot starts on a picture a picture model makes.
-        if (_board.AddFirstFrames() is { Count: > 0 } added)
-        {
-            _dirty = true;
-            SaveNow(force: true);
-            Rebuild();
-            Say(FilmTalk.Film, $"{(added.Count == 1 ? "A shot" : "Some shots")} had no first frame, so I gave {(added.Count == 1 ? "it one" : "each one")} " +
-                               $"({string.Join(", ", added.Select(f => f.Id))}) from what happens in {(added.Count == 1 ? "it" : "them")}: a picture model makes what a shot starts on.");
-        }
-        if (Missing() is null && Joined())
-        {
-            Status = "Everything is made and joined.";
-            return;
-        }
-        Say(FilmTalk.Film, Missing() is null ? "Everything is made: joining the film and looking at it…" : "Making what's missing, one piece after another…");
-        await RunJobAsync(FilmTalk.Film, null, async (_, ct) =>
-        {
-            var made = 0;
-            var tried = new HashSet<FilmPiece>();
-            while (Missing() is { } next && tried.Add(next))
-            {
-                Say(FilmTalk.Film, $"Making what's missing: {Lower(ItemOf(next)?.Title ?? next.Id)} now ({made} made so far). Pick it to watch it being made.", replace: true);
-                await MakePieceAsync(next, next.Id, ct);
-                made++;
-            }
-            Say(FilmTalk.Film, $"Made {made} piece{(made == 1 ? "" : "s")}." + (Missing() is { } left ? $" {Capital(Lower(ItemOf(left)?.Title ?? left.Id))} couldn't be made: pick it to see why." : " Joining the film…"), replace: true);
-            if (Missing() is null)
-            {
-                await JoinAsync(ct);
-                await LookAtFilmAsync(ct);
-            }
-            SaveTalk();
-        });
+        ToChat("Make the film.", null,
+            $"Make what isn't made yet or is out of date, in the order film action=storyboard path=\"{_board.Folder}\" lists under To make (references and frames, the song, then the shots), " +
+            "and read each piece's fresh look: when a look finds something wrong, change what the piece is made from (its prompt, its frames, the seed) and make it again, " +
+            "up to twice for a piece. Then join the film (action=join), check it (action=check without id), fix the shots that check names once, join again and check again. " +
+            "At the end, say what was made and what is still wrong, if anything.");
     }
 
-    /// <summary>Whether the film is joined from the clips and soundtrack there are now.</summary>
-    private bool Joined()
+    /// <summary>Joins the shots made so far, with the soundtrack, into the film: in the chat.</summary>
+    [RelayCommand]
+    private void Join() =>
+        ToChat("Join the clips.", null, $"Join the clips made so far with the soundtrack: film action=join path=\"{_board.Folder}\". Nothing else.");
+
+    /// <summary>Looks at the joined film again (its shots side by side and each cut) and fixes what the looks find: in the chat.</summary>
+    [RelayCommand]
+    private void LookAtFilm()
     {
         if (!HasFilm)
-            return false;
-        var newest = _board.Shots.Select(s => _board.ShotVideo(s)).Append(_board.SoundtrackFile).Where(p => p is not null && File.Exists(p))
-            .Select(p => File.GetLastWriteTimeUtc(p!)).DefaultIfEmpty(DateTime.MinValue).Max();
-        return File.GetLastWriteTimeUtc(_board.FilmFile) >= newest;
+        {
+            Status = "The film isn't joined yet: Make the film makes and joins it.";
+            return;
+        }
+        ToChat("Look at the whole film.", null,
+            $"Check the joined film: film action=check path=\"{_board.Folder}\" without id. Fix the shots it names once (each made again after changing what it is made from), " +
+            "join again and check again; then say what is left.");
     }
 
     /// <summary>
-    /// Fresh looks at the joined film: a frame from each shot side by side, and each cut, the frame
-    /// before beside the frame after. They see what no look at one shot can: a fix that moved shot 2
-    /// of the fox film to an open clearing with the moon on the other side passed all of shot 2's own
-    /// looks. The shots they name are fixed and made again and the film joined again, once; then
-    /// looked at again, to say what is left.
+    /// A message to the chat the window belongs to, where the agent does it in view: the user's
+    /// words, shown there with the film and piece they are about, and for the model what they are
+    /// about (the storyboard, saved first so it reads what the window shows) and what to do.
     /// </summary>
-    private async Task LookAtFilmAsync(CancellationToken ct, bool fix = true)
+    private void ToChat(string words, FilmPiece? piece, string what, IReadOnlyList<string>? files = null)
     {
-        if (_ask is not { } ask || _previews.Decoder is not { } decoder || !HasFilm)
-            return;
-        Say(FilmTalk.Film, fix ? "Looking at the whole film…" : "Looking at the whole film again…");
-        var look = await Task.Run(() => FilmCheck.Film(_board, _board.FilmFile, decoder), ct);
-        var verdict = await FilmCheck.JudgeFilmAsync(_board, look,
-            (pictures, question, c) => ask("You look at pictures carefully and say plainly what you see, faults included. You don't praise what isn't good.", question, pictures, true, c), ct);
-        if (verdict is not { Reason: { } reason })
+        SaveNow(force: true);
+        var title = _board.Title.Trim().Length > 0 ? _board.Title.Trim() : Path.GetFileName(_board.Folder);
+        var busy = _chat.IsBusy;
+        _chat.SendFromFilm(new UserInput(words, files ?? [])
         {
-            Say(FilmTalk.Film, verdict is null ? "The whole film couldn't be looked at."
-                : "Looked at the whole film: the same people and places all through and across every cut, and each shot shows what it should.", replace: true);
-            return;
-        }
-        var named = verdict.Redo.Select(_board.Shot).OfType<FilmShot>().Select(FilmPiece.Of).ToList();
-        if (named.Count == 0 || !fix)
+            Via = $"Filmmaking · {title} · {(piece is null ? "the whole film" : Lower(ItemOf(piece)?.Title ?? piece.Id))}",
+            Context = $"[From the Filmmaking window, about {Describe(piece)} of the film \"{title}\" (its storyboard: {_board.FilePath}). {what}]",
+        });
+        Status = busy ? "Sent to the chat: BlackBox reads it before its next step." : "Sent to the chat, where BlackBox does it.";
+    }
+
+    /// <summary>The piece as the model is told it: "shot s2 (the 2nd of 3, from 5 to 9 s)", "the reference f1 "Marco"", "the song".</summary>
+    private string Describe(FilmPiece? piece)
+    {
+        switch (piece?.Kind)
         {
-            Say(FilmTalk.Film, $"The look at the whole film found: {reason}." + (fix ? " Say what to change." : $" It still isn't right after fixing: say what to change, or pick a shot and say it."), replace: true);
-            return;
-        }
-        Say(FilmTalk.Film, $"The look at the whole film found: {reason}. Fixing {string.Join(", ", named.Select(p => Lower(ItemOf(p)?.Title ?? p.Id)))}…", replace: true);
-        foreach (var piece in named)
-        {
-            var at = _board.Shots.FindIndex(s => s.Id == piece.Id);
-            var cut = look.Cuts?.FirstOrDefault(c => c.At == at) ?? look.Cuts?.FirstOrDefault(c => c.At == at + 1);
-            await FixAsync(piece, piece.Id, $"(seen with the other shots of the film) {reason}", ct, 0, cut is null ? null : (cut.Picture,
-                "The picture shows a cut of the film: on top the last frame of the shot before, below it the first frame of the shot after. " +
-                $"Make {piece.Id}'s frames agree with the shots next to it unless the story moves on: the same kind of place, the moon, sun or light on the same side and the same size, " +
-                "the same time and weather, the same people looking the same, framed as the story needs; and keep its last frame made from its first, so the shot stays put."));
-        }
-        if (Missing() is null)
-        {
-            await JoinAsync(ct);
-            await LookAtFilmAsync(ct, fix: false);
+            case null:
+                return "the whole film";
+            case FilmPieceKind.Shot when _board.Shot(piece.Id) is { } shot:
+                var (starts, _) = _board.Timing();
+                var at = _board.Shots.IndexOf(shot);
+                return string.Create(CultureInfo.InvariantCulture, $"shot {shot.Id} (shot {at + 1} of {_board.Shots.Count}, from {starts[at]:0.#} to {starts[at] + shot.Seconds:0.#} s)");
+            case FilmPieceKind.Frame when _board.Frame(piece.Id) is { Reference: true } reference:
+                return $"the reference {reference.Id}" + (reference.Name is { Length: > 0 } name ? $" \"{name}\"" : "");
+            case FilmPieceKind.Frame:
+                return $"frame {piece.Id}" + (ItemOf(piece) is { Title: var label } && label != piece.Id ? $" ({Lower(label)})" : "");
+            default:
+                return _board.Sound.Source == FilmSound.FromFile ? "the soundtrack" : "the song";
         }
     }
 
-    /// <summary>What is installed for the kinds of job a piece can be, for the model to name.</summary>
-    private async Task<IReadOnlyList<FilmOption>> InstalledAsync(FilmPiece piece, Action<string> progress, CancellationToken ct)
+    /// <summary>The film tool call that makes a piece as the storyboard has it.</summary>
+    private string Call(FilmPiece piece) => piece.Kind switch
     {
-        try
+        FilmPieceKind.Frame => $"film action=frame id={piece.Id} path=\"{_board.Folder}\"",
+        FilmPieceKind.Shot => $"film action=shot id={piece.Id} path=\"{_board.Folder}\", which makes the frames it starts and ends on first if they need it",
+        _ => $"film action=sound path=\"{_board.Folder}\"",
+    };
+
+    /// <summary>
+    /// What the model does with what is said about a piece: change that piece alone (a shot, its
+    /// frames too) and make it again, as the window's own director did; the rest of the film stays.
+    /// </summary>
+    private string PieceNote(FilmPiece piece)
+    {
+        var scope = piece.Kind switch
         {
-            _maker.Use();
-            var api = await _hub.ConnectAsync(null, [], progress, ct);
-            var jobs = piece.Kind switch
-            {
-                FilmPieceKind.Frame => new[] { FilmJob.Frame, FilmJob.Edit },
-                FilmPieceKind.Song => [FilmJob.Song],
-                _ => [FilmJob.Shot, FilmJob.ShotFromFirst, FilmJob.ShotFromText, FilmJob.LipSync],
-            };
-            var all = new List<FilmOption>();
-            foreach (var job in jobs)
-                all.AddRange((await FilmTemplates.OptionsAsync(_hub, api, job, ct)).Where(o => all.All(a => a.Name != o.Name)));
-            return all;
-        }
-        catch (Exception ex) when (ex is ComfyApiException or IOException or FilmException)
-        {
-            return [];
-        }
+            FilmPieceKind.Shot => "that shot alone (its prompt, camera, length, line, model or seed), with the frames it starts and ends on and the lines' voice",
+            FilmPieceKind.Song => "the sound alone (the song's style and lyrics, or the lines' voice)",
+            _ => "that frame alone (its prompt, what it is made from, its model or seed)",
+        };
+        return $"What they say is about it: read the storyboard first (film action=storyboard path=\"{_board.Folder}\"), then change {scope}, unless they ask for more; " +
+               $"then make it again ({Call(piece)}), unless they only asked a question. Say in a sentence or two what you changed and how it came out.";
     }
 
-    /// <summary>The piece as it is, for the model to see: a frame's picture, a shot's sheet (or its first frame).</summary>
-    private byte[]? PictureOf(FilmPiece? piece)
+    /// <summary>
+    /// What the model does with what is said about the whole film: lay it out or change anything,
+    /// and make nothing, since the user makes each piece (or the whole film) when they want it.
+    /// </summary>
+    private string WholeFilmNote()
     {
-        try
-        {
-            switch (piece?.Kind)
-            {
-                case FilmPieceKind.Frame when _board.Frame(piece.Id) is { } f && File.Exists(_board.FramePicture(f)):
-                    return FilmCheck.Picture(_board.FramePicture(f), 768);
-                case FilmPieceKind.Shot when _board.Shot(piece.Id) is { } s:
-                    if (File.Exists(_board.ShotVideo(s)) && _previews.Decoder is { } decoder)
-                        return FilmCheck.Shot(_board, s, _board.ShotVideo(s), decoder).Sheet;
-                    return _board.Frame(s.First) is { } first && File.Exists(_board.FramePicture(first)) ? FilmCheck.Picture(_board.FramePicture(first), 768) : null;
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException or InvalidOperationException) { }
-        return null;
+        var note = $"What they say is about the whole film: read the storyboard first (film action=storyboard path=\"{_board.Folder}\"), then lay it out or change anything in it " +
+                   "(references, frames, shots, lines, the song) with action=storyboard. Make nothing unless they ask: they make each piece, or the whole film, from the window. " +
+                   "Say in a few sentences what you changed and what is to be made.";
+        if (_board.Shots.All(s => s.Prompt.Trim().Length == 0))
+            note += " The film is new: give it a title, a reference for each person or place that comes back, frames made from those, shots as long as their action " +
+                    "(2 to 8 seconds) from different angles, each with its first frame and a last one when where it ends matters, the lines when people speak, " +
+                    "and a song as long as the film when they want music. Take out the empty starting shot and frames (s1, f1, f2) if you don't use them.";
+        return note;
     }
 
     private IFilmPiece? ItemOf(FilmPiece piece) => piece.Kind switch
@@ -494,105 +208,94 @@ public sealed partial class FilmViewModel
         _ => Sound,
     };
 
-    private static string Short(string template) =>
-        template.StartsWith(FilmTemplates.CheckpointPrefix, StringComparison.OrdinalIgnoreCase) ? Path.GetFileNameWithoutExtension(template) : Path.GetFileName(template);
+    // ---- what the chat is doing -------------------------------------------------------------------------
 
-    // ---- jobs ------------------------------------------------------------------------------------------------
-
-    /// <summary>What the bottom line says: what the window is doing, what went wrong.</summary>
+    /// <summary>What the bottom line says: what the window did, what went wrong.</summary>
     [ObservableProperty]
     private string _status = "";
 
+    /// <summary>A run goes on in the chat: the panel says what it is doing, with Stop.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsWorking))]
-    private int _working;
+    private bool _chatBusy;
 
-    public bool IsWorking => Working > 0;
+    /// <summary>What the run in the chat is doing now ("Make shot s2 · KSampler, step 3 of 8").</summary>
+    [ObservableProperty]
+    private string _chatActivity = "";
 
-    private CancellationTokenSource? _job;
+    /// <summary>The window's title: whose add-on it is, the chat's title.</summary>
+    [ObservableProperty]
+    private string _windowTitle = "Filmmaking";
 
-    /// <summary>The talk the running job writes to, so the panel shows it working.</summary>
-    private string? _jobKey;
+    /// <summary>The piece the film tool is making or looking at in the chat now, shown working on the timeline.</summary>
+    private IFilmPiece? _working;
 
-    /// <summary>Runs one job at a time: what BlackBox does for a request, or a piece being made; what goes wrong is said in the talk.</summary>
-    private async Task RunJobAsync(string key, IFilmPiece? item, Func<Action<string>, CancellationToken, Task> job)
+    /// <summary>Brings the chat window forward; set by the window that opened this one.</summary>
+    public Action? ShowChatWindow { get; set; }
+
+    [RelayCommand]
+    private void ShowChat() => ShowChatWindow?.Invoke();
+
+    /// <summary>Stops the run in the chat (what the window sent, or anything else it is doing).</summary>
+    [RelayCommand]
+    private void Stop() => _chat.StopCommand.Execute(null);
+
+    /// <summary>Reads what the chat is doing, twice a second: the line in the panel, and the piece being made.</summary>
+    private void WatchChat()
     {
-        SaveNow(force: true);
-        using var cts = new CancellationTokenSource();
-        _job = cts;
-        _jobKey = key;
-        Working++;
-        RefreshTalk();
-        void Progress(string s) => Dispatcher.UIThread.Post(() =>
+        WindowTitle = "Filmmaking - " + _chat.WindowTitle;
+        var doing = _chat.Doing();
+        ChatBusy = doing is not null;
+        ChatActivity = doing is null ? "" : $"In the chat: {doing}";
+        var call = _chat.FilmCall();
+        var piece = call is { } c && IsThisFilm(c.Args) ? PieceIn(c.Args) : null;
+        if (!ReferenceEquals(piece, _working) && _working is { } done)
         {
-            Status = s;
-            if (key == TalkKey && Talk.Count > 0 && !Talk[^1].Mine)
-                Talk[^1] = Talk[^1] with { Text = s, Working = true };
-        });
-        try
-        {
-            await job(Progress, cts.Token);
-            Status = "";
-        }
-        catch (OperationCanceledException)
-        {
-            Say(key, "Stopped.", replace: true);
-        }
-        catch (Exception ex) when (ex is FilmException or FilmStillRunningException or ComfyApiException or ComfyWorkflowException or IOException or UnauthorizedAccessException)
-        {
-            Say(key, ex.Message, replace: true);
-            if (item is not null)
-                item.Report(ex.Message, true);
-        }
-        finally
-        {
-            Working--;
-            _job = null;
-            _jobKey = null;
-            SaveTalk();
-            RefreshTalk();
+            done.IsWorking = false;
+            _working = null;
             RefreshStates();
         }
+        if (piece is null || call is not { } running)
+            return;
+        _working = piece;
+        piece.IsWorking = true;
+        piece.State = running.Status.Length > 0 ? running.Status : Arg(running.Args, "action") == "check" ? "Looking at it…" : "Making it…";
+        piece.IsError = false;
     }
 
-    [RelayCommand]
-    private void Stop() => _job?.Cancel();
+    /// <summary>Whether a film tool call is about this window's film: by its path, or none (the film the chat worked on last).</summary>
+    private bool IsThisFilm(JsonObject args)
+    {
+        if (Arg(args, "path") is not { Length: > 0 } path)
+            return true;
+        path = path.Trim().Trim('"');
+        try
+        {
+            var full = Path.GetFullPath(Path.GetFileName(path).Equals(Storyboard.FileName, StringComparison.OrdinalIgnoreCase) ? Path.GetDirectoryName(path)! : path);
+            return string.Equals(full.TrimEnd('\\', '/'), _board.Folder.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)
+                   || !Path.IsPathRooted(path) && string.Equals(path, Path.GetFileName(_board.Folder), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>The piece a film tool call makes or looks at, from what it was given; null for the whole film.</summary>
+    private IFilmPiece? PieceIn(JsonObject args)
+    {
+        var id = Arg(args, "id");
+        return Arg(args, "action")?.ToLowerInvariant() switch
+        {
+            "sound" or "song" => Sound,
+            "frame" when id is not null => _frames.GetValueOrDefault(id),
+            "shot" when id is not null => Shots.FirstOrDefault(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase)),
+            "check" when id is not null => (IFilmPiece?)Shots.FirstOrDefault(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase)) ?? _frames.GetValueOrDefault(id),
+            _ => null,
+        };
+    }
+
+    /// <summary>A text a tool call was given, trimmed; null when it wasn't.</summary>
+    private static string? Arg(JsonObject args, string name) => args[name] is JsonValue v && v.TryGetValue<string>(out var s) && s.Trim().Length > 0 ? s.Trim() : null;
 
     public bool HasFilm => File.Exists(_board.FilmFile);
-
-    /// <summary>Joins the shots made so far, with the soundtrack, into the film, and shows it.</summary>
-    [RelayCommand]
-    private async Task Join()
-    {
-        if (IsWorking)
-            return;
-        await RunJobAsync(FilmTalk.Film, null, (_, ct) => JoinAsync(ct));
-    }
-
-    private async Task JoinAsync(CancellationToken ct)
-    {
-        Say(FilmTalk.Film, "Joining the clips…");
-        var made = await FilmMontage.JoinAsync(_board, _previews.Decoder?.Ffmpeg, _previews.Decoder, s => Dispatcher.UIThread.Post(() => Status = s), ct);
-        Say(FilmTalk.Film, $"Joined the film ({Path.GetFileName(made.File)}): it plays in the viewer, and it is in the film's folder." +
-                           (made.Notes.Count > 0 ? " " + string.Join(" ", made.Notes) : ""), replace: true);
-        SaveTalk();
-        _filmView?.Player?.Dispose();
-        _filmView = null;
-        OnPropertyChanged(nameof(HasFilm));
-        Select(null);
-    }
-
-    /// <summary>
-    /// Hands the storyboard to the agent in the chat: it makes what isn't made yet, checks each shot
-    /// against what it should show, fixes what is wrong, joins the film and checks it.
-    /// </summary>
-    [RelayCommand]
-    private void MakeFilm()
-    {
-        SaveNow(force: true);
-        _sendToChat($"Make the film from my storyboard: {_board.FilePath}\n" +
-                    "Make what isn't made yet or is out of date (frames, the song, each shot's clip), check every shot and fix the ones that don't show what they should, " +
-                    "then join them and check the whole film.");
-        Status = "BlackBox is making the film in the chat; what it makes shows here as it goes.";
-    }
 }

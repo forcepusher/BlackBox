@@ -11,11 +11,11 @@ whatever it downloads stay in a `Data` folder next to the exe.
 ## What it can do
 - **Use any app.** It sees the screen and uses the mouse and keyboard, in any program.
 - **Pictures, video and sound.** It makes them with ComfyUI, installing ComfyUI and the models if needed.
-- **Films.** The **Filmmaking** button opens a film on a timeline: its characters and places, its
-  shots and its sound. Say what you want in plain words, for the whole film or for the shot or
-  picture you pick (click away from it, or press Esc, to go back to the whole film), and BlackBox
-  writes the prompts, picks the models, makes that piece and looks at it; earlier takes are kept.
-  Or just ask for a film in the chat.
+- **Films.** The **Filmmaking** button opens a film on a timeline beside the chat: its characters
+  and places, its shots and its sound. Say what you want in plain words, for the whole film or for
+  the shot or picture you pick (click away from it, or press Esc, to go back to the whole film), and
+  BlackBox writes the prompts, picks the models, makes that piece and looks at it, in the chat,
+  where you can watch it and stop it; earlier takes are kept. Or just ask for a film in the chat.
 - **Game development.** It makes games in any engine (Unity, Unreal, Godot) and play-tests them.
 - **Know your projects.** Before it works on a project or a big folder, it indexes it, as Cursor
   does: what is in it, what its files define, and a search that finds where anything is.

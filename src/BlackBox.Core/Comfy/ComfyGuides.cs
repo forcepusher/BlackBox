@@ -8,11 +8,15 @@ namespace BlackBox.Core.Comfy;
 /// in). The video guide is LTX's own advice (docs.ltx.io's prompting guide and motion control) and
 /// what went wrong in BlackBox's films: the user found most takes ruined by motion going the wrong
 /// way, poses bending wrong and props moving by themselves, and LTX drawing its own first picture
-/// badly. The comfyui tool shows it with a video workflow, and the film director writes shots by it.
+/// badly. The comfyui tool shows it with a video workflow, and the film tool with the storyboard
+/// guide (how to write a film's frames, shots, lines and song).
 /// </summary>
 public static partial class ComfyGuides
 {
     public const string Video = "video-prompts";
+
+    /// <summary>How to write a film's storyboard: its frames, references, shots, lines and song (the film tool shows it).</summary>
+    public const string Storyboards = "storyboards";
 
     private static readonly Dictionary<string, string> Loaded = [];
 
@@ -49,13 +53,17 @@ public static partial class ComfyGuides
         return sb.ToString().Trim();
     }
 
-    /// <summary>The guides whose name or text hold the words; all of them for none.</summary>
+    /// <summary>
+    /// The guides whose name holds the words, else those whose text does; all of them for none.
+    /// "video" is the video guide's name, and the storyboard guide speaks of the video model too.
+    /// </summary>
     public static IReadOnlyList<string> Find(string? words)
     {
         var terms = (words ?? "").ToLowerInvariant().Split([' ', ',', ';'], StringSplitOptions.RemoveEmptyEntries).Where(w => w.Length > 2).ToList();
         if (terms.Count == 0)
             return Names;
-        return Names.Where(n => terms.Any(t => n.Contains(t, StringComparison.OrdinalIgnoreCase) || Text(n).Contains(t, StringComparison.OrdinalIgnoreCase))).ToList();
+        var named = Names.Where(n => terms.Any(t => n.Contains(t, StringComparison.OrdinalIgnoreCase))).ToList();
+        return named.Count > 0 ? named : Names.Where(n => terms.Any(t => Text(n).Contains(t, StringComparison.OrdinalIgnoreCase))).ToList();
     }
 
     /// <summary>Whether a workflow makes video with LTX (its nodes are LTXV…, as ComfyUI's own and ComfyUI-LTXVideo's are).</summary>

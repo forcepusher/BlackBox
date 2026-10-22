@@ -26,6 +26,9 @@ public sealed class ChatEntry
 
     public bool IsError { get; set; }
 
+    /// <summary>For a message of the user's written elsewhere than the chat's box: where ("Filmmaking · The Fox and the Moon · shot 2").</summary>
+    public string? Via { get; set; }
+
     /// <summary>For a notice: a run ended here before its task was done (stopped, or an error), so the chat offers to carry on.</summary>
     public bool Stopped { get; set; }
 

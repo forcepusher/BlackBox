@@ -916,6 +916,16 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public void A_message_from_the_filmmaking_window_tells_the_model_what_it_is_about()
+    {
+        var input = new UserInput("make him smile") { Via = "Filmmaking · Keeper · shot 2", Context = "[From the Filmmaking window, about shot s2.]" };
+        Assert.Equal("[From the Filmmaking window, about shot s2.]\nmake him smile", input.ToMessage(seesImages: true).Content);
+        Assert.Same(input, UserInput.Join([input])); // alone, as it is
+        var joined = UserInput.Join([new UserInput("and quicker"), input]);
+        Assert.Equal("and quicker\n\n[From the Filmmaking window, about shot s2.]\nmake him smile", joined.Text);
+    }
+
+    [Fact]
     public void A_saved_chat_keeps_the_paths_of_attached_pictures_but_not_the_pictures()
     {
         var (_, picture, _) = Dropped();
