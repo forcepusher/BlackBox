@@ -6,11 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- Several BlackBox windows at once: the new-window button at the top, or Ctrl+Shift+N, opens
-  another window with a chat and an agent of its own, a step down and to the right of the first.
-  The windows take turns with the mouse and keyboard, stay out of each other's screenshots, all
-  pause while you type in any of them, and one Pause/Break stops them all. A chat open in one
-  window brings that window forward when picked in another's History.
+- Several BlackBox windows at once: the new-window button at the top, Ctrl+Shift+N, or starting
+  BlackBox again opens another window with a chat and an agent of its own, a step down and to the
+  right of the one in front. The windows take turns with the mouse and keyboard, stay out of each
+  other's screenshots, all pause while you type in any of them, and one Pause/Break stops them all.
+  A chat open in one window brings that window forward when picked in another's History.
 - Filmmaking: a window that lays a film out on one timeline (its characters and places, its shots
   and its sound) and makes it shot by shot with ComfyUI. Say in words what to make or change, for
   one piece or the whole film, and BlackBox writes the prompts, picks the models, makes it and looks

@@ -275,24 +275,14 @@ internal static partial class Native
     [LibraryImport("user32.dll")]
     public static partial nint GetForegroundWindow();
 
+    /// <summary>Lets the process bring a window of its own to the front, which the process in the foreground may allow.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool AllowSetForegroundWindow(uint processId);
+
     /// <summary>The window's open modal dialog or other popup that was active last; the window itself if it has none.</summary>
     [LibraryImport("user32.dll")]
     public static partial nint GetLastActivePopup(nint hWnd);
-
-    public const int SW_RESTORE = 9;
-
-    // ---- other BlackBox processes (see WindowsNeighbours) -------------------------------
-
-    /// <summary>The parent of message-only windows, which are never shown and only take messages.</summary>
-    public static readonly nint HWND_MESSAGE = -3;
-
-    [LibraryImport("user32.dll", EntryPoint = "FindWindowExW", StringMarshalling = StringMarshalling.Utf16)]
-    public static partial nint FindWindowEx(nint parent, nint childAfter, string? className, string? windowName);
-
-    public const uint SMTO_ABORTIFHUNG = 0x0002;
-
-    [LibraryImport("user32.dll", EntryPoint = "SendMessageTimeoutW", SetLastError = true)]
-    public static partial nint SendMessageTimeout(nint hWnd, uint msg, nint wParam, nint lParam, uint flags, uint timeout, out nint result);
 
     public const int DWMWA_CLOAKED = 14;
 

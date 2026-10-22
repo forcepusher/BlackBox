@@ -26,9 +26,14 @@ public sealed class WindowsPlatform : IPlatformServices
     public IHostWindow HostWindow { get; } = new WindowsHostWindow();
     public IInputOverlay InputOverlay => _overlay;
     public IStopKey StopKey { get; } = new WindowsStopKey();
-    public IDesktopTurn DesktopTurn { get; } = new WindowsDesktopTurn();
     public Core.Media.IMediaDecoder? Media { get; } = new MediaFoundationDecoder();
     public Core.Media.IAudioOutput? CreateAudioOutput() => new WaveOutPlayer();
+
+    /// <summary>
+    /// Lets <paramref name="processId"/> bring its window to the front: called by the program the
+    /// user just started, which has the foreground, for the one it hands over to.
+    /// </summary>
+    public static void AllowToFront(int processId) => AllowSetForegroundWindow((uint)processId);
 
     public ProcessStartInfo CreateShellStartInfo(string command)
     {

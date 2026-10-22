@@ -25,6 +25,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private readonly AppPaths _paths;
     private readonly SettingsStore _store;
     private readonly IPlatformServices _platform;
+    private readonly ChatWindows _windows;
     private readonly HttpClient _http = LlmHttp.Create(Timeout.InfiniteTimeSpan);
     private List<ChatMessage> _history = [];
     private readonly ChatStore _chats;
@@ -38,7 +39,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private CancellationTokenSource? _runCts;
     private AgentSession? _session;
     private AssistantMessageItem? _current;
-    private IDisposable? _stopKey;
     private volatile bool _stoppedByKey;
 
     /// <summary>Ticks once a second during a run, for the reply in progress to count the wait, and a tool call that runs long its time.</summary>
@@ -47,17 +47,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>Decoders and speakers for the previews of files in the chat.</summary>
     private readonly PreviewServices _previews;
 
-    public MainWindowViewModel(AppPaths paths, SettingsStore store, AppSettings settings, IPlatformServices platform)
+    /// <param name="windows">BlackBox's chat windows, this one among them, with what they share.</param>
+    public MainWindowViewModel(AppPaths paths, SettingsStore store, AppSettings settings, ChatWindows windows)
     {
         _paths = paths;
         _store = store;
         _settings = settings;
-        _platform = platform;
-        _previews = new PreviewServices(Core.Media.MediaDecoders.Create(platform, paths, Core.Comfy.ComfyHub.For(paths.ComfyDir)), platform.CreateAudioOutput);
-        // A ComfyUI an earlier BlackBox started and left at work is closed once its jobs are done.
-        Core.Comfy.ComfyHub.For(paths.ComfyDir).CloseLeftover();
+        _windows = windows;
+        _platform = windows.Platform;
+        _previews = new PreviewServices(Core.Media.MediaDecoders.Create(_platform, paths, Core.Comfy.ComfyHub.For(paths.ComfyDir)), _platform.CreateAudioOutput);
         _chats = new ChatStore(paths.ChatsDir);
-        _chatSaver = new ChatSaver(_chats);
+        _chatSaver = windows.Saver;
         _ssh = new Core.Ssh.SshHosts(paths.KnownHostsFile);
         _tick = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) =>
         {
@@ -194,8 +194,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     public void OnStartup()
     {
         Items.CollectionChanged += (_, _) => ShowIntro = Items.All(i => i is NoticeItem);
-        _stopKey = _platform.StopKey.Watch(OnStopKey);
-        _platform.HostWindow.AnswerTyping(TypingHere);
         foreach (var header in _chats.List())
             PastChats.Add(NewRow(header));
         OnPropertyChanged(nameof(HasPastChats));
@@ -203,27 +201,24 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _mcpConnect = ConnectMcpAsync();
     }
 
-    /// <summary>Stops the run and the MCP servers; called when the window closes.</summary>
-    public void Shutdown()
+    /// <summary>
+    /// Stops the run, and the SSH and MCP servers; called when the window closes. The chat goes to
+    /// the shared <see cref="ChatSaver"/>, which BlackBox waits for before it ends.
+    /// </summary>
+    /// <returns>The servers stopping, all at the same time: one after the other, each one that
+    /// didn't answer kept the process alive five seconds more.</returns>
+    public Task Shutdown()
     {
         // A chat is saved at every step and when its run ends, so only one in progress needs it here.
         if (IsBusy) SaveChat(SnapshotHistory());
-        _chatSaver.Flush(TimeSpan.FromSeconds(10));
         if (_settingsSave?.IsEnabled == true)
         {
             _settingsSave.Stop();
             SaveSettings(); // what was typed just before closing
         }
-        _chatClaim?.Dispose(); // written: another window may open it
         _runCts?.Cancel();
-        _stopKey?.Dispose();
-        // Logging out of the SSH servers and stopping the MCP ones, at the same time and for five
-        // seconds at most: one after the other, a server that didn't answer kept the process
-        // alive five seconds a server after the window had gone.
-        var ssh = Task.Run(_ssh.Dispose);
-        var mcp = _mcp.DisposeAsync().AsTask();
-        try { Task.WaitAll([ssh, mcp], TimeSpan.FromSeconds(5)); }
-        catch (AggregateException) { /* a server that would not stop; the process ends anyway */ }
+        _tick.Stop();
+        return Task.WhenAll(Task.Run(_ssh.Dispose), _mcp.DisposeAsync().AsTask());
     }
 
     // ---- filmmaking ------------------------------------------------------------------
@@ -466,8 +461,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>How long after the last key press in the box the agent carries on by itself.</summary>
     private static readonly TimeSpan TypingQuiet = TimeSpan.FromSeconds(15);
 
-    /// <summary>The agent's clicks and key presses are on hold because the user is typing to it (see <see cref="UserComposing"/>).</summary>
-    public bool TypingPause => IsBusy && UserComposing();
+    /// <summary>The agent's clicks and key presses are on hold because the user is typing to an agent (see <see cref="ChatWindows.UserComposing"/>).</summary>
+    public bool TypingPause => IsBusy && _windows.UserComposing();
 
     /// <summary>The pause is for typing in this window's box, which Resume can end; typing in another window it can't.</summary>
     public bool TypingPauseHere => TypingHere();
@@ -490,17 +485,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     }
 
     /// <summary>
-    /// The user is writing a message, in this window's box or another BlackBox window's. The
-    /// agent's clicks and key presses wait meanwhile, so neither ends up in the other's window.
-    /// Read from the agent's thread.
-    /// </summary>
-    private bool UserComposing() => TypingHere() || _platform.HostWindow.OtherWindowTyping();
-
-    /// <summary>
     /// The user is writing a message in this window's box: text in it, typed in the last 15
-    /// seconds. Also what other BlackBox windows are told when they ask, from a thread of the platform's.
+    /// seconds. Every window's agent waits with its clicks and key presses meanwhile, so neither
+    /// ends up in the other's window. Read from the agents' threads.
     /// </summary>
-    private bool TypingHere() => Input.Length > 0 && DateTime.UtcNow - _lastTyped < TypingQuiet;
+    internal bool TypingHere() => Input.Length > 0 && DateTime.UtcNow - _lastTyped < TypingQuiet;
 
     /// <summary>The hint in the empty box: what Enter does now, and that pictures and files can go in too.</summary>
     public string InputHint => IsBusy
@@ -565,7 +554,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 await _mcpConnect.WaitAsync(ct);
             }
 
-            var session = _session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, _ssh, history, UserComposing);
+            var session = _session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, _ssh, history,
+                _windows.UserComposing, _windows.DesktopTurn);
             // Taken now: another model can be picked at the top while the run goes on.
             var imagesKey = session.SeesImages ? ImagesKey(server) : null;
             foreach (var pending in _steerPending)
@@ -652,8 +642,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     [RelayCommand(CanExecute = nameof(IsBusy))]
     private void Stop() => _runCts?.Cancel();
 
-    /// <summary>Pause/Break, from the hook's thread: stops the run in progress, if any.</summary>
-    private bool OnStopKey()
+    /// <summary>Pause/Break, from the hook's thread: stops the run in progress, if any; false when there is none.</summary>
+    internal bool StopByKey()
     {
         var cts = _runCts;
         if (cts is null || cts.IsCancellationRequested)
@@ -682,25 +672,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     }
 
     /// <summary>
-    /// New window (Ctrl+Shift+N): another BlackBox, a window of its own with its own chat and
-    /// agent, for another task at the same time. The agents take turns with the mouse and keyboard.
+    /// New window (Ctrl+Shift+N, or starting BlackBox again): a window of its own with its own chat
+    /// and agent, for another task at the same time. The agents take turns with the mouse and keyboard.
     /// </summary>
     [RelayCommand]
-    private void NewWindow()
-    {
-        try
-        {
-            var exe = Environment.ProcessPath ?? throw new InvalidOperationException("BlackBox's program file is not known.");
-            // The same folder (BLACKBOX_HOME comes along in the environment), so the same settings and chats.
-            var start = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory };
-            // Run as "dotnet BlackBox.App.dll": the same again.
-            if (Path.GetFileNameWithoutExtension(exe).Equals("dotnet", StringComparison.OrdinalIgnoreCase) && Environment.GetCommandLineArgs() is [var dll, ..])
-                start.ArgumentList.Add(dll);
-            System.Diagnostics.Process.Start(start)?.Dispose();
-        }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
-        {
-            AddNotice($"Another window could not be opened: {ex.Message}", isError: true);
-        }
-    }
+    private void NewWindow() => _windows.Open();
 }

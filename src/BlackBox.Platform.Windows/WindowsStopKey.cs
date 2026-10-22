@@ -17,9 +17,7 @@ namespace BlackBox.Platform.Windows;
 /// ignored, so a model pressing "pause" never stops itself. A press that stopped a run is
 /// swallowed whole, so the window the agent was working in never sees it: its key-down, the
 /// repeats while it is held and its key-up, and also the keys pressed while it is held (mashed in
-/// a hurry, they would land in that window). Otherwise the key goes through as usual. Every
-/// BlackBox window has a hook of its own; the one that stops its run with a press tells the
-/// others, whose hooks never see it, to stop theirs (see <see cref="WindowsNeighbours"/>).
+/// a hurry, they would land in that window). Otherwise the key goes through as usual.
 /// </remarks>
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsStopKey : IStopKey
@@ -46,7 +44,6 @@ internal sealed class WindowsStopKey : IStopKey
         public Hook(Func<bool> onPressed)
         {
             _onPressed = onPressed;
-            WindowsNeighbours.OnStop(onPressed);
             _proc = Callback;
             using var ready = new ManualResetEventSlim();
             new Thread(() => Run(ready)) { IsBackground = true, Name = "BlackBox stop key" }.Start();
@@ -116,9 +113,6 @@ internal sealed class WindowsStopKey : IStopKey
                 if (!Stopped())
                     return false; // no run to stop: Pause/Break does its usual job
                 _stopPress = vk;
-                // The other BlackBox windows' runs too, which never see the press: off the hook's
-                // thread, which Windows gives a fraction of a second.
-                ThreadPool.QueueUserWorkItem(_ => WindowsNeighbours.StopOthers());
             }
             // else a key pressed while the key that stopped the run is held: not meant for the window
             // the agent was in either.
@@ -137,7 +131,6 @@ internal sealed class WindowsStopKey : IStopKey
 
         public void Dispose()
         {
-            WindowsNeighbours.OnStop(null, _onPressed);
             if (_threadId != 0)
                 PostThreadMessage(_threadId, WM_QUIT, 0, 0);
         }

@@ -6,7 +6,7 @@ namespace BlackBox.Platform.Windows;
 
 /// <summary>
 /// Keeps BlackBox's windows visible to the user but out of the agent's way: the main window, the
-/// full-screen viewer, Filmmaking and dialogs, and those of the other BlackBoxes on the PC.
+/// full-screen viewer, Filmmaking and dialogs, of every chat window.
 /// <list type="bullet">
 /// <item>Screenshots show what is behind them (see <see cref="WindowsScreenCapture"/>).</item>
 /// <item>When a click or drag lands on one, it is pushed to the bottom of the z-order for that action.</item>
@@ -16,8 +16,6 @@ namespace BlackBox.Platform.Windows;
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsHostWindow : IHostWindow
 {
-    public WindowsHostWindow() => WindowsNeighbours.Start();
-
     public IDisposable StepAside(params (int X, int Y)[] points)
     {
         // Top to bottom, as EnumWindows lists them; each one left out of the screenshots, so the
@@ -37,16 +35,16 @@ internal sealed class WindowsHostWindow : IHostWindow
     }
 
     /// <summary>
-    /// The visible top-level windows of every BlackBox on the PC, top to bottom, but for those that
-    /// let clicks through (the click log and its marker, which stay on top by design).
+    /// BlackBox's visible top-level windows, top to bottom, but for those that let clicks through
+    /// (the click log and its marker, which stay on top by design).
     /// </summary>
     private static List<nint> BlackBoxWindows()
     {
-        var processes = WindowsNeighbours.Processes();
+        var process = (uint)Environment.ProcessId;
         var windows = new List<nint>();
         EnumWindows((hwnd, _) =>
         {
-            if (IsWindowVisible(hwnd) && !IsIconic(hwnd) && GetWindowThreadProcessId(hwnd, out var owner) != 0 && processes.Contains(owner)
+            if (IsWindowVisible(hwnd) && !IsIconic(hwnd) && GetWindowThreadProcessId(hwnd, out var owner) != 0 && owner == process
                 && (GetWindowLongPtr(hwnd, GWL_EXSTYLE) & (nint)WS_EX_TRANSPARENT) == 0)
                 windows.Add(hwnd);
             return true;
@@ -57,10 +55,9 @@ internal sealed class WindowsHostWindow : IHostWindow
     public void YieldFocus()
     {
         var foreground = GetForegroundWindow();
-        var processes = WindowsNeighbours.Processes();
-        if (foreground == 0 || GetWindowThreadProcessId(foreground, out var owner) == 0 || !processes.Contains(owner))
+        if (foreground == 0 || GetWindowThreadProcessId(foreground, out var owner) == 0 || owner != Environment.ProcessId)
             return;
-        if (NextWindowBelow(foreground, processes) is var next and not 0)
+        if (NextWindowBelow(foreground) is var next and not 0)
         {
             // A window with a modal dialog open (Save As, a message box) is disabled, and keys sent
             // to it are lost; they belong to the dialog, as when Alt+Tab goes back to it.
@@ -71,48 +68,22 @@ internal sealed class WindowsHostWindow : IHostWindow
 
     /// <summary>
     /// The next normal, visible top-level window under <paramref name="hwnd"/> in z-order that isn't
-    /// a BlackBox's: from the viewer, the chat's window was next, and the agent's keys went into it;
-    /// from one BlackBox, another's.
+    /// BlackBox's own: from the viewer, the chat's window was next, and the agent's keys went into it;
+    /// from one chat window, another.
     /// </summary>
-    internal static nint NextWindowBelow(nint hwnd, HashSet<uint> blackBoxes)
+    internal static nint NextWindowBelow(nint hwnd)
     {
+        var process = (uint)Environment.ProcessId;
         for (var w = GetWindow(hwnd, GW_HWNDNEXT); w != 0; w = GetWindow(w, GW_HWNDNEXT))
         {
             if (!IsWindowVisible(w) || IsIconic(w) || GetWindow(w, GW_OWNER) != 0) continue;
             if ((GetWindowLongPtr(w, GWL_EXSTYLE) & (nint)WS_EX_TOOLWINDOW) != 0) continue;
             if (DwmGetWindowAttribute(w, DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) continue;
             if (GetWindowTextLength(w) == 0) continue;
-            if (GetWindowThreadProcessId(w, out var owner) != 0 && blackBoxes.Contains(owner)) continue;
+            if (GetWindowThreadProcessId(w, out var owner) != 0 && owner == process) continue;
             return w;
         }
         return 0;
-    }
-
-    public void AnswerTyping(Func<bool> typing) => WindowsNeighbours.AnswerTyping(typing);
-
-    public bool OtherWindowTyping() => WindowsNeighbours.OthersTyping();
-
-    public bool BringForward(int processId)
-    {
-        nint found = 0;
-        EnumWindows((hwnd, _) =>
-        {
-            // Its main window: the first of its own in z-order that no other window owns, with a title.
-            if (GetWindowThreadProcessId(hwnd, out var owner) != 0 && owner == processId && IsWindowVisible(hwnd)
-                && GetWindow(hwnd, GW_OWNER) == 0 && GetWindowTextLength(hwnd) > 0)
-            {
-                found = hwnd;
-                return false;
-            }
-            return true;
-        }, 0);
-        if (found == 0)
-            return false;
-        if (IsIconic(found))
-            ShowWindow(found, SW_RESTORE);
-        // Allowed when the user has just clicked in this BlackBox, whose process is in the foreground
-        // then; otherwise Windows flashes the window's taskbar button instead.
-        return SetForegroundWindow(GetLastActivePopup(found) is var popup and not 0 ? popup : found);
     }
 
     private sealed class Restore(List<nint> windows) : IDisposable

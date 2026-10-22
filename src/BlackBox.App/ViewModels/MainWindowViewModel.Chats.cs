@@ -18,8 +18,11 @@ public sealed partial class MainWindowViewModel
     private string? _chatId;
     private string? _chatTitle;
 
-    /// <summary>The chat on screen, claimed for this window (see <see cref="ChatStore.Claim"/>): another BlackBox window brings this one forward instead of opening it too.</summary>
-    private IDisposable? _chatClaim;
+    /// <summary>
+    /// The chat on screen, by its file; null until its first message. Open in one window at a time:
+    /// two each saving their own run into one file would lose one of them.
+    /// </summary>
+    internal string? ChatId => _chatId;
 
     /// <summary>The window's title: the chat's, so several BlackBox windows can be told apart on the taskbar.</summary>
     public string WindowTitle => _chatTitle is { } title ? $"{title} - BlackBox" : "BlackBox";
@@ -64,10 +67,6 @@ public sealed partial class MainWindowViewModel
             item.DisposePreviews();
         Items.Clear();
         _current = null;
-        // Let go of once its last version is on the disk.
-        if (_chatClaim is { } claim)
-            _chatSaver.Release(claim);
-        _chatClaim = null;
         _chatId = null;
         _chatTitle = null;
         OnPropertyChanged(nameof(WindowTitle));
@@ -78,25 +77,23 @@ public sealed partial class MainWindowViewModel
     {
         if (row.Id == _chatId)
             return;
-        // A chat left a moment ago may still be on its way to the disk, and this window let go of it
-        // only once it is there.
-        _chatSaver.Flush(TimeSpan.FromSeconds(10));
-        // Open in another BlackBox window: that one comes forward, with the chat as it goes on there.
-        if (_chats.Claim(row.Id) is not { } claim)
+        // Open in another window: that one comes forward, with the chat as it goes on there.
+        var other = _windows.WithChat(row.Id, this);
+        row.IsElsewhere = other is not null;
+        if (other is not null)
         {
-            ShowElsewhere(row);
+            _windows.BringForward(other);
             return;
         }
-        row.IsElsewhere = false;
+        // A chat left a moment ago, here or in another window, may still be on its way to the disk.
+        _chatSaver.Flush(TimeSpan.FromSeconds(10));
         if (_chats.Load(row.Id) is not { } chat)
         {
-            claim.Dispose();
             PastChats.Remove(row);
             OnPropertyChanged(nameof(HasPastChats));
             return;
         }
         LeaveChat(save: true);
-        _chatClaim = claim;
         _chatId = chat.Id;
         _chatTitle = chat.Title;
         OnPropertyChanged(nameof(WindowTitle));
@@ -123,20 +120,10 @@ public sealed partial class MainWindowViewModel
         MarkCurrentChat();
     }
 
-    /// <summary>A chat another BlackBox window has open: that window comes forward, or the row says where it is.</summary>
-    private void ShowElsewhere(PastChat row)
-    {
-        var process = _chats.OpenElsewhere().TryGetValue(row.Id, out var p) ? p : (int?)null;
-        row.IsElsewhere = process is not null;
-        if (process is { } other && _platform.HostWindow.BringForward(other))
-            return;
-        AddNotice($"\"{row.Title}\" is open in another BlackBox window.", isError: false);
-    }
-
     private void DeleteChat(PastChat row)
     {
         // Another window's run would only write it back.
-        if (row.Id != _chatId && _chats.OpenElsewhere().ContainsKey(row.Id))
+        if (_windows.WithChat(row.Id, this) is not null)
         {
             row.IsElsewhere = true;
             return;
@@ -166,13 +153,12 @@ public sealed partial class MainWindowViewModel
     }
 
     /// <summary>
-    /// The History list as the chats folder has it now, when it opens: other BlackBox windows add
-    /// chats to it as they go, and those they have open are marked.
+    /// The History list as the chats folder has it now, when it opens: other windows add chats to it
+    /// as they go, and those they have open are marked.
     /// </summary>
     public void RefreshPastChats()
     {
         var headers = _chats.List();
-        var elsewhere = _chats.OpenElsewhere();
         var rows = headers.Select(h =>
         {
             if (PastChats.FirstOrDefault(r => r.Id == h.Id) is not { } row)
@@ -190,7 +176,7 @@ public sealed partial class MainWindowViewModel
             var at = PastChats.IndexOf(rows[i]);
             if (at < 0) PastChats.Insert(i, rows[i]);
             else if (at != i) PastChats.Move(at, i);
-            rows[i].IsElsewhere = elsewhere.ContainsKey(rows[i].Id);
+            rows[i].IsElsewhere = _windows.WithChat(rows[i].Id, this) is not null;
         }
         while (PastChats.Count > rows.Count)
             PastChats.RemoveAt(PastChats.Count - 1);
@@ -214,11 +200,7 @@ public sealed partial class MainWindowViewModel
         var first = Items.OfType<UserMessageItem>().FirstOrDefault();
         if (history is null || first is null && _chatTitle is null)
             return;
-        if (_chatId is null)
-        {
-            _chatId = ChatStore.NewId();
-            _chatClaim = _chats.Claim(_chatId);
-        }
+        _chatId ??= ChatStore.NewId();
         if (_chatTitle is null)
         {
             // A message that is only a file is named after it.

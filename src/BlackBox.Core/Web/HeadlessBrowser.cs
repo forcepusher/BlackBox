@@ -14,8 +14,13 @@ public sealed class HeadlessBrowser(string executable, string profileDirectory)
 {
     private const string UserAgent = WebHttp.UserAgent + " Edg/140.0.0.0";
 
-    /// <summary>One page at a time: two browsers on one profile fight over its lock.</summary>
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    /// <summary>
+    /// One page at a time on a profile: two browsers on one fight over its lock. Kept per profile, not
+    /// per instance, as every BlackBox window's agent has an instance of its own on the same profile.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> Gates = new(StringComparer.OrdinalIgnoreCase);
+
+    private SemaphoreSlim Gate => Gates.GetOrAdd(Path.GetFullPath(profileDirectory), _ => new SemaphoreSlim(1, 1));
 
     /// <summary>The browser found on this PC, or null when there is none.</summary>
     public static HeadlessBrowser? Find(string profileDirectory) =>
@@ -61,12 +66,10 @@ public sealed class HeadlessBrowser(string executable, string profileDirectory)
     /// <param name="runScripts">Let the page's scripts run for up to 5 s of page time first, for pages that build their content in script.</param>
     public async Task<string> GetDomAsync(Uri url, bool runScripts, CancellationToken ct)
     {
-        await _gate.WaitAsync(ct).ConfigureAwait(false);
-        // And one at a time among the BlackBox windows, which share the profile and its lock.
-        IDisposable? claim = null;
+        var gate = Gate;
+        await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            claim = await Settings.InterProcess.ClaimAsync(profileDirectory.TrimEnd('\\', '/') + ".lock", ct).ConfigureAwait(false);
             Directory.CreateDirectory(profileDirectory);
             var psi = new ProcessStartInfo(executable)
             {
@@ -124,8 +127,7 @@ public sealed class HeadlessBrowser(string executable, string profileDirectory)
         }
         finally
         {
-            claim?.Dispose();
-            _gate.Release();
+            gate.Release();
         }
     }
 

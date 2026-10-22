@@ -60,7 +60,7 @@ public partial class MainWindow : Window
             if (!_pinning && e.OffsetDelta.Y != 0 && e.ExtentDelta.Y == 0 && e.ViewportDelta.Y == 0)
                 UpdateStickiness();
         };
-        // Other BlackBox windows add chats while this one is open, and have some open themselves.
+        // Other windows add chats while this one is open, and have some open themselves.
         ((Avalonia.Controls.Primitives.PopupFlyoutBase)HistoryButton.Flyout!).Opening += (_, _) => Vm.RefreshPastChats();
 
         // What Tab or the arrow keys move to is scrolled into view; what a click focuses stays where
@@ -100,21 +100,18 @@ public partial class MainWindow : Window
     /// <summary>The last size and place while the window was neither maximized nor minimized.</summary>
     private (PixelPoint Position, double Width, double Height)? _normal;
 
-    /// <summary>Which of the BlackBox windows on the PC this is (see <see cref="WindowSlot"/>); 0 for the first.</summary>
-    private int _slot;
-
-    /// <summary>The size and place the window opened with: one opened beside another and left there doesn't save it.</summary>
-    private (PixelPoint Position, double Width, double Height)? _opened;
+    /// <summary>Opened a step from another window: closed where it opened, it doesn't save its place.</summary>
+    private (PixelPoint Position, double Width, double Height)? _cascaded;
 
     /// <summary>
     /// Puts the window where it was when last closed (it used to open in the middle at its default
     /// size every time), unless that place is no longer on any screen: a monitor unplugged since.
-    /// Another BlackBox window open already, it opens a step down and to the right of that.
-    /// Called before the window is first shown.
+    /// With another window open already (<paramref name="beside"/>), it opens a step down and to the
+    /// right of that one, at its size, as Windows cascades windows: right on top of it, a second
+    /// window looked as if nothing had opened. Called before the window is first shown.
     /// </summary>
-    public void Restore(Core.Settings.WindowPlacement? placement, int slot)
+    public void Restore(Core.Settings.WindowPlacement? placement, MainWindow? beside = null)
     {
-        _slot = slot;
         // Read once the move or resize is through: a window being minimized moves off screen
         // before it reports being minimized.
         PositionChanged += (_, _) => Dispatcher.UIThread.Post(Remember);
@@ -122,38 +119,33 @@ public partial class MainWindow : Window
         if (Screens.Primary is not { } primary)
             return;
         FitTo(primary);
-        var screen = primary;
+        beside?.Remember();
+        if (beside?._normal is { } other)
+            placement = new Core.Settings.WindowPlacement { X = other.Position.X, Y = other.Position.Y, Width = other.Width, Height = other.Height };
         // Some of the title bar must be on a screen, or the window can't even be dragged back.
-        if (placement is { } p && p.Width >= MinWidth && p.Height >= MinHeight
-            && Screens.All.FirstOrDefault(s => s.WorkingArea.Intersects(new PixelRect(p.X + 40, p.Y + 4, 160, 24))) is { } shown)
-        {
-            screen = shown;
-            WindowStartupLocation = WindowStartupLocation.Manual;
-            Position = new PixelPoint(p.X, p.Y);
-            Width = p.Width;
-            Height = p.Height;
-            FitTo(screen);
-            if (p.Maximized)
-                WindowState = WindowState.Maximized;
-        }
-        if (slot > 0)
-            Cascade(screen, slot);
-        if (WindowStartupLocation == WindowStartupLocation.Manual)
-            _normal = _opened = (Position, Width, Height);
+        if (placement is not { } p || p.Width < MinWidth || p.Height < MinHeight
+            || Screens.All.FirstOrDefault(s => s.WorkingArea.Intersects(new PixelRect(p.X + 40, p.Y + 4, 160, 24))) is not { } screen)
+            return;
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Position = new PixelPoint(p.X, p.Y);
+        Width = p.Width;
+        Height = p.Height;
+        FitTo(screen);
+        if (beside is not null)
+            Cascade(screen);
+        else if (p.Maximized)
+            WindowState = WindowState.Maximized;
+        _normal = (Position, Width, Height);
+        if (beside is not null)
+            _cascaded = _normal;
     }
 
-    /// <summary>A step down and to the right per window open before this one, kept on the screen.</summary>
-    private void Cascade(Avalonia.Platform.Screen screen, int slot)
+    /// <summary>A step down and to the right, kept on the screen.</summary>
+    private void Cascade(Avalonia.Platform.Screen screen)
     {
         var area = screen.WorkingArea;
         var (width, height) = ((int)(Width * screen.Scaling), (int)(Height * screen.Scaling));
-        if (WindowStartupLocation != WindowStartupLocation.Manual)
-        {
-            // Where CenterScreen would have put it.
-            WindowStartupLocation = WindowStartupLocation.Manual;
-            Position = new PixelPoint(area.X + (area.Width - width) / 2, area.Y + (area.Height - height) / 2);
-        }
-        var step = (int)Math.Round(32 * screen.Scaling) * slot;
+        var step = (int)Math.Round(32 * screen.Scaling);
         Position = new PixelPoint(Math.Max(area.X, Math.Min(Position.X + step, area.Right - width)),
                                   Math.Max(area.Y, Math.Min(Position.Y + step, area.Bottom - height)));
     }
@@ -177,13 +169,21 @@ public partial class MainWindow : Window
             _normal = (Position, ClientSize.Width, ClientSize.Height);
     }
 
+    protected override void OnClosed(EventArgs e)
+    {
+        base.OnClosed(e);
+        // Its own: BlackBox goes on with the other windows, where these were left behind.
+        _film?.Close();
+        _viewer?.Close();
+    }
+
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         base.OnClosing(e);
         Remember();
         // A window opened beside another and neither moved nor resized: the place where BlackBox
         // opens stays where it was, rather than creeping down a step with every second window.
-        if (_slot > 0 && _normal == _opened && WindowState != WindowState.Maximized)
+        if (_cascaded is not null && _normal == _cascaded && WindowState != WindowState.Maximized)
             return;
         if (!e.Cancel && _normal is { } normal)
             Vm.SavePlacement(new Core.Settings.WindowPlacement

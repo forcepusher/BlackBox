@@ -38,27 +38,11 @@ internal sealed class WindowsScreenCapture : IScreenCapture
         return monitors.OrderByDescending(m => m.Primary).ThenBy(m => m.Rect.X).ThenBy(m => m.Rect.Y).Select(m => m.Rect).ToList();
     }
 
-    /// <summary>
-    /// One capture at a time among all the BlackBoxes on the PC: one asking another to show its
-    /// windows again must not do so while a third is taking its picture.
-    /// </summary>
-    private static readonly Mutex? Everyone = SharedMutex();
-
-    /// <summary>The captures' mutex; null where a BlackBox run as administrator made it and this one may not open it.</summary>
-    private static Mutex? SharedMutex()
-    {
-        try { return new Mutex(false, @"Local\BlackBox.Capture"); }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or WaitHandleCannotBeOpenedException or IOException) { return null; }
-    }
-
     public RawImage Capture(ScreenRect region, bool includeCursor)
     {
         lock (Gate)
         {
-            var mine = TakeTurn();
             var hidden = HideOwnWindows(region);
-            // The other BlackBoxes' windows too: their agents' own, which this one's must not see.
-            var others = mine ? WindowsNeighbours.HideOthers() : [];
             try
             {
                 return CaptureNow(region, includeCursor);
@@ -67,34 +51,22 @@ internal sealed class WindowsScreenCapture : IScreenCapture
             {
                 foreach (var hwnd in hidden)
                     SetWindowDisplayAffinity(hwnd, WDA_NONE);
-                WindowsNeighbours.ShowOthers(others);
-                if (mine)
-                    Everyone!.ReleaseMutex();
             }
         }
     }
 
-    /// <summary>Waits for the other BlackBoxes' captures, a second at most: one that hangs leaves the others to capture with its windows in the picture.</summary>
-    private static bool TakeTurn()
-    {
-        if (Everyone is null)
-            return false;
-        try { return Everyone.WaitOne(TimeSpan.FromSeconds(1)); }
-        catch (AbandonedMutexException) { return true; } // a BlackBox that ended mid-capture
-    }
-
     /// <summary>
-    /// Leaves this process's visible windows over the region (anywhere, when null) out of screen
-    /// capture and returns them. Windows that are left out already (the click log) are not touched.
+    /// Leaves this process's visible windows over the region out of screen capture and returns
+    /// them. Windows that are left out already (the click log) are not touched.
     /// </summary>
-    internal static List<nint> HideOwnWindows(ScreenRect? region)
+    private static List<nint> HideOwnWindows(ScreenRect region)
     {
         var hidden = new List<nint>();
         var process = (uint)Environment.ProcessId;
         EnumWindows((hwnd, _) =>
         {
             if (GetWindowThreadProcessId(hwnd, out var owner) != 0 && owner == process && IsWindowVisible(hwnd) && !IsIconic(hwnd)
-                && GetWindowRect(hwnd, out var r) && (region is not { } area || r.Left < area.X + area.Width && r.Right > area.X && r.Top < area.Y + area.Height && r.Bottom > area.Y)
+                && GetWindowRect(hwnd, out var r) && r.Left < region.X + region.Width && r.Right > region.X && r.Top < region.Y + region.Height && r.Bottom > region.Y
                 && GetWindowDisplayAffinity(hwnd, out var affinity) && affinity == WDA_NONE
                 && SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE))
                 hidden.Add(hwnd);

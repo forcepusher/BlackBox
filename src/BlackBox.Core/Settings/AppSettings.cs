@@ -322,13 +322,13 @@ public sealed class AppSettings
 }
 
 /// <summary>
-/// settings.json. Every BlackBox window is a process of its own with the settings in memory, so
+/// settings.json. Every BlackBox window has the settings in memory, with a store of its own, so
 /// each one writes only what it changed since it last read or wrote the file: a model picked in
 /// one window stays picked when another closes and saves where it was.
 /// </summary>
 public sealed class SettingsStore(AppPaths paths)
 {
-    /// <summary>The settings as this BlackBox last read or wrote them; what differs from them is what it changed.</summary>
+    /// <summary>The settings as this store last read or wrote them; what differs from them is what its window changed.</summary>
     private JsonObject? _base;
 
     public AppSettings Load()
@@ -351,7 +351,8 @@ public sealed class SettingsStore(AppPaths paths)
             // Rewrite the file if it still has keys from older versions, so it only ever holds
             // settings that exist. A folder that can't be written to (a read-only stick) can wait.
             if (loaded != text)
-                TryWrite(() => AtomicFile.Write(paths.SettingsFile, loaded));
+                lock (SaveGate)
+                    TryWrite(() => AtomicFile.Write(paths.SettingsFile, loaded));
             return settings;
         }
         catch (JsonException)
@@ -388,15 +389,18 @@ public sealed class SettingsStore(AppPaths paths)
         return root.ToJsonString();
     }
 
+    /// <summary>Held while settings.json is read and written: every window has a store of its own.</summary>
+    private static readonly Lock SaveGate = new();
+
     /// <summary>
-    /// Writes what changed in <paramref name="settings"/> since this BlackBox last read or wrote
-    /// the file, over what is in the file now: another window's changes meanwhile stay.
+    /// Writes what changed in <paramref name="settings"/> since this store last read or wrote the
+    /// file, over what is in the file now: another window's changes meanwhile stay.
     /// </summary>
     public void Save(AppSettings settings)
     {
         var mine = (JsonObject)JsonSerializer.SerializeToNode(settings, SettingsJson.Default.AppSettings)!;
-        // Read and written by one window at a time; one that hangs holding it is waited for a second at most.
-        using (InterProcess.Lock(paths.SettingsFile, TimeSpan.FromSeconds(1)))
+        // Read and written by one window at a time.
+        lock (SaveGate)
         {
             var merged = _base is { } @base && ReadFile() is { } theirs ? Merge(@base, mine, theirs) : mine;
             using var text = new MemoryStream();

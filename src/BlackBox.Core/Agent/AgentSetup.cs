@@ -14,8 +14,9 @@ public static class AgentSetup
     /// <param name="history">The conversation to carry on; a new one when null.</param>
     /// <param name="ssh">The chat's SSH logins, kept by the caller across the chat's runs and disposed with it.</param>
     /// <param name="userComposing">Whether the user is typing a message to the agent right now (see <see cref="ToolContext.UserComposing"/>).</param>
+    /// <param name="desktopTurn">Shared by the agents of BlackBox's windows, for one at a time with the mouse and keyboard; null for one agent alone.</param>
     public static AgentSession Create(BackendConnection backend, IPlatformServices platform, AgentSettings agent, AppPaths paths,
-        McpHost mcp, SshHosts ssh, List<ChatMessage>? history = null, Func<bool>? userComposing = null)
+        McpHost mcp, SshHosts ssh, List<ChatMessage>? history = null, Func<bool>? userComposing = null, DesktopTurn? desktopTurn = null)
     {
         var mcpSetup = new McpSetup(mcp, paths.McpConfigFile);
         var comfy = Comfy.ComfyHub.For(paths.ComfyDir);
@@ -28,6 +29,7 @@ public static class AgentSetup
             MaxScreenshotSide = OpenAiChatClient.IsAnthropic(backend.Client.BaseUrl) ? ClaudeModel.FromName(backend.Options.Model).ScreenshotSide : null,
             SeesImages = backend.Vision,
             UserComposing = userComposing,
+            DesktopTurn = desktopTurn,
             Browser = HeadlessBrowser.Find(paths.BrowserProfileDir),
             Ssh = ssh,
             Mcp = mcpSetup,

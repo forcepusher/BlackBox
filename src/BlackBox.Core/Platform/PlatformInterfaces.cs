@@ -67,8 +67,8 @@ public interface IInputController
 /// <summary>
 /// BlackBox's own window. It stays on screen while the agent works, so it is kept out of the
 /// agent's way: left out of its screenshots by <see cref="IScreenCapture"/> where the OS allows,
-/// and pushed behind other windows for the moment an action lands on it. So are the windows of
-/// the other BlackBoxes running on the PC, each a process of its own with its own agent.
+/// and pushed behind other windows for the moment an action lands on it: all of BlackBox's
+/// windows (every chat window, the viewer, Filmmaking, a dialog).
 /// </summary>
 public interface IHostWindow
 {
@@ -77,21 +77,6 @@ public interface IHostWindow
 
     /// <summary>If the window has keyboard focus, hands focus to the window underneath it.</summary>
     void YieldFocus();
-
-    /// <summary>
-    /// What this window says when another BlackBox window asks whether the user is typing to it
-    /// (see <see cref="OtherWindowTyping"/>): its own box only.
-    /// </summary>
-    void AnswerTyping(Func<bool> typing) { }
-
-    /// <summary>
-    /// Whether the user is typing a message in another BlackBox window right now: this window's
-    /// clicks and key presses wait then too, or they would take the focus from under the typing.
-    /// </summary>
-    bool OtherWindowTyping() => false;
-
-    /// <summary>Brings forward the window of another BlackBox (by its process); false when it has none on screen.</summary>
-    bool BringForward(int processId) => false;
 }
 
 public sealed class NoHostWindow : IHostWindow
@@ -156,36 +141,6 @@ public sealed class NoStopKey : IStopKey
     }
 }
 
-/// <summary>
-/// The mouse and keyboard, shared by every BlackBox window on the PC, each of which may have an
-/// agent at work: one agent uses them at a time, from its first click or key press until its task
-/// ends, or until it has left them alone for a while and another window's agent waits for them.
-/// Two at once, each one's clicks moved the focus from under the other's typing.
-/// </summary>
-public interface IDesktopTurn
-{
-    /// <summary>
-    /// Waits until this agent has the mouse and keyboard, for up to <paramref name="maxWait"/>;
-    /// <paramref name="waiting"/> is told for how long so far, about twice a second. Null when the
-    /// wait ran out; otherwise whether another window's agent had them since this one last did,
-    /// so the screen may no longer be what this agent last saw.
-    /// </summary>
-    Task<bool?> TakeAsync(TimeSpan maxWait, Action<TimeSpan>? waiting, CancellationToken ct);
-
-    /// <summary>The action taken for is over: the time the mouse and keyboard are left alone counts from here.</summary>
-    void Done() { }
-
-    /// <summary>The task is over: another window's agent may have them.</summary>
-    void Release();
-}
-
-public sealed class NoDesktopTurn : IDesktopTurn
-{
-    public static readonly NoDesktopTurn Instance = new();
-    public Task<bool?> TakeAsync(TimeSpan maxWait, Action<TimeSpan>? waiting, CancellationToken ct) => Task.FromResult<bool?>(false);
-    public void Release() { }
-}
-
 /// <summary>Everything OS-specific the agent needs. One implementation per platform.</summary>
 public interface IPlatformServices
 {
@@ -197,9 +152,6 @@ public interface IPlatformServices
     IHostWindow HostWindow { get; }
 
     IInputOverlay InputOverlay { get; }
-
-    /// <summary>Whose turn it is with the mouse and keyboard, among the BlackBox windows on the PC.</summary>
-    IDesktopTurn DesktopTurn => NoDesktopTurn.Instance;
 
     /// <summary>Start info for running one command string in the platform shell (no redirection set).</summary>
     ProcessStartInfo CreateShellStartInfo(string command);

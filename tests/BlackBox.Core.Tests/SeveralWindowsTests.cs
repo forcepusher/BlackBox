@@ -1,5 +1,4 @@
 using System.Text.Json.Nodes;
-using BlackBox.Core.Chats;
 using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
@@ -8,8 +7,8 @@ using Xunit;
 namespace BlackBox.Core.Tests;
 
 /// <summary>
-/// Several BlackBox windows at once, each a process of its own sharing one Data folder: the
-/// settings each one changes, the chats each one has open, and the mouse and keyboard.
+/// Several BlackBox windows at once, in one process with one Data folder: the settings each one
+/// changes, and the mouse and keyboard their agents take turns with.
 /// </summary>
 public class SeveralWindowsTests : IDisposable
 {
@@ -67,116 +66,180 @@ public class SeveralWindowsTests : IDisposable
     }
 
     [Fact]
-    public void A_chat_open_in_one_window_cannot_be_claimed_by_another()
+    public void Windows_saving_at_once_keep_each_others_changes()
     {
-        var store = new ChatStore(Path.Combine(_root, "chats"));
-        using (var claim = store.Claim("chat-1"))
+        var paths = new AppPaths(_root);
+        paths.EnsureCreated();
+        new SettingsStore(paths).Save(new AppSettings());
+        var stores = Enumerable.Range(0, 8).Select(_ => new SettingsStore(paths)).ToList();
+        var settings = stores.Select(s => s.Load()).ToList();
+
+        Parallel.For(0, stores.Count, i =>
         {
-            Assert.NotNull(claim);
-            Assert.Null(store.Claim("chat-1"));
-            // This window's own claim isn't "elsewhere".
-            Assert.Empty(store.OpenElsewhere());
-        }
-        // Let go of: free again, and the claim file is gone with it.
-        using (var again = store.Claim("chat-1"))
-            Assert.NotNull(again);
-        Assert.Empty(Directory.GetFiles(store.Folder, "*.open"));
+            settings[i].Agent.CustomInstructions = i == 0 ? "Be brief." : settings[i].Agent.CustomInstructions;
+            settings[i].Server.Model = i == 1 ? "gemma" : settings[i].Server.Model;
+            settings[i].Window = i == 2 ? new WindowPlacement { X = 5, Y = 5, Width = 900, Height = 700 } : settings[i].Window;
+            stores[i].Save(settings[i]);
+        });
+
+        var saved = new SettingsStore(paths).Load();
+        Assert.Equal("Be brief.", saved.Agent.CustomInstructions);
+        Assert.Equal("gemma", saved.Server.Model);
+        Assert.Equal(5, saved.Window?.X);
+    }
+
+    // ---- the mouse and keyboard ----------------------------------------------------------
+
+    private long _now;
+
+    private DesktopTurn NewTurn() => new(() => _now);
+
+    [Fact]
+    public async Task One_agent_at_a_time_has_the_mouse_and_keyboard()
+    {
+        var turn = NewTurn();
+        object a = new(), b = new();
+
+        Assert.False(await turn.TakeAsync(a, TimeSpan.Zero, null, CancellationToken.None));
+        // In the middle of a's action, however long: b doesn't get them.
+        _now += 10 * 60_000;
+        Assert.Null(await turn.TakeAsync(b, TimeSpan.Zero, null, CancellationToken.None));
+
+        // Between two of a's actions, for less than the handover time: still a's.
+        turn.Done(a, acted: true);
+        _now += (long)DesktopTurn.IdleHandover.TotalMilliseconds - 1;
+        Assert.Null(await turn.TakeAsync(b, TimeSpan.Zero, null, CancellationToken.None));
+        Assert.False(await turn.TakeAsync(a, TimeSpan.Zero, null, CancellationToken.None));
+        turn.Done(a, acted: true);
+
+        // Left alone for longer: b's.
+        _now += (long)DesktopTurn.IdleHandover.TotalMilliseconds;
+        Assert.NotNull(await turn.TakeAsync(b, TimeSpan.Zero, null, CancellationToken.None));
+        Assert.Null(await turn.TakeAsync(a, TimeSpan.Zero, null, CancellationToken.None));
     }
 
     [Fact]
-    public void A_chat_another_process_holds_is_open_elsewhere()
+    public async Task A_task_that_ends_hands_them_over_at_once()
     {
-        var store = new ChatStore(Path.Combine(_root, "chats"));
-        Directory.CreateDirectory(store.Folder);
-        // Held the way another BlackBox holds it, with its process id in it.
-        var file = Path.Combine(store.Folder, "chat-2.open");
-        using (var other = new FileStream(file, FileMode.Create, FileAccess.ReadWrite, FileShare.Read, 4096, FileOptions.DeleteOnClose))
-        {
-            other.Write("4242"u8);
-            other.Flush();
-            Assert.Equal(4242, Assert.Contains("chat-2", store.OpenElsewhere()));
-            Assert.Null(store.Claim("chat-2"));
-        }
-        Assert.Empty(store.OpenElsewhere());
+        var turn = NewTurn();
+        object a = new(), b = new();
+        Assert.False(await turn.TakeAsync(a, TimeSpan.Zero, null, CancellationToken.None));
+        turn.Done(a, acted: true);
+
+        turn.Release(a);
+
+        Assert.NotNull(await turn.TakeAsync(b, TimeSpan.Zero, null, CancellationToken.None));
     }
 
     [Fact]
-    public void A_claim_file_nobody_holds_is_no_claim()
+    public async Task An_agent_hears_when_another_acted_since_it_last_saw_the_screen()
     {
-        // Left behind where it couldn't be deleted on close.
-        var store = new ChatStore(Path.Combine(_root, "chats"));
-        Directory.CreateDirectory(store.Folder);
-        File.WriteAllText(Path.Combine(store.Folder, "chat-3.open"), "4242");
+        var turn = NewTurn();
+        object a = new(), b = new();
+        turn.Looked(b);
 
-        Assert.Empty(store.OpenElsewhere());
-        using var claim = store.Claim("chat-3");
-        Assert.NotNull(claim);
+        // a acts and its task ends; b, which looked before, would aim at what may have moved.
+        Assert.False(await turn.TakeAsync(a, TimeSpan.Zero, null, CancellationToken.None));
+        turn.Done(a, acted: true);
+        turn.Release(a);
+        Assert.True(await turn.TakeAsync(b, TimeSpan.Zero, null, CancellationToken.None));
+        turn.Done(b, acted: false);
+
+        // Shown the screen as it is now, it goes on; its own actions don't count against it.
+        turn.Looked(b);
+        Assert.False(await turn.TakeAsync(b, TimeSpan.Zero, null, CancellationToken.None));
+        turn.Done(b, acted: true);
+        Assert.False(await turn.TakeAsync(b, TimeSpan.Zero, null, CancellationToken.None));
+        turn.Done(b, acted: true);
+        turn.Release(b);
+
+        // An action held back for a look again, since b acted, is no action b has to hear of.
+        turn.Looked(b);
+        Assert.True(await turn.TakeAsync(a, TimeSpan.Zero, null, CancellationToken.None));
+        turn.Done(a, acted: false);
+        turn.Looked(a);
+        turn.Release(a);
+        Assert.False(await turn.TakeAsync(b, TimeSpan.Zero, null, CancellationToken.None));
     }
 
     [Fact]
-    public void A_chat_is_let_go_of_once_its_last_version_is_written()
+    public async Task An_agent_that_waited_for_another_is_told_the_screen_changed()
     {
-        var store = new ChatStore(Path.Combine(_root, "chats"));
-        var saver = new ChatSaver(store);
-        var claim = store.Claim("chat-4")!;
-        saver.Save(new SavedChat { Id = "chat-4", Title = "Last", Updated = DateTime.UtcNow });
+        var turn = NewTurn();
+        object a = new(), b = new();
+        Assert.False(await turn.TakeAsync(a, TimeSpan.Zero, null, CancellationToken.None));
 
-        saver.Release(claim);
-        Assert.True(saver.Flush(TimeSpan.FromSeconds(10)));
+        var waits = new List<TimeSpan>();
+        var waiting = turn.TakeAsync(b, TimeSpan.FromSeconds(30), waits.Add, CancellationToken.None);
+        await Task.Delay(300);
+        Assert.False(waiting.IsCompleted);
+        Assert.NotEmpty(waits);
 
-        // Another window opening it now finds the version written last.
-        using var other = store.Claim("chat-4");
-        Assert.NotNull(other);
-        Assert.Equal("Last", store.Load("chat-4")?.Title);
+        turn.Done(a, acted: true);
+        turn.Release(a);
+        Assert.True(await waiting.WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
     [Fact]
-    public async Task An_action_waits_for_its_turn_and_looks_again_when_another_window_had_it()
+    public async Task An_action_waits_for_its_turn_and_looks_again_when_another_window_acted()
     {
-        var platform = new FakePlatform { DesktopTurn = new Turn(true) };
-        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var turn = new DesktopTurn();
+        var platform = new FakePlatform();
+        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(), DesktopTurn = turn };
+        ScreenshotTool.Take(ctx);
+        // Another window's agent clicked meanwhile, and its task ended.
+        var other = new object();
+        Assert.NotNull(await turn.TakeAsync(other, TimeSpan.Zero, null, CancellationToken.None));
+        turn.Done(other, acted: true);
+        turn.Release(other);
 
         var result = await new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = "enter" }, ctx, CancellationToken.None);
 
         Assert.Empty(platform.Actions); // nothing pressed on a screen the model hasn't seen
         Assert.StartsWith("Nothing was done: another BlackBox window", result.Text);
         Assert.NotNull(result.Image);
+
+        // Asked again, with the screen now seen: done.
+        await new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = "enter" }, ctx, CancellationToken.None);
+        Assert.NotEmpty(platform.Actions);
+        await ctx.FinishRunAsync();
     }
 
     [Fact]
     public async Task An_action_whose_turn_never_came_does_nothing_and_says_why()
     {
-        var platform = new FakePlatform { DesktopTurn = new Turn(null) };
-        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var turn = new DesktopTurn();
+        Assert.NotNull(await turn.TakeAsync(new object(), TimeSpan.Zero, null, CancellationToken.None)); // another window's agent, mid-action
+        var platform = new FakePlatform();
+        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(), DesktopTurn = turn };
+        var wait = DesktopActionTool.MaxTurnWait;
+        DesktopActionTool.MaxTurnWait = TimeSpan.Zero;
+        try
+        {
+            var result = await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 10, ["y"] = 10 }, ctx, CancellationToken.None);
 
-        var result = await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 10, ["y"] = 10 }, ctx, CancellationToken.None);
-
-        Assert.Empty(platform.Actions);
-        Assert.Contains("Do what doesn't need them meanwhile", result.Text);
+            Assert.Empty(platform.Actions);
+            Assert.Contains("Do what doesn't need them meanwhile", result.Text);
+        }
+        finally
+        {
+            DesktopActionTool.MaxTurnWait = wait;
+        }
     }
 
     [Fact]
     public async Task The_turn_is_let_go_of_when_the_task_ends()
     {
-        var turn = new Turn(false);
-        var platform = new FakePlatform { DesktopTurn = turn };
-        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false }, WorkingDirectory = Path.GetTempPath() };
+        var turn = new DesktopTurn();
+        var platform = new FakePlatform();
+        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false }, WorkingDirectory = Path.GetTempPath(), DesktopTurn = turn };
 
         await new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = "enter" }, ctx, CancellationToken.None);
         Assert.NotEmpty(platform.Actions);
-        Assert.Equal(1, turn.Done); // the idle time counts from the end of the action
-        Assert.Equal(0, turn.Released);
+        var other = new object();
+        Assert.Null(await turn.TakeAsync(other, TimeSpan.Zero, null, CancellationToken.None)); // left alone only a moment
 
         await ctx.FinishRunAsync();
-        Assert.Equal(1, turn.Released);
-    }
-
-    private sealed class Turn(bool? answer) : IDesktopTurn
-    {
-        public int Released { get; private set; }
-        public int Done { get; private set; }
-        public Task<bool?> TakeAsync(TimeSpan maxWait, Action<TimeSpan>? waiting, CancellationToken ct) => Task.FromResult(answer);
-        void IDesktopTurn.Done() => Done++;
-        public void Release() => Released++;
+        Assert.NotNull(await turn.TakeAsync(other, TimeSpan.Zero, null, CancellationToken.None));
     }
 }

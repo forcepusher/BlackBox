@@ -16,20 +16,22 @@ public abstract class DesktopActionTool : Tool
 
     public sealed override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
-        // Another BlackBox window's agent may be using the mouse and keyboard: one at a time.
-        var turn = await ctx.Platform.DesktopTurn.TakeAsync(MaxTurnWait,
+        if (ctx.DesktopTurn is not { } desktop)
+            return await ActAndLookAsync(args, ctx, screenChanged: false, ct).ConfigureAwait(false);
+        // Another window's agent may be using the mouse and keyboard: one at a time.
+        var turn = await desktop.TakeAsync(ctx, MaxTurnWait,
             waited => ctx.Progress?.Invoke($"Waiting for another BlackBox window to finish with the mouse and keyboard · {Chats.ChatTimes.Stopwatch(waited)}"), ct).ConfigureAwait(false);
         if (turn is null)
             return new ToolResult($"Nothing was done: another BlackBox window's agent has been using the mouse and keyboard for {MaxTurnWait.TotalMinutes:0} minutes. " +
                                   "Do what doesn't need them meanwhile (files, commands), or try again.");
         ctx.AfterRun("desktop turn", () =>
         {
-            ctx.Platform.DesktopTurn.Release();
+            desktop.Release(ctx);
             return Task.CompletedTask;
         });
         // Not handed to another window while the action goes on, however long it waits for the user's typing.
         try { return await ActAndLookAsync(args, ctx, screenChanged: turn == true, ct).ConfigureAwait(false); }
-        finally { ctx.Platform.DesktopTurn.Done(); }
+        finally { desktop.Done(ctx, acted: turn == false); }
     }
 
     private async Task<ToolResult> ActAndLookAsync(JsonObject args, ToolContext ctx, bool screenChanged, CancellationToken ct)
@@ -41,7 +43,7 @@ public abstract class DesktopActionTool : Tool
             var now = ScreenshotTool.Take(ctx);
             return now with
             {
-                Text = "Nothing was done: another BlackBox window's agent was using the mouse and keyboard, so the screen may have changed since you last saw it. " +
+                Text = "Nothing was done: another BlackBox window's agent has used the mouse and keyboard, so the screen may have changed since you last saw it. " +
                        "This is the screen now; do it again if it still applies.\n" + now.Text,
             };
         }
@@ -161,6 +163,7 @@ public sealed class ScreenshotTool : Tool
         var space = ctx.GetScreenSpace();
         var frame = ctx.Platform.Screen.Capture(space.Screen, includeCursor: true);
         ctx.LastShot = (space.Screen, frame);
+        ctx.DesktopTurn?.Looked(ctx);
         var jpeg = space.Encode(frame);
         var count = ctx.Screens.Count;
         var which = count > 1 ? $"Screenshot of screen {ctx.CurrentScreen + 1} of {count}" : "Screenshot";

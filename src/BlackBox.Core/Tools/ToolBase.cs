@@ -87,6 +87,9 @@ public sealed class ToolContext
     /// <summary>Where the last click that was held back because the screen had changed was aimed (screen pixels).</summary>
     internal (int X, int Y)? HeldBack { get; set; }
 
+    /// <summary>Whose turn it is with the mouse and keyboard among BlackBox's windows; null where only one agent runs (the command line, tests).</summary>
+    public Platform.DesktopTurn? DesktopTurn { get; init; }
+
     /// <summary>The PC's own browser, run headless, for the web tools to fall back on; null when there is none.</summary>
     public Web.HeadlessBrowser? Browser { get; init; }
 

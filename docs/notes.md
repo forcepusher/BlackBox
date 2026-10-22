@@ -818,59 +818,72 @@ The times are saved with the chat; a chat saved before they were kept shows none
 
 ## Several windows
 The new-window button in the top bar (an icon, so the bar still fits the narrowest window) or
-Ctrl+Shift+N starts another BlackBox, a process of its own from the same exe and the same `Data`
-folder (BLACKBOX_HOME goes along), with its own chat, agent and MCP servers. Starting the exe again
-does the same. Each window holds a named mutex for its slot (`Local\BlackBox.Window.N`): the first
-opens where BlackBox was last closed, each later one 32 px further down and right (kept on the
-screen), as Windows cascades windows; right on top of the first, a second looked as if nothing had
-opened. A later window closed where it opened doesn't save its place, so BlackBox doesn't creep
-down a step with every second window. The title bar names the chat ("keys 6 - BlackBox"), to tell
-the windows apart on the taskbar.
+Ctrl+Shift+N opens another chat window, with its own chat, agent and MCP servers. Starting BlackBox
+again does the same: one BlackBox runs per `Data` folder (`SingleInstance`), and a second start of
+the exe asks it for another window and ends at once. All the windows are one process
+(`ChatWindows` keeps them), so what they share needs no talk between programs; BlackBox ends with
+its last chat window. Until the user chose this (2026-10-23, "I prefer simple solutions"), each
+window was a process of its own, and that took a hidden message window per process to hide each
+other's windows from screenshots and to ask "typing?", named mutexes for the mouse and keyboard and
+the captures, claim files for open chats, and a Pause/Break passed on from process to process.
+
+How a second start finds the first: a named mutex `Local\BlackBox-<hash>` says one runs, and it is
+asked over a named pipe of the same name, open to this Windows user only. The hash stands for the
+user, the Windows session, the `Data` folder and the build (the exe's module id): another build in
+the same folder (a newer download started beside the old one, "BlackBox (1).exe") runs on its own,
+as before. The pipe is listened on from the first line of `Main`, so a start a moment after another
+waits for it (two started at once made one process with two windows); one that started before the
+first window was up gets its window once it is. The running one sends its process id first, and
+the new start, which has the foreground as the program the user just opened, lets it bring the new
+window to the front (`AllowSetForegroundWindow`); Windows doesn't let a program in the background
+do that by itself. A running one that doesn't answer in 10 s (hung, or ending) is left be, and the
+new start runs beside it.
+
+The first window opens where BlackBox was last closed, every later one 32 px down and right of the
+window in front, at its size, kept on the screen, as Windows cascades windows: right on top of it,
+a second window looked as if nothing had opened. A window closed where it opened beside another
+doesn't save its place, so BlackBox doesn't creep down a step with every second window. The title
+bar names the chat ("keys 6 - BlackBox"), to tell the windows apart on the taskbar. A window's
+Filmmaking window and full-screen viewer close with it.
 
 What they share, and how they keep out of each other's way:
-- **Settings.** Each window has them in memory and writes only what it changed since it last read
-  or wrote `settings.json` (a three-way merge, key by key, under a named mutex): a model picked in
-  one window stayed picked when another closed and saved where it was. Each window keeps using what
-  it has; a new window starts with what was saved last.
-- **Chats.** The chat on screen is claimed with `Data/chats/<id>.open`, held open with the window's
-  process id in it and deleted when let go of (also when the process ends, however). A chat another
-  window has open says so in History ("Open in another window", no trash button) and picking it
-  brings that window forward; two windows saving their own runs into one file lost one of them.
-  History rereads the folder whenever it opens, for the chats other windows started. A chat is let
-  go of once its last version is on the disk.
-- **The screen.** A process can only leave its own windows out of a capture, so every BlackBox keeps
-  a hidden message-only window (class `BlackBox.Neighbour`) through which the others ask it to
-  leave its windows out for the moment a screenshot is taken, and back after; the captures of all
-  BlackBoxes take turns on a named mutex. Without it a second window showed in the first one's
-  screenshots, its chat and its task with it. A click that lands on any BlackBox window (its own,
-  another's, Filmmaking, a dialog) pushes it to the bottom for the click, and keys go to the window
-  under it, as they did for the chat alone.
-- **The mouse and keyboard.** One agent at a time (`IDesktopTurn`, a named mutex held by a thread
-  of its own): from its first click or key press until its task ends, or until it has left them
-  alone for 60 s while another window's agent waits (longer than a model thinks between two
-  clicks). An action that had to wait does nothing and gives the model the screen as it is now, as
-  the screen it aimed at may have changed; one that waited 5 minutes says so and suggests work
-  that doesn't need them. Typing in any window's box pauses every window's clicks and keys, as
-  typing in its own does ("Paused while you type in another BlackBox window", without Resume, which
-  only ends its own pause). One Pause/Break stops every window's run, and a command-line runner's:
-  the hook that swallowed the press tells the others (a Pause pressed in a test stopped a CLI
-  benchmark running beside it).
-- **ComfyUI.** Each window marks a task that uses it with `Data/comfyui/in-use-<pid>.lock`; the
-  server BlackBox started is closed by the last one done with it, and a leftover is closed at start
-  only when no other BlackBox uses it. The first window's task closed it between two jobs of the second's.
-- **The headless browser** (web search): one page at a time among the windows too, by a claim on
-  `Data/browser.lock`, since they share its profile. **The native libraries**: two windows started
-  at once after an update unpack them one after the other.
+- **Settings.** Each window has them in memory, with a store of its own that writes only what the
+  window changed since it last read or wrote `settings.json` (a three-way merge, key by key, one
+  window at a time): a model picked in one window stayed picked when another closed and saved
+  where it was. Each window keeps using what it has; a new window starts with what was saved last.
+- **Chats.** A chat is open in one window at a time: two saving their own runs into one file lost
+  one of them. One another window has open says so in History ("Open in another window", no trash
+  button), and picking it brings that window forward. History rereads the folder whenever it opens,
+  for the chats other windows started. One saver writes every window's chats, so a window opening a
+  chat another just left waits for its last version.
+- **The screen.** Every window, Filmmaking, the viewer and a dialog is the process's own, so all of
+  them are left out of every agent's screenshots, and a click that lands on any of them pushes it to
+  the bottom for the click, as for the chat alone.
+- **The mouse and keyboard.** One agent at a time (`DesktopTurn`): from its first click or key
+  press until its task ends, or until it has left them alone for 60 s while another window's agent
+  waits (longer than a model thinks between two clicks); never in the middle of an action. An
+  action whose agent hasn't seen the screen since another agent acted (it waited for them, or the
+  other's task ended a moment before) does nothing and gives the model the screen as it is now:
+  what it aimed at may have moved. Its own actions and plain looks don't count. One that waited
+  5 minutes says so and suggests work that doesn't need them. Typing in any window's box pauses
+  every window's clicks and keys, as typing in its own does ("Paused while you type in another
+  BlackBox window", without Resume, which only ends its own pause). One keyboard hook watches
+  Pause/Break for all of them, and one press stops every window's run; with a hook each, the first
+  that stopped its run swallowed the press, and the others never saw it.
+- **ComfyUI and the headless browser** are the process's: the server BlackBox started is closed by
+  the last task done with it, and the browser loads one page at a time on its profile.
 
-Checked on the desktop PC with a stand-in model server: a second window from the button opened at
-(132,92) beside the first at (100,60); "keys 6" in one window and "keys 3" in the other a second
-later pressed F24 six times, then the second window's first press came 13 s late with "Nothing was
-done", then its other two; neither window showed in the other's screenshots; typing in the second
-window's box paused the first ("Paused while you type in another BlackBox window", the task took
-25 s instead of 12); one Pause stopped both runs; the first window's agent clicked into a Notepad
-behind the second window and typed "hello from window one" into it, with nothing in the second
-window's box; the second window's History showed the first's chat as open in another window, and
-picking it brought the first window forward.
+Checked on the desktop PC with a stand-in model server (2026-10-23): starting the exe again ended
+that start in 0.1 s and opened a second window in the first process, in front, 32 px down and
+right; New window there opened a third a step further. "keys 4" in one window with text typed in
+another's box paused it ("Paused while you type in another BlackBox window", 25 s instead of 12);
+one Pause stopped two runs; picking a chat another window had open brought that window forward.
+"keys 3" sent in two windows half a second apart: the second showed "Waiting for another BlackBox
+window to finish with the mouse and keyboard", got them when the first was done, and its first
+press was "Nothing was done" with the screen as it was. No BlackBox window showed in any screenshot.
+Two starts at the same moment made one process with two windows; a start with another `Data`
+folder ran as a process of its own. Closing the first window left the others; closing the last
+ended the process.
 
 ## Files in a message
 Drop files or folders anywhere on the window, paste them with Ctrl+V (a screenshot, a picture
@@ -1547,8 +1560,8 @@ run, the line saying so in the chat has a Continue button: the task carries on w
 as if "Continue." had been sent (a stop before the model had the message runs that message again).
 A chat that ended stopped shows it again when opened from History. BlackBox
 stays on screen while it works but is left out of the agent's screenshots, and steps behind other
-windows for the moment a click lands on it: all of its windows (the viewer, Filmmaking, a dialog),
-found by their process, and those of other BlackBox windows too (see Several windows). It is left out only for the instant each screenshot is
+windows for the moment a click lands on it: all of its windows (every chat window, the viewer,
+Filmmaking, a dialog), found by their process (see Several windows). It is left out only for the instant each screenshot is
 taken, so screen recorders and screen sharing show it the rest of the time (before, an option hid
 it from them for good). Every click and key press the agent makes shows up in a
 log in the bottom-right corner that fades after 15 seconds, with a ring where it clicked. The agent
@@ -1760,7 +1773,7 @@ dotnet test --filter SshIntegrationTests  # ssh, file tools and copy; BB_SSH_TES
 - `src/BlackBox.Core`: OpenAI-compatible streaming client, server probe, agent loop, tools,
   settings. Platform-neutral.
 - `src/BlackBox.Platform.Windows` (net10.0-windows): screen capture (GDI), input (SendInput),
-  host-window handling and the other BlackBox windows (turns, screenshots, typing, Pause/Break).
+  host-window handling, Pause/Break.
   Only referenced when building on Windows.
 - `src/BlackBox.Cli`: headless runner for trying tasks and models.
 - `src/BlackBox.App`: Avalonia 11 UI with CommunityToolkit.Mvvm.
