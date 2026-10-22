@@ -199,6 +199,9 @@ public class GuessworkTests
     [InlineData("I need to check the node names in Blender 5.2. Let me do a quick web search for Blender 5.2's geometry nodes Python API. Actually, let me think about what I know.",
         "Let me do a quick web search for Blender 5.2's geometry nodes Python API.")]
     [InlineData("Let me search for the templates that make video first.", null)]
+    [InlineData("Let me search the web for this specific problem.", null)]
+    [InlineData("Let me search the web for this specific problem: \"Blender 5.2 modifier input not updating\".",
+        "Let me search the web for this specific problem: \"Blender 5.2 modifier input not updating\".")]
     // A check it makes on this PC (inspect.signature on the installed moviepy), not on the web.
     [InlineData("Also, let's check the signature of crossfadein/crossfadeout in moviepy 2.x. Let me verify.", null)]
     [InlineData("Let me check the output folder for the new file.", null)]
@@ -229,6 +232,9 @@ public class GuessworkTests
     // Saying it will look something up, and then writing the script from memory (qwen3.8 on Blender 5.2).
     [InlineData("Let me do a quick web search for Blender 5.2's geometry nodes Python API.", null, "Blender 5.2's geometry nodes Python API")]
     [InlineData("I should look up the node names in Blender 5.2, but most are stable.", null, "the node names in Blender 5.2")]
+    // What it would search, written after a colon (qwen3.8 on develop, before it went on from memory).
+    [InlineData("Let me search the web for this specific problem: \"Blender 5.2 geometry nodes modifier input value python background not updating depsgraph\".", "Blender 5.2",
+        "Blender 5.2 geometry nodes modifier input value python background not updating depsgraph")]
     [InlineData("I don't know which sampler Nova Furry XL wants, so I'll keep euler.", "ComfyUI", "which sampler Nova Furry XL wants ComfyUI")]
     public void A_question_is_searched_without_the_thinking_around_it(string question, string? subject, string query) =>
         Assert.Equal(query, Guesswork.Query(question, subject));
@@ -402,6 +408,25 @@ public class GuessworkTests
         now += TimeSpan.FromSeconds(20);
         Assert.Equal(Guesswork.CheckNote(TimeSpan.FromSeconds(160), 8), guesswork.Check(Shell, new ToolResult("Exit code 0\nprobing")));
         Assert.StartsWith("[BlackBox] Time to look things up: 8 tries and 2 minutes since", Guesswork.CheckNote(TimeSpan.FromSeconds(160), 8));
+    }
+
+    [Fact]
+    public void Looking_things_up_for_long_with_no_try_says_to_ask_the_installed_version()
+    {
+        var guesswork = new Guesswork();
+        guesswork.StartRun("Make scatter.blend with Blender 5.2");
+        var page = new ToolResult("# nodeitems_builtins.py");
+        for (var i = 1; i < Guesswork.LongSearch; i++)
+            Assert.Null(guesswork.Check(new FetchPageTool(), page));
+        Assert.Equal(Guesswork.LongSearchNote(8), guesswork.Check(new FetchPageTool(), page));
+        for (var i = 9; i < 14; i++)
+            Assert.Null(guesswork.Check(new WebSearchTool(), page));
+        Assert.Equal(Guesswork.LongSearchNote(14), guesswork.Check(new FetchPageTool(), page));
+
+        // A try starts the count again.
+        Assert.Null(guesswork.Check(Shell, new ToolResult("Exit code 0\n['GeometryNodeGroup', 'NodeGroupInput', 'NodeGroupOutput']")));
+        for (var i = 1; i < Guesswork.LongSearch; i++)
+            Assert.Null(guesswork.Check(new FetchPageTool(), page));
     }
 
     [Theory]

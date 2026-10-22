@@ -1246,6 +1246,16 @@ how long the task takes still turns on the model. A third run with the eight-tri
 first again, failed 2 of 10 scripts and was done in 10 minutes with the scene right: the new build
 finished two of its three runs, the old one neither of its two.
 
+Then it looked things up too long. On develop, the same task had qwen3.8 read Blender's release
+notes, its manual and then its source on GitHub's main branch for 13 minutes, 40 pages with no
+script in between, asking itself whether Group Input had been renamed in 5.2, and it hadn't
+finished at 20 minutes. So after eight look-ups with no try between them, and every six after
+that, the result says the installed version can settle it: a short script that lists or prints
+what it has, then the likeliest answer tried. With that, the next run read for four minutes, went
+to scripts, and had the scene right (100 cubes) in 16 minutes. A search the model says it will
+make and then doesn't is searched as it wrote it when it wrote it out in quotes after a colon
+("this specific problem: "Blender 5.2 geometry nodes modifier input…"").
+
 No API key and nothing to install. `web_search` asks DuckDuckGo's HTML page through the system's
 `curl` (built into Windows 10 and later; a fraction of a second): DuckDuckGo recognizes .NET's own
 HTTP client by its TLS handshake and answers it with a captcha, even on the first search.

@@ -50,6 +50,19 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     /// </summary>
     internal const int CheckBurst = 8;
 
+    /// <summary>
+    /// Look-ups in a row, with no try between them, after which the model is told the installed
+    /// version can settle it: told to look things up, qwen3.8 read Blender's release notes, the
+    /// manual and then its source on GitHub's main branch for 13 minutes (40 pages), asking whether
+    /// Group Input had been renamed, rather than listing the node types its Blender 5.2 had.
+    /// </summary>
+    internal const int LongSearch = 8;
+
+    internal static string LongSearchNote(int lookUps) =>
+        $"[BlackBox] {lookUps} look-ups since your last try. When the pages don't settle it, the installed version can: ask it directly " +
+        "(a short script that lists or prints what it has: dir(), help(), --help), then try the likeliest answer. " +
+        "A try tells you more now than another page, and an error from it is something a search answers.";
+
     /// <summary>Calls after a look-up before a question of the model's is searched for it: it is reading what it found.</summary>
     internal const int SearchGap = 4;
 
@@ -89,7 +102,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     private readonly Dictionary<string, int> _seen = [];
     private readonly Queue<int> _failures = new();
     private readonly List<HashSet<string>> _searched = [];
-    private int _calls, _triesSince, _lookedUpAt = -SearchGap;
+    private int _calls, _triesSince, _lookUpsSinceTry, _lookedUpAt = -SearchGap;
     private TimeSpan _worked;
     private DateTime? _tick;
     private bool _lookedUp, _firstSaid, _tried, _triedInRun;
@@ -189,7 +202,8 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         {
             _failures.Clear();
             (_lookedUp, _worked, _triesSince, _lookedUpAt, _pending, _noted) = (true, TimeSpan.Zero, 0, _calls, null, null);
-            return null;
+            _lookUpsSinceTry++;
+            return _lookUpsSinceTry >= LongSearch && (_lookUpsSinceTry - LongSearch) % 6 == 0 ? LongSearchNote(_lookUpsSinceTry) : null;
         }
         // Reading the installed version's own API (inspect.signature, --help) is looking it up too.
         if (Reads(tool, arguments))
@@ -199,6 +213,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         {
             _triesSince++;
             _triedInRun = true;
+            _lookUpsSinceTry = 0;
         }
         var pending = _pending;
         _pending = null;
@@ -282,9 +297,11 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         string? found = null;
         foreach (var sentence in Sentences().Split(Plain(text)))
         {
-            // The question is the part of a sentence that asks: "Node 1 loads Pony — wait, which checkpoint should I use?"
-            var asked = Clauses().Split(sentence).Select(c => c.Trim().Trim('*', '_', '`', '-', ' ', '"', '\''))
-                .LastOrDefault(c => (c.EndsWith('?') && Asks().IsMatch(c)) || DoesntKnow().IsMatch(c) || MeansToLookUp(c) is not null);
+            // A search it means to make is the whole sentence: what it would search often follows a colon.
+            // A question is the part of a sentence that asks: "Node 1 loads Pony — wait, which checkpoint should I use?"
+            var asked = MeansToLookUp(sentence) is { } what && Words(what).Count >= 2 ? sentence.Trim().Trim('*', '_', '-', ' ')
+                : Clauses().Split(sentence).Select(c => c.Trim().Trim('*', '_', '`', '-', ' ', '"', '\''))
+                    .LastOrDefault(c => (c.EndsWith('?') && Asks().IsMatch(c)) || DoesntKnow().IsMatch(c));
             // "How should I proceed with this?" names nothing to search for.
             if (asked is null || asked.Length is < 20 or > 300 || Screenish().IsMatch(asked) || Words(asked).Count < 3)
                 continue;
@@ -305,7 +322,8 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         if (!q.EndsWith('?') && DoesntKnow().Match(q) is { Success: true } m)
             q = AfterThought().Replace(q[m.Groups["what"].Index..], "");
         else if (MeansToLookUp(q) is { } what)
-            q = AfterThought().Replace(what, "");
+            // "...for this specific problem: "Blender 5.2 modifier input not updating"": the quoted search.
+            q = Quoted().Match(what) is { Success: true } quoted ? quoted.Groups[1].Value : AfterThought().Replace(what, "");
         q = q.TrimEnd('?', '.', ' ');
         // The program, unless the question names it (or another one with its version).
         if (subject is { Length: > 0 } && !q.Contains(subject.Split(' ')[0], StringComparison.OrdinalIgnoreCase) && !NamedVersion().IsMatch(q))
@@ -372,7 +390,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         ["the", "and", "how", "can", "could", "should", "would", "does", "what", "which", "this", "that", "with", "for", "not", "sure", "know",
          "there", "way", "any", "into", "from", "you", "use", "proceed", "task", "next", "step", "now", "here", "then", "need", "want", "get",
          "done", "doing", "thing", "things", "it's", "i'm", "will", "work", "best", "about", "right", "correct", "exactly",
-         "wait", "but", "hmm", "also", "actually", "maybe", "well", "okay"];
+         "wait", "but", "hmm", "also", "actually", "maybe", "well", "okay", "problem", "issue", "specific", "particular"];
 
     // Curly apostrophes as straight ones, so "doesn’t" reads as "doesn't".
     private static string Plain(string text) => text.Replace('’', '\'').Replace('‘', '\'');
@@ -536,6 +554,10 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     // What a statement goes on to say after what isn't known: ", so I'll keep euler".
     [GeneratedRegex(@",\s*(so|and|but|then|because|which|i'll|i will)\b.*$", RegexOptions.IgnoreCase)]
     private static partial Regex AfterThought();
+
+    // A search written out in quotes, three words at least.
+    [GeneratedRegex(@"[""“]([^""”]*\s[^""”]*\s[^""”]*)[""”]")]
+    private static partial Regex Quoted();
 
     // Thinking's fillers before a question: "Hmm, so", "But wait,", "OK".
     [GeneratedRegex(@"^((so|but|hmm+|ok(ay)?|well|wait|now|and|also|actually|then|right|oh|ah)\b[,.:]?\s*)+", RegexOptions.IgnoreCase)]
