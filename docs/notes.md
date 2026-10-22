@@ -852,8 +852,9 @@ What they share, and how they keep out of each other's way:
   the screen it aimed at may have changed; one that waited 5 minutes says so and suggests work
   that doesn't need them. Typing in any window's box pauses every window's clicks and keys, as
   typing in its own does ("Paused while you type in another BlackBox window", without Resume, which
-  only ends its own pause). One Pause/Break stops every window's run: the hook that swallowed the
-  press tells the others.
+  only ends its own pause). One Pause/Break stops every window's run, and a command-line runner's:
+  the hook that swallowed the press tells the others (a Pause pressed in a test stopped a CLI
+  benchmark running beside it).
 - **ComfyUI.** Each window marks a task that uses it with `Data/comfyui/in-use-<pid>.lock`; the
   server BlackBox started is closed by the last one done with it, and a leftover is closed at start
   only when no other BlackBox uses it. The first window's task closed it between two jobs of the second's.
