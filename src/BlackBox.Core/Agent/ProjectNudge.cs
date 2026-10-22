@@ -1,0 +1,101 @@
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using BlackBox.Core.Projects;
+using BlackBox.Core.Tools;
+
+namespace BlackBox.Core.Agent;
+
+/// <summary>
+/// The note that says to index a project first, on the first file or folder of it the model
+/// reads, lists, changes or runs a command in, when it hasn't indexed it in this chat. The user
+/// asked for the model to index eagerly, by itself; the system prompt and index_folder's
+/// description ask for it too, and this catches the times it goes straight to the files. A note
+/// once per project, never a block: the user's rule for steering the model.
+/// </summary>
+internal sealed partial class ProjectNudge
+{
+    /// <summary>A project with fewer files than this is read faster than indexed: one the model is making from scratch, say.</summary>
+    internal const int MinFiles = 25;
+
+    private readonly List<string> _indexed = [];
+    private readonly HashSet<string> _said = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The project each path seen was in, as looking it up reads every folder above it.</summary>
+    private readonly Dictionary<string, (string Root, string Why)?> _projects = new(StringComparer.OrdinalIgnoreCase);
+
+    internal static string Note(string root, string why) =>
+        $"[BlackBox] {root} is a project ({why}) that you haven't indexed in this chat. Index it now: index_folder path=\"{root}\" " +
+        "tells you what is in it and what its files define, and index_folder with query= finds where anything is in it " +
+        "far faster than listing folders and opening files one by one.";
+
+    /// <summary>After a context reset the overview is gone from the conversation, so a project is worth indexing again.</summary>
+    public void Forget()
+    {
+        _indexed.Clear();
+        _said.Clear();
+    }
+
+    /// <summary>The note for a call, or null.</summary>
+    public string? Check(Tool? tool, string arguments, ToolResult result, ToolContext ctx)
+    {
+        if (tool is null)
+            return null;
+        JsonObject args;
+        try { args = ToolCallRepair.NormalizeArguments(ToolCallRepair.ParseArguments(arguments), tool); }
+        catch (ToolArgumentException) { return null; }
+        if (tool is IndexFolderTool)
+        {
+            if (!result.IsError && Arg(args, "path") is { } indexed)
+            {
+                var full = FolderIndex.Normalize(ctx.ResolvePath(indexed));
+                // The index the call used, as the tool finds it: a search of src goes to the
+                // project's, and a file stands for the project it is in.
+                _indexed.Add(FolderIndex.IndexedAbove(full, ctx.IndexDirectory)
+                             ?? (File.Exists(full) ? ProjectRoot.Find(full)?.Root ?? Path.GetDirectoryName(full)! : full));
+            }
+            return null;
+        }
+        // Work on another computer: its folders are no business of the index.
+        if (Arg(args, "host") is not null)
+            return null;
+        IEnumerable<string> paths = tool switch
+        {
+            ReadFileTool or WriteFileTool or EditFileTool => Arg(args, "path") is { } p ? [p] : [],
+            ListDirectoryTool => [Arg(args, "path") ?? "."],
+            ShellTool => [.. (Arg(args, "working_directory") is { } wd ? [wd] : Array.Empty<string>()), .. PathsIn(Arg(args, "command") ?? "")],
+            _ => [],
+        };
+        foreach (var path in paths)
+        {
+            string full;
+            try { full = FolderIndex.Normalize(ctx.ResolvePath(path)); }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { continue; }
+            if (_indexed.Any(i => Under(full, i)))
+                continue;
+            var dir = Directory.Exists(full) ? full : Path.GetDirectoryName(full) ?? full;
+            if (!_projects.TryGetValue(dir, out var project))
+                _projects[dir] = project = ProjectRoot.Find(dir);
+            if (project is not var (root, why) || _said.Contains(root) || _indexed.Any(i => Under(root, i)))
+                continue;
+            _said.Add(root);
+            if (!ProjectRoot.HasFiles(root, MinFiles))
+                continue;
+            return Note(root, why);
+        }
+        return null;
+    }
+
+    private static bool Under(string path, string folder) =>
+        path.Equals(folder, StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith(folder.EndsWith(Path.DirectorySeparatorChar) ? folder : folder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+
+    private static string? Arg(JsonObject args, string key) =>
+        args[key] is JsonValue v && v.TryGetValue<string>(out var s) && s.Trim().Length > 0 ? s.Trim() : null;
+
+    /// <summary>The full paths a command names (C:\Projects\game, "D:\My Game\src").</summary>
+    internal static IEnumerable<string> PathsIn(string command) =>
+        WindowsPath().Matches(command).Select(m => (m.Groups["quoted"].Success ? m.Groups["quoted"].Value : m.Groups["bare"].Value).TrimEnd('\\', '/', '.', ','));
+
+    [GeneratedRegex(@"[""'](?<quoted>[A-Za-z]:[\\/][^""'\r\n]*)[""']|(?<![\w""'])(?<bare>[A-Za-z]:[\\/][^\s""'|;<>,()]*)")]
+    private static partial Regex WindowsPath();
+}

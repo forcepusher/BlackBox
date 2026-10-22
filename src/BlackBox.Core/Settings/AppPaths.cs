@@ -15,6 +15,7 @@ namespace BlackBox.Core.Settings;
 ///   Data/scratch/  (helper files the agent made for its tasks: scripts and the like)
 ///   Data/pasted/   (pictures pasted into the chat from the clipboard)
 ///   Data/films/    (one folder per film: its storyboard, frames, shots, song and the film)
+///   Data/index/    (the indexes of the folders the agent indexed, a file each)
 /// </code>
 /// </summary>
 public sealed class AppPaths(string root)
@@ -56,6 +57,9 @@ public sealed class AppPaths(string root)
     /// choice), rather than in the PC's Videos folder.
     /// </summary>
     public string FilmsDir => Path.Combine(DataDir, "films");
+
+    /// <summary>The indexes of the folders the agent indexed, a file each (see <see cref="Projects.FolderIndex"/>).</summary>
+    public string IndexDir => Path.Combine(DataDir, "index");
 
     /// <summary>ComfyUI's address and folder as last used, the log of a server BlackBox started, and the browser profile its page is loaded in (see <see cref="Comfy.ComfyHub"/>).</summary>
     public string ComfyDir => Path.Combine(DataDir, "comfyui");

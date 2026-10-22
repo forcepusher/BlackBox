@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Folder index: before it works on a project or a big folder, BlackBox indexes it by itself, as
+  Cursor does: what kind of project it is, its README, its folders and what its main files define,
+  and a search that finds where anything is by names or by what the code does. Indexes are kept in
+  `Data\index` and bring themselves up to date on every use.
 - Several BlackBox windows at once: **New window** at the top, Ctrl+Shift+N, or starting BlackBox
   again opens another window with a chat and an agent of its own, a step down and to the
   right of the one in front. The windows take turns with the mouse and keyboard, stay out of each

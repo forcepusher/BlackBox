@@ -97,6 +97,8 @@ public sealed partial class AgentSession
         History.Clear();
         History.AddRange(userMessages);
         History.Add(ChatMessage.User(HandoffHeader + "\n\n" + note));
+        // A project's overview went with the rest: indexing it again brings it back.
+        _projects.Forget();
         if (screen is not null)
             History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText(CurrentScreenText), screen] });
 

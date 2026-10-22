@@ -17,6 +17,8 @@ whatever it downloads stay in a `Data` folder next to the exe.
   writes the prompts, picks the models, makes that piece and looks at it; earlier takes are kept.
   Or just ask for a film in the chat.
 - **Game development.** It makes games in any engine (Unity, Unreal, Godot) and play-tests them.
+- **Know your projects.** Before it works on a project or a big folder, it indexes it, as Cursor
+  does: what is in it, what its files define, and a search that finds where anything is.
 - **Documents.** It writes and edits Word, Excel, PowerPoint and PDF files, no Office needed.
 - **Servers.** It logs in over SSH to set servers up or fix them.
 - **Chat for you.** It replies in your chat apps while you're away, and says it's your assistant if asked.

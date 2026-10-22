@@ -19,6 +19,7 @@ BlackBox/
                comfyui/ (ComfyUI's address and folder, the log of a server BlackBox started, see Pictures, video and sound),
                pasted/ (pictures pasted into the chat, see Files in a message),
                films/ (a folder per film: storyboard, frames, shots, song and the film, see Films),
+               index/ (the indexes of the folders the agent indexed, a file each, see Folder index),
                crash.log (errors no code caught, see below)
 ```
 
@@ -1245,6 +1246,7 @@ prints the traceback and exits with 0.
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
+| `index_folder` | Indexes a folder, as Cursor does a codebase: an overview of the project (its kind, README, folders and what its main files define), and with `query` a search of its files by names or by what the code does (see below) |
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures, videos, sounds and 3D models to the model; `write_file` makes documents from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
 | `comfyui` | Pictures, video, sound, music, speech and 3D models with ComfyUI on this PC, which it installs when there is none: templates, node and model look-ups, models found online and downloaded, checked runs that hand back the files (see Pictures, video and sound) |
 | `film` | Films from a storyboard (the Filmmaking window's): plans or changes it, makes its frames, song and shots with ComfyUI, checks each shot against what it should show, joins them with ffmpeg (see Films) |
@@ -1343,6 +1345,102 @@ notification's close button, the notification was gone by the click, and the loo
 window's own close button and closed the chat. So when the look finds the target far from where
 the model aimed (more than 8% of the screen) and the screen there is no longer what the model saw,
 nothing is clicked: the model gets the new screen, and a click it then asks for again goes ahead.
+
+### Folder index
+`index_folder` gives the model what Cursor's codebase indexing gives its own: a project's layout
+and a search of its files. The user asked for the model to reach for it by itself, and eagerly,
+whenever a folder is worth indexing before it works on it.
+
+**What is in an index.** The folder is walked as git sees it: what its `.gitignore` files leave
+out (nested ones too, `!` taking a file back) is left out, and so are the folders tools fill by
+themselves: `.git`, `node_modules`, a Python environment (a folder with `pyvenv.cfg`) wherever they
+are; `bin` and `obj` beside a .NET project, `Library`, `Temp` and `Logs` beside a Unity project's
+`Assets` and `ProjectSettings` (its `Packages` stay: they are the project's own), Unreal's
+`Intermediate`, `Saved` and `DerivedDataCache`, `target` beside `Cargo.toml` or `pom.xml`, `dist`
+and `build` beside `package.json`. Only beside the file that makes them: elsewhere a `bin` folder
+can hold sources (a Rails app's scripts). Text files up to 1 MB are read, and PDF and Office
+documents as `read_file` reads them, so the line numbers a search gives are `read_file`'s. Pictures,
+programs, lock files, minified code and Unity's scene and asset YAML are counted, not read. An
+index reads at most 20,000 files and 150 MB of text, the smaller first; the walk stops at 200,000
+entries. Past either, the overview says to index the folder worked in.
+
+Each file is cut into parts of up to 60 lines, ending before a definition once a part has 20
+(with the comments and attributes above it, so a part is mostly one function), and each part keeps
+its words: a name whole and in its words ("SaveSettings" is also "save" and "settings",
+`save_game` also "save" and "game"), words without their endings ("saved", "saving" and "saves"
+are one). The definitions (classes, functions, methods, properties, Markdown headings…) come from a
+few regular expressions per language: C#, Java, Kotlin, JavaScript and TypeScript, Python, Go,
+Rust, C and C++ and shaders, Swift, Dart, PHP, Ruby, Lua, GDScript, PowerShell, shell scripts,
+SQL, XAML's `x:Name`, F# and Visual Basic. Not a parser: a definition written across lines is
+missed, which costs a line of the map, not a wrong answer.
+
+**Words, not embeddings.** Cursor ranks a codebase's parts by embeddings. BlackBox's model server
+may have no embedding model (Kilo's free models, Anthropic's API have none), and on a local server
+one would be a second model loaded next to the one doing the work, on a GPU that one already
+fills. So parts are ranked by BM25, the usual ranking of text search, over those words, with a part
+that defines a name the query gives, or whose file's path has the query's words, put first, parts
+with more of the query's words above parts that repeat one, and tests after the code they test
+unless the query asks for tests. On 26 questions about BlackBox's own code, from "where the settings
+are saved to disk" and "Pause/Break stops the agent" to `MouseClickTool`, searched in `src`, the file
+that answers came first 20 times, in the first three 24 times and in the first ten all 26
+(`FolderIndexTests.Questions_about_this_repository_find_the_file_that_answers_them`). A search takes
+15-70 ms; on a Unity project of 37,000 files, 0.4 s.
+
+**Where it lives.** `Data/index`, a file per folder, named after it and a hash of its path
+(gzip): 720 KB for this repository (373 files, 4 MB of text), 200 KB for a Unity project of 7,857
+files (231 of them read), 6.8 MB for one of 37,011 files (3,753 read, 80 MB of text). Every call
+brings it up to date: the folder is walked again and only files whose size or time changed are read
+(a file another program holds open is read at the next call).
+Built from nothing in 0.5 s, 1 s and 5-10 s; brought up to date in 0.03 s, 0.03 s and 0.3 s. That
+last was 1.8 s with a regular expression for each of the big project's 60 `.gitignore` files' rules;
+a plain name ("build") or ending ("*.log") is now compared without one. BlackBox's windows share an
+index, one updating it at a time, and six are kept in memory.
+
+**The overview** (index_folder without `query`, at most about 2,500 tokens): what kind of project
+it is (git and its branch; a solution and each project's kind, framework, packages and projects it
+uses; `package.json`'s scripts and dependencies; Unity's version and packages; Godot, Unreal,
+Cargo, Go, Python, CMake…), the start of its README, the start of its notes for AI agents
+(`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, Copilot's instructions), its languages, its folders two
+levels down with the files in each, and its main files with what they define: a "repo map", the
+files whose definitions the most other files use first, each with its types and their most used
+members. A name of several words (`SettingsStore`) used in another file counts fully; a one-word
+name (`Run`, `connect`) turns up in files that have nothing to do with it and counts a fifth, and a
+test file half: with every name counting the same, the map of this repository led with a sysadmin
+benchmark's Python script.
+
+**Search** (`query`): the definitions of names the query writes as code (`SettingsStore`,
+`save_game`; a plain "settings" in a question isn't the property `Settings`), then the best eight
+parts, two of a file at most, each with its full path, its lines, what it defines or is inside
+("in class AgentSession › method RunAsync") and its lines with the most of the query's words, then
+the other files that match. A path inside an indexed folder searches just that part of it; a
+search of a folder never indexed indexes its project (or the folder) first. The index a search
+goes to is never above the path's project, nor the home folder or a drive: an index of the whole
+home folder, made once, would otherwise have taken every later search of a project in it.
+
+**Eagerly.** Three things say to index first: `index_folder`'s description ("Use it first, without
+being asked, whenever a task involves a project or a folder of many files you haven't indexed in
+this chat"), a line of the system prompt, and a note. The first time in a chat that the model reads,
+lists or changes a file, or names a path in a command, inside a project it hasn't indexed in that
+chat, the result ends with "[BlackBox] … is a project (a git repository) that you haven't indexed in
+this chat. Index it now…". A project is the nearest folder above with a `.git`, or else with a
+solution or an engine's project (Unity, Unreal, Godot), or else with a package or build file
+(`package.json`, `Cargo.toml`, a `.csproj`…); never the home folder or a drive, and not one of
+fewer than 25 files, which is read faster than indexed (one the model is making). Once per project,
+and again after a context reset, which drops the overview. A note, never a block: the user's rule.
+
+With qwen3.8 27B (q6_k_xl, on the user's LM Studio) through `blackbox-cli`, on copies of this repository
+and of a Unity project, the build before the index against the build with it, the same question each:
+
+| Task | Before | With the index |
+| --- | --- | --- |
+| How the app picks a model when none is picked (this repository) | 68 s, 4 tool calls: listed the folder, `Get-ChildItem` for `.cs` files, read the file, `Select-String` | 43 s, 2: `index_folder` with a query first, then read the file it named |
+| What happens when a character takes damage and when its health runs out (Unity, 231 files read) | 6.3 min, 44 calls: 13 folder listings, 27 files read one by one, 4 commands | 2.2 min, 11: the overview, a search, 8 files read, a search for a name it met |
+| Rename the `pasted` folder to `pastes` (this repository) | 84 s, 5: a command listing the files, one read, three edits | 85 s, 7: it grepped for the word first, the note had it index, the search found the line |
+
+Both builds answered all three right. A task that names the exact text to find is a grep's, and
+indexing costs it a call; a question about how something works is where the index pays.
+
+Not indexed: folders on SSH hosts (`ssh` with grep works there).
 
 ### Web search
 A local model's memory of APIs is where it slips most (qwen3.8 writes Unity's `KeyCode.Left`, which
