@@ -400,12 +400,15 @@ public partial class MainWindow : Window
     private void OnPastChatClick(object? sender, RoutedEventArgs e)
     {
         _stickToBottom = true;
+        var row = (sender as Control)?.DataContext as PastChat;
         // Closed afterwards: the Click event comes before the command, and closing detaches the
         // row, which unbinds its command.
         Dispatcher.UIThread.Post(() =>
         {
             HistoryButton.Flyout?.Hide();
-            InputBox.Focus();
+            // Open in another window, which came forward: the focus stays there.
+            if (row is not { IsElsewhere: true })
+                InputBox.Focus();
         });
     }
 

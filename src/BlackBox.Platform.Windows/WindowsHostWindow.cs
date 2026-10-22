@@ -110,9 +110,9 @@ internal sealed class WindowsHostWindow : IHostWindow
             return false;
         if (IsIconic(found))
             ShowWindow(found, SW_RESTORE);
-        // Allowed: the user just clicked in this BlackBox, whose process is in the foreground.
-        SetForegroundWindow(GetLastActivePopup(found) is var popup and not 0 ? popup : found);
-        return true;
+        // Allowed when the user has just clicked in this BlackBox, whose process is in the foreground
+        // then; otherwise Windows flashes the window's taskbar button instead.
+        return SetForegroundWindow(GetLastActivePopup(found) is var popup and not 0 ? popup : found);
     }
 
     private sealed class Restore(List<nint> windows) : IDisposable
