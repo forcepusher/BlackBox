@@ -1535,6 +1535,27 @@ the new-user fixes, sharing LM Studio with other runs) 15 of 17 passed in full, 
 disk-full and disk-ghost each missed their log-rotation check, and postgres spent an hour writing
 its own PostgreSQL client to prove a login from this PC before it passed.
 
+`sqlite-to-postgres` moves a live game backend (game-api: Python behind nginx, whose code already
+has a PostgreSQL path) from its SQLite file to PostgreSQL on the same server while players are
+online, after the FluffyMeow server a Claude run set up for the user on 21 October 2026. A task's
+optional `traffic-host.ps1`, which the runner starts on this PC after setup and stops (through
+`$tdir\traffic.stop`) before the reboot, sends about 3.5 requests a second, mostly writes,
+retried like a game client, and logs every try and every acknowledged write to `traffic.jsonl`.
+The seed (`files/seed.py`, made from the token so the check can make it again) holds what real
+migrations trip on: id gaps with AUTOINCREMENT counters past the last id, emoji, quotes,
+backslashes and "NULL" in names, NULL next to empty strings, BLOB avatars (one empty), 0/1
+booleans, text timestamps, scores past 32 bits, and JSON saves up to 33 KB in three styles that
+must come back byte for byte. The checks compare every seeded row with PostgreSQL as md5s
+computed the same way on both sides, look in PostgreSQL for every write the traffic saw
+acknowledged, allow at most 75 s without an answer, post new rows from this PC (the sequences),
+move the SQLite file away and restart the API, and run the backup job as cron would to find a
+pg_dump holding a player who signed up just before. The reference solution (a bulk copy while
+live, then a stop of about 6 s for the final sync, the sequences set past `sqlite_sequence`)
+passed 19 of 19; the server as setup leaves it failed 8 checks, a migration that switched 30 s
+after a live copy failed only the lost-writes check, and one without `setval` failed the two
+insert checks. Files scp'd from a Windows folder without Users:RX arrive unreadable for other
+users on the VM, so setup.sh reads `files/` as root.
+
 The VM is QEMU (from qemu.weilnetz.de, unpacked, not installed) running Debian's cloud image in
 software emulation: portable, no admin rights or Windows features, everything in
 `.dev/sysadmin-lab`. Each task runs on a throwaway disk over the clean one, so a reset takes a
