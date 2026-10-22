@@ -51,6 +51,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A click of the agent's that lands on the Filmmaking window or a dialog of BlackBox's goes to what
   is behind it, as one on the chat window always did; keys meant for another program no longer
   land in them.
+- Links whose address holds parentheses (Wikipedia's) open whole, and an address followed by
+  Chinese or Japanese punctuation no longer takes it in.
+- In Filmmaking, a click on the picked piece's own view (a frame not made yet) keeps it picked, and
+  a soundtrack that is a video opens full screen.
+- A film's camera is said to hold still only when that was measured: a pan there and back, or a
+  plain night sky, no longer reads as a still camera.
+- Look-ups: a search the model means to make after mentioning the screen is made; the words between
+  two quoted names aren't searched; a request that is all research no longer gets told to ask the
+  installed version.
+- Claude through OpenRouter or Kilo no longer gets thinking turned on by the effort, which broke
+  its tool calls.
+- A Claude request bigger than the account's input tokens a minute no longer waits for ever: the
+  context gets smaller.
+- The sysadmin migration ticket finds backups written under /var/lib and /var/local too.
 
 ## [1.0.0] - 2026-10-19
 The first release.

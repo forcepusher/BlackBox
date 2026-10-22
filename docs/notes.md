@@ -561,7 +561,9 @@ sideways, Ctrl+wheel zooms. Above the timeline are a viewer (the piece picked: a
 song; with nothing picked, the joined film) and a panel. A click away from every piece (on the
 timeline's empty space, around the viewer, on the bar at the top) or Esc (not while typing) picks
 the whole film again, so what is said next is about the film; a click on the ruler moves the
-playhead and keeps the pick, and so does a click in the panel, which acts on what is picked.
+playhead and keeps the pick, and so does a click in the panel, which acts on what is picked, or on
+the picked piece's own view (a frame not made yet, whose disabled full-screen button let the click
+through to "away", the song's card). A soundtrack that is a video opens full screen on its own.
 
 **The user never writes a prompt** (their rule): there are no prompt fields. They pick a piece (a
 reference, a shot or one of its frames, the sound) or nothing (the whole film), and say in the
@@ -653,7 +655,9 @@ walking back from the mailbox twice, one with a see-through double; a wave froze
 splash from nowhere; a café cup vanishing; the boy holding still 2 s before his wave) and four good:
 the four looks together failed all six bad ones. Of the good ones they failed one where a girl
 walking right read as the mailbox drifting (the measured movement now says outright when the camera
-holds, and the steadiness look that someone walking across is not the things behind them moving),
+holds, and the steadiness look that someone walking across is not the things behind them moving;
+"holds" only when most steps were measured and the whole picture's path stayed under 2% however it
+turned: added up, a pan there and back came to nothing and a plain night sky measured nothing),
 and one where a 1.6 s sip read as a freeze (the behaviour look is now told that a sip, a look or an
 asked-for pause holds still by its nature); both pass now, and the bad ones still fail. The reasons
 weren't always the right ones: the vanishing cup was failed for a freeze at the lips.
@@ -926,7 +930,9 @@ otherwise, saying why in its tooltip:
 - Anthropic's model list says each model's levels (`capabilities.effort`); without it, the
   version does (4.7 on: low to max; 4.6: no xhigh; Opus 4.5: low to high; Haiku 4.5: none).
 - OpenRouter and Kilo list `reasoning` among a model's `supported_parameters`; the effort goes as
-  their `reasoning: {effort}`.
+  their `reasoning: {effort}`. Not for Claude or Gemini through them: with thinking on, a tool call
+  wants the signed thinking before it back (their `reasoning_details`), which BlackBox doesn't keep,
+  so those run with thinking off as before (a review found it; not tried against OpenRouter).
 - LM Studio 0.4 lists `capabilities.reasoning.allowed_options` (gpt-oss: low, medium, high; a model
   that only turns thinking on and off takes none); it goes as `reasoning_effort`. The test server's
   LM Studio lists no reasoning options for qwen3.8 (its switches, `reasoning_effort` among them,
@@ -955,7 +961,11 @@ Claude unchanged. A gateway in front of Anthropic whose address has an `anthropi
   uses the whole 1M (the user's call, 22 October 2026: what a long context costs is the user's to
   weigh), where OpenRouter's and Kilo's 1M gets 100k. Checked then against Anthropic's documents:
   reading earlier steps from the cache doesn't count toward the input tokens a minute (Opus 5.5
-  takes 2M a minute even on the lowest paid tier, Fable 500k), so the limits hold; the cost grows
+  takes 2M a minute even on the lowest paid tier, Fable 500k), so the limits hold while the cache
+does; after it expires a request of a context bigger than the minute's input tokens would wait for
+ever, so a 429 for input tokens that comes with the minute's budget all but unspent
+(`anthropic-ratelimit-input-tokens-remaining`) is taken as the context being too long: four fifths
+of the limit from then on, after a handoff note; the cost grows
   with the context, as every step reads all of it again: on Opus 5.5 $0.02 a step at 100k, $0.16
   at 800k, about $7 against $28 of input over a 300-step job, and a step after more than 5 minutes
   without one writes the whole context to the cache again ($4 at 800k). A request over 32 MB,
@@ -1349,11 +1359,16 @@ Then it looked things up too long. On develop, the same task had qwen3.8 read Bl
 notes, its manual and then its source on GitHub's main branch for 13 minutes, 40 pages with no
 script in between, asking itself whether Group Input had been renamed in 5.2, and it hadn't
 finished at 20 minutes. So after eight look-ups with no try between them, and every six after
-that, the result says the installed version can settle it: a short script that lists or prints
+that, where there is something installed to ask (a try made in the task, or a request naming a
+program's version; a request that is all research gets no such note), the result says the installed version can settle it: a short script that lists or prints
 what it has, then the likeliest answer tried. With that, the next run read for four minutes, went
 to scripts, and had the scene right (100 cubes) in 16 minutes. A search the model says it will
 make and then doesn't is searched as it wrote it when it wrote it out in quotes after a colon
-("this specific problem: "Blender 5.2 geometry nodes modifier input…"").
+("this specific problem: "Blender 5.2 geometry nodes modifier input…""), but not the words between
+two quoted names (`"GeometryNodeGroup" vs "NodeGroupInput"`). The count starts over with each
+message of the user's and with a call that asks the installed version (help(), --help). A sentence
+saying it will search is taken from where it says so: before, what came before its colon ("the value
+on screen didn't change: let me search the web for…") named the screen and the search was dropped.
 
 No API key and nothing to install. `web_search` asks DuckDuckGo's HTML page through the system's
 `curl` (built into Windows 10 and later; a fraction of a second): DuckDuckGo recognizes .NET's own
