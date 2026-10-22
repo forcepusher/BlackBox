@@ -268,9 +268,13 @@ public sealed partial class FilmViewModel
                 var fresh = Storyboard.Load(_board.Folder);
                 if (fresh.ToJson() != _board.ToJson())
                 {
+                    var title = _board.Title;
                     _board = fresh;
                     _ownWrite = written;
                     Rebuild();
+                    // Named in the chat: the list of films shows the new title.
+                    if (_board.Title != title)
+                        RefreshFilms();
                     return;
                 }
                 _ownWrite = written;

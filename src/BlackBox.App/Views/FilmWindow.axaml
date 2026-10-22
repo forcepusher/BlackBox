@@ -424,7 +424,7 @@
               <TextBlock Classes="muted" Text="{Binding PanelSubtitle}" FontSize="12" TextWrapping="Wrap" />
               <!-- A shot's frames, to pick and change on their own. -->
               <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding IsShotPicked}" Margin="0,6,0,0">
-                <Button Classes="thumb" Click="OnPickFirstFrame" ToolTip.Tip="The frame it starts on: pick it to change it" IsVisible="{Binding PickedShot.First, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}">
+                <Button Classes="thumb" Click="OnPickFirstFrame" ToolTip.Tip="The frame it starts on: pick it to change it" AutomationProperties.Name="The frame it starts on" IsVisible="{Binding PickedShot.First, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}">
                   <StackPanel Spacing="2">
                     <Border Classes="thumb" Width="96" Height="54">
                       <Image Source="{Binding PickedShot.First.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
@@ -432,7 +432,7 @@
                     <TextBlock Classes="label" Text="Starts on" FontSize="11" />
                   </StackPanel>
                 </Button>
-                <Button Classes="thumb" Click="OnPickLastFrame" ToolTip.Tip="The frame it ends on: pick it to change it" IsVisible="{Binding PickedShot.EndsOnFrame, FallbackValue=False}">
+                <Button Classes="thumb" Click="OnPickLastFrame" ToolTip.Tip="The frame it ends on: pick it to change it" AutomationProperties.Name="The frame it ends on" IsVisible="{Binding PickedShot.EndsOnFrame, FallbackValue=False}">
                   <StackPanel Spacing="2">
                     <Border Classes="thumb" Width="96" Height="54">
                       <Image Source="{Binding PickedShot.Last.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />

@@ -132,12 +132,13 @@ public sealed partial class FilmViewModel
     {
         SaveNow(force: true);
         var title = _board.Title.Trim().Length > 0 ? _board.Title.Trim() : Path.GetFileName(_board.Folder);
+        var busy = _chat.IsBusy;
         _chat.SendFromFilm(new UserInput(words, files ?? [])
         {
             Via = $"Filmmaking · {title} · {(piece is null ? "the whole film" : Lower(ItemOf(piece)?.Title ?? piece.Id))}",
             Context = $"[From the Filmmaking window, about {Describe(piece)} of the film \"{title}\" (its storyboard: {_board.FilePath}). {what}]",
         });
-        Status = _chat.IsBusy ? "Sent to the chat: BlackBox reads it before its next step." : "Sent to the chat, where BlackBox does it.";
+        Status = busy ? "Sent to the chat: BlackBox reads it before its next step." : "Sent to the chat, where BlackBox does it.";
     }
 
     /// <summary>The piece as the model is told it: "shot s2 (the 2nd of 3, from 5 to 9 s)", "the reference f1 "Marco"", "the song".</summary>

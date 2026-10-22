@@ -52,6 +52,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         // What the chat is doing, shown here: in a line, and on the piece the film tool is making.
         _chatTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Background, (_, _) => WatchChat());
         _chatTimer.Start();
+        WindowTitle = "Filmmaking - " + chat.WindowTitle;
         RefreshFilms();
         var open = folder ?? Films.FirstOrDefault()?.Folder;
         if (open is not null && File.Exists(Path.Combine(open, Storyboard.FileName)))
