@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its tool calls.
 - A Claude request bigger than the account's input tokens a minute no longer waits for ever: the
   context gets smaller.
+- A chat whose window was closed while BlackBox worked says so when opened again, with Continue.
 - A ComfyUI BlackBox started is no longer closed at the end of a task while another BlackBox (the
   command line) may be between two of its jobs.
 - The sysadmin migration ticket finds backups written under /var/lib and /var/local too.

@@ -222,6 +222,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         // what the stopped run still reports is dropped, as the chat may be opened in another window.
         if (IsBusy)
         {
+            // Said in the chat, with Continue: opened from History, it ended without a word.
+            AddStopNotice("Stopped: the window was closed.", isError: false);
             SaveChat(SnapshotHistory());
             _runDetached = true;
         }

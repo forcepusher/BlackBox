@@ -847,7 +847,8 @@ a second window looked as if nothing had opened. A window closed where it opened
 doesn't save its place, so BlackBox doesn't creep down a step with every second window. The title
 bar names the chat ("keys 6 - BlackBox"), to tell the windows apart on the taskbar. A window's
 Filmmaking window and full-screen viewer close with it, and so does all it had going: its run
-stops, what that run still reports is dropped (another window may open the chat meanwhile), the
+stops (the chat says so, with Continue, when it is opened again; it ended without a word before),
+what that run still reports is dropped (another window may open the chat meanwhile), the
 sounds in its chat stop, and no run or MCP server of its starts again. Its videos hold still while
 it is minimized or its viewer is open, not those of the other windows.
 
