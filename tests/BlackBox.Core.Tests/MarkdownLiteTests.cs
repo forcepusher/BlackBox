@@ -73,12 +73,52 @@ public class MarkdownLiteTests
     }
 
     [Fact]
-    public void Italic_only_where_it_is_meant_and_links_keep_their_address()
+    public void Italic_only_where_it_is_meant_and_links_open_their_page()
     {
         var lines = MarkdownLite.Render("A *very* big file, a*b*c, see [the docs](https://example.com/docs) or [https://x.dev](https://x.dev).");
 
-        Assert.Equal("A very big file, a*b*c, see the docs (https://example.com/docs) or https://x.dev.", Text(Assert.Single(lines)));
+        Assert.Equal("A very big file, a*b*c, see the docs or https://x.dev.", Text(Assert.Single(lines)));
         Assert.Contains(lines[0], s => s is { Text: "very", Style: MdStyle.Italic });
+        Assert.Contains(new MdSpan("the docs", MdStyle.None, "https://example.com/docs"), lines[0]);
+        Assert.Contains(new MdSpan("https://x.dev", MdStyle.None, "https://x.dev"), lines[0]);
+        Assert.Equal(".", lines[0][^1].Text);
+    }
+
+    [Fact]
+    public void A_link_to_a_file_keeps_its_target_readable_as_it_cannot_be_opened()
+    {
+        var line = Assert.Single(MarkdownLite.Render("Saved as [report](C:\\Users\\me\\report.docx)."));
+
+        Assert.Equal("Saved as report (C:\\Users\\me\\report.docx).", Text(line));
+        Assert.All(line, s => Assert.Null(s.Url));
+    }
+
+    [Fact]
+    public void Addresses_written_out_become_links_without_the_punctuation_after_them()
+    {
+        // As qwen3.8 and Claude wrote them in replies on the FluffyMeow migration.
+        var line = Assert.Single(MarkdownLite.Render(
+            "Admin console: https://pushmeow.kindzadzagames.com/admin, (see https://en.wikipedia.org/wiki/Let%27s_Encrypt_(CA)) or www.hostkey.com."));
+
+        var links = line.Where(s => s.Url != null).ToList();
+        Assert.Equal(["https://pushmeow.kindzadzagames.com/admin", "https://en.wikipedia.org/wiki/Let%27s_Encrypt_(CA)", "www.hostkey.com"], links.Select(s => s.Text));
+        Assert.Equal("https://www.hostkey.com", links[2].Url);
+        Assert.Equal("Admin console: https://pushmeow.kindzadzagames.com/admin, (see https://en.wikipedia.org/wiki/Let%27s_Encrypt_(CA)) or www.hostkey.com.", Text(line));
+    }
+
+    [Fact]
+    public void Addresses_in_code_bold_and_plain_text_are_links_too()
+    {
+        var lines = MarkdownLite.Render("Check **https://x.dev/health** with `curl http://127.0.0.1:8080/health`.\n```\nwget https://example.com/a.tar.gz\n```");
+
+        Assert.Contains(new MdSpan("https://x.dev/health", MdStyle.Bold, "https://x.dev/health"), lines[0]);
+        Assert.Contains(new MdSpan("http://127.0.0.1:8080/health", MdStyle.Code, "http://127.0.0.1:8080/health"), lines[0]);
+        Assert.Contains(new MdSpan("https://example.com/a.tar.gz", MdStyle.Code, "https://example.com/a.tar.gz"), lines[1]);
+
+        var plain = MarkdownLite.Plain("my repo: https://github.com/Cromwill/FluffyMeow\nthanks **no markdown here**", MdStyle.Muted);
+        Assert.Equal(2, plain.Count);
+        Assert.Equal(new MdSpan("https://github.com/Cromwill/FluffyMeow", MdStyle.Muted, "https://github.com/Cromwill/FluffyMeow"), plain[0][1]);
+        Assert.Equal("thanks **no markdown here**", Text(plain[1]));
     }
 
     [Fact]

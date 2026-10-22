@@ -69,6 +69,8 @@ public sealed class FilmRuler : Control
         _dragging = true;
         e.Pointer.Capture(this);
         Seek(e);
+        // Moving the playhead leaves what is picked as it is (a click on empty timeline picks the film).
+        e.Handled = true;
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
@@ -160,6 +162,7 @@ public sealed class FilmWave : Control
     {
         base.OnPointerPressed(e);
         Picked?.Invoke();
+        e.Handled = true;
     }
 
     public override void Render(DrawingContext context)

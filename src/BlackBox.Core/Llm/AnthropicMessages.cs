@@ -178,9 +178,10 @@ public static partial class AnthropicMessages
                 betas.Add(ThinkingBindingBeta);
             }
             req["thinking"] = thinking;
-            if (options.QuickAnswer)
-                req["output_config"] = new JsonObject { ["effort"] = "low" };
         }
+        // The effort picked in the top bar (where the model takes one), and low for a quick answer.
+        if ((options.QuickAnswer && model.Adaptive ? "low" : options.Effort) is { } effort)
+            req["output_config"] = new JsonObject { ["effort"] = effort };
         if (model.Fallbacks && wire.Betas)
         {
             req["fallbacks"] = "default";

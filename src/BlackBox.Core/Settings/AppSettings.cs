@@ -70,6 +70,20 @@ public sealed class ServerSettings
     [JsonIgnore]
     public bool SupportsVision { get; set; } = true;
 
+    /// <summary>How hard the model thinks, picked in the top bar: one of <see cref="Efforts.Levels"/>.</summary>
+    public string Effort { get; set; } = Efforts.Default;
+
+    /// <summary>
+    /// The effort levels the model in use takes, as the server says (see <see cref="Llm.ServerProbe"/>);
+    /// empty when it takes none or doesn't say, and then no effort is sent. Not saved.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> EffortLevels { get; set; } = [];
+
+    /// <summary>The effort requests ask for: <see cref="Effort"/>, or the nearest level the model takes; null when it takes none.</summary>
+    [JsonIgnore]
+    public string? EffortInUse => Efforts.Nearest(Effort, EffortLevels);
+
     /// <summary>Assumed context window when the server doesn't report one. If the real one is smaller, the server's "too long" error says so and BlackBox adjusts.</summary>
     public const int FallbackContextSize = 100_000;
 
@@ -208,6 +222,51 @@ public static class ContextSizes
         if (tokens >= 1024 * 1024 && tokens % (1024 * 1024) == 0) return $"{tokens / (1024 * 1024)}M";
         if (tokens >= 1_000_000 && tokens % 1_000_000 == 0) return $"{tokens / 1_000_000}M";
         return tokens % 1024 == 0 ? $"{tokens / 1024}k" : $"{Math.Round(tokens / 1000.0)}k";
+    }
+}
+
+/// <summary>
+/// The effort a model can be asked to think with, least to most, as Anthropic names them
+/// (OpenAI-style servers take low, medium and high). Medium unless picked otherwise.
+/// </summary>
+public static class Efforts
+{
+    public static readonly IReadOnlyList<string> Levels = ["low", "medium", "high", "xhigh", "max"];
+
+    public const string Default = "medium";
+
+    /// <summary>The level as the dropdown says it.</summary>
+    public static string Label(string level) => level switch
+    {
+        "xhigh" => "Extra high effort",
+        "max" => "Max effort",
+        _ => char.ToUpperInvariant(level[0]) + level[1..] + " effort",
+    };
+
+    /// <summary>
+    /// <paramref name="wanted"/> if the model takes it, else the closest level it takes (the lower
+    /// one between two: max asked of a model that goes up to high gets high); null when it takes none.
+    /// </summary>
+    public static string? Nearest(string wanted, IReadOnlyList<string> offered)
+    {
+        if (offered.Count == 0) return null;
+        if (offered.Contains(wanted)) return wanted;
+        var at = Rank(wanted) is var r and >= 0 ? r : Rank(Default);
+        return offered.OrderBy(l => Math.Abs(Rank(l) - at)).ThenBy(Rank).First();
+    }
+
+    private static int Rank(string level)
+    {
+        for (var i = 0; i < Levels.Count; i++)
+            if (Levels[i] == level) return i;
+        return -1;
+    }
+
+    /// <summary>The known levels among <paramref name="names"/>, least to most.</summary>
+    public static IReadOnlyList<string> Of(IEnumerable<string> names)
+    {
+        var set = names.Select(n => n.Trim().ToLowerInvariant()).ToHashSet();
+        return Levels.Where(set.Contains).ToList();
     }
 }
 

@@ -16,8 +16,8 @@ public enum MdStyle
     Muted = 16,
 }
 
-/// <summary>A run of text in one style.</summary>
-public readonly record struct MdSpan(string Text, MdStyle Style);
+/// <summary>A run of text in one style; <paramref name="Url"/> when a click on it opens a web page.</summary>
+public readonly record struct MdSpan(string Text, MdStyle Style, string? Url = null);
 
 /// <summary>
 /// The Markdown models write in their answers (bold, headings, lists, code, tables, quotes),
@@ -41,7 +41,7 @@ public static partial class MarkdownLite
             }
             if (inCode)
             {
-                output.Add([new MdSpan(line, MdStyle.Code)]);
+                output.Add(Linked([new MdSpan(line, MdStyle.Code)]));
                 continue;
             }
             if (IsTableRow(line))
@@ -50,13 +50,74 @@ public static partial class MarkdownLite
                 while (i < lines.Length && IsTableRow(lines[i]))
                     table.Add(lines[i++]);
                 i--;
-                output.AddRange(Table(table));
+                output.AddRange(Table(table).Select(Linked));
                 continue;
             }
-            output.Add(Line(line));
+            output.Add(Linked(Line(line)));
         }
         return output;
     }
+
+    /// <summary>
+    /// Text that isn't Markdown (the user's messages, notices, the model's thinking) as lines, with
+    /// its web addresses made links.
+    /// </summary>
+    public static List<List<MdSpan>> Plain(string text, MdStyle style = MdStyle.None) =>
+        text.Replace("\r\n", "\n").Split('\n').Select(l => Linked([new MdSpan(l, style)])).ToList();
+
+    /// <summary>
+    /// The web addresses written out in a line's spans (https://..., www....) split off as links of
+    /// their own. Punctuation after an address ("see https://x.dev.") stays text, and so does a
+    /// closing bracket the address didn't open ("(https://x.dev)").
+    /// </summary>
+    private static List<MdSpan> Linked(List<MdSpan> spans)
+    {
+        if (!spans.Any(s => s.Url == null && (s.Text.Contains("://", StringComparison.Ordinal) || s.Text.Contains("www.", StringComparison.OrdinalIgnoreCase))))
+            return spans;
+        var output = new List<MdSpan>();
+        foreach (var span in spans)
+        {
+            if (span.Url != null)
+            {
+                output.Add(span);
+                continue;
+            }
+            var at = 0;
+            foreach (Match m in BareUrl().Matches(span.Text))
+            {
+                var url = TrimUrl(m.Value);
+                if (url.Length < 8) continue;
+                if (m.Index > at) output.Add(span with { Text = span.Text[at..m.Index] });
+                var target = url.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? "https://" + url : url;
+                output.Add(span with { Text = url, Url = target });
+                at = m.Index + url.Length;
+            }
+            if (at < span.Text.Length) output.Add(span with { Text = span.Text[at..] });
+        }
+        return output;
+    }
+
+    private static string TrimUrl(string url)
+    {
+        while (url.Length > 0)
+        {
+            var last = url[^1];
+            if (".,;:!?'\"*_>".Contains(last))
+                url = url[..^1];
+            else if (last == ')' && url.Count(c => c == '(') < url.Count(c => c == ')'))
+                url = url[..^1];
+            else if (last == ']' && url.Count(c => c == '[') < url.Count(c => c == ']'))
+                url = url[..^1];
+            else
+                break;
+        }
+        return url;
+    }
+
+    /// <summary>A link a click may open: a web page or an e-mail address, nothing that runs on the PC.</summary>
+    public static bool IsWebLink(string url) =>
+        url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+        || url.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase);
 
     private static List<MdSpan> Line(string line)
     {
@@ -128,10 +189,20 @@ public static partial class MarkdownLite
             }
             if (c == '[' && Link().Match(text, i) is { Success: true } link && link.Index == i)
             {
-                plain.Append(link.Groups[1].Value);
+                // A link to a web page shows its text, a click on it opening the page; any other
+                // target (a file, a relative path) stays readable after the text, as it can't be opened.
                 var target = link.Groups[2].Value;
-                if (target != link.Groups[1].Value)
-                    plain.Append(" (").Append(target).Append(')');
+                if (IsWebLink(target))
+                {
+                    Flush(style);
+                    spans.AddRange(Inline(link.Groups[1].Value, style).Select(s => s with { Url = target }));
+                }
+                else
+                {
+                    plain.Append(link.Groups[1].Value);
+                    if (target != link.Groups[1].Value)
+                        plain.Append(" (").Append(target).Append(')');
+                }
                 i += link.Length - 1;
                 continue;
             }
@@ -243,4 +314,7 @@ public static partial class MarkdownLite
 
     [GeneratedRegex(@"\[([^\]\n]+)\]\(([^)\s]+)\)")]
     private static partial Regex Link();
+
+    [GeneratedRegex(@"\b(?:https?://|www\.)[^\s<>""`]+", RegexOptions.IgnoreCase)]
+    private static partial Regex BareUrl();
 }

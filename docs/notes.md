@@ -558,7 +558,10 @@ half seconds. **Sound** has the lines where they are said and the soundtrack's w
 where it is turned down under the lines. A ruler on top moves the playhead (click or drag), and the
 play button plays the soundtrack from it with each shot's frame in the viewer. The wheel scrolls
 sideways, Ctrl+wheel zooms. Above the timeline are a viewer (the piece picked: a frame, a clip, the
-song; with nothing picked, the joined film) and a panel.
+song; with nothing picked, the joined film) and a panel. A click away from every piece (on the
+timeline's empty space, around the viewer, on the bar at the top) or Esc (not while typing) picks
+the whole film again, so what is said next is about the film; a click on the ruler moves the
+playhead and keeps the pick, and so does a click in the panel, which acts on what is picked.
 
 **The user never writes a prompt** (their rule): there are no prompt fields. They pick a piece (a
 reference, a shot or one of its frames, the sound) or nothing (the whole film), and say in the
@@ -860,6 +863,23 @@ The command-line runner picks the same way for the saved model or `--model`.
 BlackBox sends no sampling parameters: temperature, top-k/p, reply length and thinking come from
 the server's own model configuration (in LM Studio, per model).
 
+**Effort**: the dropdown next to the model says how hard the model thinks (Low, Medium, High, and
+for Claude Extra high and Max), medium until another is picked; it is saved, and applies from the
+next message. It goes only to a model whose server says it takes one, and is greyed out
+otherwise, saying why in its tooltip:
+- Anthropic's model list says each model's levels (`capabilities.effort`); without it, the
+  version does (4.7 on: low to max; 4.6: no xhigh; Opus 4.5: low to high; Haiku 4.5: none).
+- OpenRouter and Kilo list `reasoning` among a model's `supported_parameters`; the effort goes as
+  their `reasoning: {effort}`.
+- LM Studio 0.4 lists `capabilities.reasoning.allowed_options` (gpt-oss: low, medium, high; a model
+  that only turns thinking on and off takes none); it goes as `reasoning_effort`. The test server's
+  LM Studio lists no reasoning options for qwen3.8 (its switches, `reasoning_effort` among them,
+  changed nothing for a click's look, see Tools the agent has), so there the dropdown is greyed out.
+- Another server's list goes by the name: OpenAI's gpt-5 and o-series models take low to high as
+  `reasoning_effort`; anything else gets none.
+A level the model doesn't take becomes the nearest it does (Max on a model that goes to High is
+High); the picked one stays saved for the next model. The command-line runner takes `--effort`.
+
 Thinking models get their earlier reasoning sent back each step (`reasoning_content`,
 `preserve_thinking`), as the Qwen3.5+ and Gemma 4 templates expect.
 
@@ -873,10 +893,19 @@ Claude unchanged. A gateway in front of Anthropic whose address has an `anthropi
 (Cloudflare's AI Gateway, `…/{account}/{gateway}/anthropic`) is spoken to the same way.
 
 - Models: the list comes from `/v1/models`, every page, with each model's context
-  (`max_input_tokens`, 1M for the current ones), reply limit and image support. With none picked
+  (`max_input_tokens`, 1M for the current ones), reply limit, image support and effort levels. With none picked
   BlackBox uses Claude Opus 5.5, Anthropic's recommended default (without it the newest Opus, then
   Sonnet, then Haiku); Fable and Mythos only when picked, at more than twice the price. On Auto it
-  uses 100k of the 1M, as on other hosted services; the slider goes to 1M.
+  uses the whole 1M (the user's call, 22 October 2026: what a long context costs is the user's to
+  weigh), where OpenRouter's and Kilo's 1M gets 100k. Checked then against Anthropic's documents:
+  reading earlier steps from the cache doesn't count toward the input tokens a minute (Opus 5.5
+  takes 2M a minute even on the lowest paid tier, Fable 500k), so the limits hold; the cost grows
+  with the context, as every step reads all of it again: on Opus 5.5 $0.02 a step at 100k, $0.16
+  at 800k, about $7 against $28 of input over a 300-step job, and a step after more than 5 minutes
+  without one writes the whole context to the cache again ($4 at 800k). A request over 32 MB,
+  which a long run's screenshots reach before 800k, is refused with 413 and resets the context as
+  any server's does. A five-hour run on Opus 5.5 at 1M (the FluffyMeow server move, 21 October)
+  never reset and met no limit.
 - Prompt caching: breakpoints on the system prompt (which caches the tools with it), at the end of
   the request and where the previous request ended, so each step reads everything before it from
   the cache (on Opus 5.5 at $0.20 a million tokens against $4) and pays in full only for what it
@@ -891,9 +920,10 @@ Claude unchanged. A gateway in front of Anthropic whose address has an `anthropi
   `thinking-binding-controls-2026-08-01`), and where that beta is unknown, the thinking of the
   replies before the latest is left out and the request sent again, then if need be all of it (the
   latest reply's must otherwise go back whole while its calls are answered). A context reset keeps only the user's messages, the handoff note
-  and a screenshot, which the check allows. Effort is the model's default (medium on Opus 5.5),
-  except for fresh looks and quick questions, which ask for low: every Claude since 4.6 thinks, and
-  only effort says how much. Thinking counts toward the reply limit, so requests ask for 64k (the
+  and a screenshot, which the check allows. Effort is the one picked in the top bar (see Effort,
+  below), sent as `output_config.effort`, the handoff note's too (another effort would read the
+  whole conversation anew), except for fresh looks and quick questions, which ask for low: every
+  Claude since 4.6 thinks, and only effort says how much. Thinking counts toward the reply limit, so requests ask for 64k (the
   model's limit if lower) whatever smaller limit a caller set; only what is written is paid for and
   counts toward the output tokens a minute.
 - Refusals: on the models that take it (Opus and Fable 5 on, Sonnet 5.5), a request Anthropic's
@@ -974,7 +1004,7 @@ names the real size, and BlackBox switches to it. BlackBox uses the whole contex
 hosted service's `context_length`, which is the most it takes for the model: Kilo and OpenRouter list
 1M for some, and since every step sends the whole conversation again, screenshots and all, a
 request would grow toward 800k tokens and tens of megabytes. On Auto BlackBox uses 100k of it (the
-tooltip says so); untick Auto for more. A server that refuses a request for its size in bytes
+tooltip says so); untick Auto for more. Claude's 1M is used whole (see Claude through Anthropic's API). A server that refuses a request for its size in bytes
 (HTTP 413: Kilo takes 20 MB) gets the same reset as a "too long" error, and the run goes on with a
 quarter less context.
 
@@ -1033,6 +1063,19 @@ minutes which looked like the model thinking.
 
 Replies are shown with their Markdown formatted: bold, headings, lists, code and tables (lined
 up in a monospace font), as models write them; the thinking above them stays as written.
+
+Web addresses in the chat are links: in replies (written out, `www.` ones, in code and tables,
+and Markdown's `[text](https://...)`, which shows its text alone), in the user's messages, in the
+thinking and in notices. They are drawn in the accent colour, underlined; over one the pointer is
+a hand and the tooltip says where it goes, and a click opens it in the browser. Only http, https
+and mailto links open; a Markdown link to anything else (a file) keeps its target in brackets
+after its text. A drag over a link selects its text and a double-click a word, as anywhere in the
+chat. `MarkdownText` lays each line out as runs ending in a "\n" of their own, so that a
+character's place is the sum of the runs before it, and finds the character under the pointer
+from Avalonia's hit test (whose IsInside is false on every line of a text block but the first, so
+the character's own box decides). Checked in the app with clicks sent as window messages: the
+addresses on the first line, in a table and after plain text opened, plain text and the space
+just past an address didn't.
 
 ### Unstable connections
 VPNs and proxies often cut a connection that has been silent for about a minute, which happens
@@ -1417,7 +1460,8 @@ you stopped it goes back in the box.
 Until the model reads it, a message sent during a run waits above the box, and moves into the chat
 when it is read: there it stands after what the model was doing when it was sent, as the model
 sees it (it used to show where it was sent, above work the model did before reading it). × on it
-takes it back unsent. **Interrupt** over them (or Ctrl+Enter to send one) has them read at once:
+takes it back unsent. **Interrupt the model** over them (or Ctrl+Enter to send one) has them read at once
+(the button said only "Interrupt" until 22 October 2026, which didn't say what it interrupts):
 the model's reply in progress, thinking or writing, is cut off and left out of the conversation
 (what streamed stays on screen, with "Interrupted to read your message."), or the tool calls it is
 running are stopped and the rest of that reply's calls not run, each saying so to the model, and

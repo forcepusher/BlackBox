@@ -39,6 +39,29 @@ public partial class FilmWindow : Window
 
     // ---- the timeline ----------------------------------------------------------------------------------
 
+    /// <summary>
+    /// A click away from every piece (empty timeline, around the viewer, the bar at the top) picks
+    /// the whole film again, as Esc does, so what is said next is about the film. Clicks on a piece,
+    /// a button or the ruler are handled before they get here; the panel on the right, which acts
+    /// on what is picked, isn't watched.
+    /// </summary>
+    private void OnAwayPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.Handled && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            Vm.Select(null);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        // Not while typing: Esc in the box to BlackBox would change what the words are about.
+        if (!e.Handled && e.Key == Key.Escape && FocusManager?.GetFocusedElement() is not TextBox && !Vm.IsFilmPicked)
+        {
+            Vm.Select(null);
+            e.Handled = true;
+        }
+    }
+
     private void OnShotClick(object? sender, RoutedEventArgs e)
     {
         if ((sender as Control)?.DataContext is ShotItem shot)

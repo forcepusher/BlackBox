@@ -5,11 +5,12 @@ using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
 
-// Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] [--full-results] [--attach FILE]... [--then TEXT]... "task"
+// Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--effort LEVEL] [--yes] [--save-shots DIR] [--full-results] [--attach FILE]... [--then TEXT]... "task"
 //   --root        portable folder (default: BLACKBOX_HOME, else .dev/ when run from the repository, else the exe folder);
 //                 its Data/mcp.json lists the MCP servers to start, as in the app
 //   --url/--model override the server address and model saved in Data/settings.json; with no model, or one the
 //                 server doesn't offer, the strongest model it offers is used
+//   --effort      how hard the model thinks: low, medium, high, xhigh or max (saved: medium), for a model that takes it
 //   --yes         approve risky tools without asking
 //   --save-shots  write every screenshot the model sees to DIR
 //   --full-results  log each tool result whole, not just its start and end
@@ -35,6 +36,7 @@ var root = Take("--root") ?? AppPaths.FindRoot(useRepositoryDevFolder: true);
 var shotsDir = Take("--save-shots");
 var urlOverride = Take("--url");
 var modelOverride = Take("--model");
+var effortOverride = Take("--effort");
 var autoYes = Flag("--yes");
 var fullResults = Flag("--full-results");
 var attached = new List<string>();
@@ -46,7 +48,7 @@ while (Take("--then") is { } later)
 var task = string.Join(' ', argsList);
 if (string.IsNullOrWhiteSpace(task))
 {
-    Console.Error.WriteLine("Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--yes] [--save-shots DIR] [--attach FILE]... [--then TEXT]... \"task\"");
+    Console.Error.WriteLine("Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--effort LEVEL] [--yes] [--save-shots DIR] [--attach FILE]... [--then TEXT]... \"task\"");
     return 2;
 }
 if (attached.FirstOrDefault(f => !File.Exists(f) && !Directory.Exists(f)) is { } missing)
@@ -82,6 +84,7 @@ platform.InputOverlay.Duration = TimeSpan.FromSeconds(AgentSettings.InputLogSeco
 platform.InputOverlay.Enabled = true;
 if (urlOverride is not null) settings.Server.BaseUrl = urlOverride;
 if (modelOverride is not null) settings.Server.Model = modelOverride;
+if (effortOverride is not null) settings.Server.Effort = effortOverride.Trim().ToLowerInvariant();
 using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10))) // loading a model can take a while
 try
 {
@@ -111,12 +114,14 @@ try
                     : $"[server] no model picked: using {probe.Model}{details}, the strongest the server offers");
     }
     settings.Server.SupportsVision = probe.Vision ?? true;
+    settings.Server.EffortLevels = probe.Efforts ?? [];
     var facts = await ServerProbe.EnsureLoadedAsync(probeHttp, settings.Server, () => Console.WriteLine("[server] loading the model…"), cts.Token,
         note => Console.WriteLine("[server] " + note));
     if (facts.Context is { } c)
         settings.Server.SetDetectedContext(c, facts.Hosted);
     Console.WriteLine($"[server] {settings.Server.BaseUrl} · {settings.Server.ModelInUse} · {ContextSizes.Format(settings.Server.ContextSize)} context"
-        + (settings.Server.AutoContext ? "" : " (set by hand)"));
+        + (settings.Server.AutoContext ? "" : " (set by hand)")
+        + (settings.Server.EffortInUse is { } effort ? $" · {effort} effort" : " · no effort setting"));
 }
 catch (OperationCanceledException) when (cts.IsCancellationRequested)
 {

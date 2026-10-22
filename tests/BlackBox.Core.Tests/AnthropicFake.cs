@@ -62,6 +62,16 @@ internal sealed partial class FakeAnthropic : HttpMessageHandler
                 ["supported"] = true,
                 ["types"] = new JsonObject { ["adaptive"] = new JsonObject { ["supported"] = adaptive }, ["enabled"] = new JsonObject { ["supported"] = !adaptive } },
             },
+            // As the API lists it: Haiku 4.5 takes no effort, the adaptive ones low to max.
+            ["effort"] = new JsonObject
+            {
+                ["supported"] = adaptive,
+                ["low"] = new JsonObject { ["supported"] = adaptive },
+                ["medium"] = new JsonObject { ["supported"] = adaptive },
+                ["high"] = new JsonObject { ["supported"] = adaptive },
+                ["xhigh"] = new JsonObject { ["supported"] = adaptive },
+                ["max"] = new JsonObject { ["supported"] = adaptive },
+            },
         },
     };
 
@@ -155,6 +165,8 @@ internal sealed partial class FakeAnthropic : HttpMessageHandler
         }
         if (body["fallbacks"] is not null && !betas.Contains(AnthropicBetas.Fallback)) return "fallbacks: Extra inputs are not permitted";
         if (body["output_config"]?["effort"] is { } effort && (string?)effort is not ("low" or "medium" or "high" or "xhigh" or "max")) return "output_config.effort: invalid";
+        if (body["output_config"]?["effort"] is { } level && model["capabilities"]?["effort"]?[(string)level!]?["supported"]?.GetValue<bool>() != true)
+            return $"output_config.effort: '{level}' is not supported for this model";
 
         var breakpoints = 0;
         foreach (var block in (body["system"] as JsonArray)?.OfType<JsonObject>() ?? [])

@@ -114,6 +114,8 @@ public sealed partial class AgentSession
             MaxTokens = HandoffMaxTokens,
             Extra = requestOptions.Extra,
             SendReasoning = requestOptions.SendReasoning,
+            // Claude's cache holds the conversation for one effort: another would read it all anew.
+            Effort = requestOptions.Effort,
         };
         var request = new List<ChatMessage>(History.Count + 2) { ChatMessage.System(systemPrompt) };
         request.AddRange(History);
