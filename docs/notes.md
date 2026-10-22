@@ -604,7 +604,13 @@ action in order in the present tense, as long as it takes; first and last frames
 stays put; lines that fit their shot; a model named only when the user names or describes one. That
 guide is the brief the window's own director (`FilmDirector`) gave the model in a request of its
 own, which answered a piece's request in 11 to 30 s without thinking; in the chat the same request
-is a few steps of the agent's (read the storyboard, change it, make the piece). Each piece made is
+is a few steps of the agent's (read the storyboard, change it, make the piece). Checked with qwen3.8
+from the window (2026-10-23): "A 4 second clip: a paper boat floats down a rainy street gutter at
+dusk" on a new film was laid out in 2 min 17 s (it read the storyboard and the guide, wrote one shot
+with a first frame only, as the guide says for a drift that goes on to the end, and took out the
+empty starting pieces); "make it darker, closer to night, with the street lamps on" on that frame
+changed its prompt, the shot's look words with it (and said so), and made it with a fresh look, in
+2 min 13 s, 12 s of it ComfyUI. Each piece made is
 looked at by fresh looks (see below), and what they found is kept in the piece's workflow file
 (`"look"`, a song's judged sound too) so the window shows it with the piece.
 
