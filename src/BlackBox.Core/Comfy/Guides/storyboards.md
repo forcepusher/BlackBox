@@ -27,6 +27,12 @@ they want), so write them well.
 - The references' folders also hold the person's own pictures (a photo of them, a drawing of a
   character, a place). In a frame's "from", a reference's folder by its name ("Marco") stands for
   its main picture, and "Marco/side.png" for one picture in it: pick the ones the frame needs.
+- The person's own pictures stay exactly as they gave them: never crop, resize, pad, retouch or
+  redraw one, and save no picture of your own beside them (a cut-out of one figure, a padded copy).
+  The references are what is made from them: name the whole picture in the reference's "from" (one
+  they attached from elsewhere by its full path: it is copied into the reference's folder as it
+  is), and say in the prompt who or what in it to take ("the rabbit on the left, in the grey
+  t-shirt and jeans"): the picture model picks one figure out of a lineup or a character sheet.
 - A reference is in the film's look like every picture (for a live-action film, a photograph of a
   real person, not a drawing or a 3D render): frames made from it take its style, and a boy's sheet
   written with no look came out a 3D cartoon, and so did the shot made from it.

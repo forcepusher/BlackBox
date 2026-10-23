@@ -450,10 +450,11 @@ public sealed partial class FilmViewModel
     }
 
     /// <summary>
-    /// Files dropped on the panel: pictures go into References (copies, under names of their own),
-    /// to make frames from: into the reference picked in the tree, else each into a folder of its
-    /// own named after it; the first is picked for the user to say what to do with it. Anything
-    /// else goes with the next message.
+    /// Files dropped on the panel: pictures go into References (copies as they are, under names of
+    /// their own, never one a reference planned there is to be made as: see
+    /// <see cref="Storyboard.KeepPicture"/>), to make frames from: into the reference picked in the
+    /// tree, else each into a folder of its own named after it; the first is picked for the user to
+    /// say what to do with it. Anything else goes with the next message.
     /// </summary>
     public bool Drop(IReadOnlyList<string> paths)
     {
@@ -469,14 +470,9 @@ public sealed partial class FilmViewModel
             foreach (var picture in pictures)
             {
                 var folder = into ?? Path.Combine(_board.ReferencesFolder, Storyboard.Safe(Path.GetFileNameWithoutExtension(picture)));
-                var target = Path.Combine(folder, Path.GetFileName(picture));
-                if (string.Equals(Path.GetFullPath(picture), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(Path.GetFullPath(picture), Path.GetFullPath(Path.Combine(folder, Path.GetFileName(picture))), StringComparison.OrdinalIgnoreCase))
                     continue;
-                for (var n = 2; File.Exists(target); n++)
-                    target = Path.Combine(folder, $"{Path.GetFileNameWithoutExtension(picture)} ({n}){Path.GetExtension(picture)}");
-                Directory.CreateDirectory(folder);
-                File.Copy(picture, target);
-                added.Add(target);
+                added.Add(Storyboard.KeepPicture(picture, folder));
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
