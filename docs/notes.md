@@ -1868,6 +1868,8 @@ First runs, 22 October 2026 (feature/chat-effort-migration, medium effort where 
   row-by-row check compared the same text and passed); and its new backup job called `runuser`,
   which is in /usr/sbin, off cron's PATH (tried with sudo, whose PATH has it, it worked). A model's
   slips, not BlackBox's: the same ticket and model passed 19 of 19 the day before.
+- qwen3.8 again, the same morning and build: 19 of 19 in 23.5 minutes, 30 model calls, the longest
+  stretch without an answer 53 s, 2966 writes of the players kept.
 
 The VM is QEMU (from qemu.weilnetz.de, unpacked, not installed) running Debian's cloud image in
 software emulation: portable, no admin rights or Windows features, everything in
