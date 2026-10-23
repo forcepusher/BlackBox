@@ -121,6 +121,7 @@ public static class FilmTakes
     /// </summary>
     internal static void Promote(string from, string to)
     {
+        Media.MediaRelease.Release(to);
         System.IO.File.Move(from, to, overwrite: true);
         if (System.IO.File.Exists(Storyboard.WorkflowOf(from)))
             System.IO.File.Move(Storyboard.WorkflowOf(from), Storyboard.WorkflowOf(to), overwrite: true);
@@ -154,7 +155,10 @@ public static class FilmTakes
         if (string.Equals(member, Storyboard.MetaOf(file), StringComparison.OrdinalIgnoreCase))
             MadeInto(take, member);
         else
+        {
+            Media.MediaRelease.Release(member);
             System.IO.File.Move(take, member, overwrite: true);
+        }
     }
 
     /// <summary>
@@ -286,6 +290,7 @@ public static class FilmTakes
         if (piece.File(board) is not { } file || !System.IO.File.Exists(take.File))
             return board;
         Keep(board, piece);
+        Media.MediaRelease.Release(file);
         System.IO.File.Copy(take.File, file, overwrite: true);
         // Made now, as far as what is made from it goes: with the take's own time, the film joined
         // since with the piece it replaced still read as made after everything in it.

@@ -11,11 +11,13 @@ whatever it downloads stay in a `Data` folder next to the exe.
 ## What it can do
 - **Use any app.** It sees the screen and uses the mouse and keyboard, in any program.
 - **Pictures, video and sound.** It makes them with ComfyUI, installing ComfyUI and the models if needed.
-- **Films.** The **Filmmaking** button opens a film on a timeline beside the chat: its characters
-  and places, its shots and its sound. Say what you want in plain words, for the whole film or for
-  the shot or picture you pick (click away from it, or press Esc, to go back to the whole film), and
-  BlackBox writes the prompts, picks the models, makes that piece and looks at it, in the chat,
-  where you can watch it and stop it; earlier takes are kept. Or just ask for a film in the chat.
+- **Films.** Pick **Filmmaking** in the **Toolkit** dropdown at the top left: it opens on the left
+  of the chat with the film's folder (a folder for each shot, with its frames and clip, and
+  References for its characters, places and pictures of yours) and a timeline you drag sideways.
+  Click a folder, picture or clip to put it in your message, and say what you want in plain words
+  (with nothing picked, it is about the whole film). BlackBox writes the prompts, picks the models,
+  makes it and looks at it, in the chat, where you can watch it and stop it; earlier takes are kept
+  in each folder's Takes. Or just ask for a film in the chat.
 - **Game development.** It makes games in any engine (Unity, Unreal, Godot) and play-tests them.
 - **Know your projects.** Before it works on a project or a big folder, it indexes it, as Cursor
   does: what is in it, what its files define, and a search that finds where anything is.
@@ -46,8 +48,8 @@ private or long work, use your own model.
   (or AUTOMATIC1111) shows the prompts and settings it was made with.
 - Paste a screenshot or files with Ctrl+V, or drop them on the window, to send them with a message.
 - **History** keeps every chat, so you can come back to one and carry on.
-- **Several tasks at once:** **New window** at the top (or Ctrl+Shift+N, or starting BlackBox
-  again) opens another window with a chat of its own. The windows take turns with the
+- **Several tasks at once:** **New window** at the top (or starting BlackBox again) opens another
+  window with a chat of its own. The windows take turns with the
   mouse and keyboard, and Pause/Break stops them all.
 - It doesn't ask before it acts. To approve each step, use "Ask me first" in Settings.
 - Every error it shows is also written to `Data\errors.log`, with the details, so you can look at

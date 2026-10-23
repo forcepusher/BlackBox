@@ -34,7 +34,7 @@ with the message box under the taskbar.
 
 Every error BlackBox shows also goes into `Data/errors.log`: when, where it was shown (the chat,
 named by its title and its file in `Data/chats`; the banner under the top bar, with the server's
-address; the Filmmaking window, with the film's folder; a start that failed), what it said, and the
+address; Filmmaking, with the film's folder; a start that failed), what it said, and the
 whole exception behind it, stack trace and all. That covers the red lines in the chat (a run that
 ended on a server's answer or a bug, a run that couldn't start, settings or a pasted picture that
 couldn't be saved, MCP servers that failed), the lines about a server's failure a run went on
@@ -279,8 +279,12 @@ them again when it is opened, as long as the files are still there.
 A video plays by itself while it is on screen, over and over and without its sound, as a GIF
 would; scrolled away, under the full-screen viewer or with the window minimized it pauses, so a
 long chat decodes only what can be seen (a third of its height showing, or 120 pixels of a tall one,
-counts as on screen). Its pause button holds it until it is played again. The Filmmaking window's
-players are not touched by this: they play with sound when asked.
+counts as on screen). Its pause button holds it until it is played again. The Filmmaking panel's
+players are not touched by this: they play with sound when asked. Playing, a video holds its file
+open, so a file the film tool is about to write over (a shot made again, the song, the film joined
+again, a take put back) is let go of first (`MediaRelease`): every window's players of it stop, and
+the writer waits until they have. Making a shot again failed with "the process cannot access the
+file" while its first take played in the chat (2026-10-24, found driving the panel with ComfyUI).
 
 A click on a picture or a video (a preview, a picture that came with a message or waits under the
 box to go with one, a tool's screenshot) opens the full-screen viewer on the chat's screen, rather than another program: a
@@ -289,7 +293,7 @@ click between that and its own size (from twice its size its pixels stay square,
 video plays with its sound (M or the speaker turns it off), Space plays or pauses. The arrow keys
 and the side buttons go through the chat's other pictures and videos, Esc, × or a click beside the
 picture goes back. The agent's clicks step it aside as they do the chat's window, and its keys go to
-the window under both (before, from the chat they could go to the Filmmaking window).
+the window under both (before, from the chat they could go to the Filmmaking window there was then).
 
 **Prompt** under a picture, video or sound made with ComfyUI shows the prompts it was made with and
 the settings that matter for making it again (model, LoRAs with their strength, shift, sampler,
@@ -444,18 +448,51 @@ comfyui-mcp up by itself when the user asks for it.
 ## Films
 A video of more than one shot (a music video, a story, an ad) is planned as a **storyboard** and
 made piece by piece with ComfyUI: one video model run can't hold a story together for more than
-a few seconds, and not every film is one continuous camera shot. The **Filmmaking** button opens a
-window for it, an add-on of the chat window it was opened from: what the user tells the window, and
-what its buttons ask for, go to the chat that window shows as messages (another chat picked there
-since takes them, and the film window's title follows it), and the agent does them there with its `film` tool,
-which reads and writes the same storyboard the window shows. A film can start in either and go on in
-the other.
+a few seconds, and not every film is one continuous camera shot. **Filmmaking**, picked in the
+**Toolkit** dropdown at the top left of the chat window, opens in a panel on the left of the chat
+(see "The Filmmaking panel" below): what the user picks in it goes into the chat's box, they say
+there what to do with it, and the agent does it with its `film` tool, which reads and writes the
+same film the panel shows. A film can start in either and go on in the other.
 
-A storyboard is the `storyboard.json` in the film's folder, `Data/films/<title>` next to the exe
-like the rest of BlackBox's data (the user's choice: it is portable; the first build put films in
-the PC's Videos folder). A path the model gives that isn't from a drive ("lighthouse") is a folder
-in `Data/films` too: taken from the working folder, as until 2026-10-23, qwen3.8's "lighthouse"
-was made in the user's home, where the Filmmaking window doesn't look. The window's **Show folder** opens it:
+**A film is its folder** (the user's call, 2026-10-24: "I want the entire film to be
+folder-driven", and "We don't need the film file storyboard.json anymore right?"), in
+`Data/films/<title>` next to the exe like the rest of BlackBox's data (the user's choice: it is
+portable; the first build put films in the PC's Videos folder). A path the model gives that isn't
+from a drive ("lighthouse") is a folder in `Data/films` too: taken from the working folder, as until
+2026-10-23, qwen3.8's "lighthouse" was made in the user's home, where Filmmaking doesn't look:
+
+```
+Fox Film/
+  Fox Film.mp4 (+ .meta)     the joined film; its meta: title, size, frame rate, levels, the shots' order
+  References/                the references' pictures (named after them) and the user's own
+  1 Intro/                   a folder per shot, numbered in the film's order, named after the shot
+    Intro start.png (+ .meta, Intro start.workflow.json)
+    Intro end.png   (+ .meta, Intro end.workflow.json)
+    Intro.mp4       (+ .meta, Intro.workflow.json)
+    Takes/                   earlier versions, each with its meta and workflow
+  Sound/song.mp3 (+ .meta, song.workflow.json)
+```
+
+Every piece has a `.meta` beside its file (JSON, as Unity keeps one beside each asset, the user's
+comparison): what it is (`"kind"`, its id, prompt, seed, model, what it is made from) and, once
+made, how (`"made"`: the stamp of the settings it was made from, the template, when, the settings
+then, what its look found). The workflow beside it is ComfyUI's API format alone, which ComfyUI
+opens as it is and the comfyui tool runs (`workflow_file`). A piece is where its meta is: moved or
+renamed with its meta in Explorer it stays in the film, and with its meta deleted (a shot's folder
+deleted) it leaves it. Reading a film gathers the metas into one storyboard
+(`StoryboardFolder.cs`), which is what the agent reads and writes as JSON; saving it gives each piece
+its place (`Storyboard.Arrange`) and writes the metas back, only those that say something new. A
+shot's folder follows the film's order and the shot's `name` (renamed with the files in it when
+they change, but not while a piece of the film is being made, `FilmMaker.IsMaking`: the job writes
+into it); a frame goes in the folder of the shot that ends on it, else the one that starts on it
+(the frame a shot after goes on from is the end of the shot before, and the tree shows it in the
+next shot's folder too), a reference in References, any other in Frames. A piece made stays where
+its file is; one not made yet goes where the order and names say, never onto a file a piece taken
+out left there ("2 puddle (2)"). The meta of a piece taken out goes, so it doesn't come back; its
+files stay. A film kept in a `storyboard.json` from before is turned into folders the first time it
+is opened: each piece's record (the workflow file that held its stamp and workflow) becomes its
+meta and workflow, the pieces move into their folders with their takes (a file moved keeps its time
+and size, so what was made from it stays made), and the storyboard.json goes. A film is made of:
 
 - **Shots** in order, each going from its **first frame** to its **last frame** in so many seconds,
   with what happens in it, what the camera does, and how it follows the shot before (a cut, a
@@ -466,7 +503,10 @@ was made in the user's home, where the Filmmaking window doesn't look. The windo
 - **Frames**: made from a prompt with a fixed seed, or taken from a picture of the user's (cut to
   the film's frame). A frame can be made **from other frames** (an edit model such as
   Qwen-Image-Edit gets them as its pictures), so the people and places stay the same from shot to
-  shot; **references** (a character, a place) are frames for that alone, in no shot.
+  shot; **references** (a character, a place) are frames for that alone, in no shot, their
+  pictures in the film's **References** folder at their own shape. Any picture the user puts in
+  References (dropped on the panel, or copied there) is one too: a frame names it in `from` by its
+  file name to be made from it.
 - **Nothing film-wide that goes into a prompt.** Each frame's and shot's prompt holds all of its
   own look, and each says what it is made with (`model`). There used to be a film-wide look added
   to every prompt, a story and a template per kind of job, and the user ruled them out: one change
@@ -488,16 +528,26 @@ was made in the user's home, where the Filmmaking window doesn't look. The windo
   line longer than its shot is said to be cut. A small Gemma 4 hears each line back in the check:
   "Honestly? It used to be a lot worse." came back word for word.
 
-Only decisions are kept in the storyboard. What is made sits at fixed places beside it, each with
-the workflow that made it: `frames/<id>.png` and `frames/<id>.json`, `shots/<id>.mp4` and
-`shots/<id>.json`, `sound/song.mp3` and `sound/song.json`, and the joined film as `<title>.mp4`.
-A workflow file is ComfyUI's API format under `"prompt"` (the comfyui tool runs it as it is, with
-`workflow_file`; the files it loads named by their full paths), with what it was made from under
-`"blackbox"`: a hash of the prompt, seed, size, template, and the pictures and sound it started
-from. A piece whose hash no longer matches the storyboard is out of date, which the window and
-the tool say (a frame changed after the clip that starts on it was made, a song shorter than the
-film became). So the window and the agent never overwrite each other's results, and the same
-seed and prompt make the same picture again.
+A piece's meta keeps, under `"made"`, a hash of what it was made from: the prompt, seed, size,
+template, and the pictures and sound it started from. A piece whose hash no longer matches its
+settings is out of date, which the panel and the tool say (a frame changed after the clip that
+starts on it was made, a song shorter than the film became). So the panel and the agent never
+overwrite each other's results, and the same seed and prompt make the same picture again.
+
+**Pictures of another shape.** The user's films came out with heads cut off ("models have
+problems adapting references for video generation, because references (probably?) need to use the
+same resolution as the video", 2026-10-23, from the publish log): a square picture of a character
+was made a reference, which was cut to the film's 16:9 frame, head and all, and the model cropped
+a band of it with Pillow to get the head back. References don't need the video's size: the edit
+model takes its pictures at any shape. The film's frames do, and they had it from the wrong place:
+Qwen-Image-Edit's template samples the latent its first picture is encoded to
+(`FluxKontextImageScale` then `VAEEncode`), so a frame made from a square reference came out square
+and was then cut to 16:9 too. Now a reference keeps its shape (`FilmMaker.SaveReference`: black bars
+cut off, no more than 2048 across), and a template that takes its size from its first picture is
+given a blank picture of the film's size to encode instead, where its sampler draws the picture anew
+(denoise 1; `FilmRoles.SizeFromBlank`), the pictures still going to the model as they are. A frame
+taken from a picture of the user's (`file`) is still cut to the film's frame: to keep all of a
+picture of another shape, make the frame from it.
 
 What a frame, shot or the song is made with is its `model`: words ("furry nova xl", "my pony
 workflow", "juggernaut") matched against everything ComfyUI has installed for that kind of job, a
@@ -579,41 +629,68 @@ saw as a chubby teenager). `tries=N` makes up to N takes with new seeds until on
 the best. The whole film is checked from a frame of each shot side by side and the joins where the
 camera should go on.
 
-**The window is a timeline**, the user's design (it replaced a grid of shots two to a row with
-prompt boxes, and a read-only strip): one horizontal scroll for three kinds of row, the names
-staying put at the left. **References** have a row each, with a bar under every run of shots made
-from them (directly or through frames made from frames). **Video** has a block per shot from where
-it starts for as long as it lasts, its clip's frames inside once made (else its frames and what
-happens in it), its state under it; dragging a shot's right edge makes it longer or shorter, in
-half seconds. **Sound** has the lines where they are said and the soundtrack's waveform, darker
-where it is turned down under the lines. A ruler on top moves the playhead (click or drag), and the
-play button plays the soundtrack from it with each shot's frame in the viewer. The wheel scrolls
-sideways, Ctrl+wheel zooms. Above the timeline are a viewer (the piece picked: a frame, a clip, the
-song; with nothing picked, the joined film) and a panel. A click away from every piece (on the
-timeline's empty space, around the viewer, on the bar at the top) or Esc (not while typing) picks
-the whole film again, so what is said next is about the film; a click on the ruler moves the
-playhead and keeps the pick, and so does a click in the panel, which acts on what is picked, or on
-the picked piece's own view (a frame not made yet, whose disabled full-screen button let the click
-through to "away", the song's card). A soundtrack that is a video opens full screen on its own.
+**The Filmmaking panel** (2026-10-24, the user's design: "Filmmaking window should extend current
+window to the left side instead of opening a new separate window... Use the main chat for film
+making... Put filmmaking button under Toolkit dropdown menu with None and Filmmaking options. There
+will be more tools extending to the left side of the screen later."). The **Toolkit** dropdown
+takes the place of the second BlackBox logo and name under the title bar, an arrow on it pointing
+left, where its tools open: None or Filmmaking (`ToolkitOption`, `IToolkit`, more to come). Picked,
+the window grows to the left by the tool's width (960), so the chat stays where it was on the
+screen, as far as the screen has room; None gives the room back, and a window neither moved nor
+resized since goes back where it was. The window's place is saved without the panel. A splitter
+between the two moves the line between them. The panel has the film's folder as a tree on the left,
+a viewer beside it with how the piece shown was made under it, and the timeline at the bottom; its
+top bar picks the film (New film, Open… a folder, Show folder, the film's title, size, frame rate
+and levels behind the cog) and has **Make the film**.
 
-**The user never writes a prompt** (their rule): there are no prompt fields. They pick a piece (a
-reference, a shot or one of its frames, the sound) or nothing (the whole film), and say in the
-panel what they want. **It runs in the chat** (the user's call, 2026-10-23: "Filmmaking window
-should execute its prompts visibly in the main chat log window... treat the filmmaking as an addon
-window for the main chat"): the window sends it to the chat its chat window shows as a message
-(`UserInput.Via`, shown over it there: "Filmmaking · The Fox and the Moon · shot 2"), saving the
-storyboard first, and the model gets before the words what the chat doesn't show
-(`UserInput.Context`): the film, its storyboard's path, the piece (shot s2, the 2nd of 3, from 5 to
-9 s) and what to do with it. A piece's request: read the storyboard, change that piece alone (a
-shot, its frames too, and the lines' voice) unless they ask for more, and make it again with the
-film tool call it names. A whole film's request may lay the film out or change anything, and makes
-nothing: each piece is made when the user makes it. The buttons send messages of their own words
-("Make it.", "Another take, please.", "Look at it again.", "Make the film.", "Join the clips.",
-"Look at the whole film.") with the tool call to make (Another take sets a new seed in the
-storyboard first; a picture of the user's goes into the storyboard and comes with the message).
-A piece's request also says to fix what its fresh look finds wrong and make it again, up to twice,
-as the window's own director did with every piece: told only to say how it came out, the agent
-reported the fault and left the piece so. With Claude Opus 5.5 (2026-10-23), Make it on a 3 s shot
+**The tree is the film's folder** as it is on the disk: References, a folder per shot in the
+film's order, Sound, any other folder, and the joined film, with what each piece is beside its name
+("the start of shot 1", "shot 1's clip"), its state ("Not made yet", "Made · looked at", what the
+chat is doing to it), a thumbnail for a picture, and its takes under it. A piece planned and not
+made yet is there, greyed, where it will be. The metas and workflows aren't shown (what they say is
+under the viewer), nor what is made beside a piece. It is built again only when what it shows
+changed: as a job writes, the folder changes every second.
+
+**The timeline**, the user's design (it replaced a grid of shots two to a row with prompt boxes,
+and a read-only strip): one horizontal scroll for its rows, the names staying put at the left.
+**Video** has a block per shot from where it starts for as long as it lasts, its clip's frames
+inside once made (else its frames and what happens in it), its state under it; dragging a shot's
+right edge makes it longer or shorter, in half seconds. The lines where they are said, and the
+soundtrack's waveform, darker where it is turned down under the lines. A ruler on top moves the
+playhead (click or drag), and the play button plays the soundtrack from it with each shot's frame
+in the viewer. The timeline is dragged sideways anywhere but the ruler and a shot's edge (the user
+found its scrollbar "very inconvenient", 2026-10-24; a drag from a shot doesn't pick it, a press
+let go without moving 4 pixels does), its scrollbar shows only under the pointer, the wheel scrolls
+sideways and Ctrl+wheel zooms. A shot clicked doesn't scroll into view (`BringIntoViewOnFocusChange`
+off): partly scrolled out, it moved from under the pointer between press and release. Testing it
+with posted mouse messages, Windows adds a move to where the real cursor is when the press captures
+the mouse, so a posted click away from the cursor can read as a drag; and UI Automation gives a
+shot's whole bounds, under the row names too when scrolled, so click inside what shows. A click away from every piece (the timeline's empty space, around
+the viewer) or Esc (not while typing) shows the whole film again and picks nothing. A soundtrack
+that is a video opens full screen on its own.
+
+**The user never writes a prompt** (their rule): there are no prompt fields. **What they pick
+goes into the chat's box** (the user's call, 2026-10-24: "in order to generate something you either
+select folder or image or video, it shows up in main chat window prompt, and then you write the
+prompt to describe what you wanna do with it"): a folder, a picture or a clip, in the tree or on the
+timeline, is a chip under the box ("The start of shot 1 · Moon start.png", "not made yet" for a
+piece planned), × takes it off, another pick takes its place, and sent, it goes with the message
+(a piece not made yet as its place, with no file). A message sent while Filmmaking is open carries
+the film (`IToolkit.About`): over its bubble (`UserInput.Via`, "Filmmaking · The Fox and the Moon ·
+shot 2"), and for the model before the words (`UserInput.Context`) the film's folder, what each
+pick is in it (shot s2, the 2nd of 3, from 5 to 9 s, its clip or its folder; frame f1, the start of
+shot 1; the reference "Fox"; a picture of theirs in References and how to name it; a take, which
+the panel puts back), and what to do: about picks, read the storyboard, change those pieces alone
+(a shot, its frames too, and the lines' voice) unless they ask for more, and make them again unless
+they only ask a question; with nothing picked, lay the film out or change it and make nothing unless
+asked, and when asked to make the film, make what isn't made in order, fix what each fresh look
+finds up to twice a piece, join, look at the film, fix what that names once, join and look again.
+The film is saved first, so the model reads what the panel shows. The window's own box, its buttons
+(Make it, Another take, Look at it again, Use a picture of mine, Delete it, Earlier/Later) and the
+picked piece's panel are gone: the user says those in the chat. **Make the film** stays, sending
+"Make the film." as typed. A piece's request also says to fix what its fresh look finds wrong and
+make it again, up to twice, as the window's own director did with every piece: told only to say how
+it came out, the agent reported the fault and left the piece so. With Claude Opus 5.5 (2026-10-23), Make it on a 3 s shot
 of a paper boat in a gutter: the looks found the first take nearly a still picture (the start
 frame had the boat on the dry kerb), so it made the frame again with the boat in the water,
 changed the camera to suit it and the seed, made the shot again, and all four looks passed, in
@@ -622,12 +699,11 @@ the wrong way (left and up); it looked at the frames itself, judged that the boa
 gutter that recedes up the picture, kept the take and said why. The clause is a guideline the model
 weighs, not a rule: the user's way of steering it.
 During a run they wait above the box as anything typed in the chat does. The user watches every step
-in the chat, with each frame and clip as it is made, and stops it there or with the window's Stop.
-One still waiting when the run is stopped, or the chat is left, doesn't go into the chat's box, as
-typed messages do: sent from there with the next message it was "Another take, please." without the
-film and piece, so the chat says it wasn't done. Its context is saved with the message, so Continue
-on one the model never had sends it whole. A chat begun from the window is named after the words and
-the film and piece ("Make it. (Fox Test · start of shot 1)"), not "Make it." alone.
+in the chat, with each frame and clip as it is made, and stops it there. One still waiting when the
+run is stopped, or the chat is left, goes back into the box as any typed message does, and sent
+again while Filmmaking is open carries the film again. Its context is saved with the message, so
+Continue on one the model never had sends it whole. A chat begun with Filmmaking open is named after
+the words and the film and picks ("Make it. (Fox Test · start of shot 1)"), not "Make it." alone.
 
 The model writes prompts as BlackBox's storyboard guide says (`Comfy/Guides/storyboards.md`, which
 the film tool shows with the first storyboard a chat reads or writes, together with the video
@@ -645,23 +721,19 @@ with a first frame only, as the guide says for a drift that goes on to the end, 
 empty starting pieces); "make it darker, closer to night, with the street lamps on" on that frame
 changed its prompt, the shot's look words with it (and said so), and made it with a fresh look, in
 2 min 13 s, 12 s of it ComfyUI. Each piece made is
-looked at by fresh looks (see below), and what they found is kept in the piece's workflow file
-(`"look"`, a song's judged sound too) so the window shows it with the piece.
+looked at by fresh looks (see below), and what they found is kept in the piece's meta
+(`"made"."look"`, a song's judged sound too) so the panel shows it with the piece.
 
-**The window as the chat's add-on.** It reads twice a second what the chat is doing: a line over the
-box ("In the chat: Make shot s2 · KSampler, step 3 of 8") with Show and Stop while a run goes on, and
-on the timeline the piece the film tool is making or looking at, by the call's arguments, with how it
-is getting on. What the agent changes in the storyboard and makes in the film's folder shows as it
-happens (the folder is watched). Its title names the chat (Filmmaking - <chat> - BlackBox), it opens
-beside the chat where a screen has room for both (right or left of it, else on another screen, else
-over it), it closes with the chat's window, and **Show the chat** brings that window forward.
-Changes made by hand (a shot's length, its order, new shots and references, deleting, the film's
-size and levels, a take put back, a sound file of the user's) are saved to the storyboard at once,
-without the chat. One made while the chat changes the storyboard (a shot's edge dragged as the film
-tool rewrites a prompt or settles a seed) is put together with the chat's (`StoryboardMerge`: key
-by key, frames and shots by id, the window's hand winning where both changed the same value):
-saved whole, as until 2026-10-23, the window's copy wrote over the chat's change, and the window
-never showed it. Checked in the window: a shot dragged from 3 s to 5.5 s while its prompt was
+**The panel and the chat.** It reads twice a second what the chat is doing: on the timeline and in
+the tree, the piece the film tool is making or looking at, by the call's arguments, with how it is
+getting on. What the agent changes and makes in the film's folder shows as it happens (the folder is
+watched, and read again when it changed). Changes made by hand (a shot's length, a new shot, the
+film's size and levels, a take put back, pictures dropped into References) are saved at once,
+without the chat. One made while the chat changes the film (a shot's edge dragged as the film tool
+rewrites a prompt or settles a seed) is put together with the chat's (`StoryboardMerge`: key by
+key, frames and shots by id, the panel's hand winning where both changed the same value): saved
+whole, as until 2026-10-23, the window's copy wrote over the chat's change, and the window never
+showed it. Checked in the window: a shot dragged from 3 s to 5.5 s while its prompt was
 written from outside kept both, where the build before kept only the drag. A drag counts as a
 change from its first step (it was one only once let go, and a write from the chat in the middle
 of it was read over it, the shot snapping back); the timeline laid out again for a write put
@@ -670,7 +742,7 @@ together in the middle of a drag ends the drag where it was, kept, as does losin
 
 From a review of the window (2026-10-23): a take isn't put back while the chat makes a piece of the
 film (a shot makes its frames first, which don't show as being made, and the finished frame wrote
-over the take); a new piece never gets the id of one taken out whose files are still in the folder
+over the take); a new piece never gets the files of one taken out that are still in the folder
 (the new s3 came with the old s3's clip and takes, and joining used it); a new film whose folder
 another window's new film took since gets one of its own ("New film 2"); a film named again finds
 its joined video under the old name (`Storyboard.JoinedFile`); switching films stops the old one's
@@ -804,27 +876,30 @@ the cup just leaving the saucer: the shot's look failed its first take for a sec
 saucer vanishing, the director took that cup out of the picture, and the second take passed every
 look and the film's, its camera still (measured), in 21 minutes.
 
-**Full screen.** A click on the picture or video in the window's viewer opens it in the chat's
+**Full screen.** A click on the picture or video in the panel's viewer opens it in the chat's
 full-screen viewer (`MediaViewer`), on the window's screen, with the film's other pictures and
-clips an arrow key away: the references, the frames, the shots' clips in order, then the joined
-film. A clip playing in the window stops meanwhile; the play button under it still plays it in
-place.
+clips an arrow key away, in the tree's order: the references, each shot's frames and clip, then the
+joined film. A clip playing in the panel stops meanwhile; the play button under it still plays it
+in place.
 
-**Takes**: before the film tool makes a piece again, the one there is kept beside it
-(`frames/f2.v1.png` and `.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it
-was made with (`"settings"`) and what its look found; a make that fails or is stopped puts that
-take back in place, its workflow file too (the job had begun to write over it, and dropped, the
-piece lost its settings and look and read as changed), and so does a shot of several `tries`
+**Takes**: before the film tool makes a piece again, the one there is kept in its folder's Takes
+(`1 Intro/Takes/Intro end.v1.png` with its meta and workflow, `Intro.v1.mp4`…), its meta holding the
+settings it was made with (`"made"."settings"`) and what its look found; a make that fails or is
+stopped puts that take back in place, what its meta says of how it was made too (the job had begun
+to write over it, and dropped, the piece lost its settings and look and read as changed; only the
+`"made"` part goes back over the piece's meta, which keeps what it says of the piece: moved whole, a
+take made beside a piece left it without its prompt), and so does a shot of several `tries`
 stopped before one replaced its clip (the takes made so far stay). A speaking shot's take keeps
-its line with it (`sN.wav` and `sN.line.flac`): put back without it, the newer line played over the
-older lips, and the shot read as up to date. A frame or shot call's changes go in only for a piece
+its line with it (`Intro.v1.wav` and `Intro.line.v1.flac`): put back without it, the newer line
+played over the older lips, and the shot read as up to date. A take is picked in the tree under its
+piece, and **Use this take** under the viewer puts it back. A frame or shot call's changes go in only for a piece
 of that kind, or a new one it gives a prompt: a frame call with a shot's id added a stray frame.
 The song's tries made before one that fails or is stopped are takes of the song, not stray files.
 Checked with Claude in the window (2026-10-23): "Use a picture of mine…" on the frame shot 1 starts
 on, through the Open dialog, made the frame from the user's picture, cut to the film's size, and
 kept it though its look said it didn't match the shot's words, as the request says. A seed settled after several
-tries isn't written over one the window gave meanwhile (Another take, which then made the same clip
-again).
+tries isn't written over one the panel gave meanwhile (a new seed set by hand, which then made the
+same clip again).
 
 A whole storyboard laid out without `path`, of another title (shots that each say what happens,
 none taken out), while the film used last in the task says what is in it, is a new film: "two ads,
@@ -934,7 +1009,7 @@ and the line a task ended with says under it how long the whole task took ("Work
 The times are saved with the chat; a chat saved before they were kept shows none.
 
 ## Several windows
-**New window** in the top bar or Ctrl+Shift+N opens another chat window, with its own chat, agent
+**New window** in the top bar opens another chat window, with its own chat, agent
 and MCP servers. (It was an icon at first, to keep the bar within the narrowest window, and went
 unnoticed; now the server's status text is what gets shorter in a narrow window.) Starting BlackBox
 again does the same: one BlackBox runs per `Data` folder (`SingleInstance`), and a second start of
@@ -965,7 +1040,7 @@ window in front, at its size, kept on the screen, as Windows cascades windows: r
 a second window looked as if nothing had opened. A window closed where it opened beside another
 doesn't save its place, so BlackBox doesn't creep down a step with every second window. The title
 bar names the chat ("keys 6 - BlackBox"), to tell the windows apart on the taskbar. A window's
-Filmmaking window and full-screen viewer close with it, and so does all it had going: its run
+Filmmaking panel and full-screen viewer close with it, and so does all it had going: its run
 stops (the chat says so, with Continue, when it is opened again; it ended without a word before),
 what that run still reports is dropped (another window may open the chat meanwhile), the
 sounds in its chat stop, and no run or MCP server of its starts again. Its videos hold still while
@@ -1053,7 +1128,7 @@ picture again with `read_file`. The command-line runner takes files with `--atta
 Until a chat is used, it shows first that Pause/Break stops it and that corrections and hints can be
 typed to it while it works, that it uses the mouse and keyboard but pauses while you type and what it
 asks before it acts, then that Ctrl+V pastes a screenshot or files into a message and that files can
-be dropped on the window (the empty box says so too), that Ctrl+Shift+N or New window opens another window for
+be dropped on the window (the empty box says so too), that New window at the top opens another window for
 another task at the same time (see [Several windows](#several-windows)), then what BlackBox can do (apps, pictures,
 video and sound, game development in any game engine, getting the programs and MCP servers a job
 needs, servers, documents, the web, chatting for you, long jobs, and files and commands). It says
@@ -1389,7 +1464,7 @@ prints the traceback and exits with 0.
 | `index_folder` | Indexes a folder, as Cursor does a codebase: an overview of the project (its kind, README, folders and what its main files define), and with `query` a search of its files by names or by what the code does (see below) |
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures, videos, sounds and 3D models to the model; `write_file` makes documents from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
 | `comfyui` | Pictures, video, sound, music, speech and 3D models with ComfyUI on this PC, which it installs when there is none: templates, node and model look-ups, models found online and downloaded, checked runs that hand back the files (see Pictures, video and sound) |
-| `film` | Films from a storyboard (the Filmmaking window's): plans or changes it, makes its frames, song and shots with ComfyUI, checks each shot against what it should show, joins them with ffmpeg (see Films) |
+| `film` | Films from a storyboard (the film's folder Filmmaking shows): plans or changes it, makes its frames, song and shots with ComfyUI, checks each shot against what it should show, joins them with ffmpeg (see Films) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
 | `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |

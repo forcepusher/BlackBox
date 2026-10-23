@@ -7,22 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - `Data\errors.log`: every error BlackBox shows (in the chat, in the banner under the top bar, in
-  the Filmmaking window, or when it can't start), with the details behind it, to read after the
-  chat or the window is gone.
+  Filmmaking, or when it can't start), with the details behind it, to read after the chat or the
+  window is gone.
 - Folder index: before it works on a project or a big folder, BlackBox indexes it by itself, as
   Cursor does: what kind of project it is, its README, its folders and what its main files define,
   and a search that finds where anything is by names or by what the code does, with every line that
   has a name it asks for. Indexes are kept in `Data\index` and bring themselves up to date on every use.
-- Several BlackBox windows at once: **New window** at the top, Ctrl+Shift+N, or starting BlackBox
-  again opens another window with a chat and an agent of its own, a step down and to the
+- Several BlackBox windows at once: **New window** at the top, or starting BlackBox again, opens
+  another window with a chat and an agent of its own, a step down and to the
   right of the one in front. The windows take turns with the mouse and keyboard, stay out of each
   other's screenshots, all pause while you type in any of them, and one Pause/Break stops them all.
   A chat open in one window brings that window forward when picked in another's History, and what
   Settings saves applies to every window; each keeps its own model.
-- Filmmaking: a window that lays a film out on one timeline (its characters and places, its shots
-  and its sound) and makes it shot by shot with ComfyUI. Say in words what to make or change, for
-  one piece or the whole film, and BlackBox writes the prompts, picks the models, makes it and looks
-  at it; earlier takes are kept. Or ask for a film in the chat.
+- Filmmaking: pick it in the **Toolkit** dropdown at the top left, and it opens on the left of the
+  chat, the window growing to that side: the film's folder as a tree, a viewer, and the film on one
+  timeline (its shots and its sound), which you drag sideways. Pick a folder, picture or clip there
+  and it goes into the chat's box; say what to make or change and BlackBox writes the prompts, picks
+  the models, makes it with ComfyUI and looks at it, in the chat, where you watch and can stop it.
+  Earlier takes are kept, and **Use this take** puts one back. Or ask for a film in the chat.
+- A film is its folder: a folder for each shot, numbered in the film's order and named after the
+  shot, with the frames it starts and ends on and its clip; References, for its characters and
+  places and pictures of yours (drop them on Filmmaking, and frames are made from them); Sound; and
+  the joined film. Every file has a `.meta` beside it saying what it is and how it was made, and the
+  ComfyUI workflow that made it, which opens in ComfyUI as it is.
 - Films get songs about a minute long (the best of three, judged by SongEval), spoken lines in one
   cloned voice with lip sync, and fresh looks at every shot, cut and the whole film that catch
   broken bodies, frozen or jumping action, a camera that moves when it shouldn't and a change of
@@ -52,29 +59,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This changelog.
 
 ### Changed
-- Filmmaking is an add-on of the chat it was opened from: what you tell it, and what its buttons ask
-  for, go to that chat as messages, where you watch BlackBox do them, step by step, and can stop
-  them. The window shows what the chat is doing and the film as it changes, opens beside the chat
-  when a screen has room, and names the chat in its title. **Make what's missing** and **Make the
-  whole film** are one button now, **Make the film**.
 - A frame the film tool makes gets a fresh look, and every piece it makes again keeps the one before
-  as a take, as the Filmmaking window did; a shot's or song's other tries are takes too.
+  as a take; a shot's or song's other tries are takes too.
 - The context slider goes up to 1M.
-- A click away from a piece in Filmmaking, or Esc, goes back to the whole film.
+- The second BlackBox name and logo under the title bar made way for the Toolkit dropdown.
 
 ### Removed
-- The conversation beside each piece in Filmmaking: what was said about a piece is in the chat now.
+- Ctrl+Shift+N: **New window** at the top opens another window.
 
 ### Fixed
 - A task whose last step the server failed a few times before answering no longer looks as if it
   ended on that error: the lines about the tries come before the answer, not after it.
-- A click of the agent's that lands on the Filmmaking window or a dialog of BlackBox's goes to what
-  is behind it, as one on the chat window always did; keys meant for another program no longer
-  land in them.
+- A click of the agent's that lands on a dialog of BlackBox's goes to what is behind it, as one on
+  the chat window always did; keys meant for another program no longer land in it.
 - Links whose address holds parentheses (Wikipedia's) open whole, and an address followed by
   Chinese or Japanese punctuation no longer takes it in.
-- In Filmmaking, a click on the picked piece's own view (a frame not made yet) keeps it picked, and
-  a soundtrack that is a video opens full screen.
+- In Filmmaking, a soundtrack that is a video opens full screen.
+- Making a shot, the song or the film again no longer fails with "the process cannot access the
+  file" while the one before plays in the chat.
+- A frame made from a picture of another shape (a square picture of a character) comes out the
+  film's size with all of the picture in it, and a reference keeps its own shape: both were cut to
+  the film's frame, and the character's head went with it.
 - A film's camera is said to hold still only when that was measured: a pan there and back, or a
   plain night sky, no longer reads as a still camera.
 - Look-ups: a search the model means to make after mentioning the screen is made; the words between
@@ -99,16 +104,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saving Settings in one window no longer undoes what another window saved while the dialog was
   open; closing a window right after picking another chat no longer marks that chat stopped; a
   window closed while its MCP servers restarted no longer leaves them running.
-- Filmmaking: a request still waiting when BlackBox is stopped, or another chat is opened, is no
-  longer put in the chat's box without the film and piece it was about (the chat says it wasn't
-  done), and Continue sends one the model never had whole; chats begun from the window are named
-  after the film and piece too, not "Make it." alone; a change made by hand while BlackBox changes
-  the storyboard in the chat no longer writes over BlackBox's change, nor is a shot's length being
-  dragged lost to it; a shot added after one was deleted no longer brings back the deleted shot's
-  clip; a film named again keeps its joined video; a take isn't put back while BlackBox makes a
-  piece of the film; two new films started in two windows at once no longer share a folder; a
-  piece of the film open is no longer shown as being made when the chat makes another film's.
-- A piece made from the Filmmaking window is made again when its look finds something wrong, up to
+- Filmmaking: Continue sends a message the model never had whole, with the film it was about; chats
+  begun with Filmmaking open are named after the film and what was picked too, not "Make it." alone;
+  a change made by hand while BlackBox changes the film in the chat no longer writes over BlackBox's
+  change, nor is a shot's length being dragged lost to it; a shot added after one was deleted no
+  longer brings back the deleted shot's clip; a film named again keeps its joined video; a take isn't
+  put back while BlackBox makes a piece of the film; two new films started in two windows at once no
+  longer share a folder; a piece of the film open is no longer shown as being made when the chat
+  makes another film's.
+- A piece asked for in Filmmaking is made again when its look finds something wrong, up to
   twice, as before it ran in the chat; the storyboard guide comes back after the context starts
   afresh; a stopped shot of several takes no longer keeps a copy of its clip as one more take; a
   film the model names without a full path goes into `Data\films`, not your home folder; a second
@@ -130,7 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Films: a failed remake no longer leaves a piece looking made; remaking the song keeps the lines'
   voice and doesn't redo a song that still covers the film; restoring a take restores all of its
   settings; long titles and names like "Con" work; the film tool no longer writes over changes made
-  in the Filmmaking window during a long job. A frame changed to be taken from where a shot ends
+  in Filmmaking during a long job. A frame changed to be taken from where a shot ends
   is no longer dropped back to its old prompt while the shot still ends on it.
 
 ## [1.0.0] - 2026-10-19

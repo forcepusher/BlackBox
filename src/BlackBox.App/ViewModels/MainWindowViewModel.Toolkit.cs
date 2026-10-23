@@ -92,13 +92,34 @@ public sealed partial class MainWindowViewModel
             _ = SendAsync(WithToolkit(new UserInput(text), []));
     }
 
-    /// <summary>A message as the model gets it while a tool is open: with what the tool says about it and what was picked in it.</summary>
+    /// <summary>
+    /// A message as the model gets it while a tool is open: with what the tool says about it and what
+    /// was picked in it, which then goes with it (none for a message of the tool's own: what is picked
+    /// stays in the box for the next).
+    /// </summary>
     private UserInput WithToolkit(UserInput input, IReadOnlyList<string> picked)
     {
         if (Toolkit?.About(picked) is not { } about)
             return input;
-        Toolkit.Sent();
+        if (picked.Count > 0)
+            Toolkit.Sent();
         return input with { Via = about.Via, Context = about.Context };
+    }
+
+    /// <summary>
+    /// A file about to be written over (a shot made again): the chat's players of it, and the
+    /// toolkit's, stop; their playbacks, still holding it, are handed back to be ended.
+    /// </summary>
+    internal List<IDisposable> LetGo(string path)
+    {
+        var playing = new List<IDisposable>();
+        foreach (var preview in Items.SelectMany(i => i.Previews).OfType<PlayerPreview>()
+                     .Where(p => string.Equals(Path.GetFullPath(p.Path), path, StringComparison.OrdinalIgnoreCase)))
+            if (preview.LetGo() is { } playback)
+                playing.Add(playback);
+        if (Toolkit is FilmViewModel film && film.LetGo(path) is { } shown)
+            playing.Add(shown);
+        return playing;
     }
 
     /// <summary>Files dropped on the toolkit's panel: the tool takes them, or they go with the next message.</summary>

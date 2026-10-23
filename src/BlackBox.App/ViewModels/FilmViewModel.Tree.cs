@@ -31,7 +31,10 @@ public sealed partial class FilmViewModel
         foreach (var frame in _board.Frames.Where(f => f.Reference))
             references.Children.Add(PieceNode(_board.FramePicture(frame), _frames[frame.Id], frame.Name is { Length: > 0 } name ? name : "a reference"));
         foreach (var file in _board.ReferenceFiles().Where(f => !shown.Contains(f)))
+        {
+            shown.Add(Path.GetFullPath(file));
             references.Children.Add(new FilmNode(file, isFolder: false, Path.GetRelativePath(_board.ReferencesFolder, file)) { Label = "your picture" });
+        }
         Others(references);
         root.Children.Add(references);
 
@@ -449,6 +452,10 @@ public sealed partial class FilmViewModel
             _ => new PictureView(null, node.Caption, "It isn't there."),
         };
     }
+
+    /// <summary>The viewer's player of a file about to be written over, stopped; its playback, still holding the file, handed back to end.</summary>
+    internal IDisposable? LetGo(string path) =>
+        _shown is { Shown: PlayerPreview player } && string.Equals(Path.GetFullPath(player.Path), path, StringComparison.OrdinalIgnoreCase) ? player.LetGo() : null;
 
     /// <summary>Stops and lets go of what the viewer showed.</summary>
     private void DropViewer()

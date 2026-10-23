@@ -169,6 +169,7 @@ public static class FilmMontage
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
             throw new FilmException($"ffmpeg couldn't join the shots (exit code {process.ExitCode}):\n{tail}");
         }
+        MediaRelease.Release(output); // the film joined before may be playing in the chat
         File.Move(temp, output, overwrite: true);
         return new FilmMade(output, null, null, clock.Elapsed, notes);
     }

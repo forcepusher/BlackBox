@@ -248,6 +248,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         var stamp = ShotStamp(board, shot);
         var run = await RunAsync(job, ModelOf(board, shot), inputs, shot.Set, workflow, stamp, "video", progress, userMessage, ct).ConfigureAwait(false);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        MediaRelease.Release(target); // its take before may be playing in the chat
         File.Copy(run.Output, target, overwrite: true);
         if (VideoSteady.AsksStill(shot.Camera + "\n" + shot.Prompt) && await HoldStillAsync(target, ct).ConfigureAwait(false) is { } held)
             notes.Add(held);
@@ -277,6 +278,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         {
             if (!await VideoSteady.HoldAsync(clip, held, path, media, ffmpeg, ct).ConfigureAwait(false))
                 return $"The camera {path.Describe()} where the shot holds it still, too far to hold still after the fact.";
+            MediaRelease.Release(clip);
             File.Move(held, clip, overwrite: true);
             return $"The camera {path.Describe()} where the shot holds it still: held it still, the picture enlarged {(path.Enlarged - 1) * 100:0}%.";
         }
@@ -325,6 +327,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         var stamp = LineStamp(board, shot);
         var run = await RunWorkflowAsync(api, library, workflow, board.ShotLineMeta(shot), stamp, "VoxCPM2", "audio", progress, userMessage, ct).ConfigureAwait(false);
         Directory.CreateDirectory(Path.GetDirectoryName(board.ShotLine(shot))!);
+        MediaRelease.Release(board.ShotLine(shot));
         File.Copy(run.Output, board.ShotLine(shot), overwrite: true);
         Restamp(board.ShotLineMeta(shot), stamp);
         return new FilmMade(board.ShotLine(shot), board.ShotLineMeta(shot), "VoxCPM2", run.Took, [.. notes, .. run.Notes]);
@@ -464,6 +467,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
                 var run = await RunAsync(FilmJob.Song, SongModelOf(board), inputs, sound.Set, workflow, stamp, "audio",
                     takes <= 1 ? progress : s => progress?.Invoke($"Song {take} of {takes}: {s}"), userMessage, ct).ConfigureAwait(false);
                 Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+                MediaRelease.Release(file);
                 File.Copy(run.Output, file, overwrite: true);
                 Restamp(workflow, stamp);
                 made.Add((sound.Seed, file, workflow, run));

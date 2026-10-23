@@ -221,8 +221,11 @@
             </StackPanel>
           </Border>
 
-          <ScrollViewer x:Name="Timeline" Grid.Column="1" HorizontalScrollBarVisibility="Visible" VerticalScrollBarVisibility="Disabled"
-                        PointerWheelChanged="OnTimelineWheel">
+          <!-- Dragged sideways anywhere but the ruler and a shot's edge, it scrolls (FilmPanel.Pan);
+               the wheel does too, Ctrl+wheel zooms. Its bar only shows under the pointer. A shot
+               clicked stays where it is: brought into view, it moved from under the pointer. -->
+          <ScrollViewer x:Name="Timeline" Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                        PointerWheelChanged="OnTimelineWheel" Background="Transparent" BringIntoViewOnFocusChange="False">
             <Panel Width="{Binding TimelineWidth}" HorizontalAlignment="Left" ClipToBounds="True">
               <StackPanel>
                 <views:FilmRuler x:Name="Ruler" Height="26" Pps="{Binding Pps}" Length="{Binding Length}" Lead="{x:Static vm:FilmViewModel.Lead}" />

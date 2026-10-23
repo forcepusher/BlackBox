@@ -36,6 +36,28 @@ public sealed class ChatWindows
         platform.StopKey.Watch(StopAll);
         // A ComfyUI an earlier BlackBox started and left at work is closed once its jobs are done.
         Core.Comfy.ComfyHub.For(paths.ComfyDir).CloseLeftover();
+        Core.Media.MediaRelease.Releasing += LetGo;
+    }
+
+    /// <summary>
+    /// A file about to be written over (a shot made again, the film joined again): every window's
+    /// players of it stop, and the writer waits until they have let go of it. From the writer's
+    /// thread; the players are found on the window's.
+    /// </summary>
+    private void LetGo(string path)
+    {
+        var playing = new List<IDisposable>();
+        void Find()
+        {
+            foreach (var (vm, _) in _open)
+                playing.AddRange(vm.LetGo(path));
+        }
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            Find();
+        else
+            Avalonia.Threading.Dispatcher.UIThread.Invoke(Find);
+        foreach (var playback in playing)
+            playback.Dispose();
     }
 
     public IPlatformServices Platform { get; }

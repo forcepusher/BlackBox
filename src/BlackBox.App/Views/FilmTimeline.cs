@@ -158,11 +158,22 @@ public sealed class FilmWave : Control
 
     static FilmWave() => AffectsRender<FilmWave>(PeaksProperty, SecondsProperty, PpsProperty, LeadProperty, LengthProperty, DucksProperty, LabelProperty, IsPickedProperty);
 
+    /// <summary>Where it was pressed: let go there, it is a click; dragged, the timeline scrolls (FilmPanel).</summary>
+    private Point? _pressed;
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        Picked?.Invoke();
+        _pressed = e.GetPosition(this);
         e.Handled = true;
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (_pressed is { } at && Point.Distance(at, e.GetPosition(this)) < 4)
+            Picked?.Invoke();
+        _pressed = null;
     }
 
     public override void Render(DrawingContext context)
