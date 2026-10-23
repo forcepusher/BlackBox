@@ -89,11 +89,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   window's program, and so is a window's next task until it has looked again; saving Settings in one window no longer undoes what another window saved while
   the dialog was open; closing a window right after picking another chat no longer marks that chat
   stopped; a window closed while its MCP servers restarted no longer leaves them running.
-- Filmmaking: a request still waiting when BlackBox is stopped is no longer put in the chat's box
-  without the film and piece it was about (the chat says it wasn't done), and Continue sends one
-  the model never had whole; chats begun from the window are named after the film, not "Make it.";
-  the storyboard guide comes back after the context starts afresh; a stopped shot of several takes
-  no longer keeps a copy of its clip as one more take.
+- Filmmaking: a request still waiting when BlackBox is stopped, or another chat is opened, is no
+  longer put in the chat's box without the film and piece it was about (the chat says it wasn't
+  done), and Continue sends one the model never had whole; chats begun from the window are named
+  after the film and piece too, not "Make it." alone; the storyboard guide comes back after the
+  context starts afresh; a stopped shot of several takes no longer keeps a copy of its clip as one
+  more take.
 - Folder index: projects in OneDrive folders are indexed (only their top folder was), files kept
   online only aren't downloaded, linked files are read as the files they point to, and a search
   that finds nothing says what the index doesn't search.

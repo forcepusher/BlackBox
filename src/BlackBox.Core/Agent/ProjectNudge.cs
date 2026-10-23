@@ -43,6 +43,7 @@ internal sealed partial class ProjectNudge
     /// </summary>
     public void Recall(IEnumerable<ChatMessage> history, ToolContext ctx)
     {
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var message in history)
         {
             foreach (var call in message.ToolCalls ?? [])
@@ -52,7 +53,7 @@ internal sealed partial class ProjectNudge
                 try
                 {
                     if (JsonNode.Parse(call.Arguments) is JsonObject args && Arg(args, "path") is { } path)
-                        Indexed(FolderIndex.Normalize(ctx.ResolvePath(path)), ctx);
+                        paths.Add(FolderIndex.Normalize(ctx.ResolvePath(path)));
                 }
                 catch (Exception ex) when (ex is System.Text.Json.JsonException or ArgumentException or NotSupportedException or PathTooLongException) { }
             }
@@ -60,6 +61,10 @@ internal sealed partial class ProjectNudge
             foreach (Match said in SaidNote().Matches(text))
                 _said.Add(said.Groups["root"].Value);
         }
+        // Only an index that was made: one stopped while it was built, or that failed, is none.
+        foreach (var path in paths)
+            if (FolderIndex.IndexedAbove(path, ctx.IndexDirectory) is not null)
+                Indexed(path, ctx);
     }
 
     private void Indexed(string full, ToolContext ctx)

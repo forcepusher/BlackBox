@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using BlackBox.Core.Agent;
 using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
@@ -225,6 +226,33 @@ public class SeveralWindowsTests : IDisposable
         await new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = "enter" }, ctx, CancellationToken.None);
         Assert.NotEmpty(platform.Actions);
         await ctx.FinishRunAsync();
+    }
+
+    [Fact]
+    public async Task A_step_held_back_holds_back_the_rest_of_it_and_the_next_step_acts()
+    {
+        var turn = new DesktopTurn();
+        var platform = new FakePlatform();
+        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false }, WorkingDirectory = _root, DesktopTurn = turn };
+        ScreenshotTool.Take(ctx);
+        var other = new object(); // another window's agent acts after this one looked
+        Assert.NotNull(await turn.TakeAsync(other, TimeSpan.Zero, null, CancellationToken.None));
+        turn.Done(other, acted: true);
+        turn.Release(other);
+        var server = new ScriptedServer(
+            Sse.ToolCalls(("c1", "press_keys", """{"keys":"enter"}"""), ("c2", "type_text", """{"text":"John"}""")),
+            Sse.ToolCall("c3", "type_text", """{"text":"John"}"""),
+            Sse.Text("Typed."));
+        var session = new AgentSession(new Llm.OpenAiChatClient(new HttpClient(server), "http://test", null), new Llm.ChatRequestOptions(),
+            ToolRegistry.CreateDefault(includeScreenTools: true), ctx, "system prompt");
+
+        await session.RunAsync("type John", new RecordingObserver(), CancellationToken.None);
+
+        string Result(string id) => session.History.Single(m => m.ToolCallId == id).Content!;
+        Assert.StartsWith("Nothing was done: another BlackBox window", Result("c1"));
+        Assert.StartsWith("Nothing was done: an action before this one", Result("c2"));
+        Assert.DoesNotContain("Nothing was done", Result("c3")); // the next step, on the screen it was shown, acts
+        Assert.Single(platform.Actions, a => a.Contains("John"));
     }
 
     [Fact]

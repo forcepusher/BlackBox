@@ -119,8 +119,10 @@ internal static class IndexSearch
         var unread = index.Files.Values.Count(f => f.Kind is FileKind.Large or FileKind.Unread or FileKind.Locked &&
                                                    f.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
         var parts = new List<string>();
-        if (index.LeftOut.Count > 0)
-            parts.Add("what it leaves out (" + string.Join(", ", index.LeftOut.Keys.Take(6)) + (index.LeftOut.Count > 6 ? "…" : "") + ")");
+        // Not files kept online only: a command searching them would download every one.
+        var leftOut = index.LeftOut.Where(l => l.Key != "online only").OrderByDescending(l => l.Value).Select(l => l.Key).ToList();
+        if (leftOut.Count > 0)
+            parts.Add("what it leaves out (" + string.Join(", ", leftOut.Take(6)) + (leftOut.Count > 6 ? "…" : "") + ")");
         if (unread > 0)
             parts.Add($"{unread:N0} file(s) it didn't read (too big, in use or past its limits)");
         return parts.Count == 0 ? "" : $" The index doesn't search {string.Join(" or ", parts)}: if it may be there, search those with a command.";

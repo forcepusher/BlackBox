@@ -551,6 +551,40 @@ public class FolderIndexTests : IDisposable
     }
 
     [Fact]
+    public async Task A_search_that_finds_nothing_says_what_the_index_leaves_out()
+    {
+        var project = Path.Combine(_dir, "web");
+        Write("web/package.json", "{}");
+        Write("web/src/app.js", "function startApp() {}");
+        Write("web/node_modules/lib/stripes.js", "function zebraStripes() {}");
+
+        var found = (await Run(Ctx(), project, "zebraStripes")).Text;
+
+        Assert.Contains("No file in", found);
+        Assert.Contains("The index doesn't search what it leaves out (node_modules", found);
+    }
+
+    [Fact]
+    public void An_index_call_that_made_no_index_is_not_taken_for_one_in_the_next_message()
+    {
+        var project = Path.Combine(_dir, "stopped");
+        Directory.CreateDirectory(Path.Combine(project, ".git"));
+        for (var i = 0; i < ProjectNudge.MinFiles; i++)
+            Write($"stopped/f{i}.txt", "hello");
+        var ctx = Ctx();
+        // Stopped while the index was being built: the call is in the chat, no index is.
+        var history = new List<Llm.ChatMessage>
+        {
+            new() { Role = Llm.ChatRole.Assistant, ToolCalls = [new Llm.ToolCall { Id = "c1", Name = "index_folder", Arguments = new JsonObject { ["path"] = project }.ToJsonString() }] },
+            Llm.ChatMessage.ToolResult("c1", "Stopped."),
+        };
+        var nudge = new ProjectNudge();
+        nudge.Recall(history, ctx);
+
+        Assert.NotNull(nudge.Check(new ReadFileTool(), new JsonObject { ["path"] = Path.Combine(project, "f1.txt") }.ToJsonString(), new ToolResult("1\thello"), ctx));
+    }
+
+    [Fact]
     public async Task The_next_message_of_a_chat_is_not_told_again_what_this_one_was()
     {
         // The app starts a session for every message, with the chat so far.
