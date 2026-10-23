@@ -308,7 +308,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            AddNotice($"The pasted picture could not be saved: {ex.Message}", isError: true);
+            AddNotice($"The pasted picture could not be saved: {ex.Message}", isError: true, ex);
         }
     }
 
@@ -433,10 +433,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// server that didn't answer), Continue runs that message again instead: "Continue." alone
     /// would reach the model without the task.
     /// </summary>
-    private void AddStopNotice(string text, bool isError, UserInput? unsent = null) =>
+    private void AddStopNotice(string text, bool isError, UserInput? unsent = null, Exception? error = null)
+    {
+        if (isError)
+            Core.ErrorLog.Write(ChatPlace(), text, error);
         Items.Add(unsent is null
             ? new NoticeItem(text, isError, CarryOn)
             : new NoticeItem(text, isError, () => _ = RunAgainAsync(unsent), unsent: true));
+    }
 
     private async Task RunAgainAsync(UserInput input)
     {
@@ -611,7 +615,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         {
             // The run itself never throws; this is the preparation (an address that isn't one, a
             // server that doesn't answer), so Continue tries the message again.
-            if (!_runDetached) AddStopNotice(ex.Message, isError: true, delivered ? null : input);
+            if (!_runDetached) AddStopNotice(ex.Message, isError: true, delivered ? null : input, ex);
         }
         finally
         {

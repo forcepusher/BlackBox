@@ -225,6 +225,13 @@ public sealed partial class FilmViewModel
     [ObservableProperty]
     private string _status = "";
 
+    /// <summary>What went wrong, on the bottom line and in Data/errors.log, about the film in <paramref name="folder"/> (this one's).</summary>
+    private void ShowError(string text, Exception error, string? folder = null)
+    {
+        Status = text;
+        Core.ErrorLog.Write($"Filmmaking, {folder ?? _board.Folder}", text, error);
+    }
+
     /// <summary>A run goes on in the chat: the panel says what it is doing, with Stop.</summary>
     [ObservableProperty]
     private bool _chatBusy;

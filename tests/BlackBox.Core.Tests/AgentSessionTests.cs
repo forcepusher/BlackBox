@@ -451,6 +451,7 @@ public class AgentSessionTests
         Assert.Equal(AgentStopReason.Error, observer.StopReason);
         Assert.Equal("a bug", observer.Detail);
         Assert.Same(bug, observer.Failed);
+        Assert.Same(bug, observer.Error);
 
         var refused = new ScriptedServer();
         refused.Failures.Enqueue((HttpStatusCode.BadRequest, "no such model"));
@@ -458,6 +459,8 @@ public class AgentSessionTests
         await session.RunAsync("go", observer, TestContext.Current.CancellationToken);
         Assert.Equal(AgentStopReason.Error, observer.StopReason);
         Assert.Null(observer.Failed);
+        // Not a bug, but the error log still wants what the server said, and from where.
+        Assert.Contains("no such model", Assert.IsAssignableFrom<LlmException>(observer.Error).Message);
     }
 
     [Fact]
@@ -481,6 +484,10 @@ public class AgentSessionTests
         Assert.Equal("sys", server.Requests[0]["messages"]![0]!["content"]!.GetValue<string>());
         Assert.Equal("\nsys", server.Requests[1]["messages"]![0]!["content"]!.GetValue<string>());
         Assert.Contains(observer.Notices, n => n.Contains("Upstream idle timeout exceeded") && n.Contains("Reconnecting"));
+        // The failure goes with its notice, for the error log: the chat keeps only the line.
+        var (notice, error) = Assert.Single(observer.NoticeErrors);
+        Assert.Contains("Reconnecting", notice);
+        Assert.Contains("Upstream idle timeout exceeded", Assert.IsType<ConnectionLostException>(error).Message);
         // The requests after it begin the same way, so the server's cache holds again.
         await session.RunAsync("and again", observer, TestContext.Current.CancellationToken);
         Assert.Equal("\nsys", server.Requests[2]["messages"]![0]!["content"]!.GetValue<string>());

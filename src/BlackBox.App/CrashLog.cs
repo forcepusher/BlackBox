@@ -48,6 +48,7 @@ internal static class CrashLog
     public static void Ended(Exception ex)
     {
         Write("ended BlackBox", ex);
+        Core.ErrorLog.Write("BlackBox", "BlackBox closed on an error.", ex);
         if (_paths is not { } paths)
             return;
         try { File.WriteAllText(LastCrashFile(paths), $"{DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture)} · {Summary(ex)}"); }
@@ -103,6 +104,7 @@ internal static class CrashLog
     public static void ShowCouldNotStart(Exception ex)
     {
         Write("could not start", ex);
+        Core.ErrorLog.Write("BlackBox", "BlackBox could not start.", ex);
         if (!OperatingSystem.IsWindows())
             return;
         // Put in Program Files (or another folder Windows keeps users out of), it said only

@@ -50,6 +50,8 @@ private or long work, use your own model.
   again) opens another window with a chat of its own. The windows take turns with the
   mouse and keyboard, and Pause/Break stops them all.
 - It doesn't ask before it acts. To approve each step, use "Ask me first" in Settings.
+- Every error it shows is also written to `Data\errors.log`, with the details, so you can look at
+  it (or send it along) later.
 
 ## Using your own model
 Type your server's address in the bar at the top of the window, such as `http://localhost:1234/v1`

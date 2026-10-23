@@ -151,20 +151,51 @@ public sealed partial class MainWindowViewModel
         });
     }
 
-    void IAgentObserver.OnNotice(string text) => PostTimed(at =>
+    void IAgentObserver.OnNotice(string text) => ShowNotice(text, null);
+
+    void IAgentObserver.OnNotice(string text, Exception error) => ShowNotice(text, error);
+
+    /// <summary>A notice from the run; one about a server's failure (<paramref name="error"/>) goes into the error log too.</summary>
+    private void ShowNotice(string text, Exception? error) => PostTimed(at =>
     {
         if (_runDetached) return;
+        if (error is not null)
+            Core.ErrorLog.Write(ChatPlace(), text, error);
         var notice = new NoticeItem(text, isError: false) { At = at };
+        var waiting = WaitingReply();
+        var index = NoticeIndex();
         // One line for a wait that goes on (a busy or unreachable server), not one per try: no
         // step starts meanwhile to trim the chat, and an hour of tries filled it.
-        if (text.EndsWith(WaitNoticeEnd, StringComparison.Ordinal) && Items.Count > 0 && Items[^1] is NoticeItem { Text: var last } && last.EndsWith(WaitNoticeEnd, StringComparison.Ordinal))
-            Items[^1] = notice;
+        if (text.EndsWith(WaitNoticeEnd, StringComparison.Ordinal) && index > 0 && Items[index - 1] is NoticeItem { Text: var last } && last.EndsWith(WaitNoticeEnd, StringComparison.Ordinal))
+            Items[index - 1] = notice;
         else
-            Items.Add(notice);
+            Items.Insert(index, notice);
+        // The reply that comes is the next try's, and is timed from it, as its sending is: under
+        // the lines of the tries, it said it was asked before them.
+        if (waiting is not null)
+            waiting.At = at;
     });
 
     /// <summary>How AgentSession's notices of a wait before trying again end.</summary>
     private const string WaitNoticeEnd = "(Stop ends the wait)…";
+
+    /// <summary>
+    /// Where a notice goes in the chat: at the end, or before the reply still waiting for its first
+    /// words. A request the server failed is sent again, and the reply that comes then fills that
+    /// bubble: the lines about the tries went under it, and a task that had done its work ended
+    /// on "Connection lost (The server broke off its answer…)", as if that had stopped it.
+    /// </summary>
+    private int NoticeIndex() => WaitingReply() is null ? Items.Count : Items.Count - 1;
+
+    /// <summary>The step's reply at the end of the chat, nothing of it come yet; null if there is none.</summary>
+    private AssistantMessageItem? WaitingReply() =>
+        Items.Count > 0 && Items[^1] is AssistantMessageItem { IsStreaming: true, FirstWords: null } waiting && ReferenceEquals(waiting, _current)
+            ? waiting
+            : null;
+
+    /// <summary>The chat, as the error log names it: its title and file, once it has them.</summary>
+    private string ChatPlace() =>
+        _chatId is null ? "a new chat" : $"chat \"{_chatTitle}\", Data\\chats\\{_chatId}.json";
 
     void IAgentObserver.OnToolStarted(ToolCall call, string summary) => PostTimed(at =>
     {
@@ -229,7 +260,11 @@ public sealed partial class MainWindowViewModel
         _failureLogged = true;
     }
 
-    void IAgentObserver.OnFinished(AgentStopReason reason, string? detail)
+    void IAgentObserver.OnFinished(AgentStopReason reason, string? detail) => Finished(reason, detail, null);
+
+    void IAgentObserver.OnFinished(AgentStopReason reason, string? detail, Exception error) => Finished(reason, detail, error);
+
+    private void Finished(AgentStopReason reason, string? detail, Exception? error)
     {
         // Read here: by the time the window gets to this, a run of what came too late for this one may have started.
         var started = _runStarted;
@@ -253,7 +288,7 @@ public sealed partial class MainWindowViewModel
                     AddStopNotice(stopped, isError: false);
                     break;
                 case AgentStopReason.Error:
-                    AddStopNotice((detail ?? "Something went wrong.") + (logged ? @" Details are in Data\crash.log." : ""), isError: true);
+                    AddStopNotice((detail ?? "Something went wrong.") + (logged ? @" Details are in Data\crash.log." : ""), isError: true, error: error);
                     break;
             }
 

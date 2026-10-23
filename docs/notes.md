@@ -20,7 +20,7 @@ BlackBox/
                pasted/ (pictures pasted into the chat, see Files in a message),
                films/ (a folder per film: storyboard, frames, shots, song and the film, see Films),
                index/ (the indexes of the folders the agent indexed, a file each, see Folder index),
-               crash.log (errors no code caught, see below)
+               crash.log (errors no code caught, see below), errors.log (every error shown, see below)
 ```
 
 Set `BLACKBOX_HOME` to use a different root. Debug builds use `.dev/` in the repository.
@@ -31,6 +31,19 @@ also keeps the main window's size and place, and it opens there again unless tha
 longer on a screen. It is never bigger than the screen it opens on: the default 900x760 is taller
 than a 1920x1080 laptop screen at 150% has room for, and the title bar opened above the screen
 with the message box under the taskbar.
+
+Every error BlackBox shows also goes into `Data/errors.log`: when, where it was shown (the chat,
+named by its title and its file in `Data/chats`; the banner under the top bar, with the server's
+address; the Filmmaking window, with the film's folder; a start that failed), what it said, and the
+whole exception behind it, stack trace and all. That covers the red lines in the chat (a run that
+ended on a server's answer or a bug, a run that couldn't start, settings or a pasted picture that
+couldn't be saved, MCP servers that failed), the lines about a server's failure a run went on
+after (each try, each wait, a context made smaller), and the banner, once each time a server stops
+answering rather than at every check. A tool call that failed is the model's business, not
+BlackBox's, and isn't written. The chat keeps only the line, and a window closed or a chat deleted
+took even that: a task that looked as if it had ended on "The server broke off its answer" left
+nothing to say what the server sent, nor whether the task was done. Past 1 MB the log keeps its
+newer half, from the start of an entry.
 
 An error no code caught goes into `Data/crash.log` with its stack trace. One in the window says so
 in the chat, and the window and a run in progress go on; one that ends BlackBox is shown in the
@@ -1345,7 +1358,12 @@ or after growing waits from 2 seconds to 5 minutes, as often as it takes; Stop e
 the second try on it waits at least those growing waits (up to a minute) whatever the server names,
 and the chat shows one line for the wait rather than one per try. A
 server that can't be reached at all (its PC restarting, LM Studio closed, the VPN down) is waited
-for the same way, so a long task carries on once it is back instead of ending on a short outage. A VPN can also stall an
+for the same way, so a long task carries on once it is back instead of ending on a short outage.
+The lines about the tries go above the step's reply, which waits at the end of the chat for its
+first words, and the reply is timed from the last try. They went under it: on 23 October 2026
+Kilo's Nvidia backend failed the request for a finished task's summary three times (an error inside
+the stream, then two 502s) and the fourth try brought it, but the chat ended on the three
+"Connection lost" lines with "Worked for 8 min" under the last, as if the task had broken off there. A VPN can also stall an
 upload without breaking it: a request carries every screenshot still in the context, several
 megabytes, and LM Studio waited five minutes for the rest of one before answering 408. So when
 nothing of a request gets through for 30 seconds, it is sent again. A tool that fails, however

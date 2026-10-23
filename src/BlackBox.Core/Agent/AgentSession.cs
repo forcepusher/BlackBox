@@ -32,6 +32,12 @@ public interface IAgentObserver
     void OnNotice(string text);
 
     /// <summary>
+    /// A notice of what the run does about a server's failure (tries again, waits, goes on with a
+    /// smaller context): shown as <see cref="OnNotice(string)"/>, with what failed for a log.
+    /// </summary>
+    void OnNotice(string text, Exception error) => OnNotice(text);
+
+    /// <summary>
     /// How much of a step's request has gone out: it carries every screenshot in the context, and
     /// over a slow VPN sending it took minutes that looked like the model thinking.
     /// </summary>
@@ -46,6 +52,12 @@ public interface IAgentObserver
     void OnFailed(Exception error) { }
 
     void OnFinished(AgentStopReason reason, string? detail);
+
+    /// <summary>
+    /// <see cref="OnFinished(AgentStopReason, string?)"/> for a run that ended on <paramref name="error"/>,
+    /// a server's answer or a bug, whose message is the detail: the whole exception for a log.
+    /// </summary>
+    void OnFinished(AgentStopReason reason, string? detail, Exception error) => OnFinished(reason, detail);
 }
 
 /// <summary>
@@ -517,7 +529,7 @@ public sealed partial class AgentSession(
         {
             if (ex is not LlmException)
                 observer.OnFailed(ex);
-            observer.OnFinished(AgentStopReason.Error, ex.Message);
+            observer.OnFinished(AgentStopReason.Error, ex.Message, ex);
         }
         finally
         {
@@ -793,7 +805,7 @@ public sealed partial class AgentSession(
                 // anew, once), and later ones are left out as they come. Kept in, they failed every
                 // request after the first screenshot, or every message after switching models.
                 toolContext.SeesImages = false;
-                observer.OnNotice(ex.Message.TrimEnd().TrimEnd('.') + ". Going on without them.");
+                observer.OnNotice(ex.Message.TrimEnd().TrimEnd('.') + ". Going on without them.", ex);
                 DropImages();
                 request.Clear();
                 request.Add(ChatMessage.System(systemPrompt));
@@ -808,7 +820,7 @@ public sealed partial class AgentSession(
                     var fits = Math.Max(16_384, rate.PerMinute * 4 / 5);
                     if (contextTokens == 0 || fits < contextTokens)
                     {
-                        observer.OnNotice($"The API key's account takes {rate.PerMinute / 1000}k input tokens a minute, and one request of the whole conversation was more than that; working with {fits / 1000}k tokens of context from now on.");
+                        observer.OnNotice($"The API key's account takes {rate.PerMinute / 1000}k input tokens a minute, and one request of the whole conversation was more than that; working with {fits / 1000}k tokens of context from now on.", ex);
                         contextTokens = fits;
                     }
                 }
@@ -819,14 +831,14 @@ public sealed partial class AgentSession(
                     var smaller = Math.Max(16_384, TokensInUse() * 3 / 4);
                     if (contextTokens == 0 || smaller < contextTokens)
                     {
-                        observer.OnNotice($"The request, {tooLarge.Bytes / 1e6:0.#} MB with its screenshots, was more than the server takes; working with {smaller / 1000}k tokens of context from now on.");
+                        observer.OnNotice($"The request, {tooLarge.Bytes / 1e6:0.#} MB with its screenshots, was more than the server takes; working with {smaller / 1000}k tokens of context from now on.", ex);
                         contextTokens = smaller;
                     }
                 }
                 // The context size was assumed or wrong; most servers name the real one.
                 else if (ex.ContextLimit is { } limit && (contextTokens == 0 || limit < contextTokens))
                 {
-                    observer.OnNotice($"The server's context is {limit / 1000}k tokens, not {contextTokens / 1000}k; working with that from now on.");
+                    observer.OnNotice($"The server's context is {limit / 1000}k tokens, not {contextTokens / 1000}k; working with that from now on.", ex);
                     contextTokens = limit;
                 }
                 await ResetContextAsync(observer, ct, overflowed: true).ConfigureAwait(false);
@@ -868,7 +880,7 @@ public sealed partial class AgentSession(
                     : ex.Message.Contains("daily", StringComparison.OrdinalIgnoreCase)
                         ? " Kilo shares a free model's daily allowance among all its users, so this can last until tomorrow: pick another free model at the top, or use a Kilo key with credits or a model server of your own."
                         : " Kilo's free models take 200 requests an hour from each PC, so this can last until the hour is up; a Kilo key with credits, or a model server of your own, has no such limit.";
-                observer.OnNotice($"{ex.Message}{why} Trying again in {Describe(wait)} (Stop ends the wait)…");
+                observer.OnNotice($"{ex.Message}{why} Trying again in {Describe(wait)} (Stop ends the wait)…", ex);
                 await Task.Delay(wait, ct).ConfigureAwait(false);
             }
             catch (ConnectionLostException ex) when (ex.Unreachable)
@@ -878,7 +890,7 @@ public sealed partial class AgentSession(
                 // hours ended on a short outage; it waits for the server instead, the waits growing
                 // as for a busy server. Stop ends the wait.
                 var wait = RateLimitWait(null, ++away);
-                observer.OnNotice($"{ex.Message} Trying again in {Describe(wait)} (Stop ends the wait)…");
+                observer.OnNotice($"{ex.Message} Trying again in {Describe(wait)} (Stop ends the wait)…", ex);
                 await Task.Delay(wait, ct).ConfigureAwait(false);
             }
             catch (ConnectionLostException ex) when (++drops <= MaxReconnects)
@@ -892,7 +904,7 @@ public sealed partial class AgentSession(
                     var smaller = Math.Max(16_384, TokensInUse() * 3 / 4);
                     if (contextTokens == 0 || smaller < contextTokens)
                     {
-                        observer.OnNotice($"The server has no room for {TokensInUse() / 1000}k tokens of conversation right now; working with {smaller / 1000}k tokens of context from now on.");
+                        observer.OnNotice($"The server has no room for {TokensInUse() / 1000}k tokens of conversation right now; working with {smaller / 1000}k tokens of context from now on.", ex);
                         contextTokens = smaller;
                     }
                     throw new ContextOverflowException("the server has no room left for it (" + ex.Message + ")");
@@ -903,7 +915,7 @@ public sealed partial class AgentSession(
                     : drops > 1 ? TimeSpan.FromSeconds(Math.Min(drops - 1, 3)) : TimeSpan.Zero;
                 observer.OnNotice(ex.ServerFailed
                     ? $"{ex.Message} Trying again in {Describe(pause)}, attempt {drops} of {MaxReconnects}…"
-                    : $"Connection lost ({ex.Message}). Reconnecting, attempt {drops} of {MaxReconnects}…");
+                    : $"Connection lost ({ex.Message}). Reconnecting, attempt {drops} of {MaxReconnects}…", ex);
                 // A model server that fails a request may have got stuck on how the prompt begins,
                 // as Kilo's free Nemotron did for half an hour: the request goes again a line lower.
                 if (ex.Upstream)

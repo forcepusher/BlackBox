@@ -58,7 +58,7 @@ public sealed partial class MainWindowViewModel
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                AddNotice($"The MCP server list could not be saved: {ex.Message}", isError: true);
+                AddNotice($"The MCP server list could not be saved: {ex.Message}", isError: true, ex);
             }
         }
         // They are BlackBox's settings, not this window's: "Ask me first" turned on here holds the
@@ -108,7 +108,7 @@ public sealed partial class MainWindowViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            if (!_saveFailed) AddNotice($"Settings could not be saved, so they last only until BlackBox closes: {ex.Message}", isError: true);
+            if (!_saveFailed) AddNotice($"Settings could not be saved, so they last only until BlackBox closes: {ex.Message}", isError: true, ex);
             _saveFailed = true;
         }
     }
@@ -125,7 +125,7 @@ public sealed partial class MainWindowViewModel
         }
         catch (Exception ex) when (ex is McpConfigException or IOException or UnauthorizedAccessException)
         {
-            AddNotice($"The MCP server list could not be read, so no MCP tools are available: {ex.Message} Fix it in Settings.", isError: true);
+            AddNotice($"The MCP server list could not be read, so no MCP tools are available: {ex.Message} Fix it in Settings.", isError: true, ex);
             servers = [];
         }
         await Task.Run(() => _mcp.ConnectAsync(servers, CancellationToken.None));
@@ -133,14 +133,20 @@ public sealed partial class MainWindowViewModel
             AddNotice($"MCP server \"{s.Name}\" is not available: {s.Error} (Settings)", isError: true);
     }
 
-    private void AddNotice(string text, bool isError) => Items.Add(new NoticeItem(text, isError));
+    /// <summary>A line in the chat; an error goes into Data/errors.log too, with the exception behind it.</summary>
+    private void AddNotice(string text, bool isError, Exception? error = null)
+    {
+        if (isError)
+            Core.ErrorLog.Write(ChatPlace(), text, error);
+        Items.Insert(NoticeIndex(), new NoticeItem(text, isError));
+    }
 
     private readonly HashSet<string> _problemsShown = [];
 
     /// <summary>Something no code caught (see <see cref="CrashLog"/>), said in the chat once, with where to read more.</summary>
-    public void ShowProblem(string text)
+    public void ShowProblem(string text, Exception? error = null)
     {
         if (_problemsShown.Add(text))
-            AddNotice(text + @" Details are in Data\crash.log.", isError: true);
+            AddNotice(text + @" Details are in Data\crash.log.", isError: true, error);
     }
 }

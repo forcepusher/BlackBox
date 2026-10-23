@@ -426,6 +426,12 @@ public sealed partial class MainWindowViewModel
 
     private void SetStatus(ServerState state, string status, string? setup, string title = NotConnectedTitle)
     {
+        // Once each time the server stops answering or says why not, rather than at every check while it stays so.
+        var problem = state == ServerState.Failed ? $"{status}: {setup}" : null;
+        if (problem is not null && problem != _problemLogged)
+            Core.ErrorLog.Write($"the server at {_settings.Server.BaseUrl}", problem);
+        if (state != ServerState.Checking)
+            _problemLogged = problem;
         ServerState = state;
         ServerStatusText = status;
         ShowSetupBanner = setup is not null;
@@ -433,6 +439,9 @@ public sealed partial class MainWindowViewModel
         SetupTitle = title;
         OffersKilo = setup is not null && state is ServerState.Failed or ServerState.Unknown && !KiloGateway.Is(_settings.Server.BaseUrl);
     }
+
+    /// <summary>What the banner said last about a server that failed, as written to the error log.</summary>
+    private string? _problemLogged;
 
     /// <summary>The setup banner's button for Kilo's free models, while BlackBox has no server that answers.</summary>
     [ObservableProperty]
