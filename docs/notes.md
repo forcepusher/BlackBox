@@ -1429,7 +1429,9 @@ are; `bin` and `obj` beside a .NET project, `Library`, `Temp` and `Logs` beside 
 `Intermediate`, `Saved` and `DerivedDataCache`, `target` beside `Cargo.toml` or `pom.xml`, `dist`
 and `build` beside `package.json`. Only beside the file that makes them: elsewhere a `bin` folder
 can hold sources (a Rails app's scripts). Text files up to 1 MB are read, and PDF and Office
-documents as `read_file` reads them, so the line numbers a search gives are `read_file`'s. Pictures,
+documents as `read_file` reads them, so the line numbers a search gives are `read_file`'s, one
+document at a time (a workbook is read whole into memory; six of 30 MB at once would take
+gigabytes). An index file damaged on disk is built again. Pictures,
 programs, lock files, minified code and Unity's scene and asset YAML are counted, not read. An
 index reads at most 20,000 files and 150 MB of text, the smaller first; the walk stops at 200,000
 entries. Past either, the overview says to index the folder worked in. Links and junctions to

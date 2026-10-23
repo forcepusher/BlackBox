@@ -86,6 +86,9 @@ internal sealed class FolderIndex
     /// <summary>The biggest PDF or Office document read.</summary>
     internal const long MaxDocument = 30_000_000;
 
+    /// <summary>Documents are read one at a time, by every index (see <see cref="Read"/>).</summary>
+    private static readonly SemaphoreSlim DocumentGate = new(1, 1);
+
     /// <summary>Lines in a part of a file at most, and before it may end at a definition.</summary>
     internal const int MaxChunk = 60, MinChunk = 20;
 
@@ -217,8 +220,11 @@ internal sealed class FolderIndex
             {
                 if (f.Size > MaxDocument)
                     return Plain(f, FileKind.Large, language);
-                // As read_file reads it, so the line numbers search gives are read_file's.
-                lines = DocumentText.Read(full, ct).ReplaceLineEndings("\n").Split('\n');
+                // As read_file reads it, so the line numbers search gives are read_file's. One at a
+                // time: a workbook is read whole into memory, and six big ones at once took gigabytes.
+                DocumentGate.Wait(ct);
+                try { lines = DocumentText.Read(full, ct).ReplaceLineEndings("\n").Split('\n'); }
+                finally { DocumentGate.Release(); }
                 kind = FileKind.Document;
             }
             else if (IsBinaryName(f.Path))
@@ -600,7 +606,9 @@ internal sealed class FolderIndex
             }
             return index;
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or EndOfStreamException or UnauthorizedAccessException or ArgumentException or FormatException)
+        // A file damaged on disk (a count read as negative or huge among them) is built again.
+        catch (Exception ex) when (ex is IOException or InvalidDataException or EndOfStreamException or UnauthorizedAccessException or ArgumentException or FormatException
+                                       or OverflowException or OutOfMemoryException or IndexOutOfRangeException)
         {
             return new FolderIndex(root);
         }
