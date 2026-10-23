@@ -6,15 +6,15 @@ using System.Text.RegularExpressions;
 namespace BlackBox.Core.Projects;
 
 /// <summary>
-/// What the model is told about a folder once it is indexed, in about 2,500 tokens: what kind of
+/// What the model is told about a folder once it is indexed, in about 1,400 tokens: what kind of
 /// project it is and how it builds, its README and its notes for AI agents, its languages and
 /// folders, and its main files with what they define (a "repo map": the files whose definitions
 /// most other files use come first).
 /// </summary>
 internal static partial class ProjectOverview
 {
-    /// <summary>The longest overview, about 2,500 tokens: room in a 32k context for the task itself.</summary>
-    internal const int MaxChars = 10_000;
+    /// <summary>The longest overview, about 1,400 tokens: an orientation, which a small model reads along with everything after it.</summary>
+    internal const int MaxChars = 5_500;
 
     public static string Build(FolderIndex index, IndexChanges changes)
     {
@@ -32,11 +32,11 @@ internal static partial class ProjectOverview
         else
             sb.AppendLine("Paths below are under that folder.");
 
-        Section(sb, "What it is", Kind(index, files), 1_600);
-        Section(sb, "README", Readme(index, files), 1_000);
-        Section(sb, "Notes for AI agents in the project", AgentNotes(index, files), 1_200);
-        Section(sb, "Languages", Languages(read), 400);
-        Section(sb, "Folders (files in each)", Folders(files), 1_400);
+        Section(sb, "What it is", Kind(index, files), 700);
+        Section(sb, "README", Readme(index, files), 400);
+        Section(sb, "Notes for AI agents in the project", AgentNotes(index, files), 600);
+        Section(sb, "Languages", Languages(read), 200);
+        Section(sb, "Folders (files in each)", Folders(files), 700);
         var footer = Footer(index, files);
         var room = MaxChars - sb.Length - footer.Length - 100;
         if (room > 300)
@@ -254,7 +254,7 @@ internal static partial class ProjectOverview
     {
         var readme = files.Where(f => Depth(f.Path) == 0 && Path.GetFileNameWithoutExtension(f.Path).Equals("README", StringComparison.OrdinalIgnoreCase))
             .OrderBy(f => f.Path.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ? 0 : 1).FirstOrDefault();
-        return readme is null ? null : Opening(index.FullPath(readme), 14, Show(readme.Path));
+        return readme is null ? null : Opening(index.FullPath(readme), 6, Show(readme.Path));
     }
 
     /// <summary>The files a project keeps for AI agents (CLAUDE.md, AGENTS.md, .cursorrules…): its conventions, said for exactly this.</summary>
@@ -284,7 +284,7 @@ internal static partial class ProjectOverview
     private static string Languages(List<IndexedFile> read) =>
         string.Join(", ", read.Where(f => f.Language is not null).GroupBy(f => f.Language!)
             .Select(g => (Language: g.Key, Files: g.Count(), Lines: g.Sum(f => f.Lines)))
-            .OrderByDescending(l => l.Lines).Take(10)
+            .OrderByDescending(l => l.Lines).Take(5)
             .Select(l => $"{l.Language} {l.Files:N0} file{(l.Files == 1 ? "" : "s")} ({l.Lines:N0} lines)"));
 
     /// <summary>The folder tree two levels down with the files in each, and the files at the top.</summary>
@@ -335,8 +335,12 @@ internal static partial class ProjectOverview
         // code in it, at first: a library kept in the project uses its own names over and over,
         // and in a Unity game of 1,530 scripts of its own the map was half the Spine runtime's
         // 152 files and DOTween.
-        // Its share of the room, and a line at least; then what is left goes by rank alone.
-        var share = ranked.GroupBy(r => Area(r.File.Path)).ToDictionary(g => g.Key, g => room * g.Count() / ranked.Count);
+        // Its share of the room, and a line at least; then what is left goes by rank alone. The share
+        // goes by files and lines together: by files alone a folder of 112 small lab scripts took a
+        // third of this repository's map, by lines alone Spine's long files took a third of the game's.
+        var weight = ranked.GroupBy(r => Area(r.File.Path)).ToDictionary(g => g.Key, g => Math.Sqrt(g.Count() * (double)g.Sum(r => (long)r.File.Lines)));
+        var all = Math.Max(1, weight.Values.Sum());
+        var share = weight.ToDictionary(w => w.Key, w => (int)(room * w.Value / all));
         var taken = share.ToDictionary(s => s.Key, _ => 0);
         var chosen = new List<(IndexedFile File, string Line)>();
         var length = 0;
@@ -428,17 +432,18 @@ internal static partial class ProjectOverview
             return string.Join(", ", picked) + (list.Count > most ? ", …" : "");
         }
 
+        // Short lines, more files: a small model needs where things are more than every member.
         var head = $"{Show(f.Path)} ({f.Lines:N0} lines)";
         if (f.Language == "Markdown")
         {
             var headings = f.Symbols.Where(s => s.Kind == "heading" && s.Depth <= 2).ToList();
-            return headings.Count == 0 ? null : $"{head}: {Of(headings, 6)}";
+            return headings.Count == 0 ? null : $"{head}: {Of(headings, 4)}";
         }
         var types = f.Symbols.Where(s => s.IsType && s.Kind != "namespace").DistinctBy(s => (s.Kind, s.Name)).ToList();
         if (types.Count == 0)
         {
             var functions = f.Symbols.Where(s => s.Kind is "function" or "method").ToList();
-            return functions.Count == 0 ? null : $"{head}: {Of(functions, 8)}";
+            return functions.Count == 0 ? null : $"{head}: {Of(functions, 5)}";
         }
         var parts = new List<string>();
         var inTypes = new HashSet<Symbol>();
@@ -447,13 +452,13 @@ internal static partial class ProjectOverview
             var next = types.FirstOrDefault(t => t.Line > type.Line && t.Depth <= type.Depth);
             var members = f.Symbols.Where(s => s.Line > type.Line && (next == default || s.Line < next.Line) && !s.IsType && s.Depth > type.Depth).ToList();
             inTypes.UnionWith(members);
-            if (parts.Count < 3 && types.OrderByDescending(Uses).ThenBy(t => t.Line).Take(3).Contains(type))
-                parts.Add($"{type.Kind} {type.Name}" + (members.Count > 0 ? $" ({Of(members, 6)})" : ""));
+            if (parts.Count < 2 && types.OrderByDescending(Uses).ThenBy(t => t.Line).Take(2).Contains(type))
+                parts.Add($"{type.Kind} {type.Name}" + (members.Count > 0 ? $" ({Of(members, 3)})" : ""));
         }
-        var more = types.Count > 3 ? $"; {types.Count - 3} more types" : "";
+        var more = types.Count > 2 ? $"; {types.Count - 2} more types" : "";
         // Functions of their own beside the types: a module's exports.
         var loose = f.Symbols.Where(s => s.Kind is "function" or "method" && !inTypes.Contains(s)).ToList();
-        return $"{head}: {string.Join("; ", parts)}{more}" + (loose.Count > 0 ? $"; functions {Of(loose, 6)}" : "");
+        return $"{head}: {string.Join("; ", parts)}{more}" + (loose.Count > 0 ? $"; functions {Of(loose, 4)}" : "");
     }
 
     // --- what was left out -------------------------------------------------------------------

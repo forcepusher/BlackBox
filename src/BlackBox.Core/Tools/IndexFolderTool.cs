@@ -17,9 +17,9 @@ public sealed class IndexFolderTool : Tool
         "Index a folder so you know your way around it, as a code editor does, and search it. Use it first, without being asked, whenever a task " +
         "involves a project or a folder of many files you haven't indexed in this chat (code, a game, a website, a set of documents), before you list, " +
         "read or change its files: it tells you what kind of project it is and how it builds, its README, its folders, and its main files with the " +
-        "classes and functions they define. Then, whenever you need to find something in it (where a class, function or setting is, what uses it, " +
-        "the code behind an error message or a feature), call it with query= rather than listing folders and opening files one by one. " +
-        "It keeps itself up to date: each call reads only the files that changed, so call it again whenever it helps.";
+        "classes and functions they define. To find something in it (where a class, function or setting is, every line that uses a name, " +
+        "the code behind an error message or a feature), call it with query=, or search with the shell when that fits better. " +
+        "It keeps itself up to date: each call reads only the files that changed.";
     public override ToolRisk Risk => ToolRisk.ReadOnly;
     public override JsonObject Parameters => Schema(
         ("path", Str("The folder: a project's top folder (where its .git, solution or package file is), not a drive or the whole home folder. " +
