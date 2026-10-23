@@ -1376,6 +1376,58 @@ public sealed class FilmReferencesTests : IDisposable
         Assert.True(loaded.Frame("mira")!.Reference);
     }
 
+    // Told that from takes pictures in References, the model cut one figure out of the user's lineup
+    // of four (2220x1889, attached from OneDrive), saved it as References/Carl/source.png, and the
+    // panel showed the cut-out as the user's picture (the user's call, 2026-10-24: the source is kept
+    // as they pasted or made it, never cut, resized or made again).
+    [Fact]
+    public async Task A_picture_from_elsewhere_a_reference_is_made_from_is_kept_in_its_folder_as_it_is()
+    {
+        var lineup = Path.Combine(_dir, "OneDrive", "CarlLineup.png");
+        Png(lineup, 222, 189);
+        File.AppendAllText(lineup, "the user's own bytes"); // copied as they are, not saved again as a PNG
+        var bytes = File.ReadAllBytes(lineup);
+        var named = Path.Combine(_dir, "OneDrive", "Carl.png"); // named as the reference is to be made
+        Png(named, 50, 80);
+        var path = Path.Combine(_dir, "Bunny");
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir };
+        var result = await new FilmTool().ExecuteAsync(new JsonObject
+        {
+            ["action"] = "storyboard",
+            ["path"] = path,
+            ["storyboard"] = JsonNode.Parse($$"""
+                {"title": "Bunny", "frames": [
+                  {"id": "r1", "name": "Carl", "reference": true, "prompt": "Carl from the front", "from": [{{JsonValue.Create(lineup).ToJsonString()}}, {{JsonValue.Create(named).ToJsonString()}}]},
+                  {"id": "f1", "prompt": "Carl on the court", "from": ["r1", {{JsonValue.Create(lineup).ToJsonString()}}]}]}
+                """),
+        }, ctx, CancellationToken.None);
+        Assert.False(result.IsError, result.Text);
+        var board = Storyboard.Load(path);
+        var carl = Path.Combine(board.ReferencesFolder, "Carl");
+        // In the reference's folder, byte for byte, and named so in from: the film keeps it.
+        Assert.Equal(["Carl/CarlLineup.png", "Carl/Carl (2).png"], board.Frame("r1")!.From);
+        Assert.Equal(bytes, File.ReadAllBytes(Path.Combine(carl, "CarlLineup.png")));
+        Assert.Equal(bytes, File.ReadAllBytes(lineup));
+        // The reference is still made as Carl.png: the user's picture of that name isn't in its way.
+        Assert.Equal(Path.Combine(carl, "Carl.png"), board.FramePicture(board.Frame("r1")!));
+        Assert.False(File.Exists(Path.Combine(carl, "Carl.png")));
+        // Another frame's goes into a folder of its own, as a picture dropped on the panel does.
+        Assert.Equal(["r1", "CarlLineup/CarlLineup.png"], board.Frame("f1")!.From);
+        Assert.Equal(bytes, File.ReadAllBytes(Path.Combine(board.ReferencesFolder, "CarlLineup", "CarlLineup.png")));
+        Assert.Contains($"{lineup} as \"Carl/CarlLineup.png\"", result.Text);
+        Assert.Contains("Copied into References as they are", result.Text);
+        Assert.Contains("Carl/CarlLineup.png", FilmTool.Overview(board));
+
+        // Named again in a frame call, it is the copy already there, not another one.
+        var again = await new FilmTool().ExecuteAsync(new JsonObject
+        {
+            ["action"] = "frame", ["path"] = path, ["id"] = "r1", ["from"] = new JsonArray(lineup),
+        }, ctx, CancellationToken.None);
+        Assert.True(again.IsError); // no ComfyUI in this run: the change is saved, nothing is made
+        Assert.Equal(["Carl/CarlLineup.png"], Storyboard.Load(path).Frame("r1")!.From);
+        Assert.Equal(["Carl (2).png", "Carl.json", "CarlLineup.png"], Directory.GetFiles(carl).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+    }
+
     [Fact]
     public void An_edit_template_that_takes_its_size_from_its_first_picture_makes_the_films_size()
     {

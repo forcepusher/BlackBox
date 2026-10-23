@@ -27,8 +27,9 @@ public sealed class FilmTool : Tool
         "Each file has a .json of its name beside it (what it is and how it was made: Intro.json for Intro.mp4) and the ComfyUI workflow that made it (Intro.workflow.json). " +
         "The storyboard is all of it at once: shots in order, each going from a first frame to an optional last frame in so many seconds, the pictures they start and end on, and the soundtrack. " +
         "action=storyboard shows it (path: the film's folder), with BlackBox's guide to writing one the first time in a chat, or makes or changes it with storyboard={...}: title (the film's folder is named after it: a new one renames it), " +
-        "width, height, fps, frames:[{id, prompt (what it shows and its look), model, seed, from: [what it is made from, to keep people and places the same: frames' ids, and in the References folder " +
-        "a reference's folder by its name (\"Mira\": its main picture) or one picture in it (\"Mira/side.png\")], " +
+        "width, height, fps, frames:[{id, prompt (what it shows and its look), model, seed, from: [what it is made from, to keep people and places the same: frames' ids, in the References folder " +
+        "a reference's folder by its name (\"Mira\": its main picture) or one picture in it (\"Mira/side.png\"), or a picture of the user's from elsewhere by its full path (one they attached: " +
+        "it is copied into References as it is, a reference's into its folder)], " +
         "file (a picture of the user's, cut to the film's frame), name, reference: true for a character or place sheet, made at its own shape into References/<name>/<name>.png " +
         "(name \"Mira/side\" for another picture of Mira, made into her folder as side.png), " +
         "of: a shot's id, for a frame taken from where that shot's clip ends, so the shot that starts on it goes on from that moment (after a shot without a last frame)}], " +
@@ -46,6 +47,8 @@ public sealed class FilmTool : Tool
         "and what is heard (the shot's own sound is kept under the song at half; music comes from the song, not the video model). " +
         "The References folders also hold any picture the user puts there (action=storyboard lists them): name one in a frame's from to make the frame from it, " +
         "whatever its shape: a frame made from pictures is made the film's size with all of each in view. " +
+        "The user's pictures stay as they gave them: never crop, resize, retouch or redraw one, or put pictures of your own beside them (a cut-out, a padded copy); " +
+        "name the whole picture in from and say in the prompt who or what in it to take (\"the rabbit on the left, in the grey t-shirt\"): the picture model picks one out of a lineup or a sheet. " +
         "action=frame id= makes a frame's picture (a reference's too) and has a fresh look at it; action=sound makes the song, a minute long at least (the film uses its start), the best of tries=3 by a judge " +
         "of how good music sounds (SongEval); write lyrics for the part the film uses. action=shot id= makes a shot's clip and checks it (does it start and end on its frames, " +
         "how it moves, and a fresh look at what happens, faults and whether people stay the same); tries=N makes up to N takes with new seeds until one passes. " +
@@ -67,7 +70,7 @@ public sealed class FilmTool : Tool
         ("seconds", Num("action=shot: how long it lasts"), false),
         ("seed", Int("action=frame or shot: a new seed (another result from the same prompt)"), false),
         ("model", Str("action=frame or shot: what it is made with, a model or workflow in words or by name (\"\" for the best installed)"), false),
-        ("from", StrArray("action=frame: what it is made from: frames' ids, references' folders (\"Mira\") or pictures in them (\"Mira/side.png\") in References"), false),
+        ("from", StrArray("action=frame: what it is made from: frames' ids, references' folders (\"Mira\") or pictures in them (\"Mira/side.png\") in References, or a picture of the user's from elsewhere by its full path"), false),
         ("tries", Int("action=shot: up to this many takes, each with a new seed, until the check passes (default 1); action=sound: songs to make, the best kept (default 3)"), false));
 
     public override string Describe(JsonObject args)
@@ -92,7 +95,7 @@ public sealed class FilmTool : Tool
     /// <summary>The film this task worked on last, for calls that leave path out.</summary>
     private string? _lastFolder;
 
-    /// <summary>What the call's storyboard couldn't do as asked (a rename), said before the storyboard.</summary>
+    /// <summary>What the call's changes did beside them (a picture copied in) or couldn't do as asked (a rename), said first.</summary>
     private string? _note;
 
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
@@ -108,11 +111,11 @@ public sealed class FilmTool : Tool
             if (action != "storyboard" && Changes(args, action) is { Count: > 0 } changes && Fits(board, args, action))
             {
                 board = Storyboard.Merge(board, changes);
-                board.Save();
+                Save(board);
             }
-            return action switch
+            var result = action switch
             {
-                "storyboard" => Show(board, args["storyboard"] is JsonObject, GuideFor(ctx)) is var shown && _note is { } note ? new ToolResult(note + shown.Text) : shown,
+                "storyboard" => Show(board, args["storyboard"] is JsonObject, GuideFor(ctx)),
                 "frame" => await FrameAsync(board, RequireId(args), ctx, ct).ConfigureAwait(false),
                 "shot" => await ShotAsync(board, RequireId(args), (int)Math.Clamp(GetNumber(args, "tries") ?? 1, 1, 8), ctx, ct).ConfigureAwait(false),
                 "sound" or "song" => await SoundAsync(board, (int)Math.Clamp(GetNumber(args, "tries") ?? 3, 1, 8), ctx, ct).ConfigureAwait(false),
@@ -120,6 +123,7 @@ public sealed class FilmTool : Tool
                 "check" => await CheckAsync(board, GetString(args, "id"), ctx, ct).ConfigureAwait(false),
                 _ => throw new ToolArgumentException("action must be storyboard, frame, shot, sound, join, check or models."),
             };
+            return _note is { } note ? result with { Text = note + result.Text } : result;
         }
         catch (FilmStillRunningException ex)
         {
@@ -171,7 +175,7 @@ public sealed class FilmTool : Tool
                     {
                         _note = $"The film's folder couldn't be renamed to \"{newName.Trim()}\" ({ex.Message}): the film keeps the name \"{Path.GetFileName(board.Folder)}\".\n";
                     }
-                board.Save();
+                Save(board);
             }
             return board;
         }
@@ -195,11 +199,25 @@ public sealed class FilmTool : Tool
             folder = Path.GetDirectoryName(given)!;
         Directory.CreateDirectory(folder);
         var created = Storyboard.Merge(new Storyboard { Title = title, Folder = folder }, change);
-        created.Save();
+        Save(created);
         return created;
 
         static bool Exists([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] string? at) =>
             at is not null && (Storyboard.IsFilm(at) || File.Exists(at) && Storyboard.IsFilm(Path.GetDirectoryName(at)!));
+    }
+
+    /// <summary>
+    /// Saves the film, the pictures from elsewhere its frames are made from copied into References
+    /// as they are (see <see cref="Storyboard.TakeInPictures"/>), which the result says first.
+    /// </summary>
+    private void Save(Storyboard board)
+    {
+        board.Save();
+        if (board.TakeInPictures().Distinct().ToList() is not { Count: > 0 } taken)
+            return;
+        board.Save();
+        _note += $"Copied into References as {(taken.Count == 1 ? "it is" : "they are")}, where the user sees {(taken.Count == 1 ? "it" : "them")} as their own: " +
+                 string.Join("; ", taken.Select(t => $"{t.From} as \"{t.To}\"")) + ", the name from has for it now. Keep the user's pictures as they are, and make the references from them.\n";
     }
 
     /// <summary>The storyboard changes a frame or shot call gives with it: a new prompt, seed, length.</summary>

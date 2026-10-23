@@ -102,6 +102,78 @@ public sealed partial class Storyboard
     public string InReferences(string picture) => Path.GetRelativePath(ReferencesFolder, picture).Replace(Path.DirectorySeparatorChar, '/');
 
     /// <summary>
+    /// A picture of the user's put into a folder as it is, byte for byte (the user's call,
+    /// 2026-10-24: the source picture stays as they pasted or made it, never cut, resized or made
+    /// again; the references are made from it): under its own name, or "Carl (2).png" where another
+    /// file has that name or a piece is planned (a .json of that name). The same picture there
+    /// already is the one. Its path.
+    /// </summary>
+    public static string KeepPicture(string picture, string folder)
+    {
+        picture = Path.GetFullPath(picture);
+        var (stem, extension) = (Path.GetFileNameWithoutExtension(picture), Path.GetExtension(picture));
+        var target = Path.GetFullPath(Path.Combine(folder, stem + extension));
+        for (var n = 2; !Same(picture, target); n++)
+        {
+            if (!File.Exists(target) && !File.Exists(MetaOf(target)))
+            {
+                Directory.CreateDirectory(folder);
+                File.Copy(picture, target);
+                break;
+            }
+            target = Path.GetFullPath(Path.Combine(folder, $"{stem} ({n}){extension}"));
+        }
+        return target;
+
+        static bool Same(string a, string b)
+        {
+            if (string.Equals(a, b, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (!File.Exists(b) || new FileInfo(a).Length != new FileInfo(b).Length)
+                return false;
+            return File.ReadAllBytes(a).AsSpan().SequenceEqual(File.ReadAllBytes(b));
+        }
+    }
+
+    /// <summary>
+    /// The pictures from outside the film that frames are made from, named in "from" by their full
+    /// paths (one the user attached to a message), copied into References as they are (see
+    /// <see cref="KeepPicture"/>): a reference's into its folder, any other frame's into a folder
+    /// named after the picture, as one dropped on the Filmmaking panel goes; "from" names the copy
+    /// then ("Carl/CarlLineup.png"). Told only that from takes pictures in References, the model
+    /// cut one figure out of the user's lineup of four and saved that there as the source; and a
+    /// pasted picture goes with its chat when the chat is deleted. Called once the film is saved, so
+    /// the names of pieces not made yet are taken. What was copied: from where, as what in "from".
+    /// </summary>
+    public List<(string From, string To)> TakeInPictures()
+    {
+        var taken = new List<(string, string)>();
+        if (Folder.Length == 0)
+            return taken;
+        var film = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Folder)) + Path.DirectorySeparatorChar;
+        foreach (var frame in Frames)
+            for (var i = 0; i < frame.From.Count; i++)
+            {
+                var name = frame.From[i].Trim().Trim('"').Trim();
+                try
+                {
+                    if (!Path.IsPathRooted(name) || Frame(name) is not null)
+                        continue;
+                    var full = Path.GetFullPath(name);
+                    if (full.StartsWith(film, StringComparison.OrdinalIgnoreCase) || !File.Exists(full) ||
+                        !PictureExtensions.Contains(Path.GetExtension(full), StringComparer.OrdinalIgnoreCase))
+                        continue;
+                    var folder = frame.Reference ? Path.GetDirectoryName(FramePicture(frame))! : Path.Combine(ReferencesFolder, Safe(Path.GetFileNameWithoutExtension(full)));
+                    frame.From[i] = InReferences(KeepPicture(full, folder));
+                    taken.Add((full, frame.From[i]));
+                }
+                // Not copied: the frame is made from it where it is.
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { }
+            }
+        return taken;
+    }
+
+    /// <summary>
     /// The picture a reference's folder stands for, named by the folder alone: the one named after
     /// it ("Mira/Mira.png", the reference BlackBox made), else its first picture by name.
     /// </summary>

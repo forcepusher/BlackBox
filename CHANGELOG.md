@@ -85,6 +85,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   title, and the soundtrack and shots' own sound sliders.
 
 ### Fixed
+- In Filmmaking, a picture you give for a reference (pasted, attached or dropped) is kept exactly as
+  it is, in the reference's folder, and the references are made from all of it: BlackBox cut one
+  pose out of a character lineup and showed the cut-out as your picture.
 - A task whose last step the server failed a few times before answering no longer looks as if it
   ended on that error: the lines about the tries come before the answer, not after it.
 - A click of the agent's that lands on a dialog of BlackBox's goes to what is behind it, as one on

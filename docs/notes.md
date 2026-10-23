@@ -524,6 +524,19 @@ the possibility that anyone was using an old version". A film is made of:
   too. A frame's `from` names a reference's folder ("Fox": its main picture, the one named after the
   folder, else its first, `Storyboard.MainPicture`) or a picture in it ("Fox/side.png", or just
   "side.png"), so the agent picks the pictures a frame needs: an edit template takes a few.
+- **The user's pictures stay as they gave them** (the user's call, 2026-10-24: "Source should be
+  kept as is"). Asked to make front and back references from a lineup of four poses attached from
+  OneDrive, the model, told only that `from` takes pictures in References, cut one figure out with
+  Python and saved it as `References/Carl/source.png`, which the panel then showed as the user's
+  picture. Now `from` also takes a picture from elsewhere by its full path, and the film tool copies
+  it into References byte for byte (`Storyboard.TakeInPictures`, after the film is saved): a
+  reference's into its folder, any other frame's into a folder named after it, as a dropped one
+  goes; `from` names the copy ("Carl/CarlLineup.png") and the result says so. The copy never takes a
+  name a planned piece will be made as (a `.json` of that name: "Carl (2).png" beside a planned
+  Carl), and the same picture there already is used again (`Storyboard.KeepPicture`, which Drop
+  uses too). The tool's description and the storyboard guide say never to crop, resize, retouch or
+  redraw the user's pictures or save cut-outs beside them, but to name the whole picture and say in
+  the prompt which figure to take.
 - **Nothing film-wide that goes into a prompt.** Each frame's and shot's prompt holds all of its
   own look, and each says what it is made with (`model`). There used to be a film-wide look added
   to every prompt, a story and a template per kind of job, and the user ruled them out: one change
