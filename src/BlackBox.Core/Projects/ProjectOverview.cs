@@ -331,25 +331,48 @@ internal static partial class ProjectOverview
         var ranked = read.Where(f => f.Symbols.Length > 0)
             .Select(f => (File: f, Score: Importance(f, used)))
             .OrderByDescending(r => r.Score).ThenBy(r => r.File.Path, StringComparer.OrdinalIgnoreCase).ToList();
+        // Each part of the project (its folders two levels down) gets lines in proportion to the
+        // code in it, at first: a library kept in the project uses its own names over and over,
+        // and in a Unity game of 1,530 scripts of its own the map was half the Spine runtime's
+        // 152 files and DOTween.
+        // Its share of the room, and a line at least; then what is left goes by rank alone.
+        var share = ranked.GroupBy(r => Area(r.File.Path)).ToDictionary(g => g.Key, g => room * g.Count() / ranked.Count);
+        var taken = share.ToDictionary(s => s.Key, _ => 0);
         var chosen = new List<(IndexedFile File, string Line)>();
         var length = 0;
-        foreach (var (file, _) in ranked)
+        foreach (var byShare in new[] { true, false })
         {
-            var line = MapLine(file, used);
-            if (line is null)
-                continue;
-            if (length + line.Length + 1 > room)
+            foreach (var (file, _) in ranked)
             {
-                if (room - length < 80)
-                    break;
-                continue;
+                if (chosen.Any(c => c.File == file))
+                    continue;
+                var area = Area(file.Path);
+                if (byShare && taken[area] > 0 && taken[area] >= share[area])
+                    continue;
+                var line = MapLine(file, used);
+                if (line is null)
+                    continue;
+                if (length + line.Length + 1 > room)
+                {
+                    if (room - length < 80)
+                        break;
+                    continue;
+                }
+                chosen.Add((file, line));
+                length += line.Length + 1;
+                taken[area] += line.Length + 1;
             }
-            chosen.Add((file, line));
-            length += line.Length + 1;
         }
         var left = ranked.Count - chosen.Count;
         return string.Join("\n", chosen.OrderBy(c => c.File.Path, StringComparer.OrdinalIgnoreCase).Select(c => c.Line)) +
                (left > 0 ? $"\n({left:N0} more files define things; search finds them)" : "");
+    }
+
+    /// <summary>The part of the project a file is in: its first two folders ("Assets/Source", "src/BlackBox.Core").</summary>
+    private static string Area(string path)
+    {
+        var parts = path.Split('/');
+        return string.Join('/', parts.Take(Math.Min(2, parts.Length - 1)));
     }
 
     /// <summary>In how many files each defined name (lower-cased) is used, its own files left out.</summary>

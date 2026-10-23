@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using BlackBox.Core.Tools;
 
 namespace BlackBox.Core.Projects;
@@ -142,7 +143,8 @@ internal static class IndexSearch
         if (words.Count == 0)
             return nothing;
 
-        var defined = Definitions(index, words.Where(w => words.Count == 1 || Terms.IsName(query, w.Word)).ToList(), under);
+        var names = words.Where(w => words.Count == 1 || Terms.IsName(query, w.Word)).ToList();
+        var defined = Definitions(index, names, under);
         if (defined.Count > 0)
         {
             sb.AppendLine("Defined:");
@@ -152,6 +154,10 @@ internal static class IndexSearch
                 sb.AppendLine($"- and {defined.Count - 8} more definitions of the same names");
             sb.AppendLine();
         }
+        // Not for a word of a question that alone was found: "zeppelin flight" isn't a search for every "flight".
+        foreach (var name in names.Where(w => asked.Count == 1 || Terms.IsName(query, w.Word)).Take(2))
+            await AppendUsesAsync(sb, index, name, asked.FirstOrDefault(w => w.Equals(name.Word, StringComparison.OrdinalIgnoreCase)) ?? name.Word, under, ct)
+                .ConfigureAwait(false);
 
         var hits = Rank(index, query, under);
         if (hits.Count == 0)
@@ -194,6 +200,78 @@ internal static class IndexSearch
         sb.Append("read_file with offset at a line shows that part in full.");
         return sb.ToString();
     }
+
+    /// <summary>A name's uses shown line by line at most; past that, each file with its line numbers.</summary>
+    internal const int MaxUseLines = 25, MaxUseFiles = 40;
+
+    /// <summary>Files read for a name's uses at most: a name in more is everywhere, and the files are only counted.</summary>
+    private const int MaxUseReads = 300;
+
+    /// <summary>
+    /// Every line that has a name the query asks for (IAgentObserver, save_game), as a search of the
+    /// whole word with a command gives them. Asked what implements an interface, or to rename a class
+    /// everywhere, models searched the index and then the shell anyway: the best parts are eight at
+    /// most and two of a file, which isn't every use.
+    /// </summary>
+    private static async Task AppendUsesAsync(StringBuilder sb, FolderIndex index, QueryWord name, string written, string under, CancellationToken ct)
+    {
+        var id = index.TermId(name.Word);
+        if (id < 0)
+            return;
+        var files = InScope(index, under).Where(f => f.Chunks.Any(c => c.Count(id) > 0)).OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase).ToList();
+        if (files.Count == 0)
+            return;
+        if (files.Count > MaxUseReads)
+        {
+            sb.AppendLine($"{written} is in {files.Count:N0} files, too many to show each line; a few of them: " +
+                          string.Join(", ", files.Take(10).Select(f => f.Path.Replace('/', Path.DirectorySeparatorChar))) + ", …");
+            sb.AppendLine();
+            return;
+        }
+        // The whole word, as the index has it: SaveSettings is no use of Save.
+        var word = new Regex($@"(?<![\p{{L}}\p{{Nd}}_]){Regex.Escape(name.Word)}(?![\p{{L}}\p{{Nd}}_])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var uses = new List<(IndexedFile File, List<(int Line, string Text)> Lines)>();
+        foreach (var file in files)
+        {
+            ct.ThrowIfCancellationRequested();
+            var lines = await LinesAsync(index.FullPath(file), file, ct).ConfigureAwait(false);
+            var found = new List<(int, string)>();
+            for (var i = 0; i < lines.Count; i++)
+                if (word.IsMatch(lines[i]))
+                    found.Add((i + 1, lines[i].Trim()));
+            if (found.Count > 0)
+                uses.Add((file, found));
+        }
+        var total = uses.Sum(u => u.Lines.Count);
+        if (total == 0)
+            return;
+        // Paths under the root: forty full paths took most of the answer.
+        sb.AppendLine($"Every line with {written}, {total} in {uses.Count} file(s) under {index.Root}:");
+        if (total <= MaxUseLines)
+        {
+            foreach (var (file, lines) in uses)
+                foreach (var (line, text) in lines)
+                    sb.Append(file.Path.Replace('/', Path.DirectorySeparatorChar)).Append(':').Append(line).Append(": ").AppendLine(Shorten(text, 120));
+        }
+        else
+        {
+            // Each file's first such line in full, which is often what the file does with the name
+            // (the class that implements an interface, the field that holds one), and where the others are.
+            foreach (var (file, lines) in uses.Take(MaxUseFiles))
+            {
+                sb.Append(file.Path.Replace('/', Path.DirectorySeparatorChar)).Append(':').Append(lines[0].Line).Append(": ").Append(Shorten(lines[0].Text, 100));
+                if (lines.Count > 1)
+                    sb.Append(lines.Count == 2 ? " (and line " : " (and lines ").Append(string.Join(", ", lines.Skip(1).Take(10).Select(l => l.Line)))
+                        .Append(lines.Count > 11 ? $" and {lines.Count - 11} more)" : ")");
+                sb.AppendLine();
+            }
+            if (uses.Count > MaxUseFiles)
+                sb.AppendLine($"and {uses.Count - MaxUseFiles} more files");
+        }
+        sb.AppendLine();
+    }
+
+    private static string Shorten(string line, int max) => line.Length > max ? line[..max] + " …" : line;
 
     internal sealed record QueryWord(string Word, string[] Terms, int[] Ids);
 
@@ -261,9 +339,7 @@ internal static class IndexSearch
                 scored.Add((i, score));
         }
         return scored.OrderByDescending(s => s.Score).ThenBy(s => s.Line).Take(LinesPerHit).OrderBy(s => s.Line)
-            .Select(s => (s.Line, Shorten(lines[s.Line - 1].Trim()))).ToList();
-
-        static string Shorten(string line) => line.Length > 200 ? line[..200] + " …" : line;
+            .Select(s => (s.Line, Shorten(lines[s.Line - 1].Trim(), 200))).ToList();
     }
 
     private static readonly Dictionary<string, (long Modified, IReadOnlyList<string> Lines)> Documents = new(StringComparer.OrdinalIgnoreCase);
