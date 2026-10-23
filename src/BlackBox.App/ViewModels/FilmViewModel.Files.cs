@@ -79,7 +79,7 @@ public sealed partial class FilmViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Status = $"The storyboard couldn't be saved: {ex.Message}";
+            ShowError($"The storyboard couldn't be saved: {ex.Message}", ex);
         }
     }
 

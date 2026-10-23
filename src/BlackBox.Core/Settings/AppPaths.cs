@@ -16,6 +16,7 @@ namespace BlackBox.Core.Settings;
 ///   Data/pasted/   (pictures pasted into the chat from the clipboard)
 ///   Data/films/    (one folder per film: its storyboard, frames, shots, song and the film)
 ///   Data/index/    (the indexes of the folders the agent indexed, a file each)
+///   Data/errors.log (every error BlackBox showed, see <see cref="ErrorLog"/>)
 /// </code>
 /// </summary>
 public sealed class AppPaths(string root)

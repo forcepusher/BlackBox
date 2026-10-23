@@ -107,7 +107,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException)
         {
-            Status = $"That film can't be opened: {ex.Message}";
+            ShowError($"That film can't be opened: {ex.Message}", ex, path);
             return;
         }
         Watch();

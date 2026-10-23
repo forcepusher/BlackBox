@@ -220,6 +220,10 @@ internal sealed class RecordingObserver : IAgentObserver
     public List<string> Notices { get; } = [];
     public event Action<string>? NoticeReceived;
     public void OnNotice(string text) { Notices.Add(text); NoticeReceived?.Invoke(text); }
+
+    /// <summary>The server's failures the notices said what was done about, with each notice.</summary>
+    public List<(string Notice, Exception Error)> NoticeErrors { get; } = [];
+    public void OnNotice(string text, Exception error) { NoticeErrors.Add((text, error)); OnNotice(text); }
     public void OnToolFinished(ToolCall call, ToolResult result) => Results.Add(result);
 
     /// <summary>What the request upload reported, in order: (sent, total).</summary>
@@ -234,6 +238,14 @@ internal sealed class RecordingObserver : IAgentObserver
     {
         StopReason = reason;
         Detail = detail;
+    }
+
+    /// <summary>The exception the run ended on, a server's answer or a bug, if it ended on one.</summary>
+    public Exception? Error { get; private set; }
+    public void OnFinished(AgentStopReason reason, string? detail, Exception error)
+    {
+        Error = error;
+        OnFinished(reason, detail);
     }
 }
 

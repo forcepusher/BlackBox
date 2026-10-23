@@ -80,7 +80,7 @@ public sealed partial class AgentSession
         }
         catch (LlmException ex)
         {
-            observer.OnNotice("The model couldn't write a handoff note (" + ex.Message + "); using a record of the last steps instead.");
+            observer.OnNotice("The model couldn't write a handoff note (" + ex.Message + "); using a record of the last steps instead.", ex);
             note = "";
         }
         if (note.Length == 0)

@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- `Data\errors.log`: every error BlackBox shows (in the chat, in the banner under the top bar, in
+  the Filmmaking window, or when it can't start), with the details behind it, to read after the
+  chat or the window is gone.
 - Folder index: before it works on a project or a big folder, BlackBox indexes it by itself, as
   Cursor does: what kind of project it is, its README, its folders and what its main files define,
   and a search that finds where anything is by names or by what the code does. Indexes are kept in
@@ -63,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The conversation beside each piece in Filmmaking: what was said about a piece is in the chat now.
 
 ### Fixed
+- A task whose last step the server failed a few times before answering no longer looks as if it
+  ended on that error: the lines about the tries come before the answer, not after it.
 - A click of the agent's that lands on the Filmmaking window or a dialog of BlackBox's goes to what
   is behind it, as one on the chat window always did; keys meant for another program no longer
   land in them.

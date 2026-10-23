@@ -30,7 +30,7 @@ public partial class App : Application
             {
                 CrashLog.Write("the window", e.Exception);
                 e.Handled = true;
-                windows.Front()?.Vm.ShowProblem($"Something went wrong in BlackBox's window: {CrashLog.Summary(e.Exception)}");
+                windows.Front()?.Vm.ShowProblem($"Something went wrong in BlackBox's window: {CrashLog.Summary(e.Exception)}", e.Exception);
             };
             if (CrashLog.TakeLastCrash(paths) is { } crash)
                 windows.Front()?.Vm.ShowProblem($"BlackBox closed unexpectedly last time ({crash}).");

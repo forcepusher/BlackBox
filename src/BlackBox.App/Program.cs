@@ -15,6 +15,7 @@ internal static class Program
         if (SingleInstance.HandedOff(paths.DataDir))
             return;
         CrashLog.Watch(paths);
+        Core.ErrorLog.Start(paths);
         try
         {
             // Must run before Avalonia touches Skia.

@@ -351,7 +351,7 @@ public sealed partial class FilmViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException)
         {
-            Status = $"That take couldn't be put back: {ex.Message}";
+            ShowError($"That take couldn't be put back: {ex.Message}", ex);
             return;
         }
         Status = $"Put take {kept.Number} back in the film; the one before it is a take now.";
