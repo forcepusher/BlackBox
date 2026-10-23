@@ -598,8 +598,8 @@ in the chat, with each frame and clip as it is made, and stops it there or with 
 One still waiting when the run is stopped, or the chat is left, doesn't go into the chat's box, as
 typed messages do: sent from there with the next message it was "Another take, please." without the
 film and piece, so the chat says it wasn't done. Its context is saved with the message, so Continue
-on one the model never had sends it whole. A chat begun from the window is named after the film and
-piece and the words ("Filmmaking · Fox Test · start of shot 1 · Make it."), not "Make it.".
+on one the model never had sends it whole. A chat begun from the window is named after the words and
+the film and piece ("Make it. (Fox Test · start of shot 1)"), not "Make it." alone.
 
 The model writes prompts as BlackBox's storyboard guide says (`Comfy/Guides/storyboards.md`, which
 the film tool shows with the first storyboard a chat reads or writes, together with the video

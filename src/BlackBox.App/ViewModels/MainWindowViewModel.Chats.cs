@@ -205,7 +205,9 @@ public sealed partial class MainWindowViewModel
             // A message that is only a file is named after it; one from the Filmmaking window after
             // the film and piece too: History filled with chats named "Make it.".
             var text = first!.HasText ? first.Text : string.Join(", ", first.Attachments.Select(a => a.FileName));
-            _chatTitle = ChatStore.TitleFrom(first.Via is { } via ? $"{via} · {text}" : text);
+            // "Make it. (Fox Test · start of shot 1)": the window's own name would come twice in the Filmmaking window's title.
+            const string film = "Filmmaking · ";
+            _chatTitle = ChatStore.TitleFrom(first.Via is { } via ? $"{text.Trim().Split('\n')[0]} ({(via.StartsWith(film, StringComparison.Ordinal) ? via[film.Length..] : via)})" : text);
             OnPropertyChanged(nameof(WindowTitle));
         }
         var chat = new SavedChat

@@ -91,7 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stopped; a window closed while its MCP servers restarted no longer leaves them running.
 - Filmmaking: a request still waiting when BlackBox is stopped is no longer put in the chat's box
   without the film and piece it was about (the chat says it wasn't done), and Continue sends one
-  the model never had whole; chats begun from the window are named after the film, not "Make it.";
+  the model never had whole; chats begun from the window are named after the film and piece too, not "Make it." alone;
   the storyboard guide comes back after the context starts afresh; a stopped shot of several takes
   no longer keeps a copy of its clip as one more take.
 - Folder index: projects in OneDrive folders are indexed (only their top folder was), files kept
