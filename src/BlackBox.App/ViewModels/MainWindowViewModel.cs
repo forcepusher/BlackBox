@@ -223,6 +223,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         // Not a run that is ending for a chat this window has left: the chat on screen never ran.
         if (IsBusy && !_runDetached)
         {
+            // What was still waiting above the box: kept in the chat's words, not lost with the box.
+            foreach (var queued in Queued)
+                AddNotice($"Not sent, as the window was closed first: \"{queued.Input.Text}\"" + (queued.Input.Via is { } via ? $" ({via})." : "."), isError: false);
             // Said in the chat, with Continue: opened from History, it ended without a word. Before
             // the model had the message, Continue sends it again: "Continue." alone has no task.
             AddStopNotice("Stopped: the window was closed.", isError: false, _unread);
@@ -547,9 +550,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             // LM Studio loads models on first use; do that now so we know the real context size.
             using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10)))
             {
+                // Not into a chat opened since: the run is then one ending for the chat left.
                 var facts = await ServerProbe.EnsureLoadedAsync(probeHttp, server,
-                    () => Dispatcher.UIThread.Post(() => AddNotice("Loading the model on the server…", isError: false)), ct,
-                    note => Dispatcher.UIThread.Post(() => AddNotice(note, isError: false)));
+                    () => Dispatcher.UIThread.Post(() => { if (!_runDetached) AddNotice("Loading the model on the server…", isError: false); }), ct,
+                    note => Dispatcher.UIThread.Post(() => { if (!_runDetached) AddNotice(note, isError: false); }));
                 if (facts.Context is { } context)
                 {
                     server.SetDetectedContext(context, facts.Hosted);
@@ -558,7 +562,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                     // Ollama and llama-server start models with 4k unless told otherwise; the run
                     // then resets after every step, or fails as too long. Not for a size near 32k
                     // (LM Studio's 32000 is 31k), which works.
-                    if (context < ServerProbe.MinimumContext * 3 / 4 && !facts.Hosted)
+                    if (context < ServerProbe.MinimumContext * 3 / 4 && !facts.Hosted && !_runDetached)
                         AddNotice($"The server runs {server.ModelInUse} with a {context / 1024}k context, and BlackBox needs about {ServerProbe.MinimumContext / 1024}k: " +
                                   "its instructions and tools alone take about 9k tokens, and each screenshot about 3k. Load the model with a larger context on the server " +
                                   "(LM Studio: Context Length when you load it; Ollama: the Context length setting; llama-server: -c).", isError: false);
@@ -566,7 +570,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             }
             if (!_mcpConnect.IsCompleted)
             {
-                AddNotice("Starting the MCP servers…", isError: false);
+                if (!_runDetached) AddNotice("Starting the MCP servers…", isError: false);
                 await _mcpConnect.WaitAsync(ct);
             }
 
