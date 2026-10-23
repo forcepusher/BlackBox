@@ -15,8 +15,10 @@ public static class AgentSetup
     /// <param name="ssh">The chat's SSH logins, kept by the caller across the chat's runs and disposed with it.</param>
     /// <param name="userComposing">Whether the user is typing a message to the agent right now (see <see cref="ToolContext.UserComposing"/>).</param>
     /// <param name="desktopTurn">Shared by the agents of BlackBox's windows, for one at a time with the mouse and keyboard; null for one agent alone.</param>
+    /// <param name="desktopSeat">The window the agent works in (see <see cref="ToolContext.DesktopSeat"/>).</param>
     public static AgentSession Create(BackendConnection backend, IPlatformServices platform, AgentSettings agent, AppPaths paths,
-        McpHost mcp, SshHosts ssh, List<ChatMessage>? history = null, Func<bool>? userComposing = null, DesktopTurn? desktopTurn = null)
+        McpHost mcp, SshHosts ssh, List<ChatMessage>? history = null, Func<bool>? userComposing = null, DesktopTurn? desktopTurn = null,
+        object? desktopSeat = null)
     {
         var mcpSetup = new McpSetup(mcp, paths.McpConfigFile);
         var comfy = Comfy.ComfyHub.For(paths.ComfyDir);
@@ -30,6 +32,7 @@ public static class AgentSetup
             SeesImages = backend.Vision,
             UserComposing = userComposing,
             DesktopTurn = desktopTurn,
+            DesktopSeat = desktopSeat,
             Browser = HeadlessBrowser.Find(paths.BrowserProfileDir),
             Ssh = ssh,
             Mcp = mcpSetup,

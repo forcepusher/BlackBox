@@ -29,9 +29,12 @@ public sealed class DesktopTurn(Func<long>? clock = null)
 
     /// <summary>
     /// For each agent, <see cref="_actions"/> as it was when the agent last saw the screen or acted;
-    /// kept no longer than the agent's run, whose screenshots it would otherwise hold on to.
+    /// kept by its window (<see cref="Tools.ToolContext.DesktopSeat"/>), as the chat keeps its last
+    /// screenshot from one run to the next, and no longer than the window.
     /// </summary>
     private readonly ConditionalWeakTable<object, StrongBox<long>> _seen = new();
+
+    private static object Seat(object who) => who is Tools.ToolContext { DesktopSeat: { } seat } ? seat : who;
 
     /// <summary>
     /// Waits until <paramref name="who"/> has the mouse and keyboard, for up to <paramref name="maxWait"/>;
@@ -51,7 +54,9 @@ public sealed class DesktopTurn(Func<long>? clock = null)
                 if (_holder is null || ReferenceEquals(_holder, who) || !_busy && _now() - _lastUse >= IdleHandover.TotalMilliseconds)
                 {
                     (_holder, _busy, _lastUse) = (who, true, _now());
-                    return hadToWait || _seen.TryGetValue(who, out var seen) && seen.Value < _actions;
+                    // One that never looked, after another acted: its chat's last screenshot may be of a
+                    // screen another agent has changed since ("press Enter", typed into that one's program).
+                    return hadToWait || (_seen.TryGetValue(Seat(who), out var seen) ? seen.Value < _actions : _actions > 0);
                 }
             }
             hadToWait = true;
@@ -66,7 +71,7 @@ public sealed class DesktopTurn(Func<long>? clock = null)
     public void Looked(object who)
     {
         lock (_gate)
-            _seen.AddOrUpdate(who, new StrongBox<long>(_actions));
+            _seen.AddOrUpdate(Seat(who), new StrongBox<long>(_actions));
     }
 
     /// <summary>
@@ -79,7 +84,7 @@ public sealed class DesktopTurn(Func<long>? clock = null)
         {
             if (acted)
                 // Its own action it knows of.
-                _seen.AddOrUpdate(who, new StrongBox<long>(++_actions));
+                _seen.AddOrUpdate(Seat(who), new StrongBox<long>(++_actions));
             if (ReferenceEquals(_holder, who))
                 (_busy, _lastUse) = (false, _now());
         }

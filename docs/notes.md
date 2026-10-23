@@ -876,8 +876,11 @@ the captures, claim files for open chats, and a Pause/Break passed on from proce
 How a second start finds the first: a named mutex `Local\BlackBox-<hash>` says one runs, and it is
 asked over a named pipe of the same name, open to this Windows user only. The hash stands for the
 user, the Windows session, the `Data` folder and the build (the exe's module id): another build in
-the same folder (a newer download started beside the old one, "BlackBox (1).exe") runs on its own,
-as before. The pipe is listened on from the first line of `Main`, so a start a moment after another
+the same folder (a newer download started beside the old one, "BlackBox (1).exe") runs on its own.
+Two processes on one `Data` folder share nothing of the above: not the turn with the mouse and
+keyboard, the open chats, Pause/Break or each other's windows in screenshots, which the
+process-per-window design had guards for (gone with it). The same goes for one run as administrator
+and a start the running one didn't answer in time. The pipe is listened on from the first line of `Main`, so a start a moment after another
 waits for it (two started at once made one process with two windows); one that started before the
 first window was up gets its window once it is. The running one sends its process id first, and
 the new start, which has the foreground as the program the user just opened, lets it bring the new
@@ -920,7 +923,9 @@ What they share, and how they keep out of each other's way:
   other's task ended a moment before) does nothing and gives the model the screen as it is now:
   what it aimed at may have moved. The rest of that reply's clicks and keys do nothing either: decided
   on the same old screen, a click held back and "John" + Enter typed after it went into whatever the
-  other agent had left in front. Its own actions and plain looks don't count. One that waited
+  other agent had left in front. What a window's agent last saw counts from one of its tasks to the
+  next, as the chat keeps that screenshot ("press Enter" in the next message went into the other
+  window's program), and an agent that never looked is held back once another acted. Its own actions and plain looks don't count. One that waited
   5 minutes says so and suggests work that doesn't need them. Typing in any window's box pauses
   every window's clicks and keys, as typing in its own does ("Paused while you type in another
   BlackBox window", without Resume, which only ends its own pause). One keyboard hook watches
@@ -1856,6 +1861,12 @@ First runs, 22 October 2026 (feature/chat-effort-migration, medium effort where 
   switch. It had first sent bytea as `\x...` (COPY reads that as an escaped byte), found it, and
   doubled the backslash. It didn't reboot, as the players were on. The acknowledged-writes check
   said those rows were lost; it now tells rows that aren't there from rows there but changed.
+- Claude Opus 5.5 again, 23 October 2026 (develop after the night's fixes): 15 of 19 in 9 minutes,
+  23 model calls, a 22 s outage and no write lost. Its copy read avatars as SQLite's
+  `lower(hex(avatar))`, which is '' for a NULL, so 2336 NULL avatars came out as empty ones (its own
+  row-by-row check compared the same text and passed); and its new backup job called `runuser`,
+  which is in /usr/sbin, off cron's PATH (tried with sudo, whose PATH has it, it worked). A model's
+  slips, not BlackBox's: the same ticket and model passed 19 of 19 the day before.
 
 The VM is QEMU (from qemu.weilnetz.de, unpacked, not installed) running Debian's cloud image in
 software emulation: portable, no admin rights or Windows features, everything in

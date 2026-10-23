@@ -86,9 +86,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The note to index a project no longer comes back with every message of a chat that indexed it.
 - Several windows: once a click is held back because another window's agent changed the screen,
   the rest of that step's clicks and keys are held back too, instead of typing into the other
-  window's program; saving Settings in one window no longer undoes what another window saved while
+  window's program, and so is a window's next task until it has looked again; saving Settings in one window no longer undoes what another window saved while
   the dialog was open; closing a window right after picking another chat no longer marks that chat
-  stopped.
+  stopped; a window closed while its MCP servers restarted no longer leaves them running.
 - Filmmaking: a request still waiting when BlackBox is stopped is no longer put in the chat's box
   without the film and piece it was about (the chat says it wasn't done), and Continue sends one
   the model never had whole; chats begun from the window are named after the film, not "Make it.";

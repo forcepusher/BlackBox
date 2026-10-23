@@ -228,6 +228,37 @@ public class SeveralWindowsTests : IDisposable
     }
 
     [Fact]
+    public async Task A_windows_next_task_hears_what_another_window_did_since_its_last_look()
+    {
+        var turn = new DesktopTurn();
+        var window = new object();
+        var platform = new FakePlatform();
+        ToolContext Run() => new() { Platform = platform, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(), DesktopTurn = turn, DesktopSeat = window };
+        var first = Run();
+        ScreenshotTool.Take(first);
+        await first.FinishRunAsync();
+        // Another window's agent acted after this window's task ended.
+        var other = new object();
+        Assert.NotNull(await turn.TakeAsync(other, TimeSpan.Zero, null, CancellationToken.None));
+        turn.Done(other, acted: true);
+        turn.Release(other);
+
+        // "Press Enter" in this window's next message: the chat's last screenshot is no longer the screen.
+        var next = Run();
+        var result = await new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = "enter" }, next, CancellationToken.None);
+        Assert.Empty(platform.Actions);
+        Assert.StartsWith("Nothing was done: another BlackBox window", result.Text);
+        await next.FinishRunAsync();
+
+        // A window whose agent never looked, after another acted, looks first too.
+        var fresh = new ToolContext { Platform = platform, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(), DesktopTurn = turn, DesktopSeat = new object() };
+        result = await new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = "enter" }, fresh, CancellationToken.None);
+        Assert.Empty(platform.Actions);
+        Assert.StartsWith("Nothing was done", result.Text);
+        await fresh.FinishRunAsync();
+    }
+
+    [Fact]
     public async Task An_action_whose_turn_never_came_does_nothing_and_says_why()
     {
         var turn = new DesktopTurn();
