@@ -113,6 +113,7 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
             "video" => new VideoPreview(path, services, width),
             "audio" => new AudioPreview(path, services),
             "3d" => new ModelPreview(path),
+            _ when MarkdownFiles.Handles(path) => new MarkdownPreview(path),
             _ => new FileCardPreview(path),
         };
         preview.Load();
@@ -249,6 +250,26 @@ public sealed class FileCardPreview(string path) : FilePreview(path)
         var details = File.Exists(Path) ? Size(Path) : "The file is no longer there.";
         Show(() => Details = details);
     });
+}
+
+/// <summary>
+/// A Markdown file, formatted as a reply is (headings, lists, code, tables, links) in a box that
+/// scrolls; a long one shows its first <see cref="MarkdownFiles.MaxChars"/> characters.
+/// </summary>
+public sealed partial class MarkdownPreview(string path) : FilePreview(path)
+{
+    [ObservableProperty]
+    private string? _text;
+
+    protected override void Load() => Background(() =>
+    {
+        var (text, cut) = MarkdownFiles.ReadStart(Path);
+        var lines = text.Length == 0 ? 0 : text.TrimEnd('\n', '\r').Count(c => c == '\n') + 1;
+        var details = $"Markdown, {(cut ? $"first {lines:N0}" : $"{lines:N0}")} line{(lines == 1 ? "" : "s")}, {Size(Path)}";
+        Show(() => (Text, Details) = (text, details));
+    });
+
+    protected override void Release() => Text = null;
 }
 
 /// <summary>A 3D model, turned around with the mouse (see <see cref="Views.ModelViewer"/>).</summary>

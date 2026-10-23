@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Markdown files (.md) preview formatted in the chat, as replies are: headings, lists, code, tables
+  and links, in a box that scrolls. They show under the reply that names them and under write_file
+  when the agent writes one.
 - `Data\errors.log`: every error BlackBox shows (in the chat, in the banner under the top bar, in
   Filmmaking, or when it can't start), with the details behind it, to read after the chat or the
   window is gone.
