@@ -276,6 +276,14 @@ waveform, a 3D model turns with the mouse (the wheel comes closer, a double clic
 any other file gets a card. Each has Open (its own program) and Show in folder. A saved chat shows
 them again when it is opened, as long as the files are still there.
 
+A Markdown file (.md, .markdown) is shown formatted by the same renderer as replies
+(`MarkdownLite` through `MarkdownText`), in a box up to 420 pixels tall that scrolls; at its ends
+the wheel goes on scrolling the chat. Its first 100,000 characters are read, in the file's own
+encoding (`TextFiles`), cut at a whole line; the details then say "first N lines". write_file
+reports a Markdown file it writes or appends to as a file of the call, so it shows under the call;
+other text files it writes don't, and read_file shows none (the agent reads many READMEs while it
+works). Before, a .md had only a card with its name and size.
+
 A video plays by itself while it is on screen, over and over and without its sound, as a GIF
 would; scrolled away, under the full-screen viewer or with the window minimized it pauses, so a
 long chat decodes only what can be seen (a third of its height showing, or 120 pixels of a tall one,

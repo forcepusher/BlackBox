@@ -255,12 +255,15 @@ public sealed class WriteFileTool : Tool
             if (!existed)
                 return ToolResult.Error($"Cannot append: {path} does not exist. Check the path, or create the file first with append=false.");
             await TextFiles.AppendAsync(path, content, ct).ConfigureAwait(false);
-            return new ToolResult($"Appended {content.Length} chars to {path} (now {new FileInfo(path).Length} bytes).");
+            return new ToolResult($"Appended {content.Length} chars to {path} (now {new FileInfo(path).Length} bytes).", Files: Shown(path));
         }
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         await TextFiles.WriteAllAsync(path, content, TextFiles.ForNewFile(path), ct).ConfigureAwait(false);
-        return new ToolResult($"{(existed ? "Overwrote" : "Created")} {path} ({content.Length} chars).");
+        return new ToolResult($"{(existed ? "Overwrote" : "Created")} {path} ({content.Length} chars).", Files: Shown(path));
     }
+
+    /// <summary>A Markdown file written is shown formatted under the call; other text files aren't shown.</summary>
+    private static List<string>? Shown(string path) => Media.MarkdownFiles.Handles(path) ? [path] : null;
 }
 
 public sealed class EditFileTool : Tool
