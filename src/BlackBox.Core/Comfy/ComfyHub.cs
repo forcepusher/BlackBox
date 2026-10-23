@@ -401,6 +401,38 @@ public sealed class ComfyHub(string stateDirectory)
         });
     }
 
+    /// <summary>
+    /// BlackBox ends: a server it started is closed now if nothing is in its queue and no other
+    /// BlackBox runs; one still at work is left for the next start (see <see cref="CloseLeftover"/>).
+    /// A window closed while its task ran ended BlackBox before the task's end could close the
+    /// server, and ComfyUI ran on, holding the graphics card's memory, until BlackBox started again.
+    /// </summary>
+    public void CloseOnExit(TimeSpan wait)
+    {
+        try { Task.Run(() => CloseIfIdleAsync(wait)).Wait(wait + TimeSpan.FromSeconds(1)); }
+        catch (AggregateException) { }
+    }
+
+    private async Task CloseIfIdleAsync(TimeSpan wait)
+    {
+        using var cts = new CancellationTokenSource(wait);
+        try
+        {
+            var api = new ComfyApi(Address);
+            if (!(OwnsForTests?.Invoke(api) ?? IsOurs(api)) || (OthersRunForTests?.Invoke() ?? OtherBlackBoxRuns()))
+                return;
+            var queue = await api.GetJsonAsync("queue", cts.Token, wait).ConfigureAwait(false) as JsonObject;
+            if ((queue?["queue_running"] as JsonArray)?.Count is > 0 || (queue?["queue_pending"] as JsonArray)?.Count is > 0)
+                return;
+            if (StopForTests is { } stop)
+                await stop(api, cts.Token).ConfigureAwait(false);
+            else
+                await ComfyProcess.StopAsync(api, cts.Token).ConfigureAwait(false);
+            RememberServer(api, ours: false);
+        }
+        catch (Exception ex) when (ex is ComfyApiException or OperationCanceledException or System.Text.Json.JsonException or IOException) { }
+    }
+
     /// <summary>Stand-in for tests: whether another BlackBox process runs.</summary>
     internal Func<bool>? OthersRunForTests { get; set; }
 

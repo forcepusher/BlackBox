@@ -133,5 +133,7 @@ public sealed class ChatWindows
         // A server that would not stop doesn't keep the process; it ends anyway.
         try { Task.WaitAll([.. _ending], TimeSpan.FromSeconds(5)); }
         catch (AggregateException) { }
+        // The ComfyUI a task ended by closing its window had started, when it has nothing to do.
+        Core.Comfy.ComfyHub.For(_paths.ComfyDir).CloseOnExit(TimeSpan.FromSeconds(5));
     }
 }
