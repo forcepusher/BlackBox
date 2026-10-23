@@ -19,9 +19,9 @@ they want), so write them well.
 ## References
 - A reference is a picture other frames are made from, so a person or place looks the same in
   every shot: a character sheet (the same person from the front and three-quarters on a plain
-  background) or the place on its own. It is in no shot, has "reference": true, an id that names it
-  ("marco", "fox", "forest") and a short "name" the person knows it by ("Marco", "the fox"). Its
-  picture is made into the film's References folder as that id, at its own shape.
+  background) or the place on its own. It is in no shot, has "reference": true, and a short "name"
+  the person knows it by ("Marco", "the fox"): its picture is made into the film's References
+  folder under that name, at its own shape.
 - The References folder also holds the person's own pictures (a photo of them, a drawing of a
   character, a place): name one in a frame's "from" by its file name to make the frame from it.
 - A reference is in the film's look like every picture (for a live-action film, a photograph of a
@@ -33,6 +33,8 @@ they want), so write them well.
   keep all of a picture of another shape, make the frame from it.
 
 ## Shots
+- Give each shot a "name" of a few words ("intro", "the leap"): its folder in the film is named
+  after it, with the frames it starts and ends on and its clip.
 - A shot is a few seconds of video from its first frame to its last one, if it has one. Every shot
   starts on a frame (its own, or the one the shot before ends on): the video model animates a
   picture well and draws one badly, so a picture model makes it.

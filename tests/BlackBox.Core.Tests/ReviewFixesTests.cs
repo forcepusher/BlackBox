@@ -82,7 +82,7 @@ public class ReviewFixesTests
             board.Folder = folder;
             Directory.CreateDirectory(Path.Combine(folder, "sound"));
             File.WriteAllText(board.SongFile, "a song");
-            File.WriteAllText(board.SongWorkflow, new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = FilmMaker.SongStamp(board) } }.ToJsonString());
+            File.WriteAllText(board.SongMeta, new JsonObject { ["made"] = new JsonObject { ["stamp"] = FilmMaker.SongStamp(board) } }.ToJsonString());
             Assert.True(FilmMaker.SongIsCurrent(board));
 
             board.Shot("s3")!.Seconds = 9; // a second shorter: the song still covers it

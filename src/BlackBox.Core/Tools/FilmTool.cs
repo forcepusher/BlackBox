@@ -22,19 +22,21 @@ public sealed class FilmTool : Tool
 
     public override string Description =>
         "Make a film (a music video, a short story, an ad: anything longer than one shot) from a storyboard, with ComfyUI on this PC. " +
-        "The storyboard is the film's storyboard.json, which the user also sees in BlackBox's Filmmaking panel beside the chat, from where they pick the film's pictures, clips and folders into their messages to you: shots in order, " +
-        "each going from a first frame to an optional last frame in so many seconds, the pictures they start and end on, and the soundtrack. " +
+        "The film is its folder, which the user also sees in BlackBox's Filmmaking panel beside the chat, from where they pick its pictures, clips and folders into their messages to you: " +
+        "a folder for each shot, numbered in the film's order and named after the shot, holding the frames it starts and ends on and its clip; References; Sound; and the joined film. " +
+        "Each file has a .meta beside it (what it is and how it was made, as JSON) and the ComfyUI workflow that made it (.workflow.json). " +
+        "The storyboard is all of it at once: shots in order, each going from a first frame to an optional last frame in so many seconds, the pictures they start and end on, and the soundtrack. " +
         "action=storyboard shows it (path: the film's folder), with BlackBox's guide to writing one the first time in a chat, or makes or changes it with storyboard={...}: title, " +
         "width, height, fps, frames:[{id, prompt (what it shows and its look), model, seed, from: [what it is made from, to keep people and places the same: frames' ids, and pictures in the film's References folder by file name], " +
-        "file (a picture of the user's, cut to the film's frame), name, reference: true for a character or place sheet, which is made into the film's References folder as <id>.png at its own shape (so give it an id that names it: \"mira\", \"harbour\"), " +
+        "file (a picture of the user's, cut to the film's frame), name, reference: true for a character or place sheet, made into the film's References folder at its own shape and named after its name, " +
         "of: a shot's id, for a frame taken from where that shot's clip ends, so the shot that starts on it goes on from that moment (after a shot without a last frame)}], " +
-        "shots:[{id, first, last (frame ids), seconds, prompt (what happens, and its look), camera, model, transition: cut|dissolve|fade, " +
+        "shots:[{id, name (a few words naming it, \"intro\", \"the leap\": its folder's name), first, last (frame ids), seconds, prompt (what happens, and its look), camera, model, transition: cut|dissolve|fade, " +
         "line (what is said in it, lip-synced, in the voice sound.voice describes; it starts 0.4 s in, so leave time for it), lipSync (without a line: sings the soundtrack's part under it), seed}], " +
         "sound:{source: none|file|song, file, tags (the song's style), lyrics, voice (who says the lines: age, voice, manner), model, seed}. Frames and shots are matched by id; {\"id\": …, \"delete\": true} removes one, and a field set to null is taken out (a shot's \"last\": null). " +
         "Nothing is film-wide, so a change remakes only what it changes: write the film's look into every frame's and shot's prompt. " +
         "model is what one is made with: a model or workflow in words (\"z image turbo\", \"juggernaut xl\", \"my pony workflow\"), matched against what ComfyUI has installed, " +
         "or none for the best installed one; action=models lists what is installed for each kind of picture, video and song. " +
-        "Without path a new film goes into a folder of its own in BlackBox's Data\\films, where the Filmmaking panel finds it; its frames, clips and the film are made there too " +
+        "Without path a new film goes into a folder of its own in BlackBox's Data\\films, where the Filmmaking panel finds it " +
         "(BlackBox is portable: what it makes stays next to it). " +
         "A shot that starts on the last frame of the one before goes on with the same camera; " +
         "a new first frame is a cut to another scene or angle. Every shot starts on a frame: the video model animates a picture well and draws one badly. " +
@@ -45,7 +47,7 @@ public sealed class FilmTool : Tool
         "action=frame id= makes a frame's picture (a reference's too) and has a fresh look at it; action=sound makes the song, a minute long at least (the film uses its start), the best of tries=3 by a judge " +
         "of how good music sounds (SongEval); write lyrics for the part the film uses. action=shot id= makes a shot's clip and checks it (does it start and end on its frames, " +
         "how it moves, and a fresh look at what happens, faults and whether people stay the same); tries=N makes up to N takes with new seeds until one passes. " +
-        "What is made again keeps the one before as a take, which the user can put back in the Filmmaking panel. " +
+        "What is made again keeps the one before as a take (in Takes, in its folder), which the user can put back in the Filmmaking panel. " +
         "Fix a frame or shot the look finds wrong: a plainer prompt, another seed, frames closer to each other, or a new frame. " +
         "action=join puts the shots and the soundtrack together into the film; action=check looks at a frame or shot (id) or, without id, the whole film. " +
         "Order: frames (those others are made from first), the song when a shot is lip-synced, the shots, then join and check the film. " +
@@ -163,8 +165,8 @@ public sealed class FilmTool : Tool
         {
             var films = Storyboard.Recent(root);
             throw new FilmException((given is null
-                ? "Which film? Give path: the film's folder (the one with its storyboard.json), or make a new one with action=storyboard and storyboard={…}."
-                : $"There is no storyboard in {given}. Make one with action=storyboard and storyboard={{…}} (path is where it goes).") +
+                ? "Which film? Give path: the film's folder, or make a new one with action=storyboard and storyboard={…}."
+                : $"There is no film in {given}. Make one with action=storyboard and storyboard={{…}} (path is where it goes).") +
                 (films.Count > 0 ? $" The films in {root}, the latest first: {string.Join("; ", films.Take(12))}." : ""));
         }
         var title = (string?)change["title"] ?? "Untitled film";
@@ -173,9 +175,9 @@ public sealed class FilmTool : Tool
         // Another film of the same title is another film: it isn't written over. Its number goes
         // after a name cut short enough to keep it: cut at 80 characters with the number, a long
         // title gave the same folder for every number, and the tool went round for ever.
-        for (var n = 2; given is null && File.Exists(Path.Combine(folder, Storyboard.FileName)); n++)
+        for (var n = 2; given is null && Storyboard.IsFilm(folder); n++)
             folder = Path.Combine(root, $"{(name.Length > 72 ? name[..72].TrimEnd() : name)} {n}");
-        if (given is not null && Path.GetFileName(given).Equals(Storyboard.FileName, StringComparison.OrdinalIgnoreCase))
+        if (given is not null && File.Exists(given))
             folder = Path.GetDirectoryName(given)!;
         Directory.CreateDirectory(folder);
         var created = Storyboard.Merge(new Storyboard { Title = title, Folder = folder }, change);
@@ -183,7 +185,7 @@ public sealed class FilmTool : Tool
         return created;
 
         static bool Exists([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] string? at) =>
-            at is not null && (File.Exists(at) && Path.GetFileName(at).Equals(Storyboard.FileName, StringComparison.OrdinalIgnoreCase) || File.Exists(Path.Combine(at, Storyboard.FileName)));
+            at is not null && (Storyboard.IsFilm(at) || File.Exists(at) && Storyboard.IsFilm(Path.GetDirectoryName(at)!));
     }
 
     /// <summary>The storyboard changes a frame or shot call gives with it: a new prompt, seed, length.</summary>
@@ -249,7 +251,7 @@ public sealed class FilmTool : Tool
             var added = board.AddFirstFrames();
             if (added.Count > 0)
                 board.Save();
-            line = $"Saved the storyboard: {board.FilePath}. The user can open it in the Filmmaking panel (Toolkit, at the top of BlackBox).\n" +
+            line = $"Saved the film in {board.Folder}: a folder for each shot, each piece's settings in a .meta beside it. The user sees it in the Filmmaking panel (Toolkit, at the top of BlackBox).\n" +
                    (added.Count == 0 ? "" : $"Shots without a first frame got one each from their prompts ({string.Join(", ", added.Select(f => f.Id))}): " +
                                             "rewrite each as the still picture the shot starts on, with who is in it as the references show them.\n");
         }
@@ -397,7 +399,7 @@ public sealed class FilmTool : Tool
         var preview = MediaPreview.ForFiles([made.File], ctx.Media, ctx.SeesImages);
         var sb = new StringBuilder();
         sb.AppendLine($"Frame {frame.Id} made in {Chats.ChatTimes.Stopwatch(made.Took)}" + (made.Template is { } t ? $" with {t}" : frame.Of is { } of ? $" from where {of}'s clip ends" : " from the user's picture") + $": {made.File}");
-        if (made.Workflow is { } wf) sb.AppendLine($"Its workflow (fixed seed {frame.Seed}): {wf}");
+        if (made.Template is not null) sb.AppendLine($"Its ComfyUI workflow (fixed seed {frame.Seed}): {Storyboard.WorkflowOf(made.File)}");
         foreach (var note in made.Notes.Where(n => !n.Contains("no place for the size", StringComparison.Ordinal)))
             sb.AppendLine("Note: " + note);
         // A frame made from its prompt alone draws its people anew; in a film with a character sheet that drifts.
@@ -426,7 +428,7 @@ public sealed class FilmTool : Tool
         ctx.Progress?.Invoke($"Looking at {frame.Label}…");
         if (await FilmCheck.JudgeFrameAsync(board, frame, ask, ct).ConfigureAwait(false) is not { } answer)
             return null;
-        RememberLook(board.FrameWorkflow(frame), answer, []);
+        RememberLook(board.FrameMeta(frame), answer, []);
         var text = $"A fresh look at it: {answer.Trim()}";
         if (FilmCheck.Verdict(answer) == "redo")
             text += $"\nTo fix: {FilmCheck.Reason(answer)}. Change its prompt, what it is made from or its seed, and make it again." +
@@ -531,8 +533,8 @@ public sealed class FilmTool : Tool
         {
             var made = await KeepingTakeAsync(board, piece, () => Maker(ctx).MakeShotAsync(board, shot, ctx.Progress, ctx.UserMessage, ct)).ConfigureAwait(false);
             var look = await LookAtShotAsync(board, shot, made.File, ctx, ct).ConfigureAwait(false);
-            RememberLook(made.Workflow, look.Text, look.Faults);
-            return Result(board, shot, $"Shot {shot.Id} made in {Chats.ChatTimes.Stopwatch(made.Took)} with {made.Template}: {made.File}\nIts workflow (fixed seed {shot.Seed}): {made.Workflow}", [.. first, .. made.Notes], look, made.File);
+            RememberLook(made.Meta, look.Text, look.Faults);
+            return Result(board, shot, $"Shot {shot.Id} made in {Chats.ChatTimes.Stopwatch(made.Took)} with {made.Template}: {made.File}\nIts ComfyUI workflow (fixed seed {shot.Seed}): {Storyboard.WorkflowOf(made.File)}", [.. first, .. made.Notes], look, made.File);
         }
 
         // Takes with new seeds until a check passes; the best one is kept as the shot's clip, and
@@ -550,11 +552,11 @@ public sealed class FilmTool : Tool
                 if (take > 1)
                     shot.Seed = Storyboard.NewSeed();
                 ctx.Progress?.Invoke($"Take {take} of {tries}…");
-                var file = Path.Combine(board.Folder, "shots", $"{Storyboard.Safe(shot.Id)}.take{take}.mp4");
+                var file = Path.Combine(board.ShotFolder(shot), $"{Path.GetFileNameWithoutExtension(board.ShotVideo(shot))}.take{take}.mp4");
                 var made = await Maker(ctx).MakeShotAsync(board, shot, s => ctx.Progress?.Invoke($"Take {take} of {tries}: {s}"), ctx.UserMessage, ct, take: file).ConfigureAwait(false);
                 notes.AddRange(made.Notes.Where(n => !notes.Contains(n)));
                 var look = await LookAtShotAsync(board, shot, file, ctx, ct).ConfigureAwait(false);
-                RememberLook(made.Workflow, look.Text, look.Faults);
+                RememberLook(made.Meta, look.Text, look.Faults);
                 var verdict = FilmCheck.Verdict(look.Text);
                 var score = (verdict == "good" ? 10 : verdict is null ? 5 : 0) - 3 * look.Faults.Count;
                 takes.Add((shot.Seed, file, look, verdict, score));
@@ -570,9 +572,8 @@ public sealed class FilmTool : Tool
                 if (fresh.Shot(shot.Id) is { } kept && kept.Seed == startSeed)
                     kept.Seed = best.Seed;
             });
-            File.Move(best.File, board.ShotVideo(shot), overwrite: true);
+            FilmTakes.Promote(best.File, board.ShotVideo(shot));
             replaced = true;
-            File.Move(Path.ChangeExtension(best.File, ".json"), board.ShotWorkflow(shot), overwrite: true);
         }
         finally
         {
@@ -581,7 +582,7 @@ public sealed class FilmTool : Tool
             if (!replaced && before is not null)
                 FilmTakes.Drop(before);
             foreach (var other in takes.Where(t => File.Exists(t.File)))
-                FilmTakes.Add(board, piece, other.File, Path.ChangeExtension(other.File, ".json"));
+                FilmTakes.Add(board, piece, other.File);
         }
         var head = $"Shot {shot.Id}: {takes.Count} take(s); " +
                    (best.Verdict == "good" && best.Look.Faults.Count == 0 ? $"take {takes.IndexOf(best) + 1} passed" : $"none passed, take {takes.IndexOf(best) + 1} was the best") +
@@ -627,7 +628,7 @@ public sealed class FilmTool : Tool
             if (!File.Exists(clip))
                 throw new FilmException($"Shot {shot.Id} has no clip yet: make it with action=shot.");
             var look = await LookAtShotAsync(board, shot, clip, ctx, ct).ConfigureAwait(false);
-            RememberLook(board.ShotWorkflow(shot), look.Text, look.Faults);
+            RememberLook(board.ShotMeta(shot), look.Text, look.Faults);
             return Result(board, shot, $"Shot {shot.Id}: {clip}" + (FilmMaker.IsCurrent(board, shot) ? "" : " (made before the storyboard's latest changes to it)"), [], look, clip);
         }
         var film = board.JoinedFile;

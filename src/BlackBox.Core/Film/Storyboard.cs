@@ -6,15 +6,16 @@ namespace BlackBox.Core.Film;
 
 /// <summary>
 /// A film as the user or the agent plans it: shots in order, each going from a first frame to a
-/// last one in so many seconds, the pictures they start and end on, and the film's sound. It is
-/// the storyboard.json in the film's folder, which the Filmmaking panel and the film tool both
-/// read and write. Only what was decided is kept in it: what was made sits at fixed places beside
-/// it (frames/&lt;id&gt;.png, shots/&lt;id&gt;.mp4, sound/song.mp3), each with the workflow that made it,
-/// so the window and the agent can't overwrite each other's results.
+/// last one in so many seconds, the pictures they start and end on, and the film's sound. The film
+/// is its folder (see StoryboardFolder.cs): a folder for each shot with its frames and clip, one
+/// for the references and one for the sound, each file with a .meta beside it saying what it is
+/// and how it was made, and its ComfyUI workflow; the Filmmaking panel and the film tool both read
+/// and write it. Here it is the whole film at once, as the agent writes and reads it in JSON.
 /// </summary>
 public sealed partial class Storyboard
 {
-    public const string FileName = "storyboard.json";
+    /// <summary>Where a film was kept whole before it was its folder: converted when the film is opened.</summary>
+    public const string OldFileName = "storyboard.json";
 
     /// <summary>How long a dissolve or a fade between two shots takes: the two overlap that long.</summary>
     public const double DissolveSeconds = 0.5, FadeSeconds = 1.0;
@@ -51,12 +52,9 @@ public sealed partial class Storyboard
     /// <summary>How loud the soundtrack is in the film (0 to 1).</summary>
     public double SoundVolume { get; set; } = 1;
 
-    /// <summary>The folder the storyboard is in; not saved.</summary>
+    /// <summary>The film's folder; not saved.</summary>
     [JsonIgnore]
     public string Folder { get; set; } = "";
-
-    [JsonIgnore]
-    public string FilePath => Path.Combine(Folder, FileName);
 
     public FilmFrame? Frame(string? id) => id is null ? null : Frames.FirstOrDefault(f => f.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
@@ -72,12 +70,12 @@ public sealed partial class Storyboard
 
     /// <summary>
     /// Where a frame's picture is once it is made (or taken from the user's file): a reference's in
-    /// the References folder, the shots' frames in frames.
+    /// the References folder, a shot's frame in the folder of the shot it is the start or end of.
     /// </summary>
-    public string FramePicture(FilmFrame frame) => Path.Combine(frame.Reference ? ReferencesFolder : Path.Combine(Folder, "frames"), Safe(frame.Id) + ".png");
+    public string FramePicture(FilmFrame frame) => Full(frame.Place ?? PlaceFor(frame));
 
-    /// <summary>The workflow that made a frame's picture, as it ran.</summary>
-    public string FrameWorkflow(FilmFrame frame) => Path.ChangeExtension(FramePicture(frame), ".json");
+    /// <summary>What a frame is and how it was made: its settings, and the stamp, template and look of the picture made.</summary>
+    public string FrameMeta(FilmFrame frame) => MetaOf(FramePicture(frame));
 
     /// <summary>The kinds of picture a reference can be.</summary>
     public static readonly string[] PictureExtensions = [".png", ".jpg", ".jpeg", ".webp", ".bmp"];
@@ -123,7 +121,8 @@ public sealed partial class Storyboard
         {
             return Folder.Length > 0 && Directory.Exists(ReferencesFolder)
                 ? new DirectoryInfo(ReferencesFolder).EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 2, IgnoreInaccessible = true })
-                    .Where(f => PictureExtensions.Contains(f.Extension, StringComparer.OrdinalIgnoreCase) && !IsTake(f.Name) && !f.Name.StartsWith('.'))
+                    .Where(f => PictureExtensions.Contains(f.Extension, StringComparer.OrdinalIgnoreCase) && !IsTake(f.Name) && !f.Name.StartsWith('.') &&
+                                !string.Equals(f.Directory?.Name, TakesName, StringComparison.OrdinalIgnoreCase))
                     .Select(f => f.FullName).Order(StringComparer.OrdinalIgnoreCase).ToList()
                 : [];
         }
@@ -139,24 +138,33 @@ public sealed partial class Storyboard
     [System.Text.RegularExpressions.GeneratedRegex(@"\.v\d+\.[^.]+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex TakeName();
 
-    public string ShotVideo(FilmShot shot) => Path.Combine(Folder, "shots", Safe(shot.Id) + ".mp4");
+    /// <summary>A shot's clip, in its folder.</summary>
+    public string ShotVideo(FilmShot shot) => Full(shot.Place ?? PlaceFor(shot));
 
-    public string ShotWorkflow(FilmShot shot) => Path.Combine(Folder, "shots", Safe(shot.Id) + ".json");
+    /// <summary>What a shot is and how its clip was made.</summary>
+    public string ShotMeta(FilmShot shot) => MetaOf(ShotVideo(shot));
+
+    /// <summary>The folder of a shot: its clip, and the frames it starts and ends on unless another shot's they are.</summary>
+    public string ShotFolder(FilmShot shot) => Path.GetDirectoryName(ShotVideo(shot))!;
 
     /// <summary>The sound a lip-synced shot is made with: its line, or the part of the soundtrack under it, as long as the shot.</summary>
-    public string ShotAudio(FilmShot shot) => Path.Combine(Folder, "shots", Safe(shot.Id) + ".wav");
+    public string ShotAudio(FilmShot shot) => Path.ChangeExtension(ShotVideo(shot), ".wav");
 
-    /// <summary>A shot's line as the voice model said it, and the workflow that said it.</summary>
-    public string ShotLine(FilmShot shot) => Path.Combine(Folder, "shots", Safe(shot.Id) + ".line.flac");
+    /// <summary>A shot's line as the voice model said it, and how it was said.</summary>
+    public string ShotLine(FilmShot shot) => Path.ChangeExtension(ShotVideo(shot), ".line.flac");
 
-    public string ShotLineWorkflow(FilmShot shot) => Path.Combine(Folder, "shots", Safe(shot.Id) + ".line.json");
+    public string ShotLineMeta(FilmShot shot) => MetaOf(ShotLine(shot));
 
     /// <summary>Whether a shot is lip-synced to a line of its own (rather than the soundtrack).</summary>
     public static bool Speaks(FilmShot shot) => shot.LipSync && shot.Line.Trim().Length > 0;
 
-    public string SongFile => Path.Combine(Folder, "sound", "song.mp3");
+    /// <summary>The folder of the film's soundtrack: the song made for it, and what it is (even with none).</summary>
+    public const string SoundName = "Sound";
 
-    public string SongWorkflow => Path.Combine(Folder, "sound", "song.json");
+    public string SongFile => Path.Combine(Folder, SoundName, "song.mp3");
+
+    /// <summary>What the film's sound is (none, a file, a song) and how the song was made.</summary>
+    public string SongMeta => MetaOf(SongFile);
 
     /// <summary>The soundtrack to use: the user's file, the song once made, or none.</summary>
     public string? SoundtrackFile => Sound.Source switch
@@ -168,6 +176,9 @@ public sealed partial class Storyboard
 
     /// <summary>The joined film: named after it, in its folder.</summary>
     public string FilmFile => Path.Combine(Folder, Safe(Title.Length > 0 ? Title : "film") + ".mp4");
+
+    /// <summary>What belongs to the whole film: its title, size, frame rate, sound levels and the order of its shots.</summary>
+    public string FilmMeta => MetaOf(FilmFile);
 
     /// <summary>
     /// The film as last joined: <see cref="FilmFile"/>, or, when the film was named again since, the
@@ -229,24 +240,13 @@ public sealed partial class Storyboard
     };
 
     /// <summary>
-    /// The next free id with this prefix: f1, f2… for frames, s1, s2… for shots. Not one whose files
-    /// a piece taken out left in the folder: a new shot s3 came with the deleted s3's clip and takes,
-    /// and joining put that clip in the film.
+    /// The next free id with this prefix: f1, f2… for frames, s1, s2… for shots. A piece's files are
+    /// where it is placed, not named by its id, so a new piece never gets the files one taken out
+    /// left behind (see <see cref="PlaceFor(FilmShot)"/>).
     /// </summary>
     public string NewId(string prefix)
     {
         var taken = Frames.Select(f => f.Id).Concat(Shots.Select(s => s.Id)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (Folder.Length > 0)
-            foreach (var dir in new[] { "frames", "shots" })
-            {
-                try
-                {
-                    if (Directory.Exists(Path.Combine(Folder, dir)))
-                        foreach (var file in Directory.EnumerateFiles(Path.Combine(Folder, dir)))
-                            taken.Add(Path.GetFileName(file).Split('.')[0]);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-            }
         for (var n = 1; ; n++)
             if (!taken.Contains(prefix + n))
                 return prefix + n;
@@ -308,53 +308,6 @@ public sealed partial class Storyboard
     }
 
     // ---- reading and writing ---------------------------------------------------------------------
-
-    /// <summary>
-    /// The storyboard in a folder, or in the storyboard.json given. One from before frames and shots
-    /// said all of their own look and model is upgraded and saved, what was made staying made
-    /// (<paramref name="upgrade"/> false only reads it, for its title).
-    /// </summary>
-    public static Storyboard Load(string path, bool upgrade = true)
-    {
-        var file = Directory.Exists(path) ? Path.Combine(path, FileName) : path;
-        var board = Parse(File.ReadAllText(file), upgrade: false);
-        board.Folder = Path.GetDirectoryName(Path.GetFullPath(file))!;
-        if (upgrade && board.IsOld)
-            FilmMaker.Upgrade(board);
-        if (upgrade)
-            board.MoveOldReferences();
-        return board;
-    }
-
-    /// <summary>
-    /// Moves the references' pictures from where they were kept before the References folder (in
-    /// frames, with the shots' frames) into it, with their workflows and takes. Moved, a file keeps
-    /// its time and size, so what was made from it stays made.
-    /// </summary>
-    private void MoveOldReferences()
-    {
-        foreach (var reference in Frames.Where(f => f.Reference))
-        {
-            var stem = Safe(reference.Id);
-            var old = Path.Combine(Folder, "frames");
-            try
-            {
-                if (!File.Exists(Path.Combine(old, stem + ".png")) || File.Exists(FramePicture(reference)))
-                    continue;
-                Directory.CreateDirectory(ReferencesFolder);
-                foreach (var file in Directory.EnumerateFiles(old, stem + ".*").ToList())
-                {
-                    var rest = Path.GetFileName(file)[stem.Length..];
-                    if (rest is ".png" or ".json" || TakeName().IsMatch(rest))
-                        File.Move(file, Path.Combine(ReferencesFolder, stem + rest), overwrite: false);
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // Open in another program, or the folder can't be written: it is moved the next time.
-            }
-        }
-    }
 
     /// <param name="upgrade">Moves an old storyboard's film-wide look and templates into its frames and shots (see <see cref="Upgrade"/>).</param>
     public static Storyboard Parse(string json, bool upgrade = true)
@@ -457,15 +410,6 @@ public sealed partial class Storyboard
 
     public JsonObject ToJsonObject() => (JsonObject)JsonNode.Parse(ToJson())!;
 
-    /// <summary>Saves it to storyboard.json in its folder, beside the References folder (made for the user's pictures too).</summary>
-    public void Save()
-    {
-        if (Folder.Length == 0)
-            throw new InvalidOperationException("The storyboard has no folder to be saved in.");
-        Settings.AtomicFile.Write(FilePath, ToJson());
-        Directory.CreateDirectory(ReferencesFolder);
-    }
-
     /// <summary>
     /// Ids filled in and made unique, seeds given, numbers kept in range: a storyboard written by
     /// hand or by a model can leave any of them out.
@@ -554,24 +498,24 @@ public sealed partial class Storyboard
 
     /// <summary>
     /// A new film in <paramref name="folder"/> (made if needed), with one shot of two frames to
-    /// start from. An existing storyboard there is loaded instead.
+    /// start from. A film already there is loaded instead.
     /// </summary>
     public static Storyboard Create(string folder, string title)
     {
         var board = New(folder, title);
-        if (board.FilePath is var file && !File.Exists(file))
+        if (!IsFilm(board.Folder))
             board.Save();
         return board;
     }
 
     /// <summary>
     /// A new film for <paramref name="folder"/>, not saved yet: one shot of two frames to start
-    /// from. A storyboard already there is loaded instead.
+    /// from. A film already there is loaded instead.
     /// </summary>
     public static Storyboard New(string folder, string title)
     {
         folder = Path.GetFullPath(folder);
-        if (File.Exists(Path.Combine(folder, FileName)))
+        if (IsFilm(folder))
             return Load(folder);
         var board = new Storyboard { Title = title, Folder = folder };
         board.Frames.Add(new FilmFrame { Id = "f1", Seed = NewSeed() });
@@ -579,22 +523,6 @@ public sealed partial class Storyboard
         board.Shots.Add(new FilmShot { Id = "s1", First = "f1", Last = "f2", Seconds = 5, Seed = NewSeed() });
         board.Normalize();
         return board;
-    }
-
-    /// <summary>The films in <paramref name="root"/> (BlackBox's Data\films), the latest changed first.</summary>
-    public static IReadOnlyList<string> Recent(string root)
-    {
-        try
-        {
-            return Directory.Exists(root)
-                ? new DirectoryInfo(root).EnumerateFiles(FileName, new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 2, IgnoreInaccessible = true })
-                    .OrderByDescending(f => f.LastWriteTimeUtc).Select(f => f.DirectoryName!).ToList()
-                : [];
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return [];
-        }
     }
 
     /// <summary>
@@ -758,6 +686,9 @@ public sealed class FilmFrame
     /// <summary>Changes to the workflow after the storyboard's own, as the comfyui tool's set takes them: {"node id.input": value}.</summary>
     public JsonObject? Set { get; set; }
 
+    /// <summary>Where its picture is in the film's folder ("1 Intro/Intro start.png"): where its .meta was found, or where it is given one.</summary>
+    public string? Place { get; set; }
+
     /// <summary>"Frame 3", or its name.</summary>
     public string Label => Name is { Length: > 0 } name ? name : Id;
 }
@@ -767,6 +698,12 @@ public sealed class FilmShot
     public const string Cut = "cut", Dissolve = "dissolve", Fade = "fade";
 
     public string Id { get; set; } = "";
+
+    /// <summary>A few words naming it ("intro", "the leap"): its folder is named after it.</summary>
+    public string? Name { get; set; }
+
+    /// <summary>Where its clip is in the film's folder ("1 Intro/Intro.mp4"): where its .meta was found, or where it is given one.</summary>
+    public string? Place { get; set; }
 
     /// <summary>The frame it starts on; the last frame of the shot before when the camera goes on from there.</summary>
     public string? First { get; set; }

@@ -39,14 +39,18 @@ public sealed class StoryboardTests : IDisposable
     }
 
     [Fact]
-    public void A_new_piece_never_takes_the_id_of_one_deleted_whose_files_are_still_there_and_a_renamed_film_keeps_its_joined_video()
+    public void A_new_piece_never_gets_the_files_one_taken_out_left_and_a_renamed_film_keeps_its_joined_video()
     {
-        var board = Storyboard.Parse("""{"title": "Rain", "shots": [{"id": "s1", "prompt": "rain"}, {"id": "s2", "prompt": "more rain"}]}""");
+        var board = Storyboard.Parse("""{"title": "Rain", "shots": [{"id": "s1", "name": "drops", "prompt": "rain"}, {"id": "s2", "name": "puddle", "prompt": "more rain"}]}""");
         board.Folder = Path.Combine(_dir, "Rain");
-        Directory.CreateDirectory(Path.Combine(board.Folder, "shots"));
-        File.WriteAllText(Path.Combine(board.Folder, "shots", "s3.mp4"), "the clip of a shot taken out");
-        File.WriteAllText(Path.Combine(board.Folder, "shots", "s4.v1.mp4"), "a take of another");
-        Assert.Equal("s5", board.NewId("s"));
+        board.Save();
+        File.WriteAllText(board.ShotVideo(board.Shots[1]), "the clip");
+        // The puddle taken out, and a new shot named the same where it was.
+        board = Storyboard.Merge(board, JsonNode.Parse("""{"shots": [{"id": "s2", "delete": true}, {"id": "s3", "name": "puddle", "prompt": "a new puddle"}]}""")!.AsObject());
+        board.Save();
+        Assert.Equal(Path.Combine(board.Folder, "2 puddle (2)", "puddle.mp4"), board.ShotVideo(board.Shot("s3")!));
+        Assert.False(File.Exists(board.ShotVideo(board.Shot("s3")!)));
+        Assert.Equal(["s1", "s3"], Storyboard.Load(board.Folder).Shots.Select(s => s.Id)); // the meta of the one taken out went
 
         File.WriteAllText(board.FilmFile, "joined");
         board.Title = "Rain at Night";
@@ -229,30 +233,44 @@ public sealed class StoryboardTests : IDisposable
     }
 
     [Fact]
-    public void Upgrading_an_old_film_keeps_what_was_made_made()
+    public void An_old_film_in_a_storyboard_json_becomes_its_folders_and_what_was_made_stays_made()
     {
         Directory.CreateDirectory(_dir);
-        File.WriteAllText(Path.Combine(_dir, Storyboard.FileName), Old);
+        File.WriteAllText(Path.Combine(_dir, Storyboard.OldFileName), Old);
         var old = Storyboard.Load(_dir, upgrade: false);
         Assert.True(old.IsOld);
-        void Made(string file, string workflow, string stamp)
+        // As made then: each piece in a folder of its kind, by id, with a record of what made it beside it.
+        void Made(string file, string stamp, bool workflow = true)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
             File.WriteAllText(file, file);
-            File.WriteAllText(workflow, new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = stamp } }.ToJsonString());
+            var record = new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = stamp, ["template"] = "templates/x", ["made"] = "2026-10-20T10:00:00Z" } };
+            if (workflow)
+                record["prompt"] = new JsonObject { ["3"] = new JsonObject { ["class_type"] = "KSampler" } };
+            File.WriteAllText(Path.ChangeExtension(file, ".json"), record.ToJsonString());
         }
         foreach (var f in old.Frames)
-            Made(old.FramePicture(f), old.FrameWorkflow(f), FilmMaker.FrameStamp(old, f));
-        Made(old.ShotVideo(old.Shots[0]), old.ShotWorkflow(old.Shots[0]), FilmMaker.ShotStamp(old, old.Shots[0]));
-        Made(old.SongFile, old.SongWorkflow, FilmMaker.SongStamp(old));
-        Assert.True(FilmMaker.IsCurrent(old, old.Shots[0]));
+            Made(Path.Combine(_dir, "frames", f.Id + ".png"), FilmMaker.FrameStamp(old, f));
+        Made(Path.Combine(_dir, "frames", "f2.v1.png"), "a take", workflow: false);
+        Made(Path.Combine(_dir, "shots", "s1.mp4"), FilmMaker.ShotStamp(old, old.Shots[0]));
+        Made(Path.Combine(_dir, "sound", "song.mp3"), FilmMaker.SongStamp(old));
 
         var board = Storyboard.Load(_dir);
         Assert.False(board.IsOld);
+        Assert.False(File.Exists(Path.Combine(_dir, Storyboard.OldFileName)));
+        Assert.False(Directory.Exists(Path.Combine(_dir, "frames")));
+        Assert.Equal(Path.Combine(_dir, "1 Shot", "Shot start.png"), board.FramePicture(board.Frame("f1")!));
+        Assert.Equal(Path.Combine(_dir, "1 Shot", "Shot end.png"), board.FramePicture(board.Frame("f2")!));
+        Assert.Equal(Path.Combine(_dir, "1 Shot", "Shot.mp4"), board.ShotVideo(board.Shots[0]));
+        Assert.True(File.Exists(Path.Combine(_dir, "1 Shot", "Takes", "Shot end.v1.png")));
+        Assert.Equal("templates/x", FilmMaker.MadeWith(board.ShotMeta(board.Shots[0])));
+        Assert.Contains("KSampler", File.ReadAllText(Storyboard.WorkflowOf(board.ShotVideo(board.Shots[0]))));
         Assert.All(board.Frames, f => Assert.True(FilmMaker.IsCurrent(board, f)));
         Assert.True(FilmMaker.IsCurrent(board, board.Shots[0]));
         Assert.True(FilmMaker.SongIsCurrent(board));
-        Assert.DoesNotContain("\"style\"", File.ReadAllText(board.FilePath)); // saved upgraded
+        Assert.Single(FilmTakes.List(board, FilmPiece.Of(board.Frame("f2")!)));
+        Assert.DoesNotContain("\"style\"", File.ReadAllText(board.FilmMeta)); // saved upgraded
+        Assert.Equal(board.ToJson(), Storyboard.Load(_dir).ToJson()); // and read back from the folders the same
 
         // From now on a change to one frame leaves the others made.
         board.Frames[1].Prompt = "closer still";
@@ -320,11 +338,51 @@ public sealed class StoryboardTests : IDisposable
     public void A_new_film_is_saved_only_when_asked_and_loads_back_the_same()
     {
         var board = Storyboard.New(_dir, "Keeper");
-        Assert.False(File.Exists(board.FilePath));
+        Assert.False(Storyboard.IsFilm(_dir));
         board.Save();
         var loaded = Storyboard.Load(_dir);
         Assert.Equal(board.ToJson(), loaded.ToJson());
         Assert.Equal(Path.Combine(_dir, "Keeper.mp4"), loaded.FilmFile);
+        // Its folders: the shot's with the metas of its frames and clip, References, Sound, and the film's own meta.
+        Assert.True(File.Exists(Path.Combine(_dir, "1 Shot", "Shot.mp4.meta")));
+        Assert.True(File.Exists(Path.Combine(_dir, "1 Shot", "Shot start.png.meta")));
+        Assert.True(File.Exists(Path.Combine(_dir, "1 Shot", "Shot end.png.meta")));
+        Assert.True(Directory.Exists(Path.Combine(_dir, "References")));
+        Assert.True(File.Exists(Path.Combine(_dir, "Sound", "song.mp3.meta")));
+        Assert.Contains("\"shots\": [\n    \"s1\"\n  ]", File.ReadAllText(Path.Combine(_dir, "Keeper.mp4.meta")).ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    public void The_film_follows_its_folder_shots_renamed_and_reordered_move_and_a_shot_whose_meta_is_gone_leaves()
+    {
+        var board = Storyboard.Parse("""
+            {"title": "Fox", "frames": [{"id": "f1", "prompt": "a fox"}, {"id": "f2", "prompt": "it leaps"}, {"id": "f3", "prompt": "it howls"}],
+             "shots": [{"id": "s1", "name": "leap", "first": "f1", "last": "f2", "prompt": "the fox leaps"}, {"id": "s2", "name": "howl", "first": "f3", "prompt": "it howls"}]}
+            """);
+        board.Folder = _dir;
+        board.Save();
+        File.WriteAllText(board.FramePicture(board.Frame("f1")!), "made");
+        Assert.Equal(Path.Combine(_dir, "1 leap", "leap start.png"), board.FramePicture(board.Frame("f1")!));
+        Assert.Equal(Path.Combine(_dir, "2 howl", "howl.mp4"), board.ShotVideo(board.Shot("s2")!));
+
+        // The howl first now: the folders are numbered again, the files go with them.
+        board = Storyboard.Load(_dir);
+        board.Shots.Reverse();
+        board.Save();
+        Assert.True(Directory.Exists(Path.Combine(_dir, "1 howl")));
+        Assert.True(File.Exists(Path.Combine(_dir, "2 leap", "leap start.png")));
+        Assert.Equal(["s2", "s1"], Storyboard.Load(_dir).Shots.Select(s => s.Id));
+
+        // A frame moved with its meta by hand stays in the film, where it is now.
+        File.Move(Path.Combine(_dir, "2 leap", "leap start.png"), Path.Combine(_dir, "References", "fox.png"));
+        File.Move(Path.Combine(_dir, "2 leap", "leap start.png.meta"), Path.Combine(_dir, "References", "fox.png.meta"));
+        Assert.Equal(Path.Combine(_dir, "References", "fox.png"), Storyboard.Load(_dir).FramePicture(Storyboard.Load(_dir).Frame("f1")!));
+
+        // A shot's folder deleted: it leaves the film.
+        Directory.Delete(Path.Combine(_dir, "1 howl"), recursive: true);
+        var left = Storyboard.Load(_dir);
+        Assert.Equal(["s1"], left.Shots.Select(s => s.Id));
+        Assert.Null(left.Frame("f3"));
     }
 
     [Fact]
@@ -415,8 +473,8 @@ public sealed class FilmLookTests : IDisposable
         {
             Directory.CreateDirectory(Path.GetDirectoryName(board.FramePicture(frame))!);
             File.WriteAllText(board.FramePicture(frame), what);
-            File.WriteAllText(board.FrameWorkflow(frame), new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = FilmMaker.FrameStamp(board, frame) } }.ToJsonString());
-            FilmTakes.Remember(board.FrameWorkflow(frame), piece.Settings(board));
+            File.WriteAllText(board.FrameMeta(frame), new JsonObject { ["made"] = new JsonObject { ["stamp"] = FilmMaker.FrameStamp(board, frame) } }.ToJsonString());
+            FilmTakes.Remember(board.FrameMeta(frame), piece.Settings(board));
         }
         Made("the sea at dawn");
         Assert.Null(FilmTakes.Keep(board, FilmPiece.Of(board.Frame("f1")!))); // not made: nothing to keep
@@ -470,16 +528,17 @@ public sealed class FilmLookTests : IDisposable
         var piece = FilmPiece.Of(shot);
         Directory.CreateDirectory(Path.GetDirectoryName(board.ShotVideo(shot))!);
         File.WriteAllText(board.ShotVideo(shot), "the clip");
-        File.WriteAllText(board.ShotWorkflow(shot), new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = "x" } }.ToJsonString());
-        var other = Path.Combine(Path.GetDirectoryName(board.ShotVideo(shot))!, "s2.take2.mp4");
+        File.WriteAllText(board.ShotMeta(shot), new JsonObject { ["made"] = new JsonObject { ["stamp"] = "x" } }.ToJsonString());
+        var other = Path.Combine(Path.GetDirectoryName(board.ShotVideo(shot))!, "Shot.take2.mp4");
         File.WriteAllText(other, "another take");
-        File.WriteAllText(Path.ChangeExtension(other, ".json"), new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = "y" } }.ToJsonString());
-        FilmTakes.RememberLook(Path.ChangeExtension(other, ".json"), "redo", "It needs another go: the waves freeze.");
+        File.WriteAllText(Storyboard.MetaOf(other), new JsonObject { ["kind"] = "take", ["made"] = new JsonObject { ["stamp"] = "y" } }.ToJsonString());
+        FilmTakes.RememberLook(Storyboard.MetaOf(other), "redo", "It needs another go: the waves freeze.");
 
-        var added = FilmTakes.Add(board, piece, other, Path.ChangeExtension(other, ".json"));
+        var added = FilmTakes.Add(board, piece, other);
         Assert.False(File.Exists(other));
-        Assert.Equal("another take", File.ReadAllText(added!.File));
-        Assert.Equal(("redo", "It needs another go: the waves freeze."), FilmTakes.LookIn(added.Workflow));
+        Assert.Equal(Path.Combine(board.ShotFolder(shot), "Takes", "Shot.v1.mp4"), added!.File);
+        Assert.Equal("another take", File.ReadAllText(added.File));
+        Assert.Equal(("redo", "It needs another go: the waves freeze."), FilmTakes.LookIn(added.Meta));
         Assert.Single(FilmTakes.List(board, piece));
 
         var kept = FilmTakes.Keep(board, piece)!;
@@ -1013,13 +1072,13 @@ public sealed class FilmToolTests : IDisposable
         {
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
             File.WriteAllText(file, file);
-            File.WriteAllText(workflow, new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = stamp } }.ToJsonString());
+            File.WriteAllText(workflow, new JsonObject { ["made"] = new JsonObject { ["stamp"] = stamp } }.ToJsonString());
         }
-        Made(board.FramePicture(board.Frame("f1")!), board.FrameWorkflow(board.Frame("f1")!), "made before f1 was changed");
+        Made(board.FramePicture(board.Frame("f1")!), board.FrameMeta(board.Frame("f1")!), "made before f1 was changed");
         foreach (var id in new[] { "f2", "f3" })
-            Made(board.FramePicture(board.Frame(id)!), board.FrameWorkflow(board.Frame(id)!), FilmMaker.FrameStamp(board, board.Frame(id)!));
+            Made(board.FramePicture(board.Frame(id)!), board.FrameMeta(board.Frame(id)!), FilmMaker.FrameStamp(board, board.Frame(id)!));
         foreach (var shot in board.Shots)
-            Made(board.ShotVideo(shot), board.ShotWorkflow(shot), FilmMaker.ShotStamp(board, shot));
+            Made(board.ShotVideo(shot), board.ShotMeta(shot), FilmMaker.ShotStamp(board, shot));
         var text = FilmTool.Overview(board);
         Assert.Contains("To make: frame f1, frame f2, shot s1, then join.", text);
         Assert.Contains("made, but to be made again after f1", text);
@@ -1039,8 +1098,8 @@ public sealed class FilmToolTests : IDisposable
         };
         Assert.False((await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).IsError);
         Assert.False((await new FilmTool().ExecuteAsync(Call(), ctx, CancellationToken.None)).IsError);
-        Assert.True(File.Exists(Path.Combine(films, "Paper Boat", "storyboard.json")));
-        Assert.True(File.Exists(Path.Combine(films, "Paper Boat 2", "storyboard.json")));
+        Assert.True(Storyboard.IsFilm(Path.Combine(films, "Paper Boat")));
+        Assert.True(Storyboard.IsFilm(Path.Combine(films, "Paper Boat 2")));
 
         // Another task finds a film by its name, or is told which films there are.
         var byName = await new FilmTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = "Paper Boat 2" }, ctx, CancellationToken.None);
@@ -1063,7 +1122,7 @@ public sealed class FilmToolTests : IDisposable
             ["storyboard"] = JsonNode.Parse("""{"title": "Keeper", "frames": [{"id": "f1", "prompt": "a keeper"}], "shots": [{"id": "s1", "first": "f1", "prompt": "he waves"}]}"""),
         }, ctx, CancellationToken.None);
         Assert.False(made.IsError, made.Text);
-        Assert.True(File.Exists(Path.Combine(_dir, "Keeper", "storyboard.json")));
+        Assert.True(Storyboard.IsFilm(Path.Combine(_dir, "Keeper")));
         // No ComfyUI in this run: the shot isn't made, but its new prompt is saved first.
         var shot = await tool.ExecuteAsync(new JsonObject { ["action"] = "shot", ["id"] = "s1", ["prompt"] = "he waves at the camera", ["seconds"] = 3 }, ctx, CancellationToken.None);
         Assert.True(shot.IsError);
@@ -1134,9 +1193,9 @@ public sealed class FilmToolTests : IDisposable
         board.Folder = Path.Combine(_dir, "Keeper");
         var shot = board.Shots[0];
         var piece = FilmPiece.Of(shot);
-        Directory.CreateDirectory(Path.Combine(board.Folder, "shots"));
+        Directory.CreateDirectory(board.ShotFolder(shot));
         File.WriteAllText(board.ShotVideo(shot), "clip 1");
-        File.WriteAllText(board.ShotWorkflow(shot), "{}");
+        File.WriteAllText(board.ShotMeta(shot), "{}");
         File.WriteAllText(board.ShotAudio(shot), "line 1");
         File.WriteAllText(board.ShotLine(shot), "line 1 said");
         var kept = FilmTakes.Keep(board, piece)!;
@@ -1151,7 +1210,8 @@ public sealed class FilmToolTests : IDisposable
         // The one it replaced is a take, its line with it; dropped, nothing of it is left.
         var take = Assert.Single(FilmTakes.List(board, piece));
         FilmTakes.Drop(take);
-        Assert.Equal(["s1.json", "s1.line.flac", "s1.mp4", "s1.wav"], Directory.EnumerateFiles(Path.Combine(board.Folder, "shots")).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(["Shot.line.flac", "Shot.mp4", "Shot.mp4.meta", "Shot.wav"], Directory.EnumerateFiles(board.ShotFolder(shot)).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray());
+        Assert.Empty(Directory.EnumerateFiles(Path.Combine(board.ShotFolder(shot), "Takes")));
     }
 
     [Fact]
@@ -1162,13 +1222,14 @@ public sealed class FilmToolTests : IDisposable
         var piece = FilmPiece.Of(board.Frames[0]);
         Directory.CreateDirectory(Path.GetDirectoryName(piece.File(board)!)!);
         File.WriteAllText(piece.File(board)!, "the picture");
-        File.WriteAllText(piece.Workflow(board)!, """{"settings": {"prompt": "a keeper"}, "look": {"verdict": "good"}}""");
+        File.WriteAllText(piece.Meta(board)!, """{"kind": "frame", "id": "f1", "prompt": "a keeper", "made": {"settings": {"prompt": "a keeper"}, "look": {"verdict": "good"}}}""");
         var kept = FilmTakes.Keep(board, piece)!;
-        File.WriteAllText(piece.Workflow(board)!, "{}"); // the make begins to write its own, then fails
+        File.WriteAllText(piece.Meta(board)!, """{"kind": "frame", "id": "f1", "prompt": "a keeper", "made": {"stamp": ""}}"""); // the make begins, then fails
 
         FilmTakes.Restore(board, piece, kept);
 
-        Assert.Contains("\"look\"", File.ReadAllText(piece.Workflow(board)!));
+        Assert.Contains("\"look\"", File.ReadAllText(piece.Meta(board)!));
+        Assert.Contains("\"prompt\": \"a keeper\"", File.ReadAllText(piece.Meta(board)!)); // what it says of the frame stays
         Assert.Equal("the picture", File.ReadAllText(piece.File(board)!));
         Assert.Empty(FilmTakes.List(board, piece));
     }
@@ -1186,7 +1247,7 @@ public sealed class FilmToolTests : IDisposable
             ["storyboard"] = JsonNode.Parse("""{"title": "The Keeper", "shots": [{"id": "s1", "prompt": "he climbs"}]}"""),
         }, ctx, CancellationToken.None);
         Assert.False(made.IsError, made.Text);
-        Assert.True(File.Exists(Path.Combine(films, "lighthouse", "storyboard.json")));
+        Assert.True(Storyboard.IsFilm(Path.Combine(films, "lighthouse")));
         Assert.False(Directory.Exists(Path.Combine(_dir, "lighthouse")));
         // And found by that name again.
         Assert.False((await new FilmTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = "lighthouse" }, ctx, CancellationToken.None)).IsError);
@@ -1205,7 +1266,10 @@ public sealed class FilmToolTests : IDisposable
         using (var bitmap = new SKBitmap(64, 36))
         using (var file = File.Create(board.FramePicture(frame)))
             bitmap.Encode(file, SKEncodedImageFormat.Png, 100);
-        File.WriteAllText(board.FrameWorkflow(frame), new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = FilmMaker.FrameStamp(board, frame) } }.ToJsonString());
+        // Made: its meta says so, beside what it says of the frame.
+        var meta = JsonNode.Parse(File.ReadAllText(board.FrameMeta(frame)))!.AsObject();
+        meta["made"] = new JsonObject { ["stamp"] = FilmMaker.FrameStamp(board, frame) };
+        File.WriteAllText(board.FrameMeta(frame), meta.ToJsonString());
         var ctx = new ToolContext
         {
             Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir,
@@ -1214,7 +1278,7 @@ public sealed class FilmToolTests : IDisposable
         var looked = await new FilmTool().ExecuteAsync(new JsonObject { ["action"] = "check", ["id"] = "f1", ["path"] = board.Folder }, ctx, CancellationToken.None);
         Assert.False(looked.IsError, looked.Text);
         Assert.Contains("To fix: his hand has six fingers", looked.Text);
-        Assert.Equal(("redo", "It needs another go: his hand has six fingers."), FilmTakes.LookIn(board.FrameWorkflow(frame)));
+        Assert.Equal(("redo", "It needs another go: his hand has six fingers."), FilmTakes.LookIn(board.FrameMeta(frame)));
     }
 }
 
@@ -1263,7 +1327,7 @@ public sealed class FilmReferencesTests : IDisposable
         var shotFrame = await maker.MakeFrameAsync(board, board.Frame("f1")!, null, CancellationToken.None, CancellationToken.None);
         Assert.Equal(Path.Combine(board.ReferencesFolder, "mira.png"), reference.File);
         Assert.Equal((600, 600), SizeOf(reference.File));
-        Assert.Equal(Path.Combine(board.Folder, "frames", "f1.png"), shotFrame.File);
+        Assert.Equal(Path.Combine(board.Folder, "1 Shot", "Shot start.png"), shotFrame.File);
         Assert.Equal((1280, 720), SizeOf(shotFrame.File));
         Assert.True(FilmMaker.IsCurrent(board, board.Frame("mira")!));
         // Never bigger than the edit model can use.
@@ -1329,33 +1393,28 @@ public sealed class FilmReferencesTests : IDisposable
     }
 
     [Fact]
-    public void An_old_references_picture_moves_into_the_references_folder_and_what_is_made_from_it_stays_made()
+    public void An_old_films_reference_goes_into_references_under_its_name_and_what_is_made_from_it_stays_made()
     {
         var folder = Path.Combine(_dir, "Fox");
-        var old = Storyboard.Parse("""
-            {"title": "Fox", "frames": [{"id": "f3", "reference": true, "name": "the fox", "prompt": "a fox sheet"}, {"id": "f1", "prompt": "the fox jumps", "from": ["f3"]}]}
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, Storyboard.OldFileName), """
+            {"title": "Fox", "frames": [{"id": "f3", "reference": true, "name": "the fox", "prompt": "a fox sheet", "seed": 3}, {"id": "f1", "prompt": "the fox jumps", "from": ["f3"], "seed": 1}],
+             "shots": [{"id": "s1", "first": "f1", "prompt": "it jumps"}]}
             """);
-        old.Folder = folder;
-        Settings.AtomicFile.Write(old.FilePath, old.ToJson());
-        // As made before the References folder: the reference with the shots' frames.
+        var old = Storyboard.Load(folder, upgrade: false);
+        // As made then: the reference with the shots' frames, by id.
         var frames = Path.Combine(folder, "frames");
         foreach (var name in new[] { "f3.png", "f3.v1.png", "f1.png" })
             Png(Path.Combine(frames, name), 64, 36);
-        File.WriteAllText(Path.Combine(frames, "f3.json"), new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = "made before" } }.ToJsonString());
-        // f1's stamp as made then from the reference's picture: the same file, wherever it is.
-        Directory.CreateDirectory(old.ReferencesFolder);
-        File.Copy(Path.Combine(frames, "f3.png"), Path.Combine(old.ReferencesFolder, "f3.png"));
-        File.SetLastWriteTimeUtc(Path.Combine(old.ReferencesFolder, "f3.png"), File.GetLastWriteTimeUtc(Path.Combine(frames, "f3.png")));
+        File.WriteAllText(Path.Combine(frames, "f3.json"), new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = FilmMaker.FrameStamp(old, old.Frame("f3")!) } }.ToJsonString());
         File.WriteAllText(Path.Combine(frames, "f1.json"), new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = FilmMaker.FrameStamp(old, old.Frame("f1")!) } }.ToJsonString());
-        File.Delete(Path.Combine(old.ReferencesFolder, "f3.png"));
 
         var board = Storyboard.Load(folder);
-        Assert.Equal(Path.Combine(board.ReferencesFolder, "f3.png"), board.FramePicture(board.Frame("f3")!));
-        Assert.True(File.Exists(Path.Combine(board.ReferencesFolder, "f3.png")));
-        Assert.True(File.Exists(Path.Combine(board.ReferencesFolder, "f3.json")));
-        Assert.True(File.Exists(Path.Combine(board.ReferencesFolder, "f3.v1.png")));
-        Assert.False(File.Exists(Path.Combine(frames, "f3.png")));
-        Assert.True(File.Exists(Path.Combine(frames, "f1.png")));
+        Assert.Equal(Path.Combine(board.ReferencesFolder, "the fox.png"), board.FramePicture(board.Frame("f3")!));
+        Assert.True(File.Exists(Path.Combine(board.ReferencesFolder, "Takes", "the fox.v1.png")));
+        Assert.Equal(Path.Combine(folder, "1 Shot", "Shot start.png"), board.FramePicture(board.Frame("f1")!));
+        Assert.True(FilmMaker.IsCurrent(board, board.Frame("f3")!));
         Assert.True(FilmMaker.IsCurrent(board, board.Frame("f1")!));
+        Assert.Equal([Path.Combine(board.ReferencesFolder, "the fox.png")], board.ReferenceFiles()); // the take is no reference
     }
 }
