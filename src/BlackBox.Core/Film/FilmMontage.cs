@@ -8,7 +8,7 @@ namespace BlackBox.Core.Film;
 /// <summary>
 /// Joins a film's shots into one video with ffmpeg: each clip cut to its length, scaled to the
 /// film's frame and frame rate, one after another with the storyboard's cuts, dissolves and fades,
-/// the soundtrack laid under the shots' own sound, the end faded out.
+/// the sounds of its sound tracks laid over the shots' own sound where they start, the end faded out.
 /// </summary>
 public static class FilmMontage
 {
@@ -26,27 +26,25 @@ public static class FilmMontage
             throw new FilmException($"These shots have no clip yet: {string.Join(", ", missing)}. Make them first.");
         var notes = new List<string>();
         var (width, height, fps) = (board.Width, board.Height, board.Fps);
-        var soundtrack = board.SoundtrackFile;
-        if (board.Sound.Source != FilmSound.None && soundtrack is null)
-            notes.Add(board.Sound.Source == FilmSound.Song ? "The song isn't made yet, so the film has the shots' own sound only." : "The soundtrack file isn't there, so the film has the shots' own sound only.");
-        if (soundtrack is not null && !File.Exists(soundtrack))
-        {
-            notes.Add($"The soundtrack {soundtrack} isn't there, so the film has the shots' own sound only.");
-            soundtrack = null;
-        }
-        // Under a soundtrack the shots' own sound is kept at half: LTX makes a shot's sounds well and
+        var sounds = new List<FilmSound>();
+        foreach (var sound in board.Sounds)
+            if (File.Exists(board.SoundFile(sound)))
+                sounds.Add(sound);
+            else
+                notes.Add(sound.Source == FilmSound.Song ? $"The song {sound.Label} isn't made yet, so the film is without it." : $"The sound file {board.SoundFile(sound)} isn't there, so the film is without it.");
+        // Under a song the shots' own sound is kept at half: LTX makes a shot's sounds well and
         // its music badly (the user's finding), so a shot is asked for its sounds and no music
         // (FilmMaker.WithoutMusic) and the music is the song. Asked for nothing, LTX's sound was a
         // muddy wash that took the Paper Boat song from 3.1 to 2.7 on SongEval at 30%.
-        var shotVolume = soundtrack is null ? 1.0 : 0.5;
+        var shotVolume = sounds.Any(s => s.Source == FilmSound.Song) ? 0.5 : 1.0;
         var args = new List<string> { "-hide_banner", "-y", "-nostats", "-progress", "pipe:1" };
         foreach (var shot in board.Shots)
             args.AddRange(["-i", board.ShotVideo(shot)]);
-        if (soundtrack is not null)
-            args.AddRange(["-i", soundtrack]);
+        foreach (var sound in sounds)
+            args.AddRange(["-i", board.SoundFile(sound)]);
         // A shot's line is heard as the voice model said it, clean, not as the video model gave it back.
         var lines = new Dictionary<int, int>();
-        var next = board.Shots.Count + (soundtrack is null ? 0 : 1);
+        var next = board.Shots.Count + sounds.Count;
         for (var i = 0; i < board.Shots.Count; i++)
             if (Storyboard.Speaks(board.Shots[i]) && File.Exists(board.ShotAudio(board.Shots[i])))
             {
@@ -68,10 +66,8 @@ public static class FilmMontage
                 f.Append($"[{line}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur={N(s)},atrim=duration={N(s)},asetpts=PTS-STARTPTS[a{i}];");
                 continue;
             }
-            // A lip-synced shot's sound is the soundtrack's own part again: under the soundtrack it is left out.
-            var volume = shot.LipSync && soundtrack is not null ? 0 : shotVolume;
-            if (hasSound(board.ShotVideo(shot)) && volume > 0)
-                f.Append($"[{i}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur={N(s)},atrim=duration={N(s)},asetpts=PTS-STARTPTS,volume={N(volume)}[a{i}];");
+            if (hasSound(board.ShotVideo(shot)))
+                f.Append($"[{i}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur={N(s)},atrim=duration={N(s)},asetpts=PTS-STARTPTS,volume={N(shotVolume)}[a{i}];");
             else
                 f.Append($"anullsrc=r=48000:cl=stereo,atrim=duration={N(s)},aformat=sample_fmts=fltp:channel_layouts=stereo[a{i}];");
         }
@@ -97,19 +93,30 @@ public static class FilmMontage
         }
         var fadeOut = Math.Min(FadeOut, length / 3);
         f.Append($"[{video}]fade=t=in:d={N(Math.Min(FadeIn, length / 4))},fade=t=out:st={N(length - fadeOut)}:d={N(fadeOut)}[vout];");
-        if (soundtrack is not null)
+        if (sounds.Count > 0)
         {
-            var k = board.Shots.Count;
-            // Quieter while someone speaks, so the line is heard over it.
+            // Each sound as its clip on the track is: its start cut off (trim), as long as it plays,
+            // from where it starts in the film, at its volume; quieter while someone speaks, so the
+            // line is heard over it.
             var (starts, _) = board.Timing();
             var speaking = lines.Keys.Select(i => $"between(t,{N(starts[i])},{N(starts[i] + board.Shots[i].Seconds)})").ToList();
             var duck = speaking.Count == 0 ? "" : $",volume='if({string.Join("+", speaking)},0.35,1)':eval=frame";
-            f.Append($"[{k}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur={N(length)},atrim=duration={N(length)},asetpts=PTS-STARTPTS{duck}[music];")
-             .Append($"[{audio}][music]amix=inputs=2:duration=first:normalize=0[mixed];");
+            var mix = new StringBuilder($"[{audio}]");
+            for (var k = 0; k < sounds.Count; k++)
+            {
+                var sound = sounds[k];
+                var cut = sound.Seconds > 0 ? $",atrim=duration={N(sound.Seconds)}" : "";
+                var delay = (long)Math.Round(sound.Start * 1000);
+                f.Append($"[{board.Shots.Count + k}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,atrim=start={N(sound.Trim)},asetpts=PTS-STARTPTS{cut},volume={N(sound.Volume)},")
+                 .Append($"adelay={delay}|{delay},apad=whole_dur={N(length)},atrim=duration={N(length)},asetpts=PTS-STARTPTS{duck}[s{k}];");
+                mix.Append($"[s{k}]");
+            }
+            f.Append(mix).Append($"amix=inputs={sounds.Count + 1}:duration=first:normalize=0[mixed];");
             audio = "mixed";
         }
-        // A song is cut where the film ends, so it fades out over longer than the picture does.
-        var soundFade = soundtrack is null ? fadeOut : Math.Min(2.5, length / 3);
+        // A sound cut where the film ends fades out over longer than the picture does.
+        var runsOn = sounds.Any(s => s.Seconds <= 0 || s.Start + s.Seconds > length + 0.05);
+        var soundFade = runsOn ? Math.Min(2.5, length / 3) : fadeOut;
         f.Append($"[{audio}]afade=t=out:st={N(length - soundFade)}:d={N(soundFade)},alimiter=limit=0.95[aout]");
 
         args.AddRange(["-filter_complex", f.ToString(), "-map", "[vout]", "-map", "[aout]",

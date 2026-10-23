@@ -77,18 +77,19 @@ public class ReviewFixesTests
         {
             var board = Storyboard.Parse("""
                 {"title": "Long", "shots": [{"id": "s1", "seconds": 30}, {"id": "s2", "seconds": 30}, {"id": "s3", "seconds": 10}],
-                 "sound": {"source": "song", "tags": "piano", "seed": 7}}
+                 "sounds": [{"id": "a1", "source": "song", "tags": "piano", "seed": 7}]}
                 """);
             board.Folder = folder;
-            Directory.CreateDirectory(Path.Combine(folder, "sound"));
-            File.WriteAllText(board.SongFile, "a song");
-            File.WriteAllText(board.SongMeta, new JsonObject { ["made"] = new JsonObject { ["stamp"] = FilmMaker.SongStamp(board) } }.ToJsonString());
-            Assert.True(FilmMaker.SongIsCurrent(board));
+            var song = board.Sounds[0];
+            Directory.CreateDirectory(Path.GetDirectoryName(board.SoundFile(song))!);
+            File.WriteAllText(board.SoundFile(song), "a song");
+            File.WriteAllText(board.SoundMeta(song), new JsonObject { ["made"] = new JsonObject { ["stamp"] = FilmMaker.SongStamp(board, song) } }.ToJsonString());
+            Assert.True(FilmMaker.IsCurrent(board, song));
 
             board.Shot("s3")!.Seconds = 9; // a second shorter: the song still covers it
-            Assert.True(FilmMaker.SongIsCurrent(board));
+            Assert.True(FilmMaker.IsCurrent(board, song));
             board.Shot("s3")!.Seconds = 20; // longer than the song
-            Assert.False(FilmMaker.SongIsCurrent(board));
+            Assert.False(FilmMaker.IsCurrent(board, song));
         }
         finally
         {

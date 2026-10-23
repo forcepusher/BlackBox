@@ -12,14 +12,13 @@ whatever it downloads stay in a `Data` folder next to the exe.
 - **Use any app.** It sees the screen and uses the mouse and keyboard, in any program.
 - **Pictures, video and sound.** It makes them with ComfyUI, installing ComfyUI and the models if needed.
 - **Films.** Pick **Filmmaking** in the **Toolkit** dropdown at the top left: it opens on the left
-  of the chat with your films as folders, as in Explorer (click one to open it, right-click to
-  rename or delete it or to add a shot, reference or sound), and a timeline you drag sideways. A
-  film has a folder for each shot, with its frames and clip, and References, a folder for each
-  character or place with its pictures and yours.
-  Click a folder, picture or clip to put it in your message, and say what you want in plain words
-  (with nothing picked, it is about the whole film). BlackBox writes the prompts, picks the models,
-  makes it and looks at it, in the chat, where you can watch it and stop it; earlier takes are kept
-  in each folder's Takes. Or just ask for a film in the chat.
+  of the chat with the film on a timeline: References (pictures), takes, lines and sound tracks.
+  Right-click a row to create something there, then pick **File…** to copy in a file of yours or
+  **Generate** to have BlackBox make it; you can also drop files on the timeline. The film's name at
+  the top opens your other films. Click anything on the timeline to put it in your message, and say
+  what you want in plain words (with nothing picked, it is about the whole film). BlackBox writes the
+  prompts, picks the models, makes it and looks at it, in the chat, where you can watch it and stop
+  it; right-click a piece to get an earlier version back. Or just ask for a film in the chat.
 - **Game development.** It makes games in any engine (Unity, Unreal, Godot) and play-tests them.
 - **Know your projects.** Before it works on a project or a big folder, it indexes it, as Cursor
   does: what is in it, what its files define, and a search that finds where anything is.

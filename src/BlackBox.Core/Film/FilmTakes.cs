@@ -4,23 +4,23 @@ using BlackBox.Core.Comfy;
 
 namespace BlackBox.Core.Film;
 
-public enum FilmPieceKind { Frame, Shot, Song }
+public enum FilmPieceKind { Frame, Shot, Sound }
 
-/// <summary>A piece of a film that is made on its own: a frame (a reference too), a shot's clip, or the song.</summary>
+/// <summary>A piece of a film that is made on its own: a frame (a reference too), a shot's clip, or a sound (a song once made).</summary>
 public sealed record FilmPiece(FilmPieceKind Kind, string Id)
 {
-    public static readonly FilmPiece Song = new(FilmPieceKind.Song, "song");
-
     public static FilmPiece Of(FilmFrame frame) => new(FilmPieceKind.Frame, frame.Id);
 
     public static FilmPiece Of(FilmShot shot) => new(FilmPieceKind.Shot, shot.Id);
+
+    public static FilmPiece Of(FilmSound sound) => new(FilmPieceKind.Sound, sound.Id);
 
     /// <summary>Where it is once made.</summary>
     public string? File(Storyboard board) => Kind switch
     {
         FilmPieceKind.Frame => board.Frame(Id) is { } f ? board.FramePicture(f) : null,
         FilmPieceKind.Shot => board.Shot(Id) is { } s ? board.ShotVideo(s) : null,
-        _ => board.SongFile,
+        _ => board.Sound(Id) is { } a ? board.SoundFile(a) : null,
     };
 
     /// <summary>Its meta: what it is, and how it was made.</summary>
@@ -33,7 +33,7 @@ public sealed record FilmPiece(FilmPieceKind Kind, string Id)
         {
             FilmPieceKind.Frame => board.Frame(Id) is { } f ? JsonSerializer.SerializeToNode(f, StoryboardJson.Default.FilmFrame) : null,
             FilmPieceKind.Shot => board.Shot(Id) is { } s ? JsonSerializer.SerializeToNode(s, StoryboardJson.Default.FilmShot) : null,
-            _ => JsonSerializer.SerializeToNode(board.Sound, StoryboardJson.Default.FilmSound),
+            _ => board.Sound(Id) is { } a ? JsonSerializer.SerializeToNode(a, StoryboardJson.Default.FilmSound) : null,
         };
         (settings as JsonObject)?.Remove("place");
         return settings;
@@ -43,7 +43,7 @@ public sealed record FilmPiece(FilmPieceKind Kind, string Id)
     {
         FilmPieceKind.Frame => board.Frame(Id) is { } f && FilmMaker.IsCurrent(board, f),
         FilmPieceKind.Shot => board.Shot(Id) is { } s && FilmMaker.IsCurrent(board, s),
-        _ => FilmMaker.SongIsCurrent(board),
+        _ => board.Sound(Id) is { } a && FilmMaker.IsCurrent(board, a),
     };
 }
 
@@ -53,8 +53,8 @@ public sealed record FilmPiece(FilmPieceKind Kind, string Id)
 public sealed record FilmTake(int Number, string File, string Meta, DateTime Made, JsonObject? Settings);
 
 /// <summary>
-/// The takes of a piece: each time a frame, clip or song is made again, the one before is kept in
-/// its folder's Takes (Takes/Intro.v1.mp4, with its meta and workflow) with the settings it was made
+/// The versions of a piece: each time a frame, clip or song is made again, the one before is kept in
+/// its folder's Versions (Versions/video.v1.mp4, with its meta and workflow) with the settings it was made
 /// with, and so are the takes not kept of several made at once, so the user can put an earlier one
 /// back, settings and all.
 /// </summary>
@@ -169,9 +169,9 @@ public static class FilmTakes
     private static IEnumerable<string> Sidecars(Storyboard board, FilmPiece piece) =>
         piece.Kind == FilmPieceKind.Shot && board.Shot(piece.Id) is { } shot ? [board.ShotAudio(shot), .. Group(board.ShotLine(shot))] : [];
 
-    /// <summary>Where take <paramref name="n"/> of a file is kept: "1 Intro/Takes/Intro.v2.mp4".</summary>
+    /// <summary>Where version <paramref name="n"/> of a file is kept: "Takes/Take 1/Versions/video.v2.mp4".</summary>
     private static string TakeFile(string file, int n) =>
-        Path.Combine(Path.GetDirectoryName(file)!, Storyboard.TakesName, $"{Path.GetFileNameWithoutExtension(file)}.v{n}{Path.GetExtension(file)}");
+        Path.Combine(Path.GetDirectoryName(file)!, Storyboard.VersionsName, $"{Path.GetFileNameWithoutExtension(file)}.v{n}{Path.GetExtension(file)}");
 
     /// <summary>
     /// Where take <paramref name="n"/> of what goes with <paramref name="file"/> is kept: its .json and
@@ -199,7 +199,7 @@ public static class FilmTakes
     {
         if (piece.File(board) is not { } file)
             return [];
-        var dir = Path.Combine(Path.GetDirectoryName(file)!, Storyboard.TakesName);
+        var dir = Path.Combine(Path.GetDirectoryName(file)!, Storyboard.VersionsName);
         if (!Directory.Exists(dir))
             return [];
         var stem = Path.GetFileNameWithoutExtension(file) + ".v";
@@ -313,13 +313,16 @@ public static class FilmTakes
                         JsonValueKind.Number => JsonValue.Create(0),
                         _ => null,
                     } : null;
-        if (piece.Kind != FilmPieceKind.Song)
-            item["id"] = piece.Id;
+        item["id"] = piece.Id;
+        // A sound's place in the film is where it is now, whatever version plays there.
+        if (piece.Kind == FilmPieceKind.Sound)
+            foreach (var key in new[] { "track", "start", "trim", "seconds", "volume", "name" })
+                item.Remove(key);
         var change = piece.Kind switch
         {
             FilmPieceKind.Frame => new JsonObject { ["frames"] = new JsonArray(item) },
             FilmPieceKind.Shot => new JsonObject { ["shots"] = new JsonArray(item) },
-            _ => new JsonObject { ["sound"] = item },
+            _ => new JsonObject { ["sounds"] = new JsonArray(item) },
         };
         var merged = Storyboard.Merge(board, change);
         merged.Save();

@@ -20,19 +20,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A chat open in one window brings that window forward when picked in another's History, and what
   Settings saves applies to every window; each keeps its own model.
 - Filmmaking: pick it in the **Toolkit** dropdown at the top left, and it opens on the left of the
-  chat, the window growing to that side: the film's folder as a tree, a viewer, and the film on one
-  timeline (its shots and its sound), which you drag sideways. Pick a folder, picture or clip there
-  and it goes into the chat's box; say what to make or change and BlackBox writes the prompts, picks
-  the models, makes it with ComfyUI and looks at it, in the chat, where you watch and can stop it.
-  Earlier takes are kept, and **Use this take** puts one back. Or ask for a film in the chat.
-- A film is its folder: a folder for each shot, numbered in the film's order and named after the
-  shot, with the frames it starts and ends on and its clip; References, with a folder for each
-  character, place or thing holding its pictures, BlackBox's and yours (drop them on Filmmaking, and
-  frames are made from the ones BlackBox picks); Sound; and the joined film. Every file has a `.json`
-  of its name beside it saying what it is and how it was made (`Intro.json` for `Intro.mp4`), and the
-  ComfyUI workflow that made it, which opens in ComfyUI as it is.
-- Films get songs about a minute long (the best of three, judged by SongEval), spoken lines in one
-  cloned voice with lip sync, and fresh looks at every shot, cut and the whole film that catch
+  chat, the window growing to that side: a viewer, and the film on one timeline you drag sideways,
+  where all of it is worked on: References (pictures), the takes, the lines and the sound tracks.
+  Right-click a row to create a card, take or sound there: **File…** copies a file of yours in,
+  **Generate** has BlackBox make it; dropping files on the timeline copies them in too. Click
+  anything there and it goes into the chat's box; say what to make or change and BlackBox writes
+  the prompts, picks the models, makes it with ComfyUI and looks at it, in the chat, where you watch
+  and can stop it. Earlier versions are kept, and **Use this version** puts one back. Or ask for a
+  film in the chat.
+- A film is its folder, with two folders in it: References (your pictures and sounds, copied in, and
+  the images BlackBox generates for frames to be made from) and Generated (each take's frames and
+  clip, the songs), and the joined film. Every file has a `.json` of its name beside it saying what
+  it is and how it was made (`s1.json` for `s1.mp4`), and the ComfyUI workflow that made it, which
+  opens in ComfyUI as it is.
+- Films get sound tracks as in a video editor: add as many as you need, lay your sounds and songs
+  BlackBox makes (about a minute long, the best of three, judged by SongEval) on them, drag each to
+  where it starts or to another track, and trim it at either end. Spoken lines are in one cloned
+  voice with lip sync, and fresh looks at every shot, cut and the whole film catch
   broken bodies, frozen or jumping action, a camera that moves when it shouldn't and a change of
   style, and make the pieces again.
 - Measured movement in short clips (which way the camera and what is in the picture moved, and how
@@ -58,22 +62,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A sysadmin benchmark ticket that moves a live game API's database from SQLite to PostgreSQL while
   players keep writing to it.
 - This changelog.
-- Filmmaking's tree has your films as folders, as in Explorer: click one to open it, right-click to
-  rename it, delete it (to the Recycle Bin), or add a shot, a reference or a sound where it goes; a
-  shot, a reference and the soundtrack can be deleted the same way, a shot from its block on the
-  timeline too, and anything shown in Explorer.
+- Filmmaking's films are in a menu on the film's name at the top: open another, start a new one, or
+  rename or delete this one (to the Recycle Bin). On the timeline, right-click a card, take or sound
+  to rename or delete it, or to see an earlier version of it.
 
 ### Changed
 - A film's name is its folder's: renamed in Filmmaking, in Explorer, or by the agent giving it a
   title, the film is.
-- Filmmaking's frame size and frame rate are at the top of the panel, and a new shot is the dashed +
+- Filmmaking's frame size and frame rate are at the top of the panel, and a new take is the dashed +
   after the last one on the timeline.
 - Every dropdown's arrow (Toolkit, History, Model, Effort) is the same solid triangle, and so is the
   Toolkit's arrow to the left.
-- The chat's scrollbar always shows, and so does Filmmaking's tree's.
-- In Filmmaking's tree, the frame a shot goes on from says it is kept in the folder of the shot before.
+- The chat's scrollbar always shows.
 - A frame the film tool makes gets a fresh look, and every piece it makes again keeps the one before
-  as a take; a shot's or song's other tries are takes too.
+  as a version; a shot's or song's other tries are versions too.
 - The context slider goes up to 1M.
 - The second BlackBox name and logo under the title bar made way for the Toolkit dropdown.
 - The first-run hints for Ctrl+V and **New window** are reworded.
@@ -85,14 +87,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   title, and the soundtrack and shots' own sound sliders.
 
 ### Fixed
-- Filmmaking: a picture dropped on a reference (its folder or a picture of it in the tree, or the
-  viewer showing it) goes into that reference, which is marked while you drag over it; the dropped
-  copy can be renamed (right-click or F2). A line under the tree says what right-click and dropping
-  do, and the viewer names the film and says it is selected instead of "Whole film".
+- Filmmaking: a file dropped on a new card or sound becomes it, which is marked while you drag over
+  it; a copied file can be renamed. A line over the timeline says what right-click and dropping do,
+  and the viewer names the film and says it is selected instead of "Whole film".
 - Picking Filmmaking widens the window to the left in one smooth step: the chat no longer jumps
   sideways and back, and the new part of the window isn't black while the panel appears.
 - In Filmmaking, a picture you give for a reference (pasted, attached or dropped) is kept exactly as
-  it is, in the reference's folder, and the references are made from all of it: BlackBox cut one
+  it is, in References, and the references are made from all of it: BlackBox cut one
   pose out of a character lineup and showed the cut-out as your picture.
 - A task whose last step the server failed a few times before answering no longer looks as if it
   ended on that error: the lines about the tries come before the answer, not after it.
@@ -100,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the chat window always did; keys meant for another program no longer land in it.
 - Links whose address holds parentheses (Wikipedia's) open whole, and an address followed by
   Chinese or Japanese punctuation no longer takes it in.
-- In Filmmaking, a soundtrack that is a video opens full screen.
+
 - Making a shot, the song or the film again no longer fails with "the process cannot access the
   file" while the one before plays in the chat.
 - A frame made from a picture of another shape (a square picture of a character) comes out the
