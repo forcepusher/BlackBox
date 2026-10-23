@@ -39,6 +39,22 @@ public sealed class StoryboardTests : IDisposable
     }
 
     [Fact]
+    public void A_new_piece_never_takes_the_id_of_one_deleted_whose_files_are_still_there_and_a_renamed_film_keeps_its_joined_video()
+    {
+        var board = Storyboard.Parse("""{"title": "Rain", "shots": [{"id": "s1", "prompt": "rain"}, {"id": "s2", "prompt": "more rain"}]}""");
+        board.Folder = Path.Combine(_dir, "Rain");
+        Directory.CreateDirectory(Path.Combine(board.Folder, "shots"));
+        File.WriteAllText(Path.Combine(board.Folder, "shots", "s3.mp4"), "the clip of a shot taken out");
+        File.WriteAllText(Path.Combine(board.Folder, "shots", "s4.v1.mp4"), "a take of another");
+        Assert.Equal("s5", board.NewId("s"));
+
+        File.WriteAllText(board.FilmFile, "joined");
+        board.Title = "Rain at Night";
+        Assert.False(File.Exists(board.FilmFile));
+        Assert.Equal(Path.Combine(board.Folder, "Rain.mp4"), board.JoinedFile);
+    }
+
+    [Fact]
     public void A_change_made_in_the_window_and_one_made_in_the_chat_at_once_both_stay()
     {
         var before = Storyboard.Parse("""

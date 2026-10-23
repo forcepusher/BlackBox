@@ -99,6 +99,23 @@ public sealed partial class Storyboard
     public string FilmFile => Path.Combine(Folder, Safe(Title.Length > 0 ? Title : "film") + ".mp4");
 
     /// <summary>
+    /// The film as last joined: <see cref="FilmFile"/>, or, when the film was named again since, the
+    /// newest video beside the storyboard, joined under its old name (the window lost it, and
+    /// "Look at the film" said it wasn't joined).
+    /// </summary>
+    public string JoinedFile
+    {
+        get
+        {
+            var file = FilmFile;
+            if (File.Exists(file) || Folder.Length == 0 || !Directory.Exists(Folder))
+                return file;
+            try { return new DirectoryInfo(Folder).EnumerateFiles("*.mp4").OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault()?.FullName ?? file; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return file; }
+        }
+    }
+
+    /// <summary>
     /// A name made safe as a file name: no character Windows forbids, at most 80 long, and not a
     /// device's name (a film called "Con" got the console for its folder, and nothing saved).
     /// </summary>
@@ -139,10 +156,25 @@ public sealed partial class Storyboard
         _ => 0,
     };
 
-    /// <summary>The next free id with this prefix: f1, f2… for frames, s1, s2… for shots.</summary>
+    /// <summary>
+    /// The next free id with this prefix: f1, f2… for frames, s1, s2… for shots. Not one whose files
+    /// a piece taken out left in the folder: a new shot s3 came with the deleted s3's clip and takes,
+    /// and joining put that clip in the film.
+    /// </summary>
     public string NewId(string prefix)
     {
         var taken = Frames.Select(f => f.Id).Concat(Shots.Select(s => s.Id)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (Folder.Length > 0)
+            foreach (var dir in new[] { "frames", "shots" })
+            {
+                try
+                {
+                    if (Directory.Exists(Path.Combine(Folder, dir)))
+                        foreach (var file in Directory.EnumerateFiles(Path.Combine(Folder, dir)))
+                            taken.Add(Path.GetFileName(file).Split('.')[0]);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
         for (var n = 1; ; n++)
             if (!taken.Contains(prefix + n))
                 return prefix + n;

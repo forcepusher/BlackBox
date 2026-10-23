@@ -111,6 +111,18 @@ public partial class FilmWindow : Window
         s.Shot.Stretched();
     }
 
+    /// <summary>
+    /// The drag ended without a release (Alt+Tab, the timeline laid out anew): it ends here. Left
+    /// going, a later move over any shot's edge went on resizing the shot of the drag.
+    /// </summary>
+    private void OnHandleCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (_stretch is not { } s)
+            return;
+        _stretch = null;
+        s.Shot.Stretched();
+    }
+
     /// <summary>The wheel scrolls the timeline sideways; with Ctrl it zooms.</summary>
     private void OnTimelineWheel(object? sender, PointerWheelEventArgs e)
     {

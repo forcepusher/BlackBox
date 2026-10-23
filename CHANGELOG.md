@@ -98,7 +98,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer put in the chat's box without the film and piece it was about (the chat says it wasn't
   done), and Continue sends one the model never had whole; chats begun from the window are named
   after the film and piece too, not "Make it." alone; a change made by hand while BlackBox changes
-  the storyboard in the chat no longer writes over BlackBox's change.
+  the storyboard in the chat no longer writes over BlackBox's change, nor is a shot's length being
+  dragged lost to it; a shot added after one was deleted no longer brings back the deleted shot's
+  clip; a film named again keeps its joined video; a take isn't put back while BlackBox makes a
+  piece of the film; two new films started in two windows at once no longer share a folder.
 - A piece made from the Filmmaking window is made again when its look finds something wrong, up to
   twice, as before it ran in the chat; the storyboard guide comes back after the context starts
   afresh; a stopped shot of several takes no longer keeps a copy of its clip as one more take; a

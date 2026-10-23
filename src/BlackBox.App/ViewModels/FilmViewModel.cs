@@ -99,6 +99,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     public void Open(string path)
     {
         SaveNow();
+        StopPlaying(); // the film left: its soundtrack played on over the new one's frames
         try
         {
             _board = Storyboard.Load(path);
@@ -124,6 +125,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     private void NewFilm()
     {
         SaveNow();
+        StopPlaying();
         var root = _filmsRoot;
         var name = "New film";
         for (var n = 2; Directory.Exists(Path.Combine(root, name)); n++)
