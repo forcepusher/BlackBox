@@ -957,6 +957,13 @@ Two starts at the same moment made one process with two windows; a start with an
 folder ran as a process of its own. Closing the first window left the others; closing the last
 ended the process.
 
+On real models (2026-10-23 morning, one window each, started 2 s apart): with Claude Opus 5.5,
+"type a four-line poem about the sea into Notepad" was done in 49 s and "draw a red filled
+rectangle in the middle of Paint's canvas" in 1 min 21 s, the Paint window's agent waiting ten
+times for the other's turn and saying it brought Paint back to the front before drawing. With
+qwen3.8 the Notepad one took 7.6 minutes (8 waits) and Paint didn't finish in 25: it kept picking
+the oval for the rectangle, as on 22 October, a model's problem with Paint's small icons.
+
 ## Files in a message
 Drop files or folders anywhere on the window, paste them with Ctrl+V (a screenshot, a picture
 copied in a browser, files copied in Explorer), or pick them with the paperclip next to the box.
