@@ -59,6 +59,66 @@ public sealed class StoryboardTests : IDisposable
     }
 
     [Fact]
+    public void A_film_is_named_after_its_folder_and_renamed_with_its_joined_video()
+    {
+        var board = Storyboard.Parse("""{"title": "Rain", "shots": [{"id": "s1", "prompt": "rain"}]}""");
+        board.Folder = Path.Combine(_dir, "Rain");
+        board.Save();
+        File.WriteAllText(board.FilmFile, "joined");
+        // Renamed in Explorer: the film is, and its joined video and .json follow once it is saved.
+        Directory.Move(board.Folder, Path.Combine(_dir, "Rain at Night"));
+        var moved = Storyboard.Load(Path.Combine(_dir, "Rain at Night"));
+        Assert.Equal("Rain at Night", moved.Title);
+        Assert.Equal(Path.Combine(moved.Folder, "Rain.mp4"), moved.JoinedFile);
+        moved.Save();
+        Assert.Equal(["Rain at Night.json", "Rain at Night.mp4"], Directory.EnumerateFiles(moved.Folder).Select(Path.GetFileName).Order());
+        // Renamed in the panel or by the agent: the folder, with them.
+        moved.Rename("Storm");
+        Assert.Equal(Path.Combine(_dir, "Storm"), moved.Folder);
+        Assert.Equal("joined", File.ReadAllText(Path.Combine(_dir, "Storm", "Storm.mp4")));
+        Assert.Equal("Storm", Storyboard.Load(moved.Folder).Title);
+        Directory.CreateDirectory(Path.Combine(_dir, "Hail"));
+        Assert.Throws<FilmException>(() => moved.Rename("Hail"));
+        moved.Rename("storm");
+        Assert.Equal("storm", Path.GetFileName(Directory.EnumerateDirectories(_dir, "storm").Single()));
+    }
+
+    [Fact]
+    public void A_shot_deleted_takes_its_folder_and_leaves_the_frame_the_next_one_starts_on()
+    {
+        var board = Storyboard.Parse("""
+            {"frames": [{"id": "f1", "prompt": "a fox"}, {"id": "f2", "prompt": "in the air"}, {"id": "f3", "prompt": "landed"}],
+             "shots": [{"id": "s1", "name": "leap", "first": "f1", "last": "f2", "prompt": "it leaps"},
+                       {"id": "s2", "name": "land", "first": "f2", "last": "f3", "prompt": "it lands"}]}
+            """);
+        board.Folder = Path.Combine(_dir, "Fox");
+        board.Save();
+        foreach (var frame in board.Frames)
+            File.WriteAllText(board.FramePicture(frame), frame.Id);
+        File.WriteAllText(board.ShotVideo(board.Shots[0]), "the leap");
+        var takes = Path.Combine(board.ShotFolder(board.Shots[0]), Storyboard.TakesName);
+        Directory.CreateDirectory(takes);
+        File.WriteAllText(Path.Combine(takes, "leap end.v1.png"), "an earlier f2");
+        var removed = new List<string>();
+
+        board.DeleteShot(board.Shots[0], folder =>
+        {
+            removed.Add(folder);
+            Directory.Delete(folder, recursive: true);
+        });
+        board.Save();
+
+        Assert.Equal([Path.Combine(_dir, "Fox", "1 leap")], removed);
+        var fox = Storyboard.Load(board.Folder);
+        Assert.Equal(["s2"], fox.Shots.Select(s => s.Id));
+        Assert.Equal(["f2", "f3"], fox.Frames.Select(f => f.Id).Order());
+        // The frame the landing starts on is in its folder now, numbered first, with its take.
+        Assert.Equal(Path.Combine(fox.Folder, "1 land", "land start.png"), fox.FramePicture(fox.Frame("f2")!));
+        Assert.Equal("f2", File.ReadAllText(fox.FramePicture(fox.Frame("f2")!)));
+        Assert.True(File.Exists(Path.Combine(fox.Folder, "1 land", Storyboard.TakesName, "land start.v1.png")));
+    }
+
+    [Fact]
     public void A_change_made_in_the_window_and_one_made_in_the_chat_at_once_both_stay()
     {
         var before = Storyboard.Parse("""
@@ -265,20 +325,21 @@ public sealed class StoryboardTests : IDisposable
     [Fact]
     public void A_new_film_is_saved_only_when_asked_and_loads_back_the_same()
     {
-        var board = Storyboard.New(_dir, "Keeper");
-        Assert.False(Storyboard.IsFilm(_dir));
+        var keeper = Path.Combine(_dir, "Keeper");
+        var board = Storyboard.New(keeper, "Keeper");
+        Assert.False(Storyboard.IsFilm(keeper));
         board.Save();
-        var loaded = Storyboard.Load(_dir);
+        var loaded = Storyboard.Load(keeper);
         Assert.Equal(board.ToJson(), loaded.ToJson());
-        Assert.Equal(Path.Combine(_dir, "Keeper.mp4"), loaded.FilmFile);
+        Assert.Equal(Path.Combine(keeper, "Keeper.mp4"), loaded.FilmFile);
         // Its folders: the shot's with the .json of its frames and clip, References, Sound, and the film's own .json.
-        Assert.True(File.Exists(Path.Combine(_dir, "1 Shot", "Shot.json")));
-        Assert.True(File.Exists(Path.Combine(_dir, "1 Shot", "Shot start.json")));
-        Assert.True(File.Exists(Path.Combine(_dir, "1 Shot", "Shot end.json")));
-        Assert.True(Directory.Exists(Path.Combine(_dir, "References")));
-        Assert.True(File.Exists(Path.Combine(_dir, "Sound", "song.json")));
-        Assert.Contains("\"shots\": [\n    \"s1\"\n  ]", File.ReadAllText(Path.Combine(_dir, "Keeper.json")).ReplaceLineEndings("\n"));
-        Assert.Empty(Directory.EnumerateFiles(_dir, "*.meta", SearchOption.AllDirectories));
+        Assert.True(File.Exists(Path.Combine(keeper, "1 Shot", "Shot.json")));
+        Assert.True(File.Exists(Path.Combine(keeper, "1 Shot", "Shot start.json")));
+        Assert.True(File.Exists(Path.Combine(keeper, "1 Shot", "Shot end.json")));
+        Assert.True(Directory.Exists(Path.Combine(keeper, "References")));
+        Assert.True(File.Exists(Path.Combine(keeper, "Sound", "song.json")));
+        Assert.Contains("\"shots\": [\n    \"s1\"\n  ]", File.ReadAllText(Path.Combine(keeper, "Keeper.json")).ReplaceLineEndings("\n"));
+        Assert.Empty(Directory.EnumerateFiles(keeper, "*.meta", SearchOption.AllDirectories));
     }
 
     [Fact]
@@ -779,9 +840,6 @@ public sealed class FilmMontageTests : IDisposable
         Assert.Contains("[3:a]", graph);
         Assert.Contains("amix=inputs=2", graph);
         Assert.Contains("[0:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur=5,atrim=duration=5,asetpts=PTS-STARTPTS,volume=0.5[a0]", graph); // the shots' own sounds at half under a soundtrack
-        board.ShotVolume = 0.25;
-        var (asked, _, _) = FilmMontage.Plan(board, _ => true, "out.mp4");
-        Assert.Contains("volume=0.25", asked[asked.IndexOf("-filter_complex") + 1]);
         Assert.Equal("out.mp4", args[^1]);
         Assert.Equal("11.5", args[^2]);
     }
@@ -1097,13 +1155,18 @@ public sealed class FilmToolTests : IDisposable
         Assert.False((await tool.ExecuteAsync(Call("""{"title": "Tea", "shots": [{"id": "s1", "prompt": "a teapot pours"}]}"""), ctx, CancellationToken.None)).IsError);
         Assert.Equal("a cup steams", Storyboard.Load(Path.Combine(films, "Coffee")).Shots[0].Prompt);
         Assert.Equal("a teapot pours", Storyboard.Load(Path.Combine(films, "Tea")).Shots[0].Prompt);
-        // A new title alone renames the film in use; with a change to one of its pieces too.
+        // A new title alone renames the film in use, its folder too; with a change to one of its pieces too.
         Assert.False((await tool.ExecuteAsync(Call("""{"title": "Green Tea"}"""), ctx, CancellationToken.None)).IsError);
-        Assert.Equal("Green Tea", Storyboard.Load(Path.Combine(films, "Tea")).Title);
+        Assert.Equal("Green Tea", Storyboard.Load(Path.Combine(films, "Green Tea")).Title);
+        Assert.False(Directory.Exists(Path.Combine(films, "Tea")));
         Assert.False((await tool.ExecuteAsync(Call("""{"title": "Dawn Tea", "shots": [{"id": "s1", "camera": "close-up"}]}"""), ctx, CancellationToken.None)).IsError);
-        var tea = Storyboard.Load(Path.Combine(films, "Tea"));
+        var tea = Storyboard.Load(Path.Combine(films, "Dawn Tea"));
         Assert.Equal(("Dawn Tea", "close-up", "a teapot pours"), (tea.Title, tea.Shots[0].Camera, tea.Shots[0].Prompt));
-        Assert.False(Directory.Exists(Path.Combine(films, "Dawn Tea")));
+        Assert.False(Directory.Exists(Path.Combine(films, "Green Tea")));
+        // A title another film has: the film keeps its name, and the model is told.
+        var taken = await tool.ExecuteAsync(Call("""{"title": "Coffee"}"""), ctx, CancellationToken.None);
+        Assert.Contains("keeps the name \"Dawn Tea\"", taken.Text);
+        Assert.Equal("a cup steams", Storyboard.Load(Path.Combine(films, "Coffee")).Shots[0].Prompt);
 
         // The Filmmaking window's new film (empty s1, f1, f2), read with its path, then laid out
         // without one: in place.
@@ -1112,8 +1175,8 @@ public sealed class FilmToolTests : IDisposable
         var fresh = new FilmTool();
         Assert.False((await fresh.ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = blank.Folder }, ctx, CancellationToken.None)).IsError);
         Assert.False((await fresh.ExecuteAsync(Call("""{"title": "Lighthouse", "shots": [{"id": "s1", "prompt": "the beam sweeps the sea"}]}"""), ctx, CancellationToken.None)).IsError);
-        Assert.Equal("Lighthouse", Storyboard.Load(blank.Folder).Title);
-        Assert.False(Directory.Exists(Path.Combine(films, "Lighthouse")));
+        Assert.Equal("the beam sweeps the sea", Storyboard.Load(Path.Combine(films, "Lighthouse")).Shots[0].Prompt);
+        Assert.False(Directory.Exists(blank.Folder));
     }
 
     [Fact]

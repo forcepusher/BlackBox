@@ -43,7 +43,7 @@ public sealed partial class FilmViewModel
         Relabel();
         Relayout();
         RefreshStates();
-        foreach (var p in new[] { nameof(Title), nameof(FrameWidth), nameof(FrameHeight), nameof(Fps), nameof(SoundVolume), nameof(ShotVolume), nameof(Sound), nameof(LengthText), nameof(HasFilm) })
+        foreach (var p in new[] { nameof(FrameWidth), nameof(FrameHeight), nameof(Fps), nameof(Sound), nameof(LengthText), nameof(HasFilm) })
             OnPropertyChanged(p);
     }
 

@@ -26,7 +26,7 @@ public sealed class FilmTool : Tool
         "a folder for each shot, numbered in the film's order and named after the shot, holding the frames it starts and ends on and its clip; References, with a folder for each character, place or thing holding its pictures; Sound; and the joined film. " +
         "Each file has a .json of its name beside it (what it is and how it was made: Intro.json for Intro.mp4) and the ComfyUI workflow that made it (Intro.workflow.json). " +
         "The storyboard is all of it at once: shots in order, each going from a first frame to an optional last frame in so many seconds, the pictures they start and end on, and the soundtrack. " +
-        "action=storyboard shows it (path: the film's folder), with BlackBox's guide to writing one the first time in a chat, or makes or changes it with storyboard={...}: title, " +
+        "action=storyboard shows it (path: the film's folder), with BlackBox's guide to writing one the first time in a chat, or makes or changes it with storyboard={...}: title (the film's folder is named after it: a new one renames it), " +
         "width, height, fps, frames:[{id, prompt (what it shows and its look), model, seed, from: [what it is made from, to keep people and places the same: frames' ids, and in the References folder " +
         "a reference's folder by its name (\"Mira\": its main picture) or one picture in it (\"Mira/side.png\")], " +
         "file (a picture of the user's, cut to the film's frame), name, reference: true for a character or place sheet, made at its own shape into References/<name>/<name>.png " +
@@ -92,6 +92,9 @@ public sealed class FilmTool : Tool
     /// <summary>The film this task worked on last, for calls that leave path out.</summary>
     private string? _lastFolder;
 
+    /// <summary>What the call's storyboard couldn't do as asked (a rename), said before the storyboard.</summary>
+    private string? _note;
+
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var action = RequireString(args, "action").Trim().ToLowerInvariant();
@@ -99,6 +102,7 @@ public sealed class FilmTool : Tool
         {
             if (action is "models" or "workflows" or "templates")
                 return await ModelsAsync(ctx, ct).ConfigureAwait(false);
+            _note = null;
             var board = LoadOrCreate(args, ctx, create: action == "storyboard");
             _lastFolder = board.Folder;
             if (action != "storyboard" && Changes(args, action) is { Count: > 0 } changes && Fits(board, args, action))
@@ -108,7 +112,7 @@ public sealed class FilmTool : Tool
             }
             return action switch
             {
-                "storyboard" => Show(board, args["storyboard"] is JsonObject, GuideFor(ctx)),
+                "storyboard" => Show(board, args["storyboard"] is JsonObject, GuideFor(ctx)) is var shown && _note is { } note ? new ToolResult(note + shown.Text) : shown,
                 "frame" => await FrameAsync(board, RequireId(args), ctx, ct).ConfigureAwait(false),
                 "shot" => await ShotAsync(board, RequireId(args), (int)Math.Clamp(GetNumber(args, "tries") ?? 1, 1, 8), ctx, ct).ConfigureAwait(false),
                 "sound" or "song" => await SoundAsync(board, (int)Math.Clamp(GetNumber(args, "tries") ?? 3, 1, 8), ctx, ct).ConfigureAwait(false),
@@ -159,6 +163,14 @@ public sealed class FilmTool : Tool
             if (change is not null)
             {
                 board = Storyboard.Merge(board, change);
+                // The film's folder is named after it: a new title renames it.
+                if (change["title"] is JsonValue named && named.TryGetValue<string>(out var newName) && newName.Trim().Length > 0 &&
+                    Storyboard.Safe(newName) != Path.GetFileName(board.Folder))
+                    try { board.Rename(newName); }
+                    catch (Exception ex) when (ex is FilmException or IOException or UnauthorizedAccessException)
+                    {
+                        _note = $"The film's folder couldn't be renamed to \"{newName.Trim()}\" ({ex.Message}): the film keeps the name \"{Path.GetFileName(board.Folder)}\".\n";
+                    }
                 board.Save();
             }
             return board;

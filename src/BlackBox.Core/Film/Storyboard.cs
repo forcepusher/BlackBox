@@ -30,12 +30,6 @@ public sealed partial class Storyboard
 
     public FilmSound Sound { get; set; } = new();
 
-    /// <summary>How loud each shot's own sound is in the film (0 to 1); unset: half under a soundtrack, full without one.</summary>
-    public double? ShotVolume { get; set; }
-
-    /// <summary>How loud the soundtrack is in the film (0 to 1).</summary>
-    public double SoundVolume { get; set; } = 1;
-
     /// <summary>The film's folder; not saved.</summary>
     [JsonIgnore]
     public string Folder { get; set; } = "";
@@ -405,9 +399,6 @@ public sealed partial class Storyboard
         Width = Even(Math.Clamp(Width <= 0 ? 1280 : Width, 64, 4096));
         Height = Even(Math.Clamp(Height <= 0 ? 720 : Height, 64, 4096));
         Fps = Math.Clamp(Fps <= 0 ? 24 : Fps, 1, 120);
-        SoundVolume = Math.Clamp(SoundVolume, 0, 2);
-        if (ShotVolume is { } v)
-            ShotVolume = Math.Clamp(v, 0, 2);
         // The ids given first, shots before frames, and new ones after them: numbered in list order,
         // a frame without one took the id a later frame in the same change was given (and a shot's
         // first frame named by it was the wrong one), and a frame given a shot's id renamed that shot

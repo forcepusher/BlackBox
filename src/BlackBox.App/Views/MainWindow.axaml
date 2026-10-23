@@ -274,7 +274,7 @@
           <ComboBox.SelectionBoxItemTemplate>
             <DataTemplate x:DataType="vm:ToolkitOption">
               <StackPanel Orientation="Horizontal" Spacing="6">
-                <PathIcon Width="10" Height="10" VerticalAlignment="Center" Foreground="{StaticResource BbAccent}" Data="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+                <PathIcon Width="10" Height="10" VerticalAlignment="Center" Foreground="{StaticResource BbAccent}" Data="M14 7l-5 5 5 5z" />
                 <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
               </StackPanel>
             </DataTemplate>
@@ -413,7 +413,8 @@
          padding is not part of the scroll extent, so the last lines ended up clipped. -->
     <!-- Focus brings an item into view only from the keyboard (see MainWindow): a click on a picture
          partly out of view focused its button and scrolled the whole picture in, a jump under the mouse. -->
-    <ScrollViewer x:Name="ChatScroll" Grid.Row="3" HorizontalScrollBarVisibility="Disabled" BringIntoViewOnFocusChange="False">
+    <!-- Its bar always shows (the user, 2026-10-24: waiting for it to show up to grab it was annoying). -->
+    <ScrollViewer x:Name="ChatScroll" Grid.Row="3" HorizontalScrollBarVisibility="Disabled" BringIntoViewOnFocusChange="False" AllowAutoHide="False">
       <StackPanel Classes="conversation" Classes.unused="{Binding ShowIntro}" MaxWidth="860" Margin="16,12,16,16" Spacing="10">
         <ItemsControl ItemsSource="{Binding Items}">
           <ItemsControl.ItemsPanel>

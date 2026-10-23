@@ -37,6 +37,7 @@ public sealed partial class FilmViewModel
     {
         var full = Path.GetFullPath(path);
         bool Is(string other) => string.Equals(full, Path.GetFullPath(other), StringComparison.OrdinalIgnoreCase);
+        bool InFolder(FilmFrame frame) => string.Equals(Path.GetDirectoryName(Path.GetFullPath(_board.FramePicture(frame))), full, StringComparison.OrdinalIgnoreCase);
         var made = File.Exists(full) || Directory.Exists(full);
         var state = made ? "" : ", not made yet";
         foreach (var frame in _board.Frames)
@@ -63,12 +64,16 @@ public sealed partial class FilmViewModel
             return new("the sound", $"the Sound folder ({full}): the film's soundtrack", FilmPiece.Song);
         if (Is(_board.ReferencesFolder))
             return new("References", $"the References folder ({full}): a folder for each reference, with its pictures and their own", null);
-        if (Directory.Exists(full) && string.Equals(Path.GetDirectoryName(full), Path.GetFullPath(_board.ReferencesFolder), StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(Path.GetDirectoryName(full), Path.GetFullPath(_board.ReferencesFolder), StringComparison.OrdinalIgnoreCase) &&
+            (Directory.Exists(full) || _board.Frames.Any(f => f.Reference && InFolder(f))))
         {
             var name = Path.GetFileName(full);
             var pictures = _board.ReferenceFiles().Where(f => string.Equals(Path.GetDirectoryName(f), full, StringComparison.OrdinalIgnoreCase)).Select(_board.InReferences).ToList();
+            // The references planned in it (one made with New reference): what to make there.
+            var planned = _board.Frames.Where(f => f.Reference && InFolder(f) && !File.Exists(_board.FramePicture(f))).Select(f => $"{f.Id} \"{f.Label}\"").ToList();
             return new(name, $"the reference \"{name}\", its folder in References ({full}): " +
                              (pictures.Count == 0 ? "no picture in it yet" : $"its pictures {string.Join(", ", pictures.Take(12))}") +
+                             (planned.Count == 0 ? "" : $"; the storyboard's reference {string.Join(", ", planned)} is to be made there, not made yet") +
                              $"; a frame names it in from by \"{name}\" (its main picture) or one of its pictures by its name there", null);
         }
         if (Is(_board.Folder) || Is(_board.JoinedFile))
@@ -102,7 +107,7 @@ public sealed partial class FilmViewModel
                    "then lay it out or change it with action=storyboard and make nothing unless they ask. " +
                    $"When they ask to make the film: {MakeTheFilm}";
         if (_board.Shots.All(s => s.Prompt.Trim().Length == 0))
-            note += " The film is new: give it a title, a reference for each person or place that comes back, frames made from those, shots as long as their action " +
+            note += " The film is new: give it a title (its folder is renamed to it), a reference for each person or place that comes back, frames made from those, shots as long as their action " +
                     "(2 to 8 seconds) from different angles, each with a name, its first frame and a last one when where it ends matters, the lines when people speak, " +
                     "and a song as long as the film when they want music. Take out the empty starting shot and frames (s1, f1, f2) if you don't use them.";
         return note;

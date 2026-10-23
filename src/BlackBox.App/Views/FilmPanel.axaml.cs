@@ -2,18 +2,31 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using BlackBox.App.ViewModels;
 
 namespace BlackBox.App.Views;
 
-/// <summary>Filmmaking's panel, on the left of the chat window: the film's folder as a tree, a viewer, and the timeline.</summary>
+/// <summary>Filmmaking's panel, on the left of the chat window: the films folder as a tree, a viewer, and the timeline.</summary>
 public partial class FilmPanel : UserControl
 {
+    static FilmPanel()
+    {
+        // The box a name is typed in takes the keys as it shows, the name in it selected, as in Explorer.
+        IsVisibleProperty.Changed.AddClassHandler<TextBox>((box, _) =>
+        {
+            if (box.IsVisible && box.Classes.Contains("rename"))
+                FocusLater(box);
+        });
+    }
+
     public FilmPanel()
     {
         InitializeComponent();
+        // A right-click in the tree opens its menu without picking what is under it: picked, a
+        // film opened, and a piece went into the chat's box.
+        Files.AddHandler(PointerPressedEvent, OnTreePressed, RoutingStrategies.Tunnel);
         // A click or a drag on the seconds moves the playhead there; a click on the song's row shows it.
         Ruler.Seeked += seconds => (DataContext as FilmViewModel)?.SeekStrip(seconds);
         Wave.Picked += () => (DataContext as FilmViewModel)?.Show((DataContext as FilmViewModel)?.Sound);
@@ -52,11 +65,106 @@ public partial class FilmPanel : UserControl
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
-        if (!e.Handled && e.Key == Key.Escape && TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is not TextBox)
+        if (e.Handled || TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox)
+            return;
+        if (e.Key == Key.Escape)
         {
             Vm.Clear(viewer: true);
             e.Handled = true;
         }
+        else if (e.Key == Key.F2 && Vm.SelectedNode is { } node && Vm.CanRename(node))
+        {
+            Vm.StartRename(node);
+            e.Handled = true;
+        }
+    }
+
+    // ---- the tree's right-click menu, and renaming in it ------------------------------------------------
+
+    private void OnTreePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(Files).Properties.IsRightButtonPressed && (e.Source as Visual)?.FindAncestorOfType<TextBox>(includeSelf: true) is null)
+            e.Handled = true;
+    }
+
+    /// <summary>Right-click (or the menu key) in the tree: what can be done with the folder or file there; away from them, New film.</summary>
+    private void OnTreeMenu(object? sender, ContextRequestedEventArgs e)
+    {
+        if ((e.Source as Visual)?.FindAncestorOfType<TextBox>(includeSelf: true) is not null)
+            return;
+        var node = e.TryGetPosition(Files, out _) ? (e.Source as StyledElement)?.DataContext as FilmNode : Vm.SelectedNode;
+        OpenMenu(Vm.MenuFor(node), e);
+    }
+
+    /// <summary>Right-click on a shot on the timeline.</summary>
+    private void OnShotMenu(object? sender, ContextRequestedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is ShotItem shot)
+            OpenMenu(Vm.MenuFor(shot), e);
+    }
+
+    private static void OpenMenu(IReadOnlyList<FilmMenuItem?> items, ContextRequestedEventArgs e)
+    {
+        var menu = new ContextMenu();
+        foreach (var item in items)
+        {
+            if (item is null)
+            {
+                menu.Items.Add(new Separator());
+                continue;
+            }
+            var entry = new MenuItem { Header = item.Header, IsEnabled = item.Enabled, InputGesture = item.Key is { } key ? KeyGesture.Parse(key) : null };
+            var act = item.Do;
+            entry.Click += (_, _) => act();
+            menu.Items.Add(entry);
+        }
+        menu.Open(e.Source as Control);
+        e.Handled = true;
+    }
+
+    private void OnRenameAttached(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        if (sender is TextBox { IsVisible: true } box)
+            FocusLater(box);
+    }
+
+    /// <summary>Focused once the menu that asked for it has closed and given the focus back where it was.</summary>
+    private static void FocusLater(TextBox box) => Dispatcher.UIThread.Post(() =>
+    {
+        if (!box.IsVisible || box.GetVisualRoot() is null)
+            return;
+        box.Focus();
+        box.SelectAll();
+    }, DispatcherPriority.Background);
+
+    private void OnRenameKeyDown(object? sender, KeyEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is not FilmNode node)
+            return;
+        switch (e.Key)
+        {
+            case Key.Enter:
+                Vm.FinishRename(node, keep: true);
+                Files.Focus();
+                e.Handled = true;
+                break;
+            case Key.Escape:
+                Vm.FinishRename(node, keep: false);
+                Files.Focus();
+                e.Handled = true;
+                break;
+            // Up and down would move the tree's pick, and open another film, while the name is typed.
+            case Key.Up or Key.Down:
+                e.Handled = true;
+                break;
+        }
+    }
+
+    /// <summary>A click elsewhere keeps the name typed, as in Explorer.</summary>
+    private void OnRenameLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is FilmNode { IsRenaming: true } node)
+            Vm.FinishRename(node, keep: true);
     }
 
     private void OnShotClick(object? sender, RoutedEventArgs e)
@@ -227,15 +335,5 @@ public partial class FilmPanel : UserControl
             }
         };
         viewer.Show();
-    }
-
-    /// <summary>Opens a film from another folder.</summary>
-    private async void OnOpenClick(object? sender, RoutedEventArgs e)
-    {
-        if (TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
-            return;
-        var picked = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Open a film's folder", AllowMultiple = false });
-        if (picked.FirstOrDefault()?.TryGetLocalPath() is { } path)
-            Vm.Open(path);
     }
 }

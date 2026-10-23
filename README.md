@@ -12,9 +12,10 @@ whatever it downloads stay in a `Data` folder next to the exe.
 - **Use any app.** It sees the screen and uses the mouse and keyboard, in any program.
 - **Pictures, video and sound.** It makes them with ComfyUI, installing ComfyUI and the models if needed.
 - **Films.** Pick **Filmmaking** in the **Toolkit** dropdown at the top left: it opens on the left
-  of the chat with the film's folder (a folder for each shot, with its frames and clip, and
-  References, a folder for each character or place with its pictures and yours) and a timeline you
-  drag sideways.
+  of the chat with your films as folders, as in Explorer (click one to open it, right-click to
+  rename or delete it or to add a shot, reference or sound), and a timeline you drag sideways. A
+  film has a folder for each shot, with its frames and clip, and References, a folder for each
+  character or place with its pictures and yours.
   Click a folder, picture or clip to put it in your message, and say what you want in plain words
   (with nothing picked, it is about the whole film). BlackBox writes the prompts, picks the models,
   makes it and looks at it, in the chat, where you can watch it and stop it; earlier takes are kept

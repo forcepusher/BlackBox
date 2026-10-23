@@ -18,6 +18,7 @@ public sealed partial class FilmViewModel
         _saveTimer.Start();
         OnPropertyChanged(nameof(LengthText));
         // What the change makes out of date shows once it is saved (the stamps are computed from the files).
+        _filmTouched = true;
         _refreshTimer.Stop();
         _refreshTimer.Start();
     }
@@ -37,6 +38,9 @@ public sealed partial class FilmViewModel
         // Nothing changed here, and the film is on the disk already: nothing to write.
         if (_board.Folder.Length == 0 || !_dirty && (!force || _savedJson is not null))
             return;
+        // The film's folder went (renamed or deleted elsewhere): written, it would come back.
+        if (_savedJson is not null && !Directory.Exists(_board.Folder))
+            return;
         try
         {
             // The chat changed the film while a change made here waited to be saved (a shot's
@@ -54,8 +58,6 @@ public sealed partial class FilmViewModel
                     n++;
                 _board.Folder = Path.Combine(root, $"{name} {n}");
                 Directory.CreateDirectory(_board.Folder);
-                _watcher?.Dispose();
-                _watcher = null;
                 OnPropertyChanged(nameof(Folder));
             }
             if (_savedJson is not null && Storyboard.IsFilm(_board.Folder))
@@ -144,7 +146,6 @@ public sealed partial class FilmViewModel
                 _ => "No soundtrack",
             };
         OnPropertyChanged(nameof(HasFilm));
-        OnPropertyChanged(nameof(ShotVolume));
         OnPropertyChanged(nameof(LengthText));
         RefreshSound();
         Relayout();
@@ -218,39 +219,86 @@ public sealed partial class FilmViewModel
         });
     }
 
-    // ---- the folder, as the agent and the jobs change it ----------------------------------------------------
+    // ---- the films folder, as the agent, the jobs and Explorer change it ---------------------------------------
 
+    /// <summary>Something changed in this film's folder since the last refresh (else elsewhere in the films folder: the tree alone shows it).</summary>
+    private bool _filmTouched;
+
+    /// <summary>Where this film's folder was renamed to (in Explorer, by the chat, in another window), to follow it.</summary>
+    private string? _renamedTo;
+
+    /// <summary>
+    /// Watches the films folder, all of it: what the agent and the jobs change in this film shows,
+    /// and so does a film made, renamed or deleted elsewhere (the chat, another window, Explorer);
+    /// this film's folder renamed is followed.
+    /// </summary>
     private void Watch()
     {
         _watcher?.Dispose();
         _watcher = null;
         try
         {
-            var watcher = new FileSystemWatcher(_board.Folder) { IncludeSubdirectories = true, NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.Size };
-            FileSystemEventHandler changed = (_, _) => Dispatcher.UIThread.Post(() =>
+            if (!Directory.Exists(_filmsRoot))
+                return;
+            var watcher = new FileSystemWatcher(_filmsRoot) { IncludeSubdirectories = true, NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.Size };
+            void Changed(string path, string? from) => Dispatcher.UIThread.Post(() =>
             {
+                if (from is not null && SamePath(from, _board.Folder))
+                    _renamedTo = path;
+                _filmTouched |= IsIn(path, _board.Folder) || from is not null && IsIn(from, _board.Folder);
                 _refreshTimer.Stop();
                 _refreshTimer.Start();
             });
-            watcher.Changed += changed;
-            watcher.Created += changed;
-            watcher.Deleted += changed;
-            watcher.Renamed += (s, e) => changed(s, e);
+            watcher.Changed += (_, e) => Changed(e.FullPath, null);
+            watcher.Created += (_, e) => Changed(e.FullPath, null);
+            watcher.Deleted += (_, e) => Changed(e.FullPath, null);
+            watcher.Renamed += (_, e) => Changed(e.FullPath, e.OldFullPath);
             watcher.EnableRaisingEvents = true;
             _watcher = watcher;
         }
         catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException) { }
     }
 
+    private static bool SamePath(string a, string b) =>
+        string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(a)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(b)), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Whether a path is a folder or in it.</summary>
+    private static bool IsIn(string path, string folder) =>
+        SamePath(path, folder) || Path.GetFullPath(path).StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
-    /// Something in the film's folder changed: the agent changed the storyboard in the chat (it is
-    /// read again, unless a change made here is still to be saved), a frame, clip or song was made
-    /// or put away as a take, or the user put a picture in References: it shows.
+    /// Something in the films folder changed. In this film's: the agent changed the storyboard in
+    /// the chat (it is read again, unless a change made here is still to be saved), a frame, clip
+    /// or song was made or put away as a take, or the user put a picture in References: it shows.
+    /// This film's folder renamed: the film is followed there; gone: the latest film opens.
+    /// Elsewhere: the tree shows the films as they are.
     /// </summary>
     private void OnFolderChanged()
     {
         if (_disposing)
             return;
+        var touched = _filmTouched;
+        _filmTouched = false;
+        if (_savedJson is not null && !Directory.Exists(_board.Folder))
+        {
+            var (gone, to) = (Path.GetFileName(_board.Folder), _renamedTo);
+            _renamedTo = null;
+            if (to is not null && Storyboard.IsFilm(to))
+                Follow(to);
+            else
+            {
+                _dirty = false;
+                OpenLatest();
+                Status = $"{gone} isn't in the films folder any more.";
+            }
+            return;
+        }
+        _renamedTo = null;
+        if (!touched)
+        {
+            RefreshTree();
+            return;
+        }
         try
         {
             // Not while a change made here waits to be saved: it is put together with theirs then.
@@ -260,19 +308,47 @@ public sealed partial class FilmViewModel
                 var json = fresh.ToJson();
                 if (json != _savedJson)
                 {
-                    var title = _board.Title;
                     _savedJson = json;
                     _board = fresh;
                     Rebuild();
-                    // Named in the chat: the list of films shows the new title.
-                    if (_board.Title != title)
-                        RefreshFilms();
                     return;
                 }
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException) { }
         RefreshStates();
+    }
+
+    /// <summary>This film's folder was renamed elsewhere: the film is opened there, with a change made here meanwhile.</summary>
+    private void Follow(string to)
+    {
+        var from = _board.Folder;
+        _board.Folder = to;
+        _board.Title = Path.GetFileName(to);
+        Moved(from, to);
+        Open(to);
+    }
+
+    /// <summary>The film's folder moved: the folders open in the tree, and what the chat named, go with it.</summary>
+    private void Moved(string from, string to)
+    {
+        foreach (var set in new[] { _expanded, _seenFolders })
+            foreach (var path in set.Where(p => IsIn(p, from)).ToList())
+            {
+                set.Remove(path);
+                set.Add(to + path[Path.TrimEndingDirectorySeparator(Path.GetFullPath(from)).Length..]);
+            }
+        if (_chatFilm is not null && SamePath(_chatFilm, from))
+            _chatFilm = to;
+    }
+
+    /// <summary>The film changed last, or a new one when there is none.</summary>
+    private void OpenLatest()
+    {
+        if (Storyboard.Recent(_filmsRoot).FirstOrDefault() is { } latest)
+            Open(latest);
+        else
+            Untitled();
     }
 
     public void Dispose()

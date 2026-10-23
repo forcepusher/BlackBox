@@ -11,7 +11,11 @@ public sealed partial class FilmViewModel
 {
     // ---- the film's folder as a tree -------------------------------------------------------------------------
 
-    /// <summary>The film's folder: References, a folder for each shot, Sound and the film, with what is planned and isn't made yet.</summary>
+    /// <summary>
+    /// The films folder as Explorer shows it (the user's call, 2026-10-24: "I want it to work just
+    /// like a file explorer"): a folder for each film, the open one with all in it (References, a
+    /// folder for each shot, Sound and the film, with what is planned and isn't made yet).
+    /// </summary>
     public ObservableCollection<FilmNode> Tree { get; } = [];
 
     /// <summary>The folders open in the tree, by their paths: kept as the tree is built again when the folder changes.</summary>
@@ -22,12 +26,19 @@ public sealed partial class FilmViewModel
 
     private void RefreshTree()
     {
-        var root = new FilmNode(_board.Folder, isFolder: true, Path.GetFileName(_board.Folder)) { Label = "the film's folder" };
+        // Not while a name is typed in it: built again, the box went from under the keys.
+        if (_renaming is not null)
+        {
+            _treeSignature = "";
+            return;
+        }
+        var root = new FilmNode(_board.Folder, isFolder: true, Path.GetFileName(_board.Folder)) { IsFilm = true };
         var shown = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var frameOf = _board.Frames.ToDictionary(f => Path.GetFullPath(_board.FramePicture(f)), f => _frames[f.Id], StringComparer.OrdinalIgnoreCase);
 
         // References: a folder for each reference, with its pictures, made or planned, and the user's own there.
         var references = Folder(_board.ReferencesFolder, "a folder for each reference: the pictures frames are made from");
+        references.IsReferences = true;
         var referencesPath = Path.GetFullPath(_board.ReferencesFolder);
         var ownPictures = _board.ReferenceFiles();
         foreach (var dir in _board.Frames.Where(f => f.Reference).Select(f => Path.GetDirectoryName(Path.GetFullPath(_board.FramePicture(f)))!)
@@ -36,6 +47,8 @@ public sealed partial class FilmViewModel
                      .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList())
         {
             var reference = Folder(dir, "a reference");
+            reference.References = _board.Frames.Where(f => f.Reference && string.Equals(Path.GetDirectoryName(Path.GetFullPath(_board.FramePicture(f))), dir, StringComparison.OrdinalIgnoreCase))
+                .Select(f => _frames[f.Id]).ToList();
             ReferencePictures(reference);
             references.Children.Add(reference);
         }
@@ -47,13 +60,16 @@ public sealed partial class FilmViewModel
         foreach (var shot in Shots)
         {
             var folder = Folder(_board.ShotFolder(shot.Shot), $"{Lower(shot.Title)} · {shot.LengthText}");
+            folder.Shot = shot;
             foreach (var (id, part) in new[] { (shot.Shot.First, "start"), (shot.Shot.LipSync ? null : shot.Shot.Last, "end") })
                 if (_board.Frame(id) is { } frame && _frames.GetValueOrDefault(frame.Id) is { } item)
                 {
                     var path = _board.FramePicture(frame);
-                    folder.Children.Add(string.Equals(Path.GetDirectoryName(Path.GetFullPath(path)), Path.GetFullPath(folder.Path), StringComparison.OrdinalIgnoreCase)
+                    var where = Path.GetDirectoryName(Path.GetFullPath(path))!;
+                    // The frame of the shot before, which this one goes on from: in that shot's folder, as it says.
+                    folder.Children.Add(string.Equals(where, Path.GetFullPath(folder.Path), StringComparison.OrdinalIgnoreCase)
                         ? PieceNode(path, item, $"the {part} of {Lower(shot.Title)}")
-                        : new FilmNode(path, isFolder: false) { Label = $"it {part}s on {Lower(item.Title)}", IsPlanned = !File.Exists(path) });
+                        : new FilmNode(path, isFolder: false) { Label = $"the {part} of {Lower(shot.Title)}, in {Path.GetFileName(where)}", IsPlanned = !File.Exists(path) });
                 }
             folder.Children.Add(PieceNode(_board.ShotVideo(shot.Shot), shot, $"{Lower(shot.Title)}'s clip"));
             Others(folder);
@@ -61,6 +77,7 @@ public sealed partial class FilmViewModel
         }
 
         var sound = Folder(Path.GetDirectoryName(_board.SongFile)!, "the soundtrack");
+        sound.IsSound = true;
         if (_board.Sound.Source == FilmSound.Song)
             sound.Children.Add(PieceNode(_board.SongFile, Sound, "the song"));
         else if (_board.Sound.Source == FilmSound.FromFile && _board.Sound.File is { Length: > 0 } own)
@@ -89,9 +106,12 @@ public sealed partial class FilmViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
 
+        // The other films, folders beside this one's; picked, one opens.
+        var films = FilmNodes(root);
+
         // Built again only when what it shows changed: as a job writes, the folder changes every
         // second, and a tree built anew each time loses its scroll and the pointer's place.
-        var signature = Signature(root);
+        var signature = string.Concat(films.Select(Signature));
         if (signature == _treeSignature && Tree.Count > 0)
             return;
         _treeSignature = signature;
@@ -101,9 +121,10 @@ public sealed partial class FilmViewModel
             _expanded.UnionWith(opened.Select(n => n.Path).Prepend(root.Path));
         var selected = SelectedNode?.Path;
         var viewing = Viewing?.Path;
-        foreach (var node in All(root))
+        foreach (var node in films.SelectMany(All))
         {
-            node.IsExpanded = (_expanded.Contains(node.Path) || node == root) && (node.IsFolder || node.Children.Count > 0);
+            // The open film's folder is open, and the folder of films it is in.
+            node.IsExpanded = (_expanded.Contains(node.Path) && node.Children.Count > 0 || node == root || All(node).Contains(root)) && (node.IsFolder || node.Children.Count > 0);
             node.PropertyChanged += (sender, e) =>
             {
                 if (e.PropertyName == nameof(FilmNode.IsExpanded) && sender is FilmNode n)
@@ -121,7 +142,8 @@ public sealed partial class FilmViewModel
         try
         {
             Tree.Clear();
-            Tree.Add(root);
+            foreach (var film in films)
+                Tree.Add(film);
             SelectedNode = selected is null ? null : Find(selected);
             if (viewing is not null)
                 Viewing = Find(viewing) ?? (Viewing is { IsPlanned: false } gone && !File.Exists(gone.Path) && !Directory.Exists(gone.Path) ? null : Viewing);
@@ -191,6 +213,52 @@ public sealed partial class FilmViewModel
         static string Signature(FilmNode node) =>
             $"{node.Path}|{node.Label}|{node.IsPlanned}|{(node.IsPlanned || node.IsFolder ? 0 : StampOf(node.Path))}[{string.Join(",", node.Children.Select(Signature))}]";
     }
+
+    /// <summary>
+    /// The films in the films folder by name, as Explorer lists them: a film's folder (the open
+    /// one's with all in it), or a folder of films with theirs in it. The open film is there too
+    /// before its folder is made.
+    /// </summary>
+    private List<FilmNode> FilmNodes(FilmNode open)
+    {
+        var placed = false;
+        FilmNode Film(string dir)
+        {
+            if (!SamePath(dir, open.Path))
+                return new FilmNode(dir, isFolder: true) { IsFilm = true };
+            placed = true;
+            return open;
+        }
+        var nodes = new List<FilmNode>();
+        try
+        {
+            if (Directory.Exists(_filmsRoot))
+                foreach (var dir in Directory.EnumerateDirectories(_filmsRoot).Where(d => !Path.GetFileName(d).StartsWith('.')).Order(ByName))
+                {
+                    if (Storyboard.IsFilm(dir) || SamePath(dir, open.Path))
+                    {
+                        nodes.Add(Film(dir));
+                        continue;
+                    }
+                    var group = new FilmNode(dir, isFolder: true) { Label = "a folder of films" };
+                    foreach (var film in Directory.EnumerateDirectories(dir).Where(d => Storyboard.IsFilm(d) || SamePath(d, open.Path)).Order(ByName))
+                        group.Children.Add(Film(film));
+                    if (group.Children.Count > 0)
+                        nodes.Add(group);
+                }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        if (!placed)
+        {
+            var at = nodes.FindIndex(n => ByName.Compare(n.Name, open.Name) > 0);
+            nodes.Insert(at < 0 ? nodes.Count : at, open);
+        }
+        return nodes;
+    }
+
+    /// <summary>Names as Explorer orders them: "Film 2" before "Film 10".</summary>
+    private static readonly StringComparer ByName =
+        StringComparer.Create(System.Globalization.CultureInfo.CurrentCulture, System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.NumericOrdering);
 
     /// <summary>The folders of the film's root and of References seen so far: one that comes (a new shot or reference) opens in the tree.</summary>
     private readonly HashSet<string> _seenFolders = new(StringComparer.OrdinalIgnoreCase);
@@ -308,9 +376,35 @@ public sealed partial class FilmViewModel
     {
         if (_syncing)
             return;
+        // A film's folder: that film opens (the user's call: "opening another film should be about
+        // just selecting the other folder"), and what is said is about all of it, so nothing goes in
+        // the box. A folder of films is only a folder.
+        if (value is { IsFilm: true } || value is { IsFolder: true } && !IsIn(value.Path, _board.Folder))
+        {
+            _chat.Pick([]);
+            if (value.IsFilm && !SamePath(value.Path, _board.Folder))
+                // Once the tree is done picking it: opened at once, the tree was built anew under its own pick.
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (ReferenceEquals(SelectedNode, value) && !_disposing)
+                        Open(value.Path);
+                });
+            else if (value.IsFilm)
+                Viewing = null;
+            return;
+        }
         if (value is not null)
             Viewing = value;
         _chat.Pick(value is null ? [] : [(value.Path, value.Caption)]);
+    }
+
+    /// <summary>The open film's folder picked in the tree: nothing of it is in the box, and the viewer shows all of it.</summary>
+    private void PickFilm()
+    {
+        _syncing = true;
+        try { SelectedNode = Find(_board.Folder); }
+        finally { _syncing = false; }
+        Viewing = null;
     }
 
     /// <summary>A piece on the timeline clicked: picked, as in the tree, its folder opened there.</summary>
@@ -340,7 +434,7 @@ public sealed partial class FilmViewModel
     /// <summary>The chat's box changed: a pick taken off it there is no longer picked here.</summary>
     private void OnBoxChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (SelectedNode is not { } picked || _chat.Picked.Contains(picked.Path, StringComparer.OrdinalIgnoreCase))
+        if (SelectedNode is not { } picked || picked.IsFilm || _chat.Picked.Contains(picked.Path, StringComparer.OrdinalIgnoreCase))
             return;
         _syncing = true;
         try { SelectedNode = null; }

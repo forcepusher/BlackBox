@@ -38,7 +38,7 @@ public static class FilmMontage
         // its music badly (the user's finding), so a shot is asked for its sounds and no music
         // (FilmMaker.WithoutMusic) and the music is the song. Asked for nothing, LTX's sound was a
         // muddy wash that took the Paper Boat song from 3.1 to 2.7 on SongEval at 30%.
-        var shotVolume = board.ShotVolume ?? (soundtrack is null ? 1.0 : 0.5);
+        var shotVolume = soundtrack is null ? 1.0 : 0.5;
         var args = new List<string> { "-hide_banner", "-y", "-nostats", "-progress", "pipe:1" };
         foreach (var shot in board.Shots)
             args.AddRange(["-i", board.ShotVideo(shot)]);
@@ -104,7 +104,7 @@ public static class FilmMontage
             var (starts, _) = board.Timing();
             var speaking = lines.Keys.Select(i => $"between(t,{N(starts[i])},{N(starts[i] + board.Shots[i].Seconds)})").ToList();
             var duck = speaking.Count == 0 ? "" : $",volume='if({string.Join("+", speaking)},0.35,1)':eval=frame";
-            f.Append($"[{k}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur={N(length)},atrim=duration={N(length)},asetpts=PTS-STARTPTS,volume={N(board.SoundVolume)}{duck}[music];")
+            f.Append($"[{k}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur={N(length)},atrim=duration={N(length)},asetpts=PTS-STARTPTS{duck}[music];")
              .Append($"[{audio}][music]amix=inputs=2:duration=first:normalize=0[mixed];");
             audio = "mixed";
         }
