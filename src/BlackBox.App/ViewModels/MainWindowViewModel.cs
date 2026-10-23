@@ -224,7 +224,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         if (IsBusy && !_runDetached)
         {
             // What was still waiting above the box: kept in the chat's words, not lost with the box.
-            foreach (var queued in Queued)
+            // Not one the agent has just taken: it is in the conversation, read.
+            foreach (var queued in Queued.Where(q => _session is not { } running || _steerPending.Contains(q.Input) || running.Unsteer(q.Input)))
                 AddNotice($"Not sent, as the window was closed first: \"{queued.Input.Text}\"" + (queued.Input.Via is { } via ? $" ({via})." : "."), isError: false);
             // Said in the chat, with Continue: opened from History, it ended without a word. Before
             // the model had the message, Continue sends it again: "Continue." alone has no task.
@@ -680,8 +681,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var typed = unread.Where(u => u.Context is null).ToList();
         Input = string.Join("\n\n", typed.Select(u => u.Text).Append(Input).Where(t => t.Length > 0));
         Attach(typed.SelectMany(u => u.Files));
+        // Above the notice the run stopped with, which has to stay the chat's last line to keep its
+        // Continue when the chat is opened again.
+        var at = Items.Count > 0 && Items[^1] is NoticeItem { Stopped: true } ? Items.Count - 1 : Items.Count;
         foreach (var film in unread.Where(u => u.Context is not null))
-            AddNotice($"Not done, as BlackBox stopped before it read it: \"{film.Text}\" ({film.Via}).", isError: false);
+            Items.Insert(at++, new NoticeItem($"Not done, as BlackBox stopped before it read it: \"{film.Text}\" ({film.Via}).", isError: false));
     }
 
     [RelayCommand(CanExecute = nameof(IsBusy))]

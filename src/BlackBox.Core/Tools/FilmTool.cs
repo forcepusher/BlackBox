@@ -134,13 +134,16 @@ public sealed class FilmTool : Tool
         if (path is { Length: > 0 } && !Path.IsPathRooted(path) && !Exists(given))
             given = Path.Combine(root, path);
         var change = args["storyboard"] as JsonObject;
-        // A whole storyboard of another title (shots or frames with it), with no path, is a new film,
-        // not the last one used in this task, once that one has pieces of its own: "two ads, coffee
-        // and tea" wrote the tea ad over the coffee one. A new title alone renames the film, and the
-        // Filmmaking window's empty "New film" is laid out in place.
+        // A whole storyboard of another title, with no path, is a new film, not the last one used in
+        // this task, once that one says what is in it: "two ads, coffee and tea" wrote the tea ad
+        // over the coffee one. Whole: shots that each say what happens, none taken out. A new title
+        // alone, or with changes to some pieces, renames and changes the film in use, and the
+        // Filmmaking window's new film (its empty s1, f1 and f2) is laid out in place.
         if (create && path is not { Length: > 0 } && Exists(given) && change?["title"] is JsonValue t && t.TryGetValue<string>(out var newTitle) &&
-            newTitle.Trim().Length > 0 && (change["shots"] is JsonArray { Count: > 0 } || change["frames"] is JsonArray { Count: > 0 }) &&
-            Storyboard.Load(given, upgrade: false) is { } last && (last.Shots.Count > 0 || last.Frames.Count > 0) &&
+            newTitle.Trim().Length > 0 && change["shots"] is JsonArray { Count: > 0 } shots &&
+            shots.All(s => s is JsonObject o && o["delete"] is null && o["prompt"] is JsonValue p && p.ToString().Trim().Length > 0) &&
+            Storyboard.Load(given, upgrade: false) is { } last &&
+            (last.Shots.Any(s => s.Prompt.Trim().Length > 0) || last.Frames.Any(f => f.Prompt.Trim().Length > 0)) &&
             !newTitle.Trim().Equals(last.Title.Trim(), StringComparison.OrdinalIgnoreCase))
             given = null;
         if (Exists(given))

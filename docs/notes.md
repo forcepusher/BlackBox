@@ -806,10 +806,11 @@ stopped before one replaced its clip (the takes made so far stay). A seed settle
 tries isn't written over one the window gave meanwhile (Another take, which then made the same clip
 again).
 
-A storyboard laid out without `path`, of another title and with shots or frames, while the film
-used last in the task already has pieces, is a new film: "two ads, coffee and tea" wrote the tea ad
-over the coffee one. A new title alone still renames the film in use, and the window's empty "New
-film" is laid out in place. The takes not kept of several made at once (a shot's `tries`, the song's three) are takes too.
+A whole storyboard laid out without `path`, of another title (shots that each say what happens,
+none taken out), while the film used last in the task says what is in it, is a new film: "two ads,
+coffee and tea" wrote the tea ad over the coffee one. A new title alone, or with changes to some
+pieces, still renames and changes the film in use, and the window's new film (its empty s1, f1 and
+f2) is laid out in place. The takes not kept of several made at once (a shot's `tries`, the song's three) are takes too.
 Picking an earlier take in the window puts it back in the film with those settings (so it is up to
 date again), and the one it replaces becomes a take.
 

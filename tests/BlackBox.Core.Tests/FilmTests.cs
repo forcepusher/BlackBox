@@ -1108,9 +1108,23 @@ public sealed class FilmToolTests : IDisposable
         Assert.False((await tool.ExecuteAsync(Call("""{"title": "Tea", "shots": [{"id": "s1", "prompt": "a teapot pours"}]}"""), ctx, CancellationToken.None)).IsError);
         Assert.Equal("a cup steams", Storyboard.Load(Path.Combine(films, "Coffee")).Shots[0].Prompt);
         Assert.Equal("a teapot pours", Storyboard.Load(Path.Combine(films, "Tea")).Shots[0].Prompt);
-        // A new title alone renames the film in use.
+        // A new title alone renames the film in use; with a change to one of its pieces too.
         Assert.False((await tool.ExecuteAsync(Call("""{"title": "Green Tea"}"""), ctx, CancellationToken.None)).IsError);
         Assert.Equal("Green Tea", Storyboard.Load(Path.Combine(films, "Tea")).Title);
+        Assert.False((await tool.ExecuteAsync(Call("""{"title": "Dawn Tea", "shots": [{"id": "s1", "camera": "close-up"}]}"""), ctx, CancellationToken.None)).IsError);
+        var tea = Storyboard.Load(Path.Combine(films, "Tea"));
+        Assert.Equal(("Dawn Tea", "close-up", "a teapot pours"), (tea.Title, tea.Shots[0].Camera, tea.Shots[0].Prompt));
+        Assert.False(Directory.Exists(Path.Combine(films, "Dawn Tea")));
+
+        // The Filmmaking window's new film (empty s1, f1, f2), read with its path, then laid out
+        // without one: in place.
+        var blank = Storyboard.New(Path.Combine(films, "New film"), "New film");
+        blank.Save();
+        var fresh = new FilmTool();
+        Assert.False((await fresh.ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = blank.Folder }, ctx, CancellationToken.None)).IsError);
+        Assert.False((await fresh.ExecuteAsync(Call("""{"title": "Lighthouse", "shots": [{"id": "s1", "prompt": "the beam sweeps the sea"}]}"""), ctx, CancellationToken.None)).IsError);
+        Assert.Equal("Lighthouse", Storyboard.Load(blank.Folder).Title);
+        Assert.False(Directory.Exists(Path.Combine(films, "Lighthouse")));
     }
 
     [Fact]
