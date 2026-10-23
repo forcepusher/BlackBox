@@ -12,8 +12,10 @@ public static class SystemPrompt
     /// <param name="webSearch">Whether web_search and fetch_page are in the tool list.</param>
     /// <param name="toolsDirectory">Where portable programs the agent downloads go (BlackBox's Data/tools), or null to leave it out.</param>
     /// <param name="scratchDirectory">Where helper files the agent makes go (BlackBox's Data/scratch), or null to leave it out.</param>
+    /// <param name="folderIndex">Whether index_folder is in the tool list.</param>
     public static string Build(string platformName, IReadOnlyList<ScreenSpace>? screens, string workingDirectory, string customInstructions,
-        IReadOnlyList<McpServerStatus>? mcpServers = null, bool webSearch = false, string? toolsDirectory = null, string? scratchDirectory = null)
+        IReadOnlyList<McpServerStatus>? mcpServers = null, bool webSearch = false, string? toolsDirectory = null, string? scratchDirectory = null,
+        bool folderIndex = true)
     {
         var screen = screens is { Count: > 0 } ? screens[0] : null;
         var sb = new StringBuilder();
@@ -53,10 +55,11 @@ public static class SystemPrompt
                           "Search too before you hunt through a program's menus by trial, after any error you didn't expect, and after any try that didn't give what was wanted, " +
                           "before the next one: a search takes seconds, trial and error takes hours.");
         // The user's request: index a project first, by itself and eagerly, as Cursor does.
-        sb.AppendLine("- Before you work on a project or any folder of many files (code, a game, a website, a set of documents), index it with index_folder, " +
-                      "even when the user didn't ask: its overview shows what kind of project it is, how it is laid out and what its main files define. " +
-                      "Whenever you need to find something in it, ask the index first (index_folder with query=: names, an error's words, or what the code does) " +
-                      "rather than listing folders, opening files one by one or searching with the shell. Index a folder once per chat; later calls bring it up to date.");
+        if (folderIndex)
+            sb.AppendLine("- Before you work on a project or any folder of many files (code, a game, a website, a set of documents), index it with index_folder, " +
+                          "even when the user didn't ask: its overview shows what kind of project it is, how it is laid out and what its main files define. " +
+                          "Whenever you need to find something in it, ask the index first (index_folder with query=: names, an error's words, or what the code does) " +
+                          "rather than listing folders, opening files one by one or searching with the shell. Index a folder once per chat; later calls bring it up to date.");
         if (screen is not null)
         {
             sb.AppendLine("- Start GUI tasks with a screenshot. Look before you click; never guess coordinates.");
