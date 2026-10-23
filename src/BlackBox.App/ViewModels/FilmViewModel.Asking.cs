@@ -156,6 +156,9 @@ public sealed partial class FilmViewModel
                 return $"the reference {reference.Id}" + (reference.Name is { Length: > 0 } name ? $" \"{name}\"" : "");
             case FilmPieceKind.Frame:
                 return $"frame {piece.Id}" + (ItemOf(piece) is { Title: var label } && label != piece.Id ? $" ({Lower(label)})" : "");
+            // Taken out by the chat a moment before: it was described as the song.
+            case FilmPieceKind.Shot:
+                return $"shot {piece.Id}, which the storyboard no longer has";
             default:
                 return _board.Sound.Source == FilmSound.FromFile ? "the soundtrack" : "the song";
         }
