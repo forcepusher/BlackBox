@@ -1416,7 +1416,8 @@ index reads at most 20,000 files and 150 MB of text, the smaller first; the walk
 entries. Past either, the overview says to index the folder worked in. Links and junctions to
 folders are not walked (another folder, or the same one for ever); a linked file is read with its
 target's size and time, so its changes are seen. A reparse point that is no link is walked: every
-folder in OneDrive is one, and a project there was indexed as its top folder's files alone. Files
+folder in OneDrive is one, and a project there was indexed as its top folder's files alone (on the
+desktop PC, a OneDrive folder of 68 files gave 1 before and 68 after). Files
 OneDrive keeps online only are left out, which reading would have downloaded.
 
 Each file is cut into parts of up to 60 lines, ending before a definition once a part has 20
