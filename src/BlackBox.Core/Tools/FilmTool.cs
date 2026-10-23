@@ -213,7 +213,7 @@ public sealed class FilmTool : Tool
     private void Save(Storyboard board)
     {
         board.Save();
-        if (board.TakeInPictures() is not { Count: > 0 } taken)
+        if (board.TakeInPictures().Distinct().ToList() is not { Count: > 0 } taken)
             return;
         board.Save();
         _note += $"Copied into References as {(taken.Count == 1 ? "it is" : "they are")}, where the user sees {(taken.Count == 1 ? "it" : "them")} as their own: " +
