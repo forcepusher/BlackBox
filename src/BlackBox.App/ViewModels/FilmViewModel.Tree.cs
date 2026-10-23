@@ -179,7 +179,7 @@ public sealed partial class FilmViewModel
             foreach (var file in ownPictures.Where(f => !shown.Contains(Path.GetFullPath(f)) && string.Equals(Path.GetDirectoryName(f), Path.GetFullPath(folder.Path), StringComparison.OrdinalIgnoreCase)))
             {
                 shown.Add(Path.GetFullPath(file));
-                folder.Children.Add(new FilmNode(file, isFolder: false) { Label = "your picture" });
+                folder.Children.Add(new FilmNode(file, isFolder: false) { Label = "your picture", IsOwnPicture = true });
             }
             Others(folder);
         }
@@ -423,12 +423,16 @@ public sealed partial class FilmViewModel
         SelectedNode = node;
     }
 
-    /// <summary>Nothing picked: what is said next is about the whole film. With <paramref name="viewer"/> the viewer shows the film too.</summary>
+    /// <summary>
+    /// Nothing picked: what is said next is about the whole film. With <paramref name="viewer"/> the
+    /// viewer shows the film too, and its folder is picked in the tree, so what the viewer shows is
+    /// seen to be the pick.
+    /// </summary>
     public void Clear(bool viewer)
     {
         SelectedNode = null;
         if (viewer)
-            Viewing = null;
+            PickFilm();
     }
 
     /// <summary>The chat's box changed: a pick taken off it there is no longer picked here.</summary>
@@ -452,12 +456,15 @@ public sealed partial class FilmViewModel
     /// <summary>
     /// Files dropped on the panel: pictures go into References (copies as they are, under names of
     /// their own, never one a reference planned there is to be made as: see
-    /// <see cref="Storyboard.KeepPicture"/>), to make frames from: into the reference picked in the
-    /// tree, else each into a folder of its own named after it; the first is picked for the user to
-    /// say what to do with it. Anything else goes with the next message.
+    /// <see cref="Storyboard.KeepPicture"/>), to make frames from: into the reference they were
+    /// dropped on (its folder or a picture of it in the tree, or the viewer showing it), else the one
+    /// picked in the tree, else each into a folder of its own named after it; the first is picked for
+    /// the user to say what to do with it, or to rename. Anything else goes with the next message.
     /// </summary>
     public bool Drop(IReadOnlyList<string> paths)
     {
+        var target = _dropTarget;
+        DragOver(null, viewer: false);
         var pictures = paths.Where(p => File.Exists(p) && Storyboard.PictureExtensions.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase)).ToList();
         if (pictures.Count == 0)
             return false;
@@ -466,7 +473,8 @@ public sealed partial class FilmViewModel
         {
             SaveNow(force: true); // a new film's folder is made with it
             Directory.CreateDirectory(_board.ReferencesFolder);
-            var into = PickedReference();
+            // Dropped on References itself: a folder for each.
+            var into = target is null ? PickedReference() : ReferenceOf(target);
             foreach (var picture in pictures)
             {
                 var folder = into ?? Path.Combine(_board.ReferencesFolder, Storyboard.Safe(Path.GetFileNameWithoutExtension(picture)));
@@ -493,13 +501,42 @@ public sealed partial class FilmViewModel
     }
 
     /// <summary>The folder of the reference picked in the tree (the folder, or a picture in it); null when none is.</summary>
-    private string? PickedReference()
+    private string? PickedReference() => SelectedNode is { } node ? ReferenceOf(node) : null;
+
+    /// <summary>The folder of the reference <paramref name="node"/> is (its folder in References, or a picture in it); null when it is none.</summary>
+    private string? ReferenceOf(FilmNode node)
     {
-        if (SelectedNode is not { } node)
-            return null;
         var references = Path.GetFullPath(_board.ReferencesFolder);
         var folder = Path.GetFullPath(node.IsFolder ? node.Path : Path.GetDirectoryName(node.Path)!);
         return string.Equals(Path.GetDirectoryName(folder), references, StringComparison.OrdinalIgnoreCase) ? folder : null;
+    }
+
+    /// <summary>What pictures dragged over the panel would be dropped on: a reference, or References; null for elsewhere.</summary>
+    private FilmNode? _dropTarget;
+
+    /// <summary>Pictures dropped on the viewer would go into the reference it shows: it is marked.</summary>
+    [ObservableProperty]
+    private bool _isDropOnViewer;
+
+    /// <summary>
+    /// Pictures dragged over the panel, over <paramref name="node"/> in the tree (null: elsewhere), or
+    /// over the viewer: a reference there, or References, is marked as where they would go.
+    /// </summary>
+    public void DragOver(FilmNode? node, bool viewer)
+    {
+        if (viewer)
+            node = Viewing;
+        if (node is not null && !node.IsReferences && ReferenceOf(node) is null)
+            node = null;
+        if (!ReferenceEquals(node, _dropTarget))
+        {
+            if (_dropTarget is { } old)
+                old.IsDropTarget = false;
+            _dropTarget = node;
+        }
+        if (node is not null)
+            node.IsDropTarget = !viewer;
+        IsDropOnViewer = viewer && node is not null;
     }
 
     // ---- the viewer ---------------------------------------------------------------------------------------
@@ -542,7 +579,8 @@ public sealed partial class FilmViewModel
             DropViewer();
             var count = node.Children.Count;
             Viewer = new PictureView(null, node.Name, (node.Label.Length > 0 ? Capital(node.Label) + ". " : "") +
-                                                      (count == 0 ? "Nothing in it yet." : $"{count} in it.") + " Say in the chat what to do with it.");
+                                                      (count == 0 ? "Nothing in it yet." : $"{count} in it.") + " Say in the chat what to do with it." +
+                                                      (ReferenceOf(node) is not null ? " Drop a picture here to add it." : ""));
             return;
         }
         if (path is not null && node is not { IsPlanned: true } && File.Exists(path))
@@ -593,10 +631,13 @@ public sealed partial class FilmViewModel
         Viewer = node switch
         {
             { Piece: ShotItem shot } => new PictureView(shot.First?.Thumbnail, $"{shot.Title} is not made yet", shot.Summary),
+            { Piece: FrameItem { Frame.Reference: true } reference } => new PictureView(null, $"{reference.Title} is not made yet",
+                "Say in the chat what it should be, or to make it. Or drop a picture of it here."),
             { Piece: { } piece } => new PictureView(null, $"{piece.Title} is not made yet", "Say in the chat what it should be, or to make it."),
-            null => new PictureView(null, "Whole film", _board.Shots.All(s => s.Prompt.Trim().Length == 0)
-                ? "Say in the chat what film you want: BlackBox lays out its references, shots and sound here. Nothing is made until you ask for it."
-                : "Pick a picture, clip or folder in the tree or on the timeline: it goes into the chat's box, where you say what to do with it. Or press Make the film."),
+            // The film's name, as a folder picked shows its own: "Whole film" read oddly, and not as what was picked.
+            null => new PictureView(null, Path.GetFileName(Path.TrimEndingDirectorySeparator(_board.Folder)) is { Length: > 0 } name ? name : "The film", _board.Shots.All(s => s.Prompt.Trim().Length == 0)
+                ? "The whole film is selected. Say in the chat what film you want: BlackBox lays out its references, shots and sound here. Nothing is made until you ask for it."
+                : "The whole film is selected. Pick a picture, clip or folder in the tree or on the timeline to work on it instead, or press Make the film."),
             _ => new PictureView(null, node.Caption, "It isn't there."),
         };
     }

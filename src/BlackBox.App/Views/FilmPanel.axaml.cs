@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using BlackBox.App.ViewModels;
@@ -35,6 +36,37 @@ public partial class FilmPanel : UserControl
         Timeline.AddHandler(PointerMovedEvent, OnPanMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
         Timeline.AddHandler(PointerReleasedEvent, OnPanReleased, RoutingStrategies.Tunnel, handledEventsToo: true);
         Timeline.PointerCaptureLost += (_, _) => EndPan();
+        // Pictures dragged over a reference (in the tree, or the viewer showing it) mark it: dropped,
+        // they go into it. The window takes the drop itself (MainWindow.OnDrop) and hands it here.
+        AddHandler(DragDrop.DragEnterEvent, OnDragOver);
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
+        AddHandler(DragDrop.DropEvent, (_, _) => Dispatcher.UIThread.Post(() => (DataContext as FilmViewModel)?.DragOver(null, viewer: false)), handledEventsToo: true);
+    }
+
+    // ---- pictures dragged onto a reference ---------------------------------------------------------------
+
+    private void OnDragOver(object? sender, DragEventArgs e)
+    {
+        if (DataContext is not FilmViewModel vm)
+            return;
+        var source = e.Source as Visual;
+        var pictures = e.DataTransfer.TryGetFiles() is { } files && files.Select(f => f.TryGetLocalPath()).OfType<string>()
+            .Any(p => Core.Film.Storyboard.PictureExtensions.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase));
+        if (!pictures || source is null)
+            vm.DragOver(null, viewer: false);
+        else if (source == ViewerBox || ViewerBox.IsVisualAncestorOf(source))
+            vm.DragOver(null, viewer: true);
+        else
+            vm.DragOver(Files.IsVisualAncestorOf(source) ? source.GetSelfAndVisualAncestors().OfType<StyledElement>().Select(v => v.DataContext).OfType<FilmNode>().FirstOrDefault() : null, viewer: false);
+    }
+
+    /// <summary>Out of the panel: nothing is marked. Moving from one row to another leaves the row, not the panel.</summary>
+    private void OnDragLeave(object? sender, DragEventArgs e)
+    {
+        var at = e.GetPosition(this);
+        if (at.X <= 1 || at.Y <= 1 || at.X >= Bounds.Width - 1 || at.Y >= Bounds.Height - 1)
+            (DataContext as FilmViewModel)?.DragOver(null, viewer: false);
     }
 
     private FilmViewModel Vm => (FilmViewModel)DataContext!;

@@ -45,6 +45,9 @@ public sealed partial class FilmViewModel
                 items.Add(null);
                 items.Add(new("New reference", free, NewReference));
                 break;
+            case { IsOwnPicture: true }:
+                items.Add(new("Rename", CanRename(node), () => StartRename(node), "F2"));
+                break;
             case { Shot: { } shot }:
                 items.Add(new("Delete", free, () => DeleteShot(shot)));
                 items.Add(null);
@@ -80,9 +83,10 @@ public sealed partial class FilmViewModel
     /// <summary>The folder whose name is being typed in the tree; the tree waits meanwhile.</summary>
     private FilmNode? _renaming;
 
-    /// <summary>A film's folder can be renamed, and a reference's whose pictures aren't made yet (a new reference).</summary>
+    /// <summary>A film's folder can be renamed, a reference's whose pictures aren't made yet (a new reference), and a picture of the user's in References.</summary>
     public bool CanRename(FilmNode node) =>
-        node.IsFilm ? !Busy(node.Path) : node.References is { Count: > 0 } references && references.All(r => !r.IsMade) && !Busy(_board.Folder);
+        node.IsFilm ? !Busy(node.Path)
+        : (node.IsOwnPicture || node.References is { Count: > 0 } references && references.All(r => !r.IsMade)) && !Busy(_board.Folder);
 
     /// <summary>Its name becomes a box in the tree to type the new one in, as in Explorer (F2).</summary>
     public void StartRename(FilmNode node)
@@ -108,6 +112,8 @@ public sealed partial class FilmViewModel
         {
             if (node.IsFilm)
                 RenameFilm(node, name);
+            else if (node.IsOwnPicture)
+                RenamePicture(node, name);
             else
                 RenameReference(node, name);
         }
@@ -186,6 +192,52 @@ public sealed partial class FilmViewModel
         Select(to);
 
         static string FolderName(FilmFrame frame) => (frame.Name ?? frame.Id).Split('/', '\\')[0].Trim();
+    }
+
+    /// <summary>
+    /// Renames a picture of the user's in References (one dropped there, the user's call, 2026-10-24:
+    /// "dragged-and-dropped stuff should be copied and able to be renamed"), keeping its kind of
+    /// file; the frames made from it are told its new name.
+    /// </summary>
+    private void RenamePicture(FilmNode node, string name)
+    {
+        var extension = Path.GetExtension(node.Path);
+        var stem = Storyboard.Safe(name.EndsWith(extension, StringComparison.OrdinalIgnoreCase) ? name[..^extension.Length] : name);
+        var to = Path.Combine(Path.GetDirectoryName(node.Path)!, stem + extension);
+        if (stem.Length == 0 || SamePath(to, node.Path))
+        {
+            RefreshTree();
+            return;
+        }
+        if (File.Exists(to) || File.Exists(Storyboard.MetaOf(to)))
+        {
+            Status = $"There is a {Path.GetFileName(to)} there already.";
+            RefreshTree();
+            return;
+        }
+        var (oldName, newName) = (_board.InReferences(node.Path), _board.InReferences(to));
+        try
+        {
+            File.Move(node.Path, to);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowError($"The picture couldn't be renamed: {ex.Message} It may be open in another program.", ex);
+            RefreshTree();
+            return;
+        }
+        foreach (var frame in _board.Frames)
+        {
+            for (var i = 0; i < frame.From.Count; i++)
+                if (string.Equals(frame.From[i], oldName, StringComparison.OrdinalIgnoreCase) || Path.IsPathFullyQualified(frame.From[i]) && SamePath(frame.From[i], node.Path))
+                    frame.From[i] = newName;
+            if (frame.File is { } file && SamePath(file, node.Path))
+                frame.File = to;
+        }
+        Changed();
+        SaveNow();
+        Rebuild();
+        Select(to);
     }
 
     /// <summary>Picks something in the tree by its path, as a click there does, its folders opened.</summary>
