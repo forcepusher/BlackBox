@@ -99,8 +99,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to twice, as before it ran in the chat; a change made by hand while BlackBox changes the
   storyboard in the chat no longer writes over BlackBox's change.
 - Folder index: projects in OneDrive folders are indexed (only their top folder was), files kept
-  online only aren't downloaded, linked files are read as the files they point to, and a search
-  that finds nothing says what the index doesn't search.
+  online only aren't downloaded, linked files are read as the files they point to, a search that
+  finds nothing says what the index doesn't search, big workbooks are read one at a time, and an
+  index file damaged on disk is built again.
 - BlackBox.exe and the MCP servers it starts say version 1.0.0, as released, not 0.1.0.
 - Claude: MCP tools whose argument schema is a union work; a long task no longer stops on more than
   100 pictures in a request; a reply cut off mid-thought no longer breaks the next request; older
