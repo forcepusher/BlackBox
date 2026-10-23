@@ -805,7 +805,11 @@ piece lost its settings and look and read as changed), and so does a shot of sev
 stopped before one replaced its clip (the takes made so far stay). A speaking shot's take keeps
 its line with it (`sN.wav` and `sN.line.flac`): put back without it, the newer line played over the
 older lips, and the shot read as up to date. A frame or shot call's changes go in only for a piece
-of that kind, or a new one it gives a prompt: a frame call with a shot's id added a stray frame. A seed settled after several
+of that kind, or a new one it gives a prompt: a frame call with a shot's id added a stray frame.
+The song's tries made before one that fails or is stopped are takes of the song, not stray files.
+Checked with Claude in the window (2026-10-23): "Use a picture of mine…" on the frame shot 1 starts
+on, through the Open dialog, made the frame from the user's picture, cut to the film's size, and
+kept it though its look said it didn't match the shot's words, as the request says. A seed settled after several
 tries isn't written over one the window gave meanwhile (Another take, which then made the same clip
 again).
 

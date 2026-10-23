@@ -460,6 +460,13 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             // A take that failed (or was stopped) leaves the board as it was: the song made before
             // still matches it, rather than being out of date for a seed nothing was made with.
             sound.Seed = seedBefore;
+            // The tries made before it are takes of the song, as a shot's are, not stray files.
+            if (takes > 1)
+                foreach (var m in made)
+                {
+                    try { FilmTakes.Add(board, FilmPiece.Song, m.File, m.Workflow); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+                }
             throw;
         }
 
