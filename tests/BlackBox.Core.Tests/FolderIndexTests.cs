@@ -449,7 +449,8 @@ public class FolderIndexTests : IDisposable
             Write($"car/src/Part{i}.cs", $"public class Part{i}\n{{\n    public void Fit(Engine engine) {{ }}\n    public void Tune(Engine engine) {{ }}\n}}\n");
         var many = (await Run(Ctx(), project, "Engine")).Text;
         Assert.Contains("Every line with Engine, 63 in 33 file(s)", many);
-        Assert.Contains(Path.Combine("src", "Part7.cs") + ":3: public void Fit(Engine engine) { } (and line 4)\n", many);
+        Assert.Contains(Path.Combine("src", "Part1.cs") + ":3: public void Fit(Engine engine) { } (and line 4)\n", many);
+        Assert.Contains($"and {33 - IndexSearch.MaxUseFiles} more files", many);
     }
 
     [Fact]

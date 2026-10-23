@@ -15,13 +15,17 @@ namespace BlackBox.Core.Projects;
 internal static class IndexSearch
 {
     /// <summary>Parts shown at most, and from one file.</summary>
-    internal const int MaxHits = 8, PerFile = 2;
+    internal const int MaxHits = 5, PerFile = 2;
 
     /// <summary>Lines shown of a part: those with the most of the query's words.</summary>
-    private const int LinesPerHit = 6;
+    private const int LinesPerHit = 3;
 
-    /// <summary>The longest answer, about 2,500 tokens.</summary>
-    private const int MaxChars = 9_000;
+    /// <summary>
+    /// The longest answer, about 1,000 tokens. Each stays in the conversation: at 9,000 characters
+    /// with six lines a part, qwen3.8 explaining a project reached its context reset in 5 of 8 runs
+    /// with the index and in none of 4 without it (docs/folder-index-benchmark.md).
+    /// </summary>
+    private const int MaxChars = 4_000;
 
     private const double K1 = 1.2, B = 0.75;
 
@@ -175,7 +179,7 @@ internal static class IndexSearch
             }
             else if (!perFile.ContainsKey(hit.File) && !more.Contains(hit.File))
                 more.Add(hit.File);
-            if (shown.Count >= MaxHits && more.Count >= 10)
+            if (shown.Count >= MaxHits && more.Count >= 5)
                 break;
         }
 
@@ -196,13 +200,13 @@ internal static class IndexSearch
             sb.Append(block);
         }
         if (more.Count > 0)
-            sb.AppendLine("Also in: " + string.Join(", ", more.Take(10).Select(f => f.Path.Replace('/', Path.DirectorySeparatorChar))) + (more.Count > 10 ? ", …" : ""));
+            sb.AppendLine("Also in: " + string.Join(", ", more.Take(5).Select(f => f.Path.Replace('/', Path.DirectorySeparatorChar))) + (more.Count > 5 ? ", …" : ""));
         sb.Append("read_file with offset at a line shows that part in full.");
         return sb.ToString();
     }
 
     /// <summary>A name's uses shown line by line at most; past that, each file with its line numbers.</summary>
-    internal const int MaxUseLines = 25, MaxUseFiles = 40;
+    internal const int MaxUseLines = 15, MaxUseFiles = 20;
 
     /// <summary>Files read for a name's uses at most: a name in more is everywhere, and the files are only counted.</summary>
     private const int MaxUseReads = 300;

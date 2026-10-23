@@ -3,9 +3,16 @@
 Does `index_folder` help the model understand a project, with fewer searches and tool calls, and
 does it cost anything? Measured on 23 October 2026 on the laptop: 107 runs of ten tasks on two
 projects, with the index as merged into develop the night before (6fc10f2) and without it, then
-again with two fixes this test led to.
+again with two fixes this test led to. Afterwards, on 23 and 24 October, 24 more Qwen runs compared
+a lighter index with a map that can't search (see "A lighter index for Qwen").
 
 ## In short
+
+- **For Qwen, a lighter index is best.** An overview of about 1,400 tokens instead of 2,500,
+  searches of at most about 1,000 tokens instead of 2,300, and the shell left to the model for
+  searching: over six tasks, 25% less time than without an index, 29% fewer tool calls and 22%
+  fewer tokens, against 11%, 16% and 2% for the index as merged. A map with no search at all did no
+  better than no index. This lighter index is what BlackBox now has.
 
 - **Answers were no better and no worse with the index.** Both models answered every question fully
   or nearly so either way (76 answers graded blind), and every edit passed its checks (30 runs). The
@@ -195,15 +202,80 @@ weighs the same however long it is.
 
 Both have tests (`FolderIndexTests`), which fail without the fixes.
 
+## A lighter index for Qwen
+
+The user's aim for the index is a model that isn't blind in a project, not one that stops using
+grep, and not one buried in text. So two lighter versions were built and run on Qwen, six tasks
+twice each, on 23 and 24 October:
+
+- **Lean:** the overview cut to about 1,400 tokens (what the project is, the start of its README and
+  agent notes, its folders, and about 20 main files with two types and three members each, shared
+  out by files and lines together); searches of five parts with three lines each, at most about
+  1,000 tokens, every line with a name capped at 15; and the prompt and the tool saying to search
+  the index or the shell, whichever fits, instead of the index rather than the shell.
+- **Map only:** the same overview, and no search in the index: the shell for everything.
+
+| Task | Runs | Time (s) | Tool calls | Index calls | Shell searches | Prompt tokens (k) | Result |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| explain without | 2 | 564 | 49.5 | 0.0 | 6.5 | 997 | 8.0/8 |
+| explain with, as merged | 2 | 499 | 32.5 | 4.0 | 0.0 | 739 | 8.0/8 |
+| explain lean | 2 | 672 | 35.0 | 1.5 | 1.5 | 947 | 8.0/8 |
+| explain map only | 2 | 622 | 44.5 | 1.0 | 5.0 | 847 | 8.0/8 |
+| context without | 2 | 528 | 29.5 | 0.0 | 11.5 | 830 | 8.0/8 |
+| context with, as merged | 2 | 316 | 18.5 | 4.0 | 5.0 | 432 | 8.0/8 |
+| context lean | 2 | 415 | 19.5 | 3.5 | 3.5 | 608 | 8.0/8 |
+| context map only | 2 | 457 | 18.0 | 1.0 | 7.5 | 546 | 8.0/8 |
+| rename without | 2 | 507 | 25.5 | 0.0 | 4.0 | 302 | 2/2 passed |
+| rename with, as merged | 2 | 221 | 18.5 | 1.5 | 3.5 | 167 | 2/2 passed |
+| rename lean | 2 | 144 | 11.5 | 0.5 | 4.0 | 94 | 2/2 passed |
+| rename map only | 2 | 231 | 13.5 | 1.0 | 5.0 | 144 | 2/2 passed |
+| fm-explain without | 2 | 739 | 79.5 | 0.0 | 7.0 | 1321 | 8.0/8 |
+| fm-explain with, as merged | 2 | 860 | 66.5 | 3.0 | 11.0 | 1540 | 8.0/8 |
+| fm-explain lean | 2 | 626 | 51.5 | 1.5 | 13.0 | 966 | 7.8/8 |
+| fm-explain map only | 2 | 621 | 42.0 | 1.0 | 13.0 | 791 | 8.0/8 |
+| fm-needs without | 2 | 400 | 33.5 | 0.0 | 6.5 | 379 | 7.5/8 |
+| fm-needs with, as merged | 2 | 639 | 45.5 | 6.0 | 10.5 | 949 | 7.5/8 |
+| fm-needs lean | 2 | 330 | 29.5 | 3.5 | 7.5 | 435 | 8.0/8 |
+| fm-needs map only | 2 | 854 | 51.0 | 1.0 | 21.0 | 1453 | 8.0/8 |
+| fm-toilet without | 2 | 65 | 5.0 | 0.0 | 2.0 | 72 | 2/2 passed |
+| fm-toilet with, as merged | 2 | 74 | 5.5 | 2.0 | 0.5 | 99 | 2/2 passed |
+| fm-toilet lean | 2 | 63 | 5.5 | 2.0 | 0.5 | 88 | 2/2 passed |
+| fm-toilet map only | 2 | 86 | 5.5 | 1.0 | 2.5 | 93 | 2/2 passed |
+
+"With" is the index as merged (the first table), "lean" and "map only" the new versions. Over the
+six tasks against no index: lean 25% less time, 29% fewer tool calls, 22% fewer tokens; as merged
+11%, 16% and 2%; map only 1% more time, 21% fewer calls, 4% fewer tokens.
+
+- **Lean was the fastest on three tasks (the rename, the needs, the toilet), within 1% of the
+  fastest on explaining the game, and second on the context question.** The index as merged was
+  faster on both questions about BlackBox. Explaining BlackBox went worst with lean: one run read 28
+  files whole and reached the context reset twice (825 s); the other took 518 s, against 564 s on
+  average without the index. Over all six, lean is ahead by a wide margin, mostly on FluffyMeow.
+- **A search in the index matters for questions in plain words.** On how the game's needs decay,
+  the map-only runs ran about 21 shell searches each and took 14.2 min on average, against 5.5 min
+  with the lean index and 6.7 without one.
+- **Most of what fills Qwen's context is files it reads whole:** about 60% of the growth in the
+  explain runs, against 2 to 12% for the index's output. A smaller index helps, but the reset in a
+  long explanation comes from reading.
+- **The answers scored the same** in every version (8 of 8 on nearly all, graded blind as before).
+- **Claude**, as a last check on the lean index, ran three of the tasks once (see below).
+
+| Claude Opus 5.5 | Without | As merged | Fixed | Lean |
+| --- | --- | --- | --- | --- |
+| context | 53 s | 59 s | 48 s | 54 s, 8 tool calls |
+| rename | 59 s | 54 s | 55 s | 70 s, 4 tool calls, passed |
+| fm-needs | 113 s | 84 s | 91 s | 100 s, 9 tool calls |
+
+Both of Claude's answers on the lean index had every fact the rubric asks for (a keyword check),
+and the rename built:
+nothing the lean index cut was something Claude needed.
+
 ## Found, not fixed
 
 - **Searches in plain words miss when the code uses other words.** "How do the cat's needs go down
   over time" finds movement code and minigames, because FluffyMeow says "stat" and "decay"; the
   model has to guess the code's words, as both did ("hunger hygiene decay"). Ranking by words, not
   embeddings, was a deliberate choice (see docs/notes.md, Folder index); this is its price.
-- **The index's search results are long** (about 1,200 to 2,500 tokens each), which is what makes
-  extra searches cost on a slow local model. Fewer lines per part, or shorter paths, would cut that;
-  not tried here.
 - **BlackBox's automatic web look-ups fire on questions about the local code.** In 13 of the 107
   runs BlackBox searched the web for a question the model asked itself ("where does the VM handle
   OnDelta"), with a folder name from the task as the subject, and added the results under the step.

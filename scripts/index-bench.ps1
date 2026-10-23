@@ -216,6 +216,8 @@ function Grade-Edits($run) {
 function Finish-Run($run, [bool]$timedOut) {
   $r = Read-Log (Join-Path $run.Dir "log.txt")
   if ($timedOut) { $r.stop = "TimedOut"; $r.seconds = [int]((Get-Date) - $run.Start).TotalSeconds }
+  # A CLI that never got going (no .NET found, a bad argument) says so in err.txt, not in a [done] line.
+  if (-not $r.stop) { $r.stop = "DidNotRun"; $why = Get-Content (Join-Path $run.Dir "err.txt") -TotalCount 1 -ErrorAction SilentlyContinue; Write-Host "$($run.Name) did not run: $why" }
   [IO.File]::WriteAllText((Join-Path $run.Dir "answer.md"), $r.answer, (New-Object Text.UTF8Encoding $false))
   # What the run changed, files added included, before any build of ours.
   & git.exe -C $run.Project add -A 2>&1 | Out-Null
