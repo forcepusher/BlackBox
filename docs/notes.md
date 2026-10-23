@@ -1009,6 +1009,11 @@ times for the other's turn and saying it brought Paint back to the front before 
 qwen3.8 the Notepad one took 7.6 minutes (8 waits) and Paint didn't finish in 25: it kept picking
 the oval for the rectangle, as on 22 October, a model's problem with Paint's small icons.
 
+A soak of 20 minutes on the stand-in (2026-10-23): two windows each sending "keys 6" in a new chat
+as soon as the last one ended, 45 tasks each and 91 chats saved, taking turns with the keyboard
+all along. The process stayed at 340-510 MB (up and down with the screenshots it collects), about
+940 handles and 107 threads from the fourth minute to the end, and nothing went to the crash log.
+
 ## Files in a message
 Drop files or folders anywhere on the window, paste them with Ctrl+V (a screenshot, a picture
 copied in a browser, files copied in Explorer), or pick them with the paperclip next to the box.
