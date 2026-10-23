@@ -13,12 +13,14 @@
 #>
 param(
   [string[]]$Labels = @(),
+  [string[]]$Tasks = @(),
   [string]$Name = "round1",
   [switch]$Scores,
   [string]$Work = (Join-Path $env:USERPROFILE "IndexBench")
 )
 $ErrorActionPreference = "Stop"
 $Labels = @($Labels | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+$Tasks = @($Tasks | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 $spec = Get-Content (Join-Path $PSScriptRoot "index-bench\tasks.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 $judge = Join-Path $Work "judge\$Name"
 $keyFile = Join-Path $judge "key.csv"
@@ -47,7 +49,7 @@ if ($Scores) {
 if (Test-Path $judge) { throw "$judge is there already: pick another -Name" }
 $key = @()
 $random = New-Object Random
-foreach ($task in @($spec.tasks | Where-Object { $_.rubric })) {
+foreach ($task in @($spec.tasks | Where-Object { $_.rubric -and ($Tasks.Count -eq 0 -or $Tasks -contains $_.id) })) {
   $runs = foreach ($label in $Labels) {
     Get-ChildItem (Join-Path $Work "runs\$label") -Directory -Filter "$($task.id)-*" | Where-Object { Test-Path (Join-Path $_.FullName "answer.md") } |
       ForEach-Object { [pscustomobject]@{ Label = $label; Dir = $_.FullName; Name = $_.Name } }

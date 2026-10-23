@@ -1535,13 +1535,23 @@ files whose definitions the most other files use first, each with its types and 
 members. A name of several words (`SettingsStore`) used in another file counts fully; a one-word
 name (`Run`, `connect`) turns up in files that have nothing to do with it and counts a fifth, and a
 test file half: with every name counting the same, the map of this repository led with a sysadmin
-benchmark's Python script.
+benchmark's Python script. Each part of the project (its first two folders, `Assets/Source`,
+`src/BlackBox.Core`) gets lines in proportion to the code in it first, and what room is left goes
+by rank alone: a library kept in the project uses its own names over and over, and in a Unity game
+of 1,530 scripts of its own, 17 of the 40 main files were the Spine runtime (152 files) and DOTween.
+Now 33 are the game's own.
 
 **Search** (`query`): the definitions of names the query writes as code (`SettingsStore`,
-`save_game`; a plain "settings" in a question isn't the property `Settings`), then the best eight
-parts, two of a file at most, each with its full path, its lines, what it defines or is inside
-("in class AgentSession › method RunAsync") and its lines with the most of the query's words, then
-the other files that match. Nothing found says what the index doesn't search (what it leaves out,
+`save_game`; a plain "settings" in a question isn't the property `Settings`), then every line that
+has such a name (or the one word of a one-word query) as a whole word, as a search with a command
+would give them, then the best eight parts, two of a file at most, each with its full path, its
+lines, what it defines or is inside ("in class AgentSession › method RunAsync") and its lines with
+the most of the query's words, then the other files that match. Past 25 such lines, each file gets
+its first one in full (often the class that implements the interface, the field that holds one) and
+the numbers of the others; past 300 files, only a few are named. Without them, asked for every class
+that implements an interface or to rename a class everywhere, Qwen and Claude searched the index and
+then the shell for the same name, and were slower with the index than without it (see the
+benchmark below). Nothing found says what the index doesn't search (what it leaves out,
 files too big or past its limits), which a model took for "the code isn't there". A path inside an indexed folder searches just that part of it; a
 search of a folder never indexed indexes its project (or the folder) first. The index a search
 goes to is never above the path's project, nor the home folder or a drive: an index of the whole
@@ -1572,6 +1582,21 @@ and of a Unity project, the build before the index against the build with it, th
 
 Both builds answered all three right. A task that names the exact text to find is a grep's, and
 indexing costs it a call; a question about how something works is where the index pays.
+
+Those were one run each. On 23 October a benchmark ran the same build with and without the index
+(`blackbox-cli --no-index`), ten tasks on this repository and on FluffyMeow (a Unity game of 22,247
+files), twice each, on qwen3.8 and Claude Opus 5.5, 107 runs, the answers graded blind
+([folder-index-benchmark.md](folder-index-benchmark.md), `scripts/index-bench.ps1`):
+- The answers were as good either way: both models answered nearly everything fully, and every edit
+  passed. The index changes the way there.
+- Qwen on this repository: 21% less time, 22% fewer tool calls, 15% fewer tokens. On FluffyMeow, 29%
+  more time: it found the files sooner, then searched and checked more, each search result (1-2.5k
+  tokens) read again at every later step.
+- Claude: 4% less time on this repository, 30% less on FluffyMeow, more tool calls but fewer tokens.
+- Tasks a grep answers (list every class that implements X, change a constant) were slower with the
+  index for both: the models searched the index, then the shell. Searches for a name now list every
+  line that has it (above), which brought them about level.
+- The same task without the index took Qwen 822 s once and 191 s the next time: one run says little.
 
 Not indexed: folders on SSH hosts (`ssh` with grep works there).
 
@@ -1858,6 +1883,7 @@ dotnet run --project src/BlackBox.Cli -- --yes --then "brighter" --then "@20 and
 ./scripts/sysadmin-vm.ps1         # once: the portable Debian lab VM (QEMU in .dev/sysadmin-lab, nothing installed)
 ./scripts/sysadmin-test.ps1       # sysadmin tickets on that VM over SSH, checked over SSH and from this PC
 ./scripts/chat-test.ps1           # BlackBox chats with scripted people for you in local look-alike chat apps (drives your mouse and keyboard)
+./scripts/index-bench.ps1 -Settings .dev\index-bench\qwen\Data\settings.json -Label qwen   # code tasks with and without the folder index (--no-index), see docs/folder-index-benchmark.md
 ./scripts/comfy-test.ps1          # BlackBox makes a picture, a video, sounds, music, speech and a 3D model with this PC's ComfyUI
 ```
 

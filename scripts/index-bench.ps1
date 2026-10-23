@@ -25,6 +25,7 @@ param(
   [int]$Parallel = 1,                               # runs at once; 1 for a local server, so times compare
   [int]$TimeoutMinutes = 25,
   [string]$Cli = "",                                # a blackbox-cli.exe built before, to compare builds; else the repository's, built now
+  [switch]$Rescore,                                 # only score the runs of this label whose scoring failed
   [string]$Work = (Join-Path $env:USERPROFILE "IndexBench")  # outside the repository: the model shouldn't find the real checkout
 )
 # Not Stop: in Windows PowerShell a native program's stderr (git's progress) would end the script.
@@ -129,7 +130,15 @@ function Start-Run($task, [string]$cond, [int]$n, [int]$slot) {
 }
 
 function Read-Log([string]$path) {
-  $lines = [IO.File]::ReadAllLines($path, [Text.Encoding]::UTF8)
+  # Shared, and again after a moment: the redirect of a run that just ended can still hold the file.
+  for ($try = 1; ; $try++) {
+    try {
+      $stream = New-Object IO.FileStream($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+      $reader = New-Object IO.StreamReader($stream, [Text.Encoding]::UTF8)
+      try { $lines = $reader.ReadToEnd() -split "`r?`n" } finally { $reader.Dispose() }
+      break
+    } catch [IO.IOException] { if ($try -ge 10) { throw }; Start-Sleep -Milliseconds 500 }
+  }
   $r = [ordered]@{ seconds = $null; modelCalls = 0; toolCalls = 0; toolErrors = 0; stop = ""; promptTokens = 0; maxPrompt = 0; replyTokens = 0
     index = 0; indexSearch = 0; read = 0; list = 0; shell = 0; shellSearch = 0; edits = 0; other = 0; calls = @() }
   foreach ($l in $lines) {
@@ -232,6 +241,22 @@ function Finish-Run($run, [bool]$timedOut) {
   if ($grade) { $line += ", passed=$($grade.passed)" }
   if ($null -ne $found) { $line += ", found $found of $(@($run.Task.expect).Count)" }
   Write-Host $line
+}
+
+# ---- runs whose scoring failed, scored again from their logs (questions only: an edit task's
+# copy has been reset for another run since)
+if ($Rescore) {
+  foreach ($d in Get-ChildItem $out -Directory) {
+    if ((Test-Path (Join-Path $d.FullName "result.json")) -or -not (Test-Path (Join-Path $d.FullName "log.txt"))) { continue }
+    if ($d.Name -notmatch '^(?<task>.+)-(?<cond>with|without)-(?<n>\d+)$') { continue }
+    $id, $cond, $n = $Matches.task, $Matches.cond, [int]$Matches.n
+    $task = $spec.tasks | Where-Object { $_.id -eq $id }
+    if (-not $task) { continue }
+    if ($task.checks) { Write-Host "$($d.Name): an edit task, whose copy has changed since; run it again"; continue }
+    $project = Join-Path $Work "slots\$Label\$($task.project)-1\$($spec.projects.($task.project).folder)"
+    Finish-Run ([pscustomobject]@{ Name = $d.Name; Task = $task; Cond = $cond; N = $n; Slot = 1; Dir = $d.FullName; Project = $project; Start = $d.CreationTime }) $false
+  }
+  return
 }
 
 # ---- the order: every task and condition once per round, the conditions alternating, so a

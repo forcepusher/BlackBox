@@ -12,10 +12,12 @@ param(
   [Parameter(Mandatory = $true)][string]$Without,  # the label whose "without" runs are the baseline
   [Parameter(Mandatory = $true)][string[]]$With,    # labels whose "with" runs are compared to it
   [string]$Judge = "",
+  [string[]]$Tasks = @(),                          # only these tasks
   [string]$Work = (Join-Path $env:USERPROFILE "IndexBench")
 )
 $ErrorActionPreference = "Stop"
 $With = @($With | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+$Tasks = @($Tasks | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 $spec = Get-Content (Join-Path $PSScriptRoot "index-bench\tasks.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 $scores = @()
 if ($Judge -and (Test-Path (Join-Path $Work "judge\$Judge\scores.csv"))) { $scores = Import-Csv (Join-Path $Work "judge\$Judge\scores.csv") }
@@ -47,7 +49,7 @@ if ($Model) { [void]$out.AppendLine("### $Model").AppendLine() }
 $header = "| Task | Runs | Time (s) | Tool calls | Index calls | Shell searches | Prompt tokens (k) | Result |"
 [void]$out.AppendLine($header).AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- |")
 $ratios = @{}
-foreach ($task in $spec.tasks) {
+foreach ($task in @($spec.tasks | Where-Object { $Tasks.Count -eq 0 -or $Tasks -contains $_.id })) {
   $base = Cell (Runs $Without "without" $task.id) $Without "without" $task
   if (-not $base) { continue }
   $rows = @(@{ Name = "without"; Cell = $base })
