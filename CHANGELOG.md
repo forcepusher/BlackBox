@@ -31,9 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   far) for every look the agent takes at a video.
 - A guide to writing video prompts that LTX follows, given with LTX workflows, and a first frame
   made by an image model for every video.
-- Look-ups: BlackBox searches the web for the questions and doubts the model has about how
-  something is done and for the errors programs raise, and puts what it found under the step; ten
-  minutes or eight tries with nothing looked up make it time to look.
+- Look-ups: a question or doubt the model goes on with about how something is done, a try it or
+  you call wrong, and an error it was told to look up and went past each get a note to search the
+  web; ten minutes or eight tries with nothing looked up make it time to look.
 - Claude through Anthropic's own API: type `api.anthropic.com` (or just `claude`) and an API key.
   Prompt caching, thinking kept between steps, Claude Opus 5.5 unless another is picked, with its
   whole 1M context on Auto.

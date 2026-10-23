@@ -210,7 +210,8 @@ Both have tests (`FolderIndexTests`), which fail without the fixes.
   They never helped: Qwen once called them "an injected message … containing fake web-search
   results" and said so in its answer, and one Claude run was refused by Anthropic's safety checks
   (`reasoning_extraction`), apparently because the look-up quotes the model's own thinking back to
-  it. That run was left out of the averages. This is the look-up feature, not the index.
+  it. That run was left out of the averages. This is the look-up feature, not the index; BlackBox
+  no longer searches for the model (see docs/notes.md, Web search).
 - **FluffyMeow's repository holds an SSH key and a credentials file** (`Backend/VirtualMachine`) in
   its git history. They were left out of the copies the models saw and weren't opened.
 
