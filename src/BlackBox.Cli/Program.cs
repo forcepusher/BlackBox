@@ -5,7 +5,7 @@ using BlackBox.Core.Platform;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
 
-// Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--effort LEVEL] [--yes] [--save-shots DIR] [--full-results] [--attach FILE]... [--then TEXT]... "task"
+// Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--effort LEVEL] [--yes] [--save-shots DIR] [--full-results] [--attach FILE]... [--then TEXT]... [--no-index] "task"
 //   --root        portable folder (default: BLACKBOX_HOME, else .dev/ when run from the repository, else the exe folder);
 //                 its Data/mcp.json lists the MCP servers to start, as in the app
 //   --url/--model override the server address and model saved in Data/settings.json; with no model, or one the
@@ -18,6 +18,7 @@ using BlackBox.Core.Tools;
 //   --then        a later message of the same chat, sent when the run before it is over (once per message, in
 //                 order); "@N text" is typed N seconds into that run instead, as a message sent while the agent
 //                 works, so a recorded chat can be played again
+//   --no-index    leave index_folder out (the tool, its prompt line and its note), to measure what the index changes
 
 // UTF-8 also when redirected to a log file, so scripts can show the log as it is written.
 Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -39,6 +40,7 @@ var modelOverride = Take("--model");
 var effortOverride = Take("--effort");
 var autoYes = Flag("--yes");
 var fullResults = Flag("--full-results");
+var noIndex = Flag("--no-index");
 var attached = new List<string>();
 while (Take("--attach") is { } file)
     attached.Add(Path.GetFullPath(file));
@@ -48,7 +50,7 @@ while (Take("--then") is { } later)
 var task = string.Join(' ', argsList);
 if (string.IsNullOrWhiteSpace(task))
 {
-    Console.Error.WriteLine("Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--effort LEVEL] [--yes] [--save-shots DIR] [--attach FILE]... [--then TEXT]... \"task\"");
+    Console.Error.WriteLine("Usage: blackbox-cli [--root DIR] [--url URL] [--model ID] [--effort LEVEL] [--yes] [--save-shots DIR] [--attach FILE]... [--then TEXT]... [--no-index] \"task\"");
     return 2;
 }
 if (attached.FirstOrDefault(f => !File.Exists(f) && !Directory.Exists(f)) is { } missing)
@@ -153,7 +155,7 @@ catch (OperationCanceledException)
 }
 
 using var ssh = new BlackBox.Core.Ssh.SshHosts(paths.KnownHostsFile);
-var session = AgentSetup.Create(BackendConnection.Create(http, settings.Server), platform, agent, paths, mcp, ssh);
+var session = AgentSetup.Create(BackendConnection.Create(http, settings.Server), platform, agent, paths, mcp, ssh, folderIndex: !noIndex);
 var observer = new ConsoleObserver(autoYes, shotsDir, fullResults);
 
 var t0 = DateTime.UtcNow;
@@ -254,10 +256,14 @@ internal sealed class ConsoleObserver(bool autoYes, string? shotsDir, bool fullR
     {
         Console.WriteLine();
         var done = DateTime.Now;
+        // The counts also for a reply of tool calls alone, which streams no text: a benchmark adding
+        // up the tokens missed those steps.
+        var tokens = message.PromptTokens is { } p ? $" ({p / 1000.0:0.0}k prompt tokens, {message.CompletionTokens} reply tokens)" : "";
         Console.WriteLine(_firstToken is { } first
-            ? $"[time] {Now} server read the prompt in {(first - _requestStart).TotalSeconds:0.0}s, wrote the reply in {(done - first).TotalSeconds:0.0}s" +
-              (message.PromptTokens is { } p ? $" ({p / 1000.0:0.0}k prompt tokens, {message.CompletionTokens} reply tokens)" : "")
-            : $"[time] {Now} no reply after {(done - _requestStart).TotalSeconds:0.0}s");
+            ? $"[time] {Now} server read the prompt in {(first - _requestStart).TotalSeconds:0.0}s, wrote the reply in {(done - first).TotalSeconds:0.0}s" + tokens
+            : message.HasToolCalls
+                ? $"[time] {Now} tool calls alone after {(done - _requestStart).TotalSeconds:0.0}s" + tokens
+                : $"[time] {Now} no reply after {(done - _requestStart).TotalSeconds:0.0}s");
         foreach (var c in message.ToolCalls ?? [])
             Console.WriteLine($"[call] {Now} {c.Name} {c.Arguments}{(c.Id.StartsWith("text_") ? "   (recovered from text)" : "")}");
     }

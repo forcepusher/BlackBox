@@ -366,7 +366,7 @@ public class FolderIndexTests : IDisposable
     {
         var project = Path.Combine(_dir, "shared");
         for (var i = 0; i < 200; i++)
-            Write($"shared/src/Part{i}.cs", $"public class Part{i}\n{{\n    public int Weight => {i};\n}}\n");
+            Write($"shared/src/Part{i}.cs",$"public class Part{i}\n{{\n    public int Weight => {i};\n}}\n");
         // Files change while the searches run, so each brings the index up to date as another reads it.
         var writer = Task.Run(() =>
         {
@@ -425,6 +425,34 @@ public class FolderIndexTests : IDisposable
     }
 
     [Fact]
+    public async Task A_search_for_a_name_lists_every_line_that_has_it()
+    {
+        var project = Path.Combine(_dir, "car");
+        Write("car/src/Engine.cs", "public class Engine\n{\n    public void Start() { }\n}\n");
+        Write("car/src/Car.cs", "public class Car\n{\n    private readonly Engine _engine = new();\n    public void Drive() => _engine.Start();\n}\n");
+        Write("car/src/EngineRoom.cs", "public class EngineRoom { }\n");
+        Write("car/tests/CarTests.cs", "public class CarTests\n{\n    public void Starts() => new Engine().Start();\n}\n");
+
+        // Every use, as a whole word: what an interface's implementations or a rename need, which the best parts alone aren't.
+        var found = (await Run(Ctx(), project, "Engine")).Text;
+        Assert.Contains($"Every line with Engine, 3 in 3 file(s) under {project}:\n", found);
+        Assert.Contains(Path.Combine("src", "Car.cs") + ":3: private readonly Engine _engine = new();\n", found);
+        Assert.Contains(Path.Combine("tests", "CarTests.cs") + ":3: public void Starts() => new Engine().Start();\n", found);
+        Assert.DoesNotContain("EngineRoom.cs:", found);
+        Assert.Contains("Best matches", found);
+
+        // A plain word of a question isn't a name to list.
+        Assert.DoesNotContain("Every line", (await Run(Ctx(), project, "how does the engine start")).Text);
+
+        // Many: each file's first such line, and where the others are.
+        for (var i = 0; i < 30; i++)
+            Write($"car/src/Part{i}.cs", $"public class Part{i}\n{{\n    public void Fit(Engine engine) {{ }}\n    public void Tune(Engine engine) {{ }}\n}}\n");
+        var many = (await Run(Ctx(), project, "Engine")).Text;
+        Assert.Contains("Every line with Engine, 63 in 33 file(s)", many);
+        Assert.Contains(Path.Combine("src", "Part7.cs") + ":3: public void Fit(Engine engine) { } (and line 4)\n", many);
+    }
+
+    [Fact]
     public async Task The_overview_says_what_the_project_is_and_what_its_files_define()
     {
         var project = Path.Combine(_dir, "web");
@@ -450,6 +478,27 @@ public class FolderIndexTests : IDisposable
         Assert.Contains("Listed but not read: 1 pictures", overview);
         Assert.EndsWith($"To find anything in it: index_folder path=\"{project}\" query=\"...\" (names, words of an error, or what the code does in a few words).", overview);
         Assert.True(overview.Length <= ProjectOverview.MaxChars);
+    }
+
+    [Fact]
+    public async Task A_library_kept_in_the_project_does_not_fill_its_map()
+    {
+        // A library's files use one another's names over and over, so each ranks high: in a Unity
+        // game the map was half the Spine runtime. Each part gets lines by the code in it first.
+        var project = Path.Combine(_dir, "game");
+        Write("game/Assets/Game/GameState.cs", "public class GameState { }\n");
+        for (var i = 0; i < 600; i++)
+            Write($"game/Assets/Game/PlayerPart{i:000}.cs", $"public class PlayerPart{i:000}\n{{\n    public void Tick(GameState state) {{ }}\n}}\n");
+        var vendor = string.Join(" ", Enumerable.Range(0, 12).Select(i => $"VendorNode{i:00} n{i};"));
+        for (var i = 0; i < 12; i++)
+            Write($"game/Assets/Vendor/Node{i:00}.cs", $"public class VendorNode{i:00}\n{{\n    {vendor}\n}}\n");
+
+        var overview = (await Run(Ctx(), project)).Text;
+        var map = overview[overview.IndexOf("Main files and what they define:")..];
+        // Its share of the room: 12 of 613 files. Ranked alone, all twelve came before every PlayerPart.
+        Assert.True(map.Split('\n').Count(l => l.Contains("VendorNode")) <= 4, map);
+        Assert.True(map.Split('\n').Count(l => l.Contains("PlayerPart")) >= 10, map);
+        Assert.Contains("GameState.cs", map);
     }
 
     [Fact]
@@ -625,6 +674,9 @@ public class FolderIndexTests : IDisposable
         Assert.IsType<IndexFolderTool>(ToolCallRepair.ResolveTool("codebase_search", registry));
         Assert.Contains("index it with index_folder", SystemPrompt.Build("Test OS", null, "C:\\", ""));
         Assert.Equal(Path.Combine("C:\\Data", "index"), new AppPaths("C:\\").IndexDir);
+        // Left out to measure what it changes (blackbox-cli --no-index): the tool and the prompt's line.
+        Assert.Null(ToolRegistry.CreateDefault(includeScreenTools: false, includeIndex: false).Find("index_folder"));
+        Assert.DoesNotContain("index_folder", SystemPrompt.Build("Test OS", null, "C:\\", "", folderIndex: false));
     }
 
     [Fact]

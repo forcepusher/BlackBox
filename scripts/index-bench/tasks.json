@@ -1,0 +1,165 @@
+{
+  "projects": {
+    "blackbox": { "folder": "BlackBox", "source": "..", "commit": "6fc10f2" },
+    "fluffymeow": { "folder": "FluffyMeow", "source": "C:\\Repos\\FluffyMeow", "commit": "d85638bea", "history": false, "exclude": ["Backend/VirtualMachine"] }
+  },
+  "tasks": [
+    {
+      "id": "explain",
+      "project": "blackbox",
+      "kind": "explain the project",
+      "prompt": "Explain the project in {path} to a developer who is new to it: what the program does, how the code is organised (its projects and main folders, and what each is responsible for), and how a user's request travels through the code from the moment it is sent until tools run and the answer comes back. Name the key classes and files. Don't change any files.",
+      "rubric": [
+        "Says it is an AI agent that operates the user's Windows computer (screenshots, mouse and keyboard) and also works with files, the shell and more, driven by a model on an OpenAI-compatible server such as LM Studio (Anthropic's API is also spoken)",
+        "Names the four projects under src and their roles: BlackBox.App (the Avalonia desktop window), BlackBox.Core (agent, model clients, tools, settings), BlackBox.Platform.Windows (Win32 screen capture and input), BlackBox.Cli (headless command-line runner)",
+        "Mentions the tests folder (BlackBox.Core.Tests, and/or ChatLab, McpTestServer) and/or docs/notes.md and scripts",
+        "Request flow starts in the UI: MainWindowViewModel (or the CLI's Program.cs) builds the run with AgentSetup.Create",
+        "AgentSession (RunAsync) runs the loop: system prompt (SystemPrompt) plus history sent to the model, streamed reply, tool calls run, results appended, repeat until a reply has no tool calls",
+        "Names the model client layer: OpenAiChatClient (and/or AnthropicMessages, BackendConnection, ServerProbe)",
+        "Tools: Tool base class / ToolRegistry, with examples of the tool set (screen and input tools, files, shell, ssh, web search, ComfyUI, film, MCP servers); approval of risky tools",
+        "Mentions at least one cross-cutting mechanism correctly: tool-call repair (ToolCallRepair), context reset with a handoff note, fresh-look click aiming, portable Data folder settings (AppPaths/SettingsStore)"
+      ]
+    },
+    {
+      "id": "context",
+      "project": "blackbox",
+      "kind": "how does it work (code question)",
+      "prompt": "In the project at {path}: what does the agent do when the conversation gets close to the model's context limit? Explain when exactly it triggers (how the threshold is computed and from what token count), what happens step by step, and what the conversation holds afterwards. Name the classes, methods and files involved. Don't change any files.",
+      "rubric": [
+        "The check runs at the start of each step in AgentSession's loop (AgentSession.cs, RunAsync): TokensInUse() > ResetThreshold, then ResetContextAsync",
+        "ResetThreshold = context - min(max(context/5, 16384), context/2): a fifth of the context is kept free, at least 16k, at most half",
+        "TokensInUse is the server's reported prompt and reply token count of the last reply plus an estimate of the messages added since (an estimate alone before the first reply)",
+        "The model is asked to write a handoff note (WriteHandoffNoteAsync, HandoffRequest) on the existing, cached history; if it can't, a record of the last steps is used (FallbackNote)",
+        "Afterwards the history holds the user's messages (and a stopped-task note), the handoff note under its header, and the latest screenshot; the project-index memory is forgotten (_projects.Forget) and ContextResets is counted",
+        "If it is still too big, FitContext trims it; notices tell the user (context nearly full / context reset: Nk replaced)",
+        "Also triggered when a reply is cut off for lack of context or the server reports the context exceeded (overflow), followed by a retry",
+        "Points to the right file for the reset itself: AgentSession.Handoff.cs (partial class AgentSession)"
+      ]
+    },
+    {
+      "id": "repeat",
+      "project": "blackbox",
+      "kind": "trace a message to its cause",
+      "prompt": "In the project at {path}, users sometimes see the notice 'The model's thinking started repeating itself; cut it off and asked it to look again.' Explain exactly how the program decides that the model's output is repeating (what it compares, how often it checks, and every threshold involved) and what it does afterwards, including how many times it will do so. Name the classes, methods and files. Don't change any files.",
+      "rubric": [
+        "Detection is in RepetitionGuard (src/BlackBox.Core/Agent/RepetitionGuard.cs), which watches the reply while it streams (OnDelta)",
+        "It checks every 100 new characters, once the reply is at least 600 characters (TailChars 200 x Repeats 3)",
+        "It takes the last 200 characters (the tail) and looks for earlier occurrences of exactly that text in the reply (IsRepeating)",
+        "A tail with fewer than 50 letters (a quarter of 200) is not counted: digits and punctuation repeat legitimately",
+        "Repeating means the tail is found 3 times evenly spaced (the last two gaps equal) or 6 times however spaced (UnevenRepeats)",
+        "It throws RepetitionException, which AgentSession.CompleteWithResetAsync catches: the stream is dropped, the reply thrown away, the notice shown",
+        "It appends RepetitionNote (a user message: your thinking kept repeating, don't re-check screens from memory, trust/take a new screenshot, decide, call the next tool) unless it is already the last message, and asks again",
+        "At most 3 times per request (MaxRepetitionRetries = 3); after that the exception goes up and the run fails"
+      ]
+    },
+    {
+      "id": "observers",
+      "project": "blackbox",
+      "kind": "find every use (enumerate)",
+      "prompt": "In the project at {path}, list every class that implements the IAgentObserver interface, in the application code and in the tests, with the file each one is in and one line on what it is used for. Also say which file defines the interface. Don't change any files.",
+      "expect": ["MainWindowViewModel", "ConsoleObserver", "FirstClickObserver", "TimingObserver", "RecordingObserver"],
+      "rubric": [
+        "MainWindowViewModel in src/BlackBox.App/ViewModels/MainWindowViewModel.cs (the app window shows the run)",
+        "ConsoleObserver in src/BlackBox.Cli/Program.cs (prints the run in the command-line runner)",
+        "FirstClickObserver in tests/BlackBox.Core.Tests/ClickAccuracyTests.cs",
+        "TimingObserver in tests/BlackBox.Core.Tests/PromptCacheTests.cs",
+        "RecordingObserver in tests/BlackBox.Core.Tests/TestDoubles.cs",
+        "The interface is defined in src/BlackBox.Core/Agent/AgentSession.cs (not in a file of its own)",
+        "No class is listed that does not implement it (deduct for each wrong one)"
+      ]
+    },
+    {
+      "id": "wait",
+      "project": "blackbox",
+      "kind": "locate and edit",
+      "prompt": "In the project at {path}: the agent's wait tool can wait at most 10 minutes. Raise that limit to 30 minutes. Update anything that states the old limit (code, tool descriptions, documentation), and make sure the solution still builds (dotnet build BlackBox.slnx).",
+      "checks": [
+        { "name": "limit", "kind": "match", "path": "src/BlackBox.Core/Tools/DesktopTools.cs", "pattern": "MaxSeconds\\s*=\\s*(1800|30\\s*\\*\\s*60)\\s*;", "required": true },
+        { "name": "docs", "kind": "match", "path": "docs/notes.md", "pattern": "\\| `wait` \\|[^\\r\\n]*30 minutes", "required": false },
+        { "name": "build", "kind": "build", "target": "BlackBox.slnx", "required": true }
+      ],
+      "expectedFiles": ["src/BlackBox.Core/Tools/DesktopTools.cs", "docs/notes.md"]
+    },
+    {
+      "id": "rename",
+      "project": "blackbox",
+      "kind": "cross-file refactor",
+      "prompt": "In the project at {path}, rename the class HeadlessBrowser to BackgroundBrowser everywhere it is used, in the application and in the tests, and rename its file to match. Then make sure the whole solution still builds, tests included (dotnet build BlackBox.slnx).",
+      "checks": [
+        { "name": "no old name", "kind": "nomatch", "glob": "*.cs", "pattern": "\\bHeadlessBrowser\\b", "required": true },
+        { "name": "file renamed", "kind": "exists", "path": "src/BlackBox.Core/Web/BackgroundBrowser.cs", "required": true },
+        { "name": "old file gone", "kind": "missing", "path": "src/BlackBox.Core/Web/HeadlessBrowser.cs", "required": true },
+        { "name": "build", "kind": "build", "target": "BlackBox.slnx", "required": true }
+      ],
+      "expectedFiles": [
+        "src/BlackBox.Core/Agent/AgentSetup.cs", "src/BlackBox.Core/Comfy/ComfyFrontend.cs", "src/BlackBox.Core/Settings/AppPaths.cs",
+        "src/BlackBox.Core/Tools/ToolBase.cs", "src/BlackBox.Core/Web/BackgroundBrowser.cs", "src/BlackBox.Core/Web/HeadlessBrowser.cs",
+        "src/BlackBox.Core/Web/WebPage.cs", "src/BlackBox.Core/Web/WebSearch.cs", "tests/BlackBox.Core.Tests/ComfyFrontendTests.cs",
+        "tests/BlackBox.Core.Tests/FolderIndexTests.cs", "tests/BlackBox.Core.Tests/WebToolsTests.cs", "docs/notes.md"
+      ]
+    },
+    {
+      "id": "fm-explain",
+      "project": "fluffymeow",
+      "kind": "explain the project",
+      "prompt": "Explain the project in {path} to a developer who is new to it: what the game is, how its code and assets are organised (its main systems and the folders they are in), what runs from the moment the game starts until the player is in the main scene, and what lives outside the Unity project itself (servers, tools). Name the key classes and files. Don't change any files.",
+      "rubric": [
+        "A Unity game (Unity 6, 6000.3) called PushMeow (FluffyMeow in code), by KIN-DZA-DZA Games: a virtual pet game about a cat whose needs (hunger, hygiene, mood, vivacity) the player looks after in rooms of a house (kitchen, bathroom, bedroom, playroom, shop...), with many minigames; built for WebGL / Yandex Games (and mobile)",
+        "The game's own code is in Assets/Source/Scripts (namespace FluffyMeow, FluffyMeow.asmdef); the other folders under Assets are third-party assets and plugins (Spine, Epic Toon FX, GUI kits, TMPEffects, Joystick Pack...)",
+        "Start-up: BootScene with Boot.cs (Start: FirstBoot, localization, a boot video from StreamingAssets, then GlobalServices.Load, waits for IsLoadCompleted, then SceneLoader loads the main scene)",
+        "GlobalServices (Root/GlobalServices.cs) holds the game-wide services: account login by device id (or offline mode), cloud save fetched through CloudSavePipe with a PlayerPrefs fallback, friends, inventory, wardrobe, quests, notifications; each scene has a Scenario class in Root (KitchenScenario, BathroomScenario...) and references/registries for dependency injection (Root/DI, BananaParty.Arch)",
+        "Names several main systems with their folders correctly: needs (CharacterStats, StatDecay), SaveSystem, QuestSystem, InventoryAndShop, PlacementSystem, SkinCustomization, FriendsSystem, Localization, Advertising, Tutorial, Notifications",
+        "Minigames: Minigames folder (Night survival, Garden, FlappyCat, Platformer, EscapeFromCastle, TopDown...) and others such as AngryHamsters, AirHockey, Pinata",
+        "Backend folder: server-side JavaScript functions (Account, CloudSave, Friends, Leaderboard) on Yandex Cloud with YDB tables, RemoteConfig JSON files (balance, IAP, level-up rewards, skins), and a relay server for real-time multiplayer (RealtimeNetwork, the websocketrelay package)",
+        "Other outside parts: Tools (Python and JavaScript scripts: garden balance spreadsheets, Turkish locale), ComfyUI (art and sound workflows and renders), tests in Assets/Source/Tests, forcepusher's bananaparty packages in Packages/manifest.json"
+      ]
+    },
+    {
+      "id": "fm-needs",
+      "project": "fluffymeow",
+      "kind": "how does it work (code question)",
+      "prompt": "In the game in {path}: how do the cat's needs (hunger, hygiene, mood and so on) go down over time, both while the game runs and while it is closed? Explain what drives it, how fast it goes and where those numbers come from, and what can change the speed. Name the classes, methods, settings and files involved. Don't change any files.",
+      "rubric": [
+        "Four needs: Hunger, Hygiene, Mood, Vivacity, each 0 to 100 (Stat.MaxValue); Hygiene is a HygieneStat made of toilet, bath and brush values, weighted 0.2, 0.4 (changeable) and 0.8",
+        "CharacterStats (CharacterStats.cs, a MonoBehaviour) makes a StatDecay per need in Start and calls Tick(Time.deltaTime) on each in Update",
+        "StatDecay.Tick adds up the time and, past the config's DecayDelay, takes the delay off and calls Decay, which lowers the need by 1 point (HygieneStat lowers its three parts)",
+        "The speed: CertainStatDecayConfig turns a duration in seconds (time from full to empty) into DecayDelay = duration / 100, with separate durations for Hub, Activity and Online (DecayLocation); StatsDecayConfig (a ScriptableObject) holds one per need; only Hub is ever set (SetLocation(DecayLocation.Hub) in CharacterStats.Start)",
+        "The durations come from the config assets and are overwritten from the remote config: RemoteConfig.ApplyBalanceConfig calls UpdateRemoteConfig with balance-config.json's hubDurationSeconds/activityDurationSeconds/onlineDurationSeconds/offlineDurationSeconds (1800 s for hunger)",
+        "Hygiene's speed changes with the bath item used: BathExperience.UpdateSoapMultiplier calls CharacterStats.SetHygieneMultiplier(BathStuffType), which sets a multiplier on the hygiene delay (from BathStuffMultipliers; white soap and the round bomb give 1) and the bath weight, and saves the multiplier",
+        "While closed: on load CharacterStats.SetSaveData takes the seconds since EnvironmentSaveData.LastSavedTime and subtracts NormalizedOfflineDecay (offline time / offlineDuration x 100, floored) from each saved need, clamped to 0-100; vivacity isn't lowered when the game was saved at night",
+        "The needs are written to the save data every 10 seconds (SaveDelay), when the component is disabled and when the game loses focus"
+      ]
+    },
+    {
+      "id": "fm-draggable",
+      "project": "fluffymeow",
+      "kind": "find every use (enumerate)",
+      "prompt": "In the project at {path}, list every class that directly implements the IDraggable interface (in its own declaration, not only through a base class), with the file each one is in. Also say where the interface is defined and which code uses it to find what the player drags. Don't change any files.",
+      "expect": ["BathBomb", "Brush", "Cloth", "GroomingFoam", "Tongs", "Shower", "Soap", "Food", "DraggableItem"],
+      "rubric": [
+        "BathBomb (Assets/Source/Scripts/Bathroom/BathBomb.cs)",
+        "Shower (Bathroom/Shower.cs)",
+        "Soap (Bathroom/Soap.cs)",
+        "Brush (Bathroom/Grooming/Brush.cs)",
+        "Cloth (Bathroom/Grooming/Cloth.cs)",
+        "GroomingFoam (Bathroom/Grooming/GroomingFoam.cs)",
+        "Tongs (Bathroom/Grooming/Tongs.cs)",
+        "Food (Kitchen/Food.cs)",
+        "DraggableItem (PlacementSystem/DraggableItems/DraggableItem.cs, abstract; the placeable items derive from it)",
+        "The interface is defined in Assets/Source/Scripts/Contracts/IDraggable.cs",
+        "RoomInteraction (RoomInteraction.cs) finds the draggable under the pointer with TryGetComponent(out IDraggable) and checks IsDraggingAvailable",
+        "No class is listed as implementing it directly that doesn't (deduct for each wrong one)"
+      ]
+    },
+    {
+      "id": "fm-toilet",
+      "project": "fluffymeow",
+      "kind": "locate and edit",
+      "prompt": "In the game in {path}, the cat's hygiene value is a weighted sum of its toilet, bath and brushing values, with the toilet weighing 0.2. Raise the toilet's weight to 0.3. Change nothing else.",
+      "checks": [
+        { "name": "weight", "kind": "match", "path": "Assets/Source/Scripts/HygieneStat.cs", "pattern": "ToiletWeight\\s*=\\s*0\\.3f?\\s*;", "required": true }
+      ],
+      "expectedFiles": ["Assets/Source/Scripts/HygieneStat.cs"]
+    }
+  ]
+}

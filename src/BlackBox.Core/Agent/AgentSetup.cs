@@ -16,9 +16,10 @@ public static class AgentSetup
     /// <param name="userComposing">Whether the user is typing a message to the agent right now (see <see cref="ToolContext.UserComposing"/>).</param>
     /// <param name="desktopTurn">Shared by the agents of BlackBox's windows, for one at a time with the mouse and keyboard; null for one agent alone.</param>
     /// <param name="desktopSeat">The window the agent works in (see <see cref="ToolContext.DesktopSeat"/>).</param>
+    /// <param name="folderIndex">Whether the agent has index_folder (its tool, prompt line and note); off only to measure what the index changes.</param>
     public static AgentSession Create(BackendConnection backend, IPlatformServices platform, AgentSettings agent, AppPaths paths,
         McpHost mcp, SshHosts ssh, List<ChatMessage>? history = null, Func<bool>? userComposing = null, DesktopTurn? desktopTurn = null,
-        object? desktopSeat = null)
+        object? desktopSeat = null, bool folderIndex = true)
     {
         var mcpSetup = new McpSetup(mcp, paths.McpConfigFile);
         var comfy = Comfy.ComfyHub.For(paths.ComfyDir);
@@ -58,9 +59,10 @@ public static class AgentSetup
 
         // The MCP tools are a snapshot: the tool list stays the same for the whole run, unless the
         // agent sets up a server itself (mcp_servers), whose tools then join it.
-        var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: [new McpServersTool(), .. mcp.Tools]);
+        var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: [new McpServersTool(), .. mcp.Tools], includeIndex: folderIndex);
         mcpSetup.Registry = registry;
-        string Prompt() => SystemPrompt.Build(platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, mcp.Connected, webSearch: true, paths.ToolsDir, paths.ScratchDir);
+        string Prompt() => SystemPrompt.Build(platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, mcp.Connected, webSearch: true, paths.ToolsDir, paths.ScratchDir,
+            folderIndex);
         var session = new AgentSession(backend.Client, backend.Options, registry, ctx, Prompt(), history, backend.ContextTokens);
         // A server the agent adds or removes: the prompt then lists the servers as the next
         // message's will, in the same request whose tools change anyway.

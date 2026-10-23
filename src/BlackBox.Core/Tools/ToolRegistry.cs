@@ -13,10 +13,11 @@ public sealed class ToolRegistry
     }
 
     /// <param name="extra">Tools from outside BlackBox (MCP servers), offered after its own.</param>
-    public static ToolRegistry CreateDefault(bool includeScreenTools, IEnumerable<Tool>? extra = null, bool includeWebTools = true) =>
-        new(DefaultTools(includeScreenTools, includeWebTools).Concat(extra ?? []));
+    /// <param name="includeIndex">Whether index_folder is offered: off only to measure what the index changes (blackbox-cli --no-index).</param>
+    public static ToolRegistry CreateDefault(bool includeScreenTools, IEnumerable<Tool>? extra = null, bool includeWebTools = true, bool includeIndex = true) =>
+        new(DefaultTools(includeScreenTools, includeWebTools, includeIndex).Concat(extra ?? []));
 
-    private static IEnumerable<Tool> DefaultTools(bool includeScreenTools, bool includeWebTools)
+    private static IEnumerable<Tool> DefaultTools(bool includeScreenTools, bool includeWebTools, bool includeIndex)
     {
         if (includeScreenTools)
         {
@@ -33,7 +34,8 @@ public sealed class ToolRegistry
         yield return new WriteFileTool();
         yield return new EditFileTool();
         yield return new ListDirectoryTool();
-        yield return new IndexFolderTool();
+        if (includeIndex)
+            yield return new IndexFolderTool();
         yield return new ShellTool();
         yield return new SshTool();
         yield return new CopyTool();
