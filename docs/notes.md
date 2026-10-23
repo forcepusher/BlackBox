@@ -667,7 +667,13 @@ arrows are solid triangles, the left one and the dropdown's, as History's and ev
 that depends on a state, as a plain one loses to what the template sets). Picked,
 the window grows to the left by the tool's width (960), so the chat stays where it was on the
 screen, as far as the screen has room; None gives the room back, and a window neither moved nor
-resized since goes back where it was. The window's place is saved without the panel. A splitter
+resized since goes back where it was. It moves and resizes in one step (`MainWindow.Place`, one
+SetWindowPos on Windows), with the panel laid out at the new size before and what the window gains
+filled with the panel's background colour at once: moved by Position and widened by Width at the
+next layout, the chat jumped sideways with the window, the window grew a tenth of a second later
+with its new part black for a twentieth more, and the chat jumped back (captured frame by frame,
+2026-10-24). Now the chat stays put and the panel fills in about 50 ms later. The window's place is
+saved without the panel. A splitter
 between the two moves the line between them. The panel has the films folder as a tree on the left,
 a viewer beside it with how the piece shown was made under it, and the timeline at the bottom; its
 top bar has the film's frame size and frame rate, **New film** and **Make the film** (the user,
