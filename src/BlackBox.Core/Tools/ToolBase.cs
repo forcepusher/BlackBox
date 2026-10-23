@@ -75,6 +75,14 @@ public sealed class ToolContext
     public (ScreenRect Screen, RawImage Frame)? Seen { get; set; }
 
     /// <summary>
+    /// An action of the model's reply was held back, as another window's agent had used the mouse
+    /// and keyboard since the model last saw the screen: the reply's later actions were decided on
+    /// that same screen, and would type into whatever the other agent left in front. Cleared by the
+    /// agent before each reply's tool calls.
+    /// </summary>
+    public bool ScreenStale { get; set; }
+
+    /// <summary>
     /// Asks the model about a picture in a conversation of its own, without the run's history:
     /// a fresh look, as at a clip's frames to judge it (see <see cref="FilmTool"/>). The answer, or
     /// null when it couldn't be had. Set by the agent session; null when the model can't see.
@@ -86,6 +94,9 @@ public sealed class ToolContext
     /// isn't shown again until a context reset drops it. Set by the agent session; null outside one.
     /// </summary>
     public Func<string, bool>? InConversation { get; set; }
+
+    /// <summary>How many times the agent has started the context afresh with a handoff note in this run: what a tool showed before is gone.</summary>
+    public int ContextResets { get; set; }
 
     /// <summary>The latest screenshot taken for the model (screen and frame).</summary>
     public (ScreenRect Screen, RawImage Frame)? LastShot { get; set; }

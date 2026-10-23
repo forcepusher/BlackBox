@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using BlackBox.Core.Llm;
 using BlackBox.Core.Projects;
 using BlackBox.Core.Tools;
 
@@ -35,6 +36,42 @@ internal sealed partial class ProjectNudge
         _said.Clear();
     }
 
+    /// <summary>
+    /// The projects the conversation already indexed or was told to index. The app starts a
+    /// session for every message the user sends, with the chat so far: without this, every
+    /// message said again to index the project the model had indexed for the one before.
+    /// </summary>
+    public void Recall(IEnumerable<ChatMessage> history, ToolContext ctx)
+    {
+        foreach (var message in history)
+        {
+            foreach (var call in message.ToolCalls ?? [])
+            {
+                if (!call.Name.Equals("index_folder", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                try
+                {
+                    if (JsonNode.Parse(call.Arguments) is JsonObject args && Arg(args, "path") is { } path)
+                        Indexed(FolderIndex.Normalize(ctx.ResolvePath(path)), ctx);
+                }
+                catch (Exception ex) when (ex is System.Text.Json.JsonException or ArgumentException or NotSupportedException or PathTooLongException) { }
+            }
+            var text = message.Content ?? string.Join("\n", message.Parts?.Select(p => p.Text) ?? []);
+            foreach (Match said in SaidNote().Matches(text))
+                _said.Add(said.Groups["root"].Value);
+        }
+    }
+
+    private void Indexed(string full, ToolContext ctx)
+    {
+        // The index the call used, as the tool finds it: a search of src goes to the project's,
+        // and a file stands for the project it is in.
+        var root = FolderIndex.IndexedAbove(full, ctx.IndexDirectory)
+                   ?? (File.Exists(full) ? ProjectRoot.Find(full)?.Root ?? Path.GetDirectoryName(full)! : full);
+        if (!_indexed.Contains(root, StringComparer.OrdinalIgnoreCase))
+            _indexed.Add(root);
+    }
+
     /// <summary>The note for a call, or null.</summary>
     public string? Check(Tool? tool, string arguments, ToolResult result, ToolContext ctx)
     {
@@ -46,13 +83,7 @@ internal sealed partial class ProjectNudge
         if (tool is IndexFolderTool)
         {
             if (!result.IsError && Arg(args, "path") is { } indexed)
-            {
-                var full = FolderIndex.Normalize(ctx.ResolvePath(indexed));
-                // The index the call used, as the tool finds it: a search of src goes to the
-                // project's, and a file stands for the project it is in.
-                _indexed.Add(FolderIndex.IndexedAbove(full, ctx.IndexDirectory)
-                             ?? (File.Exists(full) ? ProjectRoot.Find(full)?.Root ?? Path.GetDirectoryName(full)! : full));
-            }
+                Indexed(FolderIndex.Normalize(ctx.ResolvePath(indexed)), ctx);
             return null;
         }
         // Work on another computer: its folders are no business of the index.
@@ -98,4 +129,8 @@ internal sealed partial class ProjectNudge
 
     [GeneratedRegex(@"[""'](?<quoted>[A-Za-z]:[\\/][^""'\r\n]*)[""']|(?<![\w""'])(?<bare>[A-Za-z]:[\\/][^\s""'|;<>,()]*)")]
     private static partial Regex WindowsPath();
+
+    /// <summary>The project a <see cref="Note"/> named.</summary>
+    [GeneratedRegex(@"^\[BlackBox\] (?<root>[^\r\n]+?) is a project \(", RegexOptions.Multiline)]
+    private static partial Regex SaidNote();
 }

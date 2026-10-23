@@ -429,8 +429,9 @@ comfyui-mcp up by itself when the user asks for it.
 A video of more than one shot (a music video, a story, an ad) is planned as a **storyboard** and
 made piece by piece with ComfyUI: one video model run can't hold a story together for more than
 a few seconds, and not every film is one continuous camera shot. The **Filmmaking** button opens a
-window for it, an add-on of the chat it was opened from: what the user tells the window, and what its
-buttons ask for, go to that chat as messages, and the agent does them there with its `film` tool,
+window for it, an add-on of the chat window it was opened from: what the user tells the window, and
+what its buttons ask for, go to the chat that window shows as messages (another chat picked there
+since takes them, and the film window's title follows it), and the agent does them there with its `film` tool,
 which reads and writes the same storyboard the window shows. A film can start in either and go on in
 the other.
 
@@ -581,7 +582,7 @@ through to "away", the song's card). A soundtrack that is a video opens full scr
 reference, a shot or one of its frames, the sound) or nothing (the whole film), and say in the
 panel what they want. **It runs in the chat** (the user's call, 2026-10-23: "Filmmaking window
 should execute its prompts visibly in the main chat log window... treat the filmmaking as an addon
-window for the main chat"): the window sends it to the chat it was opened from as a message
+window for the main chat"): the window sends it to the chat its chat window shows as a message
 (`UserInput.Via`, shown over it there: "Filmmaking · The Fox and the Moon · shot 2"), saving the
 storyboard first, and the model gets before the words what the chat doesn't show
 (`UserInput.Context`): the film, its storyboard's path, the piece (shot s2, the 2nd of 3, from 5 to
@@ -594,11 +595,16 @@ nothing: each piece is made when the user makes it. The buttons send messages of
 storyboard first; a picture of the user's goes into the storyboard and comes with the message).
 During a run they wait above the box as anything typed in the chat does. The user watches every step
 in the chat, with each frame and clip as it is made, and stops it there or with the window's Stop.
+One still waiting when the run is stopped, or the chat is left, doesn't go into the chat's box, as
+typed messages do: sent from there with the next message it was "Another take, please." without the
+film and piece, so the chat says it wasn't done. Its context is saved with the message, so Continue
+on one the model never had sends it whole. A chat begun from the window is named after the film and
+piece and the words ("Filmmaking · Fox Test · start of shot 1 · Make it."), not "Make it.".
 
 The model writes prompts as BlackBox's storyboard guide says (`Comfy/Guides/storyboards.md`, which
 the film tool shows with the first storyboard a chat reads or writes, together with the video
 guide; a chat that still has it in its conversation, `ToolContext.InConversation`, isn't shown it
-again): who is in a frame (repeating what makes each person look like themselves), where, framing,
+again, and one that lost it to a context reset is): who is in a frame (repeating what makes each person look like themselves), where, framing,
 light, and the film's look in the same words in every prompt; references in that look; a shot's
 action in order in the present tense, as long as it takes; first and last frames that agree on what
 stays put; lines that fit their shot; a model named only when the user names or describes one. That
@@ -762,7 +768,8 @@ place.
 **Takes**: before the film tool makes a piece again, the one there is kept beside it
 (`frames/f2.v1.png` and `.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it
 was made with (`"settings"`) and what its look found; a make that fails or is stopped takes that take
-back. The takes not kept of several made at once (a shot's `tries`, the song's three) are takes too.
+back, and so does a shot of several `tries` stopped before one replaced its clip (the takes made so
+far stay). The takes not kept of several made at once (a shot's `tries`, the song's three) are takes too.
 Picking an earlier take in the window puts it back in the film with those settings (so it is up to
 date again), and the one it replaces becomes a take.
 
@@ -895,7 +902,8 @@ What they share, and how they keep out of each other's way:
   window at a time): a model picked in one window stayed picked when another closed and saved
   where it was. The server, key, model and context in the top bar are each window's own; what the
   Settings dialog saves ("Ask me first", the instructions, the MCP servers) goes to every window at
-  once, from its next task, as in the window it was saved in: "Ask me first" turned on in one window
+  once, from its next task, as in the window it was saved in (what was changed in the dialog, over
+  what another window saved while it was open: its copy took that back in every window's memory): "Ask me first" turned on in one window
   left the other's agent acting without asking. A new window starts with what was saved last.
 - **Chats.** A chat is open in one window at a time: two saving their own runs into one file lost
   one of them. One another window has open says so in History ("Open in another window", no trash
@@ -910,7 +918,9 @@ What they share, and how they keep out of each other's way:
   waits (longer than a model thinks between two clicks); never in the middle of an action. An
   action whose agent hasn't seen the screen since another agent acted (it waited for them, or the
   other's task ended a moment before) does nothing and gives the model the screen as it is now:
-  what it aimed at may have moved. Its own actions and plain looks don't count. One that waited
+  what it aimed at may have moved. The rest of that reply's clicks and keys do nothing either: decided
+  on the same old screen, a click held back and "John" + Enter typed after it went into whatever the
+  other agent had left in front. Its own actions and plain looks don't count. One that waited
   5 minutes says so and suggests work that doesn't need them. Typing in any window's box pauses
   every window's clicks and keys, as typing in its own does ("Paused while you type in another
   BlackBox window", without Resume, which only ends its own pause). One keyboard hook watches
@@ -1398,7 +1408,11 @@ can hold sources (a Rails app's scripts). Text files up to 1 MB are read, and PD
 documents as `read_file` reads them, so the line numbers a search gives are `read_file`'s. Pictures,
 programs, lock files, minified code and Unity's scene and asset YAML are counted, not read. An
 index reads at most 20,000 files and 150 MB of text, the smaller first; the walk stops at 200,000
-entries. Past either, the overview says to index the folder worked in.
+entries. Past either, the overview says to index the folder worked in. Links and junctions to
+folders are not walked (another folder, or the same one for ever); a linked file is read with its
+target's size and time, so its changes are seen. A reparse point that is no link is walked: every
+folder in OneDrive is one, and a project there was indexed as its top folder's files alone. Files
+OneDrive keeps online only are left out, which reading would have downloaded.
 
 Each file is cut into parts of up to 60 lines, ending before a definition once a part has 20
 (with the comments and attributes above it, so a part is mostly one function), and each part keeps
@@ -1448,7 +1462,8 @@ benchmark's Python script.
 `save_game`; a plain "settings" in a question isn't the property `Settings`), then the best eight
 parts, two of a file at most, each with its full path, its lines, what it defines or is inside
 ("in class AgentSession › method RunAsync") and its lines with the most of the query's words, then
-the other files that match. A path inside an indexed folder searches just that part of it; a
+the other files that match. Nothing found says what the index doesn't search (what it leaves out,
+files too big or past its limits), which a model took for "the code isn't there". A path inside an indexed folder searches just that part of it; a
 search of a folder never indexed indexes its project (or the folder) first. The index a search
 goes to is never above the path's project, nor the home folder or a drive: an index of the whole
 home folder, made once, would otherwise have taken every later search of a project in it.
@@ -1461,8 +1476,11 @@ chat, the result ends with "[BlackBox] … is a project (a git repository) that 
 this chat. Index it now…". A project is the nearest folder above with a `.git`, or else with a
 solution or an engine's project (Unity, Unreal, Godot), or else with a package or build file
 (`package.json`, `Cargo.toml`, a `.csproj`…); never the home folder or a drive, and not one of
-fewer than 25 files, which is read faster than indexed (one the model is making). Once per project,
-and again after a context reset, which drops the overview. A note, never a block: the user's rule.
+fewer than 25 files, which is read faster than indexed (one the model is making). Once per project in
+a chat, and again after a context reset, which drops the overview: the app starts a session for
+every message, so the note looks back over the chat for the projects already indexed and the notes
+already given (until 2026-10-23 it came again with every message, and the model indexed again). A
+note, never a block: the user's rule.
 
 With qwen3.8 27B (q6_k_xl, on the user's LM Studio) through `blackbox-cli`, on copies of this repository
 and of a Unity project, the build before the index against the build with it, the same question each:

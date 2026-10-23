@@ -528,6 +528,38 @@ public class FolderIndexTests : IDisposable
     }
 
     [Fact]
+    public async Task The_next_message_of_a_chat_is_not_told_again_what_this_one_was()
+    {
+        // The app starts a session for every message, with the chat so far.
+        var told = Path.Combine(_dir, "told");
+        var indexed = Path.Combine(_dir, "indexed");
+        foreach (var project in new[] { told, indexed })
+        {
+            Directory.CreateDirectory(Path.Combine(project, ".git"));
+            for (var i = 0; i < ProjectNudge.MinFiles; i++)
+                Write($"{Path.GetFileName(project)}/f{i}.txt", "hello");
+        }
+        string Json(string project, string name) => new JsonObject { ["path"] = Path.Combine(project, name) }.ToJsonString();
+        var ctx = Ctx();
+        var history = new List<Llm.ChatMessage>();
+        AgentSession Session(params string[] replies) => new(new Llm.OpenAiChatClient(new HttpClient(new ScriptedServer(replies)), "http://test", null),
+            new Llm.ChatRequestOptions(), ToolRegistry.CreateDefault(includeScreenTools: false), ctx, "system prompt", history);
+
+        await Session(
+            Sse.ToolCall("c1", "read_file", Json(told, "f1.txt")),
+            Sse.ToolCall("c2", "index_folder", new JsonObject { ["path"] = indexed }.ToJsonString()),
+            Sse.Text("Read and indexed.")).RunAsync("Read f1 and index the other", new RecordingObserver(), CancellationToken.None);
+        Assert.Contains(ProjectNudge.Note(told, "a git repository"), history.Single(m => m.ToolCallId == "c1").Content);
+
+        await Session(
+            Sse.ToolCall("c3", "read_file", Json(told, "f2.txt")),
+            Sse.ToolCall("c4", "read_file", Json(indexed, "f2.txt")),
+            Sse.Text("Both say hello.")).RunAsync("And f2 in both?", new RecordingObserver(), CancellationToken.None);
+        Assert.DoesNotContain("[BlackBox]", history.Single(m => m.ToolCallId == "c3").Content);
+        Assert.DoesNotContain("[BlackBox]", history.Single(m => m.ToolCallId == "c4").Content);
+    }
+
+    [Fact]
     public void The_tool_is_offered_and_the_prompt_says_to_index_first()
     {
         var registry = ToolRegistry.CreateDefault(includeScreenTools: false);

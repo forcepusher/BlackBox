@@ -66,6 +66,22 @@ public class SeveralWindowsTests : IDisposable
     }
 
     [Fact]
+    public void A_settings_dialog_saves_only_what_was_changed_in_it_over_what_another_window_saved()
+    {
+        var window = new AppSettings();
+        var opened = window.Clone(); // the dialog's copy
+        var dialog = opened.Clone();
+        dialog.Agent.CustomInstructions = "Answer in French.";
+        // Meanwhile another window's Settings turned "Ask me first" on, and this window took it.
+        window.Agent.Approval = ApprovalMode.AskAll;
+
+        var saved = window.With(opened, dialog);
+
+        Assert.Equal("Answer in French.", saved.Agent.CustomInstructions);
+        Assert.Equal(ApprovalMode.AskAll, saved.Agent.Approval);
+    }
+
+    [Fact]
     public void Windows_saving_at_once_keep_each_others_changes()
     {
         var paths = new AppPaths(_root);
@@ -198,8 +214,14 @@ public class SeveralWindowsTests : IDisposable
         Assert.Empty(platform.Actions); // nothing pressed on a screen the model hasn't seen
         Assert.StartsWith("Nothing was done: another BlackBox window", result.Text);
         Assert.NotNull(result.Image);
+        // Nor the rest of the same reply, decided on the same old screen: typed into whatever the
+        // other agent left in front, it would land in the wrong program.
+        result = await new TypeTextTool().ExecuteAsync(new JsonObject { ["text"] = "John" }, ctx, CancellationToken.None);
+        Assert.Empty(platform.Actions);
+        Assert.StartsWith("Nothing was done: an action before this one in your reply was held back", result.Text);
 
-        // Asked again, with the screen now seen: done.
+        // Asked again in the next reply, with the screen now seen: done.
+        ctx.ScreenStale = false;
         await new PressKeysTool().ExecuteAsync(new JsonObject { ["keys"] = "enter" }, ctx, CancellationToken.None);
         Assert.NotEmpty(platform.Actions);
         await ctx.FinishRunAsync();

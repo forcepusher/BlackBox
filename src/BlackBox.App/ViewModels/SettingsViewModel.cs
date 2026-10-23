@@ -8,6 +8,10 @@ namespace BlackBox.App.ViewModels;
 public sealed partial class SettingsViewModel(AppSettings settings, AppPaths paths, string mcpConfigText, IReadOnlyList<McpServerStatus> mcpStatuses) : ObservableObject
 {
     public AppSettings Settings { get; } = settings;
+
+    /// <summary>The settings as they were when the dialog opened: what differs from them in <see cref="Settings"/> is what the user changed.</summary>
+    public AppSettings Opened { get; } = settings.Clone();
+
     public AppPaths Paths { get; } = paths;
 
     public AgentSettings Agent => Settings.Agent;

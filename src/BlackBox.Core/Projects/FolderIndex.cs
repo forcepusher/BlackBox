@@ -173,7 +173,10 @@ internal sealed class FolderIndex
                 bool overLimit;
                 lock (Files)
                     overLimit = read >= MaxFiles || text + f.Size > MaxText;
-                var file = overLimit ? Plain(f, FileKind.Unread) : Read(f, full, token);
+                // A video or a program past the limits is no file the limits left unread: it is never read.
+                var file = !overLimit ? Read(f, full, token)
+                    : IsBinaryName(f.Path) && !DocumentText.Handles(full) ? Plain(f, FileKind.Binary, Symbols.Language(f.Path))
+                    : Plain(f, FileKind.Unread);
                 lock (Files)
                 {
                     if (!Files.TryGetValue(f.Path, out var before)) added++;
