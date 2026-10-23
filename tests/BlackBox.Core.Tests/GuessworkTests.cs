@@ -222,22 +222,30 @@ public class GuessworkTests
     [InlineData("Maybe I should crop just one view?", null)]
     [InlineData("I'm not sure which crop looks best.", null)]
     [InlineData("Let me make the frame first, then the shot.", null)]
+    [InlineData("Wait, but how does the default value work now?", null)]
     public void Questions_about_how_things_are_done_are_told_apart(string thinking, string? question) =>
         Assert.Equal(question, Guesswork.QuestionIn(thinking));
 
-    [Theory]
-    [InlineData("Hmm, how do I make LTX follow the motion of a reference video?", "ComfyUI", "how do I make LTX follow the motion of a reference video ComfyUI")]
-    [InlineData("I'm not sure how the IC-LoRA takes the control video.", null, "how the IC-LoRA takes the control video")]
-    [InlineData("So which node does motion control in ComfyUI?", "ComfyUI", "which node does motion control in ComfyUI")]
-    // Saying it will look something up, and then writing the script from memory (qwen3.8 on Blender 5.2).
-    [InlineData("Let me do a quick web search for Blender 5.2's geometry nodes Python API.", null, "Blender 5.2's geometry nodes Python API")]
-    [InlineData("I should look up the node names in Blender 5.2, but most are stable.", null, "the node names in Blender 5.2")]
-    // What it would search, written after a colon (qwen3.8 on develop, before it went on from memory).
-    [InlineData("Let me search the web for this specific problem: \"Blender 5.2 geometry nodes modifier input value python background not updating depsgraph\".", "Blender 5.2",
-        "Blender 5.2 geometry nodes modifier input value python background not updating depsgraph")]
-    [InlineData("I don't know which sampler Nova Furry XL wants, so I'll keep euler.", "ComfyUI", "which sampler Nova Furry XL wants ComfyUI")]
-    public void A_question_is_searched_without_the_thinking_around_it(string question, string? subject, string query) =>
-        Assert.Equal(query, Guesswork.Query(question, subject));
+    [Fact]
+    public void A_question_the_model_goes_on_without_looking_up_gets_a_note_once_until_it_looks_something_up()
+    {
+        var guesswork = new Guesswork();
+        guesswork.StartRun("Make the bunny dance like in dance.mp4");
+        guesswork.Read(Reply("How do I make LTX follow the motion of a reference video? I'll try the depth guide first."), [Write]);
+        Assert.Equal(Guesswork.QuestionNote, guesswork.Check(Write, Wrote));
+        guesswork.Read(Reply("Which node does the pose conditioning in the LTX workflow?"), [Write]);
+        Assert.Null(guesswork.Check(Write, Wrote));
+
+        // It looks something up and reads what it found: a question then gets no note for a few calls.
+        guesswork.Read(Reply("Let me search for LTX motion control."), [new WebSearchTool()]);
+        Assert.Null(guesswork.Check(new WebSearchTool(), new ToolResult("1. Motion Control | LTX Documentation")));
+        guesswork.Read(Reply("Is there a node for depth control in LTX 2.5?"), [Write]);
+        Assert.Null(guesswork.Check(Write, Wrote));
+        for (var i = 0; i < Guesswork.SearchGap; i++)
+            Assert.Null(guesswork.Check(Read, new ToolResult("text")));
+        guesswork.Read(Reply("Does LoadAudio support flac files?"), [Write]);
+        Assert.Equal(Guesswork.QuestionNote, guesswork.Check(Write, Wrote));
+    }
 
     [Theory]
     [InlineData(@"With Blender 5.2 (C:\Program Files\Blender Foundation\Blender 5.2\blender.exe), make scatter.blend", "Blender 5.2")]
@@ -248,44 +256,35 @@ public class GuessworkTests
         Assert.Equal(subject, Guesswork.SubjectIn(request));
 
     [Fact]
-    public void A_question_that_names_no_program_is_searched_with_the_one_the_request_names()
-    {
-        Assert.Equal("how do I set a socket's default value Blender 5.2", Guesswork.Query("Wait, how do I set a socket's default value?", "Blender 5.2"));
-        Assert.Equal("how do I set a socket's default value in Blender 4.2", Guesswork.Query("how do I set a socket's default value in Blender 4.2?", "Blender 5.2"));
-        Assert.Null(Guesswork.QuestionIn("Wait, but how does the default value work now?"));
-    }
-
-    [Fact]
-    public void An_error_the_model_was_told_to_look_up_and_didnt_is_searched_for_it()
+    public void Going_on_past_an_error_it_was_told_to_look_up_makes_the_next_failure_say_so()
     {
         var guesswork = new Guesswork();
         guesswork.StartRun("Make scatter.blend with Blender 5.2");
-        var failed = ToolResult.Error("Exit code 1\nTraceback (most recent call last):\n  File \"C:\\Users\\user\\BlackBox\\Data\\scratch\\scatter.py\", line 9, in <module>\n" +
-                                      "RuntimeError: Error: Node type GeometryNodeDistributePointsInFaces undefined");
-        Assert.Equal(Guesswork.NameNote, guesswork.Check(Shell, failed));
+        Assert.Equal(Guesswork.FirstNote, guesswork.Check(Shell, ToolResult.Error("Exit code 1\nValueError: invalid literal for int() with base 10: 'a'")));
 
-        // It went on with another script: the error is searched, once.
-        guesswork.Read(Reply("Let me try another name."), [Shell]);
-        Assert.Equal("RuntimeError: Error: Node type GeometryNodeDistributePointsInFaces undefined", guesswork.Question);
-        Assert.True(guesswork.QuestionIsError);
-        guesswork.Searched(guesswork.Question!);
+        // It went on with another script: one that works needs no note, the next failure gets one.
+        guesswork.Read(Reply("Let me try it another way."), [Shell]);
         Assert.Null(guesswork.Check(Shell, new ToolResult("Exit code 0")));
-        guesswork.Read(Reply("Next step."), [Shell]);
-        Assert.Null(guesswork.Question);
+        Assert.Equal(Guesswork.IgnoredNote, guesswork.Check(Shell, ToolResult.Error("Exit code 1\nZeroDivisionError: division by zero")));
 
         // One that looks it up itself is left to it.
         var searching = new Guesswork();
         searching.StartRun("Make scatter.blend with Blender 5.2");
-        Assert.Equal(Guesswork.NameNote, searching.Check(Shell, failed));
+        Assert.Equal(Guesswork.FirstNote, searching.Check(Shell, ToolResult.Error("Exit code 1\nValueError: invalid literal for int() with base 10: 'a'")));
         searching.Read(Reply("Let me search for it."), [new WebSearchTool()]);
-        Assert.Null(searching.Question);
-        Assert.Null(searching.Check(new WebSearchTool(), new ToolResult("1. Distribute Points on Faces")));
+        Assert.Null(searching.Check(new WebSearchTool(), new ToolResult("1. int() - Python documentation")));
         searching.Read(Reply("Now the script."), [Shell]);
-        Assert.Null(searching.Question);
+        Assert.Null(searching.Check(Shell, ToolResult.Error("Exit code 1\nZeroDivisionError: division by zero")));
+
+        // A command line's own slip is no matter for a search.
+        var slip = new Guesswork();
+        Assert.Equal(Guesswork.FirstNote, slip.Check(Shell, ToolResult.Error("Exit code 1\nUnexpected token 'version' in expression or statement.")));
+        slip.Read(Reply("Let me quote it."), [Shell]);
+        Assert.Null(slip.Check(Shell, ToolResult.Error("Exit code 1\nZeroDivisionError: division by zero")));
     }
 
     [Theory]
-    // What Nemotron's Blender run failed with: the command line's own slips aren't searched.
+    // What Nemotron's Blender run failed with: the command line's own slips aren't ones to look up.
     [InlineData("Unexpected token 'version' in expression or statement.", false)]
     [InlineData("The filename, directory name, or volume label syntax is incorrect.", false)]
     [InlineData(@"ls : Cannot find path 'C:\Program' because it does not exist.", false)]
@@ -294,13 +293,8 @@ public class GuessworkTests
     [InlineData("TypeError: 'bpy_prop_collection' object is not callable", true)]
     [InlineData("error CS0117: 'KeyCode' does not contain a definition for 'Left'", true)]
     [InlineData("Method invocation failed because [System.__ComObject] does not contain a method named 'Add'.", true)]
-    public void Only_errors_a_search_answers_are_searched(string line, bool searchable) =>
+    public void Only_errors_a_search_answers_are_ones_to_look_up(string line, bool searchable) =>
         Assert.Equal(searchable, Guesswork.Searchable(line));
-
-    [Fact]
-    public void An_error_is_searched_without_the_paths_in_it() =>
-        Assert.Equal("FileNotFoundError: [Errno 2] No such file or directory: ''",
-            Guesswork.ErrorQuery(@"FileNotFoundError: [Errno 2] No such file or directory: 'C:\Users\user\BlackBox\Data\scratch\scatter.blend'"));
 
     [Fact]
     public void A_try_the_model_calls_wrong_counts_as_a_failed_one()
@@ -453,14 +447,6 @@ public class GuessworkTests
         Assert.Equal(expected, Guesswork.QuestionIn(thinking)?.TrimEnd('.'));
 
     [Theory]
-    // The words between two quoted names are no search.
-    [InlineData("""Let me search the web for "GeometryNodeGroup" vs "NodeGroupInput" in Blender 5.2.""", "\"GeometryNodeGroup\" vs \"NodeGroupInput\" in Blender 5.2")]
-    [InlineData("""Let me search the web for "bpy.types" and "Blender 5.2 geometry nodes".""", "Blender 5.2 geometry nodes")]
-    [InlineData("""Let me search the web for this specific problem: "Blender 5.2 modifier input not updating".""", "Blender 5.2 modifier input not updating")]
-    public void Only_a_search_written_out_in_quotes_is_searched_as_written(string sentence, string query) =>
-        Assert.Equal(query, Guesswork.Query(sentence, null));
-
-    [Theory]
     [InlineData("run", true)]
     [InlineData("templates", false)]
     [InlineData("nodes", false)]
@@ -469,64 +455,27 @@ public class GuessworkTests
         Assert.Equal(isTry, Guesswork.IsTry(new ComfyTool(), Guesswork.ActionOf($$"""{"action": "{{action}}"}""")));
 
     [Fact]
-    public async Task An_error_the_model_goes_on_past_is_searched_for_it_in_a_run()
-    {
-        var execute = new McpTool("blender", "blender__execute_blender_code", new ModelContextProtocol.Protocol.Tool { Name = "execute_blender_code" },
-            (_, _) => Task.FromResult(new CallToolResult { Content = [new TextContentBlock { Text = BlenderError }] }));
-        var server = new ScriptedServer(
-            Sse.ToolCall("b1", "blender__execute_blender_code", """{"code":"tree.inputs.new('NodeSocketGeometry', 'Geometry')"}"""),
-            Sse.ToolCall("b2", "blender__execute_blender_code", """{"code":"tree.outputs.new('NodeSocketGeometry', 'Geometry')"}"""),
-            Sse.Text("Done."));
-        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
-        var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null), new ChatRequestOptions(),
-            ToolRegistry.CreateDefault(includeScreenTools: false, extra: [execute]), ctx, "sys");
-        var queries = new List<string>();
-        session.SearchWeb = (q, _) =>
-        {
-            queries.Add(q);
-            return Task.FromResult<IReadOnlyList<Web.SearchHit>>([new("NodeTreeInterface - Blender Python API", "https://docs.blender.org/api/current/bpy.types.NodeTreeInterface.html", "new_socket(name, in_out, socket_type)")]);
-        };
-
-        await session.RunAsync("Build a geometry nodes graph in Blender 5.2", new RecordingObserver(), CancellationToken.None);
-
-        // The program and version the request names say what the error is about.
-        Assert.Equal(["AttributeError: 'GeometryNodeTree' object has no attribute 'inputs' Blender 5.2"], queries);
-        var results = session.History.Where(m => m.Role == ChatRole.Tool).Select(m => m.Content!).ToList();
-        Assert.EndsWith(Guesswork.NameNote, results[0]);
-        Assert.Contains("You went on without looking up the error \"AttributeError: 'GeometryNodeTree' object has no attribute 'inputs'\"", results[1]);
-        Assert.Contains("https://docs.blender.org/api/current/bpy.types.NodeTreeInterface.html", results[1]);
-    }
-
-    [Fact]
-    public async Task A_question_the_model_goes_on_without_looking_up_is_searched_for_it()
+    public async Task In_a_run_a_question_the_model_goes_on_with_gets_a_note_and_nothing_is_searched_for_it()
     {
         var server = new ScriptedServer(
             Sse.Thought("How do I make LTX follow the motion of a reference video? I'll try the depth guide first.",
                 Sse.ToolCall("w1", "write_file", """{"path":"motion.json","content":"{}"}""")),
-            // The same question again isn't searched twice.
-            Sse.Thought("Hmm, how do I make LTX follow the motion of the reference video?",
+            Sse.Thought("Hmm, which node does the pose conditioning in the LTX workflow?",
                 Sse.ToolCall("w2", "write_file", """{"path":"motion.json","content":"{}"}""")),
             Sse.Text("Done."));
         var dir = Directory.CreateTempSubdirectory().FullName;
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = dir };
         var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null), new ChatRequestOptions(),
             ToolRegistry.CreateDefault(includeScreenTools: false, includeWebTools: true), ctx, "sys");
-        var queries = new List<string>();
-        session.SearchWeb = (q, _) =>
-        {
-            queries.Add(q);
-            return Task.FromResult<IReadOnlyList<Web.SearchHit>>(
-                [new("Motion Control | LTX Documentation", "https://docs.ltx.io/open-source-model/feature-guides/structural-control/motion-control", "Use IC-LoRA to follow a reference video's motion.")]);
-        };
         var observer = new RecordingObserver();
 
         await session.RunAsync("Make the bunny dance like in dance.mp4", observer, CancellationToken.None);
 
-        Assert.Equal(["How do I make LTX follow the motion of a reference video"], queries);
+        // The note says to search; it neither quotes the model's thinking nor brings search results.
         var results = session.History.Where(m => m.Role == ChatRole.Tool).Select(m => m.Content!).ToList();
-        Assert.Contains("You thought: \"How do I make LTX follow the motion of a reference video?\"", results[0]);
-        Assert.Contains("https://docs.ltx.io/open-source-model/feature-guides/structural-control/motion-control", results[0]);
-        Assert.DoesNotContain("You thought", results[1]);
-        Assert.Contains(observer.Notices, n => n.Contains("How do I make LTX follow"));
+        Assert.EndsWith("\n" + Guesswork.QuestionNote, results[0]);
+        Assert.DoesNotContain("LTX", results[0]);
+        Assert.DoesNotContain(Guesswork.QuestionNote, results[1]);
+        Assert.DoesNotContain(observer.Notices, n => n.Contains("Looked up"));
     }
 }

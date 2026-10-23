@@ -3,7 +3,6 @@ using System.Text.RegularExpressions;
 using BlackBox.Core.Llm;
 using BlackBox.Core.Mcp;
 using BlackBox.Core.Tools;
-using BlackBox.Core.Web;
 
 namespace BlackBox.Core.Agent;
 
@@ -24,9 +23,14 @@ namespace BlackBox.Core.Agent;
 /// workflows for two hours; nothing failed, the videos just didn't move as asked, and the job was
 /// done right after the user said to look for guidance (LTX's motion control guide). So a try the
 /// model itself calls wrong, or the user does, counts as a failed one; a question the model asks
-/// itself about how something is done, or an error it was told to look up and went on past, is
-/// searched for it (see <see cref="Question"/>); and after ten minutes of tries, or eight quick
-/// ones, with nothing looked up, every next try says it is time to look.
+/// itself about how something is done, which it goes on without looking up, gets a note to search,
+/// as does the next failed script after an error it was told to look up and went on past; and after ten
+/// minutes of tries, or eight quick ones, with nothing looked up, every next try says it is time to look.
+/// </para>
+/// <para>
+/// BlackBox doesn't search for the model. It used to, and put the results under the step with the
+/// model's question quoted: Qwen took them for "an injected message … containing fake web-search
+/// results", and a Claude run was refused for having its own thinking quoted back to it.
 /// </para>
 /// </summary>
 internal sealed partial class Guesswork(Func<DateTime>? clock = null)
@@ -63,8 +67,17 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         "(a short script that lists or prints what it has: dir(), help(), --help), then try the likeliest answer. " +
         "A try tells you more now than another page, and an error from it is something a search answers.";
 
-    /// <summary>Calls after a look-up before a question of the model's is searched for it: it is reading what it found.</summary>
+    /// <summary>Calls after a look-up before a question of the model's gets a note: it is reading what it found.</summary>
     internal const int SearchGap = 4;
+
+    // What the model thought isn't quoted (see the summary).
+    internal const string QuestionNote =
+        "[BlackBox] If you aren't sure how something here is done, what it is called or whether it exists, look it up with web_search " +
+        "(then fetch_page with find= the part you need) before your next try, rather than going by memory.";
+
+    internal const string IgnoredNote =
+        "[BlackBox] This failed too, and the error before it was never looked up. Unless you know exactly why, " +
+        "search for the error with web_search (then fetch_page with find=) before you try again.";
 
     internal const string RepeatNote =
         "[BlackBox] This error came up before in this chat. Unless you know exactly why, look it up with web_search " +
@@ -101,7 +114,6 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     private readonly Func<DateTime> _now = clock ?? (() => DateTime.UtcNow);
     private readonly Dictionary<string, int> _seen = [];
     private readonly Queue<int> _failures = new();
-    private readonly List<HashSet<string>> _searched = [];
     private int _calls, _triesSince, _lookUpsSinceTry, _lookedUpAt = -SearchGap;
     private TimeSpan _worked;
     private DateTime? _tick;
@@ -109,14 +121,15 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     private string? _pending;
 
     /// <summary>
-    /// A question the model asked itself in its last reply about how something is done, which it
-    /// went on without looking up: BlackBox searches it for the model (see <see cref="Searched"/>).
+    /// The last failure's note said to look its error up (<see cref="_noted"/>), the model's next
+    /// reply went on without doing so (<see cref="_ignored"/>), or a question of its own got
+    /// <see cref="QuestionNote"/> since it last looked anything up (<see cref="_asked"/>).
     /// </summary>
-    public string? Question { get; private set; }
+    private bool _noted, _ignored, _asked;
 
     /// <summary>
-    /// The program and version the user's request names ("Blender 5.2"), added to a question that
-    /// names neither: "how do I set the socket's default" alone finds nothing about Blender.
+    /// The program and version the user's request names ("Blender 5.2"): with one, there is an
+    /// installed version to ask after a long search (see <see cref="LongSearchNote"/>).
     /// </summary>
     public string? Subject { get; private set; }
 
@@ -129,7 +142,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     /// </summary>
     public void StartRun(string? userText)
     {
-        (_tick, _lookedUp, _firstSaid, _tried, Question) = (_now(), false, false, false, null);
+        (_tick, _lookedUp, _firstSaid, _tried) = (_now(), false, false, false);
         if (userText is not null && SubjectIn(userText) is { } subject)
             Subject = subject;
         Heard(userText);
@@ -144,19 +157,20 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     }
 
     /// <summary>
-    /// Reads a reply before its calls run: a try it calls wrong counts as a failed one (its note
-    /// comes with the reply's first result), and a question about how something is done, or an
-    /// error it was told to look up, that it goes on without looking up becomes <see cref="Question"/>.
+    /// Reads a reply before its calls run: a try it calls wrong counts as a failed one, and a
+    /// question about how something is done that it goes on without looking up gets
+    /// <see cref="QuestionNote"/>, once until it looks something up; either note comes with the
+    /// reply's first result. Going on past an error it was told to look up makes the next script or
+    /// command that fails say so.
     /// </summary>
     public void Read(ChatMessage reply, IReadOnlyList<Tool?> calls)
     {
-        (Question, QuestionIsError) = (null, false);
         if (calls.Count == 0)
             return;
         // It is looking something up: what it wondered and the error it was told about are its to search.
         if (calls.Any(t => t is WebSearchTool or FetchPageTool))
         {
-            _noted = null;
+            _noted = false;
             return;
         }
         var text = reply.Reasoning + "\n" + reply.Content;
@@ -166,27 +180,16 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
             _pending = Failed() ?? (_lookedUp || _firstSaid ? null : DoubtNote);
             _firstSaid |= _pending == DoubtNote;
         }
-        if (_calls - _lookedUpAt >= SearchGap && QuestionIn(text) is { } question && !SearchedBefore(question))
-            Question = question;
+        if (!_asked && _calls - _lookedUpAt >= SearchGap && QuestionIn(text) is not null)
+        {
+            _pending ??= QuestionNote;
+            _asked = true;
+        }
         // Told to look an error up, the model went on without it: Nemotron failed 13 of 29 Blender
-        // scripts with a note on many of them and never searched. The error is searched for it.
-        else if (_noted is { } error && !SearchedBefore(error))
-            (Question, QuestionIsError) = (error, true);
-        _noted = null;
-    }
-
-    /// <summary>Whether <see cref="Question"/> is an error the model was told to look up and didn't.</summary>
-    public bool QuestionIsError { get; private set; }
-
-    /// <summary>The error line of the last failure whose note said to look it up, until the model does.</summary>
-    private string? _noted;
-
-    /// <summary>The question was searched for the model: not again, and the clock starts over.</summary>
-    public void Searched(string question)
-    {
-        _searched.Add(Words(question));
-        Question = null;
-        (_worked, _triesSince, _lookedUpAt, _lookedUp) = (TimeSpan.Zero, 0, _calls, true);
+        // scripts with a note on many of them and never searched.
+        else if (_noted)
+            _ignored = true;
+        _noted = false;
     }
 
     /// <summary>The note for a call's result, or null.</summary>
@@ -201,7 +204,8 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         if (tool is WebSearchTool or FetchPageTool)
         {
             _failures.Clear();
-            (_lookedUp, _worked, _triesSince, _lookedUpAt, _pending, _noted) = (true, TimeSpan.Zero, 0, _calls, null, null);
+            (_lookedUp, _worked, _triesSince, _lookedUpAt, _pending) = (true, TimeSpan.Zero, 0, _calls, null);
+            (_noted, _ignored, _asked) = (false, false, false);
             _lookUpsSinceTry++;
             // Only where there is something installed to ask: tries made in the task, or a request that
             // names a program's version. One that is all research (laptops compared) has none.
@@ -243,8 +247,14 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
             _firstSaid = true;
             failed = FirstNote;
         }
+        // The next script or command that fails after the model went on past an error it was told to look up.
+        if (_ignored && ErrorsInText(tool))
+        {
+            _ignored = false;
+            failed ??= IgnoredNote;
+        }
         if (failed is not null && Searchable(line))
-            _noted = ErrorQuery(line);
+            _noted = true;
         return failed ?? pending;
     }
 
@@ -318,29 +328,6 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     }
 
     /// <summary>
-    /// What to search for a question: without the thinking's fillers, and with the program it is
-    /// about when the question doesn't name it (<paramref name="subject"/>: ComfyUI, an MCP server's name).
-    /// </summary>
-    internal static string Query(string question, string? subject)
-    {
-        var q = Filler().Replace(question.Replace("`", ""), "");
-        // "I'm not sure how LTX takes a video" is searched as "how LTX takes a video", and "Let me
-        // search for the node names in Blender 5.2" as "the node names in Blender 5.2".
-        if (!q.EndsWith('?') && DoesntKnow().Match(q) is { Success: true } m)
-            q = AfterThought().Replace(q[m.Groups["what"].Index..], "");
-        else if (MeansToLookUp(q) is { } what)
-            // "...for this specific problem: "Blender 5.2 modifier input not updating"": the quoted search.
-            q = Quoted().Match(what) is { Success: true } quoted ? quoted.Groups[1].Value : AfterThought().Replace(what, "");
-        q = q.TrimEnd('?', '.', ' ');
-        // The program, unless the question names it (or another one with its version).
-        if (subject is { Length: > 0 } && !q.Contains(subject.Split(' ')[0], StringComparison.OrdinalIgnoreCase) && !NamedVersion().IsMatch(q))
-            q += " " + subject;
-        if (q.Length > 160)
-            q = q[..q.LastIndexOf(' ', 160)];
-        return q;
-    }
-
-    /// <summary>
     /// What a clause says the model means to look up ("Let me do a quick web search for Blender
     /// 5.2's geometry nodes Python API", "I need to check the node names in Blender 5.2"), or null.
     /// In the Blender runs it said so, then wrote the script from memory: "Actually, let me think
@@ -350,10 +337,11 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         LookUpIntent().Match(clause) is { Success: true } m && !LocalThing().IsMatch(m.Groups["what"].Value) ? m.Groups["what"].Value : null;
 
     /// <summary>
-    /// Whether an error is one a search answers: an exception a program or library raised, or a
-    /// name that isn't there. A command line's own slips (PowerShell's quoting, a path cut at its
-    /// space) aren't: searched for Nemotron as "Unexpected token 'version' in expression or
-    /// statement Blender 5.2", they brought pages about nothing it was doing.
+    /// Whether an error is one a search answers, so that going on past it without one makes the
+    /// next failure say so: an exception a program or library raised, or a name that isn't there.
+    /// A command line's own slips (PowerShell's quoting, a path cut at its space) aren't: searched
+    /// for Nemotron as "Unexpected token 'version' in expression or statement Blender 5.2", they
+    /// brought pages about nothing it was doing.
     /// </summary>
     internal static bool Searchable(string line) =>
         !ShellSlip().IsMatch(line) && (Raised().IsMatch(line) || NamesWhatIsNotThere(line));
@@ -364,31 +352,6 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     [GeneratedRegex(@"^[\w-]+ : |\bUnexpected token\b|syntax is incorrect|missing the terminator|\bMissing (expression|closing|argument)\b|ParserError|is not recognized as the name of a cmdlet|positional parameter cannot be found",
         RegexOptions.IgnoreCase)]
     private static partial Regex ShellSlip();
-
-    /// <summary>An error line as it is searched: without paths, which no page shares, and not too long.</summary>
-    internal static string ErrorQuery(string line)
-    {
-        var q = Spaces().Replace(LocalPath().Replace(line, ""), " ").Trim();
-        return q.Length <= 150 ? q : q[..q.LastIndexOf(' ', 150)];
-    }
-
-    [GeneratedRegex(@"(?i)\b[a-z]:\\[^\s'"",)]*|(?<=\s|^)/(home|users|tmp|usr|var)/[^\s'"",)]*")]
-    private static partial Regex LocalPath();
-
-    /// <summary>What BlackBox found for the model's question, said with the step's last result.</summary>
-    internal static string Found(string question, IReadOnlyList<SearchHit> hits, bool error = false) =>
-        (error
-            ? $"[BlackBox] You went on without looking up the error \"{question}\". Here is what a web search for it found:\n"
-            : $"[BlackBox] You thought: \"{question}\" Rather than go by memory, here is what a web search for it found:\n") +
-        WebSearchTool.Format(hits) +
-        "\nRead the page that answers it with fetch_page (find= the part you need) before your next try; " +
-        "if none does, search again with the exact program or model and its version.";
-
-    private bool SearchedBefore(string question)
-    {
-        var words = Words(question);
-        return _searched.Any(s => s.Intersect(words).Count() * 10 >= Math.Max(1, Math.Min(s.Count, words.Count)) * 7);
-    }
 
     private static HashSet<string> Words(string text) =>
         Word().Matches(text.ToLowerInvariant()).Select(m => m.Value).Where(w => w.Length > 2 && !Common.Contains(w)).ToHashSet();
@@ -557,19 +520,6 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     // What is looked up on this PC, not on the web: "let me search for the templates", "look up the output folder".
     [GeneratedRegex(@"^((the|my|our|this|that|a|an)\s+)?(templates?|files?|folders?|output|logs?|results?|images?|pictures?|videos?|frames?|status|queue|screenshot|window)\b", RegexOptions.IgnoreCase)]
     private static partial Regex LocalThing();
-
-    // What a statement goes on to say after what isn't known: ", so I'll keep euler".
-    [GeneratedRegex(@",\s*(so|and|but|then|because|which|i'll|i will)\b.*$", RegexOptions.IgnoreCase)]
-    private static partial Regex AfterThought();
-
-    // A search written out in quotes, three words at least; the quote opens after a space or a colon,
-    // so the words between two quoted names (" vs ") are none.
-    [GeneratedRegex(@"(?<=^|[\s:(])[""“](\S[^""”]*\s[^""”]*\s[^""”]*\S)[""”]")]
-    private static partial Regex Quoted();
-
-    // Thinking's fillers before a question: "Hmm, so", "But wait,", "OK".
-    [GeneratedRegex(@"^((so|but|hmm+|ok(ay)?|well|wait|now|and|also|actually|then|right|oh|ah)\b[,.:]?\s*)+", RegexOptions.IgnoreCase)]
-    private static partial Regex Filler();
 
     // Questions the web can't answer: about the screen, the user, how something looks, what a check
     // would show here, or BlackBox's own tools.

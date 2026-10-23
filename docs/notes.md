@@ -1634,8 +1634,8 @@ inputs of the modifier), qwen3.8 failed 11 and 6 scripts in two runs before the 
 
 Errors weren't enough. Asked to make a character follow a video's motion with LTX, a run tried
 workflows for two hours: nothing failed, the videos just didn't move as asked, and the job was done
-right after the user said to look for guidance and it read LTX's motion control guide. So looking
-things up is now something BlackBox makes happen, not only asks for:
+right after the user said to look for guidance and it read LTX's motion control guide. So BlackBox
+presses for it at more points than errors:
 - The prompt says to look things up before the first try at anything not yet looked up in the chat
   (a program's feature, a model's technique, not only code), to search every question the model
   asks itself about how something is done, and to search again after a try that didn't give what
@@ -1645,21 +1645,27 @@ things up is now something BlackBox makes happen, not only asks for:
   a reference video?", "I'm not sure how the IC-LoRA takes the control video"), or what it says it
   will look up on the web ("Let me do a quick web search for Blender 5.2's geometry nodes Python
   API", after which qwen3.8 thought "Actually, let me think about what I know" and wrote the script
-  from memory), which it then goes on without looking up, BlackBox searches for it: the first five results come under the step's
-  last result, with the question quoted, and the chat says what was looked up. Questions about the
+  from memory), which it then goes on without looking up, gets a note with the step's first result
+  to look it up with web_search, once until the model looks something up. Questions about the
   screen, the user or how a result looks are left alone, as are ones that name nothing ("How should
-  I proceed?"), a question like one searched before, and any for a few calls after a look-up, while
-  the model reads. Without a program's name the search adds the one the step drives (ComfyUI, an
-  MCP server's name) or the one the request names with its version ("Blender 5.2"). A question
-  about a library's default counts too: making an Excel chart with openpyxl, qwen3.8 asked itself
-  whether an axis's `delete` defaults to True, answered "No, the default is None, and Excel displays
-  it" from memory, and spent ten minutes zooming into a chart whose month labels Excel hid. So is an error
-  whose note said to look it up when the model's next step goes on without doing so (without the
-  paths in it): Nemotron failed 13 of 29 Blender scripts, many with that note, and never searched.
-  With it, BlackBox searched its Python errors for it and the next run made 80 cubes where the two
-  before made none (still without random sizes). Only an exception a program raised or a name
-  that isn't there is searched: the command line's own slips (PowerShell's quoting, a path cut at
-  its space) brought pages about nothing it was doing.
+  I proceed?") and any for a few calls after a look-up, while the model reads. A question about a
+  library's default counts too: making an Excel chart with openpyxl, qwen3.8 asked itself whether
+  an axis's `delete` defaults to True, answered "No, the default is None, and Excel displays it"
+  from memory, and spent ten minutes zooming into a chart whose month labels Excel hid. An error
+  whose note said to look it up, which the model's next step goes on past without a search, makes
+  the next script or command that fails say so, when no other note does: Nemotron failed 13 of 29
+  Blender scripts, many with that note, and never searched. Only an exception a program raised or a
+  name that isn't there counts: the command line's own slips (PowerShell's quoting, a path cut at
+  its space), searched, brought pages about nothing it was doing.
+- BlackBox doesn't search for the model. Until 2026-10-23 it did, for those questions and errors,
+  and put the first five results under the step with the question quoted, and the chat said what
+  was looked up. Searched for Nemotron, its Python errors led the next run to 80 cubes where the two
+  before made none. But in the folder index benchmark (docs/folder-index-benchmark.md) it fired on
+  questions about the local code and never helped: Qwen called the results "an injected message …
+  containing fake web-search results" and said so in its answer, and a Claude run was refused by
+  Anthropic's safety checks (`reasoning_extraction`), apparently for having its own thinking quoted
+  back to it. The user ruled it out: no made-up context goes to the model. The note says nothing of
+  what the model thought.
 - A try the model itself calls wrong ("still doesn't follow the dance", "no change in the motion",
   "I need a different approach") counts as a failed one, as does the user's next message saying the
   result isn't right ("Dude it's still a kid", "it should fade from transparent"): the first such failure before anything was looked
@@ -1698,13 +1704,10 @@ finished at 20 minutes. So after eight look-ups with no try between them, and ev
 that, where there is something installed to ask (a try made in the task, or a request naming a
 program's version; a request that is all research gets no such note), the result says the installed version can settle it: a short script that lists or prints
 what it has, then the likeliest answer tried. With that, the next run read for four minutes, went
-to scripts, and had the scene right (100 cubes) in 16 minutes. A search the model says it will
-make and then doesn't is searched as it wrote it when it wrote it out in quotes after a colon
-("this specific problem: "Blender 5.2 geometry nodes modifier input…""), but not the words between
-two quoted names (`"GeometryNodeGroup" vs "NodeGroupInput"`). The count starts over with each
+to scripts, and had the scene right (100 cubes) in 16 minutes. The count starts over with each
 message of the user's and with a call that asks the installed version (help(), --help). A sentence
-saying it will search is taken from where it says so: before, what came before its colon ("the value
-on screen didn't change: let me search the web for…") named the screen and the search was dropped.
+saying it will search is read from where it says so: before, what came before its colon ("the value
+on screen didn't change: let me search the web for…") named the screen and the sentence was passed over.
 
 No API key and nothing to install. `web_search` asks DuckDuckGo's HTML page through the system's
 `curl` (built into Windows 10 and later; a fraction of a second): DuckDuckGo recognizes .NET's own

@@ -505,9 +505,6 @@ public sealed partial class AgentSession(
                 // The whole calls ran; the cut one is said with the last result.
                 if (cutCall && last is not null)
                     last.Content += "\n" + CutToolCallNote;
-                // Not when Interrupt cut the calls short: the user's message is to be read at once.
-                if (guesswork?.Question is { } question && last is not null && !calls.Interrupted(ct))
-                    await LookUpAsync(guesswork, question, called, last, observer, ct).ConfigureAwait(false);
 
                 // Most OpenAI-compatible servers only accept images in user messages,
                 // so the screenshot (or a picture read_file opened) is delivered right after the tool results.
@@ -633,41 +630,6 @@ public sealed partial class AgentSession(
 
     /// <summary>The projects indexed in this chat, and those the model was told to index (see <see cref="ProjectNudge"/>).</summary>
     private readonly ProjectNudge _projects = new();
-
-    /// <summary>The web search BlackBox runs for a question of the model's: five results, as web_search finds them.</summary>
-    internal Func<string, CancellationToken, Task<IReadOnlyList<Web.SearchHit>>>? SearchWeb { get; set; }
-
-    /// <summary>
-    /// Searches the web for a question the model asked itself and went on without looking up, and
-    /// puts what it found under the step's last result: told to search, models rarely did, and
-    /// trying from memory cost hours where a guide had the answer.
-    /// </summary>
-    private async Task LookUpAsync(Guesswork guesswork, string question, IReadOnlyList<Tool?> called, ChatMessage last, IAgentObserver observer, CancellationToken ct)
-    {
-        // What the question is about, when it doesn't say: the program the step's calls drive.
-        var subject = called.OfType<McpTool>().Select(t => t.ServerName).FirstOrDefault() ??
-                      (called.Any(t => t is ComfyTool or FilmTool) ? "ComfyUI" : guesswork.Subject);
-        // The request's "Blender 5.2" says more than the server's name "blender".
-        if (subject is not null && guesswork.Subject is { } named && named.Contains(subject, StringComparison.OrdinalIgnoreCase))
-            subject = named;
-        var query = Guesswork.Query(question, subject);
-        var error = guesswork.QuestionIsError;
-        guesswork.Searched(question);
-        IReadOnlyList<Web.SearchHit> hits;
-        try
-        {
-            hits = await (SearchWeb ?? ((q, c) => Web.WebSearch.SearchAsync(q, 5, toolContext.Browser, c)))(query, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is Web.WebSearchException or HttpRequestException or IOException ||
-                                   ex is OperationCanceledException && !ct.IsCancellationRequested)
-        {
-            return; // no answer is no worse than not asking: the model has web_search itself
-        }
-        if (hits.Count == 0)
-            return;
-        observer.OnNotice(error ? $"Looked up on the web the error the model went on without looking up: {query}" : $"Looked up on the web what the model asked itself: {query}");
-        last.Content += "\n" + Guesswork.Found(question, hits, error);
-    }
 
     /// <param name="ct">The run's: Stop and Pause/Break.</param>
     /// <param name="step">Also cancelled by <see cref="Interrupt"/>, which stops the call and leaves the run going.</param>
