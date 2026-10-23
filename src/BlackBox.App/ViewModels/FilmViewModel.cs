@@ -10,13 +10,14 @@ using CommunityToolkit.Mvvm.Input;
 namespace BlackBox.App.ViewModels;
 
 /// <summary>
-/// Filmmaking, a tool of the chat window's toolkit, in a panel on the left of the chat: the film's
-/// folder as a tree (its references, frames, shots and sound, made or planned), a viewer, and the
-/// film on one timeline (its shots and sound) under one horizontal scroll. What is picked in the
-/// tree or on the timeline goes into the chat's box, where the user says what to do with it: the
-/// agent writes the prompts, picks the models and makes each piece with the film tool in the chat,
-/// in view. The film is its folder (a folder per shot, each file with its .json), and what the agent
-/// changes and makes there shows here as it happens.
+/// Filmmaking, a tool of the chat window's toolkit, in a panel on the left of the chat: a viewer,
+/// and the film on one timeline under one horizontal scroll, where all work on it is done (the
+/// user's call, 2026-10-24: "work on the film should be done entirely in the timeline"): the
+/// References row (image files and generated images), the takes on the Video row, the lines, and the
+/// sound tracks. What is picked on it goes into the chat's box, where the user says what to do with
+/// it: the agent writes the prompts, picks the models and makes each piece with the film tool in the
+/// chat, in view. The film is its folder (References and Generated, each file with its .json), and
+/// what the agent changes and makes there shows here as it happens.
 /// </summary>
 public sealed partial class FilmViewModel : ObservableObject, IToolkit
 {
@@ -64,11 +65,14 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
 
     public string Folder => _board.Folder;
 
+    /// <summary>The film's name, on the button at the top that opens the films' menu.</summary>
+    public string FilmName => Path.GetFileName(Path.TrimEndingDirectorySeparator(_board.Folder));
+
     /// <summary>Opens the film in a folder (or of a file in it).</summary>
     public void Open(string path)
     {
         SaveNow();
-        StopPlaying(); // the film left: its soundtrack played on over the new one's frames
+        StopPlaying(); // the film left: its sounds played on over the new one's frames
         try
         {
             _board = Storyboard.Load(path);
@@ -84,17 +88,19 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
     }
 
     /// <summary>
-    /// A new film in BlackBox's Data\films, its name typed in the tree as a new folder's is in
-    /// Explorer. Its folder is made with the first change: opening the panel to look leaves
-    /// nothing behind. The user says in the chat what it is to be.
+    /// A new film in BlackBox's Data\films, its name typed as a new folder's is in Explorer. Its folder
+    /// is made with the first change: opening the panel to look leaves nothing behind. The user says
+    /// in the chat what it is to be.
     /// </summary>
     [RelayCommand]
     private void NewFilm()
     {
         Untitled();
-        if (Find(_board.Folder) is { } node)
-            StartRename(node);
+        RenameFilmAsked?.Invoke();
     }
+
+    /// <summary>The film's name is to be typed anew (a new film, or Rename in its menu): the panel shows the box.</summary>
+    public event Action? RenameFilmAsked;
 
     /// <summary>A new film, named "New film" (or "New film 2"), not saved yet.</summary>
     private void Untitled()
@@ -111,15 +117,15 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
         Opened();
     }
 
-    /// <summary>Another film is shown: what was picked of the one before goes from the chat's box, and its folder is picked in the tree.</summary>
+    /// <summary>Another film is shown: what was picked of the one before goes from the chat's box.</summary>
     private void Opened()
     {
         Status = "";
         Rebuild();
         OnPropertyChanged(nameof(Folder));
-        Clear(viewer: true);
+        OnPropertyChanged(nameof(FilmName));
         _chat.Pick([]);
-        PickFilm();
+        Clear();
     }
 
     public decimal? FrameWidth
@@ -158,14 +164,14 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
         }
     }
 
-    /// <summary>How long the film is, and in how many shots (its size and frame rate are at the top).</summary>
+    /// <summary>How long the film is, and in how many takes (its size and frame rate are at the top).</summary>
     public string LengthText
     {
         get
         {
             var (_, length) = _board.Timing();
             var made = _board.Shots.Count(s => FilmMaker.IsCurrent(_board, s));
-            return $"{length:0.#} s in {_board.Shots.Count} shot{(_board.Shots.Count == 1 ? "" : "s")}" +
+            return $"{length:0.#} s in {_board.Shots.Count} take{(_board.Shots.Count == 1 ? "" : "s")}" +
                    (_board.Shots.Count == 0 ? "" : made == _board.Shots.Count ? " · all made" : $" · {made} made");
         }
     }
@@ -175,44 +181,58 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
     /// <summary>Where the film's time starts on each row, in pixels.</summary>
     public const double Lead = 12;
 
+    /// <summary>A card on the References row, and the room between two.</summary>
+    public const double CardWidth = 96, CardGap = 6;
+
+    /// <summary>How tall a sound track is.</summary>
+    public const double TrackHeight = 48;
+
     /// <summary>How many pixels a second takes on the timeline: the zoom.</summary>
     [ObservableProperty]
     private double _pps = 64;
 
     partial void OnPpsChanged(double value) => Relayout();
 
+    public ObservableCollection<ReferenceCard> References { get; } = [];
     public ObservableCollection<ShotItem> Shots { get; } = [];
     public ObservableCollection<LineItem> Lines { get; } = [];
+    public ObservableCollection<SoundItem> Sounds { get; } = [];
+    public ObservableCollection<TrackItem> Tracks { get; } = [];
 
-    /// <summary>How wide the rows are: the film, the song where it runs past it, and room to make the last shot longer.</summary>
+    /// <summary>How tall the sound tracks are together.</summary>
+    public double TracksHeight => Math.Max(1, Tracks.Count) * TrackHeight;
+
+    /// <summary>How wide the rows are: the film, the sounds and cards past it, and room to make the last take longer.</summary>
     [ObservableProperty]
     private double _timelineWidth = 800;
 
     [ObservableProperty]
     private double _length;
 
-    /// <summary>Where the next shot's place is on the Video row, after the last: a click there adds it.</summary>
+    /// <summary>Where the next take's place is on the Video row, after the last: a click there adds it.</summary>
     [ObservableProperty]
     private double _addShotX = Lead;
 
-    /// <summary>Where the lines are heard, for the song's row to show it quieter there.</summary>
+    /// <summary>Where the next card's place is on the References row: a click there makes one.</summary>
     [ObservableProperty]
-    private IReadOnlyList<(double X, double Width)> _ducks = [];
+    private double _addReferenceX = Lead;
 
     public double PlayheadX => Lead + Math.Max(0, PlayPosition) * Pps;
 
-    /// <summary>Lays the timeline out again: each shot where it starts, each line, the width.</summary>
+    /// <summary>Lays the timeline out again: each card, take, line and sound where it is, the width.</summary>
     public void Relayout()
     {
         var (starts, length) = _board.Timing();
         Length = length;
+        for (var i = 0; i < References.Count; i++)
+            References[i].X = Lead + i * (CardWidth + CardGap);
+        AddReferenceX = Lead + References.Count * (CardWidth + CardGap);
         for (var i = 0; i < Shots.Count && i < starts.Count; i++)
         {
             Shots[i].X = Lead + starts[i] * Pps;
             Shots[i].BlockWidth = Math.Max(8, Shots[i].Shot.Seconds * Pps - 2);
         }
         Lines.Clear();
-        var ducks = new List<(double, double)>();
         for (var i = 0; i < Shots.Count && i < starts.Count; i++)
         {
             var shot = Shots[i].Shot;
@@ -221,13 +241,22 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
             var seconds = Math.Min(LineSeconds(shot), Math.Max(0.3, shot.Seconds - FilmMaker.LineLead));
             var x = Lead + (starts[i] + FilmMaker.LineLead) * Pps;
             Lines.Add(new LineItem(Shots[i], x, Math.Max(12, seconds * Pps), $"“{shot.Line.Trim()}”"));
-            ducks.Add((x, seconds * Pps));
         }
-        Ducks = ducks;
+        var end = length;
+        foreach (var sound in Sounds)
+        {
+            var seconds = sound.PlaySeconds(length);
+            sound.X = Lead + sound.Sound.Start * Pps;
+            sound.Y = sound.Sound.Track * TrackHeight + 4;
+            sound.BlockWidth = Math.Max(8, seconds * Pps - 2);
+            end = Math.Max(end, sound.Sound.Start + seconds);
+            sound.Peaks = PeaksOf(sound);
+        }
         AddShotX = Lead + length * Pps + 4;
-        TimelineWidth = Lead + Math.Max(length, Math.Min(_sound.Seconds, length + 10)) * Pps + 240;
+        TimelineWidth = Math.Max(Lead + end * Pps, AddReferenceX + CardWidth) + 240;
         OnPropertyChanged(nameof(PlayheadX));
         OnPropertyChanged(nameof(LengthText));
+        OnPropertyChanged(nameof(TracksHeight));
     }
 
     /// <summary>How long a line takes: as said, when it is; else about 2.5 words a second.</summary>
@@ -256,87 +285,82 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
     [RelayCommand]
     private void ZoomOut() => Pps = Math.Max(12, Pps / 1.25);
 
-    // ---- the song under the shots ---------------------------------------------------------------------------
+    /// <summary>The time under a point of the timeline, in seconds.</summary>
+    public double SecondsAt(double x) => Math.Max(0, (x - Lead) / Math.Max(1, Pps));
 
-    /// <summary>The soundtrack's waveform (0 to 1 from start to end), and how long it is.</summary>
-    [ObservableProperty]
-    private float[]? _peaks;
+    // ---- the sounds' audio, read once: for their waveforms and for playing the film ---------------------------
 
-    /// <summary>What the song's row says.</summary>
-    [ObservableProperty]
-    private string _soundLabel = "";
+    /// <summary>Each sound file's samples, mono, with their rate, by its path and time.</summary>
+    private readonly Dictionary<string, (DateTime Stamp, float[] Samples, int Rate)> _audio = new(StringComparer.OrdinalIgnoreCase);
 
-    private (string? File, DateTime Stamp, float[]? Peaks, double Seconds) _sound;
-    private bool _readingSound;
+    private readonly HashSet<string> _reading = new(StringComparer.OrdinalIgnoreCase);
 
-    private void RefreshSound()
+    /// <summary>A sound's samples, once read; null while they are read (it is laid out again then) or can't be.</summary>
+    private (float[] Samples, int Rate)? AudioOf(string file)
     {
-        var file = _board.SoundtrackFile;
-        var stamp = file is not null && File.Exists(file) ? File.GetLastWriteTimeUtc(file) : DateTime.MinValue;
+        var stamp = File.Exists(file) ? File.GetLastWriteTimeUtc(file) : DateTime.MinValue;
         if (stamp == DateTime.MinValue)
-            _sound = (null, DateTime.MinValue, null, 0);
-        else if (!string.Equals(_sound.File, file, StringComparison.OrdinalIgnoreCase) || _sound.Stamp != stamp)
-            ReadSound(file!, stamp);
-        Peaks = _sound.Peaks;
-        SoundLabel = _board.Sound.Source switch
-        {
-            FilmSound.Song => (File.Exists(_board.SongFile) ? "Song" : "Song · not made yet") + (_board.Sound.Tags.Trim() is { Length: > 0 } tags ? $" · {tags}" : "") +
-                              (Ducks.Count > 0 ? " · quieter under the lines" : ""),
-            FilmSound.FromFile => file is null ? "A sound file of yours · none picked yet" : $"Your sound file · {Path.GetFileName(file)}",
-            _ => "No soundtrack: each shot keeps its own sound. Pick this row and say in the chat what music you want.",
-        };
-    }
-
-    private void ReadSound(string file, DateTime stamp)
-    {
-        if (_readingSound || _previews.Decoder is not { } decoder)
-            return;
-        _readingSound = true;
+            return null;
+        if (_audio.TryGetValue(file, out var known) && known.Stamp == stamp)
+            return (known.Samples, known.Rate);
+        if (_previews.Decoder is not { } decoder || !_reading.Add(file))
+            return null;
         _ = Task.Run(() =>
         {
-            float[]? peaks = null;
-            double seconds = 0;
+            (float[], int)? read = null;
             try
             {
                 using var reader = decoder.OpenAudio(file);
                 if (reader is not null)
-                {
-                    var (mono, rate) = MediaPreview.ReadMono(reader, TimeSpan.FromMinutes(20));
-                    seconds = mono.Length / (double)Math.Max(1, rate);
-                    // A peak each tenth of a second, so the row is drawn the same at any zoom.
-                    peaks = new float[Math.Max(1, (int)Math.Ceiling(seconds * 10))];
-                    var per = Math.Max(1, mono.Length / peaks.Length);
-                    for (var i = 0; i < peaks.Length; i++)
-                    {
-                        var peak = 0f;
-                        for (var j = i * per; j < Math.Min(mono.Length, (i + 1) * per); j++)
-                            peak = Math.Max(peak, Math.Abs(mono[j]));
-                        peaks[i] = peak;
-                    }
-                    var top = peaks.DefaultIfEmpty(0).Max();
-                    if (top > 0)
-                        for (var i = 0; i < peaks.Length; i++)
-                            peaks[i] /= top;
-                }
+                    read = MediaPreview.ReadMono(reader, TimeSpan.FromMinutes(20));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException) { }
             Dispatcher.UIThread.Post(() =>
             {
-                _readingSound = false;
+                _reading.Remove(file);
                 if (_disposing)
                     return;
-                _sound = (file, stamp, peaks, seconds);
-                SoundSeconds = seconds;
-                RefreshSound();
+                _audio[file] = read is var (samples, rate) ? (stamp, samples, rate) : (stamp, [], 1);
+                foreach (var sound in Sounds.Where(s => string.Equals(_board.SoundFile(s.Sound), file, StringComparison.OrdinalIgnoreCase)))
+                    sound.FileSeconds = read is var (all, r) ? all.Length / (double)Math.Max(1, r) : 0;
                 Relayout();
             });
         });
+        return null;
     }
 
-    [ObservableProperty]
-    private double _soundSeconds;
+    /// <summary>The waveform of the part of a sound that plays, a peak each tenth of a second, 0 to 1.</summary>
+    private float[]? PeaksOf(SoundItem sound)
+    {
+        if (AudioOf(_board.SoundFile(sound.Sound)) is not var (samples, rate) || samples.Length == 0)
+            return null;
+        sound.FileSeconds = samples.Length / (double)rate;
+        var seconds = sound.PlaySeconds(Length);
+        // Worked out once for each trim and length: the timeline is laid out at every step of a drag.
+        var key = (samples, sound.Sound.Trim, seconds);
+        if (_peaks.TryGetValue(sound.Id, out var known) && known.Key == key)
+            return known.Peaks;
+        var peaks = new float[Math.Max(1, (int)Math.Ceiling(seconds * 10))];
+        var per = Math.Max(1, rate / 10);
+        var from = (long)(sound.Sound.Trim * rate);
+        for (var i = 0; i < peaks.Length; i++)
+        {
+            var peak = 0f;
+            for (long j = from + (long)i * per; j < Math.Min(samples.Length, from + (long)(i + 1) * per); j++)
+                peak = Math.Max(peak, Math.Abs(samples[j]));
+            peaks[i] = peak;
+        }
+        var top = peaks.Max();
+        if (top > 0)
+            for (var i = 0; i < peaks.Length; i++)
+                peaks[i] /= top;
+        _peaks[sound.Id] = (key, peaks);
+        return peaks;
+    }
 
-    // ---- playing the storyboard: the soundtrack with each shot's frames ---------------------------------------
+    private readonly Dictionary<string, ((float[] Samples, double Trim, double Seconds) Key, float[] Peaks)> _peaks = new(StringComparer.OrdinalIgnoreCase);
+
+    // ---- playing the film: its sounds mixed, with each take's frames -------------------------------------
 
     /// <summary>Where the playhead is, in seconds from the film's start.</summary>
     [ObservableProperty]
@@ -345,7 +369,7 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
 
     public string PlayTime => $"{TimeSpan.FromSeconds(Math.Max(0, PlayPosition)):m\\:ss\\.f}";
 
-    /// <summary>The storyboard frame under the playhead: a shot's first frame, its last for the second half.</summary>
+    /// <summary>The storyboard frame under the playhead: a take's first frame, its last for the second half.</summary>
     [ObservableProperty]
     private Bitmap? _playFrame;
 
@@ -366,7 +390,7 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
     private Stopwatch _playClock = new();
     private double _playFrom;
 
-    /// <summary>Plays the soundtrack from the playhead with the frames switching as the shots do, or pauses it.</summary>
+    /// <summary>Plays the sound tracks mixed from the playhead with the frames switching as the takes do, or pauses it.</summary>
     [RelayCommand]
     private void PlayStrip()
     {
@@ -375,8 +399,8 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
             StopPlaying();
             return;
         }
-        var (_, length) = _board.Timing();
-        StartPlaying(PlayPosition >= 0 && PlayPosition < length - 0.05 ? PlayPosition : 0);
+        var end = Math.Max(Length, Sounds.Select(s => s.Sound.Start + s.PlaySeconds(Length)).DefaultIfEmpty(0).Max());
+        StartPlaying(PlayPosition >= 0 && PlayPosition < end - 0.05 ? PlayPosition : 0);
     }
 
     /// <summary>The timeline was clicked: the playhead goes there (and plays on from there if it was playing).</summary>
@@ -384,7 +408,7 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
     {
         var playing = IsPlaying;
         StopPlaying();
-        PlayPosition = Math.Clamp(seconds, 0, Math.Max(0, Length));
+        PlayPosition = Math.Max(0, seconds);
         ShowFrameAt(PlayPosition);
         if (playing)
             StartPlaying(PlayPosition);
@@ -393,23 +417,25 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
     private void StartPlaying(double from)
     {
         StopPlaying();
-        // The soundtrack from there, if there is one and the PC can play it; otherwise the frames go by the clock.
-        if (_board.SoundtrackFile is { } file && File.Exists(file) && _previews.Decoder?.OpenAudio(file) is { } reader)
+        // The sounds that are read, mixed as the film joins them; with none, the frames go by the clock.
+        var parts = new List<FilmMix.Part>();
+        foreach (var sound in Sounds)
+            if (AudioOf(_board.SoundFile(sound.Sound)) is var (samples, rate) && samples.Length > 0)
+                parts.Add(new FilmMix.Part(samples, rate, sound.Sound.Start, sound.Sound.Trim, sound.PlaySeconds(Length), sound.Sound.Volume));
+        _playEnd = Math.Max(Length, parts.Select(p => p.Start + p.Seconds).DefaultIfEmpty(0).Max());
+        if (parts.Count > 0 && _previews.NewAudioOutput() is { } output)
         {
-            reader.Seek(TimeSpan.FromSeconds(from));
-            var output = _previews.NewAudioOutput();
-            if (output is null)
-                reader.Dispose();
-            else
-                try
-                {
-                    output.Play(reader);
-                    _playOutput = output;
-                }
-                catch (Exception ex) when (ex is not OutOfMemoryException)
-                {
-                    output.Dispose(); // no speakers to open
-                }
+            var mix = new FilmMix(parts, _playEnd);
+            mix.Seek(TimeSpan.FromSeconds(from));
+            try
+            {
+                output.Play(mix);
+                _playOutput = output;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                output.Dispose(); // no speakers to open
+            }
         }
         _playFrom = from;
         _playClock = Stopwatch.StartNew();
@@ -420,14 +446,15 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
         _playTimer.Start();
     }
 
+    private double _playEnd;
+
     private void PlayTick()
     {
-        var (_, length) = _board.Timing();
         var at = _playFrom + (_playOutput?.Played ?? _playClock.Elapsed).TotalSeconds;
-        if (at >= length)
+        if (at >= _playEnd)
         {
             StopPlaying();
-            PlayPosition = length;
+            PlayPosition = _playEnd;
             return;
         }
         PlayPosition = at;
@@ -442,7 +469,7 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
         IsPlaying = false;
     }
 
-    /// <summary>The frame of the shot at a time: its first frame, its last for the second half (when it has one).</summary>
+    /// <summary>The frame of the take at a time: its first frame, its last for the second half (when it has one).</summary>
     private void ShowFrameAt(double seconds)
     {
         var (starts, _) = _board.Timing();
@@ -461,4 +488,49 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
         PlayFrame = frame?.Thumbnail;
         PlayLabel = $"{shot.Title}, {(late ? "end" : "start")} · {seconds:0.0} s";
     }
+}
+
+/// <summary>
+/// The film's sounds mixed into one, as joining the film lays them over each other: each from where
+/// it starts, its trim cut off, as long as it plays, at its volume; mono at 48 kHz.
+/// </summary>
+internal sealed class FilmMix(IReadOnlyList<FilmMix.Part> parts, double length) : IAudioReader
+{
+    public sealed record Part(float[] Samples, int Rate, double Start, double Trim, double Seconds, double Volume);
+
+    private const int Rate = 48000;
+    private long _at;
+
+    public int SampleRate => Rate;
+    public int Channels => 1;
+    public TimeSpan Duration => TimeSpan.FromSeconds(length);
+
+    public int Read(float[] buffer, int offset, int count)
+    {
+        var n = (int)Math.Min(count, (long)(length * Rate) - _at);
+        if (n <= 0)
+            return 0;
+        Array.Clear(buffer, offset, n);
+        foreach (var part in parts)
+            for (var i = 0; i < n; i++)
+            {
+                var local = (_at + i) / (double)Rate - part.Start;
+                if (local < 0 || local >= part.Seconds)
+                    continue;
+                var pos = (local + part.Trim) * part.Rate;
+                var j = (long)pos;
+                if (j + 1 >= part.Samples.Length)
+                    continue;
+                var f = (float)(pos - j);
+                buffer[offset + i] += (part.Samples[j] * (1 - f) + part.Samples[j + 1] * f) * (float)part.Volume;
+            }
+        for (var i = 0; i < n; i++)
+            buffer[offset + i] = Math.Clamp(buffer[offset + i], -1f, 1f);
+        _at += n;
+        return n;
+    }
+
+    public void Seek(TimeSpan time) => _at = Math.Max(0, (long)(time.TotalSeconds * Rate));
+
+    public void Dispose() { }
 }

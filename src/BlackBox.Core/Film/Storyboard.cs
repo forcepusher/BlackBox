@@ -6,9 +6,9 @@ namespace BlackBox.Core.Film;
 
 /// <summary>
 /// A film as the user or the agent plans it: shots in order, each going from a first frame to a
-/// last one in so many seconds, the pictures they start and end on, and the film's sound. The film
-/// is its folder (see StoryboardFolder.cs): a folder for each shot with its frames and clip, one
-/// for the references and one for the sound, each file with a .json beside it saying what it is
+/// last one in so many seconds, the pictures they start and end on, and the sounds laid over them.
+/// The film is its folder (see StoryboardFolder.cs): References with the pictures frames are made
+/// from, Takes with a folder for each shot ("Take 1"), and Sounds, each file with a .json beside it saying what it is
 /// and how it was made, and its ComfyUI workflow; the Filmmaking panel and the film tool both read
 /// and write it. Here it is the whole film at once, as the agent writes and reads it in JSON.
 /// </summary>
@@ -28,7 +28,22 @@ public sealed partial class Storyboard
 
     public List<FilmShot> Shots { get; set; } = [];
 
-    public FilmSound Sound { get; set; } = new();
+    /// <summary>
+    /// The sounds laid over the shots' own, each from where it starts for as long as it plays, as a
+    /// video editor's sound track has them (the user's call, 2026-10-24: "make the sounds line into an
+    /// overlay sound editor... kinda like in any popular video editing software"): sound files of the
+    /// user's and songs BlackBox makes, overlapping as they please.
+    /// </summary>
+    public List<FilmSound> Sounds { get; set; } = [];
+
+    /// <summary>How many sound tracks the film has, the sounds on them by <see cref="FilmSound.Track"/> (the user: "we also need to be able to create multiple sound tracks").</summary>
+    public int Tracks { get; set; } = 1;
+
+    /// <summary>The voice the shots' lines are said in ("a man in his forties, warm and a little hoarse, deadpan").</summary>
+    public string Voice { get; set; } = "";
+
+    /// <summary>The seed the lines are said with.</summary>
+    public long VoiceSeed { get; set; }
 
     /// <summary>The film's folder; not saved.</summary>
     [JsonIgnore]
@@ -38,11 +53,13 @@ public sealed partial class Storyboard
 
     public FilmShot? Shot(string? id) => id is null ? null : Shots.FirstOrDefault(s => s.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
+    public FilmSound? Sound(string? id) => id is null ? null : Sounds.FirstOrDefault(s => s.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>
-    /// The film's folder of references: a folder for each character, place or thing ("References/Mira"),
-    /// holding its pictures, BlackBox's and the user's own (the user's call, 2026-10-24: "each
-    /// reference should have its own folder for multiple references"), which frames name in "from"
-    /// to be made from.
+    /// The film's folder of references (the user's call, 2026-10-24: "References (where either image
+    /// file or generated image present)"): image files, the user's own pictures copied in, and
+    /// generated images, the references BlackBox makes ("References/Mira.png"), which frames name in
+    /// "from" to be made from.
     /// </summary>
     public const string ReferencesName = "References";
 
@@ -50,7 +67,7 @@ public sealed partial class Storyboard
 
     /// <summary>
     /// Where a frame's picture is once it is made (or taken from the user's file): a reference's in
-    /// its folder in References, a shot's frame in the folder of the shot it is the start or end of.
+    /// References, a shot's frame in the folder of the shot it is the start or end of.
     /// </summary>
     public string FramePicture(FilmFrame frame) => Full(frame.Place ?? PlaceFor(frame));
 
@@ -138,9 +155,8 @@ public sealed partial class Storyboard
     /// <summary>
     /// The pictures from outside the film that frames are made from, named in "from" by their full
     /// paths (one the user attached to a message), copied into References as they are (see
-    /// <see cref="KeepPicture"/>): a reference's into its folder, any other frame's into a folder
-    /// named after the picture, as one dropped on the Filmmaking panel goes; "from" names the copy
-    /// then ("Carl/CarlLineup.png"). Told only that from takes pictures in References, the model
+    /// <see cref="KeepPicture"/>), as one dropped on the Filmmaking panel goes; "from" names the copy
+    /// then ("CarlLineup.png"). Told only that from takes pictures in References, the model
     /// cut one figure out of the user's lineup of four and saved that there as the source; and a
     /// pasted picture goes with its chat when the chat is deleted. Called once the film is saved, so
     /// the names of pieces not made yet are taken. What was copied: from where, as what in "from".
@@ -163,13 +179,29 @@ public sealed partial class Storyboard
                     if (full.StartsWith(film, StringComparison.OrdinalIgnoreCase) || !File.Exists(full) ||
                         !PictureExtensions.Contains(Path.GetExtension(full), StringComparer.OrdinalIgnoreCase))
                         continue;
-                    var folder = frame.Reference ? Path.GetDirectoryName(FramePicture(frame))! : Path.Combine(ReferencesFolder, Safe(Path.GetFileNameWithoutExtension(full)));
-                    frame.From[i] = InReferences(KeepPicture(full, folder));
+                    frame.From[i] = InReferences(KeepPicture(full, ReferencesFolder));
                     taken.Add((full, frame.From[i]));
                 }
                 // Not copied: the frame is made from it where it is.
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { }
             }
+        // A sound of the user's given by its path goes into Sounds the same way, and is that copy from then on.
+        foreach (var sound in Sounds)
+            try
+            {
+                if (sound.File is not { Length: > 0 } file || !Path.IsPathRooted(file))
+                    continue;
+                var full = Path.GetFullPath(file.Trim().Trim('"'));
+                if (!File.Exists(full))
+                    continue;
+                var copy = full.StartsWith(film, StringComparison.OrdinalIgnoreCase) ? full : KeepPicture(full, ReferencesFolder);
+                sound.Place = Path.GetRelativePath(Folder, copy).Replace(Path.DirectorySeparatorChar, '/');
+                sound.File = null;
+                sound.Source = FilmSound.FromFile;
+                if (!string.Equals(copy, full, StringComparison.OrdinalIgnoreCase))
+                    taken.Add((full, Path.GetRelativePath(Folder, copy).Replace(Path.DirectorySeparatorChar, '/')));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { }
         return taken;
     }
 
@@ -195,8 +227,8 @@ public sealed partial class Storyboard
     }
 
     /// <summary>
-    /// The pictures in the References folder: the references' and the user's own, in the references'
-    /// folders or loose, without the takes kept of them (Mira.v1.png), by their full paths, by name.
+    /// The pictures in the References folder: the references' and the user's own (in folders of their
+    /// own too), without the versions kept of them (Mira.v1.png), by their full paths, by name.
     /// </summary>
     public IReadOnlyList<string> ReferenceFiles()
     {
@@ -205,7 +237,7 @@ public sealed partial class Storyboard
             return Folder.Length > 0 && Directory.Exists(ReferencesFolder)
                 ? new DirectoryInfo(ReferencesFolder).EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 2, IgnoreInaccessible = true })
                     .Where(f => PictureExtensions.Contains(f.Extension, StringComparer.OrdinalIgnoreCase) && !IsTake(f.Name) && !f.Name.StartsWith('.') &&
-                                !string.Equals(f.Directory?.Name, TakesName, StringComparison.OrdinalIgnoreCase))
+                                !string.Equals(f.Directory?.Name, VersionsName, StringComparison.OrdinalIgnoreCase))
                     .Select(f => f.FullName).Order(StringComparer.OrdinalIgnoreCase).ToList()
                 : [];
         }
@@ -215,7 +247,7 @@ public sealed partial class Storyboard
         }
     }
 
-    /// <summary>A take kept of a piece when it was made again: "f2.v1.png", "s1.v3.mp4".</summary>
+    /// <summary>A version kept of a piece when it was made again: "f2.v1.png", "s1.v3.mp4".</summary>
     public static bool IsTake(string fileName) => TakeName().IsMatch(fileName);
 
     [System.Text.RegularExpressions.GeneratedRegex(@"\.v\d+\.[^.]+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
@@ -230,7 +262,7 @@ public sealed partial class Storyboard
     /// <summary>The folder of a shot: its clip, and the frames it starts and ends on unless another shot's they are.</summary>
     public string ShotFolder(FilmShot shot) => Path.GetDirectoryName(ShotVideo(shot))!;
 
-    /// <summary>The sound a lip-synced shot is made with: its line, or the part of the soundtrack under it, as long as the shot.</summary>
+    /// <summary>The sound a lip-synced shot is made with: its line placed in it, as long as the shot.</summary>
     public string ShotAudio(FilmShot shot) => Path.ChangeExtension(ShotVideo(shot), ".wav");
 
     /// <summary>A shot's line as the voice model said it, and how it was said.</summary>
@@ -238,29 +270,26 @@ public sealed partial class Storyboard
 
     public string ShotLineMeta(FilmShot shot) => MetaOf(ShotLine(shot));
 
-    /// <summary>Whether a shot is lip-synced to a line of its own (rather than the soundtrack).</summary>
+    /// <summary>Whether a shot says a line of its own, lip-synced.</summary>
     public static bool Speaks(FilmShot shot) => shot.LipSync && shot.Line.Trim().Length > 0;
 
-    /// <summary>The folder of the film's soundtrack: the song made for it, and what it is (even with none).</summary>
-    public const string SoundName = "Sound";
+    /// <summary>The most sound tracks a film has.</summary>
+    public const int MaxTracks = 12;
 
-    public string SongFile => Path.Combine(Folder, SoundName, "song.mp3");
+    /// <summary>The kinds of sound file the Sounds folder takes.</summary>
+    public static readonly string[] SoundExtensions = [".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac", ".opus"];
 
-    /// <summary>What the film's sound is (none, a file, a song) and how the song was made.</summary>
-    public string SongMeta => MetaOf(SongFile);
 
-    /// <summary>The soundtrack to use: the user's file, the song once made, or none.</summary>
-    public string? SoundtrackFile => Sound.Source switch
-    {
-        FilmSound.FromFile => Sound.File is { Length: > 0 } file ? file : null,
-        FilmSound.Song => File.Exists(SongFile) ? SongFile : null,
-        _ => null,
-    };
+    /// <summary>Where a sound's file is: a song once made, or the user's sound copied in.</summary>
+    public string SoundFile(FilmSound sound) => Full(sound.Place ?? PlaceFor(sound));
+
+    /// <summary>What a sound is, where it sits in the film, and how a song was made.</summary>
+    public string SoundMeta(FilmSound sound) => MetaOf(SoundFile(sound));
 
     /// <summary>The joined film: named after it, in its folder.</summary>
     public string FilmFile => Path.Combine(Folder, Safe(Title.Length > 0 ? Title : "film") + ".mp4");
 
-    /// <summary>What belongs to the whole film: its title, size, frame rate, sound levels and the order of its shots.</summary>
+    /// <summary>What belongs to the whole film: its size, frame rate, the lines' voice and the order of its shots.</summary>
     public string FilmMeta => MetaOf(FilmFile);
 
     /// <summary>
@@ -329,7 +358,7 @@ public sealed partial class Storyboard
     /// </summary>
     public string NewId(string prefix)
     {
-        var taken = Frames.Select(f => f.Id).Concat(Shots.Select(s => s.Id)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var taken = Frames.Select(f => f.Id).Concat(Shots.Select(s => s.Id)).Concat(Sounds.Select(s => s.Id)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         for (var n = 1; ; n++)
             if (!taken.Contains(prefix + n))
                 return prefix + n;
@@ -412,7 +441,7 @@ public sealed partial class Storyboard
 
     /// <summary>
     /// Shapes a model writes that mean what the storyboard means: "from": "f1" for ["f1"], a
-    /// frame's id as a number, a sound given as its file's path.
+    /// frame's id as a number, the lines' voice under "sound" as it was before there was none.
     /// </summary>
     private static void Tidy(JsonObject root)
     {
@@ -427,8 +456,11 @@ public sealed partial class Storyboard
         foreach (var shot in (root["shots"] as JsonArray ?? []).OfType<JsonObject>())
             foreach (var key in new[] { "id", "first", "last" })
                 Text(shot, key);
-        if (root["sound"] is JsonValue sound && sound.TryGetValue<string>(out var path))
-            root["sound"] = new JsonObject { ["source"] = FilmSound.FromFile, ["file"] = path };
+        foreach (var sound in (root["sounds"] as JsonArray ?? []).OfType<JsonObject>())
+            Text(sound, "id");
+        if (root["sound"] is JsonObject old && old["voice"] is JsonValue voice && root["voice"] is null)
+            root["voice"] = voice.DeepClone();
+        root.Remove("sound");
 
         static void Text(JsonObject o, string key)
         {
@@ -467,7 +499,8 @@ public sealed partial class Storyboard
     {
         Frames ??= [];
         Shots ??= [];
-        Sound ??= new FilmSound();
+        Sounds ??= [];
+        Voice ??= "";
         Width = Even(Math.Clamp(Width <= 0 ? 1280 : Width, 64, 4096));
         Height = Even(Math.Clamp(Height <= 0 ? 720 : Height, 64, 4096));
         Fps = Math.Clamp(Fps <= 0 ? 24 : Fps, 1, 120);
@@ -477,7 +510,7 @@ public sealed partial class Storyboard
         // and every one after it, their clips then matched to the wrong ids.
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var renamed = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        foreach (var (item, id) in Shots.Select(s => ((object)s, s.Id)).Concat(Frames.Select(f => ((object)f, f.Id))))
+        foreach (var (item, id) in Shots.Select(s => ((object)s, s.Id)).Concat(Frames.Select(f => ((object)f, f.Id))).Concat(Sounds.Select(a => ((object)a, a.Id))))
             if (string.IsNullOrWhiteSpace(id) || !seen.Add(id.Trim()))
                 renamed.Add(item);
         foreach (var f in Frames)
@@ -503,9 +536,8 @@ public sealed partial class Storyboard
             s.Camera ??= "";
             s.Line ??= "";
             s.Model = Clean(s.Model);
-            // A line is said lip-synced: a shot given one is.
-            if (s.Line.Trim().Length > 0)
-                s.LipSync = true;
+            // A line is said lip-synced: a shot is lip-synced when it has one, and only then.
+            s.LipSync = s.Line.Trim().Length > 0;
             s.Transition = s.Transition?.Trim().ToLowerInvariant() switch
             {
                 FilmShot.Dissolve or "crossfade" or "cross-fade" or "mix" => FilmShot.Dissolve,
@@ -519,18 +551,27 @@ public sealed partial class Storyboard
         foreach (var f in Frames)
             if (f.Of is { } of && (Shot(of) is not { } shot || shot.First == f.Id || shot.Last == f.Id))
                 f.Of = null;
-        if (Sound.Seed <= 0)
-            Sound.Seed = NewSeed();
-        Sound.Voice ??= "";
-        Sound.Tags ??= "";
-        Sound.Lyrics ??= "";
-        Sound.Model = Clean(Sound.Model);
-        Sound.Source = Sound.Source?.Trim().ToLowerInvariant() switch
+        foreach (var a in Sounds)
         {
-            FilmSound.FromFile or "audio" => FilmSound.FromFile,
-            FilmSound.Song or "music" or "generate" or "generated" => FilmSound.Song,
-            _ => FilmSound.None,
-        };
+            if (renamed.Contains(a))
+                a.Id = NextFree("a", seen);
+            a.Id = a.Id.Trim();
+            a.Source = a.Source?.Trim().ToLowerInvariant() is FilmSound.FromFile or "audio" or "user" ? FilmSound.FromFile : FilmSound.Song;
+            if (a.Source == FilmSound.Song && a.Seed <= 0)
+                a.Seed = NewSeed();
+            a.Tags ??= "";
+            a.Lyrics ??= "";
+            a.Model = Clean(a.Model);
+            a.Name = Clean(a.Name);
+            a.Start = Math.Clamp(a.Start, 0, 3600);
+            a.Trim = Math.Clamp(a.Trim, 0, 3600);
+            a.Seconds = Math.Clamp(a.Seconds, 0, 3600);
+            a.Volume = Math.Clamp(a.Volume, 0, 2);
+            a.Track = Math.Clamp(a.Track, 0, MaxTracks - 1);
+        }
+        Tracks = Math.Clamp(Math.Max(Tracks, Sounds.Select(a => a.Track + 1).DefaultIfEmpty(1).Max()), 1, MaxTracks);
+        if (VoiceSeed <= 0)
+            VoiceSeed = NewSeed();
 
         static int Even(int n) => n / 2 * 2;
 
@@ -583,11 +624,14 @@ public sealed partial class Storyboard
         foreach (var (key, value) in change)
         {
             var name = JsonKey(key);
-            if (name is "frames" or "shots" && value is JsonArray items)
+            if (name is "frames" or "shots" or "sounds" && value is JsonArray items)
                 json[name] = MergeList(json[name] as JsonArray ?? [], items);
-            else if (name is "sound" && value is JsonObject inner && json[name] is JsonObject existing)
-                foreach (var (k, v) in inner)
-                    existing[JsonKey(k)] = v?.DeepClone();
+            // The lines' voice, as a model may still give it.
+            else if (name is "sound")
+            {
+                if (value is JsonObject inner && inner.FirstOrDefault(p => JsonKey(p.Key) == "voice").Value is { } voice)
+                    json["voice"] = voice.DeepClone();
+            }
             else
                 json[name] = value?.DeepClone();
         }
@@ -632,14 +676,6 @@ public sealed partial class Storyboard
                         item["model"] = model;
                 }
             }
-            if (Job(workflows, "song") is { Length: > 0 } song)
-            {
-                var given = change.FirstOrDefault(p => JsonKey(p.Key) == "sound");
-                if (given.Key is null)
-                    change["sound"] = new JsonObject { ["model"] = song };
-                else if (given.Value is JsonObject sound && sound["model"] is null)
-                    sound["model"] = song;
-            }
             return change;
 
             static IEnumerable<(string Kind, JsonObject Item)> Items(JsonObject change) =>
@@ -667,18 +703,11 @@ public sealed partial class Storyboard
                     list.Add(added);
                     continue;
                 }
-                var hadLine = Said(list[at]["line"]);
                 foreach (var (k, v) in item)
                     list[at][JsonKey(k)] = v?.DeepClone();
-                // A shot whose line is taken out stops being lip-synced (else it would be lip-synced
-                // to the song under it), unless the change says it stays so.
-                if (hadLine && !Said(list[at]["line"]) && !item.Any(p => JsonKey(p.Key) == "lipSync"))
-                    list[at]["lipSync"] = false;
             }
             return new JsonArray(list.Cast<JsonNode>().ToArray());
         }
-
-        static bool Said(JsonNode? line) => line is JsonValue v && v.TryGetValue<string>(out var s) && s.Trim().Length > 0;
 
         static IEnumerable<JsonObject> Given(JsonObject change, string list) =>
             change.Where(p => JsonKey(p.Key) == list).SelectMany(p => (p.Value as JsonArray ?? []).OfType<JsonObject>());
@@ -699,8 +728,8 @@ public sealed class FilmFrame
     public string Id { get; set; } = "";
 
     /// <summary>
-    /// What a reference is called ("Mira", "the lighthouse"), its folder in References named after
-    /// it; "Mira/side" is another picture of Mira, in her folder. Frames in shots may have one too.
+    /// What a reference is called ("Mira", "the lighthouse"), its picture in References named after
+    /// it ("Mira.png"). Frames in shots may have one too.
     /// </summary>
     public string? Name { get; set; }
 
@@ -735,7 +764,7 @@ public sealed class FilmFrame
     /// <summary>Changes to the workflow after the storyboard's own, as the comfyui tool's set takes them: {"node id.input": value}.</summary>
     public JsonObject? Set { get; set; }
 
-    /// <summary>Where its picture is in the film's folder ("1 Intro/Intro start.png"): where its .json was found, or where it is given one.</summary>
+    /// <summary>Where its picture is in the film's folder ("Takes/Take 1/start.png"): where its .json was found, or where it is given one.</summary>
     public string? Place { get; set; }
 
     /// <summary>"Frame 3", or its name.</summary>
@@ -748,10 +777,10 @@ public sealed class FilmShot
 
     public string Id { get; set; } = "";
 
-    /// <summary>A few words naming it ("intro", "the leap"): its folder is named after it.</summary>
+    /// <summary>A few words naming it ("intro", "the leap").</summary>
     public string? Name { get; set; }
 
-    /// <summary>Where its clip is in the film's folder ("1 Intro/Intro.mp4"): where its .json was found, or where it is given one.</summary>
+    /// <summary>Where its clip is in the film's folder ("Takes/Take 1/video.mp4"): where its .json was found, or where it is given one.</summary>
     public string? Place { get; set; }
 
     /// <summary>The frame it starts on; the last frame of the shot before when the camera goes on from there.</summary>
@@ -773,13 +802,10 @@ public sealed class FilmShot
 
     public long Seed { get; set; }
 
-    /// <summary>
-    /// Lip-synced: made with a sound under it, so the people in it say or sing it: its own line when
-    /// it has one, else the soundtrack's part under it.
-    /// </summary>
+    /// <summary>Lip-synced to its line: set by whether it has one.</summary>
     public bool LipSync { get; set; }
 
-    /// <summary>What is said in it, in the film's voice (<see cref="FilmSound.Voice"/>), lip-synced.</summary>
+    /// <summary>What is said in it, in the film's voice (<see cref="Storyboard.Voice"/>), lip-synced.</summary>
     public string Line { get; set; } = "";
 
     /// <summary>How it follows the shot before: cut, dissolve or fade (through black).</summary>
@@ -789,33 +815,59 @@ public sealed class FilmShot
     public JsonObject? Set { get; set; }
 }
 
+/// <summary>
+/// A sound laid over the film, as a clip on a video editor's sound track: a sound file of the
+/// user's (copied into Sounds) or a song BlackBox makes, from where it starts in the film, trimmed
+/// at either end, at its volume.
+/// </summary>
 public sealed class FilmSound
 {
-    public const string None = "none", FromFile = "file", Song = "song";
+    public const string FromFile = "file", Song = "song";
 
-    /// <summary>none, file (the user's) or song (made with a music model).</summary>
-    public string Source { get; set; } = None;
+    public string Id { get; set; } = "";
 
+    /// <summary>What it is called; a song's file in Sounds is named after it.</summary>
+    public string? Name { get; set; }
+
+    /// <summary>file (the user's) or song (made with a music model).</summary>
+    public string Source { get; set; } = Song;
+
+    /// <summary>A sound of the user's from elsewhere, by its full path: copied into Sounds as it is when the film is saved.</summary>
     public string? File { get; set; }
 
-    /// <summary>The song's style: genre, instruments, voice, tempo ("dreamy synthwave, female vocals, 90 BPM").</summary>
+    /// <summary>The sound track it is on, from 0.</summary>
+    public int Track { get; set; }
+
+    /// <summary>Where it starts in the film, in seconds.</summary>
+    public double Start { get; set; }
+
+    /// <summary>How much of its start is cut off, in seconds.</summary>
+    public double Trim { get; set; }
+
+    /// <summary>How long it plays, in seconds; 0: to its end.</summary>
+    public double Seconds { get; set; }
+
+    /// <summary>How loud, 1 as it is.</summary>
+    public double Volume { get; set; } = 1;
+
+    /// <summary>A song's style: genre, instruments, voice, tempo ("dreamy synthwave, female vocals, 90 BPM").</summary>
     public string Tags { get; set; } = "";
 
-    /// <summary>The words sung; none makes an instrumental.</summary>
+    /// <summary>A song's words; none makes an instrumental.</summary>
     public string Lyrics { get; set; } = "";
 
-    /// <summary>The voice the shots' lines are said in ("a man in his forties, warm and a little hoarse, deadpan").</summary>
-    public string Voice { get; set; } = "";
-
-    /// <summary>What the song is made with, as <see cref="FilmFrame.Model"/>: a music model or workflow.</summary>
+    /// <summary>What a song is made with, as <see cref="FilmFrame.Model"/>: a music model or workflow.</summary>
     public string? Model { get; set; }
 
     public long Seed { get; set; }
 
-    /// <summary>The seed the lines are said with, once the song has one of its own (0: the song's).</summary>
-    public long VoiceSeed { get; set; }
-
     public JsonObject? Set { get; set; }
+
+    /// <summary>Where its file is in the film's folder ("Sounds/rain.mp3"): where its .json was found, or where it is given one.</summary>
+    public string? Place { get; set; }
+
+    /// <summary>"rain", or its id.</summary>
+    public string Label => Name is { Length: > 0 } name ? name : Id;
 }
 
 /// <summary>Something in a film that can't be done as asked, said so the user or the model can fix it.</summary>

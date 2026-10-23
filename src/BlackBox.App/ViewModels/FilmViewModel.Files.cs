@@ -133,23 +133,35 @@ public sealed partial class FilmViewModel
                 strip.Dispose();
             }
         }
-        var song = _board.Sound.Source switch { FilmSound.Song => _board.SongFile, FilmSound.FromFile => _board.Sound.File, _ => null };
-        var songMade = song is not null && File.Exists(song);
-        Sound.IsMade = songMade;
-        // How the song sounds to its judge, kept with it when it was made.
-        var heard = songMade && FilmTakes.LookIn(_board.SongMeta) is { } judged ? " · " + judged.Said : "";
-        if (!Sound.IsWorking)
-            Sound.State = _board.Sound.Source switch
+        foreach (var sound in Sounds)
+        {
+            var made = File.Exists(_board.SoundFile(sound.Sound));
+            sound.IsMade = made;
+            sound.Refresh();
+            if (!sound.IsWorking)
+                (sound.State, sound.IsError) = sound.Sound.Source == FilmSound.FromFile
+                    ? (made ? "Sound file" : "The file isn't there", !made)
+                    : sound.IsNew ? ("File… or Generate", false)
+                    : (!made ? "Not made yet" : FilmMaker.IsCurrent(_board, sound.Sound) ? "Made" : "Changed: make it again", false);
+        }
+        RefreshReferences();
+        foreach (var card in References)
+        {
+            card.Refresh();
+            if (card.Frame is { } frame)
             {
-                FilmSound.Song => !songMade ? "Not made yet" : FilmMaker.SongIsCurrent(_board) ? "Made" + heard : "Changed: make it again",
-                FilmSound.FromFile => song is null ? "Pick a sound file" : songMade ? "Your file" : "The file isn't there",
-                _ => "No soundtrack",
-            };
+                card.Thumbnail = frame.Thumbnail;
+                card.State = card.IsNew ? "File… or Generate" : frame.State;
+            }
+            else
+            {
+                card.State = "Image file";
+                LoadCardThumbnail(card);
+            }
+        }
         OnPropertyChanged(nameof(HasFilm));
         OnPropertyChanged(nameof(LengthText));
-        RefreshSound();
         Relayout();
-        RefreshTree();
         RefreshViewer();
     }
 
@@ -184,6 +196,8 @@ public sealed partial class FilmViewModel
                 {
                     var old = frame.Thumbnail;
                     frame.Thumbnail = bitmap;
+                    foreach (var card in References.Where(c => ReferenceEquals(c.Frame, frame)))
+                        card.Thumbnail = bitmap;
                     old?.Dispose();
                 });
             }
@@ -191,7 +205,31 @@ public sealed partial class FilmViewModel
         });
     }
 
-    /// <summary>A shot's clip as a row of frames, for its block on the timeline.</summary>
+    /// <summary>An image file's picture, small, for its card.</summary>
+    private void LoadCardThumbnail(ReferenceCard card)
+    {
+        if (card.Thumbnail is not null)
+            return;
+        var path = card.Path;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                using var stream = File.OpenRead(path);
+                var bitmap = Bitmap.DecodeToHeight(stream, 128, BitmapInterpolationMode.MediumQuality);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_disposing || !References.Contains(card))
+                        bitmap.Dispose();
+                    else
+                        card.Thumbnail = bitmap;
+                });
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { }
+        });
+    }
+
+    /// <summary>A take's clip as a row of frames, for its block on the timeline.</summary>
     private void LoadStrip(ShotItem shot, string path, DateTime stamp)
     {
         if (_previews.Decoder is not { } decoder)
@@ -295,10 +333,7 @@ public sealed partial class FilmViewModel
         }
         _renamedTo = null;
         if (!touched)
-        {
-            RefreshTree();
             return;
-        }
         try
         {
             // Not while a change made here waits to be saved: it is put together with theirs then.
@@ -329,15 +364,9 @@ public sealed partial class FilmViewModel
         Open(to);
     }
 
-    /// <summary>The film's folder moved: the folders open in the tree, and what the chat named, go with it.</summary>
+    /// <summary>The film's folder moved: what the chat named goes with it.</summary>
     private void Moved(string from, string to)
     {
-        foreach (var set in new[] { _expanded, _seenFolders })
-            foreach (var path in set.Where(p => IsIn(p, from)).ToList())
-            {
-                set.Remove(path);
-                set.Add(to + path[Path.TrimEndingDirectorySeparator(Path.GetFullPath(from)).Length..]);
-            }
         if (_chatFilm is not null && SamePath(_chatFilm, from))
             _chatFilm = to;
     }
@@ -366,7 +395,8 @@ public sealed partial class FilmViewModel
             shot.Strip?.Dispose();
         foreach (var frame in _frames.Values)
             frame.Thumbnail?.Dispose();
+        foreach (var card in References.Where(c => c.Frame is null))
+            card.Thumbnail?.Dispose();
         DropViewer();
-        DropThumbnails(keep: []);
     }
 }

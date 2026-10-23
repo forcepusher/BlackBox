@@ -232,7 +232,7 @@ public static partial class FilmCheck
         if (Storyboard.Speaks(shot))
             sb.AppendLine($"The person speaking in it says \"{shot.Line.Trim()}\": their mouth should move with the words, and they should look like they say them.");
         else if (shot.LipSync)
-            sb.AppendLine("The people in it should sing or speak along with the soundtrack, their mouths moving.");
+            sb.AppendLine("The person in it should say its line, their mouth moving.");
         if (heard is { Length: > 0 })
             sb.AppendLine(heard);
     }

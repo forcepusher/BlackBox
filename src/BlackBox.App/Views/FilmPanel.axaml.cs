@@ -1,5 +1,7 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -9,64 +11,45 @@ using BlackBox.App.ViewModels;
 
 namespace BlackBox.App.Views;
 
-/// <summary>Filmmaking's panel, on the left of the chat window: the films folder as a tree, a viewer, and the timeline.</summary>
+/// <summary>Filmmaking's panel, on the left of the chat window: a viewer, and the timeline where the film is worked on.</summary>
 public partial class FilmPanel : UserControl
 {
-    static FilmPanel()
-    {
-        // The box a name is typed in takes the keys as it shows, the name in it selected, as in Explorer.
-        IsVisibleProperty.Changed.AddClassHandler<TextBox>((box, _) =>
-        {
-            if (box.IsVisible && box.Classes.Contains("rename"))
-                FocusLater(box);
-        });
-    }
-
     public FilmPanel()
     {
         InitializeComponent();
-        // A right-click in the tree opens its menu without picking what is under it: picked, a
-        // film opened, and a piece went into the chat's box.
-        Files.AddHandler(PointerPressedEvent, OnTreePressed, RoutingStrategies.Tunnel);
-        // A click or a drag on the seconds moves the playhead there; a click on the song's row shows it.
+        // A click or a drag on the seconds moves the playhead there.
         Ruler.Seeked += seconds => (DataContext as FilmViewModel)?.SeekStrip(seconds);
-        Wave.Picked += () => (DataContext as FilmViewModel)?.Show((DataContext as FilmViewModel)?.Sound);
-        // The timeline is dragged sideways: seen before the shots' buttons, which then don't click.
+        // The timeline is dragged sideways: seen before the takes' buttons, which then don't click.
         Timeline.AddHandler(PointerPressedEvent, OnPanPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
         Timeline.AddHandler(PointerMovedEvent, OnPanMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
         Timeline.AddHandler(PointerReleasedEvent, OnPanReleased, RoutingStrategies.Tunnel, handledEventsToo: true);
         Timeline.PointerCaptureLost += (_, _) => EndPan();
-        // Pictures dragged over a reference (in the tree, or the viewer showing it) mark it: dropped,
-        // they go into it. The window takes the drop itself (MainWindow.OnDrop) and hands it here.
+        // Files dragged over a card, a sound or a row mark where they would go; the window takes the
+        // drop itself (MainWindow.OnDrop) and hands it here.
         AddHandler(DragDrop.DragEnterEvent, OnDragOver);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
-        AddHandler(DragDrop.DropEvent, (_, _) => Dispatcher.UIThread.Post(() => (DataContext as FilmViewModel)?.DragOver(null, viewer: false)), handledEventsToo: true);
+        AddHandler(DragDrop.DropEvent, (_, _) => Dispatcher.UIThread.Post(() => (DataContext as FilmViewModel)?.DragOver(null)), handledEventsToo: true);
     }
 
-    // ---- pictures dragged onto a reference ---------------------------------------------------------------
+    private FilmViewModel? _vm;
 
-    private void OnDragOver(object? sender, DragEventArgs e)
+    protected override void OnDataContextChanged(EventArgs e)
     {
-        if (DataContext is not FilmViewModel vm)
-            return;
-        var source = e.Source as Visual;
-        var pictures = e.DataTransfer.TryGetFiles() is { } files && files.Select(f => f.TryGetLocalPath()).OfType<string>()
-            .Any(p => Core.Film.Storyboard.PictureExtensions.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase));
-        if (!pictures || source is null)
-            vm.DragOver(null, viewer: false);
-        else if (source == ViewerBox || ViewerBox.IsVisualAncestorOf(source))
-            vm.DragOver(null, viewer: true);
-        else
-            vm.DragOver(Files.IsVisualAncestorOf(source) ? source.GetSelfAndVisualAncestors().OfType<StyledElement>().Select(v => v.DataContext).OfType<FilmNode>().FirstOrDefault() : null, viewer: false);
-    }
-
-    /// <summary>Out of the panel: nothing is marked. Moving from one row to another leaves the row, not the panel.</summary>
-    private void OnDragLeave(object? sender, DragEventArgs e)
-    {
-        var at = e.GetPosition(this);
-        if (at.X <= 1 || at.Y <= 1 || at.X >= Bounds.Width - 1 || at.Y >= Bounds.Height - 1)
-            (DataContext as FilmViewModel)?.DragOver(null, viewer: false);
+        base.OnDataContextChanged(e);
+        if (_vm is not null)
+        {
+            _vm.RenameAsked -= OnRenameAsked;
+            _vm.RenameFilmAsked -= OnRenameFilmAsked;
+            _vm.PickFiles = null;
+        }
+        _vm = DataContext as FilmViewModel;
+        if (_vm is not null)
+        {
+            _vm.RenameAsked += OnRenameAsked;
+            _vm.RenameFilmAsked += OnRenameFilmAsked;
+            _vm.PickFiles = PickFilesAsync;
+        }
     }
 
     private FilmViewModel Vm => (FilmViewModel)DataContext!;
@@ -77,21 +60,63 @@ public partial class FilmPanel : UserControl
         _viewer?.Close();
     }
 
-    // ---- the timeline ----------------------------------------------------------------------------------
+    // ---- where on the timeline: a row and its time, a card or a sound -----------------------------------------
 
-    /// <summary>
-    /// A click away from every piece (empty timeline, around the viewer) shows the whole film again,
-    /// as Esc does, and nothing is picked: what is said next is about the film. Clicks on a piece, a
-    /// button or the ruler are handled before they get here.
-    /// </summary>
+    /// <summary>The row (References, Video or the sound tracks) a visual is in, by its Tag.</summary>
+    private static Control? RowOf(Visual? visual) =>
+        visual?.GetSelfAndVisualAncestors().OfType<Control>().FirstOrDefault(c => c.Tag is "references" or "video" or "sounds");
+
+    /// <summary>Where on the timeline a pointer is: its row, the time there, the sound track, and the card or sound under it.</summary>
+    private FilmDropPlace? PlaceAt(Visual? source, Func<Visual, Point> at)
+    {
+        if (RowOf(source) is not { } row)
+            return null;
+        var p = at(row);
+        var card = source!.GetSelfAndVisualAncestors().OfType<StyledElement>().Select(v => v.DataContext).FirstOrDefault(d => d is ReferenceCard or SoundItem);
+        return new FilmDropPlace((string)row.Tag!, Vm.SecondsAt(p.X), Math.Clamp((int)(p.Y / FilmViewModel.TrackHeight), 0, Math.Max(0, Vm.Tracks.Count - 1)), card);
+    }
+
+    // ---- files dragged onto the timeline -------------------------------------------------------------------
+
+    private void OnDragOver(object? sender, DragEventArgs e)
+    {
+        if (DataContext is not FilmViewModel vm)
+            return;
+        var files = e.DataTransfer.TryGetFiles() is { } items && items.Select(f => f.TryGetLocalPath()).OfType<string>().Any();
+        vm.DragOver(files ? PlaceAt(e.Source as Visual, v => e.GetPosition(v)) : null);
+    }
+
+    /// <summary>Out of the panel: nothing is marked. Moving from one card to another leaves the card, not the panel.</summary>
+    private void OnDragLeave(object? sender, DragEventArgs e)
+    {
+        var at = e.GetPosition(this);
+        if (at.X <= 1 || at.Y <= 1 || at.X >= Bounds.Width - 1 || at.Y >= Bounds.Height - 1)
+            (DataContext as FilmViewModel)?.DragOver(null);
+    }
+
+    /// <summary>The Open dialog for pictures or sounds of the user's, to copy in.</summary>
+    private async Task<IReadOnlyList<string>> PickFilesAsync(string kind)
+    {
+        if (TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
+            return [];
+        var extensions = kind == "image" ? Core.Film.Storyboard.PictureExtensions : Core.Film.Storyboard.SoundExtensions;
+        var picked = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = kind == "image" ? "A picture to copy in" : "A sound to copy in",
+            FileTypeFilter = [new FilePickerFileType(kind == "image" ? "Pictures" : "Sounds") { Patterns = extensions.Select(x => "*" + x).ToList() }],
+        });
+        return picked.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
+    }
+
+    // ---- the viewer ----------------------------------------------------------------------------------------
+
+    /// <summary>A click around what the viewer shows (not on it) shows the whole film again, as Esc does: what is said next is about the film.</summary>
     private void OnAwayPressed(object? sender, PointerPressedEventArgs e)
     {
-        // On what the viewer shows, which isn't all buttons (a card, a video's time): it stays. On
-        // the timeline it is a click only once let go without dragging it (see OnPanReleased).
-        if (e.Source is Visual source && (source == ViewerBox || ViewerBox.IsVisualAncestorOf(source) || source == Timeline || Timeline.IsVisualAncestorOf(source)))
+        if (e.Source is Visual source && (source == ViewerBox || ViewerBox.IsVisualAncestorOf(source)))
             return;
         if (!e.Handled && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-            Vm.Clear(viewer: true);
+            Vm.Clear();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -101,103 +126,183 @@ public partial class FilmPanel : UserControl
             return;
         if (e.Key == Key.Escape)
         {
-            Vm.Clear(viewer: true);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.F2 && Vm.SelectedNode is { } node && Vm.CanRename(node))
-        {
-            Vm.StartRename(node);
+            Vm.Clear();
             e.Handled = true;
         }
     }
 
-    // ---- the tree's right-click menu, and renaming in it ------------------------------------------------
+    // ---- menus: the films, a row, a card, a take, a sound, a track ---------------------------------------------
 
-    private void OnTreePressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (e.GetCurrentPoint(Files).Properties.IsRightButtonPressed && (e.Source as Visual)?.FindAncestorOfType<TextBox>(includeSelf: true) is null)
-            e.Handled = true;
-    }
+    private void OnFilmMenu(object? sender, RoutedEventArgs e) => OpenMenu(Vm.FilmMenu(), FilmButton);
 
-    /// <summary>Right-click (or the menu key) in the tree: what can be done with the folder or file there; away from them, New film.</summary>
-    private void OnTreeMenu(object? sender, ContextRequestedEventArgs e)
+    /// <summary>Right-click on a row away from its cards: Create, there.</summary>
+    private void OnRowMenu(object? sender, ContextRequestedEventArgs e)
     {
-        if ((e.Source as Visual)?.FindAncestorOfType<TextBox>(includeSelf: true) is not null)
+        if (e.Handled || PlaceAt(e.Source as Visual, v => e.TryGetPosition(v as Control, out var p) ? p : default) is not { } place)
             return;
-        var node = e.TryGetPosition(Files, out _) ? (e.Source as StyledElement)?.DataContext as FilmNode : Vm.SelectedNode;
-        OpenMenu(Vm.MenuFor(node), e);
-    }
-
-    /// <summary>Right-click on a shot on the timeline.</summary>
-    private void OnShotMenu(object? sender, ContextRequestedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is ShotItem shot)
-            OpenMenu(Vm.MenuFor(shot), e);
-    }
-
-    private static void OpenMenu(IReadOnlyList<FilmMenuItem?> items, ContextRequestedEventArgs e)
-    {
-        var menu = new ContextMenu();
-        foreach (var item in items)
-        {
-            if (item is null)
-            {
-                menu.Items.Add(new Separator());
-                continue;
-            }
-            var entry = new MenuItem { Header = item.Header, IsEnabled = item.Enabled, InputGesture = item.Key is { } key ? KeyGesture.Parse(key) : null };
-            var act = item.Do;
-            entry.Click += (_, _) => act();
-            menu.Items.Add(entry);
-        }
-        menu.Open(e.Source as Control);
+        OpenMenu(Vm.MenuForRow(place.Row, place.Seconds, place.Track), e.Source as Control);
         e.Handled = true;
     }
 
-    private void OnRenameAttached(object? sender, VisualTreeAttachmentEventArgs e)
+    private void OnCardMenu(object? sender, ContextRequestedEventArgs e)
     {
-        if (sender is TextBox { IsVisible: true } box)
-            FocusLater(box);
-    }
-
-    /// <summary>Focused once the menu that asked for it has closed and given the focus back where it was.</summary>
-    private static void FocusLater(TextBox box) => Dispatcher.UIThread.Post(() =>
-    {
-        if (!box.IsVisible || box.GetVisualRoot() is null)
-            return;
-        box.Focus();
-        box.SelectAll();
-    }, DispatcherPriority.Background);
-
-    private void OnRenameKeyDown(object? sender, KeyEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is not FilmNode node)
-            return;
-        switch (e.Key)
+        if ((sender as Control)?.DataContext is ReferenceCard card)
         {
-            case Key.Enter:
-                Vm.FinishRename(node, keep: true);
-                Files.Focus();
-                e.Handled = true;
-                break;
-            case Key.Escape:
-                Vm.FinishRename(node, keep: false);
-                Files.Focus();
-                e.Handled = true;
-                break;
-            // Up and down would move the tree's pick, and open another film, while the name is typed.
-            case Key.Up or Key.Down:
-                e.Handled = true;
-                break;
+            OpenMenu(Vm.MenuFor(card), sender as Control);
+            e.Handled = true;
         }
     }
 
-    /// <summary>A click elsewhere keeps the name typed, as in Explorer.</summary>
-    private void OnRenameLostFocus(object? sender, RoutedEventArgs e)
+    private void OnShotMenu(object? sender, ContextRequestedEventArgs e)
     {
-        if ((sender as Control)?.DataContext is FilmNode { IsRenaming: true } node)
-            Vm.FinishRename(node, keep: true);
+        if ((sender as Control)?.DataContext is ShotItem shot)
+        {
+            OpenMenu(Vm.MenuFor(shot), sender as Control);
+            e.Handled = true;
+        }
     }
+
+    private void OnSoundMenu(object? sender, ContextRequestedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is SoundItem sound)
+        {
+            OpenMenu(Vm.MenuFor(sound), sender as Control);
+            e.Handled = true;
+        }
+    }
+
+    private void OnTrackMenu(object? sender, ContextRequestedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is TrackItem track)
+        {
+            OpenMenu(Vm.MenuForRow("sounds", Vm.PlayPosition, track.Index), sender as Control);
+            e.Handled = true;
+        }
+    }
+
+    private static void OpenMenu(IReadOnlyList<FilmMenuItem?> items, Control? at)
+    {
+        if (items.Count == 0)
+            return;
+        var menu = new ContextMenu();
+        foreach (var item in Entries(items))
+            menu.Items.Add(item);
+        menu.Open(at);
+
+        static IEnumerable<Control> Entries(IReadOnlyList<FilmMenuItem?> items)
+        {
+            foreach (var item in items)
+            {
+                if (item is null)
+                {
+                    yield return new Separator();
+                    continue;
+                }
+                var entry = new MenuItem { Header = item.Header, IsEnabled = item.Enabled, InputGesture = item.Key is { } key ? KeyGesture.Parse(key) : null };
+                if (item.Items is { } inner)
+                    foreach (var sub in Entries(inner))
+                        entry.Items.Add(sub);
+                else
+                {
+                    var act = item.Do;
+                    entry.Click += (_, _) => act();
+                }
+                yield return entry;
+            }
+        }
+    }
+
+    // ---- renaming: a box with the name, as Explorer's ----------------------------------------------------------
+
+    private void OnRenameFilmAsked() => Dispatcher.UIThread.Post(() => AskName(FilmButton, Vm.FilmName, name => Vm.Rename(null, name)), DispatcherPriority.Background);
+
+    private void OnRenameAsked(object target, string name)
+    {
+        var anchor = Timeline.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => ReferenceEquals(c.DataContext, target) && c is Button or Border) ?? (Control)Timeline;
+        Dispatcher.UIThread.Post(() => AskName(anchor, name, typed => Vm.Rename(target, typed)), DispatcherPriority.Background);
+    }
+
+    /// <summary>A box over <paramref name="anchor"/> with the name selected: Enter or a click elsewhere keeps what is typed, Esc doesn't.</summary>
+    private static void AskName(Control anchor, string name, Action<string> done)
+    {
+        var box = new TextBox { Text = name, MinWidth = 220 };
+        AutomationProperties.SetName(box, "New name");
+        var flyout = new Flyout { Content = box, Placement = PlacementMode.Top };
+        var kept = false;
+        void Keep()
+        {
+            if (kept)
+                return;
+            kept = true;
+            done(box.Text ?? "");
+        }
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                Keep();
+                flyout.Hide();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                kept = true;
+                flyout.Hide();
+                e.Handled = true;
+            }
+        };
+        flyout.Closed += (_, _) => Keep();
+        flyout.Opened += (_, _) => Dispatcher.UIThread.Post(() =>
+        {
+            box.Focus();
+            box.SelectAll();
+        }, DispatcherPriority.Background);
+        flyout.ShowAt(anchor);
+    }
+
+    // ---- clicks on the timeline -----------------------------------------------------------------------------
+
+    private void OnCardClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is ReferenceCard card)
+            Vm.Show(card);
+    }
+
+    private void OnCardFile(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is ReferenceCard card && Vm.MenuFor(card).FirstOrDefault() is { Enabled: true } file)
+            file.Do();
+        e.Handled = true;
+    }
+
+    private void OnCardGenerate(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is ReferenceCard card && Vm.MenuFor(card).ElementAtOrDefault(1) is { Enabled: true } generate)
+            generate.Do();
+        e.Handled = true;
+    }
+
+    private void OnSoundFile(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is SoundItem sound && Vm.MenuFor(sound).FirstOrDefault() is { Enabled: true } file)
+            file.Do();
+        e.Handled = true;
+    }
+
+    private void OnSoundGenerate(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is SoundItem sound && Vm.MenuFor(sound).ElementAtOrDefault(1) is { Enabled: true } generate)
+            generate.Do();
+        e.Handled = true;
+    }
+
+    private void OnCreateReference(object? sender, RoutedEventArgs e)
+    {
+        if (Vm.MenuForRow("references", 0, 0).FirstOrDefault() is { Enabled: true } create)
+            create.Do();
+    }
+
+    private void OnAddTrack(object? sender, RoutedEventArgs e) => Vm.AddTrack();
 
     private void OnShotClick(object? sender, RoutedEventArgs e)
     {
@@ -211,7 +316,9 @@ public partial class FilmPanel : UserControl
             Vm.Show(line.Shot);
     }
 
-    /// <summary>A shot's right edge being dragged: the shot, where the drag started and how long the shot was.</summary>
+    // ---- a take's right edge dragged: its length ------------------------------------------------------------
+
+    /// <summary>A take's right edge being dragged: the take, where the drag started and how long the take was.</summary>
     private (ShotItem Shot, double StartX, double StartSeconds)? _stretch;
 
     private void OnHandlePressed(object? sender, PointerPressedEventArgs e)
@@ -241,7 +348,7 @@ public partial class FilmPanel : UserControl
 
     /// <summary>
     /// The drag ended without a release (Alt+Tab, the timeline laid out anew): it ends here. Left
-    /// going, a later move over any shot's edge went on resizing the shot of the drag.
+    /// going, a later move over any take's edge went on resizing the take of the drag.
     /// </summary>
     private void OnHandleCaptureLost(object? sender, PointerCaptureLostEventArgs e)
     {
@@ -250,6 +357,63 @@ public partial class FilmPanel : UserControl
         _stretch = null;
         s.Shot.Stretched();
     }
+
+    // ---- a sound dragged: moved along or between tracks, or trimmed at an edge -------------------------------
+
+    /// <summary>A sound being dragged: how ("move", "left", "right"), where from, and where it was.</summary>
+    private (SoundItem Sound, string Mode, Point From, double Start, int Track, double Trim, double Seconds, bool Moved)? _sound;
+
+    private void OnSoundPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Control clip || clip.DataContext is not SoundItem sound || !e.GetCurrentPoint(clip).Properties.IsLeftButtonPressed)
+            return;
+        var mode = (e.Source as Visual)?.GetSelfAndVisualAncestors().OfType<Border>().FirstOrDefault(b => b.Classes.Contains("handle"))?.Tag as string ?? "move";
+        var a = sound.Sound;
+        _sound = (sound, mode, e.GetPosition(SoundRows), a.Start, a.Track, a.Trim, sound.PlaySeconds(Vm.Length), false);
+        e.Pointer.Capture(clip);
+        e.Handled = true;
+    }
+
+    private void OnSoundMoved(object? sender, PointerEventArgs e)
+    {
+        if (_sound is not { } s)
+            return;
+        var at = e.GetPosition(SoundRows);
+        if (!s.Moved && Point.Distance(at, s.From) < 4)
+            return;
+        _sound = s with { Moved = true };
+        var dx = (at.X - s.From.X) / Vm.Pps;
+        var file = s.Sound.FileSeconds;
+        switch (s.Mode)
+        {
+            case "left":
+                // Its start cut: no further back than the file's start, and a tenth of a second kept.
+                dx = Math.Clamp(dx, -Math.Min(s.Trim, s.Start), s.Seconds - 0.2);
+                Vm.MoveSound(s.Sound, s.Start + dx, s.Track, s.Trim + dx, s.Seconds - dx);
+                break;
+            case "right":
+                var most = file > 0 ? file - s.Trim : double.MaxValue;
+                Vm.MoveSound(s.Sound, s.Start, s.Track, s.Trim, Math.Clamp(s.Seconds + dx, 0.2, most));
+                break;
+            default:
+                var track = s.Track + (int)Math.Round((at.Y - s.From.Y) / FilmViewModel.TrackHeight);
+                Vm.MoveSound(s.Sound, s.Start + dx, track, s.Trim, s.Sound.Sound.Seconds);
+                break;
+        }
+    }
+
+    private void OnSoundReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_sound is not { } s)
+            return;
+        _sound = null;
+        e.Pointer.Capture(null);
+        // Let go where it was pressed: a click, which picks it.
+        if (!s.Moved)
+            Vm.Show(s.Sound);
+    }
+
+    private void OnSoundCaptureLost(object? sender, PointerCaptureLostEventArgs e) => _sound = null;
 
     // ---- dragging the timeline sideways --------------------------------------------------------------
 
@@ -267,10 +431,11 @@ public partial class FilmPanel : UserControl
     {
         if (!e.GetCurrentPoint(Timeline).Properties.IsLeftButtonPressed || e.Source is not Visual source)
             return;
-        // The seconds move the playhead, and a shot's right edge its length: no drag of the timeline there.
-        if (source == Ruler || Ruler.IsVisualAncestorOf(source) || source.GetSelfAndVisualAncestors().OfType<Border>().Any(b => b.Classes.Contains("handle")))
+        // The seconds move the playhead, a take's right edge its length, and a sound is dragged itself: no drag of the timeline there.
+        if (source == Ruler || Ruler.IsVisualAncestorOf(source) ||
+            source.GetSelfAndVisualAncestors().OfType<Border>().Any(b => b.Classes.Contains("handle") || b.Classes.Contains("clip")))
             return;
-        var onPiece = source.GetSelfAndVisualAncestors().TakeWhile(v => v != Timeline).Any(v => v is Button || v == Wave);
+        var onPiece = source.GetSelfAndVisualAncestors().TakeWhile(v => v != Timeline).Any(v => v is Button);
         _pan = (e.GetPosition(this), Timeline.Offset.X, false, onPiece);
     }
 
@@ -283,7 +448,7 @@ public partial class FilmPanel : UserControl
         {
             if (Math.Abs(dx) < PanSlop)
                 return;
-            // Taken from the shot's button, which then doesn't click when let go.
+            // Taken from the take's button, which then doesn't click when let go.
             _pan = pan with { Dragging = true };
             e.Pointer.Capture(Timeline);
             Timeline.Cursor = new Cursor(StandardCursorType.SizeWestEast);
@@ -304,7 +469,7 @@ public partial class FilmPanel : UserControl
         }
         // A click on the timeline away from every piece: the whole film again.
         else if (!pan.OnPiece)
-            Vm.Clear(viewer: true);
+            Vm.Clear();
     }
 
     private void EndPan()
@@ -346,7 +511,7 @@ public partial class FilmPanel : UserControl
         var shown = clicked is FilePreview preview ? preview.Path : Vm.ShownFile;
         var entries = Vm.MediaInFilm();
         var index = shown is null ? -1 : entries.FindIndex(m => string.Equals(m.Path, shown, StringComparison.OrdinalIgnoreCase));
-        // A file the film's pieces don't hold (a take, a music video picked as the soundtrack): on its own.
+        // A file the film's pieces don't hold (a version): on its own.
         if (index < 0 && shown is not null && MainWindowViewModel.Viewable(shown))
             (entries, index) = ([new MediaEntry(clicked, shown, null, Path.GetFileName(shown))], 0);
         if (index < 0 || (window.Screens.ScreenFromWindow(window) ?? window.Screens.Primary) is not { } screen)

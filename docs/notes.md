@@ -470,41 +470,39 @@ its .json after the folder when Explorer left them under the old name (`NameJoin
 
 ```
 Fox Film/
-  Fox Film.mp4 (+ Fox Film.json)  the joined film; its .json: size, frame rate, the shots' order
-  References/                a folder for each reference, with its pictures and the user's own
-    Fox/Fox.png (+ Fox.json, Fox.workflow.json), Fox/side.png, Fox/Front.jpg (the user's)
-  1 Intro/                   a folder per shot, numbered in the film's order, named after the shot
-    Intro start.png (+ Intro start.json, Intro start.workflow.json)
-    Intro end.png   (+ Intro end.json, Intro end.workflow.json)
-    Intro.mp4       (+ Intro.json, Intro.workflow.json)
-    Takes/                   earlier versions, each with its .json and workflow
-  Sound/song.mp3 (+ song.json, song.workflow.json)
+  Fox Film.mp4 (+ Fox Film.json)  the joined film; its .json: size, frame rate, the lines' voice, the sound tracks, the shots' order
+  References/   what the user gave, copied in, and the generated images frames are made from
+    lineup.jpg, rain.mp3 (+ rain.json: its track, start, trim, length, volume), Fox.png (+ Fox.json, Fox.workflow.json)
+  Generated/    what BlackBox makes for the timeline, by id
+    f1.png (+ f1.json, f1.workflow.json), s1.mp4 (+ s1.json, s1.workflow.json), a2.mp3 (+ ...)
+    Versions/   earlier versions, each with its .json and workflow
 ```
+(The user's call, 2026-10-24: "Films should just contain internal folder for the references and
+generated content and that's about it". For a day the film had a folder per shot, "1 Intro", then
+"Takes/Take 1", and a Sound folder.)
 
-Every piece has a .json beside its file, named as it (`Storyboard.MetaOf`: "Intro.json" for
-"Intro.mp4"; it was a `.meta` as Unity keeps one beside each asset, the user's comparison, until
+Every piece has a .json beside its file, named as it (`Storyboard.MetaOf`: "s1.json" for
+"s1.mp4"; it was a `.meta` as Unity keeps one beside each asset, the user's comparison, until
 they asked for plain .json, 2026-10-24): what it is (`"kind"`, its id, prompt, seed, model, what it
-is made from) and, once made, how (`"made"`: the stamp of the settings it was made from, the
-template, when, the settings then, what its look found). Named by the stem, a piece's file and its
-.json need stems no other made file in the folder has, as the workflows did already; a .json is a
-piece's when it has a `"kind"`, and the file it is beside is found by its kind (a frame's picture as
-it is there, else a PNG; a shot's or the film's MP4). The workflow beside it is ComfyUI's API format
-alone, which ComfyUI opens as it is and the comfyui tool runs (`workflow_file`). A piece is where its
-.json is: moved or renamed with its .json in Explorer it stays in the film, and with its .json
-deleted (a shot's folder deleted) it leaves it. Reading a film gathers them into one storyboard
-(`StoryboardFolder.cs`; the root, its folders and theirs, for a reference's folder in References,
-not Takes), which is what the agent reads and writes as JSON; saving it gives each piece its place
-(`Storyboard.Arrange`) and writes the .json files back, only those that say something new. A
-shot's folder follows the film's order and the shot's `name` (renamed with the files in it when
-they change, but not while a piece of the film is being made, `FilmMaker.IsMaking`: the job writes
-into it); a frame goes in the folder of the shot that ends on it, else the one that starts on it
-(the frame a shot after goes on from is the end of the shot before, and the tree shows it in the
-next shot's folder too), a reference in its folder in References, any other in Frames. A piece made
-stays where its file is; one not made yet goes where the order and names say, never onto a file a
-piece taken out left there ("2 puddle (2)"). The .json of a piece taken out goes, so it doesn't come
-back; its files stay. Films from before folders (a `storyboard.json`) aren't read or converted, and
-nor are the film-wide look and templates of older storyboards: the user's call, 2026-10-24, "ignore
-the possibility that anyone was using an old version". A film is made of:
+is made from, a sound's place on its track) and, once made, how (`"made"`: the stamp of the settings
+it was made from, the template, when, the settings then, what its look found). Named by the stem, a
+piece's file and its .json need stems no other made file in the folder has, as the workflows did
+already; a .json is a piece's when it has a `"kind"`, and the file it is beside is found by its kind
+(a frame's picture as it is there, else a PNG; a sound's as it is there, else an MP3; a shot's or the
+film's MP4). The workflow beside it is ComfyUI's API format alone, which ComfyUI opens as it is and
+the comfyui tool runs (`workflow_file`). A piece is where its .json is: moved or renamed with its
+.json in Explorer it stays in the film, and with its .json deleted it leaves it. Reading a film
+gathers them into one storyboard (`StoryboardFolder.cs`; the root, its folders and theirs, not
+Versions), which is what the agent reads and writes as JSON; saving it gives each piece its place
+(`Storyboard.Arrange`) and writes the .json files back, only those that say something new. What
+BlackBox makes goes into Generated named by its id (`s2.mp4`, `f3.png`, `a1.mp3`), which doesn't
+change as takes are put in another order, a generated image into References named after it. A
+piece made stays where its file is; one not made yet goes where its id or name says, never onto a
+file a piece taken out left there ("s2 2.mp4"). The .json of a piece taken out goes, so it doesn't
+come back; its files stay. Films from before folders (a `storyboard.json`) aren't read or converted,
+and nor are the film-wide look and templates of older storyboards: the user's call, 2026-10-24,
+"ignore the possibility that anyone was using an old version". In the panel a shot is a **take**
+("Take 1", the user's word); the agent is told which shot a take is. A film is made of:
 
 - **Shots** in order, each going from its **first frame** to its **last frame** in so many seconds,
   with what happens in it, what the camera does, and how it follows the shot before (a cut, a
@@ -515,19 +513,17 @@ the possibility that anyone was using an old version". A film is made of:
 - **Frames**: made from a prompt with a fixed seed, or taken from a picture of the user's (cut to
   the film's frame). A frame can be made **from other frames** (an edit model such as
   Qwen-Image-Edit gets them as its pictures), so the people and places stay the same from shot to
-  shot; **references** (a character, a place) are frames for that alone, in no shot. Each has a
-  folder of its own in the film's **References** folder (the user's call, 2026-10-24: "each
-  reference should have its own folder for multiple references"), its picture made there at its own
-  shape ("References/Fox/Fox.png"); a reference named "Fox/side" is another picture of Fox, made into
-  that folder as "side.png". Any picture the user puts there (dropped on the panel: into the
-  reference it is dropped on, its folder or a picture of it in the tree or the viewer showing it,
-  which is marked while the picture is dragged over it; else the reference picked in the tree, else a
-  folder of its own named after it; or copied there) is one too. A drop copies the picture, the
-  user's own staying where it was, and the copy can be renamed like a reference's folder (the user,
-  2026-10-24: "Dragged-and-dropped stuff should be copied and able to be renamed", in Filmmaking
-  only): frames whose `from` or `file` names it are told the new name. A frame's `from` names a reference's folder ("Fox": its main picture, the one named after the
-  folder, else its first, `Storyboard.MainPicture`) or a picture in it ("Fox/side.png", or just
-  "side.png"), so the agent picks the pictures a frame needs: an edit template takes a few.
+  shot; **references** (a character, a place) are frames for that alone, in no shot. Their pictures
+  are in the film's **References** folder (the user's call, 2026-10-24: "References (Where either
+  image file or generated image present)"), a generated one made there at its own shape, named after
+  it ("References/Fox.png"; "Fox/side" is "References/Fox side.png"). Any picture the user puts there
+  (File… on a card, dropped on the timeline, or copied there) is an image file, which frames are made
+  from too. A drop copies the picture, the user's own staying where it was, and the copy can be
+  renamed (the user, 2026-10-24: "Dragged-and-dropped stuff should be copied and able to be
+  renamed"): frames whose `from` or `file` names it are told the new name. A frame's `from` names a
+  picture in References ("lineup.jpg", or "lineup"), or a folder there, which pictures may still be
+  put in ("Fox": its main picture, the one named after the folder, else its first,
+  `Storyboard.MainPicture`), so the agent picks the pictures a frame needs: an edit template takes a few.
 - **The user's pictures stay as they gave them** (the user's call, 2026-10-24: "Source should be
   kept as is"). Asked to make front and back references from a lineup of four poses attached from
   OneDrive, the model, told only that `from` takes pictures in References, cut one figure out with
@@ -547,15 +543,14 @@ the possibility that anyone was using an old version". A film is made of:
   to them made every frame and shot out of date. A `style` the agent gives with a change goes only
   into the frames and shots of that change. Only the frame size and frame rate are the film's
   (1280x720 at 24 fps unless changed).
-- **The soundtrack**: none (each shot keeps the sound it was made with), a sound file of the
-  user's, or a song made for the film from a style and lyrics. A shot can be **lip-synced**: the
-  soundtrack's part under it is cut out as a WAV and given to LTX's picture and sound to video
-  template with its first frame, so the people in it sing or speak it.
+- **Sounds** on sound tracks (see "Sound tracks" below): sound files of the user's and songs made
+  for the film from a style and lyrics, each from where it starts, trimmed, at its volume, over the
+  shots' own sound.
 - **Lines**: what is said in a shot, in the film's voice (a description: "a man in his forties,
   warm, deadpan"). VoxCPM2 says the first speaking shot's line from the description and clones
   that line's voice for the others, so every line is the same person; the line is placed 0.4 s into
   the shot (time to turn to the camera) and the shot is lip-synced to it. In the film the line is
-  heard as VoxCPM2 said it, not as LTX gives it back, and the soundtrack drops to 35% under it. A
+  heard as VoxCPM2 said it, not as LTX gives it back, and the sounds drop to 35% under it. A
   line longer than its shot is said to be cut. A small Gemma 4 hears each line back in the check:
   "Honestly? It used to be a lot worse." came back word for word.
 
@@ -619,10 +614,10 @@ bars through the whole clip.
 
 **Joining** is ffmpeg: each clip held on its last frame or cut to its shot's length, scaled and
 cut to the film's frame and frame rate, joined with concat (a cut) or xfade (a dissolve or a fade,
-which overlap the shot before by half a second or a second), the soundtrack under it (the shots'
-own sound left out under one unless its volume is raised: LTX's is a muddy wash that took the
-Paper Boat song from 3.1 to 2.7 on SongEval at 30%), a short fade in, a fade out at the end, longer
-for the song, which is cut there. Without ffmpeg the error says where to put a portable one.
+which overlap the shot before by half a second or a second), the sounds over it (the shots' own
+sound at half under a song: LTX's is a muddy wash that took the Paper Boat song from 3.1 to 2.7 on
+SongEval at 30%), a short fade in, a fade out at the end, longer for a sound that runs past it,
+which is cut there. Without ffmpeg the error says where to put a portable one.
 
 **The song** is made a minute long at least and the film uses its start: ACE-Step 1.5 falls apart
 when asked for a short song. For the Paper Boat's style and lyrics, 21 s songs scored 2.4 to 2.9 of
@@ -651,7 +646,7 @@ the script reads a WAV ffmpeg made. MuQ's weights are CC BY-NC 4.0.
 the frames it should start and end on (pictures shrunk to 48 pixels across, brightness pattern
 and colour, 0 to 1; LTX's first frame came out 0.98 alike), whether it moves, freezes or jumps
 suddenly (a cut inside a shot), black frames, its length and sound; for a lip-synced shot, what
-is sung in its part of the soundtrack (a small Gemma 4 in ComfyUI hears it). Then the sheet of the
+is said in its line (a small Gemma 4 in ComfyUI hears it). Then the sheet of the
 storyboard's frames above eight of the clip's goes to a **fresh look**: the model, in a request of
 its own without the run's history, says whether what should happen happens, what is warped or
 changing, whether the people stay the same, and ends with a verdict. The model that made a clip
@@ -677,84 +672,76 @@ filled with the panel's background colour at once: moved by Position and widened
 next layout, the chat jumped sideways with the window, the window grew a tenth of a second later
 with its new part black for a twentieth more, and the chat jumped back (captured frame by frame,
 2026-10-24). Now the chat stays put and the panel fills in about 50 ms later. The window's place is
-saved without the panel. A splitter
-between the two moves the line between them. The panel has the films folder as a tree on the left,
-a viewer beside it with how the piece shown was made under it, and the timeline at the bottom; its
-top bar has the film's frame size and frame rate, **New film** and **Make the film** (the user,
-2026-10-24: "Get rid of the settings button altogether, put frame size and framerate fields at the
-top"; the cog's title went with the folder's name, its soundtrack and shots' sound sliders went
-with the levels they set, the shots' own sound staying at half under a soundtrack; the film
-dropdown, Open… and Show folder went for the tree and its right-click menu).
+saved without the panel. The panel has a viewer with how the piece shown was made under it, and the
+timeline under that; its top bar has the film's name (its menu, see below), the frame size and frame
+rate, **New film** and **Make the film** (the user, 2026-10-24: "Get rid of the settings button
+altogether, put frame size and framerate fields at the top"; the cog's title went with the folder's
+name, its soundtrack and shots' sound sliders with the levels they set).
 
-**The tree is the films folder as Explorer shows it** (the user: "Get rid of film selection
-dropdown, I want it to work just like a file explorer... Opening another film should be about just
-selecting the other folder"): a folder for each film by name (a folder of films with theirs in it),
-the open one with all in it, the others closed with nothing under them. Picking a film's folder
-opens that film (once the tree is done picking it: opened at once, the tree was built anew under its
-own pick); nothing goes into the chat's box for it, as nothing picked is the whole film, and the
-viewer shows the whole film under the film's name, saying the whole film is selected (it said
-"Whole film", which the user found odd and not seen as the pick). The open film's folder as it is on the disk: References with a folder
-for each reference, a folder per shot in the film's order, Sound, any other folder, and the joined
-film, with what each piece is beside its name ("the start of shot 1", "shot 1's clip"; the frame a
-shot goes on from, kept in the shot before's folder, "the start of shot 2, in 1 leap": named "it
-starts on end of shot 1, start of shot 2" it read as the shot's end listed twice), its state ("Not
-made yet", "Made · looked at", what the chat is doing to it), a thumbnail for a picture, and its
-takes under it. A piece planned and not made yet is there, greyed, where it will be. The pieces'
-.json files and workflows aren't shown (what they say is under the viewer), nor what is made beside
-a piece. It is built again only when what it shows changed: as a job writes, the folder changes
-every second. Its scrollbar always shows, as the chat's does (the user found waiting for it to show
-up annoying). The whole films folder is watched: a film made, renamed or deleted elsewhere (the
-chat, another window, Explorer) shows; the open film's folder renamed is followed (its Renamed
-event), and gone, the film changed last opens. Nothing is saved into a folder that went: it would
-come back.
+**All of the film is worked on in the timeline** (the user's call, 2026-10-24: "work on the film
+should be done entirely in the timeline. Right click on timeline -> Create. And then you pick either
+a file reference to copy the file, or hit a generate button. Remove all that folder tab nonsense").
+The films folder as a tree, which the panel had for a day (the user's earlier "I want it to work just
+like a file explorer"), went with it. Its rows: **References**, a card for each picture frames are made
+from, an image file of the user's or a generated image (a reference of the storyboard), by name, with
+the dashed + after them; **Video**, a block per take (shot) from where it starts for as long as it
+lasts, its clip's frames inside once made (else its frames and what happens in it), its state under
+it, dragging its right edge making it longer or shorter in half seconds, the dashed + after the last;
+**Lines**, where they are said; and the **sound tracks** (below). A ruler on top moves the playhead
+(click or drag), and the play button plays the sound tracks mixed from there (`FilmMix`, from each
+sound's samples read once for its waveform, as joining lays them over each other) with each take's
+frame in the viewer. The timeline is dragged sideways anywhere but the ruler, a take's edge and a
+sound (the user found its scrollbar "very inconvenient", 2026-10-24; a drag from a take doesn't pick
+it, a press let go without moving 4 pixels does), its scrollbar shows only under the pointer, the
+wheel scrolls sideways and Ctrl+wheel zooms. A take clicked doesn't scroll into view
+(`BringIntoViewOnFocusChange` off): partly scrolled out, it moved from under the pointer between
+press and release. A click away from every piece (the timeline's empty space, around the viewer) or
+Esc (not while typing) shows the whole film again, nothing going into the box. The whole films
+folder is watched: what the chat, another window or Explorer changes in the open film shows; its
+folder renamed is followed, and gone, the film changed last opens. Nothing is saved into a folder
+that went: it would come back.
 
-**Right-click in the tree** (the user's calls, 2026-10-24: rename films, "right click it to create a
-placeholder for a reference file", "Right click on film folder to create a new shot as well. Right
-click on sound to create a sound placeholder", and a shot deleted from its folder or its block on
-the timeline) opens a menu for what is under the pointer without picking it (picked, a film opened
-and a piece went into the box): a film's folder has Rename (F2 too), Delete, New film, New shot and
-Show in Explorer; References has New reference; a reference's folder Rename (while none of its
-pictures is made), Delete and New reference; a picture of the user's in References Rename (F2 too); a shot's folder Delete and New shot; Sound New sound
-(a song not made yet, with none) and Delete; anywhere else Show in Explorer, and away from every
-folder New film. A rename is typed in the tree as in Explorer: Enter or a click elsewhere keeps it,
-Esc doesn't; the tree isn't built again meanwhile, or the box went from under the keys. New film
-and New reference start one ("New film", "New reference") with its name to type. Renaming the open
-film lets go of what the viewer plays first: Windows doesn't move a folder a file in it is open
-from. Delete puts the folder in the Recycle Bin (`FileSystem.DeleteDirectory` with
-`SendToRecycleBin`; Windows only for now): a film, the open one giving way to the film changed
-last; a reference's folder with its references, which frames made from them no longer name; the
-soundtrack (a song made, with its takes; a sound file of the user's stays where it is); a shot
-(`Storyboard.DeleteShot`) with the frames only it starts or ends on, while a frame of its folder
-another shot uses (the end the next shot goes on from) moves first, with its .json, workflow and
-takes, to where it goes now, and the shots after are numbered again. Nothing is renamed or deleted
-while the chat is at work on the film. **New shot** is also the dashed + after the last shot on the
-timeline's Video row (the user found the "+ Shot" button by the play buttons out of place). A line
-under the tree's own says right-click renames, adds and deletes, and that a picture dropped on a
-reference goes into it: nothing showed the menu was there (the user, 2026-10-24).
+**Creating, renaming, deleting.** Right-click a row away from its cards: **Create**. On References a
+new card ("New image"), a generated image nothing is said of yet, offering **File…** (the Open
+dialog: the picture picked is copied into References as an image file, which the card is from then
+on) and **Generate** (it goes into the chat's box; with a prompt already, "Make it." is sent, else
+the status line asks what it should be); on Video a new take after the last; on a sound track a new
+sound ("New sound") from the time clicked, offering the same two. Files dropped on the timeline are
+copied in as they are (`Storyboard.KeepPicture`): pictures into References as image files, sounds
+into References too, laid on the track dropped on from the time dropped at (else the first track from
+the playhead); one dropped on a new card or sound becomes it, which is marked while dragged over.
+Right-click a card, take or sound: File…, Generate, Rename (a box over it, as Explorer's: Enter or a
+click elsewhere keeps it, Esc doesn't; a generated image's picture and what goes with it are renamed
+with it, an image file's frames' `from` told the new name), Delete (to the Recycle Bin,
+`FileSystem.DeleteFile`/`DeleteDirectory` with `SendToRecycleBin`; Windows only for now: a take with
+the frames only it uses, `Storyboard.DeleteShot`, a card or sound with its .json, workflow and
+versions), and Versions; a take also Start frame and End frame, which pick its frames. The film's
+name at the top opens the films' menu: each film to open, New film, Rename (renaming the open film
+lets go of what the viewer plays first: Windows doesn't move a folder a file in it is open from),
+Delete (the film changed last opens) and Show in Explorer. Nothing is renamed or deleted while the
+chat is at work on the film. A line over the timeline says what right-click and dropping do, until
+the status line has something to say: nothing showed the menu was there (the user, 2026-10-24).
 
-**The timeline**, the user's design (it replaced a grid of shots two to a row with prompt boxes,
-and a read-only strip): one horizontal scroll for its rows, the names staying put at the left.
-**Video** has a block per shot from where it starts for as long as it lasts, its clip's frames
-inside once made (else its frames and what happens in it), its state under it; dragging a shot's
-right edge makes it longer or shorter, in half seconds. The lines where they are said, and the
-soundtrack's waveform, darker where it is turned down under the lines. A ruler on top moves the
-playhead (click or drag), and the play button plays the soundtrack from it with each shot's frame
-in the viewer. The timeline is dragged sideways anywhere but the ruler and a shot's edge (the user
-found its scrollbar "very inconvenient", 2026-10-24; a drag from a shot doesn't pick it, a press
-let go without moving 4 pixels does), its scrollbar shows only under the pointer, the wheel scrolls
-sideways and Ctrl+wheel zooms. A shot clicked doesn't scroll into view (`BringIntoViewOnFocusChange`
-off): partly scrolled out, it moved from under the pointer between press and release. Testing it
-with posted mouse messages, Windows adds a move to where the real cursor is when the press captures
-the mouse, so a posted click away from the cursor can read as a drag; and UI Automation gives a
-shot's whole bounds, under the row names too when scrolled, so click inside what shows. A click away from every piece (the timeline's empty space, around
-the viewer) or Esc (not while typing) shows the whole film again and picks its folder in the tree,
-nothing going into the box. A soundtrack
-that is a video opens full screen on its own.
+**Sound tracks**, as a video editor has them (the user, 2026-10-24: "Make the sounds line into an
+overlay sound editor", "Same as with images, either generated or file copy of a sound", "kinda like
+in any popular video editing software", "we also need to be able to create multiple sound tracks"):
+the film's `tracks` (1 to 12; **+ Track** under their names adds one, right-click a track's name or
+row for Delete track, its sounds going with it and the tracks under it moving up), each sound
+(`Storyboard.Sounds`, ids a1, a2…) a clip on its `track` from its `start` for as long as it plays:
+`seconds`, else what its file has after its `trim`, else, a song not made, to the film's end. Its
+waveform is drawn inside. Dragged, it moves along its track and to another; its left edge cuts its
+start (trim and start together), its right edge its end, in tenths of a second, saved once let go.
+Sounds may overlap, on one track or several. A sound is a file of the user's (`"source": "file"`,
+copied into References; one put there in Explorer without a .json comes onto the first track from
+the start, `AdoptSounds`) or a song BlackBox makes (`"source": "song"`, into Generated). Joining lays
+each over the shots' own sound with ffmpeg (`atrim`, `adelay`, `amix`), quieter under the lines;
+under a song the shots' own sound is kept at half. The single soundtrack of before (none, a file or
+a song, in a Sound folder, with lip sync to its part under a shot) went with it.
 
 **The user never writes a prompt** (their rule): there are no prompt fields. **What they pick
 goes into the chat's box** (the user's call, 2026-10-24: "in order to generate something you either
 select folder or image or video, it shows up in main chat window prompt, and then you write the
-prompt to describe what you wanna do with it"): a folder, a picture or a clip, in the tree or on the
+prompt to describe what you wanna do with it"): a folder, a picture, a clip or a sound on the
 timeline, is a chip under the box ("The start of shot 1 · Moon start.png", "not made yet" for a
 piece planned), × takes it off, another pick takes its place, and sent, it goes with the message
 (a piece not made yet as its place, with no file). A message sent while Filmmaking is open carries
@@ -807,8 +794,7 @@ changed its prompt, the shot's look words with it (and said so), and made it wit
 looked at by fresh looks (see below), and what they found is kept in the piece's .json
 (`"made"."look"`, a song's judged sound too) so the panel shows it with the piece.
 
-**The panel and the chat.** It reads twice a second what the chat is doing: on the timeline and in
-the tree, the piece the film tool is making or looking at, by the call's arguments, with how it is
+**The panel and the chat.** It reads twice a second what the chat is doing: on the timeline, the piece the film tool is making or looking at, by the call's arguments, with how it is
 getting on. What the agent changes and makes in the film's folder shows as it happens (the folder is
 watched, and read again when it changed). Changes made by hand (a shot's length, a new shot, the
 film's size and frame rate, a take put back, pictures dropped into References) are saved at once,
@@ -961,23 +947,25 @@ look and the film's, its camera still (measured), in 21 minutes.
 
 **Full screen.** A click on the picture or video in the panel's viewer opens it in the chat's
 full-screen viewer (`MediaViewer`), on the window's screen, with the film's other pictures and
-clips an arrow key away, in the tree's order: the references, each shot's frames and clip, then the
+clips an arrow key away, in the timeline's order: the references, each shot's frames and clip, then the
 joined film. A clip playing in the panel stops meanwhile; the play button under it still plays it
 in place.
 
-**Takes**: before the film tool makes a piece again, the one there is kept in its folder's Takes
-(`1 Intro/Takes/Intro end.v1.png` with its .json and workflow, `Intro.v1.mp4`…), its .json holding the
+**Versions** (called takes until 2026-10-24, when the user's "Takes" became the shots): before the
+film tool makes a piece again, the one there is kept in its folder's Versions
+(`Generated/Versions/f2.v1.png` with its .json and workflow, `s1.v1.mp4`…), its .json holding the
 settings it was made with (`"made"."settings"`) and what its look found; a make that fails or is
-stopped puts that take back in place, what its .json says of how it was made too (the job had begun
+stopped puts that version back in place, what its .json says of how it was made too (the job had begun
 to write over it, and dropped, the piece lost its settings and look and read as changed; only the
 `"made"` part goes back over the piece's .json, which keeps what it says of the piece: moved whole, a
-take made beside a piece left it without its prompt), and so does a shot of several `tries`
-stopped before one replaced its clip (the takes made so far stay). A speaking shot's take keeps
-its line with it (`Intro.v1.wav` and `Intro.line.v1.flac`): put back without it, the newer line
-played over the older lips, and the shot read as up to date. A take is picked in the tree under its
-piece, and **Use this take** under the viewer puts it back. A frame or shot call's changes go in only for a piece
+version made beside a piece left it without its prompt), and so does a shot of several `tries`
+stopped before one replaced its clip (the versions made so far stay). A speaking shot's version keeps
+its line with it (`s1.v1.wav` and `s1.line.v1.flac`): put back without it, the newer line
+played over the older lips, and the shot read as up to date. A version is picked from its piece's
+right-click menu (Versions), and **Use this version** under the viewer puts it back; a sound's goes
+back where the sound is now on its track. A frame or shot call's changes go in only for a piece
 of that kind, or a new one it gives a prompt: a frame call with a shot's id added a stray frame.
-The song's tries made before one that fails or is stopped are takes of the song, not stray files.
+A song's tries made before one that fails or is stopped are versions of the song, not stray files.
 Checked with Claude in the window (2026-10-23): "Use a picture of mine…" on the frame shot 1 starts
 on, through the Open dialog, made the frame from the user's picture, cut to the film's size, and
 kept it though its look said it didn't match the shot's words, as the request says. A seed settled after several

@@ -21,7 +21,7 @@ public sealed record FilmMade(string File, string? Meta, string? Template, TimeS
 public sealed class FilmStillRunningException(string message) : Exception(message);
 
 /// <summary>
-/// Makes a film's pieces with ComfyUI: each frame, each shot's clip and the song, every one with a
+/// Makes a film's pieces with ComfyUI: each frame, each shot's clip and the songs, every one with a
 /// workflow of its own kept beside what it made, its seed fixed, so running it again makes the same
 /// thing. Shared by the Filmmaking panel and the film tool.
 /// </summary>
@@ -66,7 +66,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     /// <summary>
     /// A shot's prompt as the video model is given it: "No music." at the end unless it speaks of
     /// music. LTX makes a shot's sounds well and its music badly (the user's finding), and the film's
-    /// music is its song. Not part of the shot's stamp, so shots made before stay up to date.
+    /// music is a song on its sound tracks. Not part of the shot's stamp, so shots made before stay up to date.
     /// </summary>
     internal static string WithoutMusic(string prompt) => MusicWords().IsMatch(prompt) ? prompt : Join(prompt, "No music.");
 
@@ -85,7 +85,6 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
 
     public static string? ModelOf(Storyboard board, FilmShot shot) => shot.Model;
 
-    public static string? SongModelOf(Storyboard board) => board.Sound.Model;
 
     /// <summary>Makes a frame's picture: taken from the user's file, else made from words, or from the frames it is based on.</summary>
     public async Task<FilmMade> MakeFrameAsync(Storyboard board, FilmFrame frame, Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
@@ -141,7 +140,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             if (board.Frame(id) is not { } from)
             {
                 pictures.Add(board.ReferenceFile(id) ?? throw new FilmException(
-                    $"{frame.Label} is to be made from \"{id}\", which is neither a frame of this film nor a reference's folder or picture in its References folder ({board.ReferencesFolder})" +
+                    $"{frame.Label} is to be made from \"{id}\", which is neither a frame of this film nor a picture in its References folder ({board.ReferencesFolder})" +
                     (board.ReferenceFiles() is { Count: > 0 } there ? $", which has {string.Join(", ", there.Take(20).Select(board.InReferences))}." : ", which is empty.")));
                 continue;
             }
@@ -173,8 +172,8 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     // ---- shots -------------------------------------------------------------------------------------
 
     /// <summary>
-    /// Makes a shot's clip from its frames: first and last, first only, or words only; a lip-synced
-    /// one from its first frame and the soundtrack's part under it.
+    /// Makes a shot's clip from its frames: first and last, first only, or words only; a speaking
+    /// one from its first frame and its line.
     /// </summary>
     /// <param name="take">Saved as this file instead of the shot's own (one take of several).</param>
     public async Task<FilmMade> MakeShotAsync(Storyboard board, FilmShot shot, Action<string>? progress, CancellationToken userMessage, CancellationToken ct, string? take = null)
@@ -198,23 +197,12 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             if (firstPicture is null)
                 throw new FilmException($"Shot {shot.Id} is lip-synced, which needs its first frame to show who sings or speaks: give it one.");
             audio = board.ShotAudio(shot);
-            if (Storyboard.Speaks(shot))
-            {
-                // Its own line, said a moment after the shot starts (a head turns to the camera first).
-                if (!LineIsCurrent(board, shot))
-                    notes.AddRange((await MakeLineAsync(board, shot, progress, userMessage, ct).ConfigureAwait(false)).Notes);
-                var said = await Task.Run(() => PlaceSound(board.ShotLine(shot), LineLead, shot.Seconds, audio), ct).ConfigureAwait(false);
-                if (said + LineLead > shot.Seconds + 0.05)
-                    notes.Add($"Its line takes {said:0.0} s, and with the {LineLead:0.0} s before it the shot is {shot.Seconds:0.#} s: the end of the line is cut. Make the shot longer or the line shorter.");
-            }
-            else
-            {
-                var soundtrack = board.SoundtrackFile ?? throw new FilmException($"Shot {shot.Id} is lip-synced to the soundtrack, and there is none yet: " +
-                                                                                 (board.Sound.Source == FilmSound.Song ? "make the song first." : "give it a line, or give the film a soundtrack first."));
-                var (starts, _) = board.Timing();
-                var start = starts[board.Shots.IndexOf(shot)];
-                await Task.Run(() => CutSound(soundtrack, start, shot.Seconds, audio), ct).ConfigureAwait(false);
-            }
+            // Its own line, said a moment after the shot starts (a head turns to the camera first).
+            if (!LineIsCurrent(board, shot))
+                notes.AddRange((await MakeLineAsync(board, shot, progress, userMessage, ct).ConfigureAwait(false)).Notes);
+            var said = await Task.Run(() => PlaceSound(board.ShotLine(shot), LineLead, shot.Seconds, audio), ct).ConfigureAwait(false);
+            if (said + LineLead > shot.Seconds + 0.05)
+                notes.Add($"Its line takes {said:0.0} s, and with the {LineLead:0.0} s before it the shot is {shot.Seconds:0.#} s: the end of the line is cut. Make the shot longer or the line shorter.");
             job = FilmJob.LipSync;
             if (lastPicture is not null)
                 notes.Add($"A lip-synced shot is made from its first frame only, so it doesn't end on {last!.Label}.");
@@ -320,9 +308,9 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         var notes = new List<string>();
         var api = await hub.ConnectAsync(null, notes, progress, ct).ConfigureAwait(false);
         var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
-        var workflow = SpeechWorkflow(library, shot.Line.Trim(), board.Sound.Voice.Trim(), VoiceSeed(board), reference, firstSpeaker.Line.Trim(), Prefix(board, shot.Id + "-line"))
+        var workflow = SpeechWorkflow(library, shot.Line.Trim(), board.Voice.Trim(), board.VoiceSeed, reference, firstSpeaker.Line.Trim(), Prefix(board, shot.Id + "-line"))
                        ?? throw new FilmException("Saying a line needs VoxCPM2's nodes in ComfyUI (the ComfyUI-VoxCPM custom node pack), and they aren't installed: " +
-                                                  "install the pack (it downloads its model on first use), or give the film a soundtrack of its own to lip-sync to.");
+                                                  "install the pack (it downloads its model on first use).");
         workflow.FillAdvancedDefaults(library);
         var stamp = LineStamp(board, shot);
         var run = await RunWorkflowAsync(api, library, workflow, board.ShotLineMeta(shot), stamp, "VoxCPM2", "audio", progress, userMessage, ct).ConfigureAwait(false);
@@ -376,14 +364,8 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     {
         var first = board.Shots.FirstOrDefault(Storyboard.Speaks);
         var reference = first is null || first == shot ? "" : $"{first.Line.Trim()}|{FileStamp(board.ShotLine(first))}";
-        return Hash($"{shot.Line.Trim()}|{board.Sound.Voice.Trim()}|{VoiceSeed(board)}|{reference}");
+        return Hash($"{shot.Line.Trim()}|{board.Voice.Trim()}|{board.VoiceSeed}|{reference}");
     }
-
-    /// <summary>
-    /// The seed the lines are said with: the song's until a song was made with a seed of its own
-    /// (<see cref="FilmSound.VoiceSeed"/>); remaking the song changed the voice and put every line out of date.
-    /// </summary>
-    private static long VoiceSeed(Storyboard board) => board.Sound.VoiceSeed is > 0 and var voice ? voice : board.Sound.Seed;
 
     /// <summary>
     /// A sound placed <paramref name="at"/> seconds into a WAV <paramref name="seconds"/> long, silence
@@ -418,22 +400,23 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     /// </summary>
     public const double MinSongSeconds = 60;
 
-    /// <summary>How long the song is made: the film's length and a little more, a minute at least.</summary>
-    public static double SongSeconds(Storyboard board) => Math.Max(MinSongSeconds, Math.Ceiling(board.Timing().Length) + 2);
+    /// <summary>How long a song is made: from where it starts to the film's end and a little more, a minute at least.</summary>
+    public static double SongSeconds(Storyboard board, FilmSound sound) => Math.Max(MinSongSeconds, Math.Ceiling(board.Timing().Length - sound.Start) + 2);
 
     /// <summary>Hears how good a song is, to keep the best of several takes; null when it can't run here.</summary>
     public SongJudge? Judge { get; init; }
 
     /// <summary>
-    /// Makes the soundtrack: a song in the storyboard's style, with its lyrics (an instrumental
-    /// without), a minute long at least. With a judge, up to <paramref name="takes"/> songs with new
+    /// Makes a song for a sound track: in its style, with its lyrics (an instrumental without), a
+    /// minute long at least. With a judge, up to <paramref name="takes"/> songs with new
     /// seeds, each heard for the part the film uses, and the best kept (its seed in the storyboard,
     /// which the caller saves): the same settings scored 3.3 to 4.2 by the seed alone.
     /// </summary>
-    public async Task<FilmMade> MakeSongAsync(Storyboard board, Action<string>? progress, CancellationToken userMessage, CancellationToken ct, int takes = 1)
+    public async Task<FilmMade> MakeSongAsync(Storyboard board, FilmSound sound, Action<string>? progress, CancellationToken userMessage, CancellationToken ct, int takes = 1)
     {
         using var making = MakingIn(board);
-        var sound = board.Sound;
+        if (sound.Source != FilmSound.Song)
+            throw new FilmException($"Sound {sound.Id} is a sound file of the user's: there is nothing to make.");
         if (sound.Tags.Trim().Length == 0)
             throw new FilmException("The song has no style: say what it should sound like (genre, instruments, voice, tempo).");
         var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -442,10 +425,10 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         if (python is null || ffmpeg is null)
             takes = 1;
         var made = new List<(long Seed, string File, string Workflow, Run Run)>();
-        // The lines keep the voice they were said with, whatever seed the song ends up with.
-        if (sound.VoiceSeed <= 0)
-            sound.VoiceSeed = sound.Seed;
         var seedBefore = sound.Seed;
+        var song = board.SoundFile(sound);
+        var meta = board.SoundMeta(sound);
+        var piece = FilmPiece.Of(sound);
         try
         {
             for (var take = 1; take <= Math.Max(1, takes); take++)
@@ -458,13 +441,13 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
                     Lyrics = sound.Lyrics.Trim().Length > 0 ? sound.Lyrics.Trim() : "[Instrumental]",
                     Bpm = Bpm(sound.Tags),
                     Seed = sound.Seed,
-                    Seconds = SongSeconds(board),
-                    Prefix = Prefix(board, "song"),
+                    Seconds = SongSeconds(board, sound),
+                    Prefix = Prefix(board, sound.Id),
                 };
-                var file = takes <= 1 ? board.SongFile : Path.Combine(Path.GetDirectoryName(board.SongFile)!, $"song.take{take}.mp3");
+                var file = takes <= 1 ? song : Path.Combine(Path.GetDirectoryName(song)!, $"{Path.GetFileNameWithoutExtension(song)}.take{take}.mp3");
                 var workflow = Storyboard.MetaOf(file);
-                var stamp = SongStamp(board);
-                var run = await RunAsync(FilmJob.Song, SongModelOf(board), inputs, sound.Set, workflow, stamp, "audio",
+                var stamp = SongStamp(board, sound);
+                var run = await RunAsync(FilmJob.Song, sound.Model, inputs, sound.Set, workflow, stamp, "audio",
                     takes <= 1 ? progress : s => progress?.Invoke($"Song {take} of {takes}: {s}"), userMessage, ct).ConfigureAwait(false);
                 Directory.CreateDirectory(Path.GetDirectoryName(file)!);
                 MediaRelease.Release(file);
@@ -482,7 +465,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             if (takes > 1)
                 foreach (var m in made)
                 {
-                    try { FilmTakes.Add(board, FilmPiece.Song, m.File); }
+                    try { FilmTakes.Add(board, piece, m.File); }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
                 }
             throw;
@@ -495,7 +478,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         {
             try
             {
-                scores = await Judge!.ScoreAsync(made.Select(m => m.File).ToList(), python, ffmpeg, board.Timing().Length, progress, ct).ConfigureAwait(false);
+                scores = await Judge!.ScoreAsync(made.Select(m => m.File).ToList(), python, ffmpeg, Math.Max(1, board.Timing().Length - sound.Start), progress, ct).ConfigureAwait(false);
             }
             catch (FilmException ex)
             {
@@ -512,18 +495,18 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         {
             notes.Insert(0, $"Kept song {made.IndexOf(best) + 1} of {made.Count} (seed {best.Seed}); musicality of each: " +
                             string.Join(", ", made.Select(m => scores?.GetValueOrDefault(m.File) is { } s ? s.Musicality.ToString("0.0", CultureInfo.InvariantCulture) : "?")) + ".");
-            FilmTakes.Promote(best.File, board.SongFile);
-            FilmTakes.Remember(board.SongMeta, FilmPiece.Song.Settings(board));
-            // The others are takes of the song, to put back in the window.
+            FilmTakes.Promote(best.File, song);
+            FilmTakes.Remember(meta, piece.Settings(board));
+            // The others are versions of the song, to put back in the panel.
             foreach (var other in made.Where(m => m != best))
             {
-                FilmTakes.Remember(other.Workflow, FilmPiece.Song.Settings(board) is JsonObject settings ? With(settings, other.Seed) : null);
-                FilmTakes.Add(board, FilmPiece.Song, other.File);
+                FilmTakes.Remember(other.Workflow, piece.Settings(board) is JsonObject settings ? With(settings, other.Seed) : null);
+                FilmTakes.Add(board, piece, other.File);
             }
         }
         else
-            FilmTakes.Remember(board.SongMeta, FilmPiece.Song.Settings(board));
-        return new FilmMade(board.SongFile, board.SongMeta, best.Run.Template, clock.Elapsed, notes) { Score = scores?.GetValueOrDefault(best.File) };
+            FilmTakes.Remember(meta, piece.Settings(board));
+        return new FilmMade(song, meta, best.Run.Template, clock.Elapsed, notes) { Score = scores?.GetValueOrDefault(best.File) };
 
         // The sound's settings with the seed that take was made with.
         static JsonObject With(JsonObject settings, long seed)
@@ -705,24 +688,19 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         sb.Append('|').Append(ModelOf(board, shot));
         if (Storyboard.Speaks(shot))
             sb.Append("|line ").Append(LineStamp(board, shot)).Append(' ').Append(LineLead.ToString(CultureInfo.InvariantCulture));
-        else if (shot.LipSync)
-        {
-            var (starts, _) = board.Timing();
-            sb.Append("|sound ").Append(board.SoundtrackFile is { } s ? FileStamp(s) : "").Append(' ').Append(starts[Math.Max(0, board.Shots.IndexOf(shot))].ToString(CultureInfo.InvariantCulture));
-        }
         return Hash(sb.ToString());
     }
 
     /// <summary>
-    /// What the song is made from, and after a colon how long it was made: a song stays up to date
-    /// while it covers the film. With the length in the hash, any change of a film over a minute
-    /// (a shot a second shorter) put the song out of date, and remaking it changed the music.
+    /// What a song is made from, and after a colon how long it was made: a song stays up to date
+    /// while it covers the film from where it starts. With the length in the hash, any change of a
+    /// film over a minute (a shot a second shorter) put the song out of date, and remaking it changed the music.
     /// </summary>
-    public static string SongStamp(Storyboard board) =>
-        SongHash(board) + ":" + SongSeconds(board).ToString(CultureInfo.InvariantCulture);
+    public static string SongStamp(Storyboard board, FilmSound sound) =>
+        SongHash(sound) + ":" + SongSeconds(board, sound).ToString(CultureInfo.InvariantCulture);
 
-    private static string SongHash(Storyboard board) =>
-        Hash($"{board.Sound.Tags}|{board.Sound.Lyrics}|{board.Sound.Seed}|{SongModelOf(board)}|{board.Sound.Set?.ToJsonString()}");
+    private static string SongHash(FilmSound sound) =>
+        Hash($"{sound.Tags}|{sound.Lyrics}|{sound.Seed}|{sound.Model}|{sound.Set?.ToJsonString()}");
 
     /// <summary>Gives a made piece's meta a new stamp (when it differs).</summary>
     private static void Restamp(string meta, string stamp)
@@ -821,10 +799,12 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     public static bool IsCurrent(Storyboard board, FilmShot shot) =>
         File.Exists(board.ShotVideo(shot)) && MadeStamp(board.ShotMeta(shot)) is { } made && made == ShotStamp(board, shot);
 
-    public static bool SongIsCurrent(Storyboard board) =>
-        File.Exists(board.SongFile) && MadeStamp(board.SongMeta) is { } made
-        && (made.Split(':') is [var hash, var length] && hash == SongHash(board)
-            && double.TryParse(length, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds >= SongSeconds(board));
+    /// <summary>A sound is there and, a song, was made from what the storyboard says now and covers the film from where it starts.</summary>
+    public static bool IsCurrent(Storyboard board, FilmSound sound) =>
+        File.Exists(board.SoundFile(sound)) &&
+        (sound.Source == FilmSound.FromFile || MadeStamp(board.SoundMeta(sound)) is { } made
+            && (made.Split(':') is [var hash, var length] && hash == SongHash(sound)
+                && double.TryParse(length, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds >= SongSeconds(board, sound)));
 
     // ---- pictures and sound --------------------------------------------------------------------------------
 
@@ -912,32 +892,6 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         if (top + bottom < h * 0.03 || top >= h * 0.3 || bottom >= h * 0.3) top = bottom = 0;
         if (left + right < w * 0.03 || left >= w * 0.3 || right >= w * 0.3) left = right = 0;
         return new SKRectI(left, top, w - right, h - bottom);
-    }
-
-    /// <summary>
-    /// The part of the soundtrack from <paramref name="start"/> for <paramref name="seconds"/>, as a
-    /// WAV file (silence where the soundtrack is shorter): what a lip-synced shot is made with.
-    /// </summary>
-    public void CutSound(string soundtrack, double start, double seconds, string target)
-    {
-        using var reader = media?.OpenAudio(soundtrack) ?? throw new FilmException($"The soundtrack {soundtrack} can't be read on this PC (ffmpeg in BlackBox's Data\\tools would).");
-        var (rate, channels) = (reader.SampleRate, Math.Max(1, reader.Channels));
-        if (start > 0)
-            reader.Seek(TimeSpan.FromSeconds(start));
-        var wanted = (long)Math.Round(seconds * rate) * channels;
-        var samples = new float[wanted];
-        long got = 0;
-        var buffer = new float[8192 * channels];
-        while (got < wanted)
-        {
-            var read = reader.Read(buffer, 0, (int)Math.Min(buffer.Length, wanted - got));
-            if (read <= 0)
-                break;
-            Array.Copy(buffer, 0, samples, got, read);
-            got += read;
-        }
-        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-        WriteWav(target, samples, rate, channels);
     }
 
     /// <summary>Samples (interleaved, -1 to 1) as a 16-bit PCM WAV file.</summary>

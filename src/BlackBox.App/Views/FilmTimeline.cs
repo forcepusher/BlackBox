@@ -11,11 +11,7 @@ internal static class FilmColors
 {
     public static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#8B9199"));
     public static readonly IBrush Text = new SolidColorBrush(Color.Parse("#E6E8EB"));
-    public static readonly IBrush Wave = new SolidColorBrush(Color.Parse("#8B9199"));
-    public static readonly IBrush WaveFaint = new SolidColorBrush(Color.Parse("#4A4F56"));
-    public static readonly IBrush Duck = new SolidColorBrush(Color.Parse("#66000000"));
-    public static readonly IBrush Lane = new SolidColorBrush(Color.Parse("#1E2024"));
-    public static readonly IBrush Label = new SolidColorBrush(Color.Parse("#C0111214"));
+    public static readonly IPen WavePen = new Pen(new SolidColorBrush(Color.Parse("#6B8299")), 1);
     public static readonly IPen Tick = new Pen(new SolidColorBrush(Color.Parse("#4A4F56")), 1);
     public static readonly IPen Border = new Pen(new SolidColorBrush(Color.Parse("#2F3338")), 1);
     public static readonly IPen Picked = new Pen(new SolidColorBrush(Color.Parse("#E0A64B")), 2);
@@ -119,84 +115,29 @@ public sealed class FilmRuler : Control
     }
 }
 
-/// <summary>
-/// The soundtrack's row: its waveform on the timeline's scale, quieter where the lines are said,
-/// what it is written over it. Clicking it picks it.
-/// </summary>
+/// <summary>A sound's waveform inside its clip on a sound track: its loudness across the clip, as the part of it that plays.</summary>
 public sealed class FilmWave : Control
 {
     public static readonly StyledProperty<float[]?> PeaksProperty = AvaloniaProperty.Register<FilmWave, float[]?>(nameof(Peaks));
-    public static readonly StyledProperty<double> SecondsProperty = AvaloniaProperty.Register<FilmWave, double>(nameof(Seconds));
-    public static readonly StyledProperty<double> PpsProperty = AvaloniaProperty.Register<FilmWave, double>(nameof(Pps), 64);
-    public static readonly StyledProperty<double> LeadProperty = AvaloniaProperty.Register<FilmWave, double>(nameof(Lead), 12);
-    public static readonly StyledProperty<double> LengthProperty = AvaloniaProperty.Register<FilmWave, double>(nameof(Length));
-    public static readonly StyledProperty<IReadOnlyList<(double X, double Width)>?> DucksProperty =
-        AvaloniaProperty.Register<FilmWave, IReadOnlyList<(double X, double Width)>?>(nameof(Ducks));
-    public static readonly StyledProperty<string?> LabelProperty = AvaloniaProperty.Register<FilmWave, string?>(nameof(Label));
-    public static readonly StyledProperty<bool> IsPickedProperty = AvaloniaProperty.Register<FilmWave, bool>(nameof(IsPicked));
 
-    /// <summary>Its loudness from start to end, 0 to 1, ten a second; null with no sound.</summary>
+    /// <summary>Its loudness from where the clip starts to where it ends, 0 to 1; null while it isn't read.</summary>
     public float[]? Peaks { get => GetValue(PeaksProperty); set => SetValue(PeaksProperty, value); }
 
-    /// <summary>How long the sound is.</summary>
-    public double Seconds { get => GetValue(SecondsProperty); set => SetValue(SecondsProperty, value); }
+    static FilmWave() => AffectsRender<FilmWave>(PeaksProperty);
 
-    public double Pps { get => GetValue(PpsProperty); set => SetValue(PpsProperty, value); }
-    public double Lead { get => GetValue(LeadProperty); set => SetValue(LeadProperty, value); }
-
-    /// <summary>How long the film is: past it the sound is drawn faint.</summary>
-    public double Length { get => GetValue(LengthProperty); set => SetValue(LengthProperty, value); }
-
-    /// <summary>Where the lines are said, in pixels: the soundtrack is quieter there.</summary>
-    public IReadOnlyList<(double X, double Width)>? Ducks { get => GetValue(DucksProperty); set => SetValue(DucksProperty, value); }
-
-    public string? Label { get => GetValue(LabelProperty); set => SetValue(LabelProperty, value); }
-    public bool IsPicked { get => GetValue(IsPickedProperty); set => SetValue(IsPickedProperty, value); }
-
-    /// <summary>The user clicked it.</summary>
-    public event Action? Picked;
-
-    static FilmWave() => AffectsRender<FilmWave>(PeaksProperty, SecondsProperty, PpsProperty, LeadProperty, LengthProperty, DucksProperty, LabelProperty, IsPickedProperty);
-
-    /// <summary>Where it was pressed: let go there, it is a click; dragged, the timeline scrolls (FilmPanel).</summary>
-    private Point? _pressed;
-
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        base.OnPointerPressed(e);
-        _pressed = e.GetPosition(this);
-        e.Handled = true;
-    }
-
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    {
-        base.OnPointerReleased(e);
-        if (_pressed is { } at && Point.Distance(at, e.GetPosition(this)) < 4)
-            Picked?.Invoke();
-        _pressed = null;
-    }
+    public FilmWave() => IsHitTestVisible = false;
 
     public override void Render(DrawingContext context)
     {
         var (w, h) = (Bounds.Width, Bounds.Height);
-        var lane = new Rect(Lead, 0, Math.Max(0, w - Lead - 4), h);
-        context.FillRectangle(FilmColors.Lane, lane, 4);
-        if (Peaks is { Length: > 0 } peaks && Seconds > 0 && Pps > 0)
+        if (Peaks is not { Length: > 0 } peaks || w <= 0)
+            return;
+        var middle = h / 2;
+        for (var x = 0.5; x <= w; x += 2)
         {
-            var middle = h / 2;
-            var last = Lead + Seconds * Pps;
-            for (var x = Lead + 0.5; x <= Math.Min(last, w); x += 2)
-            {
-                var t = (x - Lead) / Pps;
-                var at = (int)Math.Clamp(t / Seconds * peaks.Length, 0, peaks.Length - 1);
-                var half = Math.Max(0.5, peaks[at] * (h / 2 - 4));
-                context.DrawLine(new Pen(t <= Length + 0.01 ? FilmColors.Wave : FilmColors.WaveFaint, 1), new Point(x, middle - half), new Point(x, middle + half));
-            }
+            var at = (int)Math.Clamp(x / w * peaks.Length, 0, peaks.Length - 1);
+            var half = Math.Max(0.5, peaks[at] * (h / 2 - 2));
+            context.DrawLine(FilmColors.WavePen, new Point(x, middle - half), new Point(x, middle + half));
         }
-        foreach (var (x, width) in Ducks ?? [])
-            context.FillRectangle(FilmColors.Duck, new Rect(x, 0, width, h));
-        if (Label is { Length: > 0 } label)
-            FilmColors.Draw(context, label, Lead + 8, 5, 11, FilmColors.Text, Math.Min(w - Lead - 16, 900), FilmColors.Label);
-        context.DrawRectangle(IsPicked ? FilmColors.Picked : FilmColors.Border, lane, 4);
     }
 }

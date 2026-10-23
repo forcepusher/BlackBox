@@ -14,7 +14,7 @@
     <Style Selector="TextBlock.error">
       <Setter Property="Foreground" Value="{StaticResource BbError}" />
     </Style>
-    <!-- A shot on the timeline; the one shown has the accent around it. -->
+    <!-- A take, a card or a sound on the timeline; the one shown has the accent around it. -->
     <Style Selector="Border.block">
       <Setter Property="Background" Value="{StaticResource BbSurfaceRaised}" />
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
@@ -25,6 +25,16 @@
     <Style Selector="Border.block.selected">
       <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
       <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <!-- Files dragged over it would go into it. -->
+    <Style Selector="Border.block.drop">
+      <Setter Property="Background" Value="#40E0A64B" />
+    </Style>
+    <Style Selector="Border.block.planned">
+      <Setter Property="Opacity" Value="0.7" />
+    </Style>
+    <Style Selector="Border.clip">
+      <Setter Property="Background" Value="#2A3A4A" />
     </Style>
     <Style Selector="Border.handle">
       <Setter Property="Background" Value="#33E0A64B" />
@@ -51,6 +61,12 @@
     <Style Selector="Button.pick /template/ ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
     </Style>
+    <!-- File… and Generate on a new card or sound. -->
+    <Style Selector="Button.choice">
+      <Setter Property="Padding" Value="6,1" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
     <Style Selector="Button.thumb">
       <Setter Property="Padding" Value="0" />
       <Setter Property="Background" Value="Transparent" />
@@ -67,22 +83,10 @@
       <Setter Property="CornerRadius" Value="4" />
       <Setter Property="ClipToBounds" Value="True" />
     </Style>
-    <!-- The film's folder: a piece planned and not made yet is greyed. -->
-    <Style Selector="DockPanel.node.planned">
-      <Setter Property="Opacity" Value="0.55" />
-    </Style>
-    <!-- The reference pictures dragged over the tree would go into. -->
-    <Style Selector="DockPanel.node.drop">
-      <Setter Property="Background" Value="#40E0A64B" />
-    </Style>
-    <Style Selector="TreeViewItem" x:DataType="vm:FilmNode">
-      <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-      <Setter Property="MinHeight" Value="26" />
-    </Style>
   </UserControl.Styles>
 
   <UserControl.DataTemplates>
-    <!-- What the viewer shows: a clip or the film playing, the song, a picture, a card for what has none. -->
+    <!-- What the viewer shows: a clip or the film playing, a sound, a picture, a card for what has none. -->
     <DataTemplate DataType="vm:VideoPreview">
       <DockPanel>
         <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
@@ -141,14 +145,20 @@
   </UserControl.DataTemplates>
 
   <DockPanel>
-    <!-- The film's size and frame rate, changed here by hand and saved at once, and what to do with all of it.
-         Which film is the folder picked in the tree. -->
+    <!-- The film (its name opens the films' menu), its size and frame rate, changed here and saved at once, and what to do with all of it. -->
     <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="12,8">
       <DockPanel>
         <Button DockPanel.Dock="Right" Classes="primary" Content="Make the film" Command="{Binding MakeFilmCommand}"
                 ToolTip.Tip="BlackBox makes in the chat what isn't made yet or has changed, looks at each piece and fixes what it finds, then joins the film and looks at it" />
         <Button DockPanel.Dock="Right" Classes="ghost" Content="New film" Command="{Binding NewFilmCommand}" Margin="0,0,6,0"
-                ToolTip.Tip="A film of its own in the films folder: type its name, then say in the chat what it is to be" />
+                ToolTip.Tip="A film of its own: type its name, then say in the chat what it is to be" />
+        <Button x:Name="FilmButton" DockPanel.Dock="Left" Classes="ghost" Padding="8,4" Margin="0,0,16,0" Click="OnFilmMenu"
+                ToolTip.Tip="Your films: open another, or rename or delete this one" AutomationProperties.Name="Films">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="{Binding FilmName}" FontWeight="SemiBold" MaxWidth="260" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            <PathIcon Data="M7 10l5 5 5-5z" Width="10" Height="10" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <TextBlock Classes="label" Text="Frame size" VerticalAlignment="Center" />
           <NumericUpDown Value="{Binding FrameWidth}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="76" ShowButtonSpinner="False" AutomationProperties.Name="Frame width" />
@@ -161,14 +171,14 @@
       </DockPanel>
     </Border>
 
-    <!-- The timeline: video and sound, under one scroll. A click on it away from every piece shows the whole film. -->
-    <Border DockPanel.Dock="Bottom" Background="#15171A" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0"
-            PointerPressed="OnAwayPressed">
+    <!-- The timeline, where the film is worked on: References, the takes, the lines and the sound tracks, under one scroll.
+         Right-click a row to create there; drop files on it to copy them in. -->
+    <Border DockPanel.Dock="Bottom" Background="#15171A" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0">
       <DockPanel>
         <Grid DockPanel.Dock="Top" Height="40" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="10,0">
           <Button Width="30" Height="30" CornerRadius="15" Padding="0" Background="{StaticResource BbAccent}" VerticalAlignment="Center"
                   HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                  Command="{Binding PlayStripCommand}" ToolTip.Tip="Play the soundtrack with each shot's frames from the playhead" AutomationProperties.Name="Play the storyboard">
+                  Command="{Binding PlayStripCommand}" ToolTip.Tip="Play the sound tracks with each take's frames from the playhead" AutomationProperties.Name="Play the storyboard">
             <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" Foreground="#111214" />
           </Button>
           <TextBlock Grid.Column="1" Text="{Binding PlayTime}" FontFamily="Consolas, monospace" Foreground="{StaticResource BbAccent}" VerticalAlignment="Center" Margin="10,0,12,0" />
@@ -176,8 +186,9 @@
             <Button Classes="ghost" Content="−" Padding="10,2" Command="{Binding ZoomOutCommand}" ToolTip.Tip="See more of the film (Ctrl + wheel)" AutomationProperties.Name="Zoom out" />
             <Button Classes="ghost" Content="+" Padding="10,2" Command="{Binding ZoomInCommand}" ToolTip.Tip="See it closer (Ctrl + wheel)" AutomationProperties.Name="Zoom in" />
           </StackPanel>
-          <TextBlock Grid.Column="3" Classes="muted" Text="{Binding Status}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="12,0" FontSize="12"
-                     ToolTip.Tip="{Binding Status}" />
+          <!-- What the panel did or what went wrong; else how the timeline is used (nothing showed the right-click menu was there). -->
+          <TextBlock Grid.Column="3" Classes="muted" Text="{Binding StatusOrHint}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="12,0" FontSize="12"
+                     ToolTip.Tip="{Binding StatusOrHint}" />
           <TextBlock Grid.Column="4" Classes="muted" Text="{Binding LengthText}" VerticalAlignment="Center" FontSize="12" />
         </Grid>
         <Grid ColumnDefinitions="96,*" Margin="0,0,0,4">
@@ -185,82 +196,140 @@
           <Border BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,1,0">
             <StackPanel>
               <Border Height="26" />
+              <Border Height="92">
+                <TextBlock Text="References" Margin="10,10,6,0" />
+              </Border>
               <StackPanel Height="112" Spacing="4">
                 <TextBlock Text="Video" Margin="10,10,6,0" />
-                <TextBlock Classes="label" TextWrapping="Wrap" FontSize="11" Margin="10,0,6,0" Text="Drag a shot's right edge to change its length" />
+                <TextBlock Classes="label" TextWrapping="Wrap" FontSize="11" Margin="10,0,6,0" Text="Drag a take's right edge to change its length" />
               </StackPanel>
               <Border Height="34">
                 <TextBlock Text="Lines" Margin="10,0,0,0" VerticalAlignment="Center" />
               </Border>
-              <Border Height="56">
-                <TextBlock Text="Sound" Margin="10,0,0,0" VerticalAlignment="Center" />
-              </Border>
+              <ItemsControl ItemsSource="{Binding Tracks}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:TrackItem">
+                    <Border Height="{x:Static vm:FilmViewModel.TrackHeight}" Background="Transparent" ContextRequested="OnTrackMenu">
+                      <TextBlock Text="{Binding Name}" Margin="10,0,0,0" VerticalAlignment="Center" />
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Button Classes="ghost" Content="+ Track" Padding="8,2" Margin="6,2,0,0" Height="26" Click="OnAddTrack"
+                      ToolTip.Tip="Another sound track" AutomationProperties.Name="New sound track" />
             </StackPanel>
           </Border>
 
-          <!-- Dragged sideways anywhere but the ruler and a shot's edge, it scrolls (FilmPanel.Pan);
-               the wheel does too, Ctrl+wheel zooms. Its bar only shows under the pointer. A shot
-               clicked stays where it is: brought into view, it moved from under the pointer. -->
+          <!-- Dragged sideways anywhere but the ruler, a take's edge and a sound, it scrolls (FilmPanel.Pan);
+               the wheel does too, Ctrl+wheel zooms. Its bar only shows under the pointer. -->
           <ScrollViewer x:Name="Timeline" Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
-                        PointerWheelChanged="OnTimelineWheel" Background="Transparent" BringIntoViewOnFocusChange="False">
+                        PointerWheelChanged="OnTimelineWheel" Background="Transparent" BringIntoViewOnFocusChange="False" ContextRequested="OnRowMenu">
             <Panel Width="{Binding TimelineWidth}" HorizontalAlignment="Left" ClipToBounds="True">
               <StackPanel>
                 <views:FilmRuler x:Name="Ruler" Height="26" Pps="{Binding Pps}" Length="{Binding Length}" Lead="{x:Static vm:FilmViewModel.Lead}" />
-                <Panel Height="112">
-                <ItemsControl ItemsSource="{Binding Shots}">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                      <Canvas />
-                    </ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
-                  <ItemsControl.Styles>
-                    <Style Selector="ContentPresenter" x:DataType="vm:ShotItem">
-                      <Setter Property="Canvas.Left" Value="{Binding X}" />
-                      <Setter Property="Canvas.Top" Value="4" />
-                    </Style>
-                  </ItemsControl.Styles>
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:ShotItem">
-                      <Button Classes="pick" Click="OnShotClick" ContextRequested="OnShotMenu" ToolTip.Tip="{Binding Summary}" AutomationProperties.Name="{Binding Title}">
-                        <Border Classes="block" Classes.selected="{Binding IsSelected}" Width="{Binding BlockWidth}" Height="104" Cursor="Hand">
-                          <Panel>
+
+                <!-- References: a card each, image files and generated images; the dashed card makes a new one. -->
+                <Panel Height="92" Tag="references" Background="Transparent">
+                  <ItemsControl ItemsSource="{Binding References}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <Canvas />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.Styles>
+                      <Style Selector="ContentPresenter" x:DataType="vm:ReferenceCard">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="4" />
+                      </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ReferenceCard">
+                        <Button Classes="pick" Click="OnCardClick" ContextRequested="OnCardMenu" ToolTip.Tip="{Binding Kind}" AutomationProperties.Name="{Binding Name}">
+                          <Border Classes="block" Classes.selected="{Binding IsSelected}" Classes.drop="{Binding IsDropTarget}" Width="{x:Static vm:FilmViewModel.CardWidth}" Height="84" Cursor="Hand">
                             <DockPanel>
-                              <Grid DockPanel.Dock="Top" Height="20" ColumnDefinitions="Auto,*,Auto" Margin="7,0,10,0">
-                                <TextBlock Text="{Binding Number}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" Margin="6,0" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="2" Text="{Binding LengthText}" Classes="muted" FontSize="12" VerticalAlignment="Center" />
-                              </Grid>
-                              <TextBlock DockPanel.Dock="Bottom" Height="18" Text="{Binding State}" FontSize="11" Margin="7,2,10,0" Classes="muted" Classes.error="{Binding IsError}" TextTrimming="CharacterEllipsis" />
-                              <Panel ClipToBounds="True">
-                                <Image Source="{Binding Strip}" Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Top" IsVisible="{Binding HasStrip}" />
-                                <Grid ColumnDefinitions="*,*" IsVisible="{Binding !HasStrip}" Opacity="0.65">
-                                  <Image Source="{Binding First.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
-                                  <Image Grid.Column="1" Source="{Binding Last.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
-                                </Grid>
-                                <TextBlock Text="{Binding Summary}" IsVisible="{Binding !IsMade}" Classes="muted" FontSize="11" TextWrapping="Wrap" Margin="7,2,8,0" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                              <TextBlock DockPanel.Dock="Bottom" Text="{Binding State}" FontSize="10" Classes="muted" Margin="6,0,6,3" TextTrimming="CharacterEllipsis" />
+                              <TextBlock DockPanel.Dock="Bottom" Text="{Binding Name}" FontSize="11" Margin="6,1,6,0" TextTrimming="CharacterEllipsis" />
+                              <Panel Background="#0B0C0E">
+                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                <StackPanel IsVisible="{Binding IsNew}" Spacing="3" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                  <Button Classes="choice" Content="File…" Click="OnCardFile" ToolTip.Tip="Copy a picture of yours in" />
+                                  <Button Classes="choice" Content="Generate" Click="OnCardGenerate" ToolTip.Tip="BlackBox makes it: say in the chat what it should be" />
+                                </StackPanel>
                               </Panel>
                             </DockPanel>
-                            <Border Classes="handle" Width="7" HorizontalAlignment="Right" Cursor="SizeWestEast" ToolTip.Tip="Drag to make it longer or shorter"
-                                    PointerPressed="OnHandlePressed" PointerMoved="OnHandleMoved" PointerReleased="OnHandleReleased" PointerCaptureLost="OnHandleCaptureLost" />
-                          </Panel>
-                        </Border>
-                      </Button>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <!-- The next shot's place, after the last: a click adds it there (the user found a
-                     "+ Shot" button by the playback buttons out of place, 2026-10-24). -->
-                <Canvas>
-                  <Button Classes="pick" Canvas.Left="{Binding AddShotX}" Canvas.Top="4" Width="56" Height="104" Command="{Binding AddShotCommand}"
-                          HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
-                          ToolTip.Tip="A shot after the last one; then say in the chat what happens in it" AutomationProperties.Name="New shot">
-                    <Panel>
-                      <Rectangle Stroke="{StaticResource BbBorder}" StrokeThickness="1.5" StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
-                      <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="16" Height="16" Foreground="{StaticResource BbMuted}" />
-                    </Panel>
-                  </Button>
-                </Canvas>
+                          </Border>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Canvas>
+                    <Button Classes="pick" Canvas.Left="{Binding AddReferenceX}" Canvas.Top="4" Width="56" Height="84" Click="OnCreateReference"
+                            HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
+                            ToolTip.Tip="A new reference: a picture of yours, or one BlackBox generates" AutomationProperties.Name="New reference">
+                      <Panel>
+                        <Rectangle Stroke="{StaticResource BbBorder}" StrokeThickness="1.5" StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
+                        <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="16" Height="16" Foreground="{StaticResource BbMuted}" />
+                      </Panel>
+                    </Button>
+                  </Canvas>
                 </Panel>
+
+                <!-- Video: a block per take from where it starts for as long as it lasts. -->
+                <Panel Height="112" Tag="video" Background="Transparent">
+                  <ItemsControl ItemsSource="{Binding Shots}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <Canvas />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.Styles>
+                      <Style Selector="ContentPresenter" x:DataType="vm:ShotItem">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="4" />
+                      </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ShotItem">
+                        <Button Classes="pick" Click="OnShotClick" ContextRequested="OnShotMenu" ToolTip.Tip="{Binding Summary}" AutomationProperties.Name="{Binding Title}">
+                          <Border Classes="block" Classes.selected="{Binding IsSelected}" Width="{Binding BlockWidth}" Height="104" Cursor="Hand">
+                            <Panel>
+                              <DockPanel>
+                                <Grid DockPanel.Dock="Top" Height="20" ColumnDefinitions="Auto,*,Auto" Margin="7,0,10,0">
+                                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+                                  <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" Margin="6,0" VerticalAlignment="Center" />
+                                  <TextBlock Grid.Column="2" Text="{Binding LengthText}" Classes="muted" FontSize="12" VerticalAlignment="Center" />
+                                </Grid>
+                                <TextBlock DockPanel.Dock="Bottom" Height="18" Text="{Binding State}" FontSize="11" Margin="7,2,10,0" Classes="muted" Classes.error="{Binding IsError}" TextTrimming="CharacterEllipsis" />
+                                <Panel ClipToBounds="True">
+                                  <Image Source="{Binding Strip}" Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Top" IsVisible="{Binding HasStrip}" />
+                                  <Grid ColumnDefinitions="*,*" IsVisible="{Binding !HasStrip}" Opacity="0.65">
+                                    <Image Source="{Binding First.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
+                                    <Image Grid.Column="1" Source="{Binding Last.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
+                                  </Grid>
+                                  <TextBlock Text="{Binding Summary}" IsVisible="{Binding !IsMade}" Classes="muted" FontSize="11" TextWrapping="Wrap" Margin="7,2,8,0" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                                </Panel>
+                              </DockPanel>
+                              <Border Classes="handle" Width="7" HorizontalAlignment="Right" Cursor="SizeWestEast" ToolTip.Tip="Drag to make it longer or shorter"
+                                      PointerPressed="OnHandlePressed" PointerMoved="OnHandleMoved" PointerReleased="OnHandleReleased" PointerCaptureLost="OnHandleCaptureLost" />
+                            </Panel>
+                          </Border>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <!-- The next take's place, after the last: a click adds it there. -->
+                  <Canvas>
+                    <Button Classes="pick" Canvas.Left="{Binding AddShotX}" Canvas.Top="4" Width="56" Height="104" Command="{Binding AddShotCommand}"
+                            HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
+                            ToolTip.Tip="A take after the last one; then say in the chat what happens in it" AutomationProperties.Name="New take">
+                      <Panel>
+                        <Rectangle Stroke="{StaticResource BbBorder}" StrokeThickness="1.5" StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
+                        <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="16" Height="16" Foreground="{StaticResource BbMuted}" />
+                      </Panel>
+                    </Button>
+                  </Canvas>
+                </Panel>
+
                 <ItemsControl ItemsSource="{Binding Lines}" Height="34">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -283,8 +352,54 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <views:FilmWave x:Name="Wave" Height="56" Peaks="{Binding Peaks}" Seconds="{Binding SoundSeconds}" Pps="{Binding Pps}" Lead="{x:Static vm:FilmViewModel.Lead}"
-                                Length="{Binding Length}" Ducks="{Binding Ducks}" Label="{Binding SoundLabel}" IsPicked="{Binding IsSongShown}" Cursor="Hand" />
+
+                <!-- The sound tracks: each sound a clip from where it starts for as long as it plays, dragged along
+                     and between tracks, trimmed at either edge, overlapping as they please. -->
+                <Panel x:Name="SoundRows" Height="{Binding TracksHeight}" Tag="sounds" Background="Transparent">
+                  <ItemsControl ItemsSource="{Binding Tracks}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:TrackItem">
+                        <Border Height="{x:Static vm:FilmViewModel.TrackHeight}" BorderBrush="#1E2024" BorderThickness="0,0,0,1" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <ItemsControl ItemsSource="{Binding Sounds}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <Canvas />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.Styles>
+                      <Style Selector="ContentPresenter" x:DataType="vm:SoundItem">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                      </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:SoundItem">
+                        <Border Classes="block clip" Classes.selected="{Binding IsSelected}" Classes.drop="{Binding IsDropTarget}" Classes.planned="{Binding !IsMade}"
+                                Width="{Binding BlockWidth}" Height="40" Cursor="Hand" ToolTip.Tip="{Binding Kind}" AutomationProperties.Name="{Binding Title}"
+                                PointerPressed="OnSoundPressed" PointerMoved="OnSoundMoved" PointerReleased="OnSoundReleased" PointerCaptureLost="OnSoundCaptureLost"
+                                ContextRequested="OnSoundMenu">
+                          <Panel>
+                            <views:FilmWave Peaks="{Binding Peaks}" Margin="0,4" />
+                            <StackPanel Margin="8,2,8,0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                              <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="SemiBold" />
+                              <TextBlock Text="{Binding State}" FontSize="10" Classes="muted" Classes.error="{Binding IsError}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <StackPanel IsVisible="{Binding IsNew}" Orientation="Horizontal" Spacing="4" Margin="8,0,8,3" VerticalAlignment="Bottom">
+                              <Button Classes="choice" Content="File…" Click="OnSoundFile" ToolTip.Tip="Copy a sound of yours in" />
+                              <Button Classes="choice" Content="Generate" Click="OnSoundGenerate" ToolTip.Tip="BlackBox makes it: say in the chat what it should be" />
+                            </StackPanel>
+                            <Border Classes="handle" Tag="left" Width="6" HorizontalAlignment="Left" Cursor="SizeWestEast" ToolTip.Tip="Drag to cut its start" />
+                            <Border Classes="handle" Tag="right" Width="6" HorizontalAlignment="Right" Cursor="SizeWestEast" ToolTip.Tip="Drag to cut its end" />
+                          </Panel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Panel>
+                <Border Height="28" />
               </StackPanel>
               <!-- The playhead, through every row. -->
               <Canvas IsHitTestVisible="False">
@@ -296,82 +411,35 @@
       </DockPanel>
     </Border>
 
-    <!-- The films folder as a tree, as Explorer shows it (a film opens when its folder is picked; right-click
-         to rename, make or delete), and the viewer: what is picked in the film goes into the chat's box. -->
-    <Grid ColumnDefinitions="300,4,*">
-      <Border Background="{StaticResource BbSurface}">
-        <DockPanel>
-          <TextBlock DockPanel.Dock="Top" Classes="muted" TextWrapping="Wrap" Margin="12,8,12,2"
-                     Text="Pick a folder, picture or clip: it goes into the chat's box, where you say what to do with it." />
-          <!-- Nothing showed the right-click menu was there (the user, 2026-10-24), nor that pictures can be dropped. -->
-          <TextBlock DockPanel.Dock="Top" Classes="muted" TextWrapping="Wrap" Margin="12,0,12,4" FontSize="11"
-                     Text="Right-click to rename, add or delete. Drop a picture on a reference to add it." />
-          <TreeView x:Name="Files" ItemsSource="{Binding Tree}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}" AutomationProperties.Name="Film files" Margin="0,0,0,4"
-                    ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.AllowAutoHide="False" ContextRequested="OnTreeMenu" Background="Transparent">
-            <TreeView.ItemTemplate>
-              <TreeDataTemplate DataType="vm:FilmNode" ItemsSource="{Binding Children}">
-                <DockPanel Classes="node" Classes.planned="{Binding IsPlanned}" Classes.drop="{Binding IsDropTarget}" ToolTip.Tip="{Binding Path}">
-                  <Panel DockPanel.Dock="Left" Width="30" Height="20" Margin="0,0,8,0" VerticalAlignment="Center">
-                    <PathIcon Data="{Binding Icon}" Width="15" Height="15" Foreground="{StaticResource BbMuted}" HorizontalAlignment="Left"
-                              IsVisible="{Binding Thumbnail, Converter={x:Static ObjectConverters.IsNull}}" />
-                    <Border Classes="thumb" BorderThickness="0" CornerRadius="3" IsVisible="{Binding Thumbnail, Converter={x:Static ObjectConverters.IsNotNull}}">
-                      <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
-                    </Border>
-                  </Panel>
-                  <StackPanel VerticalAlignment="Center" Spacing="0">
-                    <Panel>
-                      <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" IsVisible="{Binding !IsRenaming}" />
-                      <!-- Its new name typed here, as in Explorer: Enter keeps it, Esc doesn't. -->
-                      <TextBox Classes="rename" Text="{Binding EditName}" IsVisible="{Binding IsRenaming}" Padding="4,1" MinHeight="0"
-                               KeyDown="OnRenameKeyDown" LostFocus="OnRenameLostFocus" AttachedToVisualTree="OnRenameAttached" AutomationProperties.Name="New name" />
-                    </Panel>
-                    <TextBlock Classes="muted" FontSize="11" Text="{Binding Label}" TextTrimming="CharacterEllipsis"
-                               IsVisible="{Binding Label, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    <TextBlock Classes="muted" FontSize="11" Text="{Binding Piece.State, FallbackValue=''}" TextTrimming="CharacterEllipsis"
-                               Classes.error="{Binding Piece.IsError, FallbackValue=False}"
-                               IsVisible="{Binding Piece.State, Converter={x:Static StringConverters.IsNotNullOrEmpty}, FallbackValue=False}" />
-                  </StackPanel>
-                </DockPanel>
-              </TreeDataTemplate>
-            </TreeView.ItemTemplate>
-          </TreeView>
-        </DockPanel>
+    <!-- The viewer: what is picked on the timeline (it goes into the chat's box), or the whole film; how it was made under it. -->
+    <DockPanel>
+      <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0" MaxHeight="190"
+              IsVisible="{Binding Details, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="6" Margin="14,8">
+            <Button Classes="primary" Content="Use this version" Command="{Binding UseVersionCommand}" IsVisible="{Binding IsVersionShown}" HorizontalAlignment="Left"
+                    ToolTip.Tip="Put this version back in the film; the one in it now is kept as a version" />
+            <SelectableTextBlock Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" FontSize="12" />
+            <TextBlock Classes="muted" Text="{Binding MadeWith}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding MadeWith, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <SelectableTextBlock Text="{Binding Look}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding HasLook}"
+                                 Classes="muted" Classes.error="{Binding LookFoundFault}" />
+          </StackPanel>
+        </ScrollViewer>
       </Border>
-      <GridSplitter Grid.Column="1" Background="{StaticResource BbBorder}" ResizeDirection="Columns" />
-
-      <DockPanel Grid.Column="2">
-        <!-- How the piece shown was made: the prompt and settings BlackBox wrote, what made it, what the look found. -->
-        <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0" MaxHeight="190"
-                IsVisible="{Binding Details, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Spacing="6" Margin="14,8">
-              <Button Classes="primary" Content="Use this take" Command="{Binding UseTakeCommand}" IsVisible="{Binding IsTakeShown}" HorizontalAlignment="Left"
-                      ToolTip.Tip="Put this take back in the film; the one in it now is kept as a take" />
-              <SelectableTextBlock Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" FontSize="12" />
-              <TextBlock Classes="muted" Text="{Binding MadeWith}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding MadeWith, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-              <SelectableTextBlock Text="{Binding Look}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding HasLook}"
-                                   Classes="muted" Classes.error="{Binding LookFoundFault}" />
-            </StackPanel>
-          </ScrollViewer>
-        </Border>
-        <!-- Its margin takes clicks too: away from the picture, they show the whole film. -->
-        <Panel Background="Transparent" PointerPressed="OnAwayPressed">
-          <Panel x:Name="ViewerBox" Margin="14,12">
-            <ContentControl Content="{Binding Viewer}" IsVisible="{Binding !IsPlaying}" />
-            <Border Classes="thumb" Background="#000000" IsVisible="{Binding IsPlaying}">
-              <Panel>
-                <Image Source="{Binding PlayFrame}" Stretch="Uniform" />
-                <Border Background="#B0000000" VerticalAlignment="Bottom" HorizontalAlignment="Left" Padding="8,3" Margin="10" CornerRadius="4">
-                  <TextBlock Text="{Binding PlayLabel}" FontSize="12" />
-                </Border>
-              </Panel>
-            </Border>
-            <!-- Pictures dragged over it go into the reference it shows. -->
-            <Border BorderBrush="{StaticResource BbAccent}" BorderThickness="2" CornerRadius="4" Background="#1AE0A64B"
-                    IsVisible="{Binding IsDropOnViewer}" IsHitTestVisible="False" />
-          </Panel>
+      <!-- Its margin takes clicks too: away from the picture, they show the whole film. -->
+      <Panel Background="Transparent" PointerPressed="OnAwayPressed">
+        <Panel x:Name="ViewerBox" Margin="14,12">
+          <ContentControl Content="{Binding Viewer}" IsVisible="{Binding !IsPlaying}" />
+          <Border Classes="thumb" Background="#000000" IsVisible="{Binding IsPlaying}">
+            <Panel>
+              <Image Source="{Binding PlayFrame}" Stretch="Uniform" />
+              <Border Background="#B0000000" VerticalAlignment="Bottom" HorizontalAlignment="Left" Padding="8,3" Margin="10" CornerRadius="4">
+                <TextBlock Text="{Binding PlayLabel}" FontSize="12" />
+              </Border>
+            </Panel>
+          </Border>
         </Panel>
-      </DockPanel>
-    </Grid>
+      </Panel>
+    </DockPanel>
   </DockPanel>
 </UserControl>

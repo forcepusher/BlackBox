@@ -6,134 +6,252 @@ namespace BlackBox.App.ViewModels;
 
 public sealed partial class FilmViewModel
 {
-    // ---- the right-click menus: the tree as Explorer, and a shot on the timeline ------------------------------
+    // ---- the right-click menus: the timeline is where the film is worked on ------------------------------------
+    // (the user's call, 2026-10-24: "Right click on timeline -> Create. And then you pick either a file
+    // reference to copy the file, or hit a generate button. Remove all that folder tab nonsense.")
 
-    /// <summary>
-    /// What right-clicking in the tree offers (the user's calls, 2026-10-24: "right click and rename
-    /// films", a new reference, shot or sound made from where it goes, a shot deleted): null for a
-    /// line between entries. Away from every folder and file, New film.
-    /// </summary>
-    public IReadOnlyList<FilmMenuItem?> MenuFor(FilmNode? node)
+    /// <summary>What right-clicking a row of the timeline away from its cards offers: Create, there.</summary>
+    public IReadOnlyList<FilmMenuItem?> MenuForRow(string row, double seconds, int track)
     {
         var free = !Busy(_board.Folder);
-        var items = new List<FilmMenuItem?>();
-        switch (node)
+        return row switch
         {
-            case null:
-                items.Add(new("New film", true, NewFilm));
-                return items;
-            case { IsFilm: true }:
-                var open = SamePath(node.Path, _board.Folder);
-                var idle = !Busy(node.Path);
-                items.Add(new("Rename", idle, () => StartRename(node), "F2"));
-                items.Add(new("Delete", idle, () => DeleteFilm(node)));
-                items.Add(null);
-                items.Add(new("New film", true, NewFilm));
-                items.Add(new("New shot", idle, () =>
-                {
-                    if (!open)
-                        Open(node.Path);
-                    AddShot();
-                }));
-                break;
-            case { IsReferences: true }:
-                items.Add(new("New reference", free, NewReference));
-                break;
-            case { References: not null }:
-                items.Add(new("Rename", CanRename(node), () => StartRename(node), "F2"));
-                items.Add(new("Delete", free, () => DeleteReference(node)));
-                items.Add(null);
-                items.Add(new("New reference", free, NewReference));
-                break;
-            case { IsOwnPicture: true }:
-                items.Add(new("Rename", CanRename(node), () => StartRename(node), "F2"));
-                break;
-            case { Shot: { } shot }:
-                items.Add(new("Delete", free, () => DeleteShot(shot)));
-                items.Add(null);
-                items.Add(new("New shot", free, AddShot));
-                break;
-            case { IsSound: true }:
-                items.Add(new("New sound", free && _board.Sound.Source == FilmSound.None, NewSound));
-                items.Add(new("Delete", free && _board.Sound.Source != FilmSound.None, DeleteSound));
-                break;
-            case { Piece: SoundItem }:
-                items.Add(new("Delete", free, DeleteSound));
-                break;
-        }
-        if (items.Count > 0)
-            items.Add(null);
-        items.Add(new("Show in Explorer", true, () => ShowInExplorer(node.Path)));
+            "references" => [new("Create", free, CreateReference)],
+            "video" => [new("Create", free, AddShot)],
+            "sounds" => [new("Create", free, () => CreateSound(seconds, track)), null, new("Delete track", free && _board.Tracks > 1, () => DeleteTrack(track))],
+            _ => [],
+        };
+    }
+
+    /// <summary>What right-clicking a card of the References row offers.</summary>
+    public IReadOnlyList<FilmMenuItem?> MenuFor(ReferenceCard card)
+    {
+        var free = !Busy(_board.Folder);
+        var items = new List<FilmMenuItem?>
+        {
+            new("File…", free && (card.Frame is null || !card.Frame.IsMade), () => _ = PickFileForAsync(card)),
+            new("Generate", free && card.Frame is not null, () => Generate(card.Frame!)),
+            null,
+            new("Rename", free, () => RenameAsked?.Invoke(card, card.Name), "F2"),
+            new("Delete", free, () => DeleteReference(card)),
+        };
+        if (card.Frame is { } frame)
+            AddVersions(items, frame);
+        items.Add(null);
+        items.Add(new("Create", free, CreateReference));
         return items;
     }
 
-    /// <summary>What right-clicking a shot on the timeline offers.</summary>
+    /// <summary>What right-clicking a take on the Video row offers.</summary>
     public IReadOnlyList<FilmMenuItem?> MenuFor(ShotItem shot)
     {
         var free = !Busy(_board.Folder);
-        return [new("New shot", free, AddShot), new("Delete shot", free, () => DeleteShot(shot))];
+        var items = new List<FilmMenuItem?>
+        {
+            new("Generate", free, () => Generate(shot)),
+            new("Start frame", shot.First is not null, () => Show(shot.First)),
+            new("End frame", shot.Last is not null, () => Show(shot.Last)),
+            null,
+            new("Delete", free, () => DeleteShot(shot)),
+        };
+        AddVersions(items, shot);
+        items.Add(null);
+        items.Add(new("Create", free, AddShot));
+        return items;
     }
 
-    /// <summary>Whether a film's folder is written into now (a piece being made, the chat at work on it): renamed or deleted, the work went astray.</summary>
+    /// <summary>What right-clicking a sound on a sound track offers.</summary>
+    public IReadOnlyList<FilmMenuItem?> MenuFor(SoundItem sound)
+    {
+        var free = !Busy(_board.Folder);
+        var items = new List<FilmMenuItem?>
+        {
+            new("File…", free && (sound.Sound.Source == FilmSound.FromFile || !sound.IsMade), () => _ = PickFileForAsync(sound)),
+            new("Generate", free && sound.Sound.Source == FilmSound.Song, () => Generate(sound)),
+            null,
+            new("Rename", free, () => RenameAsked?.Invoke(sound, sound.Title), "F2"),
+            new("Delete", free, () => DeleteSound(sound)),
+        };
+        AddVersions(items, sound);
+        return items;
+    }
+
+    /// <summary>What the film's name at the top offers: the films to open, a new one, and this one renamed or deleted.</summary>
+    public IReadOnlyList<FilmMenuItem?> FilmMenu()
+    {
+        var idle = !Busy(_board.Folder);
+        var items = new List<FilmMenuItem?>();
+        foreach (var film in Storyboard.Recent(_filmsRoot).Append(_board.Folder).Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(f => Path.GetRelativePath(_filmsRoot, f), ByName))
+        {
+            var path = film;
+            var open = SamePath(path, _board.Folder);
+            items.Add(new((open ? "● " : "") + Path.GetRelativePath(_filmsRoot, path), !open, () => Open(path)));
+        }
+        items.Add(null);
+        items.Add(new("New film", true, () => NewFilmCommand.Execute(null)));
+        items.Add(new("Rename", idle, () => RenameFilmAsked?.Invoke()));
+        items.Add(new("Delete", idle, DeleteFilm));
+        items.Add(new("Show in Explorer", true, () => ShowInExplorer(_board.Folder)));
+        return items;
+    }
+
+    /// <summary>A piece's earlier versions, as a submenu: picked, one is shown, to put back.</summary>
+    private void AddVersions(List<FilmMenuItem?> items, IFilmPiece piece)
+    {
+        var versions = FilmTakes.List(_board, piece.Piece);
+        if (versions.Count == 0)
+            return;
+        items.Add(new("Versions", true, () => { })
+        {
+            Items = versions.Select(v => (FilmMenuItem?)new FilmMenuItem($"Version {v.Number} · {v.Made.ToLocalTime():d MMM, HH:mm}", true, () => ShowVersion(piece, v))).ToList(),
+        });
+    }
+
+    /// <summary>Whether the film's folder is written into now (a piece being made, the chat at work on it): renamed or deleted, the work went astray.</summary>
     private bool Busy(string folder) =>
         FilmMaker.IsMaking(folder) || SamePath(folder, _board.Folder) && _chat.FilmCall() is { } call && IsThisFilm(call.Args);
 
-    // ---- renaming in the tree --------------------------------------------------------------------------------
+    // ---- creating: a card or clip that is a file of the user's or generated --------------------------------------
 
-    /// <summary>The folder whose name is being typed in the tree; the tree waits meanwhile.</summary>
-    private FilmNode? _renaming;
-
-    /// <summary>A film's folder can be renamed, a reference's whose pictures aren't made yet (a new reference), and a picture of the user's in References.</summary>
-    public bool CanRename(FilmNode node) =>
-        node.IsFilm ? !Busy(node.Path)
-        : (node.IsOwnPicture || node.References is { Count: > 0 } references && references.All(r => !r.IsMade)) && !Busy(_board.Folder);
-
-    /// <summary>Its name becomes a box in the tree to type the new one in, as in Explorer (F2).</summary>
-    public void StartRename(FilmNode node)
+    /// <summary>A new card on the References row, not chosen yet: File… copies a picture in, Generate has BlackBox make one.</summary>
+    private void CreateReference()
     {
-        if (_renaming is { } other)
-            FinishRename(other, keep: true);
-        if (!CanRename(node))
-            return;
-        node.EditName = node.Name;
-        _renaming = node;
-        node.IsRenaming = true;
+        var name = "New image";
+        for (var n = 2; _board.Frames.Any(f => f.Reference && string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)) ||
+                        File.Exists(Path.Combine(_board.ReferencesFolder, name + ".png")); n++)
+            name = $"New image {n}";
+        var frame = new FilmFrame { Id = _board.NewId("r"), Name = name, Reference = true, Seed = Storyboard.NewSeed() };
+        _board.Frames.Add(frame);
+        Changed();
+        SaveNow(force: true);
+        Rebuild();
+        Show(_frames.GetValueOrDefault(frame.Id));
     }
 
-    /// <summary>The name typed: kept (Enter, or a click elsewhere), or not (Esc).</summary>
-    public void FinishRename(FilmNode node, bool keep)
+    /// <summary>A new sound on a track from <paramref name="seconds"/>, not chosen yet: File… copies a sound in, Generate has BlackBox make a song.</summary>
+    private void CreateSound(double seconds, int track)
     {
-        if (!node.IsRenaming)
+        var name = "New sound";
+        for (var n = 2; _board.Sounds.Any(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)); n++)
+            name = $"New sound {n}";
+        var sound = new FilmSound { Id = _board.NewId("a"), Name = name, Start = Math.Round(seconds * 10) / 10, Track = track, Seed = Storyboard.NewSeed() };
+        _board.Sounds.Add(sound);
+        Changed();
+        SaveNow(force: true);
+        Rebuild();
+        Show(Sounds.FirstOrDefault(s => s.Id == sound.Id));
+    }
+
+    /// <summary>Another sound track, under the last.</summary>
+    public void AddTrack()
+    {
+        if (_board.Tracks >= Storyboard.MaxTracks)
             return;
-        node.IsRenaming = false;
-        _renaming = null;
-        var name = node.EditName.Trim();
-        if (keep && name.Length > 0 && name != node.Name)
+        _board.Tracks++;
+        Changed();
+        SaveNow(force: true);
+        Rebuild();
+    }
+
+    /// <summary>
+    /// Asks the panel for files of the user's to copy in (the Open dialog), of a kind: "image" or
+    /// "sound"; set by the panel.
+    /// </summary>
+    public Func<string, Task<IReadOnlyList<string>>>? PickFiles { get; set; }
+
+    /// <summary>File… on a card: the picture picked is copied into References and is that card from then on.</summary>
+    private async Task PickFileForAsync(ReferenceCard card)
+    {
+        if (PickFiles is null || (await PickFiles("image")).FirstOrDefault() is not { } picture)
+            return;
+        try
         {
-            if (node.IsFilm)
-                RenameFilm(node, name);
-            else if (node.IsOwnPicture)
-                RenamePicture(node, name);
+            SaveNow(force: true);
+            string copy;
+            if (card.Frame is { IsMade: false } frame)
+                copy = FillReference(frame, picture);
             else
-                RenameReference(node, name);
+            {
+                // An image file of the user's replaced by another: the new one in its place, under its name.
+                Core.Media.MediaRelease.Release(card.Path);
+                File.Copy(picture, card.Path, overwrite: true);
+                copy = card.Path;
+            }
+            Rebuild();
+            ShowFile(copy);
         }
-        else
-            RefreshTree();
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowError($"The picture couldn't be copied in: {ex.Message}", ex);
+        }
     }
 
-    /// <summary>Renames a film: its folder, named after it, and the joined film in it. The open one is shown on from its new folder.</summary>
-    private void RenameFilm(FilmNode node, string name)
+    /// <summary>File… on a sound: the sound picked is copied into References and plays in that clip's place.</summary>
+    private async Task PickFileForAsync(SoundItem item)
     {
-        if (!SamePath(node.Path, _board.Folder))
-        {
-            try { Storyboard.Rename(node.Path, name); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException)
-            {
-                ShowError(RenameError(ex), ex, node.Path);
-            }
-            RefreshTree();
+        if (PickFiles is null || (await PickFiles("sound")).FirstOrDefault() is not { } file)
             return;
+        DragOver(new FilmDropPlace("sounds", item.Sound.Start, item.Sound.Track, item.IsNew ? item : null));
+        if (!item.IsNew)
+        {
+            // In its place: the clip there now goes, its place taken by the new file.
+            _board.Sounds.Remove(item.Sound);
+            Changed();
         }
+        Drop([file]);
+    }
+
+    /// <summary>Generate: the piece goes into the chat's box; with what to make said, BlackBox makes it, else the user says what it should be.</summary>
+    private void Generate(IFilmPiece piece)
+    {
+        Show(piece);
+        var said = piece switch
+        {
+            FrameItem f => f.Frame.Prompt.Trim().Length > 0,
+            ShotItem s => s.Shot.Prompt.Trim().Length > 0,
+            SoundItem a => a.Sound.Tags.Trim().Length > 0,
+            _ => false,
+        };
+        if (said)
+            _chat.SendFromToolkit("Make it.");
+        else
+            Status = $"Say in the chat what {Lower(piece.Title)} should be, and BlackBox makes it.";
+    }
+
+    // ---- renaming ------------------------------------------------------------------------------------------------
+
+    /// <summary>A card or sound is to be renamed: the panel shows a box with its name to type the new one in.</summary>
+    public event Action<object, string>? RenameAsked;
+
+    /// <summary>The name typed for a card, a sound, or (with null) the film.</summary>
+    public void Rename(object? target, string name)
+    {
+        name = name.Trim();
+        if (name.Length == 0)
+            return;
+        switch (target)
+        {
+            case null:
+                RenameFilm(name);
+                break;
+            case ReferenceCard { Frame: { } frame }:
+                RenameGenerated(frame, name);
+                break;
+            case ReferenceCard card:
+                RenamePicture(card.Path, name);
+                break;
+            case SoundItem sound:
+                RenameSound(sound, name);
+                break;
+        }
+    }
+
+    /// <summary>Renames the film: its folder, named after it, and the joined film in it.</summary>
+    private void RenameFilm(string name)
+    {
+        if (name == FilmName)
+            return;
         SaveNow();
         // What shows a file of it lets go of it first: the folder can't be moved while a file in it is open.
         StopPlaying();
@@ -149,189 +267,179 @@ public sealed partial class FilmViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException)
         {
-            ShowError(RenameError(ex), ex);
+            ShowError(ex is FilmException ? $"The film couldn't be renamed: {ex.Message}" : $"The film couldn't be renamed: {ex.Message} A file in it may be open in another program.", ex);
         }
         Rebuild();
         OnPropertyChanged(nameof(Folder));
-        _chat.Pick([]);
-        PickFilm();
-
-        static string RenameError(Exception ex) =>
-            ex is FilmException ? $"The film couldn't be renamed: {ex.Message}" : $"The film couldn't be renamed: {ex.Message} A file in it may be open in another program.";
+        Clear();
     }
 
-    /// <summary>Renames a reference not made yet: its folder in References is named after it.</summary>
-    private void RenameReference(FilmNode node, string name)
+    /// <summary>Renames a generated image: its name, and its picture with what goes with it once made.</summary>
+    private void RenameGenerated(FrameItem item, string name)
     {
+        var frame = item.Frame;
+        var from = _board.FramePicture(frame);
         var safe = Storyboard.Safe(name);
-        var ids = node.References!.Select(r => r.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var to = Path.Combine(_board.ReferencesFolder, safe);
-        if (!SamePath(to, node.Path) && (Directory.Exists(to) || _board.Frames.Any(f => f.Reference && !ids.Contains(f.Id) && FolderName(f).Equals(safe, StringComparison.OrdinalIgnoreCase))))
+        if (_board.Frames.Any(f => f != frame && f.Reference && string.Equals(f.Name, safe, StringComparison.OrdinalIgnoreCase)))
         {
-            Status = $"There is a reference called {safe} already.";
-            RefreshTree();
+            Status = $"There is an image called {safe} already.";
             return;
         }
-        foreach (var frame in _board.Frames.Where(f => ids.Contains(f.Id)))
+        SaveNow();
+        frame.Name = safe;
+        var to = Path.GetFullPath(Path.Combine(_board.Folder, _board.PlaceFor(frame)));
+        if (File.Exists(from) && !SamePath(from, to))
         {
-            // "Mira/side" is another picture of Mira: it goes with her folder.
-            var rest = (frame.Name ?? frame.Id).Split('/', 2) is [_, var more] ? "/" + more : "";
-            frame.Name = safe + rest;
-            frame.Place = null;
+            if (File.Exists(to))
+            {
+                Status = $"There is a {Path.GetFileName(to)} there already.";
+                frame.Name = item.Label;
+                return;
+            }
+            try { MoveWith(from, to); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                ShowError($"The image couldn't be renamed: {ex.Message} It may be open in another program.", ex);
+                return;
+            }
+            frame.Place = Path.GetRelativePath(_board.Folder, to).Replace(Path.DirectorySeparatorChar, '/');
         }
+        else
+            frame.Place = null;
         Changed();
         SaveNow();
-        // Its old folder, empty now: it held only the .json of what is to be made there.
-        try
-        {
-            if (Directory.Exists(node.Path) && !SamePath(to, node.Path) && !Directory.EnumerateFileSystemEntries(node.Path).Any())
-                Directory.Delete(node.Path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         Rebuild();
-        Select(to);
-
-        static string FolderName(FilmFrame frame) => (frame.Name ?? frame.Id).Split('/', '\\')[0].Trim();
+        Show(_frames.GetValueOrDefault(frame.Id));
     }
 
     /// <summary>
-    /// Renames a picture of the user's in References (one dropped there, the user's call, 2026-10-24:
-    /// "dragged-and-dropped stuff should be copied and able to be renamed"), keeping its kind of
-    /// file; the frames made from it are told its new name.
+    /// Renames an image file of the user's (the user's call, 2026-10-24: "dragged-and-dropped stuff
+    /// should be copied and able to be renamed"), keeping its kind of file; the frames made from it
+    /// are told its new name.
     /// </summary>
-    private void RenamePicture(FilmNode node, string name)
+    private void RenamePicture(string path, string name)
     {
-        var extension = Path.GetExtension(node.Path);
+        var extension = Path.GetExtension(path);
         var stem = Storyboard.Safe(name.EndsWith(extension, StringComparison.OrdinalIgnoreCase) ? name[..^extension.Length] : name);
-        var to = Path.Combine(Path.GetDirectoryName(node.Path)!, stem + extension);
-        if (stem.Length == 0 || SamePath(to, node.Path))
-        {
-            RefreshTree();
+        var to = Path.Combine(Path.GetDirectoryName(path)!, stem + extension);
+        if (stem.Length == 0 || SamePath(to, path))
             return;
-        }
         if (File.Exists(to) || File.Exists(Storyboard.MetaOf(to)))
         {
             Status = $"There is a {Path.GetFileName(to)} there already.";
-            RefreshTree();
             return;
         }
-        var (oldName, newName) = (_board.InReferences(node.Path), _board.InReferences(to));
+        var (oldName, newName) = (_board.InReferences(path), _board.InReferences(to));
+        DropViewer();
         try
         {
-            File.Move(node.Path, to);
+            File.Move(path, to);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             ShowError($"The picture couldn't be renamed: {ex.Message} It may be open in another program.", ex);
-            RefreshTree();
             return;
         }
+        var bare = Path.GetFileNameWithoutExtension(path);
         foreach (var frame in _board.Frames)
         {
             for (var i = 0; i < frame.From.Count; i++)
-                if (string.Equals(frame.From[i], oldName, StringComparison.OrdinalIgnoreCase) || Path.IsPathFullyQualified(frame.From[i]) && SamePath(frame.From[i], node.Path))
+                if (string.Equals(frame.From[i], oldName, StringComparison.OrdinalIgnoreCase) || string.Equals(frame.From[i], bare, StringComparison.OrdinalIgnoreCase) ||
+                    Path.IsPathFullyQualified(frame.From[i]) && SamePath(frame.From[i], path))
                     frame.From[i] = newName;
-            if (frame.File is { } file && SamePath(file, node.Path))
+            if (frame.File is { } file && SamePath(file, path))
                 frame.File = to;
         }
         Changed();
         SaveNow();
         Rebuild();
-        Select(to);
+        ShowFile(to);
     }
 
-    /// <summary>Picks something in the tree by its path, as a click there does, its folders opened.</summary>
-    private FilmNode? Select(string path)
+    /// <summary>Renames a sound: its name, and a sound file of the user's with it.</summary>
+    private void RenameSound(SoundItem item, string name)
     {
-        if (Find(path) is not { } node)
-            return null;
-        foreach (var folder in Tree.SelectMany(All).Where(n => All(n).Contains(node) && n != node))
-            folder.IsExpanded = true;
-        SelectedNode = node;
-        return node;
-    }
-
-    // ---- what is made new from the tree ----------------------------------------------------------------------
-
-    /// <summary>
-    /// A new reference, not made yet: its folder in References with its picture to be made, named as
-    /// it is typed; then the user picks it and says in the chat what it is to be.
-    /// </summary>
-    private void NewReference()
-    {
-        var name = "New reference";
-        for (var n = 2; Taken(name); n++)
-            name = $"New reference {n}";
-        _board.Frames.Add(new FilmFrame { Id = _board.NewId("r"), Name = name, Reference = true, Seed = Storyboard.NewSeed() });
+        var sound = item.Sound;
+        SaveNow();
+        if (sound.Source == FilmSound.FromFile && File.Exists(_board.SoundFile(sound)))
+        {
+            var from = _board.SoundFile(sound);
+            var to = Path.Combine(Path.GetDirectoryName(from)!, Storyboard.Safe(name) + Path.GetExtension(from));
+            if (!SamePath(from, to))
+            {
+                if (File.Exists(to))
+                {
+                    Status = $"There is a {Path.GetFileName(to)} there already.";
+                    return;
+                }
+                StopPlaying();
+                DropViewer();
+                try { MoveWith(from, to); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    ShowError($"The sound couldn't be renamed: {ex.Message} It may be open in another program.", ex);
+                    return;
+                }
+                sound.Place = Path.GetRelativePath(_board.Folder, to).Replace(Path.DirectorySeparatorChar, '/');
+            }
+        }
+        sound.Name = name;
         Changed();
         SaveNow();
         Rebuild();
-        if (Select(Path.Combine(_board.ReferencesFolder, name)) is { } node)
-            StartRename(node);
-
-        bool Taken(string folder) =>
-            Directory.Exists(Path.Combine(_board.ReferencesFolder, folder)) ||
-            _board.Frames.Any(f => f.Reference && (f.Name ?? f.Id).Split('/', '\\')[0].Trim().Equals(folder, StringComparison.OrdinalIgnoreCase));
+        Show(Sounds.FirstOrDefault(s => s.Id == sound.Id));
     }
 
-    /// <summary>A song for the film, not made yet, in Sound: the user picks it and says in the chat what music they want.</summary>
-    private void NewSound()
+    /// <summary>A file moved with its .json, workflow and versions.</summary>
+    private static void MoveWith(string from, string to)
     {
-        if (_board.Sound.Source != FilmSound.None)
-            return;
-        _board.Sound.Source = FilmSound.Song;
-        Changed();
-        SaveNow();
-        RefreshStates();
-        Select(_board.SongFile);
+        var (fromStem, toStem) = (Path.GetFileNameWithoutExtension(from), Path.GetFileNameWithoutExtension(to));
+        foreach (var file in Storyboard.FilesOf(from).Where(File.Exists).ToList())
+        {
+            var name = Path.GetFileName(file);
+            var target = Path.Combine(Path.GetDirectoryName(file)!, toStem + name[fromStem.Length..]);
+            File.Move(file, target);
+        }
     }
 
     // ---- deleting, to the Recycle Bin ------------------------------------------------------------------------
 
-    /// <summary>A folder to the Recycle Bin, as Explorer's Delete puts it: it can be brought back from there.</summary>
-    private static void ToRecycleBin(string folder)
+    /// <summary>A folder or file to the Recycle Bin, as Explorer's Delete puts it: it can be brought back from there.</summary>
+    private static void ToRecycleBin(string path)
     {
         if (!OperatingSystem.IsWindows())
             throw new IOException("Only Windows has a Recycle Bin to put it in.");
-        FileSystem.DeleteDirectory(folder, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+        if (Directory.Exists(path))
+            FileSystem.DeleteDirectory(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+        else if (File.Exists(path))
+            FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
     }
 
-    /// <summary>A film to the Recycle Bin; the open one gives way to the film changed last.</summary>
-    private void DeleteFilm(FilmNode node)
+    /// <summary>The open film to the Recycle Bin; the film changed last opens.</summary>
+    private void DeleteFilm()
     {
-        var open = SamePath(node.Path, _board.Folder);
-        if (open)
-        {
-            StopPlaying();
-            DropViewer();
-        }
+        var folder = _board.Folder;
+        StopPlaying();
+        DropViewer();
         try
         {
-            if (Directory.Exists(node.Path))
-                ToRecycleBin(node.Path);
+            if (Directory.Exists(folder))
+                ToRecycleBin(folder);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
         {
-            ShowError($"The film couldn't be deleted: {ex.Message}", ex, node.Path);
+            ShowError($"The film couldn't be deleted: {ex.Message}", ex, folder);
             RefreshViewer();
-            return;
-        }
-        if (!open)
-        {
-            RefreshTree();
             return;
         }
         // Nothing of it is saved again: it would come back.
         _saveTimer.Stop();
         _dirty = false;
         OpenLatest();
-        Status = $"{Path.GetFileName(node.Path)} is in the Recycle Bin.";
+        Status = $"{Path.GetFileName(folder)} is in the Recycle Bin.";
     }
 
-    /// <summary>
-    /// A shot out of the film, its folder to the Recycle Bin with the frames only it uses; the frame
-    /// the next shot goes on from stays (see <see cref="Storyboard.DeleteShot"/>).
-    /// </summary>
+    /// <summary>A take out of the film, its files to the Recycle Bin with the frames only it uses (see <see cref="Storyboard.DeleteShot"/>).</summary>
     public void DeleteShot(ShotItem item)
     {
         if (Busy(_board.Folder) || _board.Shot(item.Id) is not { } shot)
@@ -351,62 +459,72 @@ public sealed partial class FilmViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
         {
-            ShowError($"The shot couldn't be deleted: {ex.Message}", ex);
+            ShowError($"The take couldn't be deleted: {ex.Message}", ex);
             Reload();
         }
         Rebuild();
-        Clear(viewer: true);
+        Clear();
     }
 
-    /// <summary>A reference's folder to the Recycle Bin, with the references in it; what was made from them no longer names them.</summary>
-    private void DeleteReference(FilmNode node)
-    {
-        SaveNow();
-        StopPlaying();
-        DropViewer();
-        var ids = (node.References ?? []).Select(r => r.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        try
-        {
-            if (Directory.Exists(node.Path))
-                ToRecycleBin(node.Path);
-            _board.Frames.RemoveAll(f => ids.Contains(f.Id));
-            foreach (var frame in _board.Frames)
-                frame.From.RemoveAll(ids.Contains);
-            Changed();
-            SaveNow();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
-        {
-            ShowError($"The reference couldn't be deleted: {ex.Message}", ex);
-        }
-        Rebuild();
-        Clear(viewer: true);
-    }
-
-    /// <summary>The film's soundtrack taken out: a song made goes to the Recycle Bin with its takes; a file of the user's stays where it is.</summary>
-    private void DeleteSound()
+    /// <summary>A card to the Recycle Bin: an image file, or a generated image with what goes with it; frames made from it no longer name it.</summary>
+    private void DeleteReference(ReferenceCard card)
     {
         SaveNow();
         StopPlaying();
         DropViewer();
         try
         {
-            var folder = Path.GetDirectoryName(_board.SongFile)!;
-            if (_board.Sound.Source == FilmSound.Song && (File.Exists(_board.SongFile) || Directory.Exists(Path.Combine(folder, Storyboard.TakesName))))
-                ToRecycleBin(folder);
-            var voice = (_board.Sound.Voice, _board.Sound.VoiceSeed);
-            _board.Sound.Source = FilmSound.None;
-            (_board.Sound.File, _board.Sound.Tags, _board.Sound.Lyrics, _board.Sound.Model) = (null, "", "", null);
-            (_board.Sound.Voice, _board.Sound.VoiceSeed) = voice; // the lines' voice is the shots'
+            foreach (var file in Storyboard.FilesOf(card.Path).Where(File.Exists).ToList())
+                ToRecycleBin(file);
+            var names = new[] { card.Frame?.Id, _board.InReferences(card.Path), Path.GetFileNameWithoutExtension(card.Path) }.OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (card.Frame is { } frame)
+                _board.Frames.Remove(frame.Frame);
+            foreach (var f in _board.Frames)
+                f.From.RemoveAll(names.Contains);
             Changed();
             SaveNow();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
         {
-            ShowError($"The soundtrack couldn't be deleted: {ex.Message}", ex);
+            ShowError($"It couldn't be deleted: {ex.Message}", ex);
         }
         Rebuild();
-        Clear(viewer: true);
+        Clear();
+    }
+
+    /// <summary>A sound off its track, its file to the Recycle Bin (a song with its versions; a sound file of the user's, its copy).</summary>
+    private void DeleteSound(SoundItem item)
+    {
+        SaveNow();
+        StopPlaying();
+        DropViewer();
+        try
+        {
+            foreach (var file in Storyboard.FilesOf(_board.SoundFile(item.Sound)).Where(File.Exists).ToList())
+                ToRecycleBin(file);
+            _board.Sounds.Remove(item.Sound);
+            Changed();
+            SaveNow();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
+        {
+            ShowError($"The sound couldn't be deleted: {ex.Message}", ex);
+        }
+        Rebuild();
+        Clear();
+    }
+
+    /// <summary>A sound track with its sounds; the tracks under it move up.</summary>
+    private void DeleteTrack(int track)
+    {
+        foreach (var sound in Sounds.Where(s => s.Sound.Track == track).ToList())
+            DeleteSound(sound);
+        foreach (var sound in _board.Sounds.Where(s => s.Track > track))
+            sound.Track--;
+        _board.Tracks = Math.Max(1, _board.Tracks - 1);
+        Changed();
+        SaveNow();
+        Rebuild();
     }
 
     /// <summary>The film read again from its folder, after a change to it failed halfway.</summary>
@@ -424,9 +542,21 @@ public sealed partial class FilmViewModel
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException) { }
     }
 
+    // ---- a sound dragged on its track ----------------------------------------------------------------------
+
+    /// <summary>A sound moved along its track or to another, or trimmed at an edge, as a video editor's clip is; saved once let go.</summary>
+    public void MoveSound(SoundItem item, double start, int track, double trim, double seconds)
+    {
+        var sound = item.Sound;
+        (sound.Start, sound.Track, sound.Trim, sound.Seconds) =
+            (Math.Max(0, Math.Round(start * 10) / 10), Math.Clamp(track, 0, _board.Tracks - 1), Math.Max(0, Math.Round(trim * 10) / 10), Math.Max(0, Math.Round(seconds * 10) / 10));
+        Relayout();
+        Changed();
+    }
+
     // ---- Explorer --------------------------------------------------------------------------------------------
 
-    /// <summary>A folder opened in Explorer, or a file shown in its folder; for a piece not made yet, the folder it is to be in, as far as there is one.</summary>
+    /// <summary>A folder opened in Explorer, or a file shown in its folder.</summary>
     private static void ShowInExplorer(string path)
     {
         while (!File.Exists(path) && !Directory.Exists(path) && Path.GetDirectoryName(path) is { } up)
