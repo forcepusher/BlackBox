@@ -636,7 +636,12 @@ beside the chat where a screen has room for both (right or left of it, else on a
 over it), it closes with the chat's window, and **Show the chat** brings that window forward.
 Changes made by hand (a shot's length, its order, new shots and references, deleting, the film's
 size and levels, a take put back, a sound file of the user's) are saved to the storyboard at once,
-without the chat.
+without the chat. One made while the chat changes the storyboard (a shot's edge dragged as the film
+tool rewrites a prompt or settles a seed) is put together with the chat's (`StoryboardMerge`: key
+by key, frames and shots by id, the window's hand winning where both changed the same value):
+saved whole, as until 2026-10-23, the window's copy wrote over the chat's change, and the window
+never showed it. Checked in the window: a shot dragged from 3 s to 5.5 s while its prompt was
+written from outside kept both, where the build before kept only the drag.
 
 **Looks that don't let slop through.** The user found the judging dismissive: the fox film passed
 with the fox floating up the screen at the cut at 5 s. One question per kind of fault catches more
@@ -956,6 +961,13 @@ press was "Nothing was done" with the screen as it was. No BlackBox window showe
 Two starts at the same moment made one process with two windows; a start with another `Data`
 folder ran as a process of its own. Closing the first window left the others; closing the last
 ended the process.
+
+On real models (2026-10-23 morning, one window each, started 2 s apart): with Claude Opus 5.5,
+"type a four-line poem about the sea into Notepad" was done in 49 s and "draw a red filled
+rectangle in the middle of Paint's canvas" in 1 min 21 s, the Paint window's agent waiting ten
+times for the other's turn and saying it brought Paint back to the front before drawing. With
+qwen3.8 the Notepad one took 7.6 minutes (8 waits) and Paint didn't finish in 25: it kept picking
+the oval for the rectangle, as on 22 October, a model's problem with Paint's small icons.
 
 ## Files in a message
 Drop files or folders anywhere on the window, paste them with Ctrl+V (a screenshot, a picture

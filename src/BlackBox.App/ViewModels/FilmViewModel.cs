@@ -102,6 +102,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         try
         {
             _board = Storyboard.Load(path);
+            _savedJson = _board.ToJson();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException)
         {
@@ -129,6 +130,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             name = $"New film {n}";
         _board = Storyboard.New(Path.Combine(root, name), name);
         _ownWrite = default;
+        _savedJson = null;
         _watcher?.Dispose();
         _watcher = null;
         Rebuild();

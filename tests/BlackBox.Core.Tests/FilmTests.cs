@@ -39,6 +39,49 @@ public sealed class StoryboardTests : IDisposable
     }
 
     [Fact]
+    public void A_change_made_in_the_window_and_one_made_in_the_chat_at_once_both_stay()
+    {
+        var before = Storyboard.Parse("""
+            {"title": "Rain", "frames": [{"id": "f1", "prompt": "a street", "seed": 1}],
+             "shots": [{"id": "s1", "first": "f1", "seconds": 4, "prompt": "rain falls", "seed": 1},
+                       {"id": "s2", "seconds": 3, "prompt": "a car passes", "seed": 2},
+                       {"id": "s3", "seconds": 2, "prompt": "the light changes", "seed": 3}]}
+            """);
+        Storyboard Changed(Action<Storyboard> change)
+        {
+            var board = Storyboard.Parse(before.ToJson());
+            change(board);
+            return board;
+        }
+        // In the window: s1 made longer, s3 taken out, s2 moved before s1. In the chat meanwhile:
+        // s2's prompt rewritten, a shot s4 added, the frame's seed settled, s1 made shorter too.
+        var mine = Changed(b =>
+        {
+            b.Shots[0].Seconds = 6;
+            b.Shots.RemoveAt(2);
+            (b.Shots[0], b.Shots[1]) = (b.Shots[1], b.Shots[0]);
+        });
+        var theirs = Changed(b =>
+        {
+            b.Shots[1].Prompt = "a red car passes, splashing";
+            b.Shots.Add(new FilmShot { Id = "s4", Seconds = 2, Prompt = "night falls", Seed = 4 });
+            b.Frames[0].Seed = 99;
+            b.Shots[0].Seconds = 3;
+        });
+
+        var merged = StoryboardMerge.Merge(before, mine, theirs);
+
+        Assert.Equal(["s2", "s1", "s4"], merged.Shots.Select(s => s.Id));
+        Assert.Equal(6, merged.Shot("s1")!.Seconds); // both changed it: the window's hand
+        Assert.Equal("a red car passes, splashing", merged.Shot("s2")!.Prompt);
+        Assert.Equal(99, merged.Frames[0].Seed);
+        Assert.Equal("Rain", merged.Title);
+
+        // Nothing changed in the chat: the window's copy as it is.
+        Assert.Equal(mine.ToJson(), StoryboardMerge.Merge(before, mine, Storyboard.Parse(before.ToJson())).ToJson());
+    }
+
+    [Fact]
     public void A_shot_without_a_first_frame_gets_one_made_from_the_references_near_it()
     {
         var board = Storyboard.Parse("""
