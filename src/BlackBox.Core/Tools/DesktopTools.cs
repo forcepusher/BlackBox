@@ -33,8 +33,15 @@ public abstract class DesktopActionTool : Tool
             return Task.CompletedTask;
         });
         // Not handed to another window while the action goes on, however long it waits for the user's typing.
+        var acted = turn == false;
         try { return await ActAndLookAsync(args, ctx, screenChanged: turn == true, ct).ConfigureAwait(false); }
-        finally { desktop.Done(ctx, acted: turn == false); }
+        // Arguments it couldn't use: nothing was pressed, for the other windows' agents to look again for.
+        catch (ToolArgumentException)
+        {
+            acted = false;
+            throw;
+        }
+        finally { desktop.Done(ctx, acted); }
     }
 
     private async Task<ToolResult> ActAndLookAsync(JsonObject args, ToolContext ctx, bool screenChanged, CancellationToken ct)

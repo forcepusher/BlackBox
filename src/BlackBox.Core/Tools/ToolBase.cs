@@ -107,6 +107,12 @@ public sealed class ToolContext
     /// <summary>Whose turn it is with the mouse and keyboard among BlackBox's windows; null where only one agent runs (the command line, tests).</summary>
     public Platform.DesktopTurn? DesktopTurn { get; init; }
 
+    /// <summary>
+    /// The window the agent works in: what its runs saw of the screen counts from one run to the
+    /// next, as the chat keeps its last screenshot. Null: this run alone (see <see cref="Platform.DesktopTurn"/>).
+    /// </summary>
+    public object? DesktopSeat { get; init; }
+
     /// <summary>The PC's own browser, run headless, for the web tools to fall back on; null when there is none.</summary>
     public Web.HeadlessBrowser? Browser { get; init; }
 

@@ -56,7 +56,14 @@ public sealed class McpHost : IAsyncDisposable
     {
         await DisconnectAsync().ConfigureAwait(false);
         var connections = servers.Select(s => new Connection(s)).ToList();
-        lock (_gate) _connections = connections;
+        lock (_gate)
+        {
+            // Its window closed while the servers before were stopping: started now, these would
+            // run until BlackBox ends, which outlives its windows.
+            if (_disposed)
+                return;
+            _connections = connections;
+        }
         await Task.WhenAll(connections.Where(c => !c.Config.Disabled).Select(c => ConnectOneAsync(c, ct))).ConfigureAwait(false);
         lock (_gate)
         {
@@ -207,8 +214,11 @@ public sealed class McpHost : IAsyncDisposable
             await c.DisposeAsync().ConfigureAwait(false);
     }
 
+    private bool _disposed;
+
     public async ValueTask DisposeAsync()
     {
+        lock (_gate) _disposed = true;
         await DisconnectAsync().ConfigureAwait(false);
         _http.Dispose();
     }

@@ -68,6 +68,11 @@ internal sealed partial class ProjectNudge
         // and a file stands for the project it is in.
         var root = FolderIndex.IndexedAbove(full, ctx.IndexDirectory)
                    ?? (File.Exists(full) ? ProjectRoot.Find(full)?.Root ?? Path.GetDirectoryName(full)! : full);
+        // An index of the home folder or a drive is no index of each project in it: it reads at
+        // most 20,000 files of all of them, and a search goes to a project's own index.
+        if (Path.GetPathRoot(root) == root ||
+            root.Equals(FolderIndex.Normalize(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)), StringComparison.OrdinalIgnoreCase))
+            return;
         if (!_indexed.Contains(root, StringComparer.OrdinalIgnoreCase))
             _indexed.Add(root);
     }

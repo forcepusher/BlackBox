@@ -229,6 +229,29 @@ public class FolderIndexTests : IDisposable
     }
 
     [Fact]
+    public void A_junction_is_not_walked_and_a_linked_file_has_its_targets_size()
+    {
+        var project = Path.Combine(_dir, "proj");
+        Write("proj/src/Player.cs", "class Player {}");
+        var big = Write("elsewhere/big.txt", new string('x', 5000));
+        // A junction back to the project itself: walked, it would go round for ever.
+        using (var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{Path.Combine(project, "loop")}\" \"{project}\"") { CreateNoWindow = true, UseShellExecute = false })!)
+            mklink.WaitForExit();
+        Assert.True(Directory.Exists(Path.Combine(project, "loop")));
+        var linked = true;
+        try { File.CreateSymbolicLink(Path.Combine(project, "big-link.txt"), big); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { linked = false; } // symbolic links need Developer Mode
+
+        var (files, _) = FolderWalk.Run(project, CancellationToken.None);
+
+        Assert.DoesNotContain(files, f => f.Path.StartsWith("loop", StringComparison.Ordinal));
+        Assert.Contains(files, f => f.Path == "src/Player.cs");
+        if (linked)
+            Assert.Equal(5000, files.Single(f => f.Path == "big-link.txt").Size);
+        Directory.Delete(Path.Combine(project, "loop")); // the junction alone, not what it points to
+    }
+
+    [Fact]
     public async Task An_index_is_kept_up_to_date_and_read_back_from_its_file()
     {
         var project = Path.Combine(_dir, "game");
