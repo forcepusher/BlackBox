@@ -43,17 +43,37 @@ public sealed partial class MainWindowViewModel
         // of the Filmmaking window's weren't done.
         if (Queued.Count > 0)
         {
-            foreach (var queued in Queued)
-                _session?.Unsteer(queued.Input);
-            BackInTheBox([.. Queued.Select(q => q.Input)]);
+            List<UserInput> back = [], read = [];
+            foreach (var input in Queued.Select(q => q.Input).ToList())
+            {
+                // One the agent has just taken is in its conversation: it joins the chat left, as
+                // read. Put back in the box as well, it was in the saved chat unseen, and carried out
+                // on Continue.
+                if (_session is { } running && !_steerPending.Contains(input) && !_forNextRun.Contains(input) && !running.Unsteer(input))
+                    read.Add(input);
+                else
+                    back.Add(input);
+            }
+            foreach (var input in read)
+                MoveIntoChat(input);
+            BackInTheBox(back);
             Queued.Clear();
         }
         if (IsBusy)
         {
-            if (save) SaveChat(SnapshotHistory());
+            // Not when the run is one already ending for a chat left before: this one never ran.
+            if (save && !_runDetached)
+            {
+                // Said in the chat, as when its window closes: opened again from History, it had
+                // stopped without a word, and before the model had the message, "Continue." had no task.
+                AddStopNotice("Stopped: another chat was opened.", isError: false, _unread);
+                SaveChat(SnapshotHistory());
+            }
             _runDetached = true;
             _runCts?.Cancel();
         }
+        else if (save && _lastSavePending)
+            SaveChat(SnapshotHistory()); // the last save of a run that has just ended, not made yet
         // The stopped run keeps its own list until it ends, so it can't write into the next chat.
         _history = [];
         _steerPending.Clear();
@@ -188,7 +208,7 @@ public sealed partial class MainWindowViewModel
     private List<ChatMessage>? SnapshotHistory()
     {
         try { return ChatStore.ForSaving(_history); }
-        catch (InvalidOperationException) { return null; }
+        catch (Exception ex) when (ex is InvalidOperationException or NullReferenceException or ArgumentException) { return null; }
     }
 
     /// <summary>Writes the chat on screen to its file and moves it to the top of the History list. A chat with nothing typed yet isn't saved.</summary>

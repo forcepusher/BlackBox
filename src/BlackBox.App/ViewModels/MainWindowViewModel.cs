@@ -509,6 +509,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>The message the run in progress started with, until the model has it.</summary>
     private UserInput? _unread;
 
+    /// <summary>
+    /// A run's last save is waiting for its last updates to reach the chat. Another chat picked
+    /// meanwhile (a click comes before it) saves it first: it was skipped, and the chat lost its end.
+    /// </summary>
+    private bool _lastSavePending;
+
     /// <summary>One run of the agent on <paramref name="input"/>. Returns what the user sent too late for it, to run next, or null.</summary>
     private async Task<UserInput?> RunAsync(UserInput input)
     {
@@ -534,11 +540,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             // The server may offer other models than at the last check: the picked one back, or the one in use gone.
             if (Core.Llm.ServerAddress.Candidates(server.BaseUrl).Count > 0)
                 await ProbeServerAsync(quiet: true, ct);
+            // Said with Continue by the catch below, which also gives back what was sent meanwhile:
+            // returning here left those messages above the box for good.
             if (Core.Llm.ServerAddress.Candidates(server.BaseUrl).Count == 0 || string.IsNullOrWhiteSpace(server.ModelInUse))
-            {
-                AddStopNotice("Enter your model server's address and pick a model at the top first, then press Continue.", isError: true, input);
-                return null;
-            }
+                throw new InvalidOperationException("Enter your model server's address and pick a model at the top first, then press Continue.");
             // LM Studio loads models on first use; do that now so we know the real context size.
             using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10)))
             {
@@ -591,7 +596,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 }
             }
         }
-        catch (OperationCanceledException)
+        // Stop, Pause/Break or leaving the chat; a request that timed out is an error like any other.
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             var stopped = StoppedText();
             if (!_runDetached) AddStopNotice(stopped, isError: false, delivered ? null : input);
@@ -609,7 +615,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             // After the run's last posted updates (its "Stopped." notice) have reached the chat.
             var chatId = _chatId;
             if (!_runDetached)
-                Dispatcher.UIThread.Post(() => { if (_chatId == chatId) SaveChat(SnapshotHistory()); }, DispatcherPriority.Background);
+            {
+                _lastSavePending = true;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    _lastSavePending = false;
+                    if (_chatId == chatId) SaveChat(SnapshotHistory());
+                }, DispatcherPriority.Background);
+            }
             _tick.Stop();
             _session = null;
             IsBusy = false;
@@ -635,7 +648,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         if (late.Count == 0)
             return null;
-        if (ct.IsCancellationRequested)
+        // Stopped, or ended before the model had the message (the server didn't answer): run as the
+        // next task, what was sent meanwhile went to the model without the message it followed,
+        // whose Continue that run took away.
+        if (ct.IsCancellationRequested || !delivered)
         {
             // Stopped: what the agent hadn't read yet goes back in the box, with its files under it,
             // to send again or not.

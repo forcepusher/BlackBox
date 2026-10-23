@@ -84,6 +84,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   command line) may be between two of its jobs.
 - The sysadmin migration ticket finds backups written under /var/lib and /var/local too.
 - The note to index a project no longer comes back with every message of a chat that indexed it.
+- Messages sent while a task starts up are no longer stuck above the box, or sent on without the
+  first one, when the start fails; a chat left for another while BlackBox works says it stopped,
+  with Continue, when opened again, and a task that has just ended keeps its end when another chat
+  is opened at once.
 - Several windows: once a click is held back because another window's agent changed the screen,
   the rest of that step's clicks and keys are held back too, instead of typing into the other
   window's program, and a window's next task looks again first when another window acted meanwhile;
