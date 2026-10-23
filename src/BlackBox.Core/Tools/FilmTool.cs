@@ -23,12 +23,14 @@ public sealed class FilmTool : Tool
     public override string Description =>
         "Make a film (a music video, a short story, an ad: anything longer than one shot) from a storyboard, with ComfyUI on this PC. " +
         "The film is its folder, which the user also sees in BlackBox's Filmmaking panel beside the chat, from where they pick its pictures, clips and folders into their messages to you: " +
-        "a folder for each shot, numbered in the film's order and named after the shot, holding the frames it starts and ends on and its clip; References; Sound; and the joined film. " +
-        "Each file has a .meta beside it (what it is and how it was made, as JSON) and the ComfyUI workflow that made it (.workflow.json). " +
+        "a folder for each shot, numbered in the film's order and named after the shot, holding the frames it starts and ends on and its clip; References, with a folder for each character, place or thing holding its pictures; Sound; and the joined film. " +
+        "Each file has a .json of its name beside it (what it is and how it was made: Intro.json for Intro.mp4) and the ComfyUI workflow that made it (Intro.workflow.json). " +
         "The storyboard is all of it at once: shots in order, each going from a first frame to an optional last frame in so many seconds, the pictures they start and end on, and the soundtrack. " +
         "action=storyboard shows it (path: the film's folder), with BlackBox's guide to writing one the first time in a chat, or makes or changes it with storyboard={...}: title, " +
-        "width, height, fps, frames:[{id, prompt (what it shows and its look), model, seed, from: [what it is made from, to keep people and places the same: frames' ids, and pictures in the film's References folder by file name], " +
-        "file (a picture of the user's, cut to the film's frame), name, reference: true for a character or place sheet, made into the film's References folder at its own shape and named after its name, " +
+        "width, height, fps, frames:[{id, prompt (what it shows and its look), model, seed, from: [what it is made from, to keep people and places the same: frames' ids, and in the References folder " +
+        "a reference's folder by its name (\"Mira\": its main picture) or one picture in it (\"Mira/side.png\")], " +
+        "file (a picture of the user's, cut to the film's frame), name, reference: true for a character or place sheet, made at its own shape into References/<name>/<name>.png " +
+        "(name \"Mira/side\" for another picture of Mira, made into her folder as side.png), " +
         "of: a shot's id, for a frame taken from where that shot's clip ends, so the shot that starts on it goes on from that moment (after a shot without a last frame)}], " +
         "shots:[{id, name (a few words naming it, \"intro\", \"the leap\": its folder's name), first, last (frame ids), seconds, prompt (what happens, and its look), camera, model, transition: cut|dissolve|fade, " +
         "line (what is said in it, lip-synced, in the voice sound.voice describes; it starts 0.4 s in, so leave time for it), lipSync (without a line: sings the soundtrack's part under it), seed}], " +
@@ -42,7 +44,7 @@ public sealed class FilmTool : Tool
         "a new first frame is a cut to another scene or angle. Every shot starts on a frame: the video model animates a picture well and draws one badly. " +
         "Keep one clear action per shot, as many seconds as it takes (2 to 8; a longer clip holds its opening pose, then rushes): say which way things move on screen, from where to where, and what stays still, " +
         "and what is heard (the shot's own sound is kept under the song at half; music comes from the song, not the video model). " +
-        "The References folder also holds any picture the user puts there (action=storyboard lists them): name one in a frame's from to make the frame from it, " +
+        "The References folders also hold any picture the user puts there (action=storyboard lists them): name one in a frame's from to make the frame from it, " +
         "whatever its shape: a frame made from pictures is made the film's size with all of each in view. " +
         "action=frame id= makes a frame's picture (a reference's too) and has a fresh look at it; action=sound makes the song, a minute long at least (the film uses its start), the best of tries=3 by a judge " +
         "of how good music sounds (SongEval); write lyrics for the part the film uses. action=shot id= makes a shot's clip and checks it (does it start and end on its frames, " +
@@ -65,7 +67,7 @@ public sealed class FilmTool : Tool
         ("seconds", Num("action=shot: how long it lasts"), false),
         ("seed", Int("action=frame or shot: a new seed (another result from the same prompt)"), false),
         ("model", Str("action=frame or shot: what it is made with, a model or workflow in words or by name (\"\" for the best installed)"), false),
-        ("from", StrArray("action=frame: what it is made from: frames' ids, pictures in the References folder by name"), false),
+        ("from", StrArray("action=frame: what it is made from: frames' ids, references' folders (\"Mira\") or pictures in them (\"Mira/side.png\") in References"), false),
         ("tries", Int("action=shot: up to this many takes, each with a new seed, until the check passes (default 1); action=sound: songs to make, the best kept (default 3)"), false));
 
     public override string Describe(JsonObject args)
@@ -147,7 +149,7 @@ public sealed class FilmTool : Tool
         if (create && path is not { Length: > 0 } && Exists(given) && change?["title"] is JsonValue t && t.TryGetValue<string>(out var newTitle) &&
             newTitle.Trim().Length > 0 && change["shots"] is JsonArray { Count: > 0 } shots &&
             shots.All(s => s is JsonObject o && o["delete"] is null && o["prompt"] is JsonValue p && p.ToString().Trim().Length > 0) &&
-            Storyboard.Load(given, upgrade: false) is { } last &&
+            Storyboard.Load(given) is { } last &&
             (last.Shots.Any(s => s.Prompt.Trim().Length > 0) || last.Frames.Any(f => f.Prompt.Trim().Length > 0)) &&
             !newTitle.Trim().Equals(last.Title.Trim(), StringComparison.OrdinalIgnoreCase))
             given = null;
@@ -251,7 +253,7 @@ public sealed class FilmTool : Tool
             var added = board.AddFirstFrames();
             if (added.Count > 0)
                 board.Save();
-            line = $"Saved the film in {board.Folder}: a folder for each shot, each piece's settings in a .meta beside it. The user sees it in the Filmmaking panel (Toolkit, at the top of BlackBox).\n" +
+            line = $"Saved the film in {board.Folder}: a folder for each shot, each piece's settings in a .json beside it. The user sees it in the Filmmaking panel (Toolkit, at the top of BlackBox).\n" +
                    (added.Count == 0 ? "" : $"Shots without a first frame got one each from their prompts ({string.Join(", ", added.Select(f => f.Id))}): " +
                                             "rewrite each as the still picture the shot starts on, with who is in it as the references show them.\n");
         }
@@ -308,8 +310,8 @@ public sealed class FilmTool : Tool
         }
         // The user's own pictures in the References folder, which no reference of the storyboard is for.
         var references = board.Frames.Where(f => f.Reference).Select(board.FramePicture).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var own = board.ReferenceFiles().Where(f => !references.Contains(f)).Select(f => Path.GetRelativePath(board.ReferencesFolder, f)).ToList();
-        sb.AppendLine($"References folder: {board.ReferencesFolder}" + (own.Count == 0 ? " (the references' pictures)." : $"; pictures there to make frames from, by name in from: {string.Join(", ", own.Take(40))}" +
+        var own = board.ReferenceFiles().Where(f => !references.Contains(f)).Select(board.InReferences).ToList();
+        sb.AppendLine($"References folder: {board.ReferencesFolder}, a folder for each reference" + (own.Count == 0 ? "." : $"; pictures there to make frames from, by name in from: {string.Join(", ", own.Take(40))}" +
                                                                                        (own.Count > 40 ? $" and {own.Count - 40} more." : ".")));
         sb.AppendLine("Shots:");
         if (board.Shots.Count == 0) sb.AppendLine("  (none)");
@@ -404,7 +406,7 @@ public sealed class FilmTool : Tool
             sb.AppendLine("Note: " + note);
         // A frame made from its prompt alone draws its people anew; in a film with a character sheet that drifts.
         var references = board.Frames.Where(f => f.Reference && f != frame).ToList();
-        var pictures = board.ReferenceFiles().Where(p => references.All(r => !string.Equals(board.FramePicture(r), p, StringComparison.OrdinalIgnoreCase))).Select(Path.GetFileName).OfType<string>().ToList();
+        var pictures = board.ReferenceFiles().Where(p => references.All(r => !string.Equals(board.FramePicture(r), p, StringComparison.OrdinalIgnoreCase))).Select(board.InReferences).ToList();
         var sheets = references.Select(f => f.Name is { Length: > 0 } n ? $"{f.Id} (\"{n}\")" : f.Id).Concat(pictures).ToList();
         if (frame.From.Count == 0 && frame.File is not { Length: > 0 } && frame.Of is null && !frame.Reference && sheets.Count > 0)
             sb.AppendLine($"It is made from its prompt alone, so whoever is in it is drawn anew; if it shows someone or somewhere of {string.Join(", ", sheets.Take(12))}, " +

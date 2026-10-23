@@ -54,12 +54,12 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
 
     // ---- frames ----------------------------------------------------------------------------------
 
-    /// <summary>The prompt a frame is made with: its own (and an old storyboard's film-wide look, until it is upgraded).</summary>
-    public static string FramePrompt(Storyboard board, FilmFrame frame) => Join(frame.Prompt, board.Style ?? "");
+    /// <summary>The prompt a frame is made with: its own.</summary>
+    public static string FramePrompt(Storyboard board, FilmFrame frame) => frame.Prompt.Trim();
 
-    /// <summary>The prompt a shot is made with: what happens and what the camera does (and an old storyboard's look).</summary>
+    /// <summary>The prompt a shot is made with: what happens and what the camera does.</summary>
     public static string ShotPrompt(Storyboard board, FilmShot shot) =>
-        Join(Join(shot.Prompt, shot.Camera.Length > 0 ? "Camera: " + shot.Camera.TrimEnd('.') : ""), board.Style is { Length: > 0 } style ? "Style: " + style.TrimEnd('.') : "");
+        Join(shot.Prompt, shot.Camera.Length > 0 ? "Camera: " + shot.Camera.TrimEnd('.') : "");
 
     private static string Join(string a, string b) => Storyboard.JoinText(a, b);
 
@@ -80,12 +80,12 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     public static FilmJob JobOf(FilmShot shot) =>
         shot.LipSync ? FilmJob.LipSync : shot.First is null ? FilmJob.ShotFromText : shot.Last is null ? FilmJob.ShotFromFirst : FilmJob.Shot;
 
-    /// <summary>What a frame is made with: its own words, or an old storyboard's template for the job.</summary>
-    public static string? ModelOf(Storyboard board, FilmFrame frame) => frame.Model ?? (board.Workflows is { } w ? FilmTemplates.Chosen(w, JobOf(frame)) : null);
+    /// <summary>What a frame is made with, in its own words; none: the best installed (see <see cref="FilmFrame.Model"/>).</summary>
+    public static string? ModelOf(Storyboard board, FilmFrame frame) => frame.Model;
 
-    public static string? ModelOf(Storyboard board, FilmShot shot) => shot.Model ?? (board.Workflows is { } w ? FilmTemplates.Chosen(w, JobOf(shot)) : null);
+    public static string? ModelOf(Storyboard board, FilmShot shot) => shot.Model;
 
-    public static string? SongModelOf(Storyboard board) => board.Sound.Model ?? board.Workflows?.Song;
+    public static string? SongModelOf(Storyboard board) => board.Sound.Model;
 
     /// <summary>Makes a frame's picture: taken from the user's file, else made from words, or from the frames it is based on.</summary>
     public async Task<FilmMade> MakeFrameAsync(Storyboard board, FilmFrame frame, Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
@@ -141,8 +141,8 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             if (board.Frame(id) is not { } from)
             {
                 pictures.Add(board.ReferenceFile(id) ?? throw new FilmException(
-                    $"{frame.Label} is to be made from \"{id}\", which is neither a frame of this film nor a picture in its References folder ({board.ReferencesFolder})" +
-                    (board.ReferenceFiles() is { Count: > 0 } there ? $", which has {string.Join(", ", there.Take(20).Select(Path.GetFileName))}." : ", which is empty.")));
+                    $"{frame.Label} is to be made from \"{id}\", which is neither a frame of this film nor a reference's folder or picture in its References folder ({board.ReferencesFolder})" +
+                    (board.ReferenceFiles() is { Count: > 0 } there ? $", which has {string.Join(", ", there.Take(20).Select(board.InReferences))}." : ", which is empty.")));
                 continue;
             }
             if (from.Id == frame.Id)
@@ -724,35 +724,6 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     private static string SongHash(Storyboard board) =>
         Hash($"{board.Sound.Tags}|{board.Sound.Lyrics}|{board.Sound.Seed}|{SongModelOf(board)}|{board.Sound.Set?.ToJsonString()}");
 
-    /// <summary>The stamp songs were made with before 2026-10-23, the length in the hash: theirs stay up to date as before.</summary>
-    private static string OldSongStamp(Storyboard board) =>
-        Hash($"{board.Sound.Tags}|{board.Sound.Lyrics}|{board.Sound.Seed}|{SongSeconds(board)}|{SongModelOf(board)}|{board.Sound.Set?.ToJsonString()}");
-
-    /// <summary>
-    /// Upgrades a storyboard from before frames and shots had all of their own look and model
-    /// (<see cref="Storyboard.Upgrade"/>): what was made and up to date before stays so, its stamp
-    /// written again for its settings' new place. Saved when <paramref name="save"/>.
-    /// </summary>
-    public static void Upgrade(Storyboard board, bool save = true)
-    {
-        var frames = board.Frames.Where(f => IsCurrent(board, f)).ToList();
-        var shots = board.Shots.Where(s => IsCurrent(board, s)).ToList();
-        var song = SongIsCurrent(board);
-        board.Upgrade();
-        foreach (var f in frames)
-            Restamp(board.FrameMeta(f), FrameStamp(board, f));
-        foreach (var s in shots)
-            Restamp(board.ShotMeta(s), ShotStamp(board, s));
-        if (song)
-            Restamp(board.SongMeta, SongStamp(board));
-        if (save)
-            try
-            {
-                board.Save();
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-    }
-
     /// <summary>Gives a made piece's meta a new stamp (when it differs).</summary>
     private static void Restamp(string meta, string stamp)
     {
@@ -805,46 +776,17 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         try { json = File.Exists(meta) ? JsonNode.Parse(File.ReadAllText(meta)) as JsonObject ?? [] : []; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { json = []; }
         // A line's meta is made here; a frame's, shot's or the song's by the storyboard, with the piece in it.
-        if (json["kind"] is null && (meta.EndsWith(".line.flac" + Storyboard.MetaExtension, StringComparison.OrdinalIgnoreCase) ? "line"
+        if (json["kind"] is null && (meta.EndsWith(".line.json", StringComparison.OrdinalIgnoreCase) ? "line"
                 : Path.GetFileName(meta).Contains(".take", StringComparison.OrdinalIgnoreCase) ? "take" : null) is { } kind)
             json["kind"] = kind;
         json["made"] = new JsonObject { ["stamp"] = stamp, ["template"] = template, ["at"] = DateTime.UtcNow.ToString("O") };
         Directory.CreateDirectory(Path.GetDirectoryName(meta)!);
         Settings.AtomicFile.Write(meta, json.ToJsonString(ComfyWorkflow.Indented));
-        var file = Storyboard.WorkflowOf(meta[..^Storyboard.MetaExtension.Length]);
+        var file = Storyboard.WorkflowOf(meta);
         if (workflow is not null)
             Settings.AtomicFile.Write(file, JsonNode.Parse(workflow.ToJson())!.ToJsonString(ComfyWorkflow.Indented));
         else if (File.Exists(file))
             File.Delete(file); // taken from a file: no workflow made it
-    }
-
-    /// <summary>
-    /// A piece's record from before films were folders (its workflow file: what made it under
-    /// "blackbox", the ComfyUI workflow under "prompt"), as its meta and workflow beside
-    /// <paramref name="file"/>; the record goes.
-    /// </summary>
-    internal static void FromRecord(string record, string file)
-    {
-        try
-        {
-            if (JsonNode.Parse(File.ReadAllText(record)) is not JsonObject json)
-                return;
-            var meta = new JsonObject();
-            if (json["blackbox"] is JsonObject head)
-            {
-                var made = new JsonObject();
-                foreach (var (key, value) in head)
-                    made[key == "made" ? "at" : key] = value?.DeepClone();
-                meta["made"] = made;
-            }
-            if (Path.GetFileName(file).EndsWith(".line.flac", StringComparison.OrdinalIgnoreCase) || Path.GetFileName(file).Contains(".line.v", StringComparison.OrdinalIgnoreCase))
-                meta["kind"] = "line";
-            Settings.AtomicFile.Write(Storyboard.MetaOf(file), meta.ToJsonString(ComfyWorkflow.Indented));
-            if (json["prompt"] is JsonObject prompt)
-                Settings.AtomicFile.Write(Storyboard.WorkflowOf(file), prompt.ToJsonString(ComfyWorkflow.Indented));
-            File.Delete(record);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { }
     }
 
     /// <summary>The films a piece is being made of now, by their folders (with how many at once): their folders aren't renamed meanwhile.</summary>
@@ -882,8 +824,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     public static bool SongIsCurrent(Storyboard board) =>
         File.Exists(board.SongFile) && MadeStamp(board.SongMeta) is { } made
         && (made.Split(':') is [var hash, var length] && hash == SongHash(board)
-            && double.TryParse(length, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds >= SongSeconds(board)
-            || made == OldSongStamp(board));
+            && double.TryParse(length, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds >= SongSeconds(board));
 
     // ---- pictures and sound --------------------------------------------------------------------------------
 

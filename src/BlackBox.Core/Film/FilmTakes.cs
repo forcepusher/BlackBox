@@ -174,15 +174,15 @@ public static class FilmTakes
         Path.Combine(Path.GetDirectoryName(file)!, Storyboard.TakesName, $"{Path.GetFileNameWithoutExtension(file)}.v{n}{Path.GetExtension(file)}");
 
     /// <summary>
-    /// Where take <paramref name="n"/> of what goes with <paramref name="file"/> is kept: its meta and
-    /// workflow follow the take's file ("Intro.v2.mp4.meta", "Intro.v2.workflow.json"); its sound and
+    /// Where take <paramref name="n"/> of what goes with <paramref name="file"/> is kept: its .json and
+    /// workflow follow the take's file ("Intro.v2.json", "Intro.v2.workflow.json"); its sound and
     /// line are named as takes of their own ("Intro.v2.wav", "Intro.line.v2.flac").
     /// </summary>
     private static string TakeOf(string member, string file, int n)
     {
         if (string.Equals(member, file, StringComparison.OrdinalIgnoreCase))
             return TakeFile(file, n);
-        foreach (var main in new[] { file }.Concat(member.EndsWith(".line.flac" + Storyboard.MetaExtension, StringComparison.OrdinalIgnoreCase) ||
+        foreach (var main in new[] { file }.Concat(member.EndsWith(".line.json", StringComparison.OrdinalIgnoreCase) ||
                                                    member.EndsWith(".line.workflow.json", StringComparison.OrdinalIgnoreCase)
                                                        ? [Path.Combine(Path.GetDirectoryName(file)!, Path.GetFileNameWithoutExtension(file) + ".line.flac")] : []))
         {

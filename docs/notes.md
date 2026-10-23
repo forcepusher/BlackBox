@@ -463,36 +463,41 @@ from a drive ("lighthouse") is a folder in `Data/films` too: taken from the work
 
 ```
 Fox Film/
-  Fox Film.mp4 (+ .meta)     the joined film; its meta: title, size, frame rate, levels, the shots' order
-  References/                the references' pictures (named after them) and the user's own
+  Fox Film.mp4 (+ Fox Film.json)  the joined film; its .json: title, size, frame rate, levels, the shots' order
+  References/                a folder for each reference, with its pictures and the user's own
+    Fox/Fox.png (+ Fox.json, Fox.workflow.json), Fox/side.png, Fox/Front.jpg (the user's)
   1 Intro/                   a folder per shot, numbered in the film's order, named after the shot
-    Intro start.png (+ .meta, Intro start.workflow.json)
-    Intro end.png   (+ .meta, Intro end.workflow.json)
-    Intro.mp4       (+ .meta, Intro.workflow.json)
-    Takes/                   earlier versions, each with its meta and workflow
-  Sound/song.mp3 (+ .meta, song.workflow.json)
+    Intro start.png (+ Intro start.json, Intro start.workflow.json)
+    Intro end.png   (+ Intro end.json, Intro end.workflow.json)
+    Intro.mp4       (+ Intro.json, Intro.workflow.json)
+    Takes/                   earlier versions, each with its .json and workflow
+  Sound/song.mp3 (+ song.json, song.workflow.json)
 ```
 
-Every piece has a `.meta` beside its file (JSON, as Unity keeps one beside each asset, the user's
-comparison): what it is (`"kind"`, its id, prompt, seed, model, what it is made from) and, once
-made, how (`"made"`: the stamp of the settings it was made from, the template, when, the settings
-then, what its look found). The workflow beside it is ComfyUI's API format alone, which ComfyUI
-opens as it is and the comfyui tool runs (`workflow_file`). A piece is where its meta is: moved or
-renamed with its meta in Explorer it stays in the film, and with its meta deleted (a shot's folder
-deleted) it leaves it. Reading a film gathers the metas into one storyboard
-(`StoryboardFolder.cs`), which is what the agent reads and writes as JSON; saving it gives each piece
-its place (`Storyboard.Arrange`) and writes the metas back, only those that say something new. A
+Every piece has a .json beside its file, named as it (`Storyboard.MetaOf`: "Intro.json" for
+"Intro.mp4"; it was a `.meta` as Unity keeps one beside each asset, the user's comparison, until
+they asked for plain .json, 2026-10-24): what it is (`"kind"`, its id, prompt, seed, model, what it
+is made from) and, once made, how (`"made"`: the stamp of the settings it was made from, the
+template, when, the settings then, what its look found). Named by the stem, a piece's file and its
+.json need stems no other made file in the folder has, as the workflows did already; a .json is a
+piece's when it has a `"kind"`, and the file it is beside is found by its kind (a frame's picture as
+it is there, else a PNG; a shot's or the film's MP4). The workflow beside it is ComfyUI's API format
+alone, which ComfyUI opens as it is and the comfyui tool runs (`workflow_file`). A piece is where its
+.json is: moved or renamed with its .json in Explorer it stays in the film, and with its .json
+deleted (a shot's folder deleted) it leaves it. Reading a film gathers them into one storyboard
+(`StoryboardFolder.cs`; the root, its folders and theirs, for a reference's folder in References,
+not Takes), which is what the agent reads and writes as JSON; saving it gives each piece its place
+(`Storyboard.Arrange`) and writes the .json files back, only those that say something new. A
 shot's folder follows the film's order and the shot's `name` (renamed with the files in it when
 they change, but not while a piece of the film is being made, `FilmMaker.IsMaking`: the job writes
 into it); a frame goes in the folder of the shot that ends on it, else the one that starts on it
 (the frame a shot after goes on from is the end of the shot before, and the tree shows it in the
-next shot's folder too), a reference in References, any other in Frames. A piece made stays where
-its file is; one not made yet goes where the order and names say, never onto a file a piece taken
-out left there ("2 puddle (2)"). The meta of a piece taken out goes, so it doesn't come back; its
-files stay. A film kept in a `storyboard.json` from before is turned into folders the first time it
-is opened: each piece's record (the workflow file that held its stamp and workflow) becomes its
-meta and workflow, the pieces move into their folders with their takes (a file moved keeps its time
-and size, so what was made from it stays made), and the storyboard.json goes. A film is made of:
+next shot's folder too), a reference in its folder in References, any other in Frames. A piece made
+stays where its file is; one not made yet goes where the order and names say, never onto a file a
+piece taken out left there ("2 puddle (2)"). The .json of a piece taken out goes, so it doesn't come
+back; its files stay. Films from before folders (a `storyboard.json`) aren't read or converted, and
+nor are the film-wide look and templates of older storyboards: the user's call, 2026-10-24, "ignore
+the possibility that anyone was using an old version". A film is made of:
 
 - **Shots** in order, each going from its **first frame** to its **last frame** in so many seconds,
   with what happens in it, what the camera does, and how it follows the shot before (a cut, a
@@ -503,19 +508,21 @@ and size, so what was made from it stays made), and the storyboard.json goes. A 
 - **Frames**: made from a prompt with a fixed seed, or taken from a picture of the user's (cut to
   the film's frame). A frame can be made **from other frames** (an edit model such as
   Qwen-Image-Edit gets them as its pictures), so the people and places stay the same from shot to
-  shot; **references** (a character, a place) are frames for that alone, in no shot, their
-  pictures in the film's **References** folder at their own shape. Any picture the user puts in
-  References (dropped on the panel, or copied there) is one too: a frame names it in `from` by its
-  file name to be made from it.
+  shot; **references** (a character, a place) are frames for that alone, in no shot. Each has a
+  folder of its own in the film's **References** folder (the user's call, 2026-10-24: "each
+  reference should have its own folder for multiple references"), its picture made there at its own
+  shape ("References/Fox/Fox.png"); a reference named "Fox/side" is another picture of Fox, made into
+  that folder as "side.png". Any picture the user puts there (dropped on the panel: into the
+  reference picked in the tree, else a folder of its own named after it; or copied there) is one
+  too. A frame's `from` names a reference's folder ("Fox": its main picture, the one named after the
+  folder, else its first, `Storyboard.MainPicture`) or a picture in it ("Fox/side.png", or just
+  "side.png"), so the agent picks the pictures a frame needs: an edit template takes a few.
 - **Nothing film-wide that goes into a prompt.** Each frame's and shot's prompt holds all of its
   own look, and each says what it is made with (`model`). There used to be a film-wide look added
   to every prompt, a story and a template per kind of job, and the user ruled them out: one change
-  to them made every frame and shot out of date. A storyboard that has them is upgraded when it is
-  loaded: the look is joined to every prompt (so frames come out with the prompt they were made
-  with), the templates go to the frames, shots and song of their kind, and what was made and up to
-  date is stamped again so it stays made. A `style` the agent gives with a change goes only into the
-  frames and shots of that change. Only the frame size and frame rate are the film's (1280x720 at 24
-  fps unless changed).
+  to them made every frame and shot out of date. A `style` the agent gives with a change goes only
+  into the frames and shots of that change. Only the frame size and frame rate are the film's
+  (1280x720 at 24 fps unless changed).
 - **The soundtrack**: none (each shot keeps the sound it was made with), a sound file of the
   user's, or a song made for the film from a style and lyrics. A shot can be **lip-synced**: the
   soundtrack's part under it is cut out as a WAV and given to LTX's picture and sound to video
@@ -528,7 +535,7 @@ and size, so what was made from it stays made), and the storyboard.json goes. A 
   line longer than its shot is said to be cut. A small Gemma 4 hears each line back in the check:
   "Honestly? It used to be a lot worse." came back word for word.
 
-A piece's meta keeps, under `"made"`, a hash of what it was made from: the prompt, seed, size,
+A piece's .json keeps, under `"made"`, a hash of what it was made from: the prompt, seed, size,
 template, and the pictures and sound it started from. A piece whose hash no longer matches its
 settings is out of date, which the panel and the tool say (a frame changed after the clip that
 starts on it was made, a song shorter than the film became). So the panel and the agent never
@@ -643,11 +650,12 @@ a viewer beside it with how the piece shown was made under it, and the timeline 
 top bar picks the film (New film, Open… a folder, Show folder, the film's title, size, frame rate
 and levels behind the cog) and has **Make the film**.
 
-**The tree is the film's folder** as it is on the disk: References, a folder per shot in the
-film's order, Sound, any other folder, and the joined film, with what each piece is beside its name
+**The tree is the film's folder** as it is on the disk: References with a folder for each
+reference, a folder per shot in the film's order, Sound, any other folder, and the joined film,
+with what each piece is beside its name
 ("the start of shot 1", "shot 1's clip"), its state ("Not made yet", "Made · looked at", what the
 chat is doing to it), a thumbnail for a picture, and its takes under it. A piece planned and not
-made yet is there, greyed, where it will be. The metas and workflows aren't shown (what they say is
+made yet is there, greyed, where it will be. The pieces' .json files and workflows aren't shown (what they say is
 under the viewer), nor what is made beside a piece. It is built again only when what it shows
 changed: as a job writes, the folder changes every second.
 
@@ -679,7 +687,8 @@ piece planned), × takes it off, another pick takes its place, and sent, it goes
 the film (`IToolkit.About`): over its bubble (`UserInput.Via`, "Filmmaking · The Fox and the Moon ·
 shot 2"), and for the model before the words (`UserInput.Context`) the film's folder, what each
 pick is in it (shot s2, the 2nd of 3, from 5 to 9 s, its clip or its folder; frame f1, the start of
-shot 1; the reference "Fox"; a picture of theirs in References and how to name it; a take, which
+shot 1; the reference "Fox"; a reference's folder, with its pictures and how to name them; a
+picture of theirs in References and how to name it; a take, which
 the panel puts back), and what to do: about picks, read the storyboard, change those pieces alone
 (a shot, its frames too, and the lines' voice) unless they ask for more, and make them again unless
 they only ask a question; with nothing picked, lay the film out or change it and make nothing unless
@@ -721,7 +730,7 @@ with a first frame only, as the guide says for a drift that goes on to the end, 
 empty starting pieces); "make it darker, closer to night, with the street lamps on" on that frame
 changed its prompt, the shot's look words with it (and said so), and made it with a fresh look, in
 2 min 13 s, 12 s of it ComfyUI. Each piece made is
-looked at by fresh looks (see below), and what they found is kept in the piece's meta
+looked at by fresh looks (see below), and what they found is kept in the piece's .json
 (`"made"."look"`, a song's judged sound too) so the panel shows it with the piece.
 
 **The panel and the chat.** It reads twice a second what the chat is doing: on the timeline and in
@@ -883,11 +892,11 @@ joined film. A clip playing in the panel stops meanwhile; the play button under 
 in place.
 
 **Takes**: before the film tool makes a piece again, the one there is kept in its folder's Takes
-(`1 Intro/Takes/Intro end.v1.png` with its meta and workflow, `Intro.v1.mp4`…), its meta holding the
+(`1 Intro/Takes/Intro end.v1.png` with its .json and workflow, `Intro.v1.mp4`…), its .json holding the
 settings it was made with (`"made"."settings"`) and what its look found; a make that fails or is
-stopped puts that take back in place, what its meta says of how it was made too (the job had begun
+stopped puts that take back in place, what its .json says of how it was made too (the job had begun
 to write over it, and dropped, the piece lost its settings and look and read as changed; only the
-`"made"` part goes back over the piece's meta, which keeps what it says of the piece: moved whole, a
+`"made"` part goes back over the piece's .json, which keeps what it says of the piece: moved whole, a
 take made beside a piece left it without its prompt), and so does a shot of several `tries`
 stopped before one replaced its clip (the takes made so far stay). A speaking shot's take keeps
 its line with it (`Intro.v1.wav` and `Intro.line.v1.flac`): put back without it, the newer line

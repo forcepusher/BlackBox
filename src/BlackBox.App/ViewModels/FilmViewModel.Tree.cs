@@ -26,16 +26,20 @@ public sealed partial class FilmViewModel
         var shown = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var frameOf = _board.Frames.ToDictionary(f => Path.GetFullPath(_board.FramePicture(f)), f => _frames[f.Id], StringComparer.OrdinalIgnoreCase);
 
-        // References: the references' pictures, made or planned, and the user's own pictures there.
-        var references = Folder(_board.ReferencesFolder, "pictures frames are made from: yours and BlackBox's");
-        foreach (var frame in _board.Frames.Where(f => f.Reference))
-            references.Children.Add(PieceNode(_board.FramePicture(frame), _frames[frame.Id], frame.Name is { Length: > 0 } name ? name : "a reference"));
-        foreach (var file in _board.ReferenceFiles().Where(f => !shown.Contains(f)))
+        // References: a folder for each reference, with its pictures, made or planned, and the user's own there.
+        var references = Folder(_board.ReferencesFolder, "a folder for each reference: the pictures frames are made from");
+        var referencesPath = Path.GetFullPath(_board.ReferencesFolder);
+        var ownPictures = _board.ReferenceFiles();
+        foreach (var dir in _board.Frames.Where(f => f.Reference).Select(f => Path.GetDirectoryName(Path.GetFullPath(_board.FramePicture(f)))!)
+                     .Concat(Folders(referencesPath))
+                     .Where(d => string.Equals(Path.GetDirectoryName(d), referencesPath, StringComparison.OrdinalIgnoreCase))
+                     .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList())
         {
-            shown.Add(Path.GetFullPath(file));
-            references.Children.Add(new FilmNode(file, isFolder: false, Path.GetRelativePath(_board.ReferencesFolder, file)) { Label = "your picture" });
+            var reference = Folder(dir, "a reference");
+            ReferencePictures(reference);
+            references.Children.Add(reference);
         }
-        Others(references);
+        ReferencePictures(references);
         root.Children.Add(references);
 
         // A folder for each shot, in the film's order: the frames it starts and ends on (one another
@@ -142,6 +146,26 @@ public sealed partial class FilmViewModel
             return node;
         }
 
+        // A folder in References: the references made there, the user's pictures, and what else is in it.
+        void ReferencePictures(FilmNode folder)
+        {
+            foreach (var frame in _board.Frames.Where(f => f.Reference && !shown.Contains(Path.GetFullPath(_board.FramePicture(f))) &&
+                                                           string.Equals(Path.GetDirectoryName(Path.GetFullPath(_board.FramePicture(f))), Path.GetFullPath(folder.Path), StringComparison.OrdinalIgnoreCase)))
+                folder.Children.Add(PieceNode(_board.FramePicture(frame), _frames[frame.Id], frame.Name is { Length: > 0 } name ? name : "a reference"));
+            foreach (var file in ownPictures.Where(f => !shown.Contains(Path.GetFullPath(f)) && string.Equals(Path.GetDirectoryName(f), Path.GetFullPath(folder.Path), StringComparison.OrdinalIgnoreCase)))
+            {
+                shown.Add(Path.GetFullPath(file));
+                folder.Children.Add(new FilmNode(file, isFolder: false) { Label = "your picture" });
+            }
+            Others(folder);
+        }
+
+        static IEnumerable<string> Folders(string dir)
+        {
+            try { return Directory.Exists(dir) ? Directory.EnumerateDirectories(dir).Where(d => !Path.GetFileName(d).StartsWith('.') && !Path.GetFileName(d).Equals(Storyboard.TakesName, StringComparison.OrdinalIgnoreCase)).Select(Path.GetFullPath).ToList() : []; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return []; }
+        }
+
         // What else is in a folder: not a piece's own file, a meta, a workflow, a take or what goes with a shot.
         void Others(FilmNode folder)
         {
@@ -170,15 +194,33 @@ public sealed partial class FilmViewModel
     private readonly HashSet<string> _seenFolders = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// A file of the film's folders shown in the tree: not a meta or a workflow (what they say shows
-    /// under the viewer), nor what is made beside a piece (a lip-synced shot's sound and line, a take
-    /// being made, a clip being held still) or hidden.
+    /// A file of the film's folders shown in the tree: not a piece's .json or workflow (what they
+    /// say shows under the viewer), nor what is made beside a piece (a lip-synced shot's sound and
+    /// line, a take being made, a clip being held still) or hidden.
     /// </summary>
     private static bool Shown(string file)
     {
         var name = Path.GetFileName(file);
-        return !name.StartsWith('.') && !name.EndsWith(Storyboard.MetaExtension, StringComparison.OrdinalIgnoreCase) &&
-               !name.EndsWith(".workflow.json", StringComparison.OrdinalIgnoreCase) && Sidecar().IsMatch(name) is false;
+        return !name.StartsWith('.') && !Storyboard.IsWorkflow(file) && !Sidecar().IsMatch(name) &&
+               !(name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) && IsPieceJson(file));
+    }
+
+    /// <summary>
+    /// A .json saying what a piece is: one beside a file of its name ("Intro.json", "Intro.mp4"), or
+    /// one with a kind (a piece not made yet, the film's own).
+    /// </summary>
+    private static bool IsPieceJson(string file)
+    {
+        try
+        {
+            if (Directory.EnumerateFiles(Path.GetDirectoryName(file)!, Path.GetFileNameWithoutExtension(file) + ".*").Any(f => !string.Equals(f, file, StringComparison.OrdinalIgnoreCase)))
+                return true;
+            return System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file)) is System.Text.Json.Nodes.JsonObject { } json && json.ContainsKey("kind");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or ArgumentException)
+        {
+            return false;
+        }
     }
 
     [System.Text.RegularExpressions.GeneratedRegex(@"(\.(tmp|wav)$)|(\.line\.flac$)|(\.take\d+\.)|(\.held\.)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
@@ -312,9 +354,10 @@ public sealed partial class FilmViewModel
     }
 
     /// <summary>
-    /// Files dropped on the panel: pictures go into the film's References folder (copies, under
-    /// names of their own), to make frames from, and the first is picked for the user to say what
-    /// to do with it; anything else goes with the next message.
+    /// Files dropped on the panel: pictures go into References (copies, under names of their own),
+    /// to make frames from: into the reference picked in the tree, else each into a folder of its
+    /// own named after it; the first is picked for the user to say what to do with it. Anything
+    /// else goes with the next message.
     /// </summary>
     public bool Drop(IReadOnlyList<string> paths)
     {
@@ -326,13 +369,16 @@ public sealed partial class FilmViewModel
         {
             SaveNow(force: true); // a new film's folder is made with it
             Directory.CreateDirectory(_board.ReferencesFolder);
+            var into = PickedReference();
             foreach (var picture in pictures)
             {
-                var target = Path.Combine(_board.ReferencesFolder, Path.GetFileName(picture));
-                if (string.Equals(Path.GetFullPath(picture), target, StringComparison.OrdinalIgnoreCase))
+                var folder = into ?? Path.Combine(_board.ReferencesFolder, Storyboard.Safe(Path.GetFileNameWithoutExtension(picture)));
+                var target = Path.Combine(folder, Path.GetFileName(picture));
+                if (string.Equals(Path.GetFullPath(picture), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase))
                     continue;
                 for (var n = 2; File.Exists(target); n++)
-                    target = Path.Combine(_board.ReferencesFolder, $"{Path.GetFileNameWithoutExtension(picture)} ({n}){Path.GetExtension(picture)}");
+                    target = Path.Combine(folder, $"{Path.GetFileNameWithoutExtension(picture)} ({n}){Path.GetExtension(picture)}");
+                Directory.CreateDirectory(folder);
                 File.Copy(picture, target);
                 added.Add(target);
             }
@@ -352,6 +398,16 @@ public sealed partial class FilmViewModel
         if (added.Count > 0 && Find(added[0]) is { } first)
             SelectedNode = first;
         return true;
+    }
+
+    /// <summary>The folder of the reference picked in the tree (the folder, or a picture in it); null when none is.</summary>
+    private string? PickedReference()
+    {
+        if (SelectedNode is not { } node)
+            return null;
+        var references = Path.GetFullPath(_board.ReferencesFolder);
+        var folder = Path.GetFullPath(node.IsFolder ? node.Path : Path.GetDirectoryName(node.Path)!);
+        return string.Equals(Path.GetDirectoryName(folder), references, StringComparison.OrdinalIgnoreCase) ? folder : null;
     }
 
     // ---- the viewer ---------------------------------------------------------------------------------------

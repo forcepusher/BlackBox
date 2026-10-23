@@ -15,7 +15,7 @@ namespace BlackBox.App.ViewModels;
 /// film on one timeline (its shots and sound) under one horizontal scroll. What is picked in the
 /// tree or on the timeline goes into the chat's box, where the user says what to do with it: the
 /// agent writes the prompts, picks the models and makes each piece with the film tool in the chat,
-/// in view. The film is its folder (a folder per shot, each file with its .meta), and what the agent
+/// in view. The film is its folder (a folder per shot, each file with its .json), and what the agent
 /// changes and makes there shows here as it happens.
 /// </summary>
 public sealed partial class FilmViewModel : ObservableObject, IToolkit
@@ -87,7 +87,7 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
 
         static string TitleOf(string folder)
         {
-            try { return Storyboard.Load(folder, upgrade: false).Title is { Length: > 0 } t ? t : Path.GetFileName(folder); }
+            try { return Storyboard.Load(folder).Title is { Length: > 0 } t ? t : Path.GetFileName(folder); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException) { return Path.GetFileName(folder); }
         }
     }

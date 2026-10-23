@@ -62,14 +62,22 @@ public sealed partial class FilmViewModel
         if (Is(Path.GetDirectoryName(_board.SongFile)!))
             return new("the sound", $"the Sound folder ({full}): the film's soundtrack", FilmPiece.Song);
         if (Is(_board.ReferencesFolder))
-            return new("References", $"the References folder ({full}): the references' pictures and their own", null);
+            return new("References", $"the References folder ({full}): a folder for each reference, with its pictures and their own", null);
+        if (Directory.Exists(full) && string.Equals(Path.GetDirectoryName(full), Path.GetFullPath(_board.ReferencesFolder), StringComparison.OrdinalIgnoreCase))
+        {
+            var name = Path.GetFileName(full);
+            var pictures = _board.ReferenceFiles().Where(f => string.Equals(Path.GetDirectoryName(f), full, StringComparison.OrdinalIgnoreCase)).Select(_board.InReferences).ToList();
+            return new(name, $"the reference \"{name}\", its folder in References ({full}): " +
+                             (pictures.Count == 0 ? "no picture in it yet" : $"its pictures {string.Join(", ", pictures.Take(12))}") +
+                             $"; a frame names it in from by \"{name}\" (its main picture) or one of its pictures by its name there", null);
+        }
         if (Is(_board.Folder) || Is(_board.JoinedFile))
             return new("the whole film", $"the whole film ({full})", null);
         if (Tree.SelectMany(All).FirstOrDefault(n => n.Take is not null && Is(n.Path)) is { Take: { } take, TakeOf: { } of })
             return new($"take {take.Number} of {Lower(of.Title)}", $"take {take.Number} of {Lower(of.Title)} ({full}), an earlier version kept when it was made again: " +
                                                                     "the panel puts a take back in the film (Use this take, under it), not the film tool", null);
-        if (full.StartsWith(_board.ReferencesFolder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            return new(Path.GetFileName(full), $"a picture of theirs in the References folder ({full}): a frame names it in from by \"{Path.GetFileName(full)}\" to be made from it", null);
+        if (full.StartsWith(Path.GetFullPath(_board.ReferencesFolder) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            return new(Path.GetFileName(full), $"a picture of theirs in References ({full}): a frame names it in from by \"{_board.InReferences(full)}\" to be made from it", null);
         return new(Path.GetFileName(full), $"a file in the film's folder ({full})", null);
     }
 

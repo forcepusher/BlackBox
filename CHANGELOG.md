@@ -26,9 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the models, makes it with ComfyUI and looks at it, in the chat, where you watch and can stop it.
   Earlier takes are kept, and **Use this take** puts one back. Or ask for a film in the chat.
 - A film is its folder: a folder for each shot, numbered in the film's order and named after the
-  shot, with the frames it starts and ends on and its clip; References, for its characters and
-  places and pictures of yours (drop them on Filmmaking, and frames are made from them); Sound; and
-  the joined film. Every file has a `.meta` beside it saying what it is and how it was made, and the
+  shot, with the frames it starts and ends on and its clip; References, with a folder for each
+  character, place or thing holding its pictures, BlackBox's and yours (drop them on Filmmaking, and
+  frames are made from the ones BlackBox picks); Sound; and the joined film. Every file has a `.json`
+  of its name beside it saying what it is and how it was made (`Intro.json` for `Intro.mp4`), and the
   ComfyUI workflow that made it, which opens in ComfyUI as it is.
 - Films get songs about a minute long (the best of three, judged by SongEval), spoken lines in one
   cloned voice with lip sync, and fresh looks at every shot, cut and the whole film that catch
@@ -63,9 +64,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as a take; a shot's or song's other tries are takes too.
 - The context slider goes up to 1M.
 - The second BlackBox name and logo under the title bar made way for the Toolkit dropdown.
+- The first-run hints for Ctrl+V and **New window** are reworded.
 
 ### Removed
 - Ctrl+Shift+N: **New window** at the top opens another window.
+- Films kept in a `storyboard.json` (from 1.0.0) no longer open: a film is its folder now.
 
 ### Fixed
 - A task whose last step the server failed a few times before answering no longer looks as if it

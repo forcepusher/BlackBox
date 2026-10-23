@@ -206,78 +206,6 @@ public sealed class StoryboardTests : IDisposable
         Assert.Equal(_dir, merged.Folder);
     }
 
-    /// <summary>A storyboard as BlackBox wrote them before nothing was film-wide.</summary>
-    private const string Old = """
-        {"title": "Keeper", "story": "An old keeper", "style": "warm light, 35mm",
-         "frames": [{"id": "f1", "prompt": "a keeper at the door", "seed": 11}, {"id": "f2", "prompt": "closer", "from": ["f1"], "seed": 12}],
-         "shots": [{"id": "s1", "first": "f1", "last": "f2", "prompt": "he waves", "camera": "still", "seed": 13}],
-         "sound": {"source": "song", "tags": "folk", "seed": 14},
-         "workflows": {"frame": "templates/image_z_image_turbo", "shot": "templates/video_ltx2_5_flf2v", "song": "audio_ace_step1_5_xl_turbo"}}
-        """;
-
-    [Fact]
-    public void An_old_film_wide_look_and_templates_go_into_each_frame_and_shot()
-    {
-        var board = Storyboard.Parse(Old);
-        Assert.Equal("a keeper at the door. warm light, 35mm", board.Frames[0].Prompt);
-        Assert.Equal("he waves. warm light, 35mm", board.Shots[0].Prompt);
-        Assert.Equal("templates/image_z_image_turbo", board.Frames[0].Model);
-        Assert.Null(board.Frames[1].Model); // made from f1: an edit, and no edit template was named
-        Assert.Equal("templates/video_ltx2_5_flf2v", board.Shots[0].Model);
-        Assert.Equal("audio_ace_step1_5_xl_turbo", board.Sound.Model);
-        Assert.False(board.IsOld);
-        var json = board.ToJson();
-        Assert.DoesNotContain("\"style\"", json);
-        Assert.DoesNotContain("\"story\"", json);
-        Assert.DoesNotContain("\"workflows\"", json);
-    }
-
-    [Fact]
-    public void An_old_film_in_a_storyboard_json_becomes_its_folders_and_what_was_made_stays_made()
-    {
-        Directory.CreateDirectory(_dir);
-        File.WriteAllText(Path.Combine(_dir, Storyboard.OldFileName), Old);
-        var old = Storyboard.Load(_dir, upgrade: false);
-        Assert.True(old.IsOld);
-        // As made then: each piece in a folder of its kind, by id, with a record of what made it beside it.
-        void Made(string file, string stamp, bool workflow = true)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-            File.WriteAllText(file, file);
-            var record = new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = stamp, ["template"] = "templates/x", ["made"] = "2026-10-20T10:00:00Z" } };
-            if (workflow)
-                record["prompt"] = new JsonObject { ["3"] = new JsonObject { ["class_type"] = "KSampler" } };
-            File.WriteAllText(Path.ChangeExtension(file, ".json"), record.ToJsonString());
-        }
-        foreach (var f in old.Frames)
-            Made(Path.Combine(_dir, "frames", f.Id + ".png"), FilmMaker.FrameStamp(old, f));
-        Made(Path.Combine(_dir, "frames", "f2.v1.png"), "a take", workflow: false);
-        Made(Path.Combine(_dir, "shots", "s1.mp4"), FilmMaker.ShotStamp(old, old.Shots[0]));
-        Made(Path.Combine(_dir, "sound", "song.mp3"), FilmMaker.SongStamp(old));
-
-        var board = Storyboard.Load(_dir);
-        Assert.False(board.IsOld);
-        Assert.False(File.Exists(Path.Combine(_dir, Storyboard.OldFileName)));
-        Assert.False(Directory.Exists(Path.Combine(_dir, "frames")));
-        Assert.Equal(Path.Combine(_dir, "1 Shot", "Shot start.png"), board.FramePicture(board.Frame("f1")!));
-        Assert.Equal(Path.Combine(_dir, "1 Shot", "Shot end.png"), board.FramePicture(board.Frame("f2")!));
-        Assert.Equal(Path.Combine(_dir, "1 Shot", "Shot.mp4"), board.ShotVideo(board.Shots[0]));
-        Assert.True(File.Exists(Path.Combine(_dir, "1 Shot", "Takes", "Shot end.v1.png")));
-        Assert.Equal("templates/x", FilmMaker.MadeWith(board.ShotMeta(board.Shots[0])));
-        Assert.Contains("KSampler", File.ReadAllText(Storyboard.WorkflowOf(board.ShotVideo(board.Shots[0]))));
-        Assert.All(board.Frames, f => Assert.True(FilmMaker.IsCurrent(board, f)));
-        Assert.True(FilmMaker.IsCurrent(board, board.Shots[0]));
-        Assert.True(FilmMaker.SongIsCurrent(board));
-        Assert.Single(FilmTakes.List(board, FilmPiece.Of(board.Frame("f2")!)));
-        Assert.DoesNotContain("\"style\"", File.ReadAllText(board.FilmMeta)); // saved upgraded
-        Assert.Equal(board.ToJson(), Storyboard.Load(_dir).ToJson()); // and read back from the folders the same
-
-        // From now on a change to one frame leaves the others made.
-        board.Frames[1].Prompt = "closer still";
-        Assert.True(FilmMaker.IsCurrent(board, board.Frames[0]));
-        Assert.False(FilmMaker.IsCurrent(board, board.Frames[1]));
-    }
-
     [Fact]
     public void A_look_given_with_a_change_goes_only_into_what_the_change_gives()
     {
@@ -290,7 +218,7 @@ public sealed class StoryboardTests : IDisposable
         Assert.Equal("the sea. film noir", merged.Frame("f2")!.Prompt);
         Assert.Equal("juggernaut", merged.Frame("f2")!.Model);
         Assert.Equal("he waves", merged.Shots[0].Prompt);
-        Assert.False(merged.IsOld);
+        Assert.DoesNotContain("\"style\"", merged.ToJson());
     }
 
     [Fact]
@@ -343,13 +271,14 @@ public sealed class StoryboardTests : IDisposable
         var loaded = Storyboard.Load(_dir);
         Assert.Equal(board.ToJson(), loaded.ToJson());
         Assert.Equal(Path.Combine(_dir, "Keeper.mp4"), loaded.FilmFile);
-        // Its folders: the shot's with the metas of its frames and clip, References, Sound, and the film's own meta.
-        Assert.True(File.Exists(Path.Combine(_dir, "1 Shot", "Shot.mp4.meta")));
-        Assert.True(File.Exists(Path.Combine(_dir, "1 Shot", "Shot start.png.meta")));
-        Assert.True(File.Exists(Path.Combine(_dir, "1 Shot", "Shot end.png.meta")));
+        // Its folders: the shot's with the .json of its frames and clip, References, Sound, and the film's own .json.
+        Assert.True(File.Exists(Path.Combine(_dir, "1 Shot", "Shot.json")));
+        Assert.True(File.Exists(Path.Combine(_dir, "1 Shot", "Shot start.json")));
+        Assert.True(File.Exists(Path.Combine(_dir, "1 Shot", "Shot end.json")));
         Assert.True(Directory.Exists(Path.Combine(_dir, "References")));
-        Assert.True(File.Exists(Path.Combine(_dir, "Sound", "song.mp3.meta")));
-        Assert.Contains("\"shots\": [\n    \"s1\"\n  ]", File.ReadAllText(Path.Combine(_dir, "Keeper.mp4.meta")).ReplaceLineEndings("\n"));
+        Assert.True(File.Exists(Path.Combine(_dir, "Sound", "song.json")));
+        Assert.Contains("\"shots\": [\n    \"s1\"\n  ]", File.ReadAllText(Path.Combine(_dir, "Keeper.json")).ReplaceLineEndings("\n"));
+        Assert.Empty(Directory.EnumerateFiles(_dir, "*.meta", SearchOption.AllDirectories));
     }
 
     [Fact]
@@ -373,10 +302,11 @@ public sealed class StoryboardTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_dir, "2 leap", "leap start.png")));
         Assert.Equal(["s2", "s1"], Storyboard.Load(_dir).Shots.Select(s => s.Id));
 
-        // A frame moved with its meta by hand stays in the film, where it is now.
-        File.Move(Path.Combine(_dir, "2 leap", "leap start.png"), Path.Combine(_dir, "References", "fox.png"));
-        File.Move(Path.Combine(_dir, "2 leap", "leap start.png.meta"), Path.Combine(_dir, "References", "fox.png.meta"));
-        Assert.Equal(Path.Combine(_dir, "References", "fox.png"), Storyboard.Load(_dir).FramePicture(Storyboard.Load(_dir).Frame("f1")!));
+        // A frame moved with its .json by hand stays in the film, where it is now (a reference's folder too).
+        Directory.CreateDirectory(Path.Combine(_dir, "References", "Fox"));
+        File.Move(Path.Combine(_dir, "2 leap", "leap start.png"), Path.Combine(_dir, "References", "Fox", "fox.png"));
+        File.Move(Path.Combine(_dir, "2 leap", "leap start.json"), Path.Combine(_dir, "References", "Fox", "fox.json"));
+        Assert.Equal(Path.Combine(_dir, "References", "Fox", "fox.png"), Storyboard.Load(_dir).FramePicture(Storyboard.Load(_dir).Frame("f1")!));
 
         // A shot's folder deleted: it leaves the film.
         Directory.Delete(Path.Combine(_dir, "1 howl"), recursive: true);
@@ -1210,7 +1140,7 @@ public sealed class FilmToolTests : IDisposable
         // The one it replaced is a take, its line with it; dropped, nothing of it is left.
         var take = Assert.Single(FilmTakes.List(board, piece));
         FilmTakes.Drop(take);
-        Assert.Equal(["Shot.line.flac", "Shot.mp4", "Shot.mp4.meta", "Shot.wav"], Directory.EnumerateFiles(board.ShotFolder(shot)).Select(f => Path.GetFileName(f)).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(["Shot.json", "Shot.line.flac", "Shot.mp4", "Shot.wav"], Directory.EnumerateFiles(board.ShotFolder(shot)).Select(f => Path.GetFileName(f)).Order(StringComparer.Ordinal).ToArray());
         Assert.Empty(Directory.EnumerateFiles(Path.Combine(board.ShotFolder(shot), "Takes")));
     }
 
@@ -1325,7 +1255,7 @@ public sealed class FilmReferencesTests : IDisposable
         var maker = new FilmMaker(ComfyHub.For(Path.Combine(_dir, "comfy")), null);
         var reference = await maker.MakeFrameAsync(board, board.Frame("mira")!, null, CancellationToken.None, CancellationToken.None);
         var shotFrame = await maker.MakeFrameAsync(board, board.Frame("f1")!, null, CancellationToken.None, CancellationToken.None);
-        Assert.Equal(Path.Combine(board.ReferencesFolder, "mira.png"), reference.File);
+        Assert.Equal(Path.Combine(board.ReferencesFolder, "mira", "mira.png"), reference.File); // in a folder of its own
         Assert.Equal((600, 600), SizeOf(reference.File));
         Assert.Equal(Path.Combine(board.Folder, "1 Shot", "Shot start.png"), shotFrame.File);
         Assert.Equal((1280, 720), SizeOf(shotFrame.File));
@@ -1337,32 +1267,50 @@ public sealed class FilmReferencesTests : IDisposable
     }
 
     [Fact]
-    public void A_frame_is_made_from_a_picture_of_the_references_folder_named_in_its_from()
+    public void A_frame_is_made_from_a_references_folder_or_a_picture_in_it_named_in_its_from()
     {
         var board = Storyboard.Parse("""
-            {"title": "Cafe", "frames": [{"id": "mira", "reference": true, "prompt": "a sheet"}, {"id": "f1", "prompt": "at the cafe", "from": ["mira", "Front"]}]}
+            {"title": "Cafe", "frames": [{"id": "mira", "reference": true, "prompt": "a sheet"}, {"id": "side", "reference": true, "name": "mira/side", "prompt": "her side"},
+                                         {"id": "f1", "prompt": "at the cafe", "from": ["mira", "mira/Front", "Cafe"]}]}
             """);
         board.Folder = Path.Combine(_dir, "Cafe");
         board.Save();
-        var front = Path.Combine(board.ReferencesFolder, "Front.jpg");
+        // Each reference in its folder: another picture of one in its folder too.
+        Assert.Equal(Path.Combine(board.ReferencesFolder, "mira", "mira.png"), board.FramePicture(board.Frame("mira")!));
+        Assert.Equal(Path.Combine(board.ReferencesFolder, "mira", "side.png"), board.FramePicture(board.Frame("side")!));
+        var front = Path.Combine(board.ReferencesFolder, "mira", "Front.jpg");
         Png(front, 300, 500);
-        Png(Path.Combine(board.ReferencesFolder, "mira.png"), 640, 360);
-        Png(Path.Combine(board.ReferencesFolder, "mira.v1.png"), 640, 360); // a take, not a reference
-        Assert.Equal(front, board.ReferenceFile("Front"));
-        Assert.Equal(front, board.ReferenceFile("front.jpg"), StringComparer.OrdinalIgnoreCase);
-        Assert.Equal(front, board.ReferenceFile("References/Front.jpg"));
+        Png(Path.Combine(board.ReferencesFolder, "mira", "mira.png"), 640, 360);
+        Png(Path.Combine(board.ReferencesFolder, "mira", "mira.v1.png"), 640, 360); // a take, not a reference
+        Png(Path.Combine(board.ReferencesFolder, "Cafe", "inside.png"), 64, 64);
+        Png(Path.Combine(board.ReferencesFolder, "Cafe", "Cafe.png"), 64, 64);
+        Png(Path.Combine(board.ReferencesFolder, "Street", "b.png"), 64, 64);
+        Png(Path.Combine(board.ReferencesFolder, "Street", "a.png"), 64, 64);
+        Assert.Equal(front, board.ReferenceFile("mira/Front"));
+        Assert.Equal(front, board.ReferenceFile("mira/front.jpg"), StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(front, board.ReferenceFile("References/mira/Front.jpg"));
+        Assert.Equal(front, board.ReferenceFile("Front.jpg")); // without its folder
         Assert.Equal(front, board.ReferenceFile(front));
+        // A folder by its name: the picture named after it, else its first.
+        Assert.Equal(Path.Combine(board.ReferencesFolder, "Cafe", "Cafe.png"), board.ReferenceFile("Cafe"));
+        Assert.Equal(Path.Combine(board.ReferencesFolder, "Street", "a.png"), board.ReferenceFile("Street"));
         Assert.Null(board.ReferenceFile("mira")); // a frame of the film, not a file
         Assert.Null(board.ReferenceFile("nobody"));
-        Assert.Equal(["Front.jpg", "mira.png"], board.ReferenceFiles().Select(Path.GetFileName));
+        Assert.Equal(["Cafe/Cafe.png", "Cafe/inside.png", "mira/Front.jpg", "mira/mira.png", "Street/a.png", "Street/b.png"], board.ReferenceFiles().Select(board.InReferences));
 
-        // Changing the picture puts what is made from it out of date.
+        // Changing a picture puts what is made from it out of date.
         var frame = board.Frame("f1")!;
         var stamp = FilmMaker.FrameStamp(board, frame);
         File.SetLastWriteTimeUtc(front, DateTime.UtcNow.AddMinutes(1));
         Assert.NotEqual(stamp, FilmMaker.FrameStamp(board, frame));
         var overview = FilmTool.Overview(board);
-        Assert.Contains($"References folder: {board.ReferencesFolder}; pictures there to make frames from, by name in from: Front.jpg.", overview);
+        Assert.Contains($"References folder: {board.ReferencesFolder}, a folder for each reference; pictures there to make frames from, by name in from: " +
+                        "Cafe/Cafe.png, Cafe/inside.png, mira/Front.jpg, Street/a.png, Street/b.png.", overview);
+
+        // Read back from its folders, the references and the picture of one are there.
+        var loaded = Storyboard.Load(board.Folder);
+        Assert.Equal(board.FramePicture(board.Frame("side")!), loaded.FramePicture(loaded.Frame("side")!));
+        Assert.True(loaded.Frame("mira")!.Reference);
     }
 
     [Fact]
@@ -1390,31 +1338,5 @@ public sealed class FilmReferencesTests : IDisposable
         // The model still gets the picture as it is.
         Assert.Equal("""["433:117",0]""", wf.ValueOf("433:111.image1")!.ToJsonString());
         Assert.Equal(@"C:\f\mira.png", (string?)wf.ValueOf("78.image"));
-    }
-
-    [Fact]
-    public void An_old_films_reference_goes_into_references_under_its_name_and_what_is_made_from_it_stays_made()
-    {
-        var folder = Path.Combine(_dir, "Fox");
-        Directory.CreateDirectory(folder);
-        File.WriteAllText(Path.Combine(folder, Storyboard.OldFileName), """
-            {"title": "Fox", "frames": [{"id": "f3", "reference": true, "name": "the fox", "prompt": "a fox sheet", "seed": 3}, {"id": "f1", "prompt": "the fox jumps", "from": ["f3"], "seed": 1}],
-             "shots": [{"id": "s1", "first": "f1", "prompt": "it jumps"}]}
-            """);
-        var old = Storyboard.Load(folder, upgrade: false);
-        // As made then: the reference with the shots' frames, by id.
-        var frames = Path.Combine(folder, "frames");
-        foreach (var name in new[] { "f3.png", "f3.v1.png", "f1.png" })
-            Png(Path.Combine(frames, name), 64, 36);
-        File.WriteAllText(Path.Combine(frames, "f3.json"), new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = FilmMaker.FrameStamp(old, old.Frame("f3")!) } }.ToJsonString());
-        File.WriteAllText(Path.Combine(frames, "f1.json"), new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = FilmMaker.FrameStamp(old, old.Frame("f1")!) } }.ToJsonString());
-
-        var board = Storyboard.Load(folder);
-        Assert.Equal(Path.Combine(board.ReferencesFolder, "the fox.png"), board.FramePicture(board.Frame("f3")!));
-        Assert.True(File.Exists(Path.Combine(board.ReferencesFolder, "Takes", "the fox.v1.png")));
-        Assert.Equal(Path.Combine(folder, "1 Shot", "Shot start.png"), board.FramePicture(board.Frame("f1")!));
-        Assert.True(FilmMaker.IsCurrent(board, board.Frame("f3")!));
-        Assert.True(FilmMaker.IsCurrent(board, board.Frame("f1")!));
-        Assert.Equal([Path.Combine(board.ReferencesFolder, "the fox.png")], board.ReferenceFiles()); // the take is no reference
     }
 }

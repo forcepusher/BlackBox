@@ -18,7 +18,7 @@ public static class StoryboardMerge
     public static Storyboard Merge(Storyboard before, Storyboard mine, Storyboard theirs)
     {
         var merged = Node(before.ToJsonObject(), mine.ToJsonObject(), theirs.ToJsonObject());
-        var board = Storyboard.Parse(merged?.ToJsonString() ?? "{}", upgrade: false);
+        var board = Storyboard.Parse(merged?.ToJsonString() ?? "{}");
         board.Folder = mine.Folder;
         return board;
     }

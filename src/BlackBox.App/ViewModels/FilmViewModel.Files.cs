@@ -61,12 +61,12 @@ public sealed partial class FilmViewModel
             if (_savedJson is not null && Storyboard.IsFilm(_board.Folder))
             {
                 Storyboard? theirs = null;
-                try { theirs = Storyboard.Load(_board.Folder, upgrade: false); }
+                try { theirs = Storyboard.Load(_board.Folder); }
                 catch (FilmException) { /* not a film that can be read: this panel's is written */ }
                 if (theirs is not null && theirs.ToJson() != _savedJson)
                 {
                     var folder = _board.Folder;
-                    _board = StoryboardMerge.Merge(Storyboard.Parse(_savedJson, upgrade: false), _board, theirs);
+                    _board = StoryboardMerge.Merge(Storyboard.Parse(_savedJson), _board, theirs);
                     _board.Folder = folder;
                     merged = true;
                 }

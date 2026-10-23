@@ -611,7 +611,7 @@
                 </Border>
               </StackPanel>
               <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
-                         Text="pastes a screenshot or files into your message; you can also drop them here." />
+                         Text="can paste a screenshot into your message, you can also drag and drop files." />
             </DockPanel>
           </Border>
 
@@ -622,7 +622,7 @@
                 <TextBlock Text="New window" />
               </Border>
               <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
-                         Text="at the top opens another window, so I can work on several tasks at once." />
+                         Text="at the top opens another window, so I can multitask in parallel." />
             </DockPanel>
           </Border>
 
