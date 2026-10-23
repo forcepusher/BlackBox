@@ -95,8 +95,10 @@ public sealed partial class FilmViewModel
         if (signature == _treeSignature && Tree.Count > 0)
             return;
         _treeSignature = signature;
+        // The film's folders open, and the references' in References.
+        var opened = root.Children.Concat(references.Children).Where(n => n.IsFolder).ToList();
         if (_expanded.Count == 0)
-            _expanded.UnionWith(root.Children.Where(n => n.IsFolder).Select(n => n.Path).Prepend(root.Path));
+            _expanded.UnionWith(opened.Select(n => n.Path).Prepend(root.Path));
         var selected = SelectedNode?.Path;
         var viewing = Viewing?.Path;
         foreach (var node in All(root))
@@ -108,13 +110,13 @@ public sealed partial class FilmViewModel
                     _ = n.IsExpanded ? _expanded.Add(n.Path) : _expanded.Remove(n.Path);
             };
         }
-        // A shot added since opens with its folder.
-        foreach (var folder in root.Children.Where(n => n.IsFolder && !_seenFolders.Contains(n.Path)))
+        // A shot or reference added since opens with its folder.
+        foreach (var folder in opened.Where(n => !_seenFolders.Contains(n.Path)))
         {
             folder.IsExpanded = true;
             _expanded.Add(folder.Path);
         }
-        _seenFolders.UnionWith(root.Children.Where(n => n.IsFolder).Select(n => n.Path));
+        _seenFolders.UnionWith(opened.Select(n => n.Path));
         _syncing = true;
         try
         {
@@ -190,7 +192,7 @@ public sealed partial class FilmViewModel
             $"{node.Path}|{node.Label}|{node.IsPlanned}|{(node.IsPlanned || node.IsFolder ? 0 : StampOf(node.Path))}[{string.Join(",", node.Children.Select(Signature))}]";
     }
 
-    /// <summary>The folders of the film's root seen so far: one that comes (a new shot) opens in the tree.</summary>
+    /// <summary>The folders of the film's root and of References seen so far: one that comes (a new shot or reference) opens in the tree.</summary>
     private readonly HashSet<string> _seenFolders = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
