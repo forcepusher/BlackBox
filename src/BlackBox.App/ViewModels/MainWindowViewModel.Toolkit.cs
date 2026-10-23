@@ -7,7 +7,7 @@ namespace BlackBox.App.ViewModels;
 
 /// <summary>
 /// A tool that opens on the left of the chat window, picked in the Toolkit dropdown at the top of
-/// it (Filmmaking now; more to come). It works through the chat: what is picked in it goes into the
+/// it (Filmmaking, Diff). It works through the chat: what is picked in it goes into the
 /// chat's box, and what the user sends from there is done by the agent in the chat, in view.
 /// </summary>
 public interface IToolkit : IDisposable
@@ -45,6 +45,8 @@ public sealed partial class MainWindowViewModel
         new("None", "The chat alone", 0, null),
         new("Filmmaking", "Plan a film shot by shot and make it with ComfyUI: pick a picture, clip or folder of it and say in the chat what to do", 960,
             vm => new FilmViewModel(vm._previews, vm, vm._paths.FilmsDir, null)),
+        new("Diff", "See what changed in a git repository, file by file: click lines to ask about them in the chat", 880,
+            vm => new DiffViewModel(vm, vm._paths.DataDir)),
     ];
 
     [ObservableProperty]
@@ -72,14 +74,22 @@ public sealed partial class MainWindowViewModel
     /// <summary>
     /// What is picked in the toolkit's panel, into the box (one picked there before taken out): the
     /// user then says what to do with it. A piece not made yet has no file: it goes as its place.
+    /// One picked again under another caption (more lines of a file in the Diff panel) is put back with it.
     /// </summary>
     internal void Pick(IReadOnlyList<(string Path, string Caption)> picked)
     {
-        foreach (var old in Attachments.Where(a => a.Picked && !picked.Any(p => string.Equals(p.Path, a.Path, StringComparison.OrdinalIgnoreCase))).ToList())
+        foreach (var old in Attachments.Where(a => a.Picked && !picked.Any(p => string.Equals(p.Path, a.Path, StringComparison.OrdinalIgnoreCase) && p.Caption == a.Caption)).ToList())
             RemoveAttachment(old);
         foreach (var (path, caption) in picked)
-            if (!Attachments.Any(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase)))
-                Attachments.Add(new AttachmentItem(path, RemoveAttachment, caption));
+        {
+            if (Attachments.Any(a => a.Picked && string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            // The same file put in the box by the user goes as the pick: left there, the pick wasn't
+            // added and the message lost what was picked in it (BlackBox's own review of the Diff panel).
+            foreach (var same in Attachments.Where(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase)).ToList())
+                RemoveAttachment(same);
+            Attachments.Add(new AttachmentItem(path, RemoveAttachment, caption));
+        }
     }
 
     /// <summary>The paths picked in the toolkit's panel that are in the box now.</summary>

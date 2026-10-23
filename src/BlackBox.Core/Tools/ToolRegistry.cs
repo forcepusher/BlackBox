@@ -34,6 +34,7 @@ public sealed class ToolRegistry
         yield return new WriteFileTool();
         yield return new EditFileTool();
         yield return new ListDirectoryTool();
+        yield return new DiffTool();
         if (includeIndex)
             yield return new IndexFolderTool();
         yield return new ShellTool();
