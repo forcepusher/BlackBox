@@ -101,7 +101,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the storyboard in the chat no longer writes over BlackBox's change, nor is a shot's length being
   dragged lost to it; a shot added after one was deleted no longer brings back the deleted shot's
   clip; a film named again keeps its joined video; a take isn't put back while BlackBox makes a
-  piece of the film; two new films started in two windows at once no longer share a folder.
+  piece of the film; two new films started in two windows at once no longer share a folder; a
+  piece of the film open is no longer shown as being made when the chat makes another film's.
 - A piece made from the Filmmaking window is made again when its look finds something wrong, up to
   twice, as before it ran in the chat; the storyboard guide comes back after the context starts
   afresh; a stopped shot of several takes no longer keeps a copy of its clip as one more take; a
