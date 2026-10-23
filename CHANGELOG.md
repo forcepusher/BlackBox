@@ -70,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to rename or delete it, or to see an earlier version of it.
 
 ### Changed
+- Asked for code, commands or facts that change (versions, prices, news), the agent looks them up
+  on the web before it answers, rather than writing them from memory.
 - A film's name is its folder's: renamed in Filmmaking, in Explorer, or by the agent giving it a
   title, the film is.
 - Filmmaking's frame size and frame rate are at the top of the panel, and a new take is the dashed +

@@ -51,6 +51,8 @@ public static class SystemPrompt
                           "and ways of doing things, and facts may have changed since. Before your first try at anything you haven't looked up in this chat " +
                           "(code or commands for a program or library, a program's feature, a model's or workflow's technique such as motion control), check which version is in use " +
                           "and read the guidance for it: the official documentation, the makers' guides and examples (web_search, then fetch_page; find= gets just the part you need). " +
+                          "That goes for answers too, even short ones and ones you are sure of: look up code, commands or steps before you give them to the user, " +
+                          "and facts that change (versions, prices, rates, news, which products or models exist) before you state them. " +
                           "Every question you ask yourself about how something is done, what it is called or why it doesn't work is one for web_search: search it rather than answer it from memory. " +
                           "Search too before you hunt through a program's menus by trial, after any error you didn't expect, and after any try that didn't give what was wanted, " +
                           "before the next one: a search takes seconds, trial and error takes hours.");

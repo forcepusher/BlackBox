@@ -1885,6 +1885,22 @@ message of the user's and with a call that asks the installed version (help(), -
 saying it will search is read from where it says so: before, what came before its colon ("the value
 on screen didn't change: let me search the web for…") named the screen and the sentence was passed over.
 
+The rule spoke of tries, so an answer given in the chat slipped past it. Measured on 2026-10-24 with
+`.dev\search-bench\lookup-bench.ps1` (each prompt run with the CLI in a fresh root and stopped at its
+first web call or its answer): questions about facts that change (Python's latest version, an RTX
+5090's price, Anthropic's models, a Formula 1 result, the euro's rate, .NET 11, Tailwind in Vite, a
+new React app, a Blender 5.2 error) were searched first 19 of 20 times by qwen3.8 and by Nemotron
+(Kilo's free nemotron-3.5-super-vl). Asked for code to paste (a Godot 4.5 jump, Unity 6's gamepad
+stick, a Blender 5.2 modifier, OpenAI's streaming), qwen3.8 searched 10 of 12 times and Nemotron 7
+of 12: they wrote it from memory, and the Godot answers were wrong (`Input.is_key_just_pressed`,
+which doesn't exist; "ui_up" for space). Nemotron also wrote and ran OpenAI scripts with no look-up.
+So the rule now says it goes for answers too, even short ones and ones the model is sure of: code,
+commands or steps before they are given, facts that change before they are stated; web_search's
+description says to use it rather than answer from memory. With that, qwen3.8 searched first in 12
+of 12 code runs and 9 of 9 fact runs, and Nemotron in 11 of 12 and 9 of 9. Its miss thought "the
+user said just give me the GDScript", hence "even short ones"; with those words qwen3.8 searched in
+8 of 8 code runs and Nemotron in 15 of 16 (the Godot jump once more from memory).
+
 No API key and nothing to install. `web_search` asks DuckDuckGo's HTML page through the system's
 `curl` (built into Windows 10 and later; a fraction of a second): DuckDuckGo recognizes .NET's own
 HTTP client by its TLS handshake and answers it with a captcha, even on the first search.
