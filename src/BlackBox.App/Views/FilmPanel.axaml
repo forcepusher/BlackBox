@@ -137,46 +137,22 @@
   </UserControl.DataTemplates>
 
   <DockPanel>
-    <!-- Which film, and what to do with all of it. -->
+    <!-- The film's size and frame rate, changed here by hand and saved at once, and what to do with all of it.
+         Which film is the folder picked in the tree. -->
     <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="12,8">
       <DockPanel>
         <Button DockPanel.Dock="Right" Classes="primary" Content="Make the film" Command="{Binding MakeFilmCommand}"
                 ToolTip.Tip="BlackBox makes in the chat what isn't made yet or has changed, looks at each piece and fixes what it finds, then joins the film and looks at it" />
-        <StackPanel Orientation="Horizontal" Spacing="6">
-          <ComboBox ItemsSource="{Binding Films}" SelectedItem="{Binding SelectedFilm}" Width="220" AutomationProperties.Name="Film" />
-          <Button Classes="ghost" Content="New film" Command="{Binding NewFilmCommand}" />
-          <Button Classes="ghost" Content="Open…" Click="OnOpenClick" ToolTip.Tip="Open a film's folder from somewhere else" />
-          <Button Classes="ghost" Content="Show folder" Command="{Binding ShowFolderCommand}" ToolTip.Tip="{Binding Folder}" />
-          <!-- What belongs to the whole film: changed here by hand, saved at once. -->
-          <Button Classes="ghost" ToolTip.Tip="The film's title, size, frame rate and sound levels" AutomationProperties.Name="Film settings">
-            <PathIcon Width="14" Height="14" Data="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
-            <Button.Flyout>
-              <Flyout Placement="BottomEdgeAlignedLeft">
-                <StackPanel Spacing="8" Width="340">
-                  <DockPanel>
-                    <TextBlock Classes="label" Text="Title" Width="100" VerticalAlignment="Center" />
-                    <TextBox Text="{Binding Title}" AutomationProperties.Name="Film title" />
-                  </DockPanel>
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <TextBlock Classes="label" Text="Frame" Width="100" VerticalAlignment="Center" />
-                    <NumericUpDown Value="{Binding FrameWidth}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="76" ShowButtonSpinner="False" />
-                    <TextBlock Text="×" VerticalAlignment="Center" />
-                    <NumericUpDown Value="{Binding FrameHeight}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="76" ShowButtonSpinner="False" />
-                    <NumericUpDown Value="{Binding Fps}" Minimum="1" Maximum="120" Increment="1" FormatString="0" Width="52" Margin="6,0,0,0" ShowButtonSpinner="False" />
-                    <TextBlock Classes="muted" Text="fps" VerticalAlignment="Center" />
-                  </StackPanel>
-                  <DockPanel>
-                    <TextBlock Classes="label" Text="Soundtrack" Width="100" VerticalAlignment="Center" />
-                    <Slider Minimum="0" Maximum="150" Value="{Binding SoundVolume}" />
-                  </DockPanel>
-                  <DockPanel>
-                    <TextBlock Classes="label" Text="Shots' own sound" Width="100" VerticalAlignment="Center" TextWrapping="Wrap" />
-                    <Slider Minimum="0" Maximum="150" Value="{Binding ShotVolume}" />
-                  </DockPanel>
-                </StackPanel>
-              </Flyout>
-            </Button.Flyout>
-          </Button>
+        <Button DockPanel.Dock="Right" Classes="ghost" Content="New film" Command="{Binding NewFilmCommand}" Margin="0,0,6,0"
+                ToolTip.Tip="A film of its own in the films folder: type its name, then say in the chat what it is to be" />
+        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <TextBlock Classes="label" Text="Frame size" VerticalAlignment="Center" />
+          <NumericUpDown Value="{Binding FrameWidth}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="76" ShowButtonSpinner="False" AutomationProperties.Name="Frame width" />
+          <TextBlock Text="×" VerticalAlignment="Center" />
+          <NumericUpDown Value="{Binding FrameHeight}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="76" ShowButtonSpinner="False" AutomationProperties.Name="Frame height" />
+          <TextBlock Classes="label" Text="Frame rate" VerticalAlignment="Center" Margin="12,0,0,0" />
+          <NumericUpDown Value="{Binding Fps}" Minimum="1" Maximum="120" Increment="1" FormatString="0" Width="52" ShowButtonSpinner="False" AutomationProperties.Name="Frame rate" />
+          <TextBlock Classes="muted" Text="fps" VerticalAlignment="Center" />
         </StackPanel>
       </DockPanel>
     </Border>
@@ -198,10 +174,7 @@
           </StackPanel>
           <TextBlock Grid.Column="3" Classes="muted" Text="{Binding Status}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="12,0" FontSize="12"
                      ToolTip.Tip="{Binding Status}" />
-          <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <TextBlock Classes="muted" Text="{Binding LengthText}" VerticalAlignment="Center" FontSize="12" />
-            <Button Classes="ghost" Content="+ Shot" Command="{Binding AddShotCommand}" ToolTip.Tip="A shot after the last one; then say in the chat what happens in it" />
-          </StackPanel>
+          <TextBlock Grid.Column="4" Classes="muted" Text="{Binding LengthText}" VerticalAlignment="Center" FontSize="12" />
         </Grid>
         <Grid ColumnDefinitions="96,*" Margin="0,0,0,4">
           <!-- The rows' names stay put; what is right of them scrolls as one. -->
@@ -229,7 +202,8 @@
             <Panel Width="{Binding TimelineWidth}" HorizontalAlignment="Left" ClipToBounds="True">
               <StackPanel>
                 <views:FilmRuler x:Name="Ruler" Height="26" Pps="{Binding Pps}" Length="{Binding Length}" Lead="{x:Static vm:FilmViewModel.Lead}" />
-                <ItemsControl ItemsSource="{Binding Shots}" Height="112">
+                <Panel Height="112">
+                <ItemsControl ItemsSource="{Binding Shots}">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                       <Canvas />
@@ -243,7 +217,7 @@
                   </ItemsControl.Styles>
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ShotItem">
-                      <Button Classes="pick" Click="OnShotClick" ToolTip.Tip="{Binding Summary}" AutomationProperties.Name="{Binding Title}">
+                      <Button Classes="pick" Click="OnShotClick" ContextRequested="OnShotMenu" ToolTip.Tip="{Binding Summary}" AutomationProperties.Name="{Binding Title}">
                         <Border Classes="block" Classes.selected="{Binding IsSelected}" Width="{Binding BlockWidth}" Height="104" Cursor="Hand">
                           <Panel>
                             <DockPanel>
@@ -270,6 +244,19 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                <!-- The next shot's place, after the last: a click adds it there (the user found a
+                     "+ Shot" button by the playback buttons out of place, 2026-10-24). -->
+                <Canvas>
+                  <Button Classes="pick" Canvas.Left="{Binding AddShotX}" Canvas.Top="4" Width="56" Height="104" Command="{Binding AddShotCommand}"
+                          HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
+                          ToolTip.Tip="A shot after the last one; then say in the chat what happens in it" AutomationProperties.Name="New shot">
+                    <Panel>
+                      <Rectangle Stroke="{StaticResource BbBorder}" StrokeThickness="1.5" StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
+                      <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="16" Height="16" Foreground="{StaticResource BbMuted}" />
+                    </Panel>
+                  </Button>
+                </Canvas>
+                </Panel>
                 <ItemsControl ItemsSource="{Binding Lines}" Height="34">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -305,14 +292,15 @@
       </DockPanel>
     </Border>
 
-    <!-- The film's folder as a tree, and the viewer: what is picked goes into the chat's box. -->
+    <!-- The films folder as a tree, as Explorer shows it (a film opens when its folder is picked; right-click
+         to rename, make or delete), and the viewer: what is picked in the film goes into the chat's box. -->
     <Grid ColumnDefinitions="300,4,*">
       <Border Background="{StaticResource BbSurface}">
         <DockPanel>
           <TextBlock DockPanel.Dock="Top" Classes="muted" TextWrapping="Wrap" Margin="12,8,12,4"
                      Text="Pick a folder, picture or clip: it goes into the chat's box, where you say what to do with it." />
           <TreeView x:Name="Files" ItemsSource="{Binding Tree}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}" AutomationProperties.Name="Film files" Margin="0,0,0,4"
-                    ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.AllowAutoHide="False" ContextRequested="OnTreeMenu" Background="Transparent">
             <TreeView.ItemTemplate>
               <TreeDataTemplate DataType="vm:FilmNode" ItemsSource="{Binding Children}">
                 <DockPanel Classes="node" Classes.planned="{Binding IsPlanned}" ToolTip.Tip="{Binding Path}">
@@ -324,7 +312,12 @@
                     </Border>
                   </Panel>
                   <StackPanel VerticalAlignment="Center" Spacing="0">
-                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                    <Panel>
+                      <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" IsVisible="{Binding !IsRenaming}" />
+                      <!-- Its new name typed here, as in Explorer: Enter keeps it, Esc doesn't. -->
+                      <TextBox Classes="rename" Text="{Binding EditName}" IsVisible="{Binding IsRenaming}" Padding="4,1" MinHeight="0"
+                               KeyDown="OnRenameKeyDown" LostFocus="OnRenameLostFocus" AttachedToVisualTree="OnRenameAttached" AutomationProperties.Name="New name" />
+                    </Panel>
                     <TextBlock Classes="muted" FontSize="11" Text="{Binding Label}" TextTrimming="CharacterEllipsis"
                                IsVisible="{Binding Label, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     <TextBlock Classes="muted" FontSize="11" Text="{Binding Piece.State, FallbackValue=''}" TextTrimming="CharacterEllipsis"

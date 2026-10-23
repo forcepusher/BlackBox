@@ -52,45 +52,15 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
         _chatTimer.Start();
         // A pick taken off the box (its ×) is no longer picked here either.
         _chat.Attachments.CollectionChanged += OnBoxChanged;
-        RefreshFilms();
-        var open = folder ?? Films.FirstOrDefault()?.Folder;
+        var open = folder ?? Storyboard.Recent(_filmsRoot).FirstOrDefault();
         if (open is not null && Storyboard.IsFilm(open))
             Open(open);
         else
-            NewFilm();
+            Untitled();
+        Watch();
     }
 
     // ---- the film --------------------------------------------------------------------------------------
-
-    public ObservableCollection<FilmChoice> Films { get; } = [];
-
-    [ObservableProperty]
-    private FilmChoice? _selectedFilm;
-
-    partial void OnSelectedFilmChanged(FilmChoice? value)
-    {
-        if (value is not null && !_loading && !string.Equals(value.Folder, _board.Folder, StringComparison.OrdinalIgnoreCase))
-            Open(value.Folder);
-    }
-
-    private void RefreshFilms()
-    {
-        var films = Storyboard.Recent(_filmsRoot).ToList();
-        if (_board.Folder.Length > 0 && !films.Contains(_board.Folder, StringComparer.OrdinalIgnoreCase))
-            films.Insert(0, _board.Folder);
-        _loading = true;
-        Films.Clear();
-        foreach (var f in films)
-            Films.Add(new FilmChoice(f, TitleOf(f)));
-        SelectedFilm = Films.FirstOrDefault(f => string.Equals(f.Folder, _board.Folder, StringComparison.OrdinalIgnoreCase));
-        _loading = false;
-
-        static string TitleOf(string folder)
-        {
-            try { return Storyboard.Load(folder).Title is { Length: > 0 } t ? t : Path.GetFileName(folder); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException) { return Path.GetFileName(folder); }
-        }
-    }
 
     public string Folder => _board.Folder;
 
@@ -103,22 +73,31 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
         {
             _board = Storyboard.Load(path);
             _savedJson = _board.ToJson();
+            _dirty = false;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException)
         {
             ShowError($"That film can't be opened: {ex.Message}", ex, path);
             return;
         }
-        Watch();
         Opened();
     }
 
     /// <summary>
-    /// A new film in BlackBox's Data\films. Its folder is made with the first change: opening the
-    /// panel to look leaves nothing behind. The user says in the chat what it is to be.
+    /// A new film in BlackBox's Data\films, its name typed in the tree as a new folder's is in
+    /// Explorer. Its folder is made with the first change: opening the panel to look leaves
+    /// nothing behind. The user says in the chat what it is to be.
     /// </summary>
     [RelayCommand]
     private void NewFilm()
+    {
+        Untitled();
+        if (Find(_board.Folder) is { } node)
+            StartRename(node);
+    }
+
+    /// <summary>A new film, named "New film" (or "New film 2"), not saved yet.</summary>
+    private void Untitled()
     {
         SaveNow();
         StopPlaying();
@@ -128,42 +107,19 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
             name = $"New film {n}";
         _board = Storyboard.New(Path.Combine(root, name), name);
         _savedJson = null;
-        _watcher?.Dispose();
-        _watcher = null;
+        _dirty = false;
         Opened();
     }
 
-    /// <summary>Another film is shown: what was picked of the one before goes from the chat's box.</summary>
+    /// <summary>Another film is shown: what was picked of the one before goes from the chat's box, and its folder is picked in the tree.</summary>
     private void Opened()
     {
+        Status = "";
         Rebuild();
-        RefreshFilms();
         OnPropertyChanged(nameof(Folder));
         Clear(viewer: true);
         _chat.Pick([]);
-    }
-
-    [RelayCommand]
-    private void ShowFolder()
-    {
-        if (Directory.Exists(_board.Folder))
-            _ = Task.Run(() =>
-            {
-                try { Process.Start(new ProcessStartInfo(_board.Folder) { UseShellExecute = true })?.Dispose(); }
-                catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
-            });
-    }
-
-    public string Title
-    {
-        get => _board.Title;
-        set
-        {
-            if (_board.Title == value) return;
-            _board.Title = value;
-            OnPropertyChanged();
-            Changed();
-        }
+        PickFilm();
     }
 
     public decimal? FrameWidth
@@ -202,38 +158,14 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
         }
     }
 
-    /// <summary>How loud the soundtrack is, 0 to 100.</summary>
-    public double SoundVolume
-    {
-        get => _board.SoundVolume * 100;
-        set
-        {
-            _board.SoundVolume = Math.Clamp(value / 100, 0, 2);
-            OnPropertyChanged();
-            Changed();
-        }
-    }
-
-    /// <summary>How loud the shots' own sound is under the soundtrack, 0 to 100.</summary>
-    public double ShotVolume
-    {
-        get => (_board.ShotVolume ?? (_board.Sound.Source == FilmSound.None ? 1 : 0.5)) * 100;
-        set
-        {
-            _board.ShotVolume = Math.Clamp(value / 100, 0, 2);
-            OnPropertyChanged();
-            Changed();
-        }
-    }
-
-    /// <summary>How long the film is, and in how many shots.</summary>
+    /// <summary>How long the film is, and in how many shots (its size and frame rate are at the top).</summary>
     public string LengthText
     {
         get
         {
             var (_, length) = _board.Timing();
             var made = _board.Shots.Count(s => FilmMaker.IsCurrent(_board, s));
-            return $"{_board.Width} × {_board.Height} · {_board.Fps} fps · {length:0.#} s in {_board.Shots.Count} shot{(_board.Shots.Count == 1 ? "" : "s")}" +
+            return $"{length:0.#} s in {_board.Shots.Count} shot{(_board.Shots.Count == 1 ? "" : "s")}" +
                    (_board.Shots.Count == 0 ? "" : made == _board.Shots.Count ? " · all made" : $" · {made} made");
         }
     }
@@ -258,6 +190,10 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
 
     [ObservableProperty]
     private double _length;
+
+    /// <summary>Where the next shot's place is on the Video row, after the last: a click there adds it.</summary>
+    [ObservableProperty]
+    private double _addShotX = Lead;
 
     /// <summary>Where the lines are heard, for the song's row to show it quieter there.</summary>
     [ObservableProperty]
@@ -288,6 +224,7 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
             ducks.Add((x, seconds * Pps));
         }
         Ducks = ducks;
+        AddShotX = Lead + length * Pps + 4;
         TimelineWidth = Lead + Math.Max(length, Math.Min(_sound.Seconds, length + 10)) * Pps + 240;
         OnPropertyChanged(nameof(PlayheadX));
         OnPropertyChanged(nameof(LengthText));

@@ -6,10 +6,10 @@ namespace BlackBox.Core.Film;
 
 /// <summary>
 /// The film is its folder (the user's call, 2026-10-24: "I want the entire film to be
-/// folder-driven"; there is no storyboard.json):
+/// folder-driven"; there is no storyboard.json), and its title is the folder's name:
 /// <code>
 /// Fox Film/
-///   Fox Film.mp4 (+ .json)       the joined film; its .json: title, size, frame rate, sound levels, the shots' order
+///   Fox Film.mp4 (+ .json)       the joined film; its .json: size, frame rate, the shots' order
 ///   References/                  a folder for each reference, with its pictures and the user's own
 ///     Fox/Fox.png (+ .json, Fox.workflow.json)
 ///   1 Intro/                     a folder per shot, numbered in the film's order
@@ -112,7 +112,7 @@ public sealed partial class Storyboard
     /// <summary>The film's folder for a path: the folder, or the folder of a file of it.</summary>
     private static string FolderOf(string path)
     {
-        var full = Path.GetFullPath(path);
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         return File.Exists(full) && !Directory.Exists(full) ? Path.GetDirectoryName(full)! : full;
     }
 
@@ -213,7 +213,8 @@ public sealed partial class Storyboard
         foreach (var (key, value) in film ?? [])
             if (key is not ("shots" or "place"))
                 root[key] = value?.DeepClone();
-        root["title"] ??= Path.GetFileName(folder);
+        // Its title is its folder's name: renamed in Explorer or in the panel, the film is.
+        root["title"] = Path.GetFileName(folder);
         root["frames"] = new JsonArray([.. frames.OrderBy(f => f["place"]?.ToString(), NaturalOrder.Instance)]);
         root["shots"] = new JsonArray([.. shots]);
         if (sound is not null)
@@ -239,7 +240,10 @@ public sealed partial class Storyboard
     {
         if (Folder.Length == 0)
             throw new InvalidOperationException("The film has no folder to be saved in.");
+        // Named after its folder, as it is read: a new title renames the folder first (Rename).
+        Title = Path.GetFileName(Path.TrimEndingDirectorySeparator(Folder));
         Directory.CreateDirectory(Folder);
+        NameJoined(Folder, Title);
         Arrange();
         var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var shot in Shots)
@@ -249,12 +253,9 @@ public sealed partial class Storyboard
         written.Add(WriteMeta(SongMeta, "sound", SettingsOf(Sound)));
         written.Add(WriteMeta(FilmMeta, "film", new JsonObject
         {
-            ["title"] = Title,
             ["width"] = Width,
             ["height"] = Height,
             ["fps"] = Fps,
-            ["soundVolume"] = SoundVolume,
-            ["shotVolume"] = ShotVolume,
             ["shots"] = new JsonArray([.. Shots.Select(s => (JsonNode)JsonValue.Create(s.Id))]),
         }));
         foreach (var (meta, kind, _) in Metas(Folder).ToList())
@@ -355,6 +356,106 @@ public sealed partial class Storyboard
             frame.Place = free;
             placed.Add(free);
         }
+    }
+
+    // ---- renaming and taking out --------------------------------------------------------------
+
+    /// <summary>
+    /// Renames the film: its folder, named after it, and the joined film and its .json in it (the
+    /// user's call, 2026-10-24: films are folders, renamed as in Explorer). Not while a piece of
+    /// it is being made: the job writes into the folder.
+    /// </summary>
+    public void Rename(string title)
+    {
+        if (FilmMaker.IsMaking(Folder))
+            throw new FilmException("A piece of the film is being made: rename it once that is done.");
+        Folder = Rename(Folder, title);
+        Title = Path.GetFileName(Folder);
+    }
+
+    /// <summary>
+    /// Renames a film's folder, with the joined film and its .json, which are named after it; the
+    /// new folder. A film whose folder isn't made yet only gets the new name.
+    /// </summary>
+    public static string Rename(string folder, string title)
+    {
+        folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+        var name = Safe(title);
+        var to = Path.Combine(Path.GetDirectoryName(folder)!, name);
+        if (string.Equals(to, folder, StringComparison.Ordinal))
+            return folder;
+        // Only the case changed: the same folder, renamed.
+        if (!string.Equals(to, folder, StringComparison.OrdinalIgnoreCase) && (Directory.Exists(to) || File.Exists(to)))
+            throw new FilmException($"There is a {name} there already.");
+        if (Directory.Exists(folder))
+        {
+            Directory.Move(folder, to);
+            NameJoined(to, name);
+        }
+        return to;
+    }
+
+    /// <summary>The joined film and its .json named as the film (renamed in Explorer, the folder left them under the old name).</summary>
+    private static void NameJoined(string folder, string name)
+    {
+        try
+        {
+            if (FilmMetaIn(folder) is not { } meta || Path.GetFileNameWithoutExtension(meta) == name)
+                return;
+            foreach (var (from, to) in new[] { (FileOf(meta, "film"), Path.Combine(folder, name + ".mp4")), (meta, Path.Combine(folder, name + ".json")) })
+                if (File.Exists(from) && (!File.Exists(to) || string.Equals(from, to, StringComparison.OrdinalIgnoreCase)))
+                    File.Move(from, to);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    /// <summary>
+    /// Takes a shot out of the film with its folder, which goes to <paramref name="remove"/> (the
+    /// Recycle Bin), and the frames only it starts or ends on. A frame in its folder that stays (the
+    /// end the next shot goes on from) moves out first, with its .json, workflow and takes, to
+    /// where it goes now. The film is to be saved then; when <paramref name="remove"/> fails, read
+    /// again: what is on the disk is a film still.
+    /// </summary>
+    public void DeleteShot(FilmShot shot, Action<string> remove)
+    {
+        var folder = Path.GetFullPath(ShotFolder(shot));
+        var own = new[] { shot.First, shot.Last }.OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var used = Shots.Where(s => s != shot).SelectMany(s => new[] { s.First, s.Last }).OfType<string>()
+            .Concat(Frames.Where(f => !own.Contains(f.Id)).SelectMany(f => f.From))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Shots.Remove(shot);
+        Frames.RemoveAll(f => own.Contains(f.Id) && !f.Reference && !used.Contains(f.Id));
+        foreach (var frame in Frames.Where(f => In(FramePicture(f))).ToList())
+        {
+            var from = FramePicture(frame);
+            frame.Place = null;
+            var want = FramePicture(frame);
+            if (!File.Exists(from) || In(want))
+                continue;
+            var to = Path.ChangeExtension(want, Path.GetExtension(from));
+            for (var n = 2; File.Exists(to); n++)
+                to = Path.Combine(Path.GetDirectoryName(want)!, $"{Path.GetFileNameWithoutExtension(want)} {n}{Path.GetExtension(from)}");
+            Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+            foreach (var (source, target) in new[] { (from, to), (MetaOf(from), MetaOf(to)), (WorkflowOf(from), WorkflowOf(to)) })
+                if (File.Exists(source))
+                    File.Move(source, target);
+            // Its takes, "Takes/Shot end.v1.png" with theirs, go with it.
+            var (stem, takes) = (Path.GetFileNameWithoutExtension(from), Path.Combine(Path.GetDirectoryName(from)!, TakesName));
+            if (Directory.Exists(takes))
+                foreach (var take in Directory.EnumerateFiles(takes, stem + ".v*").ToList())
+                {
+                    var into = Path.Combine(Path.GetDirectoryName(to)!, TakesName);
+                    Directory.CreateDirectory(into);
+                    File.Move(take, Path.Combine(into, Path.GetFileNameWithoutExtension(to) + Path.GetFileName(take)[stem.Length..]));
+                }
+            frame.Place = Path.GetRelativePath(Folder, to).Replace(Path.DirectorySeparatorChar, '/');
+        }
+        Normalize();
+        // A shot's own folder only, never the film's.
+        if (Directory.Exists(folder) && folder.StartsWith(Path.GetFullPath(Folder) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            remove(folder);
+
+        bool In(string path) => Path.GetFullPath(path).StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>The films in <paramref name="root"/> (BlackBox's Data\films), the latest changed first.</summary>

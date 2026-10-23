@@ -192,6 +192,31 @@ public sealed partial class FilmNode : ObservableObject
     /// <summary>Planned in the storyboard and not made yet: no file there.</summary>
     public bool IsPlanned { get; init; }
 
+    // ---- what it is to its right-click menu ------------------------------------------------------------
+
+    /// <summary>A film's own folder, at the top of the tree: picked, that film opens.</summary>
+    public bool IsFilm { get; set; }
+
+    /// <summary>The film's References folder, where new references go.</summary>
+    public bool IsReferences { get; set; }
+
+    /// <summary>A reference's folder in References: the references whose pictures are in it.</summary>
+    public IReadOnlyList<FrameItem>? References { get; set; }
+
+    /// <summary>A shot's folder: the shot.</summary>
+    public ShotItem? Shot { get; set; }
+
+    /// <summary>The film's Sound folder, where its soundtrack is.</summary>
+    public bool IsSound { get; set; }
+
+    /// <summary>Its name being typed anew in the tree, as in Explorer.</summary>
+    [ObservableProperty]
+    private bool _isRenaming;
+
+    /// <summary>The name being typed.</summary>
+    [ObservableProperty]
+    private string _editName = "";
+
     [ObservableProperty]
     private Bitmap? _thumbnail;
 
@@ -227,8 +252,5 @@ public sealed record LineItem(ShotItem Shot, double X, double Width, string Text
 /// <summary>What the viewer shows for something with no picture to play: a folder, a piece not made yet, the film not joined.</summary>
 public sealed record PictureView(Bitmap? Picture, string Caption, string? Missing);
 
-/// <summary>A film in the list at the top of the panel: its title, and where it is.</summary>
-public sealed record FilmChoice(string Folder, string Title)
-{
-    public override string ToString() => Title;
-}
+/// <summary>An entry of a right-click menu in the panel: what it says, whether it can be done now, and what it does.</summary>
+public sealed record FilmMenuItem(string Header, bool Enabled, Action Do, string? Key = null);

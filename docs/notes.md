@@ -459,11 +459,18 @@ folder-driven", and "We don't need the film file storyboard.json anymore right?"
 `Data/films/<title>` next to the exe like the rest of BlackBox's data (the user's choice: it is
 portable; the first build put films in the PC's Videos folder). A path the model gives that isn't
 from a drive ("lighthouse") is a folder in `Data/films` too: taken from the working folder, as until
-2026-10-23, qwen3.8's "lighthouse" was made in the user's home, where Filmmaking doesn't look:
+2026-10-23, qwen3.8's "lighthouse" was made in the user's home, where Filmmaking doesn't look.
+**Its title is the folder's name** (2026-10-24, with the user's "I want it to work just like a file
+explorer, where you can right click and rename films"): reading a film takes it from the folder, so
+one renamed in Explorer or in the panel is; the film's own .json no longer holds one. A new title
+from the agent (`storyboard={"title": …}`) renames the folder (`Storyboard.Rename`: the joined film
+and its .json, named after it, go with it; not while a piece is being made), and a title another
+folder there has leaves the name as it was, which the tool says. Saving names the joined film and
+its .json after the folder when Explorer left them under the old name (`NameJoined`).
 
 ```
 Fox Film/
-  Fox Film.mp4 (+ Fox Film.json)  the joined film; its .json: title, size, frame rate, levels, the shots' order
+  Fox Film.mp4 (+ Fox Film.json)  the joined film; its .json: size, frame rate, the shots' order
   References/                a folder for each reference, with its pictures and the user's own
     Fox/Fox.png (+ Fox.json, Fox.workflow.json), Fox/side.png, Fox/Front.jpg (the user's)
   1 Intro/                   a folder per shot, numbered in the film's order, named after the shot
@@ -641,23 +648,63 @@ window to the left side instead of opening a new separate window... Use the main
 making... Put filmmaking button under Toolkit dropdown menu with None and Filmmaking options. There
 will be more tools extending to the left side of the screen later."). The **Toolkit** dropdown
 takes the place of the second BlackBox logo and name under the title bar, an arrow on it pointing
-left, where its tools open: None or Filmmaking (`ToolkitOption`, `IToolkit`, more to come). Picked,
+left, where its tools open: None or Filmmaking (`ToolkitOption`, `IToolkit`, more to come). Its
+arrows are solid triangles, the left one and the dropdown's, as History's and every dropdown's are
+(the user: "Arrows need consistency"; Fluent's thin chevron is replaced in App.axaml by a style
+that depends on a state, as a plain one loses to what the template sets). Picked,
 the window grows to the left by the tool's width (960), so the chat stays where it was on the
 screen, as far as the screen has room; None gives the room back, and a window neither moved nor
 resized since goes back where it was. The window's place is saved without the panel. A splitter
-between the two moves the line between them. The panel has the film's folder as a tree on the left,
+between the two moves the line between them. The panel has the films folder as a tree on the left,
 a viewer beside it with how the piece shown was made under it, and the timeline at the bottom; its
-top bar picks the film (New film, Open… a folder, Show folder, the film's title, size, frame rate
-and levels behind the cog) and has **Make the film**.
+top bar has the film's frame size and frame rate, **New film** and **Make the film** (the user,
+2026-10-24: "Get rid of the settings button altogether, put frame size and framerate fields at the
+top"; the cog's title went with the folder's name, its soundtrack and shots' sound sliders went
+with the levels they set, the shots' own sound staying at half under a soundtrack; the film
+dropdown, Open… and Show folder went for the tree and its right-click menu).
 
-**The tree is the film's folder** as it is on the disk: References with a folder for each
-reference, a folder per shot in the film's order, Sound, any other folder, and the joined film,
-with what each piece is beside its name
-("the start of shot 1", "shot 1's clip"), its state ("Not made yet", "Made · looked at", what the
-chat is doing to it), a thumbnail for a picture, and its takes under it. A piece planned and not
-made yet is there, greyed, where it will be. The pieces' .json files and workflows aren't shown (what they say is
-under the viewer), nor what is made beside a piece. It is built again only when what it shows
-changed: as a job writes, the folder changes every second.
+**The tree is the films folder as Explorer shows it** (the user: "Get rid of film selection
+dropdown, I want it to work just like a file explorer... Opening another film should be about just
+selecting the other folder"): a folder for each film by name (a folder of films with theirs in it),
+the open one with all in it, the others closed with nothing under them. Picking a film's folder
+opens that film (once the tree is done picking it: opened at once, the tree was built anew under its
+own pick); nothing goes into the chat's box for it, as nothing picked is the whole film, and the
+viewer shows the whole film. The open film's folder as it is on the disk: References with a folder
+for each reference, a folder per shot in the film's order, Sound, any other folder, and the joined
+film, with what each piece is beside its name ("the start of shot 1", "shot 1's clip"; the frame a
+shot goes on from, kept in the shot before's folder, "the start of shot 2, in 1 leap": named "it
+starts on end of shot 1, start of shot 2" it read as the shot's end listed twice), its state ("Not
+made yet", "Made · looked at", what the chat is doing to it), a thumbnail for a picture, and its
+takes under it. A piece planned and not made yet is there, greyed, where it will be. The pieces'
+.json files and workflows aren't shown (what they say is under the viewer), nor what is made beside
+a piece. It is built again only when what it shows changed: as a job writes, the folder changes
+every second. Its scrollbar always shows, as the chat's does (the user found waiting for it to show
+up annoying). The whole films folder is watched: a film made, renamed or deleted elsewhere (the
+chat, another window, Explorer) shows; the open film's folder renamed is followed (its Renamed
+event), and gone, the film changed last opens. Nothing is saved into a folder that went: it would
+come back.
+
+**Right-click in the tree** (the user's calls, 2026-10-24: rename films, "right click it to create a
+placeholder for a reference file", "Right click on film folder to create a new shot as well. Right
+click on sound to create a sound placeholder", and a shot deleted from its folder or its block on
+the timeline) opens a menu for what is under the pointer without picking it (picked, a film opened
+and a piece went into the box): a film's folder has Rename (F2 too), Delete, New film, New shot and
+Show in Explorer; References has New reference; a reference's folder Rename (while none of its
+pictures is made), Delete and New reference; a shot's folder Delete and New shot; Sound New sound
+(a song not made yet, with none) and Delete; anywhere else Show in Explorer, and away from every
+folder New film. A rename is typed in the tree as in Explorer: Enter or a click elsewhere keeps it,
+Esc doesn't; the tree isn't built again meanwhile, or the box went from under the keys. New film
+and New reference start one ("New film", "New reference") with its name to type. Renaming the open
+film lets go of what the viewer plays first: Windows doesn't move a folder a file in it is open
+from. Delete puts the folder in the Recycle Bin (`FileSystem.DeleteDirectory` with
+`SendToRecycleBin`; Windows only for now): a film, the open one giving way to the film changed
+last; a reference's folder with its references, which frames made from them no longer name; the
+soundtrack (a song made, with its takes; a sound file of the user's stays where it is); a shot
+(`Storyboard.DeleteShot`) with the frames only it starts or ends on, while a frame of its folder
+another shot uses (the end the next shot goes on from) moves first, with its .json, workflow and
+takes, to where it goes now, and the shots after are numbered again. Nothing is renamed or deleted
+while the chat is at work on the film. **New shot** is also the dashed + after the last shot on the
+timeline's Video row (the user found the "+ Shot" button by the play buttons out of place).
 
 **The timeline**, the user's design (it replaced a grid of shots two to a row with prompt boxes,
 and a read-only strip): one horizontal scroll for its rows, the names staying put at the left.
@@ -737,7 +784,7 @@ looked at by fresh looks (see below), and what they found is kept in the piece's
 the tree, the piece the film tool is making or looking at, by the call's arguments, with how it is
 getting on. What the agent changes and makes in the film's folder shows as it happens (the folder is
 watched, and read again when it changed). Changes made by hand (a shot's length, a new shot, the
-film's size and levels, a take put back, pictures dropped into References) are saved at once,
+film's size and frame rate, a take put back, pictures dropped into References) are saved at once,
 without the chat. One made while the chat changes the film (a shot's edge dragged as the film tool
 rewrites a prompt or settles a seed) is put together with the chat's (`StoryboardMerge`: key by
 key, frames and shots by id, the panel's hand winning where both changed the same value): saved

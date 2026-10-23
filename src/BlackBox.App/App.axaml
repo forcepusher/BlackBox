@@ -66,6 +66,15 @@
       <Setter Property="BorderThickness" Value="1" />
     </Style>
 
+    <!-- Every dropdown's arrow is the solid triangle History has (the user, 2026-10-24: "Arrows
+         need consistency"), not Fluent's thin chevron. Set in its template, the chevron is taken
+         over only by a style that depends on a state, as these two together. -->
+    <Style Selector="ComboBox:not(:disabled) /template/ PathIcon#DropDownGlyph, ComboBox:disabled /template/ PathIcon#DropDownGlyph">
+      <Setter Property="Data" Value="M7 10l5 5 5-5z" />
+      <Setter Property="Width" Value="10" />
+      <Setter Property="Height" Value="10" />
+    </Style>
+
     <Style Selector="Border.card">
       <Setter Property="Background" Value="{StaticResource BbSurface}" />
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />

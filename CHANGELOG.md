@@ -58,8 +58,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A sysadmin benchmark ticket that moves a live game API's database from SQLite to PostgreSQL while
   players keep writing to it.
 - This changelog.
+- Filmmaking's tree has your films as folders, as in Explorer: click one to open it, right-click to
+  rename it, delete it (to the Recycle Bin), or add a shot, a reference or a sound where it goes; a
+  shot, a reference and the soundtrack can be deleted the same way, a shot from its block on the
+  timeline too, and anything shown in Explorer.
 
 ### Changed
+- A film's name is its folder's: renamed in Filmmaking, in Explorer, or by the agent giving it a
+  title, the film is.
+- Filmmaking's frame size and frame rate are at the top of the panel, and a new shot is the dashed +
+  after the last one on the timeline.
+- Every dropdown's arrow (Toolkit, History, Model, Effort) is the same solid triangle, and so is the
+  Toolkit's arrow to the left.
+- The chat's scrollbar always shows, and so does Filmmaking's tree's.
+- In Filmmaking's tree, the frame a shot goes on from says it is kept in the folder of the shot before.
 - A frame the film tool makes gets a fresh look, and every piece it makes again keeps the one before
   as a take; a shot's or song's other tries are takes too.
 - The context slider goes up to 1M.
@@ -69,6 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Ctrl+Shift+N: **New window** at the top opens another window.
 - Films kept in a `storyboard.json` (from 1.0.0) no longer open: a film is its folder now.
+- Filmmaking's film dropdown, its Open… and Show folder buttons, the settings button with the film's
+  title, and the soundtrack and shots' own sound sliders.
 
 ### Fixed
 - A task whose last step the server failed a few times before answering no longer looks as if it
