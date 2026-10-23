@@ -799,9 +799,17 @@ place.
 
 **Takes**: before the film tool makes a piece again, the one there is kept beside it
 (`frames/f2.v1.png` and `.v1.json`, `shots/s3.v1.mp4`…), its workflow file holding the settings it
-was made with (`"settings"`) and what its look found; a make that fails or is stopped takes that take
-back, and so does a shot of several `tries` stopped before one replaced its clip (the takes made so
-far stay). The takes not kept of several made at once (a shot's `tries`, the song's three) are takes too.
+was made with (`"settings"`) and what its look found; a make that fails or is stopped puts that
+take back in place, its workflow file too (the job had begun to write over it, and dropped, the
+piece lost its settings and look and read as changed), and so does a shot of several `tries`
+stopped before one replaced its clip (the takes made so far stay). A seed settled after several
+tries isn't written over one the window gave meanwhile (Another take, which then made the same clip
+again).
+
+A storyboard laid out without `path`, of another title and with shots or frames, while the film
+used last in the task already has pieces, is a new film: "two ads, coffee and tea" wrote the tea ad
+over the coffee one. A new title alone still renames the film in use, and the window's empty "New
+film" is laid out in place. The takes not kept of several made at once (a shot's `tries`, the song's three) are takes too.
 Picking an earlier take in the window puts it back in the film with those settings (so it is up to
 date again), and the one it replaces becomes a take.
 
