@@ -1543,7 +1543,7 @@ last was 1.8 s with a regular expression for each of the big project's 60 `.giti
 a plain name ("build") or ending ("*.log") is now compared without one. BlackBox's windows share an
 index, one updating it at a time, and six are kept in memory.
 
-**The overview** (index_folder without `query`, at most about 2,500 tokens): what kind of project
+**The overview** (index_folder without `query`, at most about 1,400 tokens): what kind of project
 it is (git and its branch; a solution and each project's kind, framework, packages and projects it
 uses; `package.json`'s scripts and dependencies; Unity's version and packages; Godot, Unreal,
 Cargo, Go, Python, CMake…), the start of its README, the start of its notes for AI agents
@@ -1554,19 +1554,27 @@ members. A name of several words (`SettingsStore`) used in another file counts f
 name (`Run`, `connect`) turns up in files that have nothing to do with it and counts a fifth, and a
 test file half: with every name counting the same, the map of this repository led with a sysadmin
 benchmark's Python script. Each part of the project (its first two folders, `Assets/Source`,
-`src/BlackBox.Core`) gets lines in proportion to the code in it first, and what room is left goes
-by rank alone: a library kept in the project uses its own names over and over, and in a Unity game
-of 1,530 scripts of its own, 17 of the 40 main files were the Spine runtime (152 files) and DOTween.
-Now 33 are the game's own.
+`src/BlackBox.Core`) gets lines in proportion to the code in it first (the square root of its files
+times its lines: by files alone this repository's 112 lab scripts took a third of the map, by lines
+alone Spine's long files a third of a game's), and what room is left goes by rank alone: a library
+kept in the project uses its own names over and over, and in a Unity game of 1,530 scripts of its
+own, 17 of the 40 main files were the Spine runtime (152 files) and DOTween. Each file's line names
+two of its types and three of their most used members, so about 20 files fit.
+
+It is an orientation, not a reading of the project: what it is, how it is laid out, where the main
+things are. Until 23 October it was twice as long (about 2,500 tokens, 40 main files with six
+members each), and searches gave eight parts of six lines (up to 2,300 tokens); on qwen3.8 that
+version made a big project slower to work in than no index at all (see the benchmark below).
 
 **Search** (`query`): the definitions of names the query writes as code (`SettingsStore`,
 `save_game`; a plain "settings" in a question isn't the property `Settings`), then every line that
 has such a name (or the one word of a one-word query) as a whole word, as a search with a command
-would give them, then the best eight parts, two of a file at most, each with its full path, its
-lines, what it defines or is inside ("in class AgentSession › method RunAsync") and its lines with
-the most of the query's words, then the other files that match. Past 25 such lines, each file gets
-its first one in full (often the class that implements the interface, the field that holds one) and
-the numbers of the others; past 300 files, only a few are named. Without them, asked for every class
+would give them, then the best five parts, two of a file at most, each with its full path, its
+lines, what it defines or is inside ("in class AgentSession › method RunAsync") and its three lines
+with the most of the query's words, then five more files that match: about 1,000 tokens at most.
+Past 15 such lines, each file gets its first one in full (often the class that implements the
+interface, the field that holds one) and the numbers of the others, for 20 files; past 300 files,
+only a few are named. Without them, asked for every class
 that implements an interface or to rename a class everywhere, Qwen and Claude searched the index and
 then the shell for the same name, and were slower with the index than without it (see the
 benchmark below). Nothing found says what the index doesn't search (what it leaves out,
@@ -1588,6 +1596,11 @@ a chat, and again after a context reset, which drops the overview: the app start
 every message, so the note looks back over the chat for the projects already indexed and the notes
 already given (until 2026-10-23 it came again with every message, and the model indexed again). A
 note, never a block: the user's rule.
+
+To index first, but not to search only the index: the prompt and the tool's description say to
+search the index or the shell, whichever fits. The user's aim is a model that isn't blind in a
+project, not one kept from grep; told to ask the index "rather than ... searching with the shell",
+qwen3.8 searched both, and each search result stays in its context.
 
 With qwen3.8 27B (q6_k_xl, on the user's LM Studio) through `blackbox-cli`, on copies of this repository
 and of a Unity project, the build before the index against the build with it, the same question each:
@@ -1616,6 +1629,15 @@ files), twice each, on qwen3.8 and Claude Opus 5.5, 107 runs, the answers graded
   index for both: the models searched the index, then the shell. Searches for a name now list every
   line that has it (above), which brought them about level.
 - The same task without the index took Qwen 822 s once and 191 s the next time: one run says little.
+
+Then the overview and searches were cut to the sizes above, the prompt stopped steering the model
+away from the shell, and qwen3.8 ran six of the tasks twice again, against a variant with the same
+overview and no search at all (the shell for everything). Against no index, over the six tasks:
+the lean index 25% less time, 29% fewer tool calls, 22% fewer tokens; the index as merged 11%,
+16%, 2%; the map without search 1% more time, 21% fewer calls. On how the game's needs decay, the
+lean index took 5.5 min, no index 6.7, the merged one 10.7, the map without search 14.2 (21 shell
+searches a run). The answers scored the same in all. Most of what fills Qwen's context is files it
+reads whole (about 60% in the explain runs; the index's output 2-12%).
 
 Not indexed: folders on SSH hosts (`ssh` with grep works there).
 
