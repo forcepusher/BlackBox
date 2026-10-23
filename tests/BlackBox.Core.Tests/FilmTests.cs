@@ -1097,6 +1097,42 @@ public sealed class FilmToolTests : IDisposable
     }
 
     [Fact]
+    public async Task A_second_film_laid_out_without_a_path_is_a_film_of_its_own()
+    {
+        // "Two ads, coffee and tea": the tea ad, without a path, was written over the coffee one.
+        var films = Path.Combine(_dir, "Data", "films");
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, FilmsDirectory = films };
+        var tool = new FilmTool();
+        JsonObject Call(string json) => new() { ["action"] = "storyboard", ["storyboard"] = JsonNode.Parse(json) };
+        Assert.False((await tool.ExecuteAsync(Call("""{"title": "Coffee", "shots": [{"id": "s1", "prompt": "a cup steams"}]}"""), ctx, CancellationToken.None)).IsError);
+        Assert.False((await tool.ExecuteAsync(Call("""{"title": "Tea", "shots": [{"id": "s1", "prompt": "a teapot pours"}]}"""), ctx, CancellationToken.None)).IsError);
+        Assert.Equal("a cup steams", Storyboard.Load(Path.Combine(films, "Coffee")).Shots[0].Prompt);
+        Assert.Equal("a teapot pours", Storyboard.Load(Path.Combine(films, "Tea")).Shots[0].Prompt);
+        // A new title alone renames the film in use.
+        Assert.False((await tool.ExecuteAsync(Call("""{"title": "Green Tea"}"""), ctx, CancellationToken.None)).IsError);
+        Assert.Equal("Green Tea", Storyboard.Load(Path.Combine(films, "Tea")).Title);
+    }
+
+    [Fact]
+    public void A_make_that_fails_puts_the_piece_back_as_it_was_with_its_settings()
+    {
+        var board = Storyboard.Parse("""{"title": "Keeper", "frames": [{"id": "f1", "prompt": "a keeper"}]}""");
+        board.Folder = Path.Combine(_dir, "Keeper");
+        var piece = FilmPiece.Of(board.Frames[0]);
+        Directory.CreateDirectory(Path.GetDirectoryName(piece.File(board)!)!);
+        File.WriteAllText(piece.File(board)!, "the picture");
+        File.WriteAllText(piece.Workflow(board)!, """{"settings": {"prompt": "a keeper"}, "look": {"verdict": "good"}}""");
+        var kept = FilmTakes.Keep(board, piece)!;
+        File.WriteAllText(piece.Workflow(board)!, "{}"); // the make begins to write its own, then fails
+
+        FilmTakes.Restore(board, piece, kept);
+
+        Assert.Contains("\"look\"", File.ReadAllText(piece.Workflow(board)!));
+        Assert.Equal("the picture", File.ReadAllText(piece.File(board)!));
+        Assert.Empty(FilmTakes.List(board, piece));
+    }
+
+    [Fact]
     public async Task A_new_film_given_by_name_goes_into_the_films_folder_not_the_working_one()
     {
         // qwen3.8 gave path "lighthouse": the film was made in the user's home folder.

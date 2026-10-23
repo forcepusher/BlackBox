@@ -134,6 +134,15 @@ public sealed class FilmTool : Tool
         if (path is { Length: > 0 } && !Path.IsPathRooted(path) && !Exists(given))
             given = Path.Combine(root, path);
         var change = args["storyboard"] as JsonObject;
+        // A whole storyboard of another title (shots or frames with it), with no path, is a new film,
+        // not the last one used in this task, once that one has pieces of its own: "two ads, coffee
+        // and tea" wrote the tea ad over the coffee one. A new title alone renames the film, and the
+        // Filmmaking window's empty "New film" is laid out in place.
+        if (create && path is not { Length: > 0 } && Exists(given) && change?["title"] is JsonValue t && t.TryGetValue<string>(out var newTitle) &&
+            newTitle.Trim().Length > 0 && (change["shots"] is JsonArray { Count: > 0 } || change["frames"] is JsonArray { Count: > 0 }) &&
+            Storyboard.Load(given, upgrade: false) is { } last && (last.Shots.Count > 0 || last.Frames.Count > 0) &&
+            !newTitle.Trim().Equals(last.Title.Trim(), StringComparison.OrdinalIgnoreCase))
+            given = null;
         if (Exists(given))
         {
             var board = Storyboard.Load(given);
@@ -424,7 +433,7 @@ public sealed class FilmTool : Tool
         }
         catch when (kept is not null)
         {
-            FilmTakes.Drop(kept);
+            FilmTakes.Restore(board, piece, kept);
             throw;
         }
     }
@@ -449,9 +458,15 @@ public sealed class FilmTool : Tool
             return new ToolResult(board.SoundtrackFile is { } f && File.Exists(f) ? $"The soundtrack is the user's file {f}; nothing to make." : "The soundtrack is to be a file of the user's, and it isn't there.");
         if (board.Sound.Source != FilmSound.Song)
             throw new FilmException("The storyboard has no song to make: set sound {\"source\": \"song\", \"tags\": …, \"lyrics\": …} first.");
+        var (songSeed, voiceSeed) = (board.Sound.Seed, board.Sound.VoiceSeed);
         var made = await KeepingTakeAsync(board, FilmPiece.Song, () => Maker(ctx).MakeSongAsync(board, ctx.Progress, ctx.UserMessage, ct, tries)).ConfigureAwait(false);
-        // The seed of the song kept, and the voice the lines keep.
-        SaveSettled(board, fresh => (fresh.Sound.Seed, fresh.Sound.VoiceSeed) = (board.Sound.Seed, board.Sound.VoiceSeed));
+        // The seed of the song kept, and the voice the lines keep; not over a seed the Filmmaking
+        // window gave meanwhile (Another take), which the take it asks for is then made with.
+        SaveSettled(board, fresh =>
+        {
+            if (fresh.Sound.Seed == songSeed) fresh.Sound.Seed = board.Sound.Seed;
+            if (fresh.Sound.VoiceSeed == voiceSeed) fresh.Sound.VoiceSeed = board.Sound.VoiceSeed;
+        });
         var preview = MediaPreview.ForFiles([made.File], ctx.Media, ctx.SeesImages);
         var sb = new StringBuilder();
         sb.AppendLine($"The song is made in {Chats.ChatTimes.Stopwatch(made.Took)} with {made.Template}: {made.File} (a minute long at least: shorter songs come out badly; the film uses its start).");
@@ -501,6 +516,7 @@ public sealed class FilmTool : Tool
         var before = FilmTakes.Keep(board, piece);
         (long Seed, string File, FilmLook Look, string? Verdict, double Score) best;
         var replaced = false;
+        var startSeed = shot.Seed;
         try
         {
             for (var take = 1; take <= tries; take++)
@@ -523,7 +539,9 @@ public sealed class FilmTool : Tool
             shot.Seed = best.Seed;
             SaveSettled(board, fresh =>
             {
-                if (fresh.Shot(shot.Id) is { } kept)
+                // Not over a seed the Filmmaking window gave meanwhile (Another take): the take it
+                // asked for was made again with the best one's, the same clip once more.
+                if (fresh.Shot(shot.Id) is { } kept && kept.Seed == startSeed)
                     kept.Seed = best.Seed;
             });
             File.Move(best.File, board.ShotVideo(shot), overwrite: true);

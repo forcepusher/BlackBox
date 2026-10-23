@@ -110,7 +110,8 @@ public sealed partial class Storyboard
             var file = FilmFile;
             if (File.Exists(file) || Folder.Length == 0 || !Directory.Exists(Folder))
                 return file;
-            try { return new DirectoryInfo(Folder).EnumerateFiles("*.mp4").OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault()?.FullName ?? file; }
+            // Not the film being joined, written to a hidden ".<title>.joining.mp4" first.
+            try { return new DirectoryInfo(Folder).EnumerateFiles("*.mp4").Where(f => !f.Name.StartsWith('.')).OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault()?.FullName ?? file; }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return file; }
         }
     }

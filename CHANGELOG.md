@@ -105,7 +105,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A piece made from the Filmmaking window is made again when its look finds something wrong, up to
   twice, as before it ran in the chat; the storyboard guide comes back after the context starts
   afresh; a stopped shot of several takes no longer keeps a copy of its clip as one more take; a
-  film the model names without a full path goes into `Data\films`, not your home folder.
+  film the model names without a full path goes into `Data\films`, not your home folder; a second
+  film laid out in the same task without a path no longer replaces the first; a remake that fails
+  or is stopped leaves the piece with its settings and look; a take asked for while several were
+  being made is made with its own seed.
 - A ComfyUI that BlackBox started, with nothing left to do, is closed when BlackBox closes, also
   when its window was closed in the middle of a task.
 - Folder index: projects in OneDrive folders are indexed (only their top folder was), files kept

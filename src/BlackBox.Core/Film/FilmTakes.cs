@@ -160,6 +160,26 @@ public static class FilmTakes
         return new FilmTake(n, TakeFile(file, n), TakeFile(workflow, n), System.IO.File.GetLastWriteTimeUtc(TakeFile(file, n)), SettingsIn(TakeFile(workflow, n)));
     }
 
+    /// <summary>
+    /// Puts back what <see cref="Keep"/> kept, for a make that failed or was stopped: the piece as it
+    /// was, with its workflow file, which the make had begun to write over. Dropped instead, the
+    /// piece lost its settings and look, and read as changed.
+    /// </summary>
+    public static void Restore(Storyboard board, FilmPiece piece, FilmTake take)
+    {
+        try
+        {
+            if (piece.File(board) is { } file && System.IO.File.Exists(take.File))
+                System.IO.File.Move(take.File, file, overwrite: true);
+            if (piece.Workflow(board) is { } workflow && System.IO.File.Exists(take.Workflow))
+                System.IO.File.Move(take.Workflow, workflow, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // In use (a player has the picture open): kept as a take, which the user can put back.
+        }
+    }
+
     /// <summary>Takes back a take <see cref="Keep"/> kept for a make that then made nothing: it is the piece as it still is.</summary>
     public static void Drop(FilmTake take)
     {
