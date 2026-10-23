@@ -649,7 +649,19 @@ tool rewrites a prompt or settles a seed) is put together with the chat's (`Stor
 by key, frames and shots by id, the window's hand winning where both changed the same value):
 saved whole, as until 2026-10-23, the window's copy wrote over the chat's change, and the window
 never showed it. Checked in the window: a shot dragged from 3 s to 5.5 s while its prompt was
-written from outside kept both, where the build before kept only the drag.
+written from outside kept both, where the build before kept only the drag. A drag counts as a
+change from its first step (it was one only once let go, and a write from the chat in the middle
+of it was read over it, the shot snapping back); the timeline laid out again for a write put
+together in the middle of a drag ends the drag where it was, kept, as does losing the mouse
+(Alt+Tab), which before left the drag going for any later move over a shot's edge.
+
+From a review of the window (2026-10-23): a take isn't put back while the chat makes a piece of the
+film (a shot makes its frames first, which don't show as being made, and the finished frame wrote
+over the take); a new piece never gets the id of one taken out whose files are still in the folder
+(the new s3 came with the old s3's clip and takes, and joining used it); a new film whose folder
+another window's new film took since gets one of its own ("New film 2"); a film named again finds
+its joined video under the old name (`Storyboard.JoinedFile`); switching films stops the old one's
+sound.
 
 **Looks that don't let slop through.** The user found the judging dismissive: the fox film passed
 with the fox floating up the screen at the cut at 5 s. One question per kind of fault catches more

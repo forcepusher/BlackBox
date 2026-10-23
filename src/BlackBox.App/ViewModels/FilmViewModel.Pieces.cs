@@ -251,7 +251,7 @@ public sealed partial class FilmViewModel
     /// <summary>What the viewer shows: the piece picked (a frame's picture, a shot's clip, the song), else the film.</summary>
     public object? Viewer => Selected switch
     {
-        null when HasFilm => _filmView ??= new JoinedFilm(_board.FilmFile) { Player = FilePreview.For(_board.FilmFile, _previews) },
+        null when HasFilm => _filmView ??= new JoinedFilm(_board.JoinedFile) { Player = FilePreview.For(_board.JoinedFile, _previews) },
         null => new PictureView(null, "Whole film", _board.Shots.All(s => s.Prompt.Trim().Length == 0)
             ? "Say what film you want in the panel: BlackBox lays out its shots, references and sound on the timeline, in the chat. Nothing is made until you make it."
             : "Pick a piece on the timeline to see it and make it, or press Make the film."),
@@ -277,7 +277,7 @@ public sealed partial class FilmViewModel
             if (File.Exists(_board.ShotVideo(shot.Shot)))
                 all.Add(new MediaEntry(shot, _board.ShotVideo(shot.Shot), null, shot.Title));
         if (HasFilm)
-            all.Add(new MediaEntry((object?)_filmView ?? _board.FilmFile, _board.FilmFile, null, _board.Title.Trim().Length > 0 ? _board.Title.Trim() : "The film"));
+            all.Add(new MediaEntry((object?)_filmView ?? _board.JoinedFile, _board.JoinedFile, null, _board.Title.Trim().Length > 0 ? _board.Title.Trim() : "The film"));
         return all;
     }
 
@@ -335,6 +335,13 @@ public sealed partial class FilmViewModel
     {
         if (take?.Take is not { } kept || Selected is not IFilmPiece { Piece: var piece, IsWorking: false })
             return;
+        // Not while the chat makes anything of this film: a shot makes its frames first, which don't
+        // show as being made, and the frame it finished wrote over the take put back.
+        if (_chat.FilmCall() is { } call && IsThisFilm(call.Args))
+        {
+            Status = "BlackBox is making a piece of this film in the chat: put a take back once it is done.";
+            return;
+        }
         SaveNow(force: true);
         try
         {

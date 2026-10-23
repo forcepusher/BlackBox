@@ -305,5 +305,5 @@ public sealed partial class FilmViewModel
     /// <summary>A text a tool call was given, trimmed; null when it wasn't.</summary>
     private static string? Arg(JsonObject args, string name) => args[name] is JsonValue v && v.TryGetValue<string>(out var s) && s.Trim().Length > 0 ? s.Trim() : null;
 
-    public bool HasFilm => File.Exists(_board.FilmFile);
+    public bool HasFilm => File.Exists(_board.JoinedFile);
 }

@@ -124,6 +124,9 @@ public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : Observ
         Shot.Seconds = seconds;
         OnPropertyChanged(nameof(LengthText));
         film.Relayout();
+        // A change waiting to be saved from the first step on: the storyboard the chat wrote
+        // meanwhile is put together with it then, not read over it in the middle of the drag.
+        film.Changed();
     }
 
     /// <summary>The drag ended: the new length is saved.</summary>

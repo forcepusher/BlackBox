@@ -97,12 +97,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Filmmaking: a request still waiting when BlackBox is stopped, or another chat is opened, is no
   longer put in the chat's box without the film and piece it was about (the chat says it wasn't
   done), and Continue sends one the model never had whole; chats begun from the window are named
-  after the film and piece too, not "Make it." alone; the storyboard guide comes back after the
-  context starts afresh; a stopped shot of several takes no longer keeps a copy of its clip as one
-  more take; a piece made from the window is made again when its look finds something wrong, up
-  to twice, as before it ran in the chat; a change made by hand while BlackBox changes the
-  storyboard in the chat no longer writes over BlackBox's change; a film the model names without a
-  full path goes into `Data\films`, not your home folder.
+  after the film and piece too, not "Make it." alone; a change made by hand while BlackBox changes
+  the storyboard in the chat no longer writes over BlackBox's change, nor is a shot's length being
+  dragged lost to it; a shot added after one was deleted no longer brings back the deleted shot's
+  clip; a film named again keeps its joined video; a take isn't put back while BlackBox makes a
+  piece of the film; two new films started in two windows at once no longer share a folder.
+- A piece made from the Filmmaking window is made again when its look finds something wrong, up to
+  twice, as before it ran in the chat; the storyboard guide comes back after the context starts
+  afresh; a stopped shot of several takes no longer keeps a copy of its clip as one more take; a
+  film the model names without a full path goes into `Data\films`, not your home folder.
 - A ComfyUI that BlackBox started, with nothing left to do, is closed when BlackBox closes, also
   when its window was closed in the middle of a task.
 - Folder index: projects in OneDrive folders are indexed (only their top folder was), files kept

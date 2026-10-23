@@ -317,7 +317,7 @@ public sealed class FilmTool : Tool
         }
         if (board.Shots.Any(Storyboard.Speaks))
             sb.AppendLine("The lines' voice: " + (sound.Voice.Trim().Length > 0 ? sound.Voice.Trim() : "not described (sound.voice): the voice model picks one") + ".");
-        var film = board.FilmFile;
+        var film = board.JoinedFile;
         var newest = board.Shots.Select(s => board.ShotVideo(s)).Append(board.SoundtrackFile).Where(p => p is not null && File.Exists(p))
             .Select(p => File.GetLastWriteTimeUtc(p!)).DefaultIfEmpty(DateTime.MinValue).Max();
         var joined = File.Exists(film);
@@ -586,7 +586,7 @@ public sealed class FilmTool : Tool
             RememberLook(board.ShotWorkflow(shot), look.Text, look.Faults);
             return Result(board, shot, $"Shot {shot.Id}: {clip}" + (FilmMaker.IsCurrent(board, shot) ? "" : " (made before the storyboard's latest changes to it)"), [], look, clip);
         }
-        var film = board.FilmFile;
+        var film = board.JoinedFile;
         if (!File.Exists(film))
             throw new FilmException("The film isn't joined yet: action=join first, or give a shot's id to check that shot.");
         var check = await Task.Run(() => FilmCheck.Film(board, film, decoder), ct).ConfigureAwait(false);

@@ -42,6 +42,21 @@ public sealed partial class FilmViewModel
             // length dragged as the film tool rewrote a prompt): both stay. Saved whole, the
             // window's copy wrote over the chat's change, and nothing showed it.
             var merged = false;
+            // A new film whose folder another window's new film took since this one was named: a
+            // folder of its own. Both picked "New film", and the second wrote over the first.
+            if (_savedJson is null && File.Exists(_board.FilePath))
+            {
+                var root = Path.GetDirectoryName(_board.Folder)!;
+                var name = Path.GetFileName(_board.Folder);
+                var n = 2;
+                while (Directory.Exists(Path.Combine(root, $"{name} {n}")))
+                    n++;
+                _board.Folder = Path.Combine(root, $"{name} {n}");
+                Directory.CreateDirectory(_board.Folder);
+                _watcher?.Dispose();
+                _watcher = null;
+                OnPropertyChanged(nameof(Folder));
+            }
             if (_savedJson is not null && File.Exists(_board.FilePath) && File.GetLastWriteTimeUtc(_board.FilePath) != _ownWrite)
             {
                 Storyboard? theirs = null;
@@ -142,12 +157,12 @@ public sealed partial class FilmViewModel
             Sound.Player.Dispose();
             Sound.Player = null;
         }
-        if (_filmView is not null && (!HasFilm || _filmStamp != File.GetLastWriteTimeUtc(_board.FilmFile)))
+        if (_filmView is not null && (!HasFilm || _filmStamp != File.GetLastWriteTimeUtc(_board.JoinedFile)))
         {
             _filmView.Player?.Dispose();
             _filmView = null;
         }
-        _filmStamp = HasFilm ? File.GetLastWriteTimeUtc(_board.FilmFile) : default;
+        _filmStamp = HasFilm ? File.GetLastWriteTimeUtc(_board.JoinedFile) : default;
         OnPropertyChanged(nameof(HasFilm));
         OnPropertyChanged(nameof(ShotVolume));
         OnPropertyChanged(nameof(LengthText));
@@ -314,6 +329,7 @@ public sealed partial class FilmViewModel
     {
         _disposing = true;
         _chatTimer.Stop();
+        _refreshTimer.Stop(); // a refresh due after the window closed made players nobody disposed
         StopPlaying();
         SaveNow();
         _watcher?.Dispose();
