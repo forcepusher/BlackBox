@@ -70,18 +70,6 @@ public static partial class FilmTemplates
         _ => "a song from a style and lyrics (ACE-Step)",
     };
 
-    /// <summary>An old storyboard's template for a job, if it named one.</summary>
-    public static string? Chosen(FilmWorkflows w, FilmJob job) => job switch
-    {
-        FilmJob.Frame => w.Frame,
-        FilmJob.Edit => w.Edit,
-        FilmJob.Shot => w.Shot,
-        FilmJob.ShotFromFirst => w.ShotFromFirst,
-        FilmJob.ShotFromText => w.ShotFromText,
-        FilmJob.LipSync => w.LipSync,
-        _ => w.Song,
-    };
-
     /// <summary>A checkpoint as a way to make a picture: checkpoints/&lt;its file as ComfyUI lists it&gt;.</summary>
     public const string CheckpointPrefix = "checkpoints/";
 

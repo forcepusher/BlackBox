@@ -1,12 +1,11 @@
 using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
-using Avalonia.Threading;
 using BlackBox.Core.Film;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BlackBox.App.ViewModels;
 
-/// <summary>A piece the user picks on the timeline and tells BlackBox about, in the chat: a frame, a shot or the song.</summary>
+/// <summary>A piece of the film the storyboard plans and the film tool makes on its own: a frame, a shot or the song.</summary>
 public interface IFilmPiece
 {
     FilmPiece Piece { get; }
@@ -23,7 +22,7 @@ public interface IFilmPiece
 }
 
 /// <summary>A picture of the film: a frame a shot starts or ends on, or a reference (a character, a place) others are made from.</summary>
-public sealed partial class FrameItem(FilmViewModel film, FilmFrame frame) : ObservableObject, IFilmPiece
+public sealed partial class FrameItem(FilmFrame frame) : ObservableObject, IFilmPiece
 {
     public FilmFrame Frame { get; } = frame;
     public string Id => Frame.Id;
@@ -36,14 +35,8 @@ public sealed partial class FrameItem(FilmViewModel film, FilmFrame frame) : Obs
 
     public string Title => Label;
 
-    /// <summary>What it shows, as BlackBox asked for it: for a tooltip, not to edit.</summary>
-    public string Prompt => Frame.Prompt;
-
     [ObservableProperty]
     private Bitmap? _thumbnail;
-
-    [ObservableProperty]
-    private Bitmap? _picture;
 
     [ObservableProperty]
     private string _state = "";
@@ -59,13 +52,6 @@ public sealed partial class FrameItem(FilmViewModel film, FilmFrame frame) : Obs
 
     [ObservableProperty]
     private bool _isSelected;
-
-    /// <summary>The user picked a picture of their own for this frame: it is the frame's file now, which making it cuts to the film's frame.</summary>
-    public void TakeOwnPicture(string path)
-    {
-        Frame.File = path;
-        film.Changed();
-    }
 }
 
 /// <summary>A shot: a block on the timeline from where it starts for as long as it lasts, its clip's frames inside once made.</summary>
@@ -86,7 +72,7 @@ public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : Observ
     public string Name => Shot.Camera.Trim() is { Length: > 0 } camera ? camera : Shot.Prompt.Trim() is { Length: > 0 } p ? p : "a new shot";
 
     /// <summary>What happens in it, as BlackBox asked for it.</summary>
-    public string Summary => Shot.Prompt.Trim() is { Length: > 0 } p ? p : "Nothing said yet: pick it and say what happens in it.";
+    public string Summary => Shot.Prompt.Trim() is { Length: > 0 } p ? p : "Nothing said yet: pick it and say in the chat what happens in it.";
 
     public string LengthText => $"{Shot.Seconds:0.#} s";
 
@@ -94,11 +80,7 @@ public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : Observ
     private FrameItem? _first;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(EndsOnFrame))]
     private FrameItem? _last;
-
-    /// <summary>Whether it ends on a frame of its own: a lip-synced shot is made from its first frame alone.</summary>
-    public bool EndsOnFrame => Last is not null && !Shot.LipSync;
 
     // ---- where it sits on the timeline ----------------------------------------------------------------
 
@@ -133,9 +115,6 @@ public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : Observ
     public void Stretched() => film.Changed();
 
     [ObservableProperty]
-    private FilePreview? _clip;
-
-    [ObservableProperty]
     private string _state = "";
 
     [ObservableProperty]
@@ -149,30 +128,15 @@ public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : Observ
 
     [ObservableProperty]
     private bool _isSelected;
-
-    public void Refresh() =>
-        OnPropertyChanged(string.Empty);
 }
 
 /// <summary>The film's soundtrack: none, a file of the user's, or a song made for it.</summary>
-public sealed partial class SoundItem(FilmViewModel film, FilmSound sound) : ObservableObject, IFilmPiece
+public sealed partial class SoundItem(FilmSound sound) : ObservableObject, IFilmPiece
 {
     public FilmSound Sound { get; } = sound;
     public FilmPiece Piece => FilmPiece.Song;
     public string Title => Sound.Source == FilmSound.FromFile ? "The sound file" : "The song";
 
-    /// <summary>The user picked a sound file of their own as the soundtrack.</summary>
-    public void TakeOwnSound(string path)
-    {
-        Sound.Source = FilmSound.FromFile;
-        Sound.File = path;
-        OnPropertyChanged(string.Empty);
-        film.Changed();
-    }
-
-    [ObservableProperty]
-    private FilePreview? _player;
-
     [ObservableProperty]
     private string _state = "";
 
@@ -189,36 +153,82 @@ public sealed partial class SoundItem(FilmViewModel film, FilmSound sound) : Obs
     private bool _isSelected;
 }
 
-/// <summary>A reference's row on the timeline: its picture and name, and a bar under each run of shots made from it.</summary>
-public sealed class RefLane(FrameItem frame)
+/// <summary>
+/// A file or folder of the film in the Filmmaking panel's tree: what is in the film's folder, and
+/// what its storyboard plans that isn't made yet, where it will be. Picking one puts it in the
+/// chat's box, for the user to say what to do with it.
+/// </summary>
+public sealed partial class FilmNode : ObservableObject
 {
-    public FrameItem Frame { get; } = frame;
-    public ObservableCollection<RefSegment> Segments { get; } = [];
-}
+    public FilmNode(string path, bool isFolder, string? name = null)
+    {
+        Path = path;
+        IsFolder = isFolder;
+        Name = name ?? System.IO.Path.GetFileName(path.TrimEnd('\\', '/'));
+        Kind = isFolder ? "folder" : Core.Media.MediaPreview.KindOf(path);
+    }
 
-/// <summary>A run of shots a reference is in, on its row of the timeline.</summary>
-public sealed record RefSegment(FrameItem Frame, double X, double Width, string Text);
+    public string Path { get; }
+    public bool IsFolder { get; }
+
+    /// <summary>Its file or folder name.</summary>
+    public string Name { get; }
+
+    /// <summary>"folder", "image", "video", "audio", or another kind of file.</summary>
+    public string Kind { get; }
+
+    /// <summary>What it is in the film, beside its name: "start of shot 1", "shot 2 · 5 s", "your picture".</summary>
+    [ObservableProperty]
+    private string _label = "";
+
+    /// <summary>The piece of the storyboard it is, made or not: its state shows beside it.</summary>
+    public IFilmPiece? Piece { get; init; }
+
+    /// <summary>An earlier version of a piece (<see cref="TakeOf"/>), kept when it was made again.</summary>
+    public FilmTake? Take { get; init; }
+
+    public IFilmPiece? TakeOf { get; init; }
+
+    /// <summary>Planned in the storyboard and not made yet: no file there.</summary>
+    public bool IsPlanned { get; init; }
+
+    [ObservableProperty]
+    private Bitmap? _thumbnail;
+
+    [ObservableProperty]
+    private bool _isExpanded;
+
+    public ObservableCollection<FilmNode> Children { get; } = [];
+
+    /// <summary>How the chat's box names it: "Shot 2 · s2.mp4", "References".</summary>
+    public string Caption => Label.Length == 0 ? Name : $"{Capital(Label)} · {Name}";
+
+    private static string Capital(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
+
+    private static readonly Avalonia.Media.Geometry FolderShape = Avalonia.Media.StreamGeometry.Parse("M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z");
+    private static readonly Avalonia.Media.Geometry PictureShape = Avalonia.Media.StreamGeometry.Parse("M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z");
+    private static readonly Avalonia.Media.Geometry VideoShape = Avalonia.Media.StreamGeometry.Parse("M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z");
+    private static readonly Avalonia.Media.Geometry SoundShape = Avalonia.Media.StreamGeometry.Parse("M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z");
+    private static readonly Avalonia.Media.Geometry FileShape = Avalonia.Media.StreamGeometry.Parse("M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z");
+
+    public Avalonia.Media.Geometry Icon => Kind switch
+    {
+        "folder" => FolderShape,
+        "image" or "animation" => PictureShape,
+        "video" => VideoShape,
+        "audio" => SoundShape,
+        _ => FileShape,
+    };
+}
 
 /// <summary>A line said in a shot, where it is heard on the timeline.</summary>
 public sealed record LineItem(ShotItem Shot, double X, double Width, string Text);
 
-/// <summary>A take of the piece picked: one kept from before, or the one in the film.</summary>
-public sealed record TakeItem(FilmTake? Take, string Label, Bitmap? Thumbnail, bool InFilm);
-
-/// <summary>A picture the viewer shows: a frame, or what stands in for a piece not made yet.</summary>
+/// <summary>What the viewer shows for something with no picture to play: a folder, a piece not made yet, the film not joined.</summary>
 public sealed record PictureView(Bitmap? Picture, string Caption, string? Missing);
 
-/// <summary>A film in the list at the top of the window: its title, and where it is.</summary>
+/// <summary>A film in the list at the top of the panel: its title, and where it is.</summary>
 public sealed record FilmChoice(string Folder, string Title)
 {
     public override string ToString() => Title;
-}
-
-/// <summary>The joined film, in the viewer while picked.</summary>
-public sealed partial class JoinedFilm(string path) : ObservableObject
-{
-    public string Path { get; } = path;
-
-    [ObservableProperty]
-    private FilePreview? _player;
 }

@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 namespace BlackBox.Core.Film;
 
 /// <summary>
-/// Two changes to one storyboard made at once, put together: the Filmmaking window's (a shot made
+/// Two changes to one storyboard made at once, put together: the Filmmaking panel's (a shot made
 /// longer by hand) and the chat's (the film tool rewriting a shot's prompt, or a seed it settled),
 /// each made on the storyboard as it was before. Saved as it was in the window, the window's
 /// whole copy wrote over what the chat had just changed.
@@ -18,7 +18,7 @@ public static class StoryboardMerge
     public static Storyboard Merge(Storyboard before, Storyboard mine, Storyboard theirs)
     {
         var merged = Node(before.ToJsonObject(), mine.ToJsonObject(), theirs.ToJsonObject());
-        var board = Storyboard.Parse(merged?.ToJsonString() ?? "{}", upgrade: false);
+        var board = Storyboard.Parse(merged?.ToJsonString() ?? "{}");
         board.Folder = mine.Folder;
         return board;
     }

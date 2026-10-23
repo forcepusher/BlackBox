@@ -497,6 +497,18 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
     }
 
     /// <summary>
+    /// Stops playing and hands over the playback still holding the file, for the caller to end
+    /// before it writes over the file (see <see cref="Core.Media.MediaRelease"/>); null when it isn't playing.
+    /// </summary>
+    internal IDisposable? LetGo()
+    {
+        var playback = _playback;
+        _playback = null;
+        IsPlaying = false;
+        return playback;
+    }
+
+    /// <summary>
     /// Ends a playback off the UI thread: it waits up to two seconds for its thread, and its
     /// speakers' for as long again, which held the window still at every pause or new position.
     /// </summary>

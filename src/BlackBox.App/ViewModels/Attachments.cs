@@ -17,10 +17,12 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
     private readonly Action<AttachmentItem>? _remove;
 
     /// <param name="remove">Takes it off the message being written; null in a sent message's bubble.</param>
-    public AttachmentItem(string path, Action<AttachmentItem>? remove = null)
+    /// <param name="picked">Picked in the toolkit's panel (a piece of the film): what it is there, "Shot 2 · s2.mp4".</param>
+    public AttachmentItem(string path, Action<AttachmentItem>? remove = null, string? picked = null)
     {
         Path = path;
         _remove = remove;
+        Caption = picked;
         FileName = System.IO.Path.GetFileName(path.TrimEnd('\\', '/')) is { Length: > 0 } name ? name : path;
         IsPicture = MediaPreview.KindOf(path) is "image" or "animation";
         // Looked at off the UI thread: a file on a share that is off (a NAS, a mapped drive whose
@@ -36,7 +38,7 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
         try
         {
             folder = Directory.Exists(Path);
-            details = folder ? "folder" : File.Exists(Path) ? FilePreview.Size(Path) : "no longer there";
+            details = folder ? "folder" : File.Exists(Path) ? FilePreview.Size(Path) : Picked ? "not made yet" : "no longer there";
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -54,6 +56,15 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
 
     public string Path { get; }
     public string FileName { get; }
+
+    /// <summary>What it is in the toolkit's panel it was picked in ("Shot 2 · s2.mp4"); null for a file of the user's.</summary>
+    public string? Caption { get; }
+
+    /// <summary>Picked in the toolkit's panel, which says what it is to the model with the message.</summary>
+    public bool Picked => Caption is not null;
+
+    /// <summary>The name it shows by: what it is in the panel it was picked in, or its file's name.</summary>
+    public string Title => Caption ?? FileName;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowsName))]
@@ -85,7 +96,7 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
     private string _details = "";
 
     /// <summary>The thumbnail's tooltip: the full path and what it is.</summary>
-    public string Tip => $"{Path}\n{Details}";
+    public string Tip => Caption is null ? $"{Path}\n{Details}" : $"{Caption}\n{Path}\n{Details}";
 
     partial void OnDetailsChanged(string value) => OnPropertyChanged(nameof(Tip));
 

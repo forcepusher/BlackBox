@@ -9,10 +9,6 @@
         Width="900" Height="760" MinWidth="660" MinHeight="480"
         WindowStartupLocation="CenterScreen">
 
-  <Window.KeyBindings>
-    <KeyBinding Gesture="Ctrl+Shift+N" Command="{Binding NewWindowCommand}" />
-  </Window.KeyBindings>
-
   <Window.Styles>
     <!-- The intro in an unused chat: the cards on what BlackBox can do, and Pause/Break drawn as a key. -->
     <Style Selector="StackPanel.conversation.unused">
@@ -138,6 +134,13 @@
     <Style Selector="Button.cancelQueued:pointerover PathIcon">
       <Setter Property="Foreground" Value="{StaticResource BbError}" />
     </Style>
+    <!-- The Toolkit dropdown in the top bar: flat, as the buttons beside it. -->
+    <Style Selector="ComboBox.toolkit">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Padding" Value="10,4,6,4" />
+    </Style>
   </Window.Styles>
 
   <!-- How each kind of file is previewed: under the tool call that made or showed it, and under a
@@ -235,6 +238,11 @@
       </Border>
     </DataTemplate>
 
+    <!-- The toolkit's panel, on the left of the chat. -->
+    <DataTemplate DataType="vm:FilmViewModel">
+      <views:FilmPanel />
+    </DataTemplate>
+
     <DataTemplate DataType="vm:FileCardPreview">
       <Border Classes="preview" Width="498">
         <DockPanel>
@@ -246,20 +254,42 @@
     </DataTemplate>
   </Window.DataTemplates>
 
-  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+  <!-- A tool of the toolkit (Filmmaking) in a column of its own on the left, the chat on the right. -->
+  <Grid x:Name="Columns" ColumnDefinitions="0,0,*">
+    <Border x:Name="ToolkitHost" Grid.Column="0" IsVisible="{Binding HasToolkit}">
+      <ContentControl Content="{Binding Toolkit}" />
+    </Border>
+    <GridSplitter Grid.Column="1" IsVisible="{Binding HasToolkit}" Background="{StaticResource BbBorder}" ResizeDirection="Columns" />
+
+  <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*,Auto">
 
     <!-- Header -->
     <Border Grid.Row="0" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,8">
       <DockPanel>
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <Image Source="/Assets/blackbox.png" Width="22" Height="22" RenderOptions.BitmapInterpolationMode="HighQuality" />
-          <TextBlock Text="BlackBox" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" />
-        </StackPanel>
+        <!-- Tools that open on the left of the chat and work through it; the arrow says where.
+             Where the window's name stood a second time, under the title bar's. -->
+        <ComboBox x:Name="ToolkitBox" DockPanel.Dock="Left" Classes="toolkit" ItemsSource="{Binding ToolkitOptions}" SelectedItem="{Binding SelectedToolkit}"
+                  VerticalAlignment="Center" AutomationProperties.Name="Toolkit"
+                  ToolTip.Tip="Tools that open on the left of the chat: what you pick in them goes into your message">
+          <ComboBox.SelectionBoxItemTemplate>
+            <DataTemplate x:DataType="vm:ToolkitOption">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Width="10" Height="10" VerticalAlignment="Center" Foreground="{StaticResource BbAccent}" Data="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
+              </StackPanel>
+            </DataTemplate>
+          </ComboBox.SelectionBoxItemTemplate>
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:ToolkitOption">
+              <StackPanel Spacing="1" Width="300">
+                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                <TextBlock Classes="muted" Text="{Binding Description}" TextWrapping="Wrap" />
+              </StackPanel>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
 
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <!-- Films planned shot by shot (see FilmWindow): beside the chat, which "Make the film" hands it to. -->
-          <Button Classes="ghost" Content="Filmmaking" Click="OnFilmmakingClick"
-                  ToolTip.Tip="Plan a film shot by shot, with its frames and soundtrack, and make it with ComfyUI" />
           <!-- Earlier chats, newest first: a row opens one, its trash button deletes it. A chat another
                BlackBox window has open says so, and its row brings that window forward. -->
           <Button x:Name="HistoryButton" Classes="ghost" ToolTip.Tip="Earlier chats" AutomationProperties.Name="History">
@@ -300,7 +330,7 @@
           <!-- Another window beside this one, with a chat and an agent of its own, for another task at
                the same time. Named: as an icon alone, it went unnoticed. -->
           <Button Classes="ghost" Content="New window" Command="{Binding NewWindowCommand}"
-                  ToolTip.Tip="Another window, with a chat of its own, to work on another task at the same time (Ctrl+Shift+N)" />
+                  ToolTip.Tip="Another window, with a chat of its own, to work on another task at the same time" />
           <Button Classes="ghost" Content="Settings" Click="OnSettingsClick" />
         </StackPanel>
         <!-- The server's state, between the name and the buttons: what gets shorter in a narrow window,
@@ -410,7 +440,7 @@
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Right" />
                 <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="12,8" HorizontalAlignment="Right">
                   <StackPanel Spacing="6">
-                    <!-- Written in the Filmmaking window: which film and piece it is about. -->
+                    <!-- Sent with Filmmaking open: which film, and what was picked in it. -->
                     <TextBlock Classes="muted" Text="{Binding Via}" IsVisible="{Binding HasVia}" FontSize="12" TextWrapping="Wrap" />
                     <!-- The files that came with it: a picture as itself, anything else by its name; a click opens it. -->
                     <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}" Margin="0,4,0,0">
@@ -581,26 +611,18 @@
                 </Border>
               </StackPanel>
               <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
-                         Text="pastes a screenshot or files into your message; you can also drop them here." />
+                         Text="can paste a screenshot into your message, you can also drag and drop files." />
             </DockPanel>
           </Border>
 
-          <!-- Several tasks at once, a window each (New window at the top does the same). -->
+          <!-- Several tasks at once, a window each. -->
           <Border Classes="card">
             <DockPanel>
-              <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" Margin="0,0,8,0" VerticalAlignment="Top">
-                <Border Classes="key">
-                  <TextBlock Text="Ctrl" />
-                </Border>
-                <Border Classes="key">
-                  <TextBlock Text="Shift" />
-                </Border>
-                <Border Classes="key">
-                  <TextBlock Text="N" />
-                </Border>
-              </StackPanel>
+              <Border DockPanel.Dock="Left" Classes="key" Margin="0,0,8,0" VerticalAlignment="Top">
+                <TextBlock Text="New window" />
+              </Border>
               <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
-                         Text="or New window at the top opens another window, so I can work on several tasks at once." />
+                         Text="at the top opens another window, so I can multitask in parallel." />
             </DockPanel>
           </Border>
 
@@ -780,7 +802,7 @@
                       <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,10,0">
                         <PathIcon Data="{Binding Icon}" />
                         <StackPanel Spacing="1" VerticalAlignment="Center">
-                          <TextBlock Text="{Binding FileName}" MaxWidth="220" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Title}" MaxWidth="220" TextTrimming="CharacterEllipsis" />
                           <TextBlock Classes="muted" Text="{Binding Details}" />
                         </StackPanel>
                       </StackPanel>
@@ -813,7 +835,7 @@
       </StackPanel>
     </Border>
 
-    <!-- Files dragged over the window: where they go. The drop itself lands on the window. -->
+    <!-- Files dragged over the chat: where they go. The drop itself lands on the window. -->
     <Panel Grid.Row="0" Grid.RowSpan="5" IsVisible="{Binding IsDropping}" IsHitTestVisible="False" Background="#EC111214">
       <Rectangle Margin="14" RadiusX="12" RadiusY="12" Stroke="{StaticResource BbAccent}" StrokeThickness="2" StrokeDashArray="6,4" />
       <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
@@ -823,5 +845,6 @@
         <TextBlock Classes="muted" Text="They go with your next message, and I can work with them." HorizontalAlignment="Center" />
       </StackPanel>
     </Panel>
+  </Grid>
   </Grid>
 </Window>
