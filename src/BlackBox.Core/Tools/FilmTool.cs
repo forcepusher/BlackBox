@@ -525,8 +525,8 @@ public sealed class FilmTool : Tool
                     kept.Seed = best.Seed;
             });
             File.Move(best.File, board.ShotVideo(shot), overwrite: true);
-            File.Move(Path.ChangeExtension(best.File, ".json"), board.ShotWorkflow(shot), overwrite: true);
             replaced = true;
+            File.Move(Path.ChangeExtension(best.File, ".json"), board.ShotWorkflow(shot), overwrite: true);
         }
         finally
         {

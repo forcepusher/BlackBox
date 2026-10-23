@@ -38,6 +38,16 @@ public sealed partial class MainWindowViewModel
     /// <summary>Clears the screen for another chat. A run in progress is stopped, and saved as it is unless the chat is being deleted.</summary>
     private void LeaveChat(bool save)
     {
+        // Left before the model read them (or before they could start a run): back in the box, with
+        // their files, to send again or not. First, so the chat left is saved saying which requests
+        // of the Filmmaking window's weren't done.
+        if (Queued.Count > 0)
+        {
+            foreach (var queued in Queued)
+                _session?.Unsteer(queued.Input);
+            BackInTheBox([.. Queued.Select(q => q.Input)]);
+            Queued.Clear();
+        }
         if (IsBusy)
         {
             if (save) SaveChat(SnapshotHistory());
@@ -46,15 +56,6 @@ public sealed partial class MainWindowViewModel
         }
         // The stopped run keeps its own list until it ends, so it can't write into the next chat.
         _history = [];
-        // Left before the model read them (or before they could start a run): back in the box, with
-        // their files, to send again or not.
-        if (Queued.Count > 0)
-        {
-            foreach (var queued in Queued)
-                _session?.Unsteer(queued.Input);
-            BackInTheBox([.. Queued.Select(q => q.Input)]);
-            Queued.Clear();
-        }
         _steerPending.Clear();
         _forNextRun.Clear();
         // Logins belong to the chat: the next one starts logged out (the stopped run's tools fail).
