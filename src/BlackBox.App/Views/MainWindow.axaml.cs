@@ -163,17 +163,25 @@ public partial class MainWindow : Window
         Height = Math.Max(MinHeight, Math.Min(Height, area.Height - 40));
     }
 
+    /// <summary>The chat's place and size: without the toolkit's column on its left, which isn't open the next time.</summary>
     private void Remember()
     {
-        if (WindowState == WindowState.Normal && IsVisible)
-            _normal = (Position, ClientSize.Width, ClientSize.Height);
+        if (WindowState != WindowState.Normal || !IsVisible)
+            return;
+        // Where it was before the toolkit opened, if it is as the toolkit left it.
+        if (_beforeDock is { } before && _afterDock is { } after && Position == after.Position && Math.Abs(Width - after.Width) < 1)
+        {
+            _normal = (before.Position, before.Width, ClientSize.Height);
+            return;
+        }
+        var toolkit = ToolkitWidth;
+        var scaling = (Screens.ScreenFromWindow(this) ?? Screens.Primary)?.Scaling ?? 1;
+        _normal = (new PixelPoint(Position.X + (int)(toolkit * scaling), Position.Y), ClientSize.Width - toolkit, ClientSize.Height);
     }
 
     protected override void OnClosed(EventArgs e)
     {
         base.OnClosed(e);
-        // Its own: BlackBox goes on with the other windows, where these were left behind.
-        _film?.Close();
         // Let go of first: closing, it would bring this window forward and hold its videos again.
         var viewer = _viewer;
         _viewer = null;
@@ -209,7 +217,7 @@ public partial class MainWindow : Window
         var data = e.DataTransfer;
         // Files and pictures are attached; text (a link dragged from a browser) goes into the box.
         e.DragEffects = CarriesFiles(data) || data.Contains(DataFormat.Text) ? DragDropEffects.Copy : DragDropEffects.None;
-        Vm.IsDropping = CarriesFiles(data);
+        Vm.IsDropping = CarriesFiles(data) && !OverToolkit(e);
         e.Handled = true;
     }
 
@@ -227,7 +235,11 @@ public partial class MainWindow : Window
         Vm.IsDropping = false;
         var data = e.DataTransfer;
         if (data.TryGetFiles() is { Length: > 0 } files)
-            Vm.Attach(files.Select(f => f.TryGetLocalPath()).OfType<string>());
+        {
+            var paths = files.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
+            if (!OverToolkit(e) || !Vm.DropOnToolkit(paths))
+                Vm.Attach(paths);
+        }
         else if (data.TryGetBitmap() is { } bitmap)
             using (bitmap)
                 Vm.AttachPicture(bitmap);
@@ -391,11 +403,14 @@ public partial class MainWindow : Window
         base.OnDataContextChanged(e);
         if (DataContext is not MainWindowViewModel vm)
             return;
-        // Once the chat is used it follows its end, however far the intro was scrolled.
+        // Once the chat is used it follows its end, however far the intro was scrolled. A tool
+        // picked in the Toolkit dropdown opens on the left of the chat.
         vm.PropertyChanged += (_, change) =>
         {
             if (change.PropertyName == nameof(MainWindowViewModel.ShowIntro) && !vm.ShowIntro)
                 _stickToBottom = true;
+            if (change.PropertyName == nameof(MainWindowViewModel.HasToolkit))
+                Dock();
         };
         vm.ShowInputOverlay();
     }
@@ -493,68 +508,80 @@ public partial class MainWindow : Window
             HoldVideos();
     }
 
-    /// <summary>The Filmmaking window, while it is open: the button brings it forward rather than opening a second one.</summary>
-    private FilmWindow? _film;
+    // ---- the toolkit: a tool's panel on the left of the chat --------------------------------------
+
+    /// <summary>How wide the toolkit's column was made; 0 with none.</summary>
+    private double _docked;
+
+    /// <summary>Where the window was and how wide before the toolkit opened, and after: closed with the window as it was left, it goes back there.</summary>
+    private (PixelPoint Position, double Width)? _beforeDock, _afterDock;
 
     /// <summary>
-    /// Filmmaking, an add-on of this chat: what is told in it runs here. A window of its own, not one
-    /// kept in front of the chat, and beside it where a screen has room: the user watches the work in
-    /// the chat while the film changes in the window.
+    /// A tool picked in the Toolkit dropdown opens on the left of the chat: the window grows to the
+    /// left by the tool's width, so the chat stays where it was on the screen (as far as the screen
+    /// has room; else the window takes the screen's width, the tool and the chat sharing it). None
+    /// gives the room back. A maximized window keeps its size, and the two share it.
     /// </summary>
-    private void OnFilmmakingClick(object? sender, RoutedEventArgs e)
+    private void Dock()
     {
-        if (_film is { } open)
-        {
-            open.Activate();
+        var width = Vm.HasToolkit ? Vm.SelectedToolkit?.Width ?? 0 : 0;
+        var columns = Columns.ColumnDefinitions;
+        // What the user dragged the splitter to: given back as it is.
+        var open = _docked > 0 ? columns[0].ActualWidth + columns[1].ActualWidth : 0;
+        if (width > 0 == _docked > 0)
             return;
-        }
-        _film = new FilmWindow { DataContext = Vm.CreateFilmViewModel() };
-        _film.Closed += (_, _) => _film = null;
-        PlaceBeside(_film);
-        _film.Show();
-    }
-
-    /// <summary>
-    /// Puts the Filmmaking window right or left of the chat on its screen, where there is room for
-    /// it, else on another screen; else it opens where it did before, over the chat in the middle.
-    /// Called before it is first shown.
-    /// </summary>
-    private void PlaceBeside(FilmWindow film)
-    {
-        if (Screens.ScreenFromWindow(this) is not { } here)
-            return;
-        if (WindowState == WindowState.Normal)
+        var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+        var scaling = screen?.Scaling ?? 1;
+        if (width > 0)
         {
-            var frame = FrameSize ?? ClientSize;
-            var (left, right) = (Position.X, Position.X + (int)(frame.Width * here.Scaling));
-            var area = here.WorkingArea;
-            var rooms = new[]
+            var add = width;
+            _beforeDock = _afterDock = null;
+            if (WindowState == WindowState.Normal && screen is not null)
             {
-                (Room: new PixelRect(right, area.Y, Math.Max(0, area.Right - right), area.Height), Align: -1),
-                (Room: new PixelRect(area.X, area.Y, Math.Max(0, left - area.X), area.Height), Align: 1),
-            };
-            foreach (var (room, align) in rooms.OrderByDescending(r => r.Room.Width))
-                if (Fit(room, here.Scaling, align))
-                    return;
+                _beforeDock = (Position, Width);
+                var area = screen.WorkingArea;
+                var most = area.Width / scaling - 16;
+                Width = Math.Min(most, Width + add);
+                add = Math.Max(ChatMinWidth / 2, Math.Min(add, Width - ChatMinWidth / 2));
+                var outer = (int)((Width + 16) * scaling);
+                var x = Math.Max(area.X, Math.Min(Position.X - (int)(add * scaling), area.Right - outer));
+                Position = new PixelPoint(x, Position.Y);
+                _afterDock = (Position, Width);
+            }
+            columns[0].Width = new GridLength(add - 4);
+            columns[1].Width = new GridLength(4);
+            MinWidth = ChatMinWidth + 480;
+            _docked = add;
         }
-        foreach (var other in Screens.All.Where(s => s.Bounds != here.Bounds).OrderByDescending(s => (long)s.WorkingArea.Width * s.WorkingArea.Height))
-            if (Fit(other.WorkingArea, other.Scaling, 0))
-                return;
-
-        // Width and Height are the client area; the borders and title bar take about 16 and 40 more.
-        bool Fit(PixelRect room, double scaling, int align)
+        else
         {
-            var (width, height) = (room.Width / scaling - 16, room.Height / scaling - 40);
-            if (width < film.MinWidth || height < film.MinHeight)
-                return false;
-            film.Width = Math.Min(film.Width, width);
-            film.Height = Math.Min(film.Height, height);
-            var outer = (int)((film.Width + 16) * scaling);
-            film.WindowStartupLocation = WindowStartupLocation.Manual;
-            film.Position = new PixelPoint(align < 0 ? room.X : align > 0 ? room.Right - outer : room.X + (room.Width - outer) / 2, room.Y);
-            return true;
+            columns[0].Width = new GridLength(0);
+            columns[1].Width = new GridLength(0);
+            MinWidth = ChatMinWidth;
+            // Neither moved nor resized since: back where it was (the screen's edge may have kept it
+            // from growing to the left by all of the tool's width, and the chat moved). Else the
+            // chat stays where it is.
+            if (WindowState == WindowState.Normal && _beforeDock is { } before && _afterDock is { } after && Position == after.Position && Math.Abs(Width - after.Width) < 1)
+                (Position, Width) = before;
+            else if (WindowState == WindowState.Normal && open > 0)
+            {
+                Width = Math.Max(ChatMinWidth, Width - open);
+                Position = new PixelPoint(Position.X + (int)(open * scaling), Position.Y);
+            }
+            _docked = 0;
+            _beforeDock = _afterDock = null;
         }
     }
+
+    /// <summary>How narrow the chat may get: the window's own least width, as set in its markup.</summary>
+    private const double ChatMinWidth = 660;
+
+    /// <summary>The part of the window the toolkit takes now, in pixels across; 0 with none.</summary>
+    private double ToolkitWidth => _docked > 0 ? Columns.ColumnDefinitions[0].ActualWidth + Columns.ColumnDefinitions[1].ActualWidth : 0;
+
+    /// <summary>Whether a drag or a drop is over the toolkit's panel.</summary>
+    private bool OverToolkit(DragEventArgs e) =>
+        Vm.HasToolkit && e.GetPosition(this).X < ToolkitWidth;
 
     private async void OnSettingsClick(object? sender, RoutedEventArgs e)
     {

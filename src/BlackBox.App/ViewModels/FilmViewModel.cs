@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
-using BlackBox.Core.Comfy;
 using BlackBox.Core.Film;
 using BlackBox.Core.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -11,15 +10,15 @@ using CommunityToolkit.Mvvm.Input;
 namespace BlackBox.App.ViewModels;
 
 /// <summary>
-/// The Filmmaking window, an add-on of a chat: a film on one timeline (its references, its shots,
-/// its sound) under one horizontal scroll, a viewer, and a panel to tell BlackBox in plain words
-/// what to make or change in the piece picked, or in the whole film. What is told, and what the
-/// buttons ask for, goes to the chat as a message: the agent writes the prompts, picks the models
-/// and makes each piece with the film tool there, where the user watches it and can stop it, and
-/// a piece made again is kept as a take. Everything is kept in the film folder's storyboard.json,
-/// and what the agent changes there and makes beside it shows here as it happens.
+/// Filmmaking, a tool of the chat window's toolkit, in a panel on the left of the chat: the film's
+/// folder as a tree (its references, frames, shots and sound, made or planned), a viewer, and the
+/// film on one timeline (its shots and sound) under one horizontal scroll. What is picked in the
+/// tree or on the timeline goes into the chat's box, where the user says what to do with it: the
+/// agent writes the prompts, picks the models and makes each piece with the film tool in the chat,
+/// in view. The film is its folder (a folder per shot, each file with its .meta), and what the agent
+/// changes and makes there shows here as it happens.
 /// </summary>
-public sealed partial class FilmViewModel : ObservableObject, IDisposable
+public sealed partial class FilmViewModel : ObservableObject, IToolkit
 {
     private readonly PreviewServices _previews;
     private readonly MainWindowViewModel _chat;
@@ -29,13 +28,12 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     private readonly DispatcherTimer _refreshTimer;
     private readonly DispatcherTimer _chatTimer;
     private FileSystemWatcher? _watcher;
-    private DateTime _ownWrite;
     private bool _loading;
 
     /// <summary>Where films go, a folder each: BlackBox's Data\films, next to the exe like the rest of its data.</summary>
     private readonly string _filmsRoot;
 
-    /// <param name="chat">The chat the window belongs to, where what is said in it runs.</param>
+    /// <param name="chat">The chat the panel is a tool of, where what is said about the film runs.</param>
     /// <param name="filmsRoot">Where films go (BlackBox's Data\films).</param>
     /// <param name="folder">The film to open; the latest changed one when null.</param>
     public FilmViewModel(PreviewServices previews, MainWindowViewModel chat, string filmsRoot, string? folder)
@@ -49,13 +47,14 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             _refreshTimer!.Stop();
             OnFolderChanged();
         });
-        // What the chat is doing, shown here: in a line, and on the piece the film tool is making.
+        // What the chat is doing, shown here: on the piece the film tool is making.
         _chatTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Background, (_, _) => WatchChat());
         _chatTimer.Start();
-        WindowTitle = "Filmmaking - " + chat.WindowTitle;
+        // A pick taken off the box (its ×) is no longer picked here either.
+        _chat.Attachments.CollectionChanged += OnBoxChanged;
         RefreshFilms();
         var open = folder ?? Films.FirstOrDefault()?.Folder;
-        if (open is not null && File.Exists(Path.Combine(open, Storyboard.FileName)))
+        if (open is not null && Storyboard.IsFilm(open))
             Open(open);
         else
             NewFilm();
@@ -95,7 +94,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
 
     public string Folder => _board.Folder;
 
-    /// <summary>Opens the film in a folder (or the storyboard.json given).</summary>
+    /// <summary>Opens the film in a folder (or of a file in it).</summary>
     public void Open(string path)
     {
         SaveNow();
@@ -111,15 +110,12 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             return;
         }
         Watch();
-        Rebuild();
-        RefreshFilms();
-        OnPropertyChanged(nameof(Folder));
-        Select(null);
+        Opened();
     }
 
     /// <summary>
     /// A new film in BlackBox's Data\films. Its folder is made with the first change: opening the
-    /// window to look leaves nothing behind. The user says what it is to be in the panel.
+    /// panel to look leaves nothing behind. The user says in the chat what it is to be.
     /// </summary>
     [RelayCommand]
     private void NewFilm()
@@ -131,14 +127,20 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         for (var n = 2; Directory.Exists(Path.Combine(root, name)); n++)
             name = $"New film {n}";
         _board = Storyboard.New(Path.Combine(root, name), name);
-        _ownWrite = default;
         _savedJson = null;
         _watcher?.Dispose();
         _watcher = null;
+        Opened();
+    }
+
+    /// <summary>Another film is shown: what was picked of the one before goes from the chat's box.</summary>
+    private void Opened()
+    {
         Rebuild();
         RefreshFilms();
         OnPropertyChanged(nameof(Folder));
-        Select(null);
+        Clear(viewer: true);
+        _chat.Pick([]);
     }
 
     [RelayCommand]
@@ -248,7 +250,6 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
     partial void OnPpsChanged(double value) => Relayout();
 
     public ObservableCollection<ShotItem> Shots { get; } = [];
-    public ObservableCollection<RefLane> RefLanes { get; } = [];
     public ObservableCollection<LineItem> Lines { get; } = [];
 
     /// <summary>How wide the rows are: the film, the song where it runs past it, and room to make the last shot longer.</summary>
@@ -264,7 +265,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
 
     public double PlayheadX => Lead + Math.Max(0, PlayPosition) * Pps;
 
-    /// <summary>Lays the timeline out again: each shot where it starts, each reference's runs, each line, the width.</summary>
+    /// <summary>Lays the timeline out again: each shot where it starts, each line, the width.</summary>
     public void Relayout()
     {
         var (starts, length) = _board.Timing();
@@ -273,25 +274,6 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         {
             Shots[i].X = Lead + starts[i] * Pps;
             Shots[i].BlockWidth = Math.Max(8, Shots[i].Shot.Seconds * Pps - 2);
-        }
-        foreach (var lane in RefLanes)
-        {
-            lane.Segments.Clear();
-            var runs = new List<(int From, int To)>();
-            for (var i = 0; i < _board.Shots.Count; i++)
-                if (Uses(_board.Shots[i], lane.Frame.Id))
-                {
-                    if (runs.Count > 0 && runs[^1].To == i - 1)
-                        runs[^1] = (runs[^1].From, i);
-                    else
-                        runs.Add((i, i));
-                }
-            foreach (var (from, to) in runs)
-            {
-                var x = Lead + starts[from] * Pps;
-                var end = Lead + (starts[to] + _board.Shots[to].Seconds) * Pps;
-                lane.Segments.Add(new RefSegment(lane.Frame, x, Math.Max(8, end - x - 2), $"{lane.Frame.Label} · " + (from == to ? $"shot {from + 1}" : $"shots {from + 1} to {to + 1}")));
-            }
         }
         Lines.Clear();
         var ducks = new List<(double, double)>();
@@ -309,19 +291,6 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
         TimelineWidth = Lead + Math.Max(length, Math.Min(_sound.Seconds, length + 10)) * Pps + 240;
         OnPropertyChanged(nameof(PlayheadX));
         OnPropertyChanged(nameof(LengthText));
-    }
-
-    /// <summary>Whether a shot shows a reference: a frame it is made from is the reference, or is made from it.</summary>
-    private bool Uses(FilmShot shot, string reference)
-    {
-        foreach (var id in new[] { shot.First, shot.LipSync ? null : shot.Last }.OfType<string>())
-            if (MadeFrom(id, reference, 0))
-                return true;
-        return false;
-
-        bool MadeFrom(string id, string target, int depth) =>
-            id.Equals(target, StringComparison.OrdinalIgnoreCase) ||
-            depth < 6 && _board.Frame(id) is { } f && f.From.Any(from => MadeFrom(from, target, depth + 1));
     }
 
     /// <summary>How long a line takes: as said, when it is; else about 2.5 words a second.</summary>
@@ -377,7 +346,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             FilmSound.Song => (File.Exists(_board.SongFile) ? "Song" : "Song · not made yet") + (_board.Sound.Tags.Trim() is { Length: > 0 } tags ? $" · {tags}" : "") +
                               (Ducks.Count > 0 ? " · quieter under the lines" : ""),
             FilmSound.FromFile => file is null ? "A sound file of yours · none picked yet" : $"Your sound file · {Path.GetFileName(file)}",
-            _ => "No soundtrack: each shot keeps its own sound. Pick this row and say what music you want.",
+            _ => "No soundtrack: each shot keeps its own sound. Pick this row and say in the chat what music you want.",
         };
     }
 
@@ -417,6 +386,8 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
             Dispatcher.UIThread.Post(() =>
             {
                 _readingSound = false;
+                if (_disposing)
+                    return;
                 _sound = (file, stamp, peaks, seconds);
                 SoundSeconds = seconds;
                 RefreshSound();
@@ -437,7 +408,7 @@ public sealed partial class FilmViewModel : ObservableObject, IDisposable
 
     public string PlayTime => $"{TimeSpan.FromSeconds(Math.Max(0, PlayPosition)):m\\:ss\\.f}";
 
-    /// <summary>The storyboard frame under the playhead: a shot's clip frame or first frame, its last for the second half.</summary>
+    /// <summary>The storyboard frame under the playhead: a shot's first frame, its last for the second half.</summary>
     [ObservableProperty]
     private Bitmap? _playFrame;
 

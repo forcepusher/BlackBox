@@ -88,6 +88,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             OnPropertyChanged(nameof(QueuedTitle));
             InterruptCommand.NotifyCanExecuteChanged();
         };
+        _selectedToolkit = ToolkitOptions[0];
     }
 
     public ObservableCollection<ChatItemViewModel> Items { get; } = [];
@@ -240,6 +241,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         _runCts?.Cancel();
         _tick.Stop();
+        // The toolkit's panel goes with the window: its players, the watch on its folder.
+        Toolkit?.Dispose();
         // A sound playing in the chat stops with it.
         foreach (var item in Items)
             item.DisposePreviews();
@@ -333,7 +336,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     [RelayCommand(CanExecute = nameof(CanSend), AllowConcurrentExecutions = true)]
     private async Task SendAsync()
     {
-        var input = new UserInput(Input.Trim(), Attachments.Select(a => a.Path).ToList());
+        // A piece picked in the toolkit's panel that isn't made yet has no file: the tool says what it is.
+        var files = Attachments.Where(a => !a.Picked || File.Exists(a.Path) || Directory.Exists(a.Path)).Select(a => a.Path).ToList();
+        var input = WithToolkit(new UserInput(Input.Trim(), files), Picked);
         Input = "";
         ClearAttachments();
         await SendAsync(input);
@@ -676,20 +681,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     }
 
     /// <summary>
-    /// Messages the model never read, back in the box with their files, to send again or not. Not
-    /// a request from the Filmmaking window: sent again without the film and the piece it was about,
-    /// "Another take, please." would reach the model as bare words. The chat says it wasn't done.
+    /// Messages the model never read, back in the box with their files, to send again or not. Sent
+    /// again while a tool is open, they carry what it says about them again.
     /// </summary>
     private void BackInTheBox(IReadOnlyList<UserInput> unread)
     {
-        var typed = unread.Where(u => u.Context is null).ToList();
-        Input = string.Join("\n\n", typed.Select(u => u.Text).Append(Input).Where(t => t.Length > 0));
-        Attach(typed.SelectMany(u => u.Files));
-        // Above the notice the run stopped with, which has to stay the chat's last line to keep its
-        // Continue when the chat is opened again.
-        var at = Items.Count > 0 && Items[^1] is NoticeItem { Stopped: true } ? Items.Count - 1 : Items.Count;
-        foreach (var film in unread.Where(u => u.Context is not null))
-            Items.Insert(at++, new NoticeItem($"Not done, as BlackBox stopped before it read it: \"{film.Text}\" ({film.Via}).", isError: false));
+        Input = string.Join("\n\n", unread.Select(u => u.Text).Append(Input).Where(t => t.Length > 0));
+        Attach(unread.SelectMany(u => u.Files));
     }
 
     [RelayCommand(CanExecute = nameof(IsBusy))]
@@ -725,8 +723,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     }
 
     /// <summary>
-    /// New window (Ctrl+Shift+N, or starting BlackBox again): a window of its own with its own chat
-    /// and agent, for another task at the same time. The agents take turns with the mouse and keyboard.
+    /// New window (or starting BlackBox again): a window of its own with its own chat and agent, for
+    /// another task at the same time. The agents take turns with the mouse and keyboard.
     /// </summary>
     [RelayCommand]
     private void NewWindow() => _windows.Open();

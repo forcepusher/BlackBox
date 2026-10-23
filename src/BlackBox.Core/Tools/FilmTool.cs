@@ -8,7 +8,7 @@ using BlackBox.Core.Media;
 namespace BlackBox.Core.Tools;
 
 /// <summary>
-/// Films from a storyboard (see <see cref="Storyboard"/>): the same storyboard.json the user edits in
+/// Films from a storyboard (see <see cref="Storyboard"/>): the same film folder the user sees in
 /// the Filmmaking panel. The agent plans or changes it, makes its frames, song and shots with
 /// ComfyUI (each with a fixed-seed workflow of its own), checks every shot against what it should
 /// show and fixes the ones that don't, joins them and checks the film. A check is numbers (does the
@@ -57,7 +57,7 @@ public sealed class FilmTool : Tool
 
     public override JsonObject Parameters => Schema(
         ("action", Str("What to do", "storyboard", "frame", "shot", "sound", "join", "check", "models"), true),
-        ("path", Str("The film's folder (or its storyboard.json, or the name of a film in the films folder); a new film's folder for action=storyboard"), false),
+        ("path", Str("The film's folder (or the name of a film in the films folder); a new film's folder for action=storyboard"), false),
         ("id", Str("A frame's id (action=frame, check) or a shot's (action=shot, check)"), false),
         ("storyboard", new JsonObject { ["type"] = "object", ["description"] = "action=storyboard: the storyboard, or the parts of it to change (frames and shots by id)" }, false),
         ("prompt", Str("action=frame or shot: a new prompt for it"), false),

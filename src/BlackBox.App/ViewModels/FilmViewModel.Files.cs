@@ -8,7 +8,7 @@ public sealed partial class FilmViewModel
 {
     // ---- saving --------------------------------------------------------------------------------------------
 
-    /// <summary>Something was changed in the window: saved a moment later, and what it changes shown.</summary>
+    /// <summary>Something was changed in the panel: saved a moment later, and what it changes shown.</summary>
     public void Changed()
     {
         if (_loading)
@@ -25,7 +25,7 @@ public sealed partial class FilmViewModel
     /// <summary>Whether the storyboard has changes not saved yet.</summary>
     private bool _dirty;
 
-    /// <summary>The storyboard as this window last read it from its file or wrote it there; null before it has a file.</summary>
+    /// <summary>The storyboard as this panel last read it from its file or wrote it there; null before it has a file.</summary>
     private string? _savedJson;
 
     private bool _disposing;
@@ -34,17 +34,18 @@ public sealed partial class FilmViewModel
     private void SaveNow(bool force = false)
     {
         _saveTimer.Stop();
-        if (_board.Folder.Length == 0 || !_dirty && !force)
+        // Nothing changed here, and the film is on the disk already: nothing to write.
+        if (_board.Folder.Length == 0 || !_dirty && (!force || _savedJson is not null))
             return;
         try
         {
-            // The chat changed the storyboard while a change made here waited to be saved (a shot's
+            // The chat changed the film while a change made here waited to be saved (a shot's
             // length dragged as the film tool rewrote a prompt): both stay. Saved whole, the
-            // window's copy wrote over the chat's change, and nothing showed it.
+            // panel's copy wrote over the chat's change, and nothing showed it.
             var merged = false;
             // A new film whose folder another window's new film took since this one was named: a
             // folder of its own. Both picked "New film", and the second wrote over the first.
-            if (_savedJson is null && File.Exists(_board.FilePath))
+            if (_savedJson is null && Storyboard.IsFilm(_board.Folder))
             {
                 var root = Path.GetDirectoryName(_board.Folder)!;
                 var name = Path.GetFileName(_board.Folder);
@@ -57,20 +58,21 @@ public sealed partial class FilmViewModel
                 _watcher = null;
                 OnPropertyChanged(nameof(Folder));
             }
-            if (_savedJson is not null && File.Exists(_board.FilePath) && File.GetLastWriteTimeUtc(_board.FilePath) != _ownWrite)
+            if (_savedJson is not null && Storyboard.IsFilm(_board.Folder))
             {
                 Storyboard? theirs = null;
-                try { theirs = Storyboard.Load(_board.FilePath, upgrade: false); }
-                catch (FilmException) { /* not a storyboard that can be read: this window's is written */ }
+                try { theirs = Storyboard.Load(_board.Folder, upgrade: false); }
+                catch (FilmException) { /* not a film that can be read: this panel's is written */ }
                 if (theirs is not null && theirs.ToJson() != _savedJson)
                 {
+                    var folder = _board.Folder;
                     _board = StoryboardMerge.Merge(Storyboard.Parse(_savedJson, upgrade: false), _board, theirs);
+                    _board.Folder = folder;
                     merged = true;
                 }
             }
             _board.Save();
             _dirty = false;
-            _ownWrite = File.GetLastWriteTimeUtc(_board.FilePath);
             _savedJson = _board.ToJson();
             if (_watcher is null)
                 Watch();
@@ -79,12 +81,11 @@ public sealed partial class FilmViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            ShowError($"The storyboard couldn't be saved: {ex.Message}", ex);
+            ShowError($"The film couldn't be saved: {ex.Message}", ex);
         }
     }
 
     // ---- what is made --------------------------------------------------------------------------------------
-
 
     private string StateOf(IFilmPiece item, bool made, bool current)
     {
@@ -92,12 +93,12 @@ public sealed partial class FilmViewModel
             return item is ShotItem s && s.Shot.Prompt.Trim().Length == 0 ? "Say what happens in it" : "Not made yet";
         if (!current)
             return "Changed: make it again";
-        return FilmTakes.LookIn(item.Piece.Workflow(_board)) is { } look
+        return FilmTakes.LookIn(item.Piece.Meta(_board)) is { } look
             ? look.Verdict == "redo" ? "Made · the look found a problem" : "Made · looked at"
             : "Made";
     }
 
-    /// <summary>Thumbnails, clips, strips and each piece's state, from the files in the film's folder.</summary>
+    /// <summary>Thumbnails, strips and each piece's state, from the files in the film's folder; the tree and the viewer follow.</summary>
     public void RefreshStates()
     {
         foreach (var frame in _frames.Values)
@@ -108,8 +109,6 @@ public sealed partial class FilmViewModel
             if (!frame.IsWorking)
                 (frame.State, frame.IsError) = (StateOf(frame, made, FilmMaker.IsCurrent(_board, frame.Frame)), false);
             LoadThumbnail(frame, path);
-            if (frame == Selected || Selected is ShotItem { First: var first } && first == frame)
-                LoadPicture(frame);
         }
         foreach (var shot in Shots)
         {
@@ -119,25 +118,24 @@ public sealed partial class FilmViewModel
             if (!shot.IsWorking)
                 (shot.State, shot.IsError) = (StateOf(shot, made, FilmMaker.IsCurrent(_board, shot.Shot)), false);
             var stamp = made ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
-            if (made && (shot.Clip is null || shot.Clip.Path != path || _clipStamps.GetValueOrDefault(shot.Id) != stamp))
+            if (made && _clipStamps.GetValueOrDefault(shot.Id) != stamp)
             {
-                shot.Clip?.Dispose();
-                shot.Clip = FilePreview.For(path, _previews);
                 _clipStamps[shot.Id] = stamp;
                 LoadStrip(shot, path, stamp);
             }
-            else if (!made && shot.Clip is not null)
+            else if (!made && shot.Strip is not null)
             {
-                shot.Clip.Dispose();
-                shot.Clip = null;
+                _clipStamps.Remove(shot.Id);
+                var strip = shot.Strip;
                 shot.Strip = null;
+                strip.Dispose();
             }
         }
         var song = _board.Sound.Source switch { FilmSound.Song => _board.SongFile, FilmSound.FromFile => _board.Sound.File, _ => null };
         var songMade = song is not null && File.Exists(song);
         Sound.IsMade = songMade;
         // How the song sounds to its judge, kept with it when it was made.
-        var heard = songMade && FilmTakes.LookIn(_board.SongWorkflow) is { } judged ? " · " + judged.Said : "";
+        var heard = songMade && FilmTakes.LookIn(_board.SongMeta) is { } judged ? " · " + judged.Said : "";
         if (!Sound.IsWorking)
             Sound.State = _board.Sound.Source switch
             {
@@ -145,34 +143,14 @@ public sealed partial class FilmViewModel
                 FilmSound.FromFile => song is null ? "Pick a sound file" : songMade ? "Your file" : "The file isn't there",
                 _ => "No soundtrack",
             };
-        var songStamp = songMade ? File.GetLastWriteTimeUtc(song!) : DateTime.MinValue;
-        if (songMade && (Sound.Player is null || Sound.Player.Path != song || _clipStamps.GetValueOrDefault("\nsong") != songStamp))
-        {
-            Sound.Player?.Dispose();
-            Sound.Player = FilePreview.For(song!, _previews);
-            _clipStamps["\nsong"] = songStamp;
-        }
-        else if (!songMade && Sound.Player is not null)
-        {
-            Sound.Player.Dispose();
-            Sound.Player = null;
-        }
-        if (_filmView is not null && (!HasFilm || _filmStamp != File.GetLastWriteTimeUtc(_board.JoinedFile)))
-        {
-            _filmView.Player?.Dispose();
-            _filmView = null;
-        }
-        _filmStamp = HasFilm ? File.GetLastWriteTimeUtc(_board.JoinedFile) : default;
         OnPropertyChanged(nameof(HasFilm));
         OnPropertyChanged(nameof(ShotVolume));
         OnPropertyChanged(nameof(LengthText));
-        OnPropertyChanged(nameof(Viewer));
         RefreshSound();
         Relayout();
-        RefreshDetails();
+        RefreshTree();
+        RefreshViewer();
     }
-
-    private DateTime _filmStamp;
 
     private static string Capital(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
@@ -180,11 +158,10 @@ public sealed partial class FilmViewModel
     private static string Lower(string s) =>
         new[] { "Shot ", "The ", "Start of", "End of", "Frame ", "Reference ", "A " }.Any(p => s.StartsWith(p, StringComparison.Ordinal)) ? char.ToLowerInvariant(s[0]) + s[1..] : s;
 
-    private static string Cut(string s, int max) => s.Length <= max ? s : s[..max].TrimEnd() + "…";
-
     private readonly Dictionary<string, DateTime> _clipStamps = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<FrameItem, DateTime> _thumbStamps = [];
 
+    /// <summary>A frame's picture, small, for the timeline's blocks while its shot isn't made and for playing the storyboard.</summary>
     private void LoadThumbnail(FrameItem frame, string path)
     {
         var stamp = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
@@ -213,32 +190,6 @@ public sealed partial class FilmViewModel
         });
     }
 
-    /// <summary>A frame's picture, bigger than its thumbnail, for the viewer.</summary>
-    private void LoadPicture(FrameItem frame)
-    {
-        var path = _board.FramePicture(frame.Frame);
-        if (!File.Exists(path))
-        {
-            frame.Picture = null;
-            return;
-        }
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                using var stream = File.OpenRead(path);
-                var bitmap = Bitmap.DecodeToWidth(stream, 1280, BitmapInterpolationMode.HighQuality);
-                Dispatcher.UIThread.Post(() =>
-                {
-                    var old = frame.Picture;
-                    frame.Picture = bitmap;
-                    old?.Dispose();
-                });
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { }
-        });
-    }
-
     /// <summary>A shot's clip as a row of frames, for its block on the timeline.</summary>
     private void LoadStrip(ShotItem shot, string path, DateTime stamp)
     {
@@ -255,7 +206,7 @@ public sealed partial class FilmViewModel
             var bitmap = new Bitmap(stream);
             Dispatcher.UIThread.Post(() =>
             {
-                if (_clipStamps.GetValueOrDefault(shot.Id) != stamp)
+                if (_clipStamps.GetValueOrDefault(shot.Id) != stamp || _disposing)
                 {
                     bitmap.Dispose();
                     return;
@@ -275,7 +226,7 @@ public sealed partial class FilmViewModel
         _watcher = null;
         try
         {
-            var watcher = new FileSystemWatcher(_board.Folder) { IncludeSubdirectories = true, NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size };
+            var watcher = new FileSystemWatcher(_board.Folder) { IncludeSubdirectories = true, NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.Size };
             FileSystemEventHandler changed = (_, _) => Dispatcher.UIThread.Post(() =>
             {
                 _refreshTimer.Stop();
@@ -293,54 +244,53 @@ public sealed partial class FilmViewModel
 
     /// <summary>
     /// Something in the film's folder changed: the agent changed the storyboard in the chat (it is
-    /// read again, unless a change made here is still to be saved), or a frame, clip or song was made
-    /// (it is shown), or put away as a take.
+    /// read again, unless a change made here is still to be saved), a frame, clip or song was made
+    /// or put away as a take, or the user put a picture in References: it shows.
     /// </summary>
     private void OnFolderChanged()
     {
+        if (_disposing)
+            return;
         try
         {
-            var written = File.GetLastWriteTimeUtc(_board.FilePath);
-            if (written != _ownWrite && !_saveTimer.IsEnabled && File.Exists(_board.FilePath))
+            // Not while a change made here waits to be saved: it is put together with theirs then.
+            if (!_saveTimer.IsEnabled && !_dirty && Storyboard.IsFilm(_board.Folder))
             {
                 var fresh = Storyboard.Load(_board.Folder);
-                _savedJson = fresh.ToJson();
-                if (_savedJson != _board.ToJson())
+                var json = fresh.ToJson();
+                if (json != _savedJson)
                 {
                     var title = _board.Title;
+                    _savedJson = json;
                     _board = fresh;
-                    _ownWrite = written;
                     Rebuild();
                     // Named in the chat: the list of films shows the new title.
                     if (_board.Title != title)
                         RefreshFilms();
                     return;
                 }
-                _ownWrite = written;
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException) { }
         RefreshStates();
-        if (Selected is IFilmPiece)
-            RefreshTakes();
     }
 
     public void Dispose()
     {
+        if (_disposing)
+            return;
         _disposing = true;
+        _chat.Attachments.CollectionChanged -= OnBoxChanged;
         _chatTimer.Stop();
-        _refreshTimer.Stop(); // a refresh due after the window closed made players nobody disposed
+        _refreshTimer.Stop(); // a refresh due after the panel closed made players nobody disposed
         StopPlaying();
         SaveNow();
         _watcher?.Dispose();
         foreach (var shot in Shots)
-        {
-            shot.Clip?.Dispose();
             shot.Strip?.Dispose();
-        }
-        Sound?.Player?.Dispose();
-        _filmView?.Player?.Dispose();
-        foreach (var take in Takes)
-            take.Thumbnail?.Dispose();
+        foreach (var frame in _frames.Values)
+            frame.Thumbnail?.Dispose();
+        DropViewer();
+        DropThumbnails(keep: []);
     }
 }

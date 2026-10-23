@@ -39,8 +39,7 @@ public sealed partial class MainWindowViewModel
     private void LeaveChat(bool save)
     {
         // Left before the model read them (or before they could start a run): back in the box, with
-        // their files, to send again or not. First, so the chat left is saved saying which requests
-        // of the Filmmaking window's weren't done.
+        // their files, to send again or not, before the chat left is saved.
         if (Queued.Count > 0)
         {
             List<UserInput> back = [], read = [];
@@ -223,10 +222,10 @@ public sealed partial class MainWindowViewModel
         _chatId ??= ChatStore.NewId();
         if (_chatTitle is null)
         {
-            // A message that is only a file is named after it; one from the Filmmaking window after
+            // A message that is only a file is named after it; one sent with Filmmaking open after
             // the film and piece too: History filled with chats named "Make it.".
             var text = first!.HasText ? first.Text : string.Join(", ", first.Attachments.Select(a => a.FileName));
-            // "Make it. (Fox Test · start of shot 1)": the window's own name would come twice in the Filmmaking window's title.
+            // "Make it. (Fox Test · start of shot 1)", without "Filmmaking" before the film's name.
             const string film = "Filmmaking · ";
             _chatTitle = ChatStore.TitleFrom(first.Via is { } via ? $"{text.Trim().Split('\n')[0]} ({(via.StartsWith(film, StringComparison.Ordinal) ? via[film.Length..] : via)})" : text);
             OnPropertyChanged(nameof(WindowTitle));

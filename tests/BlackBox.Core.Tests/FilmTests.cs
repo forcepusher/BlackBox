@@ -1210,7 +1210,7 @@ public sealed class FilmToolTests : IDisposable
         // The one it replaced is a take, its line with it; dropped, nothing of it is left.
         var take = Assert.Single(FilmTakes.List(board, piece));
         FilmTakes.Drop(take);
-        Assert.Equal(["Shot.line.flac", "Shot.mp4", "Shot.mp4.meta", "Shot.wav"], Directory.EnumerateFiles(board.ShotFolder(shot)).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(["Shot.line.flac", "Shot.mp4", "Shot.mp4.meta", "Shot.wav"], Directory.EnumerateFiles(board.ShotFolder(shot)).Select(f => Path.GetFileName(f)).Order(StringComparer.Ordinal).ToArray());
         Assert.Empty(Directory.EnumerateFiles(Path.Combine(board.ShotFolder(shot), "Takes")));
     }
 
