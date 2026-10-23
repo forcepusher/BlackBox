@@ -1542,6 +1542,7 @@ prints the traceback and exits with 0.
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
 | `index_folder` | Indexes a folder, as Cursor does a codebase: an overview of the project (its kind, README, folders and what its main files define), and with `query` a search of its files by names or by what the code does (see below) |
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures, videos, sounds and 3D models to the model; `write_file` makes documents from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
+| `diff` | What changed: a git repository's uncommitted changes, staged ones, one commit, or since a branch, or two files or folders compared without git; the files and their line counts first, then the hunks, in parts (see Diff below) |
 | `comfyui` | Pictures, video, sound, music, speech and 3D models with ComfyUI on this PC, which it installs when there is none: templates, node and model look-ups, models found online and downloaded, checked runs that hand back the files (see Pictures, video and sound) |
 | `film` | Films from a storyboard (the film's folder Filmmaking shows): plans or changes it, makes its frames, song and shots with ComfyUI, checks each shot against what it should show, joins them with ffmpeg (see Films) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
@@ -1795,6 +1796,52 @@ reads whole (about 60% in the explain runs; the index's output 2-12%).
 
 Not indexed: folders on SSH hosts (`ssh` with grep works there).
 
+### Diff
+The model's `diff` tool and the user's **Diff** panel read the same changes (`Core/Diffs`), so
+"review what you changed" costs a diff instead of whole files read again, and lines the user picks
+on screen reach the model as exact lines.
+
+**Where changes come from.** `GitDiff` runs the PC's git (on the PATH, else where Git for Windows,
+GitHub Desktop or Sourcetree keep theirs) with `--no-ext-diff --no-textconv`, `GIT_OPTIONAL_LOCKS=0`
+and `--literal-pathspecs`, and parses the patch into files, hunks and lines numbered on both sides.
+Nothing it runs changes the repository; a commit or branch starting with `-` is refused, as
+`--output=x` would write a file. What is uncommitted is compared with **HEAD**: plain `git diff`
+shows only what isn't staged, and the first test caught a staged deletion missing. A repository
+with no commit yet is compared with the empty tree. A commit is shown against its first parent (a
+merge then shows all it brought in), with its hash, author, date and message. Files git doesn't
+track yet are listed with their line counts, as a new file the agent wrote is one of them; the panel
+shows them as all added, the tool only lists them (read_file shows them, and a generated folder
+would flood the diff). `FolderDiff` compares two files, or two folders file by file, with its own
+Myers diff (`LineDiff`), for paths outside a repository or a PC without git; Word, Excel, PowerPoint
+and PDF files by the text read_file shows, and line endings alone count as no change.
+
+**The tool's answer** is the list first ("2 files changed, 40 lines added, 12 removed", then each
+file with its counts), then each file's hunks under `=== path (status)`, without git's index and
+mode lines. It comes in parts of 12,000 characters (about 3k tokens), cut at a file's start when one
+is in the second half of the part, else at a line break; a later part says which file it goes on in.
+`summary=true` is the list alone, and a file's path narrows it to that file. Lines over 1,000
+characters are cut.
+
+**The panel** (Toolkit, Diff) opens on the left of the chat as Filmmaking does: the repository
+opened last (`Data/diff.json`), else the one the chat's tool calls worked in last, and the menu on
+its name opens another. It shows uncommitted changes, staged ones, the last commit, a commit, or
+everything since a commit or branch, with the changed files listed on the left, and reads them again
+when files in the repository change (a FileSystemWatcher, 1.2 s after the last change; git's own
+objects and logs don't count), keeping the picked lines picked. Lines are picked with a click,
+Shift+click and Ctrl+click (a header or @@ line picks nothing) and go into the chat's box as their
+file, captioned "Lines 48-49 · MainWindowViewModel.Toolkit.cs" (the lines first: a long name is
+cut there). A message sent then carries, for the model, the repository, what is compared (as a diff
+call that shows the same), and each picked line with its number and +/-, at most 300 lines. It
+says only that these are the lines the user refers to, not that they are to be changed: the user
+picks lines to ask about them as much as to have them changed (the user, 2026-10-24). Sent, they
+are no longer picked; one taken off the box (its ×) is unpicked in the panel too.
+
+**Checked on qwen3.8** (2026-10-24, blackbox-cli): asked to review the commit that added all this, it
+listed the commit with `diff summary=true`, then read the whole diff (about 110,000 characters) in 11
+parts by `start`, and named three faults, all fixed since: a file already in the box by the user kept
+its pick out of the message, the row cap was checked only between files, and a mode that needs a
+commit showed no hint. In the app, two lines picked in the panel and "What do the selected lines
+do?" got an answer about exactly those lines, with no tool call.
 ### Web search
 A local model's memory of APIs is where it slips most (qwen3.8 writes Unity's `KeyCode.Left`, which
 doesn't exist, for `KeyCode.LeftArrow`), so the agent can look things up. Told to whenever it wasn't

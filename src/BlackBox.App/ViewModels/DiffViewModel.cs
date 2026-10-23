@@ -137,11 +137,8 @@ public sealed partial class DiffViewModel : ObservableObject, IToolkit
     [NotifyPropertyChangedFor(nameof(TakesRef))]
     private DiffMode _mode;
 
-    partial void OnModeChanged(DiffMode value)
-    {
-        if (!value.TakesRef || Ref.Trim().Length > 0)
-            _ = LoadAsync(keepPicks: false);
-    }
+    // With no commit typed yet for it, the panel says to type one, and the diff of another mode goes.
+    partial void OnModeChanged(DiffMode value) => _ = LoadAsync(keepPicks: false);
 
     public bool TakesRef => Mode.TakesRef;
 
@@ -281,6 +278,8 @@ public sealed partial class DiffViewModel : ObservableObject, IToolkit
             return;
         if (Mode.TakesRef && Ref.Trim().Length == 0)
         {
+            _loading?.Cancel();
+            Show(null, keepPicks: false);
             Status = Mode == Modes[3] ? "Type a commit's hash or a branch, then press Enter." : "Type a commit, branch or tag to compare with, then press Enter.";
             return;
         }
@@ -333,13 +332,13 @@ public sealed partial class DiffViewModel : ObservableObject, IToolkit
         {
             if (rows.Count >= MaxRows)
             {
-                Status = $"The diff is too long to show whole: the files after {files[^1].Name} are left out.";
+                Status = $"The diff is too long to show whole: it stops in {files[^1].Name}.";
                 break;
             }
             var item = new DiffFileItem(file, rows.Count);
             files.Add(item);
             rows.Add(new DiffRow(item, null) { Index = rows.Count });
-            foreach (var line in file.Lines)
+            foreach (var line in file.Lines.Take(MaxRows - rows.Count))
                 rows.Add(new DiffRow(item, line) { Index = rows.Count });
         }
         _picking = true;

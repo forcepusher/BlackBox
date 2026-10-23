@@ -81,8 +81,15 @@ public sealed partial class MainWindowViewModel
         foreach (var old in Attachments.Where(a => a.Picked && !picked.Any(p => string.Equals(p.Path, a.Path, StringComparison.OrdinalIgnoreCase) && p.Caption == a.Caption)).ToList())
             RemoveAttachment(old);
         foreach (var (path, caption) in picked)
-            if (!Attachments.Any(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase)))
-                Attachments.Add(new AttachmentItem(path, RemoveAttachment, caption));
+        {
+            if (Attachments.Any(a => a.Picked && string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            // The same file put in the box by the user goes as the pick: left there, the pick wasn't
+            // added and the message lost what was picked in it (BlackBox's own review of the Diff panel).
+            foreach (var same in Attachments.Where(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase)).ToList())
+                RemoveAttachment(same);
+            Attachments.Add(new AttachmentItem(path, RemoveAttachment, caption));
+        }
     }
 
     /// <summary>The paths picked in the toolkit's panel that are in the box now.</summary>
