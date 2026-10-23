@@ -1608,8 +1608,9 @@ files), twice each, on qwen3.8 and Claude Opus 5.5, 107 runs, the answers graded
 - The answers were as good either way: both models answered nearly everything fully, and every edit
   passed. The index changes the way there.
 - Qwen on this repository: 21% less time, 22% fewer tool calls, 15% fewer tokens. On FluffyMeow, 29%
-  more time: it found the files sooner, then searched and checked more, each search result (1-2.5k
-  tokens) read again at every later step.
+  more time: it found the files sooner, then searched and checked more. Each search result (1-2.5k
+  tokens) stays in the conversation; cached, it isn't read again, but it fills the context: 5 of 8
+  Qwen runs explaining a project with the index reached the reset at 80k, none of 4 without.
 - Claude: 4% less time on this repository, 30% less on FluffyMeow, more tool calls but fewer tokens.
 - Tasks a grep answers (list every class that implements X, change a constant) were slower with the
   index for both: the models searched the index, then the shell. Searches for a name now list every

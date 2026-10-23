@@ -15,7 +15,7 @@ again with two fixes this test led to.
   something works (the context reset: 8.8 → 5.3 min) and on renaming a class everywhere (8.5 → 3.7 min).
 - **Qwen on FluffyMeow (22,247 files): slower with the index.** About 29% more time over four
   tasks. With the index Qwen found the right files sooner, then searched and read more: each search
-  result (1-2.5k tokens) stays in the conversation and is read again on every later step, and Qwen
+  result (1-2.5k tokens) stays in the conversation and fills Qwen's 100k context sooner, and Qwen
   went on verifying details (scene and prefab GUIDs) that the runs without the index skipped. The
   fixes cut the tool calls below those without the index, but the time only a little.
 - **Claude Opus 5.5: faster with the index, most of all on the big project.** About 4% less time on
@@ -161,8 +161,12 @@ weighs the same however long it is.
   explaining BlackBox, 48 in one explaining FluffyMeow); with it, the overview and a few searches led
   it to the right files. Renaming a class went faster too: the search named the files that use it.
 - **Where it costs:** every run with the index starts with an overview of up to 2,500 tokens, and
-  every search adds 1,000 to 2,500 more, which the model then reads again at every later step. On a
-  task a grep answers in one call, that is pure overhead: changing the toilet's weight took Qwen 65 s
+  every search adds 1,000 to 2,500 more, which stay in the conversation. LM Studio and Anthropic
+  cache what came before, so they aren't read in full again at each step, but they fill the context:
+  in the two explain tasks, 5 of Qwen's 8 runs with the index reached 80k tokens, where BlackBox has
+  the model write a handoff note and starts afresh (see Context window in docs/notes.md), against 0
+  of 4 without it. On a task a grep answers in one call, all of it is overhead: changing the
+  toilet's weight took Qwen 65 s
   without the index and 74 s with it, and Claude listed the `IAgentObserver` classes in 18 s
   without it against 27 s with it.
 - **Qwen on the big project.** With the index, Qwen found `CharacterStats`, `StatDecay` and the
