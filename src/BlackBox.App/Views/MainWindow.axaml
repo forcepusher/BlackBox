@@ -622,7 +622,7 @@
                 <TextBlock Text="New window" />
               </Border>
               <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
-                         Text="at the top opens another window, so I can multitask in parallel." />
+                         Text="button at the top opens another window, so I can multitask in parallel." />
             </DockPanel>
           </Border>
 
