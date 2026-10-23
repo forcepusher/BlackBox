@@ -192,7 +192,10 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   loaded, so the GPU is free. BlackBox tells its own from the user's by the process it started,
   kept in `Data/comfyui/state.json`, and by the port it listens on, whatever language Windows
   writes netstat's LISTENING in. One it started that doesn't come up (too slow, or the user
-  pressed Stop) is closed rather than left running hidden. `action=restart` stops it and starts it again with the
+  pressed Stop) is closed rather than left running hidden, and so is one with nothing queued when
+  BlackBox ends (its last window closed while a task used it: the task's end never came, and
+  ComfyUI held the graphics card until BlackBox started again; one still at work is closed by the
+  next start once its queue is empty). `action=restart` stops it and starts it again with the
   arguments it ran with (custom nodes load only at start; the user's own stays theirs and keeps
   running), `stop` and `free` do what they say. Custom node packs and programs a job lacks the
   agent installs itself, as with any program.
@@ -437,7 +440,9 @@ the other.
 
 A storyboard is the `storyboard.json` in the film's folder, `Data/films/<title>` next to the exe
 like the rest of BlackBox's data (the user's choice: it is portable; the first build put films in
-the PC's Videos folder). The window's **Show folder** opens it:
+the PC's Videos folder). A path the model gives that isn't from a drive ("lighthouse") is a folder
+in `Data/films` too: taken from the working folder, as until 2026-10-23, qwen3.8's "lighthouse"
+was made in the user's home, where the Filmmaking window doesn't look. The window's **Show folder** opens it:
 
 - **Shots** in order, each going from its **first frame** to its **last frame** in so many seconds,
   with what happens in it, what the camera does, and how it follows the shot before (a cut, a

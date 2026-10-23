@@ -128,9 +128,11 @@ public sealed class FilmTool : Tool
         var root = ctx.FilmsDirectory ?? Path.Combine(ctx.ScratchDirectory ?? Path.GetTempPath(), "films");
         var path = GetString(args, "path");
         var given = path is { Length: > 0 } ? ctx.ResolvePath(path) : _lastFolder;
-        // A film's name alone ("Spaghetti Days") is its folder in the films folder.
-        if (path is { Length: > 0 } && !Path.IsPathRooted(path) && !Exists(given) && Path.Combine(root, path) is var named && Exists(named))
-            given = named;
+        // A film's name alone ("Spaghetti Days"), or any path not from a drive, is its folder in
+        // the films folder, new or not: from the working folder, a new "lighthouse" was made in the
+        // user's home, out of BlackBox's Data, where the Filmmaking window doesn't list it.
+        if (path is { Length: > 0 } && !Path.IsPathRooted(path) && !Exists(given))
+            given = Path.Combine(root, path);
         var change = args["storyboard"] as JsonObject;
         if (Exists(given))
         {

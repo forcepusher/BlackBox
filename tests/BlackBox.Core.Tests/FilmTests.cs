@@ -1070,6 +1070,33 @@ public sealed class FilmToolTests : IDisposable
         said.Add(first.Text);
         // The next run in the same chat: the conversation has it.
         Assert.DoesNotContain(FilmTool.GuideHead, (await new FilmTool().ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
+
+        // The same run, after its context started afresh: the guide went with the rest.
+        var tool = new FilmTool();
+        said.Clear();
+        Assert.Contains(FilmTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
+        Assert.DoesNotContain(FilmTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
+        ctx.ContextResets++;
+        Assert.Contains(FilmTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
+    }
+
+    [Fact]
+    public async Task A_new_film_given_by_name_goes_into_the_films_folder_not_the_working_one()
+    {
+        // qwen3.8 gave path "lighthouse": the film was made in the user's home folder.
+        var films = Path.Combine(_dir, "Data", "films");
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, FilmsDirectory = films };
+        var made = await new FilmTool().ExecuteAsync(new JsonObject
+        {
+            ["action"] = "storyboard",
+            ["path"] = "lighthouse",
+            ["storyboard"] = JsonNode.Parse("""{"title": "The Keeper", "shots": [{"id": "s1", "prompt": "he climbs"}]}"""),
+        }, ctx, CancellationToken.None);
+        Assert.False(made.IsError, made.Text);
+        Assert.True(File.Exists(Path.Combine(films, "lighthouse", "storyboard.json")));
+        Assert.False(Directory.Exists(Path.Combine(_dir, "lighthouse")));
+        // And found by that name again.
+        Assert.False((await new FilmTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = "lighthouse" }, ctx, CancellationToken.None)).IsError);
     }
 
     [Fact]

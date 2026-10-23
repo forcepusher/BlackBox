@@ -919,6 +919,25 @@ public class ComfyToolTests : IDisposable
     }
 
     [Fact]
+    public async Task A_comfyui_blackbox_started_is_closed_when_blackbox_ends_with_nothing_queued()
+    {
+        // A window closed while its task ran ended BlackBox before the task's end could close it.
+        var stops = 0;
+        _hub.OwnsForTests = _ => true;
+        _hub.StopForTests = (_, _) => { stops++; return Task.CompletedTask; };
+        _hub.OthersRunForTests = () => false;
+        await Call("""{"action": "status"}"""); // a task uses it, and never gets to its end
+
+        _server.QueueBusy = true;
+        _hub.CloseOnExit(TimeSpan.FromSeconds(5));
+        Assert.Equal(0, stops); // at work: left for the next start
+
+        _server.QueueBusy = false;
+        _hub.CloseOnExit(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, stops);
+    }
+
+    [Fact]
     public async Task A_comfyui_is_left_running_at_start_while_another_blackbox_runs()
     {
         // The command line, or another build, may be between two of its jobs.
