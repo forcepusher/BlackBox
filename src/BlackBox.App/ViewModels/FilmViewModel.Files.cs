@@ -25,6 +25,11 @@ public sealed partial class FilmViewModel
     /// <summary>Whether the storyboard has changes not saved yet.</summary>
     private bool _dirty;
 
+    /// <summary>The storyboard as this window last read it from its file or wrote it there; null before it has a file.</summary>
+    private string? _savedJson;
+
+    private bool _disposing;
+
     /// <summary>Saves what changed (with <paramref name="force"/>, saves anyway: before a job, which needs the film's folder).</summary>
     private void SaveNow(bool force = false)
     {
@@ -33,11 +38,29 @@ public sealed partial class FilmViewModel
             return;
         try
         {
+            // The chat changed the storyboard while a change made here waited to be saved (a shot's
+            // length dragged as the film tool rewrote a prompt): both stay. Saved whole, the
+            // window's copy wrote over the chat's change, and nothing showed it.
+            var merged = false;
+            if (_savedJson is not null && File.Exists(_board.FilePath) && File.GetLastWriteTimeUtc(_board.FilePath) != _ownWrite)
+            {
+                Storyboard? theirs = null;
+                try { theirs = Storyboard.Load(_board.FilePath, upgrade: false); }
+                catch (FilmException) { /* not a storyboard that can be read: this window's is written */ }
+                if (theirs is not null && theirs.ToJson() != _savedJson)
+                {
+                    _board = StoryboardMerge.Merge(Storyboard.Parse(_savedJson, upgrade: false), _board, theirs);
+                    merged = true;
+                }
+            }
             _board.Save();
             _dirty = false;
             _ownWrite = File.GetLastWriteTimeUtc(_board.FilePath);
+            _savedJson = _board.ToJson();
             if (_watcher is null)
                 Watch();
+            if (merged && !_disposing)
+                Rebuild();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -266,7 +289,8 @@ public sealed partial class FilmViewModel
             if (written != _ownWrite && !_saveTimer.IsEnabled && File.Exists(_board.FilePath))
             {
                 var fresh = Storyboard.Load(_board.Folder);
-                if (fresh.ToJson() != _board.ToJson())
+                _savedJson = fresh.ToJson();
+                if (_savedJson != _board.ToJson())
                 {
                     var title = _board.Title;
                     _board = fresh;
@@ -288,6 +312,7 @@ public sealed partial class FilmViewModel
 
     public void Dispose()
     {
+        _disposing = true;
         _chatTimer.Stop();
         StopPlaying();
         SaveNow();

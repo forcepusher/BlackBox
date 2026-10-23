@@ -340,6 +340,7 @@ public sealed partial class FilmViewModel
         {
             _board = FilmTakes.Use(_board, piece, kept);
             _ownWrite = File.GetLastWriteTimeUtc(_board.FilePath);
+            _savedJson = _board.ToJson();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException)
         {

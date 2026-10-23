@@ -636,7 +636,12 @@ beside the chat where a screen has room for both (right or left of it, else on a
 over it), it closes with the chat's window, and **Show the chat** brings that window forward.
 Changes made by hand (a shot's length, its order, new shots and references, deleting, the film's
 size and levels, a take put back, a sound file of the user's) are saved to the storyboard at once,
-without the chat.
+without the chat. One made while the chat changes the storyboard (a shot's edge dragged as the film
+tool rewrites a prompt or settles a seed) is put together with the chat's (`StoryboardMerge`: key
+by key, frames and shots by id, the window's hand winning where both changed the same value):
+saved whole, as until 2026-10-23, the window's copy wrote over the chat's change, and the window
+never showed it. Checked in the window: a shot dragged from 3 s to 5.5 s while its prompt was
+written from outside kept both, where the build before kept only the drag.
 
 **Looks that don't let slop through.** The user found the judging dismissive: the fox film passed
 with the fox floating up the screen at the cut at 5 s. One question per kind of fault catches more

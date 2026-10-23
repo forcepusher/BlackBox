@@ -96,7 +96,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after the film and piece too, not "Make it." alone; the storyboard guide comes back after the
   context starts afresh; a stopped shot of several takes no longer keeps a copy of its clip as one
   more take; a piece made from the window is made again when its look finds something wrong, up
-  to twice, as before it ran in the chat.
+  to twice, as before it ran in the chat; a change made by hand while BlackBox changes the
+  storyboard in the chat no longer writes over BlackBox's change.
 - Folder index: projects in OneDrive folders are indexed (only their top folder was), files kept
   online only aren't downloaded, linked files are read as the files they point to, and a search
   that finds nothing says what the index doesn't search.
