@@ -94,7 +94,7 @@ public sealed class FilmTool : Tool
                 return await ModelsAsync(ctx, ct).ConfigureAwait(false);
             var board = LoadOrCreate(args, ctx, create: action == "storyboard");
             _lastFolder = board.Folder;
-            if (action != "storyboard" && Changes(args, action) is { Count: > 0 } changes)
+            if (action != "storyboard" && Changes(args, action) is { Count: > 0 } changes && Fits(board, args, action))
             {
                 board = Storyboard.Merge(board, changes);
                 board.Save();
@@ -184,6 +184,19 @@ public sealed class FilmTool : Tool
     }
 
     /// <summary>The storyboard changes a frame or shot call gives with it: a new prompt, seed, length.</summary>
+    /// <summary>
+    /// Whether a frame or shot call's changes go into the storyboard: to a piece of that kind, or a
+    /// new one it says what is in. A frame call with a shot's id added a frame, renamed, that the call
+    /// then didn't find; one with only a seed for an unknown id left an empty frame.
+    /// </summary>
+    private static bool Fits(Storyboard board, JsonObject args, string action)
+    {
+        var id = GetString(args, "id")?.Trim();
+        var known = action == "frame" ? board.Frame(id) is not null : board.Shot(id) is not null;
+        var other = action == "frame" ? board.Shot(id) is not null : board.Frame(id) is not null;
+        return known || !other && GetString(args, "prompt")?.Trim() is { Length: > 0 };
+    }
+
     private static JsonObject? Changes(JsonObject args, string action)
     {
         if (GetString(args, "id")?.Trim() is not { Length: > 0 } id || action is not ("frame" or "shot"))

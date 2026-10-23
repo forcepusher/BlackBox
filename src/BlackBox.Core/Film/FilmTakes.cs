@@ -103,6 +103,14 @@ public static class FilmTakes
         }
     }
 
+    /// <summary>
+    /// What a piece is made with beside its own file: a speaking shot's line, as the voice model
+    /// said it and as the shot plays it. A take put back without them played the newer line over
+    /// the older lips, and read as up to date.
+    /// </summary>
+    private static IEnumerable<string> Sidecars(Storyboard board, FilmPiece piece) =>
+        piece.Kind == FilmPieceKind.Shot && board.Shot(piece.Id) is { } shot ? [board.ShotAudio(shot), board.ShotLine(shot)] : [];
+
     private static string TakeFile(string file, int n) => Path.Combine(Path.GetDirectoryName(file)!, $"{Path.GetFileNameWithoutExtension(file)}.v{n}{Path.GetExtension(file)}");
 
     /// <summary>The takes kept of a piece, the first first.</summary>
@@ -142,6 +150,8 @@ public static class FilmTakes
         System.IO.File.Copy(file, TakeFile(file, n), overwrite: true);
         if (System.IO.File.Exists(workflow))
             System.IO.File.Copy(workflow, TakeFile(workflow, n), overwrite: true);
+        foreach (var sidecar in Sidecars(board, piece).Where(System.IO.File.Exists))
+            System.IO.File.Copy(sidecar, TakeFile(sidecar, n), overwrite: true);
         return new FilmTake(n, TakeFile(file, n), TakeFile(workflow, n), System.IO.File.GetLastWriteTimeUtc(file), SettingsIn(workflow));
     }
 
@@ -173,6 +183,8 @@ public static class FilmTakes
                 System.IO.File.Move(take.File, file, overwrite: true);
             if (piece.Workflow(board) is { } workflow && System.IO.File.Exists(take.Workflow))
                 System.IO.File.Move(take.Workflow, workflow, overwrite: true);
+            foreach (var sidecar in Sidecars(board, piece).Where(s => System.IO.File.Exists(TakeFile(s, take.Number))))
+                System.IO.File.Move(TakeFile(sidecar, take.Number), sidecar, overwrite: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -186,6 +198,12 @@ public static class FilmTakes
         System.IO.File.Delete(take.File);
         if (System.IO.File.Exists(take.Workflow))
             System.IO.File.Delete(take.Workflow);
+        // A shot's line kept with it (see Sidecars): "s1.v2.wav" and "s1.line.v2.flac".
+        var name = Path.GetFileNameWithoutExtension(take.File);
+        if (Path.GetExtension(take.File).Equals(".mp4", StringComparison.OrdinalIgnoreCase) && name.LastIndexOf(".v", StringComparison.Ordinal) is var at and > 0)
+            foreach (var sidecar in new[] { $"{name}.wav", $"{name[..at]}.line.v{take.Number}.flac" }.Select(s => Path.Combine(Path.GetDirectoryName(take.File)!, s)))
+                if (System.IO.File.Exists(sidecar))
+                    System.IO.File.Delete(sidecar);
     }
 
     /// <summary>
@@ -203,6 +221,8 @@ public static class FilmTakes
         System.IO.File.SetLastWriteTimeUtc(file, DateTime.UtcNow);
         if (System.IO.File.Exists(take.Workflow))
             System.IO.File.Copy(take.Workflow, workflow, overwrite: true);
+        foreach (var sidecar in Sidecars(board, piece).Where(s => System.IO.File.Exists(TakeFile(s, take.Number))))
+            System.IO.File.Move(TakeFile(sidecar, take.Number), sidecar, overwrite: true);
         System.IO.File.Delete(take.File);
         if (System.IO.File.Exists(take.Workflow))
             System.IO.File.Delete(take.Workflow);

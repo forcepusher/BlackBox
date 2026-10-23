@@ -108,7 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   film the model names without a full path goes into `Data\films`, not your home folder; a second
   film laid out in the same task without a path no longer replaces the first; a remake that fails
   or is stopped leaves the piece with its settings and look; a take asked for while several were
-  being made is made with its own seed.
+  being made is made with its own seed; a speaking shot's take keeps its line.
 - A ComfyUI that BlackBox started, with nothing left to do, is closed when BlackBox closes, also
   when its window was closed in the middle of a task.
 - Folder index: projects in OneDrive folders are indexed (only their top folder was), files kept
