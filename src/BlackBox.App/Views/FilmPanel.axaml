@@ -71,6 +71,10 @@
     <Style Selector="DockPanel.node.planned">
       <Setter Property="Opacity" Value="0.55" />
     </Style>
+    <!-- The reference pictures dragged over the tree would go into. -->
+    <Style Selector="DockPanel.node.drop">
+      <Setter Property="Background" Value="#40E0A64B" />
+    </Style>
     <Style Selector="TreeViewItem" x:DataType="vm:FilmNode">
       <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
       <Setter Property="MinHeight" Value="26" />
@@ -297,13 +301,16 @@
     <Grid ColumnDefinitions="300,4,*">
       <Border Background="{StaticResource BbSurface}">
         <DockPanel>
-          <TextBlock DockPanel.Dock="Top" Classes="muted" TextWrapping="Wrap" Margin="12,8,12,4"
+          <TextBlock DockPanel.Dock="Top" Classes="muted" TextWrapping="Wrap" Margin="12,8,12,2"
                      Text="Pick a folder, picture or clip: it goes into the chat's box, where you say what to do with it." />
+          <!-- Nothing showed the right-click menu was there (the user, 2026-10-24), nor that pictures can be dropped. -->
+          <TextBlock DockPanel.Dock="Top" Classes="muted" TextWrapping="Wrap" Margin="12,0,12,4" FontSize="11"
+                     Text="Right-click to rename, add or delete. Drop a picture on a reference to add it." />
           <TreeView x:Name="Files" ItemsSource="{Binding Tree}" SelectedItem="{Binding SelectedNode, Mode=TwoWay}" AutomationProperties.Name="Film files" Margin="0,0,0,4"
                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.AllowAutoHide="False" ContextRequested="OnTreeMenu" Background="Transparent">
             <TreeView.ItemTemplate>
               <TreeDataTemplate DataType="vm:FilmNode" ItemsSource="{Binding Children}">
-                <DockPanel Classes="node" Classes.planned="{Binding IsPlanned}" ToolTip.Tip="{Binding Path}">
+                <DockPanel Classes="node" Classes.planned="{Binding IsPlanned}" Classes.drop="{Binding IsDropTarget}" ToolTip.Tip="{Binding Path}">
                   <Panel DockPanel.Dock="Left" Width="30" Height="20" Margin="0,0,8,0" VerticalAlignment="Center">
                     <PathIcon Data="{Binding Icon}" Width="15" Height="15" Foreground="{StaticResource BbMuted}" HorizontalAlignment="Left"
                               IsVisible="{Binding Thumbnail, Converter={x:Static ObjectConverters.IsNull}}" />
@@ -359,6 +366,9 @@
                 </Border>
               </Panel>
             </Border>
+            <!-- Pictures dragged over it go into the reference it shows. -->
+            <Border BorderBrush="{StaticResource BbAccent}" BorderThickness="2" CornerRadius="4" Background="#1AE0A64B"
+                    IsVisible="{Binding IsDropOnViewer}" IsHitTestVisible="False" />
           </Panel>
         </Panel>
       </DockPanel>

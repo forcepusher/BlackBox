@@ -35,6 +35,45 @@ public sealed class WindowsPlatform : IPlatformServices
     /// </summary>
     public static void AllowToFront(int processId) => AllowSetForegroundWindow((uint)processId);
 
+    /// <summary>
+    /// Moves <paramref name="hwnd"/> sideways by <paramref name="dx"/> pixels and makes it
+    /// <paramref name="wider"/> pixels wider (narrower when negative) in one step, so the screen never
+    /// shows it moved and not yet resized. What it gains on either side is filled with
+    /// <paramref name="fill"/> (0xRRGGBB) until its program draws there: it showed black for the
+    /// twentieth of a second Avalonia took. False when it couldn't.
+    /// </summary>
+    public static bool MoveAndWiden(nint hwnd, int dx, int wider, uint fill)
+    {
+        if (!GetWindowRect(hwnd, out var r) || !ClientOnScreen(hwnd, out var before)
+            || !SetWindowPos(hwnd, 0, r.Left + dx, r.Top, r.Right - r.Left + wider, r.Bottom - r.Top, SWP_NOZORDER | SWP_NOACTIVATE))
+            return false;
+        if (!ClientOnScreen(hwnd, out var after))
+            return true;
+        var dc = GetDC(hwnd);
+        var brush = CreateSolidBrush(((fill & 0xFF) << 16) | (fill & 0xFF00) | ((fill >> 16) & 0xFF));
+        // In the window's own pixels, left of where it was and right of it.
+        var left = new RECT { Left = 0, Top = 0, Right = before.Left - after.Left, Bottom = after.Bottom - after.Top };
+        var right = new RECT { Left = before.Right - after.Left, Top = 0, Right = after.Right - after.Left, Bottom = after.Bottom - after.Top };
+        if (left.Right > 0)
+            FillRect(dc, ref left, brush);
+        if (right.Right > right.Left)
+            FillRect(dc, ref right, brush);
+        DeleteObject(brush);
+        ReleaseDC(hwnd, dc);
+        return true;
+    }
+
+    /// <summary>A window's client area where it is on the screen.</summary>
+    private static bool ClientOnScreen(nint hwnd, out RECT rect)
+    {
+        rect = default;
+        var corner = new POINT();
+        if (!GetClientRect(hwnd, out var client) || !ClientToScreen(hwnd, ref corner))
+            return false;
+        rect = new RECT { Left = corner.X, Top = corner.Y, Right = corner.X + client.Right, Bottom = corner.Y + client.Bottom };
+        return true;
+    }
+
     public ProcessStartInfo CreateShellStartInfo(string command)
     {
         // -EncodedCommand sidesteps every quoting problem; forcing UTF-8 output keeps

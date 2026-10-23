@@ -85,6 +85,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   title, and the soundtrack and shots' own sound sliders.
 
 ### Fixed
+- Filmmaking: a picture dropped on a reference (its folder or a picture of it in the tree, or the
+  viewer showing it) goes into that reference, which is marked while you drag over it; the dropped
+  copy can be renamed (right-click or F2). A line under the tree says what right-click and dropping
+  do, and the viewer names the film and says it is selected instead of "Whole film".
+- Picking Filmmaking widens the window to the left in one smooth step: the chat no longer jumps
+  sideways and back, and the new part of the window isn't black while the panel appears.
 - In Filmmaking, a picture you give for a reference (pasted, attached or dropped) is kept exactly as
   it is, in the reference's folder, and the references are made from all of it: BlackBox cut one
   pose out of a character lineup and showed the cut-out as your picture.

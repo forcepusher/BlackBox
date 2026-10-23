@@ -209,6 +209,13 @@ public sealed partial class FilmNode : ObservableObject
     /// <summary>The film's Sound folder, where its soundtrack is.</summary>
     public bool IsSound { get; set; }
 
+    /// <summary>A picture of the user's in References (one dropped there): it can be renamed.</summary>
+    public bool IsOwnPicture { get; init; }
+
+    /// <summary>Pictures dragged over it would go in its reference: it is marked.</summary>
+    [ObservableProperty]
+    private bool _isDropTarget;
+
     /// <summary>Its name being typed anew in the tree, as in Explorer.</summary>
     [ObservableProperty]
     private bool _isRenaming;

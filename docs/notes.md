@@ -520,8 +520,12 @@ the possibility that anyone was using an old version". A film is made of:
   reference should have its own folder for multiple references"), its picture made there at its own
   shape ("References/Fox/Fox.png"); a reference named "Fox/side" is another picture of Fox, made into
   that folder as "side.png". Any picture the user puts there (dropped on the panel: into the
-  reference picked in the tree, else a folder of its own named after it; or copied there) is one
-  too. A frame's `from` names a reference's folder ("Fox": its main picture, the one named after the
+  reference it is dropped on, its folder or a picture of it in the tree or the viewer showing it,
+  which is marked while the picture is dragged over it; else the reference picked in the tree, else a
+  folder of its own named after it; or copied there) is one too. A drop copies the picture, the
+  user's own staying where it was, and the copy can be renamed like a reference's folder (the user,
+  2026-10-24: "Dragged-and-dropped stuff should be copied and able to be renamed", in Filmmaking
+  only): frames whose `from` or `file` names it are told the new name. A frame's `from` names a reference's folder ("Fox": its main picture, the one named after the
   folder, else its first, `Storyboard.MainPicture`) or a picture in it ("Fox/side.png", or just
   "side.png"), so the agent picks the pictures a frame needs: an edit template takes a few.
 - **The user's pictures stay as they gave them** (the user's call, 2026-10-24: "Source should be
@@ -667,7 +671,13 @@ arrows are solid triangles, the left one and the dropdown's, as History's and ev
 that depends on a state, as a plain one loses to what the template sets). Picked,
 the window grows to the left by the tool's width (960), so the chat stays where it was on the
 screen, as far as the screen has room; None gives the room back, and a window neither moved nor
-resized since goes back where it was. The window's place is saved without the panel. A splitter
+resized since goes back where it was. It moves and resizes in one step (`MainWindow.Place`, one
+SetWindowPos on Windows), with the panel laid out at the new size before and what the window gains
+filled with the panel's background colour at once: moved by Position and widened by Width at the
+next layout, the chat jumped sideways with the window, the window grew a tenth of a second later
+with its new part black for a twentieth more, and the chat jumped back (captured frame by frame,
+2026-10-24). Now the chat stays put and the panel fills in about 50 ms later. The window's place is
+saved without the panel. A splitter
 between the two moves the line between them. The panel has the films folder as a tree on the left,
 a viewer beside it with how the piece shown was made under it, and the timeline at the bottom; its
 top bar has the film's frame size and frame rate, **New film** and **Make the film** (the user,
@@ -682,7 +692,8 @@ selecting the other folder"): a folder for each film by name (a folder of films 
 the open one with all in it, the others closed with nothing under them. Picking a film's folder
 opens that film (once the tree is done picking it: opened at once, the tree was built anew under its
 own pick); nothing goes into the chat's box for it, as nothing picked is the whole film, and the
-viewer shows the whole film. The open film's folder as it is on the disk: References with a folder
+viewer shows the whole film under the film's name, saying the whole film is selected (it said
+"Whole film", which the user found odd and not seen as the pick). The open film's folder as it is on the disk: References with a folder
 for each reference, a folder per shot in the film's order, Sound, any other folder, and the joined
 film, with what each piece is beside its name ("the start of shot 1", "shot 1's clip"; the frame a
 shot goes on from, kept in the shot before's folder, "the start of shot 2, in 1 leap": named "it
@@ -703,7 +714,7 @@ click on sound to create a sound placeholder", and a shot deleted from its folde
 the timeline) opens a menu for what is under the pointer without picking it (picked, a film opened
 and a piece went into the box): a film's folder has Rename (F2 too), Delete, New film, New shot and
 Show in Explorer; References has New reference; a reference's folder Rename (while none of its
-pictures is made), Delete and New reference; a shot's folder Delete and New shot; Sound New sound
+pictures is made), Delete and New reference; a picture of the user's in References Rename (F2 too); a shot's folder Delete and New shot; Sound New sound
 (a song not made yet, with none) and Delete; anywhere else Show in Explorer, and away from every
 folder New film. A rename is typed in the tree as in Explorer: Enter or a click elsewhere keeps it,
 Esc doesn't; the tree isn't built again meanwhile, or the box went from under the keys. New film
@@ -717,7 +728,9 @@ soundtrack (a song made, with its takes; a sound file of the user's stays where 
 another shot uses (the end the next shot goes on from) moves first, with its .json, workflow and
 takes, to where it goes now, and the shots after are numbered again. Nothing is renamed or deleted
 while the chat is at work on the film. **New shot** is also the dashed + after the last shot on the
-timeline's Video row (the user found the "+ Shot" button by the play buttons out of place).
+timeline's Video row (the user found the "+ Shot" button by the play buttons out of place). A line
+under the tree's own says right-click renames, adds and deletes, and that a picture dropped on a
+reference goes into it: nothing showed the menu was there (the user, 2026-10-24).
 
 **The timeline**, the user's design (it replaced a grid of shots two to a row with prompt boxes,
 and a read-only strip): one horizontal scroll for its rows, the names staying put at the left.
@@ -734,7 +747,8 @@ off): partly scrolled out, it moved from under the pointer between press and rel
 with posted mouse messages, Windows adds a move to where the real cursor is when the press captures
 the mouse, so a posted click away from the cursor can read as a drag; and UI Automation gives a
 shot's whole bounds, under the row names too when scrolled, so click inside what shows. A click away from every piece (the timeline's empty space, around
-the viewer) or Esc (not while typing) shows the whole film again and picks nothing. A soundtrack
+the viewer) or Esc (not while typing) shows the whole film again and picks its folder in the tree,
+nothing going into the box. A soundtrack
 that is a video opens full screen on its own.
 
 **The user never writes a prompt** (their rule): there are no prompt fields. **What they pick

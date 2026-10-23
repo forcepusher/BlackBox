@@ -254,12 +254,13 @@
     </DataTemplate>
   </Window.DataTemplates>
 
-  <!-- A tool of the toolkit (Filmmaking) in a column of its own on the left, the chat on the right. -->
+  <!-- A tool of the toolkit (Filmmaking) in a column of its own on the left, the chat on the right.
+       Shown and hidden by the window as it makes room for it (MainWindow.Dock). -->
   <Grid x:Name="Columns" ColumnDefinitions="0,0,*">
-    <Border x:Name="ToolkitHost" Grid.Column="0" IsVisible="{Binding HasToolkit}">
+    <Border x:Name="ToolkitHost" Grid.Column="0" IsVisible="False">
       <ContentControl Content="{Binding Toolkit}" />
     </Border>
-    <GridSplitter Grid.Column="1" IsVisible="{Binding HasToolkit}" Background="{StaticResource BbBorder}" ResizeDirection="Columns" />
+    <GridSplitter x:Name="ToolkitSplitter" Grid.Column="1" IsVisible="False" Background="{StaticResource BbBorder}" ResizeDirection="Columns" />
 
   <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*,Auto">
 
