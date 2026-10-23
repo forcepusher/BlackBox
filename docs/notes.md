@@ -593,6 +593,13 @@ nothing: each piece is made when the user makes it. The buttons send messages of
 ("Make it.", "Another take, please.", "Look at it again.", "Make the film.", "Join the clips.",
 "Look at the whole film.") with the tool call to make (Another take sets a new seed in the
 storyboard first; a picture of the user's goes into the storyboard and comes with the message).
+A piece's request also says to fix what its fresh look finds wrong and make it again, up to twice,
+as the window's own director did with every piece: told only to say how it came out, the agent
+reported the fault and left the piece so. With Claude Opus 5.5 (2026-10-23), Make it on a 3 s shot
+of a paper boat in a gutter: the looks found the first take nearly a still picture (the start
+frame had the boat on the dry kerb), so it made the frame again with the boat in the water,
+changed the camera to suit it and the seed, made the shot again, and all four looks passed, in
+7 minutes.
 During a run they wait above the box as anything typed in the chat does. The user watches every step
 in the chat, with each frame and clip as it is made, and stops it there or with the window's Stop.
 One still waiting when the run is stopped, or the chat is left, doesn't go into the chat's box, as
@@ -1868,6 +1875,8 @@ First runs, 22 October 2026 (feature/chat-effort-migration, medium effort where 
   row-by-row check compared the same text and passed); and its new backup job called `runuser`,
   which is in /usr/sbin, off cron's PATH (tried with sudo, whose PATH has it, it worked). A model's
   slips, not BlackBox's: the same ticket and model passed 19 of 19 the day before.
+- qwen3.8 again, the same morning and build: 19 of 19 in 23.5 minutes, 30 model calls, the longest
+  stretch without an answer 53 s, 2966 writes of the players kept.
 
 The VM is QEMU (from qemu.weilnetz.de, unpacked, not installed) running Debian's cloud image in
 software emulation: portable, no admin rights or Windows features, everything in
