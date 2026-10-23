@@ -802,7 +802,10 @@ place.
 was made with (`"settings"`) and what its look found; a make that fails or is stopped puts that
 take back in place, its workflow file too (the job had begun to write over it, and dropped, the
 piece lost its settings and look and read as changed), and so does a shot of several `tries`
-stopped before one replaced its clip (the takes made so far stay). A seed settled after several
+stopped before one replaced its clip (the takes made so far stay). A speaking shot's take keeps
+its line with it (`sN.wav` and `sN.line.flac`): put back without it, the newer line played over the
+older lips, and the shot read as up to date. A frame or shot call's changes go in only for a piece
+of that kind, or a new one it gives a prompt: a frame call with a shot's id added a stray frame. A seed settled after several
 tries isn't written over one the window gave meanwhile (Another take, which then made the same clip
 again).
 

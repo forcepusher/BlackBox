@@ -1128,6 +1128,33 @@ public sealed class FilmToolTests : IDisposable
     }
 
     [Fact]
+    public void A_speaking_shots_take_keeps_its_line_and_brings_it_back()
+    {
+        var board = Storyboard.Parse("""{"title": "Keeper", "shots": [{"id": "s1", "prompt": "he speaks", "line": "Hello there."}]}""");
+        board.Folder = Path.Combine(_dir, "Keeper");
+        var shot = board.Shots[0];
+        var piece = FilmPiece.Of(shot);
+        Directory.CreateDirectory(Path.Combine(board.Folder, "shots"));
+        File.WriteAllText(board.ShotVideo(shot), "clip 1");
+        File.WriteAllText(board.ShotWorkflow(shot), "{}");
+        File.WriteAllText(board.ShotAudio(shot), "line 1");
+        File.WriteAllText(board.ShotLine(shot), "line 1 said");
+        var kept = FilmTakes.Keep(board, piece)!;
+        // Made again with a new line.
+        File.WriteAllText(board.ShotVideo(shot), "clip 2");
+        File.WriteAllText(board.ShotAudio(shot), "line 2");
+        File.WriteAllText(board.ShotLine(shot), "line 2 said");
+
+        FilmTakes.Use(board, piece, kept);
+
+        Assert.Equal(("clip 1", "line 1", "line 1 said"), (File.ReadAllText(board.ShotVideo(shot)), File.ReadAllText(board.ShotAudio(shot)), File.ReadAllText(board.ShotLine(shot))));
+        // The one it replaced is a take, its line with it; dropped, nothing of it is left.
+        var take = Assert.Single(FilmTakes.List(board, piece));
+        FilmTakes.Drop(take);
+        Assert.Equal(["s1.json", "s1.line.flac", "s1.mp4", "s1.wav"], Directory.EnumerateFiles(Path.Combine(board.Folder, "shots")).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
     public void A_make_that_fails_puts_the_piece_back_as_it_was_with_its_settings()
     {
         var board = Storyboard.Parse("""{"title": "Keeper", "frames": [{"id": "f1", "prompt": "a keeper"}]}""");
