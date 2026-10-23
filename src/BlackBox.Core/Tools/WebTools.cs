@@ -8,8 +8,9 @@ public sealed class WebSearchTool : Tool
 {
     public override string Name => "web_search";
     public override string Description =>
-        "Search the web. Returns titles, links and short snippets. Use it rather than guess or try things out: how something is done " +
+        "Search the web. Returns titles, links and short snippets. Use it rather than guess, try things out or answer from memory: how something is done " +
         "in the version of a program or library in use (API names and arguments, settings, menus), what an error means, current facts. " +
+        "Look up code you give the user here first, too. " +
         "Name the program and its version in the query. Then read the best result with fetch_page.";
     public override ToolRisk Risk => ToolRisk.ReadOnly;
     public override JsonObject Parameters => Schema(
