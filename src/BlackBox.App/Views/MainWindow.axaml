@@ -256,6 +256,9 @@
     <DataTemplate DataType="vm:FilmViewModel">
       <views:FilmPanel />
     </DataTemplate>
+    <DataTemplate DataType="vm:DiffViewModel">
+      <views:DiffPanel />
+    </DataTemplate>
 
     <DataTemplate DataType="vm:FileCardPreview">
       <Border Classes="preview" Width="498">

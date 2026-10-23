@@ -32,6 +32,7 @@ public static partial class ToolCallRepair
         ["ls"] = "list_directory", ["list_files"] = "list_directory", ["list_dir"] = "list_directory", ["dir"] = "list_directory",
         ["index"] = "index_folder", ["index_project"] = "index_folder", ["index_directory"] = "index_folder", ["index_codebase"] = "index_folder",
         ["codebase_search"] = "index_folder", ["search_codebase"] = "index_folder", ["search_project"] = "index_folder", ["search_index"] = "index_folder",
+        ["git_diff"] = "diff", ["show_diff"] = "diff", ["compare"] = "diff", ["compare_files"] = "diff", ["show_changes"] = "diff", ["git_show"] = "diff",
         ["scp"] = "copy", ["copy_file"] = "copy", ["copy_files"] = "copy", ["upload"] = "copy", ["download"] = "copy",
         ["ssh_run"] = "ssh", ["ssh_command"] = "ssh", ["remote_shell"] = "ssh", ["run_ssh"] = "ssh",
     };
@@ -56,6 +57,9 @@ public static partial class ToolCallRepair
         ["to"] = ["destination", "dest", "target_path"],
         ["host"] = ["server", "hostname", "ssh_host"],
         ["query"] = ["q", "search_query", "search_term", "keywords"],
+        ["other"] = ["other_path", "path2", "second_path", "file2", "compare_to", "compare_with"],
+        ["against"] = ["base", "ref", "since"],
+        ["commit"] = ["sha", "hash", "revision"],
     };
 
     /// <summary>Maps a tool name the model produced to a registered tool, or returns null.</summary>

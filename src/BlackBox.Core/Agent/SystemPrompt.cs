@@ -62,6 +62,8 @@ public static class SystemPrompt
                           "even when the user didn't ask: its overview shows what kind of project it is, how it is laid out and what its main files define. " +
                           "To find something in it, search the index (index_folder with query=: what the code does, or names) or search with the shell, whichever fits. " +
                           "Index a folder once per chat; later calls bring it up to date.");
+        sb.AppendLine("- To see what changed in a project or folder (your own edits, the user's work, a commit, two copies of a file), use diff " +
+                      "rather than reading the files again or running git through run_shell.");
         if (screen is not null)
         {
             sb.AppendLine("- Start GUI tasks with a screenshot. Look before you click; never guess coordinates.");
