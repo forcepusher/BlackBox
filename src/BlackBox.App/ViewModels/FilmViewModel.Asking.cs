@@ -276,20 +276,27 @@ public sealed partial class FilmViewModel
     /// <summary>Whether a film tool call is about this window's film: by its path, or none (the film the chat worked on last).</summary>
     private bool IsThisFilm(JsonObject args)
     {
+        // Without a path, the film the chat named last: the one this window showed then, or the
+        // piece of the same id in the film opened since was shown as being made.
         if (Arg(args, "path") is not { Length: > 0 } path)
-            return true;
+            return _chatFilm is null || string.Equals(_chatFilm, _board.Folder.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
         path = path.Trim().Trim('"');
         try
         {
             var full = Path.GetFullPath(Path.GetFileName(path).Equals(Storyboard.FileName, StringComparison.OrdinalIgnoreCase) ? Path.GetDirectoryName(path)! : path);
-            return string.Equals(full.TrimEnd('\\', '/'), _board.Folder.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)
-                   || !Path.IsPathRooted(path) && string.Equals(path, Path.GetFileName(_board.Folder), StringComparison.OrdinalIgnoreCase);
+            var mine = string.Equals(full.TrimEnd('\\', '/'), _board.Folder.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)
+                       || !Path.IsPathRooted(path) && string.Equals(path, Path.GetFileName(_board.Folder), StringComparison.OrdinalIgnoreCase);
+            _chatFilm = mine ? _board.Folder.TrimEnd('\\', '/') : full.TrimEnd('\\', '/');
+            return mine;
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
             return false;
         }
     }
+
+    /// <summary>The film the chat's film calls named last, by its folder; null until one did.</summary>
+    private string? _chatFilm;
 
     /// <summary>The piece a film tool call makes or looks at, from what it was given; null for the whole film.</summary>
     private IFilmPiece? PieceIn(JsonObject args)
