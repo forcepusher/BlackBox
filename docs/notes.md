@@ -593,6 +593,9 @@ nothing: each piece is made when the user makes it. The buttons send messages of
 ("Make it.", "Another take, please.", "Look at it again.", "Make the film.", "Join the clips.",
 "Look at the whole film.") with the tool call to make (Another take sets a new seed in the
 storyboard first; a picture of the user's goes into the storyboard and comes with the message).
+A piece's request also says to fix what its fresh look finds wrong and make it again, up to twice,
+as the window's own director did with every piece: told only to say how it came out, the agent
+reported the fault and left the piece so.
 During a run they wait above the box as anything typed in the chat does. The user watches every step
 in the chat, with each frame and clip as it is made, and stops it there or with the window's Stop.
 One still waiting when the run is stopped, or the chat is left, doesn't go into the chat's box, as

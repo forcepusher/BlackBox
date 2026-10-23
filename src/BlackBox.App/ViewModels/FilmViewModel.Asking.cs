@@ -37,7 +37,7 @@ public sealed partial class FilmViewModel
         if (Selected is not IFilmPiece { Piece: var piece })
             return;
         ToChat(piece.Kind == FilmPieceKind.Song ? "Make the song." : "Make it.", piece,
-            $"Make it as the storyboard has it now: {Call(piece)}. Then say in a sentence or two how it came out.");
+            $"Make it as the storyboard has it now: {Call(piece)}. {FixIt}Then say in a sentence or two how it came out.");
     }
 
     /// <summary>Another take of the piece picked: the same settings with a new seed, set here; the one there is kept as a take.</summary>
@@ -54,7 +54,7 @@ public sealed partial class FilmViewModel
         }
         _dirty = true;
         ToChat("Another take, please.", picked.Piece,
-            $"Its seed in the storyboard is a new one already, so make it again as it is: {Call(picked.Piece)}. The one there now is kept as a take. Then say in a sentence or two how it came out.");
+            $"Its seed in the storyboard is a new one already, so make it again as it is: {Call(picked.Piece)}. The one there now is kept as a take. {FixIt}Then say in a sentence or two how it came out.");
     }
 
     /// <summary>Looks at the piece picked again, as it is.</summary>
@@ -170,6 +170,14 @@ public sealed partial class FilmViewModel
     };
 
     /// <summary>
+    /// What a piece made from the window gets after its fresh look, as the window's own director
+    /// did for every piece it made: told only to say how it came out, the agent reports what the
+    /// look found wrong and leaves the piece so.
+    /// </summary>
+    private const string FixIt = "When its fresh look finds something wrong, change what it is made from (its prompt, its frames, the seed) " +
+                                 "and make it again, up to twice. ";
+
+    /// <summary>
     /// What the model does with what is said about a piece: change that piece alone (a shot, its
     /// frames too) and make it again, as the window's own director did; the rest of the film stays.
     /// </summary>
@@ -182,7 +190,7 @@ public sealed partial class FilmViewModel
             _ => "that frame alone (its prompt, what it is made from, its model or seed)",
         };
         return $"What they say is about it: read the storyboard first (film action=storyboard path=\"{_board.Folder}\"), then change {scope}, unless they ask for more; " +
-               $"then make it again ({Call(piece)}), unless they only asked a question. Say in a sentence or two what you changed and how it came out.";
+               $"then make it again ({Call(piece)}), unless they only asked a question. {FixIt}Say in a sentence or two what you changed and how it came out.";
     }
 
     /// <summary>
