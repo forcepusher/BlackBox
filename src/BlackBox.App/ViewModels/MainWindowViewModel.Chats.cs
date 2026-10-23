@@ -52,8 +52,7 @@ public sealed partial class MainWindowViewModel
         {
             foreach (var queued in Queued)
                 _session?.Unsteer(queued.Input);
-            Input = string.Join("\n\n", Queued.Select(q => q.Input.Text).Append(Input).Where(t => t.Length > 0));
-            Attach(Queued.SelectMany(q => q.Input.Files));
+            BackInTheBox([.. Queued.Select(q => q.Input)]);
             Queued.Clear();
         }
         _steerPending.Clear();
@@ -203,8 +202,10 @@ public sealed partial class MainWindowViewModel
         _chatId ??= ChatStore.NewId();
         if (_chatTitle is null)
         {
-            // A message that is only a file is named after it.
-            _chatTitle = ChatStore.TitleFrom(first!.HasText ? first.Text : string.Join(", ", first.Attachments.Select(a => a.FileName)));
+            // A message that is only a file is named after it; one from the Filmmaking window after
+            // the film and piece too: History filled with chats named "Make it.".
+            var text = first!.HasText ? first.Text : string.Join(", ", first.Attachments.Select(a => a.FileName));
+            _chatTitle = ChatStore.TitleFrom(first.Via is { } via ? $"{via} · {text}" : text);
             OnPropertyChanged(nameof(WindowTitle));
         }
         var chat = new SavedChat
@@ -239,7 +240,7 @@ public sealed partial class MainWindowViewModel
     {
         var entry = item switch
         {
-            UserMessageItem u => new ChatEntry { Kind = ChatEntryKind.User, Text = u.Text, Files = u.HasAttachments ? u.Files : null, Via = u.Via },
+            UserMessageItem u => new ChatEntry { Kind = ChatEntryKind.User, Text = u.Text, Files = u.HasAttachments ? u.Files : null, Via = u.Via, Context = u.Context },
             AssistantMessageItem a => new ChatEntry
             {
                 Kind = ChatEntryKind.Assistant, Text = a.Text, Reasoning = a.Reasoning, Ended = a.Ended, Sent = a.SentAt, FirstWords = a.FirstWords,
@@ -260,7 +261,7 @@ public sealed partial class MainWindowViewModel
     {
         ChatItemViewModel item = e.Kind switch
         {
-            ChatEntryKind.User => new UserMessageItem(e.Text ?? "", e.Files) { Via = e.Via },
+            ChatEntryKind.User => new UserMessageItem(e.Text ?? "", e.Files) { Via = e.Via, Context = e.Context },
             ChatEntryKind.Assistant => new AssistantMessageItem
             {
                 Text = e.Text ?? "", Reasoning = e.Reasoning ?? "", IsStreaming = false, Ended = e.Ended, SentAt = e.Sent, FirstWords = e.FirstWords,
@@ -290,7 +291,7 @@ public sealed partial class MainWindowViewModel
             return new NoticeItem(e.Text ?? "", e.IsError);
         if (e.Unsent && Items.OfType<UserMessageItem>().LastOrDefault() is { } message)
         {
-            var again = new UserInput(message.Text, message.Files);
+            var again = message.Input;
             return new NoticeItem(e.Text ?? "", e.IsError, () => _ = RunAgainAsync(again), unsent: true);
         }
         return new NoticeItem(e.Text ?? "", e.IsError, CarryOn);

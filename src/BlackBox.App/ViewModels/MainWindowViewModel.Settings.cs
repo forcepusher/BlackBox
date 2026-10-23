@@ -34,7 +34,9 @@ public sealed partial class MainWindowViewModel
 
     public async Task ApplySettingsAsync(SettingsViewModel dialog)
     {
-        var updated = dialog.Settings;
+        // What the user changed, over what another window's Settings saved while the dialog was
+        // open: its copy still had the setting the other window changed, and took it back.
+        var updated = _settings.With(dialog.Opened, dialog.Settings);
         // The server, key, model and context size live in the top bar, not in the dialog.
         updated.Server = _settings.Server;
         updated.Window = _settings.Window;

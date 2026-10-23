@@ -220,10 +220,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         _closed = true;
         // A chat is saved at every step and when its run ends, so only one in progress needs it here;
         // what the stopped run still reports is dropped, as the chat may be opened in another window.
-        if (IsBusy)
+        // Not a run that is ending for a chat this window has left: the chat on screen never ran.
+        if (IsBusy && !_runDetached)
         {
-            // Said in the chat, with Continue: opened from History, it ended without a word.
-            AddStopNotice("Stopped: the window was closed.", isError: false);
+            // Said in the chat, with Continue: opened from History, it ended without a word. Before
+            // the model had the message, Continue sends it again: "Continue." alone has no task.
+            AddStopNotice("Stopped: the window was closed.", isError: false, _unread);
             SaveChat(SnapshotHistory());
             _runDetached = true;
         }
@@ -346,7 +348,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             else _steerPending.Add(input);
             return;
         }
-        Items.Add(new UserMessageItem(input.Text, input.Files) { Via = input.Via });
+        Items.Add(new UserMessageItem(input.Text, input.Files) { Via = input.Via, Context = input.Context });
         SaveChat(SnapshotHistory());
         // What arrived just as a run ended, too late for it, starts the next one.
         for (UserInput? next = input; next is not null;)
@@ -372,7 +374,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var queued = Queued.FirstOrDefault(q => ReferenceEquals(q.Input, input));
         if (queued is not null)
             Queued.Remove(queued);
-        Items.Add(new UserMessageItem(input.Text, input.Files) { At = queued?.SentAt ?? DateTime.UtcNow, Via = input.Via });
+        Items.Add(new UserMessageItem(input.Text, input.Files) { At = queued?.SentAt ?? DateTime.UtcNow, Via = input.Via, Context = input.Context });
     }
 
     /// <summary>× on a queued message: taken back unsent, unless the model has just read it, and then it joins the chat as any other.</summary>
@@ -504,6 +506,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>When the run in progress started: from the message that started it, for how long the run took.</summary>
     private DateTime _runStarted;
 
+    /// <summary>The message the run in progress started with, until the model has it.</summary>
+    private UserInput? _unread;
+
     /// <summary>One run of the agent on <paramref name="input"/>. Returns what the user sent too late for it, to run next, or null.</summary>
     private async Task<UserInput?> RunAsync(UserInput input)
     {
@@ -521,6 +526,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         List<UserInput> late = [];
         // Whether the model has the message: from the moment the session starts, it is in the conversation.
         var delivered = false;
+        _unread = input;
 
         try
         {
@@ -568,6 +574,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             _steerPending.Clear();
             _tick.Start();
             delivered = true;
+            _unread = null;
             await Task.Run(() => session.RunAsync(input, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
             _settings.Server.LearnContextLimit(session.ContextTokens);
@@ -635,13 +642,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             foreach (var unread in late)
                 if (Queued.FirstOrDefault(q => ReferenceEquals(q.Input, unread)) is { } item)
                     Queued.Remove(item);
-            Input = string.Join("\n\n", late.Select(l => l.Text).Append(Input).Where(t => t.Length > 0));
-            Attach(late.SelectMany(l => l.Files));
+            BackInTheBox(late);
             return null;
         }
         foreach (var message in late)
             MoveIntoChat(message);
         return UserInput.Join(late);
+    }
+
+    /// <summary>
+    /// Messages the model never read, back in the box with their files, to send again or not. Not
+    /// a request from the Filmmaking window: sent again without the film and the piece it was about,
+    /// "Another take, please." would reach the model as bare words. The chat says it wasn't done.
+    /// </summary>
+    private void BackInTheBox(IReadOnlyList<UserInput> unread)
+    {
+        var typed = unread.Where(u => u.Context is null).ToList();
+        Input = string.Join("\n\n", typed.Select(u => u.Text).Append(Input).Where(t => t.Length > 0));
+        Attach(typed.SelectMany(u => u.Files));
+        foreach (var film in unread.Where(u => u.Context is not null))
+            AddNotice($"Not done, as BlackBox stopped before it read it: \"{film.Text}\" ({film.Via}).", isError: false);
     }
 
     [RelayCommand(CanExecute = nameof(IsBusy))]

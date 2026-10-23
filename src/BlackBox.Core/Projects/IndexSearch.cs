@@ -109,6 +109,23 @@ internal static class IndexSearch
         return hits;
     }
 
+    /// <summary>
+    /// What a search with nothing found didn't look in: "no file has these words" read as "the code
+    /// isn't there" when it was in node_modules, a folder .gitignore names or a file too big to read.
+    /// </summary>
+    private static string NotSearched(FolderIndex index, string under)
+    {
+        var prefix = under.Length == 0 ? "" : under.TrimEnd('/') + "/";
+        var unread = index.Files.Values.Count(f => f.Kind is FileKind.Large or FileKind.Unread or FileKind.Locked &&
+                                                   f.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        var parts = new List<string>();
+        if (index.LeftOut.Count > 0)
+            parts.Add("what it leaves out (" + string.Join(", ", index.LeftOut.Keys.Take(6)) + (index.LeftOut.Count > 6 ? "…" : "") + ")");
+        if (unread > 0)
+            parts.Add($"{unread:N0} file(s) it didn't read (too big, in use or past its limits)");
+        return parts.Count == 0 ? "" : $" The index doesn't search {string.Join(" or ", parts)}: if it may be there, search those with a command.";
+    }
+
     /// <summary>The answer to a search, for the model: definitions of the names asked for, then the best parts with their best lines.</summary>
     internal static async Task<string> SearchAsync(FolderIndex index, string query, string under, CancellationToken ct)
     {
@@ -118,7 +135,8 @@ internal static class IndexSearch
         var asked = Terms.Words(query);
         if (asked.Count == 0)
             return "The query has no words to search for. Give names (SettingsStore, save_game), words of an error, or what the code does.";
-        var nothing = $"No file in {scope} has any of these words: {string.Join(", ", asked)}. Try other words: the names the code may use, or what it does.";
+        var nothing = $"No file in {scope} has any of these words: {string.Join(", ", asked)}. Try other words: the names the code may use, or what it does." +
+                      NotSearched(index, under);
         if (words.Count == 0)
             return nothing;
 

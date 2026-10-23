@@ -81,7 +81,8 @@ internal sealed class FolderWalk
             if (isDir)
             {
                 // A link or junction to elsewhere would walk another folder, or the same one forever.
-                if (entry.Attributes.HasFlag(FileAttributes.ReparsePoint))
+                // Not every reparse point is one: OneDrive's folders are too, and were left out whole.
+                if (IsLink(entry))
                     continue;
                 if (AlwaysLeftOut.Contains(entry.Name))
                 {
@@ -107,10 +108,40 @@ internal sealed class FolderWalk
             if (entry is DirectoryInfo sub)
                 Walk(sub, path, rules, files);
             else if (entry is FileInfo f && !f.Attributes.HasFlag(FileAttributes.System))
-                files.Add(new WalkedFile(path, f.Length, f.LastWriteTimeUtc.Ticks));
+            {
+                // Online only (OneDrive's files on demand): reading it would download it.
+                if ((f.Attributes & (FileAttributes.Offline | RecallOnDataAccess)) != 0)
+                {
+                    Count("online only");
+                    continue;
+                }
+                // A link's own size and time are the link's: the file it points to, as read, may be
+                // any size, and is changed without the link changing.
+                FileInfo? file = f;
+                if (IsLink(f))
+                {
+                    try { file = f.ResolveLinkTarget(returnFinalTarget: true) as FileInfo; }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { file = null; }
+                    if (file is not { Exists: true })
+                        continue;
+                }
+                files.Add(new WalkedFile(path, file.Length, file.LastWriteTimeUtc.Ticks));
+            }
             if (Stopped)
                 return;
         }
+    }
+
+    /// <summary>FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS: the file's data is elsewhere (in the cloud) until it is read.</summary>
+    private const FileAttributes RecallOnDataAccess = (FileAttributes)0x400000;
+
+    /// <summary>A symbolic link or a junction; a reparse point of another kind (a OneDrive folder or file) is a plain one.</summary>
+    internal static bool IsLink(FileSystemInfo entry)
+    {
+        if (!entry.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            return false;
+        try { return entry.LinkTarget is not null; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return true; }
     }
 
     private void Count(string why) => LeftOut[why] = LeftOut.GetValueOrDefault(why) + 1;

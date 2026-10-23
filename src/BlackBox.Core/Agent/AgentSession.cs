@@ -320,6 +320,7 @@ public sealed partial class AgentSession(
     {
         _request = RequestOf(input);
         _interrupted = false;
+        _projects.Recall(History, toolContext);
         History.Add(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid));
         // A picture given earlier in the chat (a reference sheet) is still the one to follow.
         toolContext.UserPictures = UserInput.PicturesIn(History);
@@ -460,6 +461,7 @@ public sealed partial class AgentSession(
                 ChatMessage? last = null;
                 // This reply's calls were decided on the screen in the last screenshot.
                 toolContext.Seen = toolContext.LastShot;
+                toolContext.ScreenStale = false;
                 var called = reply.ToolCalls!.Select(c => ToolCallRepair.ResolveTool(c.Name, tools)).ToList();
                 guesswork?.Read(reply, called);
                 using var calls = new StepScope(this, ct);

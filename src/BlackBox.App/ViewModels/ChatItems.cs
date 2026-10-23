@@ -1,6 +1,7 @@
 using System.Text;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using BlackBox.Core.Agent;
 using BlackBox.Core.Chats;
 using BlackBox.Core.Llm;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -65,6 +66,12 @@ public sealed class UserMessageItem(string text, IReadOnlyList<string>? files = 
     public string? Via { get; init; }
 
     public bool HasVia => Via is not null;
+
+    /// <summary>What the model was told with it, unseen in the chat (see <see cref="UserInput.Context"/>).</summary>
+    public string? Context { get; init; }
+
+    /// <summary>The message as sent, to send again.</summary>
+    public UserInput Input => new(Text, Files) { Via = Via, Context = Context };
 
     public IReadOnlyList<AttachmentItem> Attachments { get; } = (files ?? []).Select(f => new AttachmentItem(f)).ToList();
     public bool HasAttachments => Attachments.Count > 0;

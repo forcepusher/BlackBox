@@ -83,6 +83,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A ComfyUI BlackBox started is no longer closed at the end of a task while another BlackBox (the
   command line) may be between two of its jobs.
 - The sysadmin migration ticket finds backups written under /var/lib and /var/local too.
+- The note to index a project no longer comes back with every message of a chat that indexed it.
+- Several windows: once a click is held back because another window's agent changed the screen,
+  the rest of that step's clicks and keys are held back too, instead of typing into the other
+  window's program; saving Settings in one window no longer undoes what another window saved while
+  the dialog was open; closing a window right after picking another chat no longer marks that chat
+  stopped.
+- Filmmaking: a request still waiting when BlackBox is stopped is no longer put in the chat's box
+  without the film and piece it was about (the chat says it wasn't done), and Continue sends one
+  the model never had whole; chats begun from the window are named after the film, not "Make it.";
+  the storyboard guide comes back after the context starts afresh; a stopped shot of several takes
+  no longer keeps a copy of its clip as one more take.
+- Folder index: projects in OneDrive folders are indexed (only their top folder was), files kept
+  online only aren't downloaded, linked files are read as the files they point to, and a search
+  that finds nothing says what the index doesn't search.
 - BlackBox.exe and the MCP servers it starts say version 1.0.0, as released, not 0.1.0.
 - Claude: MCP tools whose argument schema is a union work; a long task no longer stops on more than
   100 pictures in a request; a reply cut off mid-thought no longer breaks the next request; older

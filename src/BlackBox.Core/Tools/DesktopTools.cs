@@ -18,6 +18,9 @@ public abstract class DesktopActionTool : Tool
     {
         if (ctx.DesktopTurn is not { } desktop)
             return await ActAndLookAsync(args, ctx, screenChanged: false, ct).ConfigureAwait(false);
+        if (ctx.ScreenStale)
+            return new ToolResult("Nothing was done: an action before this one in your reply was held back, as another BlackBox window's agent " +
+                                  "had used the mouse and keyboard. Look at the screen as it is now and do it again if it still applies.");
         // Another window's agent may be using the mouse and keyboard: one at a time.
         var turn = await desktop.TakeAsync(ctx, MaxTurnWait,
             waited => ctx.Progress?.Invoke($"Waiting for another BlackBox window to finish with the mouse and keyboard · {Chats.ChatTimes.Stopwatch(waited)}"), ct).ConfigureAwait(false);
@@ -38,8 +41,10 @@ public abstract class DesktopActionTool : Tool
     {
         if (screenChanged)
         {
-            // What the model aimed at may have moved, been covered or closed meanwhile.
+            // What the model aimed at may have moved, been covered or closed meanwhile; and the
+            // rest of its reply was decided on the same old screen.
             ctx.Seen = null;
+            ctx.ScreenStale = true;
             var now = ScreenshotTool.Take(ctx);
             return now with
             {

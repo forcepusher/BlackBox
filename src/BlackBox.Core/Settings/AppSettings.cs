@@ -319,6 +319,17 @@ public sealed class AppSettings
 
     public AppSettings Clone() =>
         JsonSerializer.Deserialize(JsonSerializer.Serialize(this, SettingsJson.Default.AppSettings), SettingsJson.Default.AppSettings)!;
+
+    /// <summary>
+    /// These settings with what changed from <paramref name="before"/> to <paramref name="after"/>
+    /// put over them, key by key: a Settings dialog's changes over what another window saved while
+    /// it was open, which its copy doesn't have.
+    /// </summary>
+    public AppSettings With(AppSettings before, AppSettings after)
+    {
+        JsonObject Node(AppSettings s) => (JsonObject)JsonSerializer.SerializeToNode(s, SettingsJson.Default.AppSettings)!;
+        return SettingsStore.Merge(Node(before), Node(after), Node(this)).Deserialize(SettingsJson.Default.AppSettings)!;
+    }
 }
 
 /// <summary>

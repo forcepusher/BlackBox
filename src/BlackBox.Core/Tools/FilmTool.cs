@@ -229,7 +229,8 @@ public sealed class FilmTool : Tool
     /// <summary>How the storyboard guide starts as the tool shows it, by which a chat that has it is told.</summary>
     internal const string GuideHead = "BlackBox's guide to writing a storyboard";
 
-    private bool _guideShown;
+    /// <summary>The context reset the guide was last shown after (see <see cref="ToolContext.ContextResets"/>).</summary>
+    private int? _guideShown;
 
     /// <summary>
     /// The guide to writing a storyboard, and how the video model reads a shot's prompt, with the
@@ -238,9 +239,9 @@ public sealed class FilmTool : Tool
     /// </summary>
     private string? GuideFor(ToolContext ctx)
     {
-        if (_guideShown || ctx.InConversation?.Invoke(GuideHead) == true)
+        if (_guideShown == ctx.ContextResets || ctx.InConversation?.Invoke(GuideHead) == true)
             return null;
-        _guideShown = true;
+        _guideShown = ctx.ContextResets;
         return $"{GuideHead}, to follow when you write or change one:\n\n" + ComfyGuides.Text(ComfyGuides.Storyboards) +
                "\n\nHow the video model (LTX) reads a shot's prompt, which is how to write one:\n\n" +
                ComfyGuides.Without(ComfyGuides.Video, "Pictures first", "Sound and music", "Exact motion: tracks and controls", "Settings");
@@ -497,6 +498,7 @@ public sealed class FilmTool : Tool
         var notes = first;
         var before = FilmTakes.Keep(board, piece);
         (long Seed, string File, FilmLook Look, string? Verdict, double Score) best;
+        var replaced = false;
         try
         {
             for (var take = 1; take <= tries; take++)
@@ -524,11 +526,13 @@ public sealed class FilmTool : Tool
             });
             File.Move(best.File, board.ShotVideo(shot), overwrite: true);
             File.Move(Path.ChangeExtension(best.File, ".json"), board.ShotWorkflow(shot), overwrite: true);
+            replaced = true;
         }
         finally
         {
-            // Stopped half way, the takes made so far are kept too; with none made, the shot is as it was.
-            if (takes.Count == 0 && before is not null)
+            // Stopped half way, the takes made so far are kept too; the shot's clip is still the one
+            // there was, so its copy as a take goes (kept, every call again added one more).
+            if (!replaced && before is not null)
                 FilmTakes.Drop(before);
             foreach (var other in takes.Where(t => File.Exists(t.File)))
                 FilmTakes.Add(board, piece, other.File, Path.ChangeExtension(other.File, ".json"));

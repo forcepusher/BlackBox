@@ -88,7 +88,7 @@ internal static class ProjectRoot
                 {
                     if (entry is FileInfo && ++found >= count)
                         return true;
-                    if (entry is DirectoryInfo d && !FolderWalk.AlwaysLeftOut.Contains(d.Name) && !d.Attributes.HasFlag(FileAttributes.ReparsePoint))
+                    if (entry is DirectoryInfo d && !FolderWalk.AlwaysLeftOut.Contains(d.Name) && !FolderWalk.IsLink(d))
                         pending.Push(d.FullName);
                 }
             }
