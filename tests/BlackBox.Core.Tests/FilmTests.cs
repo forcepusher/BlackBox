@@ -1217,3 +1217,145 @@ public sealed class FilmToolTests : IDisposable
         Assert.Equal(("redo", "It needs another go: his hand has six fingers."), FilmTakes.LookIn(board.FrameWorkflow(frame)));
     }
 }
+
+public sealed class FilmReferencesTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-filmref-" + Guid.NewGuid().ToString("N")[..8]);
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_dir, recursive: true); }
+        catch (IOException) { }
+    }
+
+    private static void Png(string path, int width, int height)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var bitmap = new SKBitmap(width, height);
+        using (var canvas = new SKCanvas(bitmap))
+            canvas.Clear(new SKColor(180, 120, 60));
+        using var file = File.Create(path);
+        bitmap.Encode(file, SKEncodedImageFormat.Png, 100);
+    }
+
+    private static (int Width, int Height) SizeOf(string path)
+    {
+        using var codec = SKCodec.Create(path);
+        return (codec.Info.Width, codec.Info.Height);
+    }
+
+    [Fact]
+    public async Task A_references_picture_goes_into_the_references_folder_at_its_own_shape_and_a_frames_is_cut_to_the_film()
+    {
+        var board = Storyboard.Parse("""
+            {"title": "Mira", "frames": [{"id": "mira", "reference": true, "file": "square.png"}, {"id": "f1", "file": "square.png"}],
+             "shots": [{"id": "s1", "first": "f1", "prompt": "she waves"}]}
+            """);
+        board.Folder = Path.Combine(_dir, "Mira");
+        board.Save();
+        Assert.True(Directory.Exists(board.ReferencesFolder)); // there for the user's pictures from the start
+        var square = Path.Combine(_dir, "square.png");
+        Png(square, 600, 600);
+        foreach (var frame in board.Frames)
+            frame.File = square;
+        var maker = new FilmMaker(ComfyHub.For(Path.Combine(_dir, "comfy")), null);
+        var reference = await maker.MakeFrameAsync(board, board.Frame("mira")!, null, CancellationToken.None, CancellationToken.None);
+        var shotFrame = await maker.MakeFrameAsync(board, board.Frame("f1")!, null, CancellationToken.None, CancellationToken.None);
+        Assert.Equal(Path.Combine(board.ReferencesFolder, "mira.png"), reference.File);
+        Assert.Equal((600, 600), SizeOf(reference.File));
+        Assert.Equal(Path.Combine(board.Folder, "frames", "f1.png"), shotFrame.File);
+        Assert.Equal((1280, 720), SizeOf(shotFrame.File));
+        Assert.True(FilmMaker.IsCurrent(board, board.Frame("mira")!));
+        // Never bigger than the edit model can use.
+        Png(Path.Combine(_dir, "wide.png"), 3000, 1000);
+        FilmMaker.SaveReference(Path.Combine(_dir, "wide.png"), Path.Combine(_dir, "wide.saved.png"));
+        Assert.Equal((2048, 683), SizeOf(Path.Combine(_dir, "wide.saved.png")));
+    }
+
+    [Fact]
+    public void A_frame_is_made_from_a_picture_of_the_references_folder_named_in_its_from()
+    {
+        var board = Storyboard.Parse("""
+            {"title": "Cafe", "frames": [{"id": "mira", "reference": true, "prompt": "a sheet"}, {"id": "f1", "prompt": "at the cafe", "from": ["mira", "Front"]}]}
+            """);
+        board.Folder = Path.Combine(_dir, "Cafe");
+        board.Save();
+        var front = Path.Combine(board.ReferencesFolder, "Front.jpg");
+        Png(front, 300, 500);
+        Png(Path.Combine(board.ReferencesFolder, "mira.png"), 640, 360);
+        Png(Path.Combine(board.ReferencesFolder, "mira.v1.png"), 640, 360); // a take, not a reference
+        Assert.Equal(front, board.ReferenceFile("Front"));
+        Assert.Equal(front, board.ReferenceFile("front.jpg"), StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(front, board.ReferenceFile("References/Front.jpg"));
+        Assert.Equal(front, board.ReferenceFile(front));
+        Assert.Null(board.ReferenceFile("mira")); // a frame of the film, not a file
+        Assert.Null(board.ReferenceFile("nobody"));
+        Assert.Equal(["Front.jpg", "mira.png"], board.ReferenceFiles().Select(Path.GetFileName));
+
+        // Changing the picture puts what is made from it out of date.
+        var frame = board.Frame("f1")!;
+        var stamp = FilmMaker.FrameStamp(board, frame);
+        File.SetLastWriteTimeUtc(front, DateTime.UtcNow.AddMinutes(1));
+        Assert.NotEqual(stamp, FilmMaker.FrameStamp(board, frame));
+        var overview = FilmTool.Overview(board);
+        Assert.Contains($"References folder: {board.ReferencesFolder}; pictures there to make frames from, by name in from: Front.jpg.", overview);
+    }
+
+    [Fact]
+    public void An_edit_template_that_takes_its_size_from_its_first_picture_makes_the_films_size()
+    {
+        var wf = ComfyWorkflow.FromApi(ComfyWorkflow.ParseText("""
+            {
+              "78": {"class_type": "LoadImage", "inputs": {"image": "input.png"}},
+              "433:117": {"class_type": "FluxKontextImageScale", "inputs": {"image": ["78", 0]}},
+              "433:111": {"class_type": "TextEncodeQwenImageEditPlus", "inputs": {"prompt": "a dalmatian", "image1": ["433:117", 0]}},
+              "433:88": {"class_type": "VAEEncode", "inputs": {"pixels": ["433:117", 0], "vae": ["433:39", 0]}},
+              "433:3": {"class_type": "KSampler", "inputs": {"seed": 1, "denoise": 1, "positive": ["433:111", 0], "latent_image": ["433:88", 0]}},
+              "60": {"class_type": "SaveImage", "inputs": {"filename_prefix": "ComfyUI", "images": ["433:8", 0]}}
+            }
+            """));
+        var library = ComfyNodeLibrary.Parse(JsonNode.Parse("""
+            {"EmptyImage": {"input": {"required": {"width": ["INT", {}], "height": ["INT", {}], "batch_size": ["INT", {}], "color": ["INT", {}]}}, "output": ["IMAGE"]}}
+            """)!.AsObject());
+        var missed = new List<string>();
+        FilmRoles.Apply(wf, library, new FilmInputs { Prompt = "her at the cafe", Width = 1280, Height = 720, Pictures = [@"C:\f\mira.png"] }, missed);
+        Assert.DoesNotContain(missed, m => m.Contains("size", StringComparison.Ordinal));
+        Assert.Equal("""["film_size_433_88",0]""", wf.ValueOf("433:88.pixels")!.ToJsonString());
+        Assert.Equal(1280, (int?)wf.ValueOf("film_size_433_88.width"));
+        Assert.Equal(720, (int?)wf.ValueOf("film_size_433_88.height"));
+        // The model still gets the picture as it is.
+        Assert.Equal("""["433:117",0]""", wf.ValueOf("433:111.image1")!.ToJsonString());
+        Assert.Equal(@"C:\f\mira.png", (string?)wf.ValueOf("78.image"));
+    }
+
+    [Fact]
+    public void An_old_references_picture_moves_into_the_references_folder_and_what_is_made_from_it_stays_made()
+    {
+        var folder = Path.Combine(_dir, "Fox");
+        var old = Storyboard.Parse("""
+            {"title": "Fox", "frames": [{"id": "f3", "reference": true, "name": "the fox", "prompt": "a fox sheet"}, {"id": "f1", "prompt": "the fox jumps", "from": ["f3"]}]}
+            """);
+        old.Folder = folder;
+        Settings.AtomicFile.Write(old.FilePath, old.ToJson());
+        // As made before the References folder: the reference with the shots' frames.
+        var frames = Path.Combine(folder, "frames");
+        foreach (var name in new[] { "f3.png", "f3.v1.png", "f1.png" })
+            Png(Path.Combine(frames, name), 64, 36);
+        File.WriteAllText(Path.Combine(frames, "f3.json"), new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = "made before" } }.ToJsonString());
+        // f1's stamp as made then from the reference's picture: the same file, wherever it is.
+        Directory.CreateDirectory(old.ReferencesFolder);
+        File.Copy(Path.Combine(frames, "f3.png"), Path.Combine(old.ReferencesFolder, "f3.png"));
+        File.SetLastWriteTimeUtc(Path.Combine(old.ReferencesFolder, "f3.png"), File.GetLastWriteTimeUtc(Path.Combine(frames, "f3.png")));
+        File.WriteAllText(Path.Combine(frames, "f1.json"), new JsonObject { ["blackbox"] = new JsonObject { ["stamp"] = FilmMaker.FrameStamp(old, old.Frame("f1")!) } }.ToJsonString());
+        File.Delete(Path.Combine(old.ReferencesFolder, "f3.png"));
+
+        var board = Storyboard.Load(folder);
+        Assert.Equal(Path.Combine(board.ReferencesFolder, "f3.png"), board.FramePicture(board.Frame("f3")!));
+        Assert.True(File.Exists(Path.Combine(board.ReferencesFolder, "f3.png")));
+        Assert.True(File.Exists(Path.Combine(board.ReferencesFolder, "f3.json")));
+        Assert.True(File.Exists(Path.Combine(board.ReferencesFolder, "f3.v1.png")));
+        Assert.False(File.Exists(Path.Combine(frames, "f3.png")));
+        Assert.True(File.Exists(Path.Combine(frames, "f1.png")));
+        Assert.True(FilmMaker.IsCurrent(board, board.Frame("f1")!));
+    }
+}

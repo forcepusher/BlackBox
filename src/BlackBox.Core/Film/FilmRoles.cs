@@ -101,6 +101,8 @@ public static partial class FilmRoles
                 Put(id, input, which == "width" ? width : height);
                 sized = true;
             }
+            if (!sized && inputs.Pictures.Count > 0)
+                sized = SizeFromBlank(workflow, library, width, height, Put);
             if (!sized)
                 missed.Add("the size (the template takes it from the picture it starts from)");
         }
@@ -326,6 +328,44 @@ public static partial class FilmRoles
                     latent.Add((id, which, which));
         }
         return latent;
+    }
+
+    /// <summary>
+    /// The size of a picture made from others, in a template that takes it from the first of them:
+    /// Qwen-Image-Edit's samples the latent its first picture is encoded to, so a frame made from a
+    /// square or upright reference came out that shape, and was then cut to the film's frame (a
+    /// character's head and feet cut off). The sampler draws the picture anew (denoise 1), so the
+    /// latent is encoded from a blank picture of the size asked for instead (to whole 16 pixels, for
+    /// the model; the frame is cut to the film's after), and the pictures go to the model as they
+    /// are. False when no sampler starts from an encoded picture that way.
+    /// </summary>
+    internal static bool SizeFromBlank(ComfyWorkflow workflow, ComfyNodeLibrary library, int width, int height, Action<string, string, JsonNode?> put)
+    {
+        if (library.Find("EmptyImage") is null)
+            return false;
+        var done = false;
+        foreach (var (_, sampler) in workflow.All().ToList())
+        {
+            if (sampler["inputs"] is not JsonObject inputs || !ComfyWorkflow.IsLink(inputs["latent_image"]))
+                continue;
+            if (inputs["denoise"] is JsonValue d && d.TryGetValue<double>(out var denoise) && denoise < 0.999)
+                continue;
+            var source = ((JsonArray)inputs["latent_image"]!)[0]!.ToString();
+            if (workflow.Nodes[source] is not JsonObject encode || ComfyWorkflow.ClassOf(encode) is not ("VAEEncode" or "VAEEncodeTiled") || encode["inputs"] is not JsonObject)
+                continue;
+            var blank = "film_size_" + source.Replace(':', '_');
+            workflow.Nodes[blank] = new JsonObject
+            {
+                ["class_type"] = "EmptyImage",
+                ["inputs"] = new JsonObject { ["width"] = Up16(width), ["height"] = Up16(height), ["batch_size"] = 1, ["color"] = 0 },
+                ["_meta"] = new JsonObject { ["title"] = "The picture's size" },
+            };
+            put(source, "pixels", new JsonArray(blank, 0));
+            done = true;
+        }
+        return done;
+
+        static int Up16(int n) => (n + 15) / 16 * 16;
     }
 
     internal static List<(string Id, string Input)> FpsInputs(ComfyWorkflow workflow)

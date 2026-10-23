@@ -23,7 +23,7 @@ public sealed class FilmStillRunningException(string message) : Exception(messag
 /// <summary>
 /// Makes a film's pieces with ComfyUI: each frame, each shot's clip and the song, every one with a
 /// workflow of its own kept beside what it made, its seed fixed, so running it again makes the same
-/// thing. Shared by the Filmmaking window and the film tool.
+/// thing. Shared by the Filmmaking panel and the film tool.
 /// </summary>
 public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
 {
@@ -119,12 +119,16 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             WriteStamp(board.FrameWorkflow(frame), FrameStamp(board, frame), null, null);
             return new FilmMade(target, null, null, DateTime.UtcNow - started, []);
         }
+        // A frame of a shot is the film's size, cut to it; a reference keeps its own shape, as the
+        // pictures made from it are made the film's size (see FilmRoles.SizeFromBlank): cut to the
+        // film's frame, a square picture of a character lost its head, and so did every frame made from it.
+        Action<string, string> save = frame.Reference ? SaveReference : (source, to) => SaveFrame(source, to, board.Width, board.Height);
         if (frame.File is { Length: > 0 } file)
         {
             var started = DateTime.UtcNow;
             if (!File.Exists(file))
                 throw new FilmException($"{frame.Label}'s picture {file} isn't there.");
-            await Task.Run(() => SaveFrame(file, target, board.Width, board.Height), ct).ConfigureAwait(false);
+            await Task.Run(() => save(file, target), ct).ConfigureAwait(false);
             WriteStamp(board.FrameWorkflow(frame), FrameStamp(board, frame), null, null);
             return new FilmMade(target, null, null, DateTime.UtcNow - started, []);
         }
@@ -133,7 +137,13 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         var pictures = new List<string>();
         foreach (var id in frame.From)
         {
-            var from = board.Frame(id) ?? throw new FilmException($"{frame.Label} is to be made from \"{id}\", which isn't a frame of this film.");
+            if (board.Frame(id) is not { } from)
+            {
+                pictures.Add(board.ReferenceFile(id) ?? throw new FilmException(
+                    $"{frame.Label} is to be made from \"{id}\", which is neither a frame of this film nor a picture in its References folder ({board.ReferencesFolder})" +
+                    (board.ReferenceFiles() is { Count: > 0 } there ? $", which has {string.Join(", ", there.Take(20).Select(Path.GetFileName))}." : ", which is empty.")));
+                continue;
+            }
             if (from.Id == frame.Id)
                 continue;
             var picture = board.FramePicture(from);
@@ -153,7 +163,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         var job = pictures.Count > 0 ? FilmJob.Edit : FilmJob.Frame;
         var stamp = FrameStamp(board, frame);
         var run = await RunAsync(job, ModelOf(board, frame), inputs, frame.Set, board.FrameWorkflow(frame), stamp, "image", progress, userMessage, ct).ConfigureAwait(false);
-        await Task.Run(() => SaveFrame(run.Output, target, board.Width, board.Height), ct).ConfigureAwait(false);
+        await Task.Run(() => save(run.Output, target), ct).ConfigureAwait(false);
         Restamp(board.FrameWorkflow(frame), stamp);
         FilmTakes.Remember(board.FrameWorkflow(frame), FilmPiece.Of(frame).Settings(board));
         return new FilmMade(target, board.FrameWorkflow(frame), run.Template, run.Took, run.Notes);
@@ -486,7 +496,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         }
         var best = made.MaxBy(m => scores?.GetValueOrDefault(m.File)?.Musicality ?? 0);
         sound.Seed = best.Seed;
-        // How each sounds, kept with it: the Filmmaking window shows it with the song and its takes.
+        // How each sounds, kept with it: the Filmmaking panel shows it with the song and its takes.
         foreach (var m in made)
             if (scores?.GetValueOrDefault(m.File) is { } heard)
                 FilmTakes.RememberLook(m.Workflow, heard.Musicality < SongScore.Good ? "redo" : "good", heard.Describe());
@@ -671,7 +681,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
               .Append(ModelOf(board, frame)).Append('|').Append(frame.Set?.ToJsonString());
             // Not itself, which making it skips: its own picture changes with every make, and it was never up to date.
             foreach (var id in frame.From.Where(id => id != frame.Id))
-                sb.Append("|from ").Append(id).Append(' ').Append(board.Frame(id) is { } from ? FileStamp(board.FramePicture(from)) : "");
+                sb.Append("|from ").Append(id).Append(' ').Append(board.Frame(id) is { } from ? FileStamp(board.FramePicture(from)) : board.ReferenceFile(id) is { } picture ? FileStamp(picture) : "");
         }
         sb.Append('|').Append(board.Width).Append('x').Append(board.Height);
         return Hash(sb.ToString());
@@ -819,6 +829,34 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         var temp = target + ".tmp";
         using (var data = frame.Encode(SKEncodedImageFormat.Png, 100))
+        using (var stream = File.Create(temp))
+            data.SaveTo(stream);
+        File.Move(temp, target, overwrite: true);
+    }
+
+    /// <summary>The longest side a reference is kept at: the edit model works from about a megapixel.</summary>
+    public const int ReferenceSide = 2048;
+
+    /// <summary>
+    /// A reference's picture saved as PNG at its own shape, black bars along its edges cut off and
+    /// no bigger than <see cref="ReferenceSide"/> across: what it shows is kept whole, as the frames
+    /// made from it are made the film's size from all of it.
+    /// </summary>
+    public static void SaveReference(string source, string target)
+    {
+        using var bitmap = SKBitmap.Decode(source) ?? throw new FilmException($"{source} isn't a picture this can read.");
+        var inside = Bars(bitmap);
+        var scale = Math.Min(1, ReferenceSide / (double)Math.Max(inside.Width, inside.Height));
+        var (width, height) = (Math.Max(1, (int)Math.Round(inside.Width * scale)), Math.Max(1, (int)Math.Round(inside.Height * scale)));
+        using var picture = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(picture))
+        {
+            using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true };
+            canvas.DrawBitmap(bitmap, inside, new SKRect(0, 0, width, height), paint);
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        var temp = target + ".tmp";
+        using (var data = picture.Encode(SKEncodedImageFormat.Png, 100))
         using (var stream = File.Create(temp))
             data.SaveTo(stream);
         File.Move(temp, target, overwrite: true);

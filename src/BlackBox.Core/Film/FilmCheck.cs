@@ -291,7 +291,7 @@ public static partial class FilmCheck
         var (before, beside) = Before(board, frame);
         var other = before is null ? null : await Task.Run(() => Picture(board.FramePicture(before), 768), ct).ConfigureAwait(false);
         var question = $"This picture is {(frame.Reference ? "a reference sheet" : "a frame")} of a film, made from the prompt: \"{frame.Prompt.Trim()}\"" +
-                       (frame.From.Count > 0 ? $" It was made from other pictures ({string.Join(", ", frame.From.Select(id => board.Frame(id)?.Label ?? id))}) so the same people and places look the same." : "") +
+                       (frame.From.Count > 0 ? $" It was made from other pictures ({string.Join(", ", frame.From.Select(id => board.Frame(id)?.Label ?? Path.GetFileName(id)))}) so the same people and places look the same." : "") +
                        (other is null ? "" : "\n" + beside) +
                        "\nSay briefly and concretely: does it show what the prompt says? Faults a viewer would notice: warped faces or hands, extra fingers or limbs, " +
                        "things that couldn't be (food coming out of a head, a body merged with a chair), garbled text, black bars, a person who doesn't match the prompt, " +
@@ -568,9 +568,9 @@ public static partial class FilmCheck
         foreach (var i in at)
         {
             var (before, after) = (board.Shots[i - 1], board.Shots[i]);
-            var shared = Refs(board, before).Intersect(Refs(board, after), StringComparer.OrdinalIgnoreCase).Select(board.Frame).OfType<FilmFrame>().ToList();
+            var shared = Refs(board, before).Intersect(Refs(board, after), StringComparer.OrdinalIgnoreCase).ToList();
             sb.AppendLine($"- {before.Id} to {after.Id}, a {after.Transition}" + (shared.Count > 0
-                ? $"; both are made from the same reference pictures ({string.Join("; ", shared.Select(f => $"{f.Id}: \"{Gist(f)}\""))}), so what those show should look the same."
+                ? $"; both are made from the same reference pictures ({string.Join("; ", shared.Select(r => board.Frame(r) is { } f ? $"{f.Id}: \"{Gist(f)}\"" : Path.GetFileName(r)))}), so what those show should look the same."
                 : "."));
         }
         sb.AppendLine("1. For each cut, describe each of its two frames in a few words: the place (what is right behind the people or animals, the ground, how close and dense the trees, " +
@@ -632,15 +632,21 @@ public static partial class FilmCheck
         return words.Count > 0 && words.All(w => board.Shot(w.Trim('*', '.')) is not null) && reason[(colon + 1)..].Trim() is { Length: > 0 } rest ? rest : reason;
     }
 
-    /// <summary>The reference pictures a shot's frames are made from, however far back.</summary>
+    /// <summary>The reference pictures a shot's frames are made from, however far back: references by id, the user's pictures in References by name.</summary>
     private static HashSet<string> Refs(Storyboard board, FilmShot shot)
     {
         var refs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         void Walk(string? id)
         {
-            if (id is null || !seen.Add(id) || board.Frame(id) is not { } frame)
+            if (id is null || !seen.Add(id))
                 return;
+            if (board.Frame(id) is not { } frame)
+            {
+                if (board.ReferenceFile(id) is not null)
+                    refs.Add(id);
+                return;
+            }
             if (frame.Reference)
                 refs.Add(frame.Id);
             else if (frame.Of is { } of && board.Shot(of) is { } before)

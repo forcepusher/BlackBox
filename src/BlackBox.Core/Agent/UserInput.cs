@@ -21,7 +21,7 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
 
     /// <summary>
     /// What the model is told with it, before the user's words, and the chat doesn't show: where it
-    /// was written and what it is about (the film and the piece picked in the Filmmaking window).
+    /// was written and what it is about (the film and the piece picked in the Filmmaking panel).
     /// </summary>
     public string? Context { get; init; }
 

@@ -7,7 +7,7 @@ namespace BlackBox.Core.Film;
 /// <summary>
 /// A film as the user or the agent plans it: shots in order, each going from a first frame to a
 /// last one in so many seconds, the pictures they start and end on, and the film's sound. It is
-/// the storyboard.json in the film's folder, which the Filmmaking window and the film tool both
+/// the storyboard.json in the film's folder, which the Filmmaking panel and the film tool both
 /// read and write. Only what was decided is kept in it: what was made sits at fixed places beside
 /// it (frames/&lt;id&gt;.png, shots/&lt;id&gt;.mp4, sound/song.mp3), each with the workflow that made it,
 /// so the window and the agent can't overwrite each other's results.
@@ -62,11 +62,82 @@ public sealed partial class Storyboard
 
     public FilmShot? Shot(string? id) => id is null ? null : Shots.FirstOrDefault(s => s.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Where a frame's picture is once it is made (or taken from the user's file).</summary>
-    public string FramePicture(FilmFrame frame) => Path.Combine(Folder, "frames", Safe(frame.Id) + ".png");
+    /// <summary>
+    /// The film's folder of references: the pictures of its references (named after them) and any
+    /// picture the user puts there, which frames name in "from" to be made from.
+    /// </summary>
+    public const string ReferencesName = "References";
+
+    public string ReferencesFolder => Path.Combine(Folder, ReferencesName);
+
+    /// <summary>
+    /// Where a frame's picture is once it is made (or taken from the user's file): a reference's in
+    /// the References folder, the shots' frames in frames.
+    /// </summary>
+    public string FramePicture(FilmFrame frame) => Path.Combine(frame.Reference ? ReferencesFolder : Path.Combine(Folder, "frames"), Safe(frame.Id) + ".png");
 
     /// <summary>The workflow that made a frame's picture, as it ran.</summary>
-    public string FrameWorkflow(FilmFrame frame) => Path.Combine(Folder, "frames", Safe(frame.Id) + ".json");
+    public string FrameWorkflow(FilmFrame frame) => Path.ChangeExtension(FramePicture(frame), ".json");
+
+    /// <summary>The kinds of picture a reference can be.</summary>
+    public static readonly string[] PictureExtensions = [".png", ".jpg", ".jpeg", ".webp", ".bmp"];
+
+    /// <summary>
+    /// The picture an entry of a frame's "from" names: a frame of the film by its id, else a picture
+    /// in the References folder by its name (with or without its extension, or the folder's name
+    /// before it), else a picture anywhere by its full path. Null when it names none that is there,
+    /// or a frame of the film (whose picture may not be made yet: see <see cref="Frame"/>).
+    /// </summary>
+    public string? ReferenceFile(string name)
+    {
+        name = name.Trim().Trim('"').Trim();
+        if (name.Length == 0 || Frame(name) is not null)
+            return null;
+        try
+        {
+            if (Path.IsPathRooted(name))
+                return File.Exists(name) ? Path.GetFullPath(name) : null;
+            if (Folder.Length == 0)
+                return null;
+            var relative = name.Replace('/', Path.DirectorySeparatorChar);
+            foreach (var place in new[] { Path.Combine(ReferencesFolder, relative), Path.Combine(Folder, relative) })
+            {
+                if (File.Exists(place))
+                    return Path.GetFullPath(place);
+                foreach (var extension in PictureExtensions)
+                    if (File.Exists(place + extension))
+                        return Path.GetFullPath(place + extension);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException) { }
+        return null;
+    }
+
+    /// <summary>
+    /// The pictures in the References folder: the references' and the user's own, without the takes
+    /// kept of them (Mira.v1.png), by their full paths, by name.
+    /// </summary>
+    public IReadOnlyList<string> ReferenceFiles()
+    {
+        try
+        {
+            return Folder.Length > 0 && Directory.Exists(ReferencesFolder)
+                ? new DirectoryInfo(ReferencesFolder).EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 2, IgnoreInaccessible = true })
+                    .Where(f => PictureExtensions.Contains(f.Extension, StringComparer.OrdinalIgnoreCase) && !IsTake(f.Name) && !f.Name.StartsWith('.'))
+                    .Select(f => f.FullName).Order(StringComparer.OrdinalIgnoreCase).ToList()
+                : [];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>A take kept of a piece when it was made again: "f2.v1.png", "s1.v3.mp4".</summary>
+    public static bool IsTake(string fileName) => TakeName().IsMatch(fileName);
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\.v\d+\.[^.]+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex TakeName();
 
     public string ShotVideo(FilmShot shot) => Path.Combine(Folder, "shots", Safe(shot.Id) + ".mp4");
 
@@ -218,13 +289,18 @@ public sealed partial class Storyboard
             if (f.Of is { } of && Shot(of)?.First is { } first && seen.Add(first) && Frame(first) is { } start)
                 Walk(start);
             foreach (var id in f.From)
-                if (seen.Add(id) && Frame(id) is { } from)
+                if (!seen.Add(id))
+                    continue;
+                else if (Frame(id) is { } from)
                 {
                     if (from.Reference)
                         found.Add(from.Id);
                     else
                         Walk(from);
                 }
+                // A picture of the References folder no reference of the storyboard is for: the user's own.
+                else if (ReferenceFile(id) is not null)
+                    found.Add(id);
         }
         if (frame is not null)
             Walk(frame);
@@ -245,7 +321,39 @@ public sealed partial class Storyboard
         board.Folder = Path.GetDirectoryName(Path.GetFullPath(file))!;
         if (upgrade && board.IsOld)
             FilmMaker.Upgrade(board);
+        if (upgrade)
+            board.MoveOldReferences();
         return board;
+    }
+
+    /// <summary>
+    /// Moves the references' pictures from where they were kept before the References folder (in
+    /// frames, with the shots' frames) into it, with their workflows and takes. Moved, a file keeps
+    /// its time and size, so what was made from it stays made.
+    /// </summary>
+    private void MoveOldReferences()
+    {
+        foreach (var reference in Frames.Where(f => f.Reference))
+        {
+            var stem = Safe(reference.Id);
+            var old = Path.Combine(Folder, "frames");
+            try
+            {
+                if (!File.Exists(Path.Combine(old, stem + ".png")) || File.Exists(FramePicture(reference)))
+                    continue;
+                Directory.CreateDirectory(ReferencesFolder);
+                foreach (var file in Directory.EnumerateFiles(old, stem + ".*").ToList())
+                {
+                    var rest = Path.GetFileName(file)[stem.Length..];
+                    if (rest is ".png" or ".json" || TakeName().IsMatch(rest))
+                        File.Move(file, Path.Combine(ReferencesFolder, stem + rest), overwrite: false);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Open in another program, or the folder can't be written: it is moved the next time.
+            }
+        }
     }
 
     /// <param name="upgrade">Moves an old storyboard's film-wide look and templates into its frames and shots (see <see cref="Upgrade"/>).</param>
@@ -349,12 +457,13 @@ public sealed partial class Storyboard
 
     public JsonObject ToJsonObject() => (JsonObject)JsonNode.Parse(ToJson())!;
 
-    /// <summary>Saves it to storyboard.json in its folder.</summary>
+    /// <summary>Saves it to storyboard.json in its folder, beside the References folder (made for the user's pictures too).</summary>
     public void Save()
     {
         if (Folder.Length == 0)
             throw new InvalidOperationException("The storyboard has no folder to be saved in.");
         Settings.AtomicFile.Write(FilePath, ToJson());
+        Directory.CreateDirectory(ReferencesFolder);
     }
 
     /// <summary>
