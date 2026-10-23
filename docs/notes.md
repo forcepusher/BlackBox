@@ -862,7 +862,18 @@ Every chat is saved on its own in `Data/chats/` from its first message on, after
 named after that message. **History** next to **New chat** lists them, the latest first: pick one to
 read it and carry on where it stopped (the model gets the conversation back), or delete it with its
 trash button. Screenshots are not kept in the saved file; the model takes a new one when it carries
-on. Picking another chat or New chat while a task runs stops the task, and keeps it as far as it got.
+on. Picking another chat or New chat while a task runs stops the task, and keeps it as far as it got,
+saying so with Continue ("Stopped: another chat was opened."; before the model had the message,
+Continue sends that again). Messages still waiting above the box go back into it, unless the model
+had just read one: that one joins the chat it was sent in. A task that has just ended saves its
+last state before the window turns to another chat (the save waited behind the click, and was lost).
+
+Sent while a task starts up (the model loading), messages wait for its first step. If the start
+fails (the server doesn't answer, no model picked), they go back into the box and the first
+message gets Continue: they used to start a task of their own, without the message they followed,
+and that task took its Continue away. A copy of the conversation made while the agent changes it is
+noticed and left for the next save (in .NET 10 a `Select` over a list copies its array without the
+check the list's own enumerator makes, and a copy made during a context reset could hold no message).
 
 Every line of the chat shows when it happened, so where a task's time went can be read off it: a
 message the time it was sent, each step of the model when it was asked and how long it took

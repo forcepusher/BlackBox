@@ -167,7 +167,13 @@ public sealed class ChatStore(string dir)
     /// </summary>
     public static List<ChatMessage> ForSaving(IEnumerable<ChatMessage> history)
     {
-        var copy = history.Select(m => new ChatMessage
+        // Through the list's own enumerator, which throws when the run changes the list meanwhile
+        // (a copy made from the window's thread): Select over a List copies its array unchecked
+        // in .NET 10, and a context reset clearing it gave a torn copy or a null message.
+        var messages = new List<ChatMessage>();
+        foreach (var m in history)
+            messages.Add(m);
+        var copy = messages.Select(m => new ChatMessage
         {
             Role = m.Role,
             Content = m.Parts is null
