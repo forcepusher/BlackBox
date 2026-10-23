@@ -599,7 +599,10 @@ reported the fault and left the piece so. With Claude Opus 5.5 (2026-10-23), Mak
 of a paper boat in a gutter: the looks found the first take nearly a still picture (the start
 frame had the boat on the dry kerb), so it made the frame again with the boat in the water,
 changed the camera to suit it and the seed, made the shot again, and all four looks passed, in
-7 minutes.
+7 minutes. qwen3.8 the same morning, on a 4 s shot of the same idea: one look said the boat drifted
+the wrong way (left and up); it looked at the frames itself, judged that the boat drifts down a
+gutter that recedes up the picture, kept the take and said why. The clause is a guideline the model
+weighs, not a rule: the user's way of steering it.
 During a run they wait above the box as anything typed in the chat does. The user watches every step
 in the chat, with each frame and clip as it is made, and stops it there or with the window's Stop.
 One still waiting when the run is stopped, or the chat is left, doesn't go into the chat's box, as
