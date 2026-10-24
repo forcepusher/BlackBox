@@ -1219,6 +1219,12 @@ Excel bring one). The message's bubble shows its pictures and the names of its o
 click opens one. A saved chat keeps the paths, not the pictures: carrying on, the model looks at a
 picture again with `read_file`. The command-line runner takes files with `--attach`.
 
+Picture files go to Skia through `PictureFile`, read whole by .NET, never by their path: Skia opens
+a path with the C runtime's fopen, and that handle is inherited by every program started while it is
+open. A command the agent started while a picture was being read then kept it open until it ended,
+so the picture couldn't be deleted or replaced; the read_file picture test failed now and then the
+same way (2 of 4 full runs, 24 October 2026), when another test started a process at that moment.
+
 Until a chat is used, it shows first that Pause/Break stops it and that corrections and hints can be
 typed to it while it works, that it uses the mouse and keyboard but pauses while you type and what it
 asks before it acts, then that Ctrl+V pastes a screenshot or files into a message and that files can
@@ -2201,6 +2207,12 @@ dotnet run --project src/BlackBox.Cli -- --yes --then "brighter" --then "@20 and
 ./scripts/index-bench.ps1 -Settings .dev\index-bench\qwen\Data\settings.json -Label qwen   # code tasks with and without the folder index (--no-index), see docs/folder-index-benchmark.md
 ./scripts/comfy-test.ps1          # BlackBox makes a picture, a video, sounds, music, speech and a 3D model with this PC's ComfyUI
 ```
+
+The unit tests that put windows on the real screen and capture it (`WindowsCaptureTests`,
+`WindowMoveTests`, `DesktopIntegrationTests`) are in the `RealScreen` collection, which runs alone
+after the others. Run alongside each other, they failed in 2 of 6 full runs (24 October 2026): the
+moved window covered part of the capture test's region, and BlackBox's own screenshot, which leaves
+out every window of the process while it is taken, left the moved window out of the other's capture.
 
 Every build of the app and the CLI is self-contained on Windows (`RuntimeIdentifier` = the SDK's,
 `SelfContained`, no runtime folder added to the output path), so `bin\Debug\net10.0-windows\BlackBox.exe`

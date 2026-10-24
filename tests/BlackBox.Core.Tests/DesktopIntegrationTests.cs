@@ -12,6 +12,7 @@ namespace BlackBox.Core.Tests;
 /// Opt-in (set BB_DESKTOP_TESTS=1): moves the real mouse on this PC for a moment to check that
 /// screenshots and mouse coordinates agree across monitors. Needs two monitors; skipped otherwise.
 /// </summary>
+[Collection(RealScreen.Name)]
 public class DesktopIntegrationTests
 {
     [Fact]

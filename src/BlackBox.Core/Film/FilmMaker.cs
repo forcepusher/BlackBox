@@ -814,7 +814,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     /// </summary>
     public static void SaveFrame(string source, string target, int width, int height)
     {
-        using var bitmap = SKBitmap.Decode(source) ?? throw new FilmException($"{source} isn't a picture this can read.");
+        using var bitmap = PictureFile.Decode(source) ?? throw new FilmException($"{source} isn't a picture this can read.");
         var inside = Bars(bitmap);
         using var frame = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(frame))
@@ -843,7 +843,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     /// </summary>
     public static void SaveReference(string source, string target)
     {
-        using var bitmap = SKBitmap.Decode(source) ?? throw new FilmException($"{source} isn't a picture this can read.");
+        using var bitmap = PictureFile.Decode(source) ?? throw new FilmException($"{source} isn't a picture this can read.");
         var inside = Bars(bitmap);
         var scale = Math.Min(1, ReferenceSide / (double)Math.Max(inside.Width, inside.Height));
         var (width, height) = (Math.Max(1, (int)Math.Round(inside.Width * scale)), Math.Max(1, (int)Math.Round(inside.Height * scale)));

@@ -13,6 +13,7 @@ namespace BlackBox.Core.Tests;
 /// the next layout, the chat jumped sideways and back. Puts a small red window near the screen
 /// corner for a moment.
 /// </summary>
+[Collection(RealScreen.Name)]
 public class WindowMoveTests
 {
     [Fact]

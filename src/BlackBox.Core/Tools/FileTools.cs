@@ -183,7 +183,7 @@ public sealed class ReadFileTool : Tool
     {
         try
         {
-            using var codec = SkiaSharp.SKCodec.Create(path);
+            using var codec = Media.PictureFile.Codec(path);
             return codec?.FrameCount > 1;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

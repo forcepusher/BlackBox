@@ -1,3 +1,4 @@
+using BlackBox.Core.Media;
 using SkiaSharp;
 
 namespace BlackBox.Core.Tools;
@@ -44,7 +45,7 @@ internal static class Picture
     /// <summary>The picture scaled for the model; null when the file isn't a picture this can read.</summary>
     public static Shown? Load(string path)
     {
-        using var original = SKBitmap.Decode(path);
+        using var original = PictureFile.Decode(path);
         return original is null ? null : Show(original);
     }
 

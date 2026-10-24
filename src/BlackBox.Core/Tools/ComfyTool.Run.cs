@@ -395,7 +395,7 @@ public sealed partial class ComfyTool
         {
             try
             {
-                using var codec = SkiaSharp.SKCodec.Create(file);
+                using var codec = PictureFile.Codec(file);
                 return codec is null ? null : (codec.Info.Width, codec.Info.Height);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
