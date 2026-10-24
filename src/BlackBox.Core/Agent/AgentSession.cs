@@ -678,7 +678,7 @@ public sealed partial class AgentSession(
         observer.OnToolStarted(call, summary);
         ToolResult result;
         toolContext.Progress = text => observer.OnToolProgress(call, text);
-        // The file it writes is read first, the folder a command runs in watched: the Code diff panel shows what changed.
+        // The file it writes is read first, the folder a command runs in watched: the Code changes panel shows what changed.
         var changing = toolContext.Changes?.Starting(tool, args, toolContext);
         try
         {

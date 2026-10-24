@@ -57,7 +57,7 @@ public sealed class DiffRow(DiffFileItem file, DiffLine? line)
 }
 
 /// <summary>
-/// The Code diff panel, a tool of the chat window's toolkit on the left of the chat: the files the
+/// The Code changes panel, a tool of the chat window's toolkit on the left of the chat: the files the
 /// agent changed in this chat (write_file, edit_file, and what its commands changed), each against
 /// what it held before the agent first changed it, updated as the agent works. Lines picked in it
 /// (click, Shift+click, Ctrl+click) go into the chat's box as the files they are in, and the message
@@ -273,8 +273,8 @@ public sealed partial class DiffViewModel : ObservableObject, IToolkit
         if (_diff is not { Files.Count: > 0 } diff)
             return null;
         var picks = Picks().Where(p => files.Contains(p.File.FullPath, StringComparer.OrdinalIgnoreCase)).ToList();
-        var via = "Code diff" + (picks.Count == 0 ? "" : " · " + string.Join(", ", picks.Select(p => $"{Path.GetFileName(p.File.FullPath)} {Lines(p.Rows)}")));
-        var context = new StringBuilder("[The Code diff panel is open beside the chat, showing the files you changed in this chat, each against what it held before your first change to it: ")
+        var via = "Code changes" + (picks.Count == 0 ? "" : " · " + string.Join(", ", picks.Select(p => $"{Path.GetFileName(p.File.FullPath)} {Lines(p.Rows)}")));
+        var context = new StringBuilder("[The Code changes panel is open beside the chat, showing the files you changed in this chat, each against what it held before your first change to it: ")
             .Append(string.Join(", ", diff.Files.Take(30).Select(f => $"{diff.FullPath(f)} ({f.Status}, {f.Counts})")))
             .Append(diff.Files.Count > 30 ? $" and {diff.Files.Count - 30} more. " : ". ");
         if (picks.Count == 0)

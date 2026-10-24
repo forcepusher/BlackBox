@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - "in development" beside the **Toolkit** dropdown: its tools are still being built.
-- **Code diff** in the **Toolkit** dropdown: every file the agent changes in the chat (writes, edits, and
+- **Code changes** in the **Toolkit** dropdown: every file the agent changes in the chat (writes, edits, and
   what its commands change) on the left of the chat, each beside its diff, updated as it works and kept
   with the chat. Lines you click go into your message, so you can ask about them or have them changed.
 - The agent's `diff` tool: it looks through what changed in a repository, or between two files or
@@ -106,7 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   starts loading the model, and each later connection to it no longer waits 2 seconds.
 - ComfyUI templates no longer leave an Edge button on the taskbar where Edge isn't allowed to run
   headless: the copy Edge hands over to has its window hidden too.
-- With Filmmaking or Code diff open, the window can no longer be made so narrow that the chat is
+- With Filmmaking or Code changes open, the window can no longer be made so narrow that the chat is
   squeezed to a few letters across: the panel gives way first, then the window stops. Filmmaking
   also keeps the window tall enough for its viewer, and a long film name is cut short at the top.
 - Filmmaking: a file dropped on a new card or sound becomes it, which is marked while you drag over

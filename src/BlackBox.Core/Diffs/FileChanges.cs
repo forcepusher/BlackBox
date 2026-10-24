@@ -7,7 +7,7 @@ namespace BlackBox.Core.Diffs;
 
 /// <summary>
 /// The files the agent changed in a chat, each with what it held before the agent first changed it,
-/// for the Code diff panel. write_file and edit_file read their file before they run; a run_shell
+/// for the Code changes panel. write_file and edit_file read their file before they run; a run_shell
 /// command has its folder watched while it runs, and what it changed that BlackBox hadn't read
 /// before is taken as git has it when the file is in a repository. A file a command changed outside
 /// git is shown from that command on, as what it held before is not known.

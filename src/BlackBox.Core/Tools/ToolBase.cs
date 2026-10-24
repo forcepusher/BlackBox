@@ -146,7 +146,7 @@ public sealed class ToolContext
     /// <summary>Where helper files for a task go (BlackBox's Data/scratch); null to use the system's temp folder.</summary>
     public string? ScratchDirectory { get; init; }
 
-    /// <summary>The files the agent changes in this chat, for the Code diff panel; null when nobody shows them.</summary>
+    /// <summary>The files the agent changes in this chat, for the Code changes panel; null when nobody shows them.</summary>
     public Diffs.FileChanges? Changes { get; init; }
 
     /// <summary>

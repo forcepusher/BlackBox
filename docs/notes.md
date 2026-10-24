@@ -687,7 +687,7 @@ with its new part black for a twentieth more, and the chat jumped back (captured
 saved without the panel. **Made narrower, the panel gives way first** (`ToolkitColumns`,
 `MainWindow.FitColumns` on the columns' SizeChanged): down to its least (`ToolkitOption.MinWidth`,
 splitter included: Filmmaking 770, where its top bar still fits in one row with the film's name cut
-short; Code diff 560), then the window stops, at the panel's least plus the chat's 660 (no more than
+short; Code changes 560), then the window stops, at the panel's least plus the chat's 660 (no more than
 the screen is wide). It goes back to the width it opened at, or was dragged to, as the window widens
 again; the splitter stops at both leasts. Before (bug of 2026-10-24) the window's least counted any
 panel as 480 while Filmmaking kept its 960, so the chat was squeezed to a few letters across, and
@@ -1836,7 +1836,7 @@ Not indexed: folders on SSH hosts (`ssh` with grep works there).
 
 ### Diff
 The model's `diff` tool reads a repository's changes, or two files or folders compared (`Core/Diffs`),
-so "review what you changed" costs a diff instead of whole files read again. The user's **Code diff**
+so "review what you changed" costs a diff instead of whole files read again. The user's **Code changes**
 panel shows what the agent changed in the chat (`FileChanges`, below), and lines picked there reach
 the model as exact lines.
 
@@ -1878,9 +1878,9 @@ share; a file back as it was, or made and deleted again, drops out. The list is 
 in `Data/chats/changes/<id>.json` (written after each call, deleted with the chat), so a chat opened
 again from History shows it again; a new chat starts empty.
 
-**The panel** (Toolkit, Code diff; "Diff" until the user renamed it on 2026-10-24) opens on the
-left of the chat as Filmmaking does, with the changed files listed on the left and their diff
-beside them. It reads them again 250 ms after a call that may have changed files (a file written in
+**The panel** (Toolkit, Code changes; "Diff", then "Code diff", until the user renamed it twice on
+2026-10-24) opens on the left of the chat as Filmmaking does, with the changed files listed on the
+left and their diff beside them. It reads them again 250 ms after a call that may have changed files (a file written in
 parts is read once), keeping the picked lines picked. Lines are picked with a click,
 Shift+click and Ctrl+click (a header or @@ line picks nothing) and go into the chat's box as their
 file, captioned "Lines 48-49 · MainWindowViewModel.Toolkit.cs" (the lines first: a long name is

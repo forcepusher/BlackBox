@@ -19,7 +19,7 @@ whatever it downloads stay in a `Data` folder next to the exe.
   what you want in plain words (with nothing picked, it is about the whole film). BlackBox writes the
   prompts, picks the models, makes it and looks at it, in the chat, where you can watch it and stop
   it; right-click a piece to get an earlier version back. Or just ask for a film in the chat.
-- **See what changed.** Pick **Code diff** in the **Toolkit** dropdown: it opens on the left of the chat
+- **See what changed.** Pick **Code changes** in the **Toolkit** dropdown: it opens on the left of the chat
   with every file the agent changes in the chat, beside its diff, as it works. Click lines
   (Shift+click for a range, Ctrl+click for more) to put them in your message, then ask about them or
   have them changed.
