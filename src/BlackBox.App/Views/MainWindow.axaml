@@ -244,7 +244,7 @@
         <StackPanel Spacing="8">
           <Border Background="{StaticResource BbSurface}" CornerRadius="6" Padding="12,10,4,10">
             <ScrollViewer MaxHeight="420" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Markdown preview">
-              <SelectableTextBlock views:MarkdownText.Source="{Binding Text}" TextWrapping="Wrap" LineHeight="21" Margin="0,0,10,0" />
+              <views:MarkdownView Source="{Binding Text}" Margin="0,0,10,0" />
             </ScrollViewer>
           </Border>
           <views:PreviewFooter />
@@ -498,7 +498,8 @@
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <SelectableTextBlock views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" />
+                    <!-- The bubble's padding is the text's own, so a drag that starts in it selects too. -->
+                    <SelectableTextBlock views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" Margin="-12,-8" Padding="12,8" />
                   </StackPanel>
                 </Border>
               </StackPanel>
@@ -513,7 +514,7 @@
                           Padding="10,6">
                   <SelectableTextBlock Classes="muted" views:MarkdownText.Plain="{Binding ShownReasoning}" TextWrapping="Wrap" />
                 </Expander>
-                <SelectableTextBlock views:MarkdownText.Source="{Binding ShownText}" TextWrapping="Wrap" IsVisible="{Binding HasText}" LineHeight="21" />
+                <views:MarkdownView Source="{Binding ShownText}" IsVisible="{Binding HasText}" />
                 <TextBlock Classes="muted" Text="{Binding TypingText}" IsVisible="{Binding ShowTypingDots}" />
                 <ItemsControl ItemsSource="{Binding Previews}" IsVisible="{Binding HasPreviews}" Margin="0,4,0,0">
                   <ItemsControl.ItemsPanel>

@@ -279,7 +279,7 @@ any other file gets a card. Each has Open (its own program) and Show in folder. 
 them again when it is opened, as long as the files are still there.
 
 A Markdown file (.md, .markdown) is shown formatted by the same renderer as replies
-(`MarkdownLite` through `MarkdownText`), in a box up to 420 pixels tall that scrolls; at its ends
+(`MarkdownLite` through `MarkdownView`), in a box up to 420 pixels tall that scrolls; at its ends
 the wheel goes on scrolling the chat. Its first 100,000 characters are read, in the file's own
 encoding (`TextFiles`), cut at a whole line; the details then say "first N lines". write_file
 reports a Markdown file it writes or appends to as a file of the call, so it shows under the call;
@@ -1504,6 +1504,20 @@ minutes which looked like the model thinking.
 
 Replies are shown with their Markdown formatted: bold, headings, lists, code and tables (lined
 up in a monospace font), as models write them; the thinking above them stays as written.
+`MarkdownView` cuts a reply at its fenced code blocks (`MarkdownLite.Blocks`): the text between
+them goes to `MarkdownText` as before, and each block is a box of its own in monospace, wrapped,
+with the language from its fence and a Copy button that copies the code as written. A block still
+streaming in runs to the end of the reply; at each streamed piece the parts already shown keep
+their controls and only get their new text. A fence indented in a list takes that indent off its
+lines, and only a bare fence (no language) closes a block, so a ```` ```js ```` line inside one
+stays code. Selecting can't run from the text into a code block, being two text blocks.
+
+Every `SelectableTextBlock` has a transparent background (App.axaml). Without one Avalonia hits a
+text block only on its glyphs, so a drag that started beside a short line, between two lines or
+between letters selected nothing, and the user had to land on a letter exactly; checked in the app
+with drags sent by mouse_event, which copied nothing from those places before and the text after.
+The user's bubble gives its padding to its text block (negative margin, same padding), so a drag
+from the bubble's edge selects too.
 
 Web addresses in the chat are links: in replies (written out, `www.` ones, in code and tables,
 and Markdown's `[text](https://...)`, which shows its text alone), in the user's messages, in the

@@ -29,6 +29,34 @@
     <Style Selector="SelectableTextBlock.muted.error">
       <Setter Property="Foreground" Value="{StaticResource BbError}" />
     </Style>
+    <!-- Without a background a text block is hit only on its glyphs, so a drag had to start exactly
+         on a letter; transparent, its whole box (line gaps, the space after a short line) starts one. -->
+    <Style Selector="SelectableTextBlock">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <!-- A fenced code block in a reply (MarkdownView): its language and Copy over the code. -->
+    <Style Selector="Border.code">
+      <Setter Property="Background" Value="{StaticResource BbSurface}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="DockPanel.codeHeader">
+      <Setter Property="Margin" Value="12,4,4,0" />
+    </Style>
+    <Style Selector="SelectableTextBlock.code">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="LineHeight" Value="19" />
+      <Setter Property="Padding" Value="12,2,12,10" />
+    </Style>
+    <Style Selector="Button.copyCode">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
 
     <!-- The server dot in the top bar: grey until checked, then amber, green or red. -->
     <Style Selector="Ellipse.status">
