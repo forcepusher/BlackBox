@@ -6,7 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- **Diff** in the **Toolkit** dropdown: the changes in a git repository on the left of the chat, file
+- "in development" beside the **Toolkit** dropdown: its tools are still being built.
+- **Code diff** in the **Toolkit** dropdown: the changes in a git repository on the left of the chat, file
   by file (uncommitted, staged, the last commit, a commit, or since a branch), updated as files change.
   Lines you click go into your message, so you can ask about them or have them changed.
 - The agent's `diff` tool: it looks through what changed in a repository, or between two files or

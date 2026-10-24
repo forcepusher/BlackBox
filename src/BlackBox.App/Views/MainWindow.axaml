@@ -306,6 +306,9 @@
             </DataTemplate>
           </ComboBox.ItemTemplate>
         </ComboBox>
+        <!-- The tools are still being built: said once, quietly, beside the dropdown. -->
+        <TextBlock DockPanel.Dock="Left" Classes="muted" Text="in development" VerticalAlignment="Center" Margin="10,0,0,0"
+                   ToolTip.Tip="The Toolkit's tools are still being built and may change" />
 
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <!-- Earlier chats, newest first: a row opens one, its trash button deletes it. A chat another

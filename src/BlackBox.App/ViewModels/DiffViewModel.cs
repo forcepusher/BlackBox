@@ -443,8 +443,8 @@ public sealed partial class DiffViewModel : ObservableObject, IToolkit
         if (_diff is not { } diff || Folder is not { } folder)
             return null;
         var picks = Picks().Where(p => files.Contains(p.FullPath, StringComparer.OrdinalIgnoreCase)).ToList();
-        var via = $"Diff · {FolderName}" + (picks.Count == 0 ? "" : " · " + string.Join(", ", picks.Select(p => $"{Path.GetFileName(p.File.File.Path)} {Lines(p.Rows)}")));
-        var context = new StringBuilder($"[The Diff panel is open beside the chat, showing {Lower(diff.Title)} in {folder} ({DiffCall()} shows the same). ");
+        var via = $"Code diff · {FolderName}" + (picks.Count == 0 ? "" : " · " + string.Join(", ", picks.Select(p => $"{Path.GetFileName(p.File.File.Path)} {Lines(p.Rows)}")));
+        var context = new StringBuilder($"[The Code diff panel is open beside the chat, showing {Lower(diff.Title)} in {folder} ({DiffCall()} shows the same). ");
         if (picks.Count == 0)
         {
             context.Append("What they say is about these changes unless they say otherwise.]");
