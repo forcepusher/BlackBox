@@ -26,8 +26,12 @@ public interface IToolkit : IDisposable
     bool Drop(IReadOnlyList<string> paths);
 }
 
-/// <summary>An entry of the Toolkit dropdown: None, or a tool with how wide its panel opens.</summary>
-public sealed record ToolkitOption(string Name, string Description, double Width, Func<MainWindowViewModel, IToolkit>? Open)
+/// <summary>
+/// An entry of the Toolkit dropdown: None, or a tool with how wide its panel opens and how narrow it
+/// may get with its top bar still in one row, both with the splitter on its right, and how short the
+/// window may get with it open (0: as short as the chat may).
+/// </summary>
+public sealed record ToolkitOption(string Name, string Description, double Width, double MinWidth, double MinHeight, Func<MainWindowViewModel, IToolkit>? Open)
 {
     /// <summary>What the dropdown says while it is picked: "Toolkit" with none, else the tool's name.</summary>
     public string Label => Open is null ? "Toolkit" : Name;
@@ -42,10 +46,10 @@ public sealed partial class MainWindowViewModel
     /// <summary>What the Toolkit dropdown offers: nothing, or a tool whose panel opens on the left of the chat.</summary>
     public IReadOnlyList<ToolkitOption> ToolkitOptions { get; } =
     [
-        new("None", "The chat alone", 0, null),
-        new("Filmmaking", "Plan a film shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960,
+        new("None", "The chat alone", 0, 0, 0, null),
+        new("Filmmaking", "Plan a film shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960, 770, 600,
             vm => new FilmViewModel(vm._previews, vm, vm._paths.FilmsDir, null)),
-        new("Code diff", "See what changed in a git repository, file by file: click lines to ask about them in the chat", 880,
+        new("Code diff", "See what changed in a git repository, file by file: click lines to ask about them in the chat", 880, 560, 0,
             vm => new DiffViewModel(vm, vm._paths.DataDir)),
     ];
 
