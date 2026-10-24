@@ -2202,6 +2202,13 @@ dotnet run --project src/BlackBox.Cli -- --yes --then "brighter" --then "@20 and
 ./scripts/comfy-test.ps1          # BlackBox makes a picture, a video, sounds, music, speech and a 3D model with this PC's ComfyUI
 ```
 
+Every build of the app and the CLI is self-contained on Windows (`RuntimeIdentifier` = the SDK's,
+`SelfContained`, no runtime folder added to the output path), so `bin\Debug\net10.0-windows\BlackBox.exe`
+starts on a PC with no .NET installed or on PATH. Before (24 October 2026), `dotnet build` made a
+framework-dependent exe, and double-clicking it on the laptop (only the portable SDK in `.dev\dotnet`)
+showed "You must install .NET Desktop Runtime"; the published exe was already self-contained. Each
+debug folder now holds the runtime too: about 240 files, 123 MB.
+
 ### Several monitors
 `agent-tasks.ps1` has four tasks for a second monitor (skipped with one), each checking the end
 state itself: `mm-type` types into a Notepad on screen 2 that the request doesn't place, `mm-open`
