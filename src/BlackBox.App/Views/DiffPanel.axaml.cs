@@ -4,7 +4,7 @@ using BlackBox.App.ViewModels;
 
 namespace BlackBox.App.Views;
 
-/// <summary>The Code diff panel, on the left of the chat window: the files the agent changed, and their diff, whose lines are picked by a click.</summary>
+/// <summary>The Code changes panel, on the left of the chat window: the files the agent changed, and their diff, whose lines are picked by a click.</summary>
 public partial class DiffPanel : UserControl
 {
     public DiffPanel()

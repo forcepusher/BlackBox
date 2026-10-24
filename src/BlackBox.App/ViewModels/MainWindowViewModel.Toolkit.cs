@@ -51,7 +51,7 @@ public sealed partial class MainWindowViewModel
         new("None", "The chat alone", 0, 0, 0, null),
         new("Filmmaking", "Plan a film shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960, 770, 600,
             vm => new FilmViewModel(vm._previews, vm, vm._paths.FilmsDir, null)),
-        new("Code diff", "See the files the agent changes in this chat as it works: click lines to ask about them", 880, 560, 0,
+        new("Code changes", "See the files the agent changes in this chat as it works: click lines to ask about them", 880, 560, 0,
             vm => new DiffViewModel(vm)),
     ];
 
@@ -138,7 +138,7 @@ public sealed partial class MainWindowViewModel
         return playing;
     }
 
-    // ---- the files the agent changed in this chat (the Code diff panel) -------------------------
+    // ---- the files the agent changed in this chat (the Code changes panel) -------------------------
 
     /// <summary>The files the agent changed in the chat on screen, each with what it held before.</summary>
     internal FileChanges Changes { get; private set; } = null!;

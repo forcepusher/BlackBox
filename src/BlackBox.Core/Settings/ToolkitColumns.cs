@@ -2,7 +2,7 @@ namespace BlackBox.Core.Settings;
 
 /// <summary>
 /// How the chat window shares its width with a tool's panel on the left of the chat (Filmmaking,
-/// Code diff), in the UI's own units; a panel's widths count the splitter on its right. The panel
+/// Code changes), in the UI's own units; a panel's widths count the splitter on its right. The panel
 /// gives way first: shrunk, the window takes its width from the panel down to the panel's least, and
 /// only then stops; the chat never gets narrower than its own least. The panel opened at 960 and kept
 /// it: the window's least counted the panel as 480, so the chat was squeezed to a few letters across
