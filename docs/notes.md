@@ -668,7 +668,9 @@ window to the left side instead of opening a new separate window... Use the main
 making... Put filmmaking button under Toolkit dropdown menu with None and Filmmaking options. There
 will be more tools extending to the left side of the screen later."). The **Toolkit** dropdown
 takes the place of the second BlackBox logo and name under the title bar, an arrow on it pointing
-left, where its tools open: None or Filmmaking (`ToolkitOption`, `IToolkit`, more to come). Its
+left, where its tools open: None or Filmmaking (`ToolkitOption`, `IToolkit`, more to come). A muted "in development" beside it (the
+user, 2026-10-24) says its tools are still being built: the header's `muted` text, 10 px right of
+the dropdown and centred on it. Its
 arrows are solid triangles, the left one and the dropdown's, as History's and every dropdown's are
 (the user: "Arrows need consistency"; Fluent's thin chevron is replaced in App.axaml by a style
 that depends on a state, as a plain one loses to what the template sets). Picked,
@@ -1822,8 +1824,8 @@ is in the second half of the part, else at a line break; a later part says which
 `summary=true` is the list alone, and a file's path narrows it to that file. Lines over 1,000
 characters are cut.
 
-**The panel** (Toolkit, Diff) opens on the left of the chat as Filmmaking does: the repository
-opened last (`Data/diff.json`), else the one the chat's tool calls worked in last, and the menu on
+**The panel** (Toolkit, Code diff; "Diff" until the user renamed it on 2026-10-24) opens on the
+left of the chat as Filmmaking does: the repository opened last (`Data/diff.json`), else the one the chat's tool calls worked in last, and the menu on
 its name opens another. It shows uncommitted changes, staged ones, the last commit, a commit, or
 everything since a commit or branch, with the changed files listed on the left, and reads them again
 when files in the repository change (a FileSystemWatcher, 1.2 s after the last change; git's own

@@ -43,9 +43,9 @@ public sealed partial class MainWindowViewModel
     public IReadOnlyList<ToolkitOption> ToolkitOptions { get; } =
     [
         new("None", "The chat alone", 0, null),
-        new("Filmmaking", "Plan a film shot by shot and make it with ComfyUI: pick a picture, clip or folder of it and say in the chat what to do", 960,
+        new("Filmmaking", "Plan a film shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960,
             vm => new FilmViewModel(vm._previews, vm, vm._paths.FilmsDir, null)),
-        new("Diff", "See what changed in a git repository, file by file: click lines to ask about them in the chat", 880,
+        new("Code diff", "See what changed in a git repository, file by file: click lines to ask about them in the chat", 880,
             vm => new DiffViewModel(vm, vm._paths.DataDir)),
     ];
 
