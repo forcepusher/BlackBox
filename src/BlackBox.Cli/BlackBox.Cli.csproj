@@ -11,6 +11,14 @@
     <ApplicationManifest>..\BlackBox.App\app.manifest</ApplicationManifest>
   </PropertyGroup>
 
+  <!-- Builds carry their own .NET, so blackbox-cli.exe also runs on a PC without .NET installed
+       (see BlackBox.App.csproj). -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\BlackBox.Core\BlackBox.Core.csproj" />
     <ProjectReference Include="..\BlackBox.Platform.Windows\BlackBox.Platform.Windows.csproj" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
