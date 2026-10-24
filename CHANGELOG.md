@@ -98,6 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   title, and the soundtrack and shots' own sound sliders.
 
 ### Fixed
+- A message sent with LM Studio at `localhost` no longer waits about 4 seconds before LM Studio
+  starts loading the model, and each later connection to it no longer waits 2 seconds.
 - With Filmmaking or Code diff open, the window can no longer be made so narrow that the chat is
   squeezed to a few letters across: the panel gives way first, then the window stops. Filmmaking
   also keeps the window tall enough for its viewer, and a long film name is cut short at the top.

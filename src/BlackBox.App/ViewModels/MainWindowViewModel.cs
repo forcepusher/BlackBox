@@ -550,20 +550,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         try
         {
             var server = _settings.Server;
-            // The server may offer other models than at the last check: the picked one back, or the one in use gone.
-            if (Core.Llm.ServerAddress.Candidates(server.BaseUrl).Count > 0)
-                await ProbeServerAsync(quiet: true, ct);
-            // Said with Continue by the catch below, which also gives back what was sent meanwhile:
-            // returning here left those messages above the box for good.
-            if (Core.Llm.ServerAddress.Candidates(server.BaseUrl).Count == 0 || string.IsNullOrWhiteSpace(server.ModelInUse))
-                throw new InvalidOperationException("Enter your model server's address and pick a model at the top first, then press Continue.");
-            // LM Studio loads models on first use; do that now so we know the real context size.
+            // The check and the load on one connection: a new one is a round trip more before LM Studio starts loading.
             using (var probeHttp = LlmHttp.Create(TimeSpan.FromMinutes(10)))
             {
-                // Not into a chat opened since: the run is then one ending for the chat left.
+                // The server may offer other models than at the last check: the picked one back, or the one in use gone.
+                var probe = Core.Llm.ServerAddress.Candidates(server.BaseUrl).Count > 0 ? await ProbeServerAsync(quiet: true, ct, probeHttp) : null;
+                // Said with Continue by the catch below, which also gives back what was sent meanwhile:
+                // returning here left those messages above the box for good.
+                if (Core.Llm.ServerAddress.Candidates(server.BaseUrl).Count == 0 || string.IsNullOrWhiteSpace(server.ModelInUse))
+                    throw new InvalidOperationException("Enter your model server's address and pick a model at the top first, then press Continue.");
+                // LM Studio loads models on first use; do that now so we know the real context size.
+                // What the check just said of the model isn't asked again. Not into a chat opened
+                // since: the run is then one ending for the chat left.
                 var facts = await ServerProbe.EnsureLoadedAsync(probeHttp, server,
                     () => Dispatcher.UIThread.Post(() => { if (!_runDetached) AddNotice("Loading the model on the server…", isError: false); }), ct,
-                    note => Dispatcher.UIThread.Post(() => { if (!_runDetached) AddNotice(note, isError: false); }));
+                    note => Dispatcher.UIThread.Post(() => { if (!_runDetached) AddNotice(note, isError: false); }),
+                    known: probe is not null && probe.Model == server.ModelInUse ? probe.Facts : null);
                 if (facts.Context is { } context)
                 {
                     server.SetDetectedContext(context, facts.Hosted);

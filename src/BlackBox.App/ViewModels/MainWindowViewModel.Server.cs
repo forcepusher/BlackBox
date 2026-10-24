@@ -303,7 +303,9 @@ public sealed partial class MainWindowViewModel
     /// top bar meanwhile, and the context size known for the model stays (a run may have learnt it
     /// from the server's "too long" error) unless the model to use changed.
     /// </summary>
-    private async Task ProbeServerAsync(bool quiet, CancellationToken ct)
+    /// <param name="http">The client to ask with: the one the task then loads the model with, so it goes on the same connection.</param>
+    /// <returns>What the server said, or null when it wasn't asked or the address or model changed meanwhile.</returns>
+    private async Task<ProbeResult?> ProbeServerAsync(bool quiet, CancellationToken ct, HttpClient? http = null)
     {
         var version = ++_checkVersion;
         var server = _settings.Server;
@@ -311,15 +313,15 @@ public sealed partial class MainWindowViewModel
         {
             SetStatus(ServerState.Unknown, "Not set up", "Enter the address of your model server (for example LM Studio at http://localhost:1234/v1) at the top, " +
                                                          "or use Kilo's free online models, which need no account.");
-            return;
+            return null;
         }
 
         if (!quiet)
             SetStatus(ServerState.Checking, "Checking…", null);
-        using var probeHttp = LlmHttp.Create(TimeSpan.FromSeconds(10));
-        var probe = await ServerProbe.CheckAsync(probeHttp, server, ct);
+        using var own = http is null ? LlmHttp.Create(TimeSpan.FromSeconds(10)) : null;
+        var probe = await ServerProbe.CheckAsync(http ?? own!, server, ct);
         if (version != _checkVersion)
-            return; // the address or model changed while this check was running
+            return null; // the address or model changed while this check was running
         if (probe.BaseUrl is { } found && found != server.BaseUrl)
         {
             // "host:1234" became the full URL that answered; show it so there is no doubt.
@@ -343,13 +345,13 @@ public sealed partial class MainWindowViewModel
         if (probe.KeyRefused)
         {
             SetStatus(ServerState.Failed, "Key refused", probe.Message + (kilo ? "" : " Or use Kilo's free online models, which need no account."));
-            return;
+            return probe;
         }
         if (!probe.Reachable)
         {
             SetStatus(ServerState.Failed, "Offline", $"{probe.Message}{ServerAppHint(server.BaseUrl)} Check the address at the top and that the server is running" +
                                                      (kilo ? "." : ", or use Kilo's free online models, which need no account."));
-            return;
+            return probe;
         }
         if (probe.Model is null)
         {
@@ -358,7 +360,7 @@ public sealed partial class MainWindowViewModel
                 : string.IsNullOrEmpty(server.Model)
                     ? "The server is running but offers no models. Load or download one in LM Studio."
                     : $"The server doesn't offer \"{server.Model}\" anymore, nor any other model to chat with. Load or download one in LM Studio.");
-            return;
+            return probe;
         }
 
         if (!quiet || server.ModelInUse != before)
@@ -380,6 +382,7 @@ public sealed partial class MainWindowViewModel
                 "Your model isn't on the server");
         else
             SetStatus(ServerState.Connected, status, null);
+        return probe;
     }
 
     /// <summary>
