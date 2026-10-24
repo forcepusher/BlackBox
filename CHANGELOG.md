@@ -102,6 +102,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - The `BlackBox.exe` and `blackbox-cli.exe` that `dotnet build` makes run on a PC without .NET installed,
   instead of asking for the .NET Desktop Runtime.
+- A picture BlackBox was reading when a program started no longer stays locked until that program
+  ends: it can be deleted or replaced at once.
 - Selecting text in the chat starts wherever the drag does: beside a short line, between lines or
   letters, and in the padding of your messages, not only on a letter.
 - A message sent with LM Studio at `localhost` no longer waits about 4 seconds before LM Studio

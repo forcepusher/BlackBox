@@ -374,7 +374,7 @@ public sealed class Mesh : IDisposable
                             SKBitmap? bitmap = null;
                             if (texture is not null)
                             {
-                                try { bitmap = SKBitmap.Decode(Path.Combine(dir, texture)); }
+                                try { bitmap = PictureFile.Decode(Path.Combine(dir, texture)); }
                                 catch (Exception ex) when (ex is IOException or ArgumentException) { }
                                 if (bitmap is null) mesh.Notes.Add($"texture {texture} couldn't be read");
                             }

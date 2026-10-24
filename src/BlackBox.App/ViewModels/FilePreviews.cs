@@ -165,7 +165,7 @@ public sealed partial class ImagePreview(string path) : FilePreview(path)
         using var stream = File.OpenRead(Path);
         var bitmap = Bitmap.DecodeToWidth(stream, Width, BitmapInterpolationMode.HighQuality);
         var size = Size(Path);
-        using var probe = SKCodec.Create(Path);
+        using var probe = PictureFile.Codec(Path);
         var details = probe is null ? size : $"{probe.Info.Width}x{probe.Info.Height}, {size}";
         Show(() => (Image, Details) = (bitmap, details), bitmap.Dispose);
     });
@@ -190,7 +190,7 @@ public sealed partial class AnimationPreview(string path, int width = FilePrevie
 
     protected override void Load() => Background(() =>
     {
-        using var codec = SKCodec.Create(Path) ?? throw new InvalidDataException("not a picture");
+        using var codec = PictureFile.Codec(Path) ?? throw new InvalidDataException("not a picture");
         var info = codec.FrameInfo;
         var count = Math.Max(1, Math.Min(codec.FrameCount, 400));
         // Every frame is kept, so all of them together within 256 MB: full screen, a 16 s 1080p

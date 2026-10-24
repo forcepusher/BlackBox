@@ -52,8 +52,8 @@ public static partial class FilmCheck
             var last = shot.LipSync ? null : board.Frame(shot.Last);
             var firstPicture = first is null ? null : board.FramePicture(first);
             var lastPicture = last is null ? null : board.FramePicture(last);
-            using var start = firstPicture is not null && File.Exists(firstPicture) ? SKBitmap.Decode(firstPicture) : null;
-            using var end = lastPicture is not null && File.Exists(lastPicture) ? SKBitmap.Decode(lastPicture) : null;
+            using var start = firstPicture is not null && File.Exists(firstPicture) ? PictureFile.Decode(firstPicture) : null;
+            using var end = lastPicture is not null && File.Exists(lastPicture) ? PictureFile.Decode(lastPicture) : null;
             if (start is not null)
             {
                 var alike = Alike(start, frames[0].Frame);
@@ -957,7 +957,7 @@ public static partial class FilmCheck
     {
         try
         {
-            using var bitmap = SKBitmap.Decode(file);
+            using var bitmap = PictureFile.Decode(file);
             if (bitmap is null)
                 return null;
             var scale = Math.Min(1, maxSide / (double)Math.Max(bitmap.Width, bitmap.Height));

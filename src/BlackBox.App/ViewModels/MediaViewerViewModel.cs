@@ -182,7 +182,7 @@ public sealed partial class ViewerPicture : ObservableObject, IDisposable
             try
             {
                 using var stream = data is not null ? new MemoryStream(data) : (Stream)File.OpenRead(path!);
-                using var probe = SkiaSharp.SKCodec.Create(path ?? "") ?? (data is not null ? SkiaSharp.SKCodec.Create(new MemoryStream(data)) : null);
+                using var probe = (path is not null ? PictureFile.Codec(path) : null) ?? (data is not null ? SkiaSharp.SKCodec.Create(new MemoryStream(data)) : null);
                 var size = probe is { } p ? $"{p.Info.Width}x{p.Info.Height}" : "";
                 bitmap = probe is { } c && c.Info.Width > width ? Bitmap.DecodeToWidth(stream, width, BitmapInterpolationMode.HighQuality) : new Bitmap(stream);
                 details = path is null ? size : string.Join(", ", new[] { size, FilePreview.Size(path) }.Where(s => s.Length > 0));

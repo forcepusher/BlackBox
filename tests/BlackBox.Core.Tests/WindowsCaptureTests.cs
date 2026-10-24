@@ -12,6 +12,7 @@ namespace BlackBox.Core.Tests;
 /// what screen recorders and screen sharing capture right after (there was an option for that before).
 /// Puts a small red window in the screen corner for a moment.
 /// </summary>
+[Collection(RealScreen.Name)]
 public class WindowsCaptureTests
 {
     [Fact]
@@ -89,5 +90,16 @@ public class WindowsCaptureTests
         [DllImport("gdi32.dll")]
         private static extern nint CreateSolidBrush(uint color);
     }
+}
+
+/// <summary>
+/// The tests that put windows on the real screen and capture it: one at a time, with no other test
+/// running. Side by side, one's window covered the other's, and BlackBox's own screenshot (which
+/// leaves out every window of this process while it is taken) left the other's window out.
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class RealScreen
+{
+    public const string Name = "Real screen";
 }
 #endif

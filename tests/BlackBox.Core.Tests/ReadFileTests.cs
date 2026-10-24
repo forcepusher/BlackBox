@@ -41,6 +41,35 @@ public class ReadFileTests : IDisposable
     }
 
     [Fact]
+    public void A_program_started_while_a_picture_is_open_does_not_hold_the_file()
+    {
+        // Skia opening the path itself gave the child process its handle: the delete below failed
+        // until ping ended, and the picture test above failed now and then the same way.
+        var path = Path.Combine(_dir, "small.png");
+        using (var bmp = new SKBitmap(new SKImageInfo(8, 8, SKColorType.Rgba8888, SKAlphaType.Premul)))
+        {
+            bmp.Erase(SKColors.Red);
+            using var data = bmp.Encode(SKEncodedImageFormat.Png, 100);
+            File.WriteAllBytes(path, data.ToArray());
+        }
+
+        using var codec = BlackBox.Core.Media.PictureFile.Codec(path);
+        Assert.NotNull(codec);
+        using var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe", "/c ping -n 3 127.0.0.1")
+            { UseShellExecute = false, RedirectStandardOutput = true, CreateNoWindow = true })!;
+        try
+        {
+            File.Delete(path);
+            using var decoded = SKBitmap.Decode(codec); // the codec keeps the bytes
+            Assert.Equal(SKColors.Red, decoded.GetPixel(4, 4));
+        }
+        finally
+        {
+            child.Kill();
+        }
+    }
+
+    [Fact]
     public async Task A_picture_is_shown_to_the_model_scaled_and_on_white()
     {
         // 4000x500 with a transparent half: scaled to fit 2048 wide, sides on the 32 px patch grid.

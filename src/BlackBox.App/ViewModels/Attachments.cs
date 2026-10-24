@@ -106,7 +106,7 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
         {
             using var stream = File.OpenRead(Path);
             var bitmap = Bitmap.DecodeToHeight(stream, 240, BitmapInterpolationMode.HighQuality);
-            using var probe = SkiaSharp.SKCodec.Create(Path);
+            using var probe = PictureFile.Codec(Path);
             var details = probe is null ? size : $"{probe.Info.Width}x{probe.Info.Height}, {size}";
             Dispatcher.UIThread.Post(() =>
             {

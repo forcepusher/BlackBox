@@ -97,14 +97,14 @@ public static class MediaPreview
 
     private static (string, SKBitmap?, string) LookAtPicture(string path, string size, bool makeTile)
     {
-        using var codec = SKCodec.Create(path) ?? throw new InvalidDataException("not a picture this can read");
+        using var codec = PictureFile.Codec(path) ?? throw new InvalidDataException("not a picture this can read");
         var (w, h) = (codec.Info.Width, codec.Info.Height);
         var frames = codec.FrameCount;
         if (frames <= 1)
         {
             if (!makeTile)
                 return ($"picture {w}x{h}, {size}", null, "");
-            using var bitmap = SKBitmap.Decode(path) ?? throw new InvalidDataException("not a picture this can read");
+            using var bitmap = PictureFile.Decode(path) ?? throw new InvalidDataException("not a picture this can read");
             // Shown on white, an all-transparent picture looks blank, and a model may describe what
             // it expected to see in it.
             var clear = BlackBox.Core.Tools.Picture.Transparency(bitmap) is { } t ? $", {t} (shown on white)" : "";
@@ -451,7 +451,7 @@ public static class MediaPreview
     /// <param name="label">What the picture on the left is: "The user's picture".</param>
     public static byte[]? SideBySide(string reference, byte[] look, string label)
     {
-        using var left = SKBitmap.Decode(reference);
+        using var left = PictureFile.Decode(reference);
         using var right = SKBitmap.Decode(look);
         if (left is null || right is null)
             return null;
