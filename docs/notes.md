@@ -1252,6 +1252,15 @@ a model's capabilities; models on other servers are assumed to see images. When 
 refuses a picture after all, the pictures already in the chat become a line each, the run goes on
 without them, and the next runs have no screen tools.
 
+Before each task BlackBox checks the server (the models it lists, the one to use, whether it is
+loaded) and then has LM Studio load it if needed, on one connection, without asking about the model
+twice. Each connection tries the host's IPv6 and IPv4 addresses at the same time: "localhost" is
+::1 first, LM Studio listens on IPv4 only, and Windows takes 2 s to give up on a port nobody
+listens on, so each new connection waited 2 s. On 24 October 2026, with LM Studio reached as
+`localhost:1234` (through an IPv4-only port, as LM Studio's own) and a model not loaded, the
+request that loads it went out 5.5 s after the message was sent, and 1.0 s after the fix; with the
+server's own address over the VPN, 1.6 s and 1.0 s.
+
 Until you pick a model, BlackBox uses the strongest one the server offers. One that takes images
 comes first. Then it goes by Terminal-Bench 2.1, a benchmark of agent tasks done in a terminal,
 with the scores Artificial Analysis measured running every model the same way: BlackBox has those

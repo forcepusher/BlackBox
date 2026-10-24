@@ -16,7 +16,11 @@ namespace BlackBox.Core.Llm;
 /// <param name="KeyRefused">The server answered, but turned the API key down (see <see cref="KeyRefusedException"/>); <paramref name="Message"/> says what to change.</param>
 /// <param name="Efforts">The effort levels <paramref name="Model"/> takes (see <see cref="ModelInfo.Efforts"/>); empty when it takes none or nothing says.</param>
 public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, int? LoadedContext, bool? Vision, string Message, bool? Loaded = null, string? BaseUrl = null,
-    string? Model = null, bool AutoPicked = false, string? ModelDetails = null, bool ContextHosted = false, bool KeyRefused = false, IReadOnlyList<string>? Efforts = null);
+    string? Model = null, bool AutoPicked = false, string? ModelDetails = null, bool ContextHosted = false, bool KeyRefused = false, IReadOnlyList<string>? Efforts = null)
+{
+    /// <summary>What the server said of <see cref="Model"/>, as <see cref="ServerProbe.TryContextAsync"/> gives it; null when it wasn't reached.</summary>
+    public ModelFacts? Facts => Reachable && Model is not null ? new ModelFacts(LoadedContext, Loaded, Vision, ContextHosted) : null;
+}
 
 /// <summary>What the server says about the model in use; nulls where it doesn't say.</summary>
 /// <param name="Hosted">
@@ -294,9 +298,11 @@ public static partial class ServerProbe
     /// kept: a model set to 31k, loaded again at 64k beside another one, crashed at its first
     /// answer. A model the user loaded themselves is left as it is.
     /// </remarks>
-    public static async Task<ModelFacts> EnsureLoadedAsync(HttpClient http, ServerSettings server, Action? onLoading, CancellationToken ct, Action<string>? onNote = null)
+    /// <param name="known">What a check just now said of the model (see <see cref="ProbeResult.Facts"/>), so the server isn't asked again before it loads.</param>
+    public static async Task<ModelFacts> EnsureLoadedAsync(HttpClient http, ServerSettings server, Action? onLoading, CancellationToken ct, Action<string>? onNote = null,
+        ModelFacts? known = null)
     {
-        var facts = await TryContextAsync(http, server, ct).ConfigureAwait(false);
+        var facts = known ?? await TryContextAsync(http, server, ct).ConfigureAwait(false);
         if (facts.Loaded != false)
             return facts;
 
