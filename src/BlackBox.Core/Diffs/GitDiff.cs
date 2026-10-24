@@ -203,28 +203,6 @@ public static partial class GitDiff
         return listed.Out.Split('\0', StringSplitOptions.RemoveEmptyEntries).Take(500).Select(p => new UntrackedFile(p, CountLines(Path.Combine(root, p)))).ToList();
     }
 
-    /// <summary>
-    /// A file git doesn't track yet as all added (as git diff shows it once it is added), for the
-    /// Diff panel: a file the agent just made is what the user wants to see. Null for a binary or
-    /// big one.
-    /// </summary>
-    public static DiffFile? AsAdded(string root, UntrackedFile file, int maxLines = 5_000)
-    {
-        if (file.Lines is not { } count || count > maxLines)
-            return null;
-        try
-        {
-            var lines = LineDiff.Lines(File.ReadAllText(Path.Combine(root, file.Path)));
-            var shown = new List<DiffLine>(lines.Length + 1) { new(DiffLineKind.Hunk, null, null, $"@@ -0,0 +1,{lines.Length} @@") };
-            shown.AddRange(lines.Select((l, i) => new DiffLine(DiffLineKind.Added, null, i + 1, DiffLine.Cut(l))));
-            return new DiffFile(file.Path, "not tracked yet", shown) { Added = lines.Length };
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
     /// <summary>A text file's lines; null for a binary one, or one over 2 MB.</summary>
     internal static long? CountLines(string path)
     {

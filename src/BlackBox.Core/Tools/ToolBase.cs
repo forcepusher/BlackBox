@@ -146,6 +146,9 @@ public sealed class ToolContext
     /// <summary>Where helper files for a task go (BlackBox's Data/scratch); null to use the system's temp folder.</summary>
     public string? ScratchDirectory { get; init; }
 
+    /// <summary>The files the agent changes in this chat, for the Code diff panel; null when nobody shows them.</summary>
+    public Diffs.FileChanges? Changes { get; init; }
+
     /// <summary>
     /// Tells the user how a long call is getting on ("KSampler, step 3 of 20 · 1:12"), shown on its
     /// card while it runs. Set by the agent session for each call; null when nobody listens.

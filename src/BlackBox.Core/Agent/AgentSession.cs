@@ -678,6 +678,8 @@ public sealed partial class AgentSession(
         observer.OnToolStarted(call, summary);
         ToolResult result;
         toolContext.Progress = text => observer.OnToolProgress(call, text);
+        // The file it writes is read first, the folder a command runs in watched: the Code diff panel shows what changed.
+        var changing = toolContext.Changes?.Starting(tool, args, toolContext);
         try
         {
             result = await tool.ExecuteAsync(args, toolContext, step).ConfigureAwait(false);
@@ -699,6 +701,8 @@ public sealed partial class AgentSession(
         finally
         {
             toolContext.Progress = null;
+            if (changing is not null)
+                await changing.EndAsync().ConfigureAwait(false);
         }
         observer.OnToolFinished(call, result);
         return result;

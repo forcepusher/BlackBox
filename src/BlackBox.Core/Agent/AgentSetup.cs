@@ -17,9 +17,10 @@ public static class AgentSetup
     /// <param name="desktopTurn">Shared by the agents of BlackBox's windows, for one at a time with the mouse and keyboard; null for one agent alone.</param>
     /// <param name="desktopSeat">The window the agent works in (see <see cref="ToolContext.DesktopSeat"/>).</param>
     /// <param name="folderIndex">Whether the agent has index_folder (its tool, prompt line and note); off only to measure what the index changes.</param>
+    /// <param name="changes">The chat's list of the files the agent changed (see <see cref="ToolContext.Changes"/>).</param>
     public static AgentSession Create(BackendConnection backend, IPlatformServices platform, AgentSettings agent, AppPaths paths,
         McpHost mcp, SshHosts ssh, List<ChatMessage>? history = null, Func<bool>? userComposing = null, DesktopTurn? desktopTurn = null,
-        object? desktopSeat = null, bool folderIndex = true)
+        object? desktopSeat = null, bool folderIndex = true, Diffs.FileChanges? changes = null)
     {
         var mcpSetup = new McpSetup(mcp, paths.McpConfigFile);
         var comfy = Comfy.ComfyHub.For(paths.ComfyDir);
@@ -43,6 +44,7 @@ public static class AgentSetup
             FilmsDirectory = paths.FilmsDir,
             ToolsDirectory = paths.ToolsDir,
             IndexDirectory = paths.IndexDir,
+            Changes = changes,
         };
 
         // A model that can't see gets no screen tools, nor does an OS without desktop control.

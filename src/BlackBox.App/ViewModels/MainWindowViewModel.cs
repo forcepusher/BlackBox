@@ -89,6 +89,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             InterruptCommand.NotifyCanExecuteChanged();
         };
         _selectedToolkit = ToolkitOptions[0];
+        UseChanges(new Core.Diffs.FileChanges());
     }
 
     public ObservableCollection<ChatItemViewModel> Items { get; } = [];
@@ -587,7 +588,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             }
 
             var session = _session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, _ssh, history,
-                _windows.UserComposing, _windows.DesktopTurn, desktopSeat: this);
+                _windows.UserComposing, _windows.DesktopTurn, desktopSeat: this, changes: Changes);
             // Taken now: another model can be picked at the top while the run goes on.
             var imagesKey = session.SeesImages ? ImagesKey(server) : null;
             foreach (var pending in _steerPending)

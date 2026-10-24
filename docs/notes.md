@@ -1835,9 +1835,10 @@ reads whole (about 60% in the explain runs; the index's output 2-12%).
 Not indexed: folders on SSH hosts (`ssh` with grep works there).
 
 ### Diff
-The model's `diff` tool and the user's **Diff** panel read the same changes (`Core/Diffs`), so
-"review what you changed" costs a diff instead of whole files read again, and lines the user picks
-on screen reach the model as exact lines.
+The model's `diff` tool reads a repository's changes, or two files or folders compared (`Core/Diffs`),
+so "review what you changed" costs a diff instead of whole files read again. The user's **Code diff**
+panel shows what the agent changed in the chat (`FileChanges`, below), and lines picked there reach
+the model as exact lines.
 
 **Where changes come from.** `GitDiff` runs the PC's git (on the PATH, else where Git for Windows,
 GitHub Desktop or Sourcetree keep theirs) with `--no-ext-diff --no-textconv`, `GIT_OPTIONAL_LOCKS=0`
@@ -1847,9 +1848,8 @@ Nothing it runs changes the repository; a commit or branch starting with `-` is 
 shows only what isn't staged, and the first test caught a staged deletion missing. A repository
 with no commit yet is compared with the empty tree. A commit is shown against its first parent (a
 merge then shows all it brought in), with its hash, author, date and message. Files git doesn't
-track yet are listed with their line counts, as a new file the agent wrote is one of them; the panel
-shows them as all added, the tool only lists them (read_file shows them, and a generated folder
-would flood the diff). `FolderDiff` compares two files, or two folders file by file, with its own
+track yet are listed with their line counts, as a new file the agent wrote is one of them, but not
+diffed (read_file shows them, and a generated folder would flood the diff). `FolderDiff` compares two files, or two folders file by file, with its own
 Myers diff (`LineDiff`), for paths outside a repository or a PC without git; Word, Excel, PowerPoint
 and PDF files by the text read_file shows, and line endings alone count as no change.
 
@@ -1860,16 +1860,32 @@ is in the second half of the part, else at a line break; a later part says which
 `summary=true` is the list alone, and a file's path narrows it to that file. Lines over 1,000
 characters are cut.
 
+**What the agent changed** (`FileChanges`, one per chat). The user asked on 2026-10-24 for the panel
+to fill itself with the model's changes, with no folder to choose and no git modes. Around each tool
+call (`AgentSession.RunToolAsync`, after the user's OK): write_file and edit_file read their file
+first, unless the chat already holds what it was; run_shell has the folder it runs in watched
+(a FileSystemWatcher, stopped 150 ms after the command, the last events arriving late). A path whose
+first event was its creation was not there before. One that existed is taken as git has it (`git
+show :path`, the staged or committed version) when git tracks it; otherwise BlackBox never saw it
+before the command, and it shows from that command on, under a note saying so. A command's files
+in git-ignored paths (`ls-files --others --ignored`: `check-ignore` refuses the literal pathspecs
+every git call is made with), under bin, obj, node_modules, .git, AppData and the like, binary
+files, and files over 2 MB are left out: a build would list hundreds. At most 500 files. Remote
+calls (`host`) change nothing here. Word, Excel, PowerPoint and PDF files compare by the text
+read_file shows. The diff is each file as it is now against what it held before the first change
+(Myers, `LineDiff`), in the order they were first changed, paths relative to the folder they all
+share; a file back as it was, or made and deleted again, drops out. The list is kept with the chat
+in `Data/chats/changes/<id>.json` (written after each call, deleted with the chat), so a chat opened
+again from History shows it again; a new chat starts empty.
+
 **The panel** (Toolkit, Code diff; "Diff" until the user renamed it on 2026-10-24) opens on the
-left of the chat as Filmmaking does: the repository opened last (`Data/diff.json`), else the one the chat's tool calls worked in last, and the menu on
-its name opens another. It shows uncommitted changes, staged ones, the last commit, a commit, or
-everything since a commit or branch, with the changed files listed on the left, and reads them again
-when files in the repository change (a FileSystemWatcher, 1.2 s after the last change; git's own
-objects and logs don't count), keeping the picked lines picked. Lines are picked with a click,
+left of the chat as Filmmaking does, with the changed files listed on the left and their diff
+beside them. It reads them again 250 ms after a call that may have changed files (a file written in
+parts is read once), keeping the picked lines picked. Lines are picked with a click,
 Shift+click and Ctrl+click (a header or @@ line picks nothing) and go into the chat's box as their
 file, captioned "Lines 48-49 · MainWindowViewModel.Toolkit.cs" (the lines first: a long name is
-cut there). A message sent then carries, for the model, the repository, what is compared (as a diff
-call that shows the same), and each picked line with its number and +/-, at most 300 lines. It
+cut there). A message sent then carries, for the model, the files changed (up to 30 named) and each
+picked line with its number and +/-, at most 300 lines; nothing while no file has changed. It
 says only that these are the lines the user refers to, not that they are to be changed: the user
 picks lines to ask about them as much as to have them changed (the user, 2026-10-24). Sent, they
 are no longer picked; one taken off the box (its ×) is unpicked in the panel too.
