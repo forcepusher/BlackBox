@@ -152,22 +152,27 @@
                 ToolTip.Tip="BlackBox makes in the chat what isn't made yet or has changed, looks at each piece and fixes what it finds, then joins the film and looks at it" />
         <Button DockPanel.Dock="Right" Classes="ghost" Content="New film" Command="{Binding NewFilmCommand}" Margin="0,0,6,0"
                 ToolTip.Tip="A film of its own: type its name, then say in the chat what it is to be" />
-        <Button x:Name="FilmButton" DockPanel.Dock="Left" Classes="ghost" Padding="8,4" Margin="0,0,16,0" Click="OnFilmMenu"
-                ToolTip.Tip="Your films: open another, or rename or delete this one" AutomationProperties.Name="Films">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBlock Text="{Binding FilmName}" FontWeight="SemiBold" MaxWidth="260" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-            <PathIcon Data="M7 10l5 5 5-5z" Width="10" Height="10" VerticalAlignment="Center" />
+        <!-- Short of room (the window made narrower), the film's name is cut short rather than the
+             fields going over the buttons: its column is the one that gives way. -->
+        <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left" Margin="0,0,12,0">
+          <Button x:Name="FilmButton" Classes="ghost" Padding="8,4" Margin="0,0,16,0" Click="OnFilmMenu"
+                  ToolTip.Tip="Your films: open another, or rename or delete this one" AutomationProperties.Name="Films">
+            <!-- Not a StackPanel: across, that gives the name all the room it wants and it is never cut short. -->
+            <DockPanel>
+              <PathIcon DockPanel.Dock="Right" Data="M7 10l5 5 5-5z" Width="10" Height="10" Margin="8,0,0,0" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding FilmName}" FontWeight="SemiBold" MaxWidth="260" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            </DockPanel>
+          </Button>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <TextBlock Classes="label" Text="Frame size" VerticalAlignment="Center" />
+            <NumericUpDown Value="{Binding FrameWidth}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="76" ShowButtonSpinner="False" AutomationProperties.Name="Frame width" />
+            <TextBlock Text="×" VerticalAlignment="Center" />
+            <NumericUpDown Value="{Binding FrameHeight}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="76" ShowButtonSpinner="False" AutomationProperties.Name="Frame height" />
+            <TextBlock Classes="label" Text="Frame rate" VerticalAlignment="Center" Margin="12,0,0,0" />
+            <NumericUpDown Value="{Binding Fps}" Minimum="1" Maximum="120" Increment="1" FormatString="0" Width="52" ShowButtonSpinner="False" AutomationProperties.Name="Frame rate" />
+            <TextBlock Classes="muted" Text="fps" VerticalAlignment="Center" />
           </StackPanel>
-        </Button>
-        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <TextBlock Classes="label" Text="Frame size" VerticalAlignment="Center" />
-          <NumericUpDown Value="{Binding FrameWidth}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="76" ShowButtonSpinner="False" AutomationProperties.Name="Frame width" />
-          <TextBlock Text="×" VerticalAlignment="Center" />
-          <NumericUpDown Value="{Binding FrameHeight}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="76" ShowButtonSpinner="False" AutomationProperties.Name="Frame height" />
-          <TextBlock Classes="label" Text="Frame rate" VerticalAlignment="Center" Margin="12,0,0,0" />
-          <NumericUpDown Value="{Binding Fps}" Minimum="1" Maximum="120" Increment="1" FormatString="0" Width="52" ShowButtonSpinner="False" AutomationProperties.Name="Frame rate" />
-          <TextBlock Classes="muted" Text="fps" VerticalAlignment="Center" />
-        </StackPanel>
+        </Grid>
       </DockPanel>
     </Border>
 

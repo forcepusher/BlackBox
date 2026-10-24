@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using BlackBox.App.ViewModels;
+using BlackBox.Core.Settings;
 
 namespace BlackBox.App.Views;
 
@@ -70,6 +71,19 @@ public partial class MainWindow : Window
             if (e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional && e.Source is Control focused)
                 focused.BringIntoView();
         });
+
+        // A tool's panel gives way to the chat as the window is made narrower, and what the
+        // splitter is dragged to is the width it then goes back to.
+        Columns.SizeChanged += (_, e) =>
+        {
+            if (e.WidthChanged)
+                FitColumns(e.NewSize.Width);
+        };
+        ToolkitSplitter.DragCompleted += (_, _) =>
+        {
+            if (_docked > 0)
+                _docked = ToolkitWidth;
+        };
     }
 
     private double MaxOffset => Math.Max(0, ChatScroll.Extent.Height - ChatScroll.Viewport.Height);
@@ -510,8 +524,11 @@ public partial class MainWindow : Window
 
     // ---- the toolkit: a tool's panel on the left of the chat --------------------------------------
 
-    /// <summary>How wide the toolkit's column was made; 0 with none.</summary>
+    /// <summary>How wide the toolkit's column is to be, splitter included, as it opened or was dragged to; 0 with none.</summary>
     private double _docked;
+
+    /// <summary>How narrow the open tool's panel may get, splitter included (<see cref="ToolkitOption.MinWidth"/>).</summary>
+    private double _least;
 
     /// <summary>Where the window was and how wide before the toolkit opened, and after: closed with the window as it was left, it goes back there.</summary>
     private (PixelPoint Position, double Width)? _beforeDock, _afterDock;
@@ -520,11 +537,14 @@ public partial class MainWindow : Window
     /// A tool picked in the Toolkit dropdown opens on the left of the chat: the window grows to the
     /// left by the tool's width, so the chat stays where it was on the screen (as far as the screen
     /// has room; else the window takes the screen's width, the tool and the chat sharing it). None
-    /// gives the room back. A maximized window keeps its size, and the two share it.
+    /// gives the room back. A maximized window keeps its size, and the two share it. Made narrower,
+    /// the panel gives way down to its least before the chat does (<see cref="ToolkitColumns"/>).
     /// </summary>
     private void Dock()
     {
         var width = Vm.HasToolkit ? Vm.SelectedToolkit?.Width ?? 0 : 0;
+        var least = Math.Min(width, Vm.SelectedToolkit?.MinWidth ?? 0);
+        var tall = Math.Max(ChatMinHeight, Vm.SelectedToolkit?.MinHeight ?? 0);
         var columns = Columns.ColumnDefinitions;
         // What the user dragged the splitter to: given back as it is.
         var open = _docked > 0 ? columns[0].ActualWidth + columns[1].ActualWidth : 0;
@@ -534,16 +554,21 @@ public partial class MainWindow : Window
         var scaling = screen?.Scaling ?? 1;
         if (width > 0)
         {
-            var add = width;
             _beforeDock = _afterDock = null;
             (PixelPoint Position, double Width)? place = null;
             if (WindowState == WindowState.Normal && screen is not null)
             {
-                _beforeDock = (Position, Width);
                 var area = screen.WorkingArea;
+                // As tall as the panel needs (Filmmaking's viewer over its timeline), kept on the screen.
+                if (Height < tall && tall <= area.Height / scaling - 40)
+                {
+                    Height = tall;
+                    Position = Position.WithY(Math.Max(area.Y, Math.Min(Position.Y, area.Bottom - (int)((tall + 40) * scaling))));
+                }
+                _beforeDock = (Position, Width);
                 var most = area.Width / scaling - 16;
-                var wide = Math.Min(most, Width + add);
-                add = Math.Max(ChatMinWidth / 2, Math.Min(add, wide - ChatMinWidth / 2));
+                var wide = Math.Min(most, Width + width);
+                var add = ToolkitColumns.Panel(wide, width, least);
                 var outer = (int)((wide + 16) * scaling);
                 var x = Math.Max(area.X, Math.Min(Position.X - (int)(add * scaling), area.Right - outer));
                 place = (new PixelPoint(x, Position.Y), wide);
@@ -552,9 +577,11 @@ public partial class MainWindow : Window
             // grows: the panel took a tenth of a second to lay out the first time, and laid out
             // after, the screen showed the window's new part black meanwhile.
             ToolkitHost.IsVisible = ToolkitSplitter.IsVisible = true;
-            columns[0].Width = new GridLength(add - 4);
-            columns[1].Width = new GridLength(4);
-            _docked = add;
+            columns[0].MinWidth = least - ToolkitColumns.Splitter;
+            columns[1].Width = new GridLength(ToolkitColumns.Splitter);
+            _docked = width;
+            _least = least;
+            FitColumns(place?.Width ?? Columns.Bounds.Width);
             if (place is { } p)
             {
                 var bounds = Columns.Bounds.WithWidth(p.Width);
@@ -563,15 +590,21 @@ public partial class MainWindow : Window
                 Place(p.Position, p.Width);
                 _afterDock = (Position, Width);
             }
-            MinWidth = ChatMinWidth + 480;
+            // As narrow as the panel and the chat may both get, if the screen is as wide.
+            MinWidth = screen is null ? ToolkitColumns.WindowMin(least) : Math.Min(ToolkitColumns.WindowMin(least), screen.WorkingArea.Width / scaling - 16);
+            MinHeight = screen is null ? tall : Math.Min(tall, screen.WorkingArea.Height / scaling - 40);
         }
         else
         {
             ToolkitHost.IsVisible = ToolkitSplitter.IsVisible = false;
+            // Before the window is resized: FitColumns would give the column back its width.
+            _docked = 0;
+            columns[0].MinWidth = columns[2].MinWidth = 0;
             columns[0].Width = new GridLength(0);
             columns[1].Width = new GridLength(0);
             // Lowered first: the window can't be made narrower than it while it is resized.
             MinWidth = ChatMinWidth;
+            MinHeight = ChatMinHeight;
             // Neither moved nor resized since: back where it was (the screen's edge may have kept it
             // from growing to the left by all of the tool's width, and the chat moved). Else the
             // chat stays where it is.
@@ -579,7 +612,6 @@ public partial class MainWindow : Window
                 Place(before.Position, before.Width);
             else if (WindowState == WindowState.Normal && open > 0)
                 Place(new PixelPoint(Position.X + (int)(open * scaling), Position.Y), Math.Max(ChatMinWidth, Width - open));
-            _docked = 0;
             _beforeDock = _afterDock = null;
         }
     }
@@ -608,8 +640,26 @@ public partial class MainWindow : Window
         Width = width;
     }
 
-    /// <summary>How narrow the chat may get: the window's own least width, as set in its markup.</summary>
-    private const double ChatMinWidth = 660;
+    /// <summary>
+    /// The panel's column in a window <paramref name="width"/> across: as wide as it is to be, as
+    /// far as the chat keeps its least. The chat's column keeps it too while the splitter is dragged
+    /// (on a screen narrower than both, what is left).
+    /// </summary>
+    private void FitColumns(double width)
+    {
+        if (_docked <= 0 || width <= 0)
+            return;
+        var columns = Columns.ColumnDefinitions;
+        columns[2].MinWidth = Math.Clamp(width - _least, 0, ChatMinWidth);
+        var panel = ToolkitColumns.Panel(width, _docked, _least) - ToolkitColumns.Splitter;
+        if (Math.Abs(columns[0].Width.Value - panel) > 0.5)
+            columns[0].Width = new GridLength(panel);
+    }
+
+    private const double ChatMinWidth = ToolkitColumns.ChatMin;
+
+    /// <summary>How short the chat may get: the window's own least height, as set in its markup.</summary>
+    private const double ChatMinHeight = 480;
 
     /// <summary>The part of the window the toolkit takes now, in pixels across; 0 with none.</summary>
     private double ToolkitWidth => _docked > 0 ? Columns.ColumnDefinitions[0].ActualWidth + Columns.ColumnDefinitions[1].ActualWidth : 0;

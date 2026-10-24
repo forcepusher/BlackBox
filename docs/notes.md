@@ -682,7 +682,18 @@ filled with the panel's background colour at once: moved by Position and widened
 next layout, the chat jumped sideways with the window, the window grew a tenth of a second later
 with its new part black for a twentieth more, and the chat jumped back (captured frame by frame,
 2026-10-24). Now the chat stays put and the panel fills in about 50 ms later. The window's place is
-saved without the panel. The panel has a viewer with how the piece shown was made under it, and the
+saved without the panel. **Made narrower, the panel gives way first** (`ToolkitColumns`,
+`MainWindow.FitColumns` on the columns' SizeChanged): down to its least (`ToolkitOption.MinWidth`,
+splitter included: Filmmaking 770, where its top bar still fits in one row with the film's name cut
+short; Code diff 560), then the window stops, at the panel's least plus the chat's 660 (no more than
+the screen is wide). It goes back to the width it opened at, or was dragged to, as the window widens
+again; the splitter stops at both leasts. Before (bug of 2026-10-24) the window's least counted any
+panel as 480 while Filmmaking kept its 960, so the chat was squeezed to a few letters across, and
+opening on a narrow screen left the chat only 330. Filmmaking also needs the window 600 tall
+(`ToolkitOption.MinHeight`; the chat alone 480), else its viewer is squeezed to nothing over the
+timeline; a shorter window grows to it as the panel opens. The film's name was in a StackPanel across,
+which gives a TextBlock all the room it wants: it was never cut short and pushed the fields over the
+buttons. The panel has a viewer with how the piece shown was made under it, and the
 timeline under that; its top bar has the film's name (its menu, see below), the frame size and frame
 rate, **New film** and **Make the film** (the user, 2026-10-24: "Get rid of the settings button
 altogether, put frame size and framerate fields at the top"; the cog's title went with the folder's

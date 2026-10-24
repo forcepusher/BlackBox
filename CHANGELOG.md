@@ -98,6 +98,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   title, and the soundtrack and shots' own sound sliders.
 
 ### Fixed
+- With Filmmaking or Code diff open, the window can no longer be made so narrow that the chat is
+  squeezed to a few letters across: the panel gives way first, then the window stops. Filmmaking
+  also keeps the window tall enough for its viewer, and a long film name is cut short at the top.
 - Filmmaking: a file dropped on a new card or sound becomes it, which is marked while you drag over
   it; a copied file can be renamed. A line over the timeline says what right-click and dropping do,
   and the viewer names the film and says it is selected instead of "Whole film".
