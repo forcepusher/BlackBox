@@ -15,6 +15,15 @@ public class McpTransportTests
     /// <summary>The test server built next to the tests (a project reference copies it there).</summary>
     private static string TestServerDll => Path.Combine(AppContext.BaseDirectory, "BlackBox.McpTestServer.dll");
 
+    /// <summary>
+    /// The dotnet these tests run on, to start the test server with: "dotnet" alone isn't found where
+    /// the SDK isn't on the PATH (a portable one, such as .dev\dotnet).
+    /// </summary>
+    internal static string Dotnet =>
+        Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } host && File.Exists(host) ? host
+        : Path.GetFullPath(Path.Combine(System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(), "..", "..", "..", OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet")) is var own && File.Exists(own) ? own
+        : "dotnet";
+
     private static ToolContext Ctx() => new() { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
 
     [Fact]
@@ -28,7 +37,7 @@ public class McpTransportTests
             {
                 ["local"] = new JsonObject
                 {
-                    ["command"] = "dotnet",
+                    ["command"] = Dotnet,
                     ["args"] = new JsonArray(TestServerDll),
                     ["env"] = new JsonObject { ["BB_TEST_ENV"] = "hello" },
                     ["cwd"] = cwd,

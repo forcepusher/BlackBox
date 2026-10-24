@@ -110,7 +110,55 @@ public sealed partial class ComfyFrontend(string profileRoot) : IAsyncDisposable
         }
         _page = server;
         _generation = generation;
+        HideWindows();
     }
+
+    /// <summary>
+    /// Hides the windows of the browser in use. Edge 155 handed over to a copy of itself at every
+    /// start on a test PC (24 October 2026), and the copy's window showed, off the screen but with
+    /// a button on the taskbar: the browser started it, not hidden as the one BlackBox starts.
+    /// </summary>
+    private void HideWindows()
+    {
+        if (!OperatingSystem.IsWindows() || _profile is null)
+            return;
+        var pids = new HashSet<int>();
+        string profile;
+        try { profile = Path.TrimEndingDirectorySeparator(Path.GetFullPath(_profile)); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return; }
+        foreach (var process in new[] { "msedge", "chrome" }.SelectMany(Process.GetProcessesByName))
+            using (process)
+            {
+                try
+                {
+                    if (Platform.ProcessCommandLine.Of(process.Id) is { } line && !line.Contains("--type=", StringComparison.Ordinal) &&
+                        Platform.ProcessCommandLine.Switch(line, "--user-data-dir") is { Length: > 0 } dir &&
+                        string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(dir)), profile, StringComparison.OrdinalIgnoreCase))
+                        pids.Add(process.Id);
+                }
+                catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or InvalidOperationException) { }
+            }
+        EnumWindows((window, _) =>
+        {
+            if (IsWindowVisible(window) && GetWindowThreadProcessId(window, out var owner) != 0 && pids.Contains(owner))
+                ShowWindow(window, 0); // SW_HIDE
+            return true;
+        }, 0);
+    }
+
+    private delegate bool EnumWindowsProc(nint window, nint parameter);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc callback, nint parameter);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(nint window);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(nint window, out int processId);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ShowWindow(nint window, int command);
 
     /// <summary>
     /// The browser won't run headless on this PC: it quit saying "Headless mode is disallowed by the

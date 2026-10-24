@@ -138,7 +138,7 @@ public class ServerIntegrationTests
         var (server, http, context) = await ConnectAsync();
         var dll = Path.Combine(AppContext.BaseDirectory, "BlackBox.McpTestServer.dll");
         await using var mcp = new BlackBox.Core.Mcp.McpHost();
-        await mcp.ConnectAsync([new BlackBox.Core.Mcp.McpServerConfig { Name = "calc", Command = "dotnet", Args = [dll] }], CancellationToken.None);
+        await mcp.ConnectAsync([new BlackBox.Core.Mcp.McpServerConfig { Name = "calc", Command = McpTransportTests.Dotnet, Args = [dll] }], CancellationToken.None);
         Assert.True(mcp.Statuses[0].State == BlackBox.Core.Mcp.McpServerState.Connected, mcp.Statuses[0].Summary);
 
         var connection = BackendConnection.Create(http, server);

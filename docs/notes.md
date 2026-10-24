@@ -130,7 +130,9 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   normally instead, its window hidden from the start (no window, no taskbar button), and keeps
   doing so; started by a program run as administrator, they start an un-elevated copy of
   themselves, which `--do-not-de-elevate` prevents, and a copy they hand over to anyway is found by
-  the debugging port it opens. A failure carries what the browser said. When the page can't be
+  the debugging port it opens. Edge 155 handed over at every start on a test PC (24 October 2026),
+  and the copy's window showed, off the screen with a taskbar button, since the browser started it
+  and not BlackBox; BlackBox hides the windows of the browser in use once its page is up. A failure carries what the browser said. When the page can't be
   had at all, the error tells the model to write the workflow in the API format and run it with
   `workflow=`, instead of building its own HTTP client.
 - **Names looked up, not remembered.** `action=nodes` searches the server's node types or shows
