@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Lines you click go into your message, so you can ask about them or have them changed.
 - The agent's `diff` tool: it looks through what changed in a repository, or between two files or
   folders, instead of reading whole files again.
+- Code blocks in replies and Markdown previews show in a box of their own, with their language and a
+  **Copy** button.
 - Markdown files (.md) preview formatted in the chat, as replies are: headings, lists, code, tables
   and links, in a box that scrolls. They show under the reply that names them and under write_file
   when the agent writes one.
@@ -98,6 +100,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   title, and the soundtrack and shots' own sound sliders.
 
 ### Fixed
+- Selecting text in the chat starts wherever the drag does: beside a short line, between lines or
+  letters, and in the padding of your messages, not only on a letter.
 - A message sent with LM Studio at `localhost` no longer waits about 4 seconds before LM Studio
   starts loading the model, and each later connection to it no longer waits 2 seconds.
 - ComfyUI templates no longer leave an Edge button on the taskbar where Edge isn't allowed to run

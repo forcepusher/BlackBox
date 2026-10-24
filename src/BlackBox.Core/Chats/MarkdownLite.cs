@@ -20,6 +20,12 @@ public enum MdStyle
 public readonly record struct MdSpan(string Text, MdStyle Style, string? Url = null);
 
 /// <summary>
+/// A part of an answer: Markdown text, or a fenced code block's code (<paramref name="Language"/>
+/// from its fence, "" when it names none).
+/// </summary>
+public readonly record struct MdBlock(string Text, bool IsCode, string Language = "");
+
+/// <summary>
 /// The Markdown models write in their answers (bold, headings, lists, code, tables, quotes),
 /// turned into lines of styled runs for a chat bubble, so "**Total:** $3,000" doesn't show its
 /// asterisks. Deliberately small: what it doesn't know stays as it was written.
@@ -56,6 +62,52 @@ public static partial class MarkdownLite
             output.Add(Linked(Line(line)));
         }
         return output;
+    }
+
+    /// <summary>
+    /// An answer cut at its fenced code blocks, so that each shows in a box of its own. The blank
+    /// lines around a block go; a block still streaming in (no closing fence yet) runs to the end.
+    /// A fence indented in a list takes its indent off the code's lines, and only a fence of at
+    /// least as many backticks and no language closes it, so "```" lines in the code stay code.
+    /// </summary>
+    public static List<MdBlock> Blocks(string markdown)
+    {
+        var lines = markdown.Replace("\r\n", "\n").Split('\n');
+        var blocks = new List<MdBlock>();
+        var text = new List<string>();
+        void FlushText()
+        {
+            var first = text.FindIndex(l => l.Trim().Length > 0);
+            var last = text.FindLastIndex(l => l.Trim().Length > 0);
+            if (first >= 0)
+                blocks.Add(new MdBlock(string.Join("\n", text.Skip(first).Take(last - first + 1)), false));
+            text.Clear();
+        }
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (Fence().Match(lines[i]) is not { Success: true } open)
+            {
+                text.Add(lines[i]);
+                continue;
+            }
+            FlushText();
+            var indent = open.Groups[1].Length;
+            var ticks = open.Groups[2].Length;
+            var code = new List<string>();
+            for (i++; i < lines.Length; i++)
+            {
+                if (Fence().Match(lines[i]) is { Success: true } close && close.Groups[2].Length >= ticks && close.Groups[3].Length == 0)
+                    break;
+                var line = lines[i];
+                var strip = 0;
+                while (strip < indent && strip < line.Length && line[strip] == ' ') strip++;
+                code.Add(line[strip..]);
+            }
+            blocks.Add(new MdBlock(string.Join("\n", code), true, open.Groups[3].Value));
+        }
+        FlushText();
+        return blocks;
     }
 
     /// <summary>
@@ -293,6 +345,10 @@ public static partial class MarkdownLite
         cells.Add(cell.ToString().Trim());
         return cells;
     }
+
+    // An opening or closing fence: its indent, its backticks, and the language after them.
+    [GeneratedRegex(@"^( *)(`{3,})\s*([^`\s]*)[^`]*$")]
+    private static partial Regex Fence();
 
     [GeneratedRegex(@"^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$")]
     private static partial Regex Heading();

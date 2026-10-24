@@ -155,4 +155,33 @@ public class MarkdownLiteTests
         Assert.Equal("The total is **$2,1", Text(Assert.Single(MarkdownLite.Render("The total is **$2,1"))));
         Assert.Equal("Run `Get-Date", Text(Assert.Single(MarkdownLite.Render("Run `Get-Date"))));
     }
+
+    [Fact]
+    public void Code_blocks_are_cut_out_of_the_text_with_their_language()
+    {
+        var blocks = MarkdownLite.Blocks("Run this:\n\n```powershell\nGet-ChildItem C:\\Repos |\n    Sort-Object Length\n```\n\nThen:\n```\nexit\n```");
+
+        Assert.Equal(
+            [new MdBlock("Run this:", false), new MdBlock("Get-ChildItem C:\\Repos |\n    Sort-Object Length", true, "powershell"),
+             new MdBlock("Then:", false), new MdBlock("exit", true)],
+            blocks);
+        Assert.Equal([new MdBlock("No code here, `inline` stays.", false)], MarkdownLite.Blocks("No code here, `inline` stays."));
+    }
+
+    [Fact]
+    public void A_code_block_still_streaming_in_runs_to_the_end()
+    {
+        Assert.Equal([new MdBlock("Like this:", false), new MdBlock("", true, "pow")], MarkdownLite.Blocks("Like this:\n```pow"));
+        Assert.Equal([new MdBlock("Like this:", false), new MdBlock("dotnet publish\n", true, "bash")], MarkdownLite.Blocks("Like this:\n```bash\ndotnet publish\n"));
+    }
+
+    [Fact]
+    public void A_fence_in_a_list_loses_its_indent_and_only_a_bare_fence_closes_a_block()
+    {
+        var blocks = MarkdownLite.Blocks("1. Write:\n   ```markdown\n   # Title\n   ```js\n     indented\n   ```\n2. Save it.");
+
+        Assert.Equal(
+            [new MdBlock("1. Write:", false), new MdBlock("# Title\n```js\n  indented", true, "markdown"), new MdBlock("2. Save it.", false)],
+            blocks);
+    }
 }
