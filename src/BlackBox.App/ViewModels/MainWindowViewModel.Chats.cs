@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using BlackBox.Core.Agent;
 using BlackBox.Core.Chats;
+using BlackBox.Core.Diffs;
 using BlackBox.Core.Llm;
 
 namespace BlackBox.App.ViewModels;
@@ -88,6 +89,7 @@ public sealed partial class MainWindowViewModel
         _current = null;
         _chatId = null;
         _chatTitle = null;
+        UseChanges(new FileChanges());
         OnPropertyChanged(nameof(WindowTitle));
         ContextUsage = "";
     }
@@ -117,6 +119,7 @@ public sealed partial class MainWindowViewModel
         _chatTitle = chat.Title;
         OnPropertyChanged(nameof(WindowTitle));
         _history = chat.History;
+        UseChanges(FileChanges.Load(ChangesFile(chat.Id)));
         var withFiles = new List<(ChatItemViewModel, Func<IReadOnlyList<string>>)>();
         foreach (var entry in chat.Entries)
         {
@@ -156,6 +159,8 @@ public sealed partial class MainWindowViewModel
             LeaveChat(save: false);
         _chatSaver.Forget(row.Id);
         _chats.Delete(row.Id);
+        try { File.Delete(ChangesFile(row.Id)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         PastChats.Remove(row);
         OnPropertyChanged(nameof(HasPastChats));
         foreach (var file in pasted.Where(f => !Attachments.Any(a => string.Equals(a.Path, f, StringComparison.OrdinalIgnoreCase))))
@@ -220,6 +225,7 @@ public sealed partial class MainWindowViewModel
         if (history is null || first is null && _chatTitle is null)
             return;
         _chatId ??= ChatStore.NewId();
+        Changes.KeepIn(ChangesFile(_chatId));
         if (_chatTitle is null)
         {
             // A message that is only a file is named after it; one sent with Filmmaking open after

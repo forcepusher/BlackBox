@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Avalonia.Threading;
 using BlackBox.Core.Agent;
+using BlackBox.Core.Diffs;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BlackBox.App.ViewModels;
@@ -49,8 +51,8 @@ public sealed partial class MainWindowViewModel
         new("None", "The chat alone", 0, 0, 0, null),
         new("Filmmaking", "Plan a film shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960, 770, 600,
             vm => new FilmViewModel(vm._previews, vm, vm._paths.FilmsDir, null)),
-        new("Code diff", "See what changed in a git repository, file by file: click lines to ask about them in the chat", 880, 560, 0,
-            vm => new DiffViewModel(vm, vm._paths.DataDir)),
+        new("Code diff", "See the files the agent changes in this chat as it works: click lines to ask about them", 880, 560, 0,
+            vm => new DiffViewModel(vm)),
     ];
 
     [ObservableProperty]
@@ -135,6 +137,33 @@ public sealed partial class MainWindowViewModel
             playing.Add(shown);
         return playing;
     }
+
+    // ---- the files the agent changed in this chat (the Code diff panel) -------------------------
+
+    /// <summary>The files the agent changed in the chat on screen, each with what it held before.</summary>
+    internal FileChanges Changes { get; private set; } = null!;
+
+    /// <summary>On the window's thread: the list changed, or another chat's took its place.</summary>
+    internal event Action? ChangesUpdated;
+
+    private void UseChanges(FileChanges changes)
+    {
+        if (Changes is not null)
+            Changes.Changed -= OnChanges;
+        Changes = changes;
+        changes.Changed += OnChanges;
+        ChangesUpdated?.Invoke();
+    }
+
+    // A run stopped by leaving the chat still writes into the chat's own list, never into this one.
+    private void OnChanges(FileChanges changes) => Dispatcher.UIThread.Post(() =>
+    {
+        if (ReferenceEquals(changes, Changes))
+            ChangesUpdated?.Invoke();
+    });
+
+    /// <summary>Where a chat's list is kept: Data/chats/changes/id.json.</summary>
+    private string ChangesFile(string chatId) => Path.Combine(_chats.Folder, "changes", Path.GetFileName(chatId) + ".json");
 
     /// <summary>Files dropped on the toolkit's panel: the tool takes them, or they go with the next message.</summary>
     internal bool DropOnToolkit(IReadOnlyList<string> paths) => Toolkit?.Drop(paths) == true;
