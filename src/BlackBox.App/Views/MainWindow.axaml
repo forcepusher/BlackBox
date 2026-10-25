@@ -242,9 +242,10 @@
     <DataTemplate DataType="vm:MarkdownPreview">
       <Border Classes="preview" Width="498">
         <StackPanel Spacing="8">
-          <Border Background="{StaticResource BbSurface}" CornerRadius="6" Padding="12,10,4,10">
+          <!-- The box's left padding is inside the scroller, so the text's selection margin isn't cut off. -->
+          <Border Background="{StaticResource BbSurface}" CornerRadius="6" Padding="0,10,4,10">
             <ScrollViewer MaxHeight="420" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Markdown preview">
-              <views:MarkdownView Source="{Binding Text}" Margin="0,0,10,0" />
+              <views:MarkdownView Source="{Binding Text}" Margin="12,0,10,0" />
             </ScrollViewer>
           </Border>
           <views:PreviewFooter />
@@ -437,7 +438,9 @@
     <!-- Its bar always shows (the user, 2026-10-24: waiting for it to show up to grab it was annoying). -->
     <ScrollViewer x:Name="ChatScroll" Grid.Row="3" HorizontalScrollBarVisibility="Disabled" BringIntoViewOnFocusChange="False" AllowAutoHide="False">
       <StackPanel Classes="conversation" Classes.unused="{Binding ShowIntro}" MaxWidth="860" Margin="16,12,16,16" Spacing="10">
-        <ItemsControl ItemsSource="{Binding Items}">
+        <!-- Unclipped (an ItemsControl and a ContentControl clip to their bounds by default), so a
+             message's text can reach past its sides: a drag in the gutter beside it starts a selection. -->
+        <ItemsControl ItemsSource="{Binding Items}" ClipToBounds="False">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
               <StackPanel Spacing="10" />
@@ -449,7 +452,7 @@
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:ChatItemViewModel">
               <StackPanel Spacing="6">
-                <ContentControl Content="{Binding}" />
+                <ContentControl Content="{Binding}" ClipToBounds="False" />
                 <TextBlock Classes="muted" Text="{Binding RunTookText}" IsVisible="{Binding HasRunTook}" HorizontalAlignment="Center" />
               </StackPanel>
             </DataTemplate>
@@ -512,7 +515,7 @@
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Left" />
                 <Expander IsVisible="{Binding HasReasoning}" Header="{Binding ThinkingLabel}" HorizontalAlignment="Stretch" IsExpanded="True"
                           Padding="10,6">
-                  <SelectableTextBlock Classes="muted" views:MarkdownText.Plain="{Binding ShownReasoning}" TextWrapping="Wrap" />
+                  <SelectableTextBlock Classes="muted" views:MarkdownText.Plain="{Binding ShownReasoning}" TextWrapping="Wrap" Margin="-8,-4" Padding="8,4" />
                 </Expander>
                 <views:MarkdownView Source="{Binding ShownText}" IsVisible="{Binding HasText}" />
                 <TextBlock Classes="muted" Text="{Binding TypingText}" IsVisible="{Binding ShowTypingDots}" />
@@ -568,7 +571,7 @@
                   </ItemsControl>
 
                   <Expander IsVisible="{Binding HasResult}" Header="Output" Padding="8,4" HorizontalAlignment="Stretch">
-                    <SelectableTextBlock Text="{Binding ResultText}" TextWrapping="Wrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" />
+                    <SelectableTextBlock Text="{Binding ResultText}" TextWrapping="Wrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Margin="-8,-4" Padding="8,4" />
                   </Expander>
                 </StackPanel>
               </Border>
@@ -583,7 +586,8 @@
                           ToolTip.Tip="Carry on with the task where I stopped" />
                   <TextBlock DockPanel.Dock="Left" Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}"
                              VerticalAlignment="Center" Margin="0,0,8,0" />
-                  <SelectableTextBlock Classes="muted" Classes.error="{Binding IsError}" views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                  <SelectableTextBlock Classes="muted" Classes.error="{Binding IsError}" views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                       Margin="-8,-4" Padding="8,4" />
                 </DockPanel>
               </Border>
             </DataTemplate>

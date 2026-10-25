@@ -116,7 +116,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A picture BlackBox was reading when a program started no longer stays locked until that program
   ends: it can be deleted or replaced at once.
 - Selecting text in the chat starts wherever the drag does: beside a short line, between lines or
-  letters, and in the padding of your messages, not only on a letter.
+  letters, just left of or above a reply or code block, and in the padding of your messages, not only
+  on a letter.
 - A message sent with LM Studio at `localhost` no longer waits about 4 seconds before LM Studio
   starts loading the model, and each later connection to it no longer waits 2 seconds.
 - ComfyUI templates no longer leave an Edge button on the taskbar where Edge isn't allowed to run

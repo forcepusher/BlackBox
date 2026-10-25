@@ -1552,6 +1552,19 @@ between letters selected nothing, and the user had to land on a letter exactly; 
 with drags sent by mouse_event, which copied nothing from those places before and the text after.
 The user's bubble gives its padding to its text block (negative margin, same padding), so a drag
 from the bubble's edge selects too.
+Every other text block in the chat does the same with a margin of its own: a reply's text reaches
+12 pixels past its sides and 4 over and under it (`MarkdownView`), a code block's text 11 past the
+box's sides and 3 under it (App.axaml), the thinking, a call's output and a note 8 and 4. A drag
+starting there takes the nearest letter, so one just left of a reply's first letter selects from it
+(before, it had to land on the letter: the text started flush with the column). The chat's
+ItemsControl and each item's ContentControl don't clip, as both do by default, or the part past a
+reply's sides is clipped off for hits too; a Markdown preview's left padding is inside its
+ScrollViewer for the same reason. The margins are whole multiples of 4, which are whole pixels at
+100, 125, 150 and 200%: with 5 or 13 at 125% the layout rounded a block a pixel differently and the
+chat moved by one. Checked in the app with mouse_event drags starting 6 and 10 px left of a reply's
+first letter, 11 px over it, 4 px left of a code box and left of a preview's first letter: nothing
+was selected before, the first letter after; a PrintWindow picture of the chat was pixel for pixel
+the same as before, apart from the times.
 
 Web addresses in the chat are links: in replies (written out, `www.` ones, in code and tables,
 and Markdown's `[text](https://...)`, which shows its text alone), in the user's messages, in the
