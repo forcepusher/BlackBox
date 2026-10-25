@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 using BlackBox.Core.Comfy;
-using BlackBox.Core.Film;
+using BlackBox.Core.Video;
 using BlackBox.Core.Media;
 using BlackBox.Core.Tools;
 using SkiaSharp;
@@ -10,7 +10,7 @@ namespace BlackBox.Core.Tests;
 
 public sealed class StoryboardTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-film-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-video-" + Guid.NewGuid().ToString("N")[..8]);
 
     public void Dispose()
     {
@@ -29,17 +29,17 @@ public sealed class StoryboardTests : IDisposable
         Assert.Equal("Rain", board.Title);
         Assert.Equal(["1", "2", "f1"], board.Frames.Select(f => f.Id));
         Assert.Equal(["2"], board.Frames[0].From);
-        Assert.All(board.Frames.Concat<object>(board.Shots), item => Assert.True(item is FilmFrame f ? f.Seed > 0 : ((FilmShot)item).Seed > 0));
+        Assert.All(board.Frames.Concat<object>(board.Shots), item => Assert.True(item is VideoFrame f ? f.Seed > 0 : ((VideoShot)item).Seed > 0));
         Assert.Equal(4, board.Shots[0].Seconds);
-        Assert.Equal(FilmShot.Dissolve, board.Shots[0].Transition);
+        Assert.Equal(VideoShot.Dissolve, board.Shots[0].Transition);
         Assert.Null(board.Shots[1].First); // a frame that isn't there
         Assert.Equal(5, board.Shots[1].Seconds);
-        Assert.Equal("a deep voice", board.Voice); // the lines' voice, where it was given before the film had sound tracks
+        Assert.Equal("a deep voice", board.Voice); // the lines' voice, where it was given before the video had sound lines
         Assert.Empty(board.Sounds);
     }
 
     [Fact]
-    public void A_new_piece_never_gets_the_files_one_taken_out_left_and_a_renamed_film_keeps_its_joined_video()
+    public void A_new_piece_never_gets_the_files_one_taken_out_left_and_a_renamed_video_keeps_its_joined_video()
     {
         var board = Storyboard.Parse("""{"title": "Rain", "shots": [{"id": "s1", "name": "drops", "prompt": "rain"}, {"id": "s2", "name": "puddle", "prompt": "more rain"}]}""");
         board.Folder = Path.Combine(_dir, "Rain");
@@ -54,20 +54,20 @@ public sealed class StoryboardTests : IDisposable
         Assert.False(File.Exists(board.ShotVideo(board.Shot("s2")!)));
         Assert.Equal(["s1", "s2"], Storyboard.Load(board.Folder).Shots.Select(s => s.Id));
 
-        File.WriteAllText(board.FilmFile, "joined");
+        File.WriteAllText(board.VideoFile, "joined");
         board.Title = "Rain at Night";
-        Assert.False(File.Exists(board.FilmFile));
+        Assert.False(File.Exists(board.VideoFile));
         Assert.Equal(Path.Combine(board.Folder, "Rain.mp4"), board.JoinedFile);
     }
 
     [Fact]
-    public void A_film_is_named_after_its_folder_and_renamed_with_its_joined_video()
+    public void A_video_is_named_after_its_folder_and_renamed_with_its_joined_video()
     {
         var board = Storyboard.Parse("""{"title": "Rain", "shots": [{"id": "s1", "prompt": "rain"}]}""");
         board.Folder = Path.Combine(_dir, "Rain");
         board.Save();
-        File.WriteAllText(board.FilmFile, "joined");
-        // Renamed in Explorer: the film is, and its joined video and .json follow once it is saved.
+        File.WriteAllText(board.VideoFile, "joined");
+        // Renamed in Explorer: the video is, and its joined video and .json follow once it is saved.
         Directory.Move(board.Folder, Path.Combine(_dir, "Rain at Night"));
         var moved = Storyboard.Load(Path.Combine(_dir, "Rain at Night"));
         Assert.Equal("Rain at Night", moved.Title);
@@ -80,7 +80,7 @@ public sealed class StoryboardTests : IDisposable
         Assert.Equal("joined", File.ReadAllText(Path.Combine(_dir, "Storm", "Storm.mp4")));
         Assert.Equal("Storm", Storyboard.Load(moved.Folder).Title);
         Directory.CreateDirectory(Path.Combine(_dir, "Hail"));
-        Assert.Throws<FilmException>(() => moved.Rename("Hail"));
+        Assert.Throws<VideoException>(() => moved.Rename("Hail"));
         moved.Rename("storm");
         Assert.Equal("storm", Path.GetFileName(Directory.EnumerateDirectories(_dir, "storm").Single()));
     }
@@ -145,7 +145,7 @@ public sealed class StoryboardTests : IDisposable
         var theirs = Changed(b =>
         {
             b.Shots[1].Prompt = "a red car passes, splashing";
-            b.Shots.Add(new FilmShot { Id = "s4", Seconds = 2, Prompt = "night falls", Seed = 4 });
+            b.Shots.Add(new VideoShot { Id = "s4", Seconds = 2, Prompt = "night falls", Seed = 4 });
             b.Frames[0].Seed = 99;
             b.Shots[0].Seconds = 3;
         });
@@ -192,10 +192,10 @@ public sealed class StoryboardTests : IDisposable
         Assert.Empty(board.AddFirstFrames());
         var clip = board.ShotVideo(board.Shot("s1")!);
         Directory.CreateDirectory(Path.GetDirectoryName(clip)!);
-        File.WriteAllText(clip, "take one");
-        var before = FilmMaker.FrameStamp(board, board.Frame("f2")!);
-        File.WriteAllText(clip, "take two, longer");
-        Assert.NotEqual(before, FilmMaker.FrameStamp(board, board.Frame("f2")!));
+        File.WriteAllText(clip, "try one");
+        var before = VideoMaker.FrameStamp(board, board.Frame("f2")!);
+        File.WriteAllText(clip, "try two, longer");
+        Assert.NotEqual(before, VideoMaker.FrameStamp(board, board.Frame("f2")!));
         // Its own shot can't start on it.
         Assert.Null(Storyboard.Parse("""{"frames": [{"id": "f1", "of": "s1"}], "shots": [{"id": "s1", "first": "f1"}]}""").Frame("f1")!.Of);
     }
@@ -203,9 +203,9 @@ public sealed class StoryboardTests : IDisposable
     [Fact]
     public void A_shot_is_asked_for_no_music_unless_it_speaks_of_music()
     {
-        Assert.Equal("The fox howls. Wind hisses. No music.", FilmMaker.WithoutMusic("The fox howls. Wind hisses."));
-        Assert.Equal("A busker plays the guitar.", FilmMaker.WithoutMusic("A busker plays the guitar."));
-        Assert.Equal("Quiet, no music.", FilmMaker.WithoutMusic("Quiet, no music."));
+        Assert.Equal("The fox howls. Wind hisses. No music.", VideoMaker.WithoutMusic("The fox howls. Wind hisses."));
+        Assert.Equal("A busker plays the guitar.", VideoMaker.WithoutMusic("A busker plays the guitar."));
+        Assert.Equal("Quiet, no music.", VideoMaker.WithoutMusic("Quiet, no music."));
     }
 
     [Fact]
@@ -262,11 +262,11 @@ public sealed class StoryboardTests : IDisposable
         Assert.Equal(3, merged.Shots[0].Seconds);
         Assert.Null(merged.Shots[0].First); // its frame was taken out
         var song = Assert.Single(merged.Sounds);
-        Assert.Equal((FilmSound.Song, "folk", 2.0), (song.Source, song.Tags, song.Start));
+        Assert.Equal((VideoSound.Song, "folk", 2.0), (song.Source, song.Tags, song.Start));
         Assert.True(song.Seed > 0);
         // A sound changed by id keeps what isn't said: its seed and where it is.
-        var moved = Storyboard.Merge(merged, (JsonObject)JsonNode.Parse("""{"sounds": [{"id": "a1", "track": 1, "volume": 0.5}]}""")!);
-        Assert.Equal((song.Seed, 2.0, 1, 0.5, 2), (moved.Sounds[0].Seed, moved.Sounds[0].Start, moved.Sounds[0].Track, moved.Sounds[0].Volume, moved.Tracks));
+        var moved = Storyboard.Merge(merged, (JsonObject)JsonNode.Parse("""{"sounds": [{"id": "a1", "soundLine": 1, "volume": 0.5}]}""")!);
+        Assert.Equal((song.Seed, 2.0, 1, 0.5, 2), (moved.Sounds[0].Seed, moved.Sounds[0].Start, moved.Sounds[0].SoundLine, moved.Sounds[0].Volume, moved.SoundLines));
         Assert.Equal(_dir, merged.Folder);
     }
 
@@ -275,11 +275,11 @@ public sealed class StoryboardTests : IDisposable
     {
         var board = Storyboard.Parse("""{"frames": [{"id": "f1", "prompt": "a keeper"}], "shots": [{"id": "s1", "first": "f1", "prompt": "he waves"}]}""");
         var merged = Storyboard.Merge(board, (JsonObject)JsonNode.Parse("""
-            {"style": "film noir", "story": "x", "frames": [{"id": "f2", "prompt": "the sea"}], "workflows": {"frame": "juggernaut"}}
+            {"style": "video noir", "story": "x", "frames": [{"id": "f2", "prompt": "the sea"}], "workflows": {"frame": "juggernaut"}}
             """)!);
         Assert.Equal("a keeper", merged.Frame("f1")!.Prompt);
         Assert.Null(merged.Frame("f1")!.Model);
-        Assert.Equal("the sea. film noir", merged.Frame("f2")!.Prompt);
+        Assert.Equal("the sea. video noir", merged.Frame("f2")!.Prompt);
         Assert.Equal("juggernaut", merged.Frame("f2")!.Model);
         Assert.Equal("he waves", merged.Shots[0].Prompt);
         Assert.DoesNotContain("\"style\"", merged.ToJson());
@@ -302,7 +302,7 @@ public sealed class StoryboardTests : IDisposable
     [Fact]
     public void A_frame_made_where_a_shot_ends_stops_being_that_shots_last_frame()
     {
-        // As a model wrote it on a film run: f2 to be taken from where s1 ends, and s1 given without
+        // As a model wrote it on a video run: f2 to be taken from where s1 ends, and s1 given without
         // its last frame to take it away. f2 lost its "of" instead, and s1 still ended on it.
         var board = Storyboard.Parse("""
             {"frames": [{"id": "f1", "prompt": "a fox"}, {"id": "f2", "prompt": "the fox stops", "from": ["f1"]}],
@@ -327,16 +327,16 @@ public sealed class StoryboardTests : IDisposable
     }
 
     [Fact]
-    public void A_new_film_is_saved_only_when_asked_and_loads_back_the_same()
+    public void A_new_video_is_saved_only_when_asked_and_loads_back_the_same()
     {
         var keeper = Path.Combine(_dir, "Keeper");
         var board = Storyboard.New(keeper, "Keeper");
-        Assert.False(Storyboard.IsFilm(keeper));
+        Assert.False(Storyboard.IsVideo(keeper));
         board.Save();
         var loaded = Storyboard.Load(keeper);
         Assert.Equal(board.ToJson(), loaded.ToJson());
-        Assert.Equal(Path.Combine(keeper, "Keeper.mp4"), loaded.FilmFile);
-        // Its two folders, References and Generated (the .json of each frame and clip there), and the film's own .json.
+        Assert.Equal(Path.Combine(keeper, "Keeper.mp4"), loaded.VideoFile);
+        // Its two folders, References and Generated (the .json of each frame and clip there), and the video's own .json.
         Assert.True(File.Exists(Path.Combine(keeper, "Generated", "s1.json")));
         Assert.True(File.Exists(Path.Combine(keeper, "Generated", "f1.json")));
         Assert.True(File.Exists(Path.Combine(keeper, "Generated", "f2.json")));
@@ -347,7 +347,7 @@ public sealed class StoryboardTests : IDisposable
     }
 
     [Fact]
-    public void The_film_follows_its_folder_a_piece_moved_stays_and_one_whose_meta_is_gone_leaves()
+    public void The_video_follows_its_folder_a_piece_moved_stays_and_one_whose_meta_is_gone_leaves()
     {
         var board = Storyboard.Parse("""
             {"title": "Fox", "frames": [{"id": "f1", "prompt": "a fox"}, {"id": "f2", "prompt": "it leaps"}, {"id": "f3", "prompt": "it howls"}, {"id": "r1", "name": "the fox", "reference": true}],
@@ -367,12 +367,12 @@ public sealed class StoryboardTests : IDisposable
         Assert.Equal(["s2", "s1"], Storyboard.Load(_dir).Shots.Select(s => s.Id));
         Assert.Equal("made", File.ReadAllText(Storyboard.Load(_dir).FramePicture(Storyboard.Load(_dir).Frame("f1")!)));
 
-        // A frame moved with its .json by hand stays in the film, where it is now.
+        // A frame moved with its .json by hand stays in the video, where it is now.
         File.Move(Path.Combine(_dir, "Generated", "f1.png"), Path.Combine(_dir, "References", "fox.png"));
         File.Move(Path.Combine(_dir, "Generated", "f1.json"), Path.Combine(_dir, "References", "fox.json"));
         Assert.Equal(Path.Combine(_dir, "References", "fox.png"), Storyboard.Load(_dir).FramePicture(Storyboard.Load(_dir).Frame("f1")!));
 
-        // A piece's .json deleted: it leaves the film.
+        // A piece's .json deleted: it leaves the video.
         File.Delete(Path.Combine(_dir, "Generated", "s2.json"));
         File.Delete(Path.Combine(_dir, "Generated", "f3.json"));
         var left = Storyboard.Load(_dir);
@@ -389,7 +389,7 @@ public sealed class StoryboardTests : IDisposable
         File.WriteAllText(Path.Combine(_dir, "References", "thunder.mp3"), "boom");
         var loaded = Storyboard.Load(_dir);
         var thunder = Assert.Single(loaded.Sounds);
-        Assert.Equal((FilmSound.FromFile, "thunder", 0, 0.0), (thunder.Source, thunder.Label, thunder.Track, thunder.Start));
+        Assert.Equal((VideoSound.FromFile, "thunder", 0, 0.0), (thunder.Source, thunder.Label, thunder.SoundLine, thunder.Start));
         loaded.Save();
         Assert.True(File.Exists(Path.Combine(_dir, "References", "thunder.json")));
 
@@ -397,7 +397,7 @@ public sealed class StoryboardTests : IDisposable
         File.WriteAllText(elsewhere, "drizzle");
         try
         {
-            var change = new JsonObject { ["sounds"] = new JsonArray(new JsonObject { ["id"] = "a9", ["source"] = "file", ["file"] = elsewhere, ["start"] = 3, ["track"] = 2 }) };
+            var change = new JsonObject { ["sounds"] = new JsonArray(new JsonObject { ["id"] = "a9", ["source"] = "file", ["file"] = elsewhere, ["start"] = 3, ["soundLine"] = 2 }) };
             var merged = Storyboard.Merge(Storyboard.Load(_dir), change);
             merged.Save();
             var taken = merged.TakeInPictures();
@@ -405,7 +405,7 @@ public sealed class StoryboardTests : IDisposable
             Assert.Single(taken);
             var drizzle = Storyboard.Load(_dir).Sound("a9")!;
             Assert.Equal(Path.Combine(_dir, "References", Path.GetFileName(elsewhere)), Storyboard.Load(_dir).SoundFile(drizzle));
-            Assert.Equal((3.0, 2, 3), (drizzle.Start, drizzle.Track, Storyboard.Load(_dir).Tracks));
+            Assert.Equal((3.0, 2, 3), (drizzle.Start, drizzle.SoundLine, Storyboard.Load(_dir).SoundLines));
             Assert.Null(drizzle.File);
         }
         finally
@@ -425,9 +425,9 @@ public sealed class StoryboardTests : IDisposable
     }
 }
 
-public sealed class FilmLookTests : IDisposable
+public sealed class VideoLookTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-filmdir-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-videodir-" + Guid.NewGuid().ToString("N")[..8]);
 
     public void Dispose()
     {
@@ -451,73 +451,73 @@ public sealed class FilmLookTests : IDisposable
     {
         var board = Board();
         var shot = board.Shot("s1")!;
-        var look = new FilmLook("", [1, 2, 3], [], [4, 5], Motion: "Measured movement: the leg goes up.");
+        var look = new VideoLook("", [1, 2, 3], [], [4, 5], Motion: "Measured movement: the leg goes up.");
         var asked = new List<(int Pictures, string Question)>();
         Task<string?> Ask(IReadOnlyList<byte[]> pictures, string question, CancellationToken ct)
         {
             asked.Add((pictures.Count, question));
             return Task.FromResult<string?>(question.Contains("stays put") ? "The moon wanders.\nVERDICT: redo: the moon slides across the sky" : "Fine.\nVERDICT: good");
         }
-        var answer = await FilmCheck.JudgeShotAsync(board, shot, look, null, Ask, CancellationToken.None);
+        var answer = await VideoCheck.JudgeShotAsync(board, shot, look, null, Ask, CancellationToken.None);
         Assert.Equal(4, asked.Count);
         Assert.Equal(2, asked[0].Pictures); // the overview and the closer look
         Assert.Contains("the leg goes up", asked[3].Question); // the measured movement, for the look at movement as asked
         Assert.Contains("never excuses impossible physics", asked[0].Question);
-        Assert.Equal("redo", FilmCheck.Verdict(answer!));
-        Assert.Equal("the moon slides across the sky", FilmCheck.Reason(answer!));
+        Assert.Equal("redo", VideoCheck.Verdict(answer!));
+        Assert.Equal("the moon slides across the sky", VideoCheck.Reason(answer!));
     }
 
     [Fact]
-    public async Task A_film_is_looked_at_shot_by_shot_and_cut_by_cut_and_the_shots_named_are_redone()
+    public async Task A_video_is_looked_at_shot_by_shot_and_cut_by_cut_and_the_shots_named_are_redone()
     {
         var board = Storyboard.Parse("""
             {"frames": [{"id": "r1", "reference": true, "prompt": "a snowy pine forest at night"}, {"id": "f1", "prompt": "a fox", "from": ["r1"]}, {"id": "f2", "prompt": "the fox howls", "from": ["f1"]}],
              "shots": [{"id": "s1", "first": "f1", "prompt": "the fox looks up"}, {"id": "s2", "first": "f2", "prompt": "the fox howls"}]}
             """);
-        var look = new FilmLook("", [1], [], Cuts: [new FilmCut([2], 1)]);
+        var look = new VideoLook("", [1], [], Cuts: [new VideoCut([2], 1)]);
         var asked = new List<string>();
         Task<string?> Ask(IReadOnlyList<byte[]> pictures, string question, CancellationToken ct)
         {
             asked.Add(question);
             return Task.FromResult<string?>(pictures[0][0] == 2 ? "Left: a dense forest. Right: an open clearing.\nVERDICT: redo shots s2: the forest becomes a clearing, breaking with s1" : "Fine.\nVERDICT: good");
         }
-        var verdict = await FilmCheck.JudgeFilmAsync(board, look, Ask, CancellationToken.None);
+        var verdict = await VideoCheck.JudgeVideoAsync(board, look, Ask, CancellationToken.None);
         Assert.Equal(2, asked.Count);
         Assert.Contains("s1 to s2, a cut; both are made from the same reference pictures (r1: \"a snowy pine forest at night\")", asked[1]);
         Assert.Equal(["s2"], verdict!.Redo);
         Assert.Equal("the forest becomes a clearing, breaking with s1", verdict.Reason);
-        Assert.Equal("redo", FilmCheck.Verdict(verdict.Answer));
-        Assert.Null((await FilmCheck.JudgeFilmAsync(board, look, (_, _, _) => Task.FromResult<string?>("VERDICT: good"), CancellationToken.None))!.Reason);
+        Assert.Equal("redo", VideoCheck.Verdict(verdict.Answer));
+        Assert.Null((await VideoCheck.JudgeVideoAsync(board, look, (_, _, _) => Task.FromResult<string?>("VERDICT: good"), CancellationToken.None))!.Reason);
     }
 
     [Fact]
-    public void Takes_are_kept_and_put_back_with_their_settings()
+    public void Versions_are_kept_and_put_back_with_their_settings()
     {
         var board = Board();
         board.Save();
         var frame = board.Frame("f3")!;
-        var piece = FilmPiece.Of(frame);
+        var piece = VideoPiece.Of(frame);
         void Made(string what)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(board.FramePicture(frame))!);
             File.WriteAllText(board.FramePicture(frame), what);
-            File.WriteAllText(board.FrameMeta(frame), new JsonObject { ["made"] = new JsonObject { ["stamp"] = FilmMaker.FrameStamp(board, frame) } }.ToJsonString());
-            FilmTakes.Remember(board.FrameMeta(frame), piece.Settings(board));
+            File.WriteAllText(board.FrameMeta(frame), new JsonObject { ["made"] = new JsonObject { ["stamp"] = VideoMaker.FrameStamp(board, frame) } }.ToJsonString());
+            VideoVersions.Remember(board.FrameMeta(frame), piece.Settings(board));
         }
         Made("the sea at dawn");
-        Assert.Null(FilmTakes.Keep(board, FilmPiece.Of(board.Frame("f1")!))); // not made: nothing to keep
-        FilmTakes.Keep(board, piece);
+        Assert.Null(VideoVersions.Keep(board, VideoPiece.Of(board.Frame("f1")!))); // not made: nothing to keep
+        VideoVersions.Keep(board, piece);
         frame.Prompt = "the sea at night";
         Made("the sea at night");
-        var takes = FilmTakes.List(board, piece);
-        Assert.Single(takes);
-        Assert.Equal("the sea", (string?)takes[0].Settings?["prompt"]);
+        var versions = VideoVersions.List(board, piece);
+        Assert.Single(versions);
+        Assert.Equal("the sea", (string?)versions[0].Settings?["prompt"]);
 
-        var back = FilmTakes.Use(board, piece, takes[0]);
+        var back = VideoVersions.Use(board, piece, versions[0]);
         Assert.Equal("the sea", back.Frame("f3")!.Prompt);
         Assert.Equal("the sea at dawn", File.ReadAllText(back.FramePicture(back.Frame("f3")!)));
-        Assert.True(FilmMaker.IsCurrent(back, back.Frame("f3")!));
-        Assert.Equal("the sea at night", File.ReadAllText(FilmTakes.List(back, piece).Single().File)); // the one replaced is a take now
+        Assert.True(VideoMaker.IsCurrent(back, back.Frame("f3")!));
+        Assert.Equal("the sea at night", File.ReadAllText(VideoVersions.List(back, piece).Single().File)); // the one replaced is a version now
     }
 
     [Fact]
@@ -532,54 +532,54 @@ public sealed class FilmLookTests : IDisposable
             bitmap.Encode(file, SKEncodedImageFormat.Png, 100);
         }
         var asked = new List<(int Pictures, string Question)>();
-        var answer = await FilmCheck.JudgeFrameAsync(board, board.Frame("f2")!, (pictures, question, _) =>
+        var answer = await VideoCheck.JudgeFrameAsync(board, board.Frame("f2")!, (pictures, question, _) =>
         {
             asked.Add((pictures.Count, question));
             return Task.FromResult<string?>("The lighthouse moved. SEVERE.\nVERDICT: redo: the lighthouse is on the other side");
         }, CancellationToken.None);
         Assert.Equal(2, asked.Single().Pictures); // the frame, and the one its shot starts on
         Assert.Contains("the frame its shot starts on", asked[0].Question);
-        Assert.Equal("the lighthouse is on the other side", FilmCheck.Reason(answer!));
-        Assert.Contains("keep it made from f1", FilmCheck.FramesAdvice(board, board.Frame("f2")!));
-        Assert.Null(FilmCheck.FramesAdvice(board, board.Frame("f3")!));
-        Assert.Contains("change f2 to agree with f1", FilmCheck.FramesAdvice(board, board.Shot("s1")!));
-        Assert.Null(FilmCheck.FramesAdvice(board, board.Shot("s2")!)); // no last frame: nothing to agree with
-        Assert.Null(await FilmCheck.JudgeFrameAsync(board, board.Frame("f3")!, (_, _, _) => Task.FromResult<string?>("VERDICT: good"), CancellationToken.None)); // not made
+        Assert.Equal("the lighthouse is on the other side", VideoCheck.Reason(answer!));
+        Assert.Contains("keep it made from f1", VideoCheck.FramesAdvice(board, board.Frame("f2")!));
+        Assert.Null(VideoCheck.FramesAdvice(board, board.Frame("f3")!));
+        Assert.Contains("change f2 to agree with f1", VideoCheck.FramesAdvice(board, board.Shot("s1")!));
+        Assert.Null(VideoCheck.FramesAdvice(board, board.Shot("s2")!)); // no last frame: nothing to agree with
+        Assert.Null(await VideoCheck.JudgeFrameAsync(board, board.Frame("f3")!, (_, _, _) => Task.FromResult<string?>("VERDICT: good"), CancellationToken.None)); // not made
     }
 
     [Fact]
-    public void Takes_made_beside_a_piece_join_its_takes_and_one_kept_for_nothing_goes_again()
+    public void Tries_made_beside_a_piece_join_its_versions_and_one_kept_for_nothing_goes_again()
     {
         var board = Board();
         board.Save();
         var shot = board.Shot("s2")!;
-        var piece = FilmPiece.Of(shot);
+        var piece = VideoPiece.Of(shot);
         Directory.CreateDirectory(Path.GetDirectoryName(board.ShotVideo(shot))!);
         File.WriteAllText(board.ShotVideo(shot), "the clip");
         File.WriteAllText(board.ShotMeta(shot), new JsonObject { ["made"] = new JsonObject { ["stamp"] = "x" } }.ToJsonString());
-        var other = Path.Combine(Path.GetDirectoryName(board.ShotVideo(shot))!, "Shot.take2.mp4");
-        File.WriteAllText(other, "another take");
-        File.WriteAllText(Storyboard.MetaOf(other), new JsonObject { ["kind"] = "take", ["made"] = new JsonObject { ["stamp"] = "y" } }.ToJsonString());
-        FilmTakes.RememberLook(Storyboard.MetaOf(other), "redo", "It needs another go: the waves freeze.");
+        var other = Path.Combine(Path.GetDirectoryName(board.ShotVideo(shot))!, "Shot.try2.mp4");
+        File.WriteAllText(other, "another try");
+        File.WriteAllText(Storyboard.MetaOf(other), new JsonObject { ["kind"] = "try", ["made"] = new JsonObject { ["stamp"] = "y" } }.ToJsonString());
+        VideoVersions.RememberLook(Storyboard.MetaOf(other), "redo", "It needs another go: the waves freeze.");
 
-        var added = FilmTakes.Add(board, piece, other);
+        var added = VideoVersions.Add(board, piece, other);
         Assert.False(File.Exists(other));
         Assert.Equal(Path.Combine(board.ShotFolder(shot), "Versions", "s2.v1.mp4"), added!.File);
-        Assert.Equal("another take", File.ReadAllText(added.File));
-        Assert.Equal(("redo", "It needs another go: the waves freeze."), FilmTakes.LookIn(added.Meta));
-        Assert.Single(FilmTakes.List(board, piece));
+        Assert.Equal("another try", File.ReadAllText(added.File));
+        Assert.Equal(("redo", "It needs another go: the waves freeze."), VideoVersions.LookIn(added.Meta));
+        Assert.Single(VideoVersions.List(board, piece));
 
-        var kept = FilmTakes.Keep(board, piece)!;
-        Assert.Equal(2, FilmTakes.List(board, piece).Count);
-        FilmTakes.Drop(kept); // the make that followed made nothing
-        Assert.Single(FilmTakes.List(board, piece));
+        var kept = VideoVersions.Keep(board, piece)!;
+        Assert.Equal(2, VideoVersions.List(board, piece).Count);
+        VideoVersions.Drop(kept); // the make that followed made nothing
+        Assert.Single(VideoVersions.List(board, piece));
         Assert.Equal("the clip", File.ReadAllText(board.ShotVideo(shot)));
     }
 }
 
-public sealed class FilmTemplatesTests : IDisposable
+public sealed class VideoTemplatesTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-filmtpl-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-videotpl-" + Guid.NewGuid().ToString("N")[..8]);
 
     public void Dispose()
     {
@@ -603,30 +603,30 @@ public sealed class FilmTemplatesTests : IDisposable
     public void What_a_workflow_makes_is_told_by_its_nodes()
     {
         var text2image = Editor("CheckpointLoaderSimple", "CLIPTextEncode", "KSampler", "VAEDecode", "SaveImage");
-        Assert.True(FilmTemplates.Fits(text2image, FilmJob.Frame));
-        Assert.False(FilmTemplates.Fits(text2image, FilmJob.Edit));
+        Assert.True(VideoTemplates.Fits(text2image, VideoJob.Frame));
+        Assert.False(VideoTemplates.Fits(text2image, VideoJob.Edit));
         var edit = Editor("LoadImage", "TextEncodeQwenImageEditPlus", "KSampler", "SaveImage");
-        Assert.True(FilmTemplates.Fits(edit, FilmJob.Edit));
-        Assert.False(FilmTemplates.Fits(edit, FilmJob.Frame));
+        Assert.True(VideoTemplates.Fits(edit, VideoJob.Edit));
+        Assert.False(VideoTemplates.Fits(edit, VideoJob.Frame));
         // A control picture loader that is muted doesn't count.
-        Assert.True(FilmTemplates.Fits(Editor("LoadImage!", "CLIPTextEncode", "SaveImage"), FilmJob.Frame));
+        Assert.True(VideoTemplates.Fits(Editor("LoadImage!", "CLIPTextEncode", "SaveImage"), VideoJob.Frame));
         var flf = Editor("LoadImage", "LoadImage", "CLIPTextEncode", "CreateVideo", "SaveVideo");
-        Assert.True(FilmTemplates.Fits(flf, FilmJob.Shot));
-        Assert.False(FilmTemplates.Fits(flf, FilmJob.ShotFromFirst));
-        Assert.True(FilmTemplates.Fits(Editor("LoadImage", "LoadAudio", "CLIPTextEncode", "SaveVideo"), FilmJob.LipSync));
-        Assert.True(FilmTemplates.Fits(Editor("TextEncodeAceStepAudio1.5", "SaveAudioMP3"), FilmJob.Song));
-        // No prompt (an upscaler), or a 3D model: no job of a film's.
-        Assert.False(FilmTemplates.Fits(Editor("LoadImage", "ImageUpscaleWithModel", "SaveImage"), FilmJob.Edit));
-        Assert.False(FilmTemplates.Fits(Editor("CLIPTextEncode", "SaveImage", "SaveGLB"), FilmJob.Frame));
+        Assert.True(VideoTemplates.Fits(flf, VideoJob.Shot));
+        Assert.False(VideoTemplates.Fits(flf, VideoJob.ShotFromFirst));
+        Assert.True(VideoTemplates.Fits(Editor("LoadImage", "LoadAudio", "CLIPTextEncode", "SaveVideo"), VideoJob.LipSync));
+        Assert.True(VideoTemplates.Fits(Editor("TextEncodeAceStepAudio1.5", "SaveAudioMP3"), VideoJob.Song));
+        // No prompt (an upscaler), or a 3D model: no job of a video's.
+        Assert.False(VideoTemplates.Fits(Editor("LoadImage", "ImageUpscaleWithModel", "SaveImage"), VideoJob.Edit));
+        Assert.False(VideoTemplates.Fits(Editor("CLIPTextEncode", "SaveImage", "SaveGLB"), VideoJob.Frame));
     }
 
-    private static readonly FilmOption[] Installed =
+    private static readonly VideoOption[] Installed =
     [
-        new("workflows/WorkflowCollection/Templates/Image/Custom/FurryNovaIllustrious/nova-furry-v17", "nova-furry-v17", FilmOption.Yours, "", ["novaFurryXL_ilV170.safetensors"]),
-        new("workflows/WorkflowCollection/Templates/Image/Custom/PonyDiffusion/ponydiffusion-v6", "ponydiffusion-v6", FilmOption.Yours, "", ["ponyDiffusionV6XL_v6StartWithThisOne.safetensors"]),
-        new("templates/image_z_image_turbo", "Z-Image-Turbo Text to Image", FilmOption.Template, "", ["z_image_turbo_bf16.safetensors"]),
-        new("checkpoints/novaFurryXL_ilV170.safetensors", "novaFurryXL_ilV170", FilmOption.Checkpoint, "An SDXL checkpoint", ["novaFurryXL_ilV170.safetensors"]),
-        new("checkpoints/juggernautXL_ragnarok.safetensors", "juggernautXL_ragnarok", FilmOption.Checkpoint, "An SDXL checkpoint", ["juggernautXL_ragnarok.safetensors"]),
+        new("workflows/WorkflowCollection/Templates/Image/Custom/FurryNovaIllustrious/nova-furry-v17", "nova-furry-v17", VideoOption.Yours, "", ["novaFurryXL_ilV170.safetensors"]),
+        new("workflows/WorkflowCollection/Templates/Image/Custom/PonyDiffusion/ponydiffusion-v6", "ponydiffusion-v6", VideoOption.Yours, "", ["ponyDiffusionV6XL_v6StartWithThisOne.safetensors"]),
+        new("templates/image_z_image_turbo", "Z-Image-Turbo Text to Image", VideoOption.Template, "", ["z_image_turbo_bf16.safetensors"]),
+        new("checkpoints/novaFurryXL_ilV170.safetensors", "novaFurryXL_ilV170", VideoOption.Checkpoint, "An SDXL checkpoint", ["novaFurryXL_ilV170.safetensors"]),
+        new("checkpoints/juggernautXL_ragnarok.safetensors", "juggernautXL_ragnarok", VideoOption.Checkpoint, "An SDXL checkpoint", ["juggernautXL_ragnarok.safetensors"]),
     ];
 
     [Theory]
@@ -637,7 +637,7 @@ public sealed class FilmTemplatesTests : IDisposable
     [InlineData("Juggernaut", "juggernautXL_ragnarok")]
     [InlineData("nova-furry-v17", "nova-furry-v17")]
     public void Words_name_what_is_installed(string words, string title) =>
-        Assert.Equal(title, FilmTemplates.Match(Installed, words)?.Title);
+        Assert.Equal(title, VideoTemplates.Match(Installed, words)?.Title);
 
     [Theory]
     [InlineData("something for anime")]
@@ -646,7 +646,7 @@ public sealed class FilmTemplatesTests : IDisposable
     [InlineData("ltx 2.5")] // numbers alone are in many model files
     [InlineData("ace step")]
     public void Words_that_name_nothing_installed_match_nothing(string words) =>
-        Assert.Null(FilmTemplates.Match(Installed, words));
+        Assert.Null(VideoTemplates.Match(Installed, words));
 
     [Fact]
     public void A_checkpoint_is_told_by_its_tensors()
@@ -661,15 +661,15 @@ public sealed class FilmTemplatesTests : IDisposable
             file.Write(head);
             return path;
         }
-        Assert.Equal("SDXL", FilmTemplates.CheckpointKind(Fake("xl.safetensors", "model.diffusion_model.input_blocks.0.0.weight", "conditioner.embedders.0.x", "conditioner.embedders.1.y", "first_stage_model.decoder.z")));
-        Assert.Equal("SD 1.5", FilmTemplates.CheckpointKind(Fake("sd15.safetensors", "model.diffusion_model.input_blocks.0.0.weight", "cond_stage_model.transformer.text_model.a", "first_stage_model.b")));
+        Assert.Equal("SDXL", VideoTemplates.CheckpointKind(Fake("xl.safetensors", "model.diffusion_model.input_blocks.0.0.weight", "conditioner.embedders.0.x", "conditioner.embedders.1.y", "first_stage_model.decoder.z")));
+        Assert.Equal("SD 1.5", VideoTemplates.CheckpointKind(Fake("sd15.safetensors", "model.diffusion_model.input_blocks.0.0.weight", "cond_stage_model.transformer.text_model.a", "first_stage_model.b")));
         // A video model, and a pose model without a text encoder: not for the plain workflow.
-        Assert.Null(FilmTemplates.CheckpointKind(Fake("ltx.safetensors", "model.diffusion_model.transformer_blocks.0.a", "vae.decoder.b", "vocoder.c")));
-        Assert.Null(FilmTemplates.CheckpointKind(Fake("pose.safetensors", "model.diffusion_model.input_blocks.0.0.weight", "first_stage_model.b", "model.diffusion_model.heatmap_head.c")));
+        Assert.Null(VideoTemplates.CheckpointKind(Fake("ltx.safetensors", "model.diffusion_model.transformer_blocks.0.a", "vae.decoder.b", "vocoder.c")));
+        Assert.Null(VideoTemplates.CheckpointKind(Fake("pose.safetensors", "model.diffusion_model.input_blocks.0.0.weight", "first_stage_model.b", "model.diffusion_model.heatmap_head.c")));
     }
 }
 
-public sealed class FilmRolesTests
+public sealed class VideoRolesTests
 {
     private static readonly ComfyNodeLibrary Empty = ComfyNodeLibrary.Parse([]);
 
@@ -699,21 +699,21 @@ public sealed class FilmRolesTests
     {
         var wf = Load(Ltx);
         var missed = new List<string>();
-        var set = FilmRoles.Apply(wf, Empty, new FilmInputs
+        var set = VideoRoles.Apply(wf, Empty, new VideoInputs
         {
             Prompt = "the keeper waves", Seed = 7, Width = 1280, Height = 720, Seconds = 4.5, Fps = 24,
-            FirstImage = @"C:\f\first.png", LastImage = @"C:\f\last.png", Prefix = "BlackBox films/Keeper/s1",
+            FirstImage = @"C:\f\first.png", LastImage = @"C:\f\last.png", Prefix = "BlackBox videos/Keeper/s1",
         }, missed);
         Assert.Empty(missed);
         Assert.Equal("the keeper waves", (string?)wf.ValueOf("251:252.value"));
         Assert.Equal(7, (long?)wf.ValueOf("251:196.noise_seed"));
         Assert.Equal(720, (int?)wf.ValueOf("251:216.value")); // its link replaced by the value
-        Assert.Equal(5, (int?)wf.ValueOf("251:198.value")); // whole seconds: 4.5 made 5, cut in the film
+        Assert.Equal(5, (int?)wf.ValueOf("251:198.value")); // whole seconds: 4.5 made 5, cut in the video
         Assert.Equal(24, (int?)wf.ValueOf("251:205.value"));
         Assert.Equal(@"C:\f\first.png", (string?)wf.ValueOf("31.image"));
         Assert.Equal(@"C:\f\last.png", (string?)wf.ValueOf("39.image"));
         Assert.Equal(false, (bool?)wf.ValueOf("251:250.value"));
-        Assert.Equal("BlackBox films/Keeper/s1", (string?)wf.ValueOf("68.filename_prefix"));
+        Assert.Equal("BlackBox videos/Keeper/s1", (string?)wf.ValueOf("68.filename_prefix"));
         Assert.Contains(set, s => s.StartsWith("251:252.value", StringComparison.Ordinal));
     }
 
@@ -733,7 +733,7 @@ public sealed class FilmRolesTests
     {
         var wf = Load(ZImage);
         var missed = new List<string>();
-        FilmRoles.Apply(wf, Empty, new FilmInputs { Prompt = "a lighthouse", Negative = "blurry", Seed = 11, Width = 1280, Height = 720 }, missed);
+        VideoRoles.Apply(wf, Empty, new VideoInputs { Prompt = "a lighthouse", Negative = "blurry", Seed = 11, Width = 1280, Height = 720 }, missed);
         Assert.Empty(missed);
         // The negative comes from the same encoder (zeroed out), so it isn't set over the prompt.
         Assert.Equal("a lighthouse", (string?)wf.ValueOf("57:27.text"));
@@ -756,13 +756,13 @@ public sealed class FilmRolesTests
             }
             """);
         var missed = new List<string>();
-        FilmRoles.Apply(wf, Empty, new FilmInputs { Prompt = "the same man singing", Pictures = [@"C:\f\a.png", @"C:\f\b.png", @"C:\f\c.png", @"C:\f\d.png"] }, missed);
+        VideoRoles.Apply(wf, Empty, new VideoInputs { Prompt = "the same man singing", Pictures = [@"C:\f\a.png", @"C:\f\b.png", @"C:\f\c.png", @"C:\f\d.png"] }, missed);
         Assert.Equal("the same man singing", (string?)wf.ValueOf("435.value"));
         Assert.Equal(@"C:\f\a.png", (string?)wf.ValueOf("78.image"));
-        Assert.Equal(@"C:\f\b.png", (string?)wf.ValueOf("film_picture_2.image"));
-        Assert.Equal(@"C:\f\c.png", (string?)wf.ValueOf("film_picture_3.image"));
-        Assert.Equal("""["film_picture_2",0]""", wf.ValueOf("433:110.image2")!.ToJsonString());
-        Assert.Equal("""["film_picture_3",0]""", wf.ValueOf("433:111.image3")!.ToJsonString());
+        Assert.Equal(@"C:\f\b.png", (string?)wf.ValueOf("video_picture_2.image"));
+        Assert.Equal(@"C:\f\c.png", (string?)wf.ValueOf("video_picture_3.image"));
+        Assert.Equal("""["video_picture_2",0]""", wf.ValueOf("433:110.image2")!.ToJsonString());
+        Assert.Equal("""["video_picture_3",0]""", wf.ValueOf("433:111.image3")!.ToJsonString());
         Assert.Single(missed); // the fourth has no place
     }
 
@@ -779,7 +779,7 @@ public sealed class FilmRolesTests
             }
             """);
         var missed = new List<string>();
-        FilmRoles.Apply(wf, Empty, new FilmInputs { Tags = "folk", Lyrics = "[Verse]\nla la", Seed = 5, Seconds = 9.5 }, missed);
+        VideoRoles.Apply(wf, Empty, new VideoInputs { Tags = "folk", Lyrics = "[Verse]\nla la", Seed = 5, Seconds = 9.5 }, missed);
         Assert.Empty(missed);
         Assert.Equal("folk", (string?)wf.ValueOf("94.tags"));
         Assert.Equal("[Verse]\nla la", (string?)wf.ValueOf("94.lyrics"));
@@ -799,7 +799,7 @@ public sealed class FilmRolesTests
             }
             """);
         var missed = new List<string>();
-        FilmRoles.Apply(wf, Empty, new FilmInputs { Seed = 77 }, missed);
+        VideoRoles.Apply(wf, Empty, new VideoInputs { Seed = 77 }, missed);
         Assert.Empty(missed);
         Assert.Equal(77, (long?)wf.ValueOf("109.value"));
     }
@@ -809,14 +809,14 @@ public sealed class FilmRolesTests
     {
         var board = Storyboard.Parse("""{"shots": [{"id": "s1", "seconds": 8}], "sounds": [{"id": "a1", "source": "song", "tags": "lullaby, 70 BPM"}]}""");
         var song = board.Sounds[0];
-        Assert.Equal(60, FilmMaker.SongSeconds(board, song));
+        Assert.Equal(60, VideoMaker.SongSeconds(board, song));
         board.Shots[0].Seconds = 75;
-        Assert.Equal(77, FilmMaker.SongSeconds(board, song));
-        song.Start = 10; // it covers the film from where it starts
-        Assert.Equal(67, FilmMaker.SongSeconds(board, song));
-        Assert.Equal(70, FilmMaker.Bpm("dreamy lo-fi piano, 70 BPM, instrumental"));
-        Assert.Equal(128, FilmMaker.Bpm("house at 128bpm"));
-        Assert.Null(FilmMaker.Bpm("slow and dreamy"));
+        Assert.Equal(77, VideoMaker.SongSeconds(board, song));
+        song.Start = 10; // it covers the video from where it starts
+        Assert.Equal(67, VideoMaker.SongSeconds(board, song));
+        Assert.Equal(70, VideoMaker.Bpm("dreamy lo-fi piano, 70 BPM, instrumental"));
+        Assert.Equal(128, VideoMaker.Bpm("house at 128bpm"));
+        Assert.Null(VideoMaker.Bpm("slow and dreamy"));
     }
 
     [Fact]
@@ -833,10 +833,10 @@ public sealed class FilmRolesTests
     [InlineData(2.5, 24, 65)]
     [InlineData(3, 25, 81)]
     public void Ltx_gets_the_fewest_8n_plus_1_frames_that_last_the_shot(double seconds, int fps, int frames) =>
-        Assert.Equal(frames, FilmRoles.LtxFrames(seconds, fps));
+        Assert.Equal(frames, VideoRoles.LtxFrames(seconds, fps));
 }
 
-public sealed class FilmMontageTests : IDisposable
+public sealed class VideoMontageTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-montage-" + Guid.NewGuid().ToString("N")[..8]);
 
@@ -846,7 +846,7 @@ public sealed class FilmMontageTests : IDisposable
         catch (IOException) { }
     }
 
-    private Storyboard Film(string json)
+    private Storyboard Video(string json)
     {
         var board = Storyboard.Parse(json);
         board.Folder = _dir;
@@ -861,18 +861,18 @@ public sealed class FilmMontageTests : IDisposable
     [Fact]
     public void Cuts_join_dissolves_overlap_and_each_sound_plays_where_it_is_on_its_track()
     {
-        var board = Film("""
+        var board = Video("""
             {"title": "Keeper", "shots": [{"id": "s1", "seconds": 5}, {"id": "s2", "seconds": 4, "transition": "dissolve"}, {"id": "s3", "seconds": 3}],
-             "sounds": [{"id": "a1", "source": "song", "place": "Generated/a1.mp3"}, {"id": "a2", "source": "file", "place": "References/rain.mp3", "start": 2, "trim": 1.5, "seconds": 3, "volume": 0.8, "track": 1},
+             "sounds": [{"id": "a1", "source": "song", "place": "Generated/a1.mp3"}, {"id": "a2", "source": "file", "place": "References/rain.mp3", "start": 2, "trim": 1.5, "seconds": 3, "volume": 0.8, "soundLine": 1},
                         {"id": "a3", "source": "song", "tags": "not made yet"}]}
             """);
         Directory.CreateDirectory(board.ReferencesFolder);
         File.WriteAllText(board.SoundFile(board.Sound("a1")!), "");
         File.WriteAllText(board.SoundFile(board.Sound("a2")!), "");
-        var (args, length, notes) = FilmMontage.Plan(board, _ => true, "out.mp4");
+        var (args, length, notes) = VideoMontage.Plan(board, _ => true, "out.mp4");
         var graph = args[args.IndexOf("-filter_complex") + 1];
         Assert.Equal(11.5, length);
-        Assert.Equal(["The song a3 isn't made yet, so the film is without it."], notes);
+        Assert.Equal(["The song a3 isn't made yet, so the video is without it."], notes);
         Assert.Contains("[v0][v1]xfade=transition=fade:duration=0.5:offset=4.5[vj1]", graph);
         Assert.Contains("[aj1][a2]concat=n=2:v=0:a=1[aj2]", graph);
         // The shots' own sounds at half under a song.
@@ -888,13 +888,13 @@ public sealed class FilmMontageTests : IDisposable
     [Fact]
     public void A_shots_line_is_heard_clean_and_the_sounds_go_quieter_under_it()
     {
-        var board = Film("""
+        var board = Video("""
             {"shots": [{"id": "s1", "seconds": 3}, {"id": "s2", "seconds": 4, "line": "We're working on it."}], "sounds": [{"id": "a1", "source": "file", "place": "rain.mp3"}]}
             """);
         File.WriteAllText(board.SoundFile(board.Sounds[0]), "");
         Assert.True(board.Shots[1].LipSync); // a line is said lip-synced
         File.WriteAllText(board.ShotAudio(board.Shots[1]), "");
-        var (args, _, _) = FilmMontage.Plan(board, _ => true, "out.mp4");
+        var (args, _, _) = VideoMontage.Plan(board, _ => true, "out.mp4");
         var graph = args[args.IndexOf("-filter_complex") + 1];
         Assert.Equal(board.ShotAudio(board.Shots[1]), args[args.LastIndexOf("-i") + 1]);
         Assert.Contains("[3:a]aresample=48000", graph); // the line, after the two clips and the sound
@@ -904,22 +904,22 @@ public sealed class FilmMontageTests : IDisposable
     [Fact]
     public void Shots_without_a_clip_are_named()
     {
-        var board = Film("""{"shots": [{"id": "s1"}, {"id": "s2"}]}""");
+        var board = Video("""{"shots": [{"id": "s1"}, {"id": "s2"}]}""");
         File.Delete(board.ShotVideo(board.Shots[1]));
-        var ex = Assert.Throws<FilmException>(() => FilmMontage.Plan(board, _ => true, "out.mp4"));
+        var ex = Assert.Throws<VideoException>(() => VideoMontage.Plan(board, _ => true, "out.mp4"));
         Assert.Contains("s2", ex.Message);
     }
 
     [Fact]
     public async Task Without_ffmpeg_joining_says_how_to_get_it()
     {
-        var board = Film("""{"shots": [{"id": "s1"}]}""");
-        var ex = await Assert.ThrowsAsync<FilmException>(() => FilmMontage.JoinAsync(board, null, null, null, CancellationToken.None));
+        var board = Video("""{"shots": [{"id": "s1"}]}""");
+        var ex = await Assert.ThrowsAsync<VideoException>(() => VideoMontage.JoinAsync(board, null, null, null, CancellationToken.None));
         Assert.Contains("Data\\tools", ex.Message);
     }
 }
 
-public sealed class FilmCheckTests
+public sealed class VideoCheckTests
 {
     /// <summary>Frames of a textured field the camera pans across by <paramref name="pan"/> pixels a frame, with a textured patch that rises <paramref name="rise"/> a frame on its own.</summary>
     private static List<VideoMotion.Frame> Moving(double pan, double rise, int count = 25, double walk = 0)
@@ -1024,14 +1024,14 @@ public sealed class FilmCheckTests
             using var paint = new SKPaint { Color = new SKColor(200, 160, 40) };
             c.DrawRect(0, 40, 400, 220, paint);
         });
-        Assert.Equal(new SKRectI(0, 40, 400, 260), FilmMaker.Bars(letterboxed));
+        Assert.Equal(new SKRectI(0, 40, 400, 260), VideoMaker.Bars(letterboxed));
         using var night = Picture(400, 300, c =>
         {
             c.Clear(SKColors.Black);
             using var paint = new SKPaint { Color = new SKColor(200, 200, 220) };
             c.DrawCircle(200, 150, 20, paint); // a moon in a night sky
         });
-        Assert.Equal(new SKRectI(0, 0, 400, 300), FilmMaker.Bars(night));
+        Assert.Equal(new SKRectI(0, 0, 400, 300), VideoMaker.Bars(night));
     }
 
     [Fact]
@@ -1048,8 +1048,8 @@ public sealed class FilmCheckTests
         using var a = Picture(320, 180, c => Scene(c, 0, new SKColor(240, 200, 150)));
         using var b = Picture(320, 176, c => Scene(c, 3, new SKColor(236, 198, 148)));
         using var other = Picture(320, 180, c => Scene(c, -150, new SKColor(30, 30, 60)));
-        Assert.True(FilmCheck.Alike(a, b) > 0.85, $"{FilmCheck.Alike(a, b)}");
-        Assert.True(FilmCheck.Alike(a, other) < 0.5, $"{FilmCheck.Alike(a, other)}");
+        Assert.True(VideoCheck.Alike(a, b) > 0.85, $"{VideoCheck.Alike(a, b)}");
+        Assert.True(VideoCheck.Alike(a, other) < 0.5, $"{VideoCheck.Alike(a, other)}");
     }
 
     [Theory]
@@ -1058,12 +1058,12 @@ public sealed class FilmCheckTests
     [InlineData("verdict: Redo: the hand", "redo")]
     [InlineData("No verdict here.", null)]
     public void A_fresh_looks_verdict_is_read_off_its_last_line(string answer, string? verdict) =>
-        Assert.Equal(verdict, FilmCheck.Verdict(answer));
+        Assert.Equal(verdict, VideoCheck.Verdict(answer));
 }
 
-public sealed class FilmToolTests : IDisposable
+public sealed class VideoToolTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-filmtool-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-videotool-" + Guid.NewGuid().ToString("N")[..8]);
 
     public void Dispose()
     {
@@ -1080,9 +1080,9 @@ public sealed class FilmToolTests : IDisposable
              "sounds": [{"id": "a1", "source": "song", "tags": "folk", "lyrics": "la"}]}
             """);
         board.Folder = _dir;
-        var text = FilmTool.Overview(board);
+        var text = VideoTool.Overview(board);
         Assert.Contains("To make: frame f1, frame f2, shot s1, shot s2, sound a1 (action=sound), then join.", text);
-        Assert.Contains("s2, take 2 (5–10 s, 5 s, goes on from s1)", text);
+        Assert.Contains("s2, clip 2 (5–10 s, 5 s, goes on from s1)", text);
         Assert.Contains("(lip-synced, first frame only)", text);
     }
 
@@ -1102,44 +1102,44 @@ public sealed class FilmToolTests : IDisposable
         }
         Made(board.FramePicture(board.Frame("f1")!), board.FrameMeta(board.Frame("f1")!), "made before f1 was changed");
         foreach (var id in new[] { "f2", "f3" })
-            Made(board.FramePicture(board.Frame(id)!), board.FrameMeta(board.Frame(id)!), FilmMaker.FrameStamp(board, board.Frame(id)!));
+            Made(board.FramePicture(board.Frame(id)!), board.FrameMeta(board.Frame(id)!), VideoMaker.FrameStamp(board, board.Frame(id)!));
         foreach (var shot in board.Shots)
-            Made(board.ShotVideo(shot), board.ShotMeta(shot), FilmMaker.ShotStamp(board, shot));
-        var text = FilmTool.Overview(board);
+            Made(board.ShotVideo(shot), board.ShotMeta(shot), VideoMaker.ShotStamp(board, shot));
+        var text = VideoTool.Overview(board);
         Assert.Contains("To make: frame f1, frame f2, shot s1, then join.", text);
         Assert.Contains("made, but to be made again after f1", text);
         Assert.Contains("Made, but to be made again after frame f2", text);
     }
 
     [Fact]
-    public async Task Without_a_path_a_new_film_goes_into_the_films_folder_and_never_over_another()
+    public async Task Without_a_path_a_new_video_goes_into_the_videos_folder_and_never_over_another()
     {
-        var tool = new FilmTool();
-        var films = Path.Combine(_dir, "Data", "films");
-        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, FilmsDirectory = films };
+        var tool = new VideoTool();
+        var videos = Path.Combine(_dir, "Data", "videos");
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, VideosDirectory = videos };
         JsonObject Call() => new()
         {
             ["action"] = "storyboard",
             ["storyboard"] = JsonNode.Parse("""{"title": "Paper Boat", "shots": [{"id": "s1", "prompt": "it sails"}]}"""),
         };
         Assert.False((await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).IsError);
-        Assert.False((await new FilmTool().ExecuteAsync(Call(), ctx, CancellationToken.None)).IsError);
-        Assert.True(Storyboard.IsFilm(Path.Combine(films, "Paper Boat")));
-        Assert.True(Storyboard.IsFilm(Path.Combine(films, "Paper Boat 2")));
+        Assert.False((await new VideoTool().ExecuteAsync(Call(), ctx, CancellationToken.None)).IsError);
+        Assert.True(Storyboard.IsVideo(Path.Combine(videos, "Paper Boat")));
+        Assert.True(Storyboard.IsVideo(Path.Combine(videos, "Paper Boat 2")));
 
-        // Another task finds a film by its name, or is told which films there are.
-        var byName = await new FilmTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = "Paper Boat 2" }, ctx, CancellationToken.None);
+        // Another task finds a video by its name, or is told which videos there are.
+        var byName = await new VideoTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = "Paper Boat 2" }, ctx, CancellationToken.None);
         Assert.False(byName.IsError);
-        Assert.Contains(Path.Combine(films, "Paper Boat 2"), byName.Text);
-        var unsaid = await new FilmTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard" }, ctx, CancellationToken.None);
+        Assert.Contains(Path.Combine(videos, "Paper Boat 2"), byName.Text);
+        var unsaid = await new VideoTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard" }, ctx, CancellationToken.None);
         Assert.True(unsaid.IsError);
-        Assert.Contains(Path.Combine(films, "Paper Boat 2"), unsaid.Text);
+        Assert.Contains(Path.Combine(videos, "Paper Boat 2"), unsaid.Text);
     }
 
     [Fact]
     public async Task A_new_storyboard_goes_where_the_path_says_and_a_shot_call_changes_it_first()
     {
-        var tool = new FilmTool();
+        var tool = new VideoTool();
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir };
         var made = await tool.ExecuteAsync(new JsonObject
         {
@@ -1148,7 +1148,7 @@ public sealed class FilmToolTests : IDisposable
             ["storyboard"] = JsonNode.Parse("""{"title": "Keeper", "frames": [{"id": "f1", "prompt": "a keeper"}], "shots": [{"id": "s1", "first": "f1", "prompt": "he waves"}]}"""),
         }, ctx, CancellationToken.None);
         Assert.False(made.IsError, made.Text);
-        Assert.True(Storyboard.IsFilm(Path.Combine(_dir, "Keeper")));
+        Assert.True(Storyboard.IsVideo(Path.Combine(_dir, "Keeper")));
         // No ComfyUI in this run: the shot isn't made, but its new prompt is saved first.
         var shot = await tool.ExecuteAsync(new JsonObject { ["action"] = "shot", ["id"] = "s1", ["prompt"] = "he waves at the camera", ["seconds"] = 3 }, ctx, CancellationToken.None);
         Assert.True(shot.IsError);
@@ -1164,83 +1164,83 @@ public sealed class FilmToolTests : IDisposable
         JsonObject Call() => new() { ["action"] = "storyboard", ["path"] = path, ["storyboard"] = JsonNode.Parse("""{"title": "Keeper", "shots": [{"id": "s1", "prompt": "he waves"}]}""") };
         var said = new List<string>();
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, InConversation = t => said.Any(s => s.Contains(t)) };
-        var first = await new FilmTool().ExecuteAsync(Call(), ctx, CancellationToken.None);
-        Assert.Contains(FilmTool.GuideHead, first.Text);
+        var first = await new VideoTool().ExecuteAsync(Call(), ctx, CancellationToken.None);
+        Assert.Contains(VideoTool.GuideHead, first.Text);
         Assert.Contains("make the last frame from the first", first.Text); // the storyboard guide
         Assert.Contains("Direction and distance", first.Text); // and how LTX reads a shot's prompt
         said.Add(first.Text);
         // The next run in the same chat: the conversation has it.
-        Assert.DoesNotContain(FilmTool.GuideHead, (await new FilmTool().ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
+        Assert.DoesNotContain(VideoTool.GuideHead, (await new VideoTool().ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
 
         // The same run, after its context started afresh: the guide went with the rest.
-        var tool = new FilmTool();
+        var tool = new VideoTool();
         said.Clear();
-        Assert.Contains(FilmTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
-        Assert.DoesNotContain(FilmTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
+        Assert.Contains(VideoTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
+        Assert.DoesNotContain(VideoTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
         ctx.ContextResets++;
-        Assert.Contains(FilmTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
+        Assert.Contains(VideoTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
     }
 
     [Fact]
-    public async Task A_second_film_laid_out_without_a_path_is_a_film_of_its_own()
+    public async Task A_second_video_laid_out_without_a_path_is_a_video_of_its_own()
     {
         // "Two ads, coffee and tea": the tea ad, without a path, was written over the coffee one.
-        var films = Path.Combine(_dir, "Data", "films");
-        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, FilmsDirectory = films };
-        var tool = new FilmTool();
+        var videos = Path.Combine(_dir, "Data", "videos");
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, VideosDirectory = videos };
+        var tool = new VideoTool();
         JsonObject Call(string json) => new() { ["action"] = "storyboard", ["storyboard"] = JsonNode.Parse(json) };
         Assert.False((await tool.ExecuteAsync(Call("""{"title": "Coffee", "shots": [{"id": "s1", "prompt": "a cup steams"}]}"""), ctx, CancellationToken.None)).IsError);
         Assert.False((await tool.ExecuteAsync(Call("""{"title": "Tea", "shots": [{"id": "s1", "prompt": "a teapot pours"}]}"""), ctx, CancellationToken.None)).IsError);
-        Assert.Equal("a cup steams", Storyboard.Load(Path.Combine(films, "Coffee")).Shots[0].Prompt);
-        Assert.Equal("a teapot pours", Storyboard.Load(Path.Combine(films, "Tea")).Shots[0].Prompt);
-        // A new title alone renames the film in use, its folder too; with a change to one of its pieces too.
+        Assert.Equal("a cup steams", Storyboard.Load(Path.Combine(videos, "Coffee")).Shots[0].Prompt);
+        Assert.Equal("a teapot pours", Storyboard.Load(Path.Combine(videos, "Tea")).Shots[0].Prompt);
+        // A new title alone renames the video in use, its folder too; with a change to one of its pieces too.
         Assert.False((await tool.ExecuteAsync(Call("""{"title": "Green Tea"}"""), ctx, CancellationToken.None)).IsError);
-        Assert.Equal("Green Tea", Storyboard.Load(Path.Combine(films, "Green Tea")).Title);
-        Assert.False(Directory.Exists(Path.Combine(films, "Tea")));
+        Assert.Equal("Green Tea", Storyboard.Load(Path.Combine(videos, "Green Tea")).Title);
+        Assert.False(Directory.Exists(Path.Combine(videos, "Tea")));
         Assert.False((await tool.ExecuteAsync(Call("""{"title": "Dawn Tea", "shots": [{"id": "s1", "camera": "close-up"}]}"""), ctx, CancellationToken.None)).IsError);
-        var tea = Storyboard.Load(Path.Combine(films, "Dawn Tea"));
+        var tea = Storyboard.Load(Path.Combine(videos, "Dawn Tea"));
         Assert.Equal(("Dawn Tea", "close-up", "a teapot pours"), (tea.Title, tea.Shots[0].Camera, tea.Shots[0].Prompt));
-        Assert.False(Directory.Exists(Path.Combine(films, "Green Tea")));
-        // A title another film has: the film keeps its name, and the model is told.
+        Assert.False(Directory.Exists(Path.Combine(videos, "Green Tea")));
+        // A title another video has: the video keeps its name, and the model is told.
         var taken = await tool.ExecuteAsync(Call("""{"title": "Coffee"}"""), ctx, CancellationToken.None);
         Assert.Contains("keeps the name \"Dawn Tea\"", taken.Text);
-        Assert.Equal("a cup steams", Storyboard.Load(Path.Combine(films, "Coffee")).Shots[0].Prompt);
+        Assert.Equal("a cup steams", Storyboard.Load(Path.Combine(videos, "Coffee")).Shots[0].Prompt);
 
-        // The Video editor window's new film (empty s1, f1, f2), read with its path, then laid out
+        // The Video editor window's new video (empty s1, f1, f2), read with its path, then laid out
         // without one: in place.
-        var blank = Storyboard.New(Path.Combine(films, "Untitled film"), "Untitled film");
+        var blank = Storyboard.New(Path.Combine(videos, "Untitled video"), "Untitled video");
         blank.Save();
-        var fresh = new FilmTool();
+        var fresh = new VideoTool();
         Assert.False((await fresh.ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = blank.Folder }, ctx, CancellationToken.None)).IsError);
         Assert.False((await fresh.ExecuteAsync(Call("""{"title": "Lighthouse", "shots": [{"id": "s1", "prompt": "the beam sweeps the sea"}]}"""), ctx, CancellationToken.None)).IsError);
-        Assert.Equal("the beam sweeps the sea", Storyboard.Load(Path.Combine(films, "Lighthouse")).Shots[0].Prompt);
+        Assert.Equal("the beam sweeps the sea", Storyboard.Load(Path.Combine(videos, "Lighthouse")).Shots[0].Prompt);
         Assert.False(Directory.Exists(blank.Folder));
     }
 
     [Fact]
-    public void A_speaking_shots_take_keeps_its_line_and_brings_it_back()
+    public void A_speaking_shots_version_keeps_its_line_and_brings_it_back()
     {
         var board = Storyboard.Parse("""{"title": "Keeper", "shots": [{"id": "s1", "prompt": "he speaks", "line": "Hello there."}]}""");
         board.Folder = Path.Combine(_dir, "Keeper");
         var shot = board.Shots[0];
-        var piece = FilmPiece.Of(shot);
+        var piece = VideoPiece.Of(shot);
         Directory.CreateDirectory(board.ShotFolder(shot));
         File.WriteAllText(board.ShotVideo(shot), "clip 1");
         File.WriteAllText(board.ShotMeta(shot), "{}");
         File.WriteAllText(board.ShotAudio(shot), "line 1");
         File.WriteAllText(board.ShotLine(shot), "line 1 said");
-        var kept = FilmTakes.Keep(board, piece)!;
+        var kept = VideoVersions.Keep(board, piece)!;
         // Made again with a new line.
         File.WriteAllText(board.ShotVideo(shot), "clip 2");
         File.WriteAllText(board.ShotAudio(shot), "line 2");
         File.WriteAllText(board.ShotLine(shot), "line 2 said");
 
-        FilmTakes.Use(board, piece, kept);
+        VideoVersions.Use(board, piece, kept);
 
         Assert.Equal(("clip 1", "line 1", "line 1 said"), (File.ReadAllText(board.ShotVideo(shot)), File.ReadAllText(board.ShotAudio(shot)), File.ReadAllText(board.ShotLine(shot))));
-        // The one it replaced is a take, its line with it; dropped, nothing of it is left.
-        var take = Assert.Single(FilmTakes.List(board, piece));
-        FilmTakes.Drop(take);
+        // The one it replaced is a version, its line with it; dropped, nothing of it is left.
+        var version = Assert.Single(VideoVersions.List(board, piece));
+        VideoVersions.Drop(version);
         Assert.Equal(["s1.json", "s1.line.flac", "s1.mp4", "s1.wav"], Directory.EnumerateFiles(board.ShotFolder(shot)).Select(f => Path.GetFileName(f)).Order(StringComparer.Ordinal).ToArray());
         Assert.Empty(Directory.EnumerateFiles(Path.Combine(board.ShotFolder(shot), "Versions")));
     }
@@ -1250,38 +1250,38 @@ public sealed class FilmToolTests : IDisposable
     {
         var board = Storyboard.Parse("""{"title": "Keeper", "frames": [{"id": "f1", "prompt": "a keeper"}]}""");
         board.Folder = Path.Combine(_dir, "Keeper");
-        var piece = FilmPiece.Of(board.Frames[0]);
+        var piece = VideoPiece.Of(board.Frames[0]);
         Directory.CreateDirectory(Path.GetDirectoryName(piece.File(board)!)!);
         File.WriteAllText(piece.File(board)!, "the picture");
         File.WriteAllText(piece.Meta(board)!, """{"kind": "frame", "id": "f1", "prompt": "a keeper", "made": {"settings": {"prompt": "a keeper"}, "look": {"verdict": "good"}}}""");
-        var kept = FilmTakes.Keep(board, piece)!;
+        var kept = VideoVersions.Keep(board, piece)!;
         File.WriteAllText(piece.Meta(board)!, """{"kind": "frame", "id": "f1", "prompt": "a keeper", "made": {"stamp": ""}}"""); // the make begins, then fails
 
-        FilmTakes.Restore(board, piece, kept);
+        VideoVersions.Restore(board, piece, kept);
 
         Assert.Contains("\"look\"", File.ReadAllText(piece.Meta(board)!));
         Assert.Contains("\"prompt\": \"a keeper\"", File.ReadAllText(piece.Meta(board)!)); // what it says of the frame stays
         Assert.Equal("the picture", File.ReadAllText(piece.File(board)!));
-        Assert.Empty(FilmTakes.List(board, piece));
+        Assert.Empty(VideoVersions.List(board, piece));
     }
 
     [Fact]
-    public async Task A_new_film_given_by_name_goes_into_the_films_folder_not_the_working_one()
+    public async Task A_new_video_given_by_name_goes_into_the_videos_folder_not_the_working_one()
     {
-        // qwen3.8 gave path "lighthouse": the film was made in the user's home folder.
-        var films = Path.Combine(_dir, "Data", "films");
-        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, FilmsDirectory = films };
-        var made = await new FilmTool().ExecuteAsync(new JsonObject
+        // qwen3.8 gave path "lighthouse": the video was made in the user's home folder.
+        var videos = Path.Combine(_dir, "Data", "videos");
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, VideosDirectory = videos };
+        var made = await new VideoTool().ExecuteAsync(new JsonObject
         {
             ["action"] = "storyboard",
             ["path"] = "lighthouse",
             ["storyboard"] = JsonNode.Parse("""{"title": "The Keeper", "shots": [{"id": "s1", "prompt": "he climbs"}]}"""),
         }, ctx, CancellationToken.None);
         Assert.False(made.IsError, made.Text);
-        Assert.True(Storyboard.IsFilm(Path.Combine(films, "lighthouse")));
+        Assert.True(Storyboard.IsVideo(Path.Combine(videos, "lighthouse")));
         Assert.False(Directory.Exists(Path.Combine(_dir, "lighthouse")));
         // And found by that name again.
-        Assert.False((await new FilmTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = "lighthouse" }, ctx, CancellationToken.None)).IsError);
+        Assert.False((await new VideoTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = "lighthouse" }, ctx, CancellationToken.None)).IsError);
     }
 
     [Fact]
@@ -1299,23 +1299,23 @@ public sealed class FilmToolTests : IDisposable
             bitmap.Encode(file, SKEncodedImageFormat.Png, 100);
         // Made: its meta says so, beside what it says of the frame.
         var meta = JsonNode.Parse(File.ReadAllText(board.FrameMeta(frame)))!.AsObject();
-        meta["made"] = new JsonObject { ["stamp"] = FilmMaker.FrameStamp(board, frame) };
+        meta["made"] = new JsonObject { ["stamp"] = VideoMaker.FrameStamp(board, frame) };
         File.WriteAllText(board.FrameMeta(frame), meta.ToJsonString());
         var ctx = new ToolContext
         {
             Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir,
             Ask = (_, _, _) => Task.FromResult<string?>("His left hand has six fingers. SEVERE.\nVERDICT: redo: his hand has six fingers"),
         };
-        var looked = await new FilmTool().ExecuteAsync(new JsonObject { ["action"] = "check", ["id"] = "f1", ["path"] = board.Folder }, ctx, CancellationToken.None);
+        var looked = await new VideoTool().ExecuteAsync(new JsonObject { ["action"] = "check", ["id"] = "f1", ["path"] = board.Folder }, ctx, CancellationToken.None);
         Assert.False(looked.IsError, looked.Text);
         Assert.Contains("To fix: his hand has six fingers", looked.Text);
-        Assert.Equal(("redo", "It needs another go: his hand has six fingers."), FilmTakes.LookIn(board.FrameMeta(frame)));
+        Assert.Equal(("redo", "It needs another go: his hand has six fingers."), VideoVersions.LookIn(board.FrameMeta(frame)));
     }
 }
 
-public sealed class FilmReferencesTests : IDisposable
+public sealed class VideoReferencesTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-filmref-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-videoref-" + Guid.NewGuid().ToString("N")[..8]);
 
     public void Dispose()
     {
@@ -1340,7 +1340,7 @@ public sealed class FilmReferencesTests : IDisposable
     }
 
     [Fact]
-    public async Task A_references_picture_goes_into_the_references_folder_at_its_own_shape_and_a_frames_is_cut_to_the_film()
+    public async Task A_references_picture_goes_into_the_references_folder_at_its_own_shape_and_a_frames_is_cut_to_the_video()
     {
         var board = Storyboard.Parse("""
             {"title": "Mira", "frames": [{"id": "mira", "reference": true, "file": "square.png"}, {"id": "f1", "file": "square.png"}],
@@ -1353,17 +1353,17 @@ public sealed class FilmReferencesTests : IDisposable
         Png(square, 600, 600);
         foreach (var frame in board.Frames)
             frame.File = square;
-        var maker = new FilmMaker(ComfyHub.For(Path.Combine(_dir, "comfy")), null);
+        var maker = new VideoMaker(ComfyHub.For(Path.Combine(_dir, "comfy")), null);
         var reference = await maker.MakeFrameAsync(board, board.Frame("mira")!, null, CancellationToken.None, CancellationToken.None);
         var shotFrame = await maker.MakeFrameAsync(board, board.Frame("f1")!, null, CancellationToken.None, CancellationToken.None);
         Assert.Equal(Path.Combine(board.ReferencesFolder, "mira.png"), reference.File);
         Assert.Equal((600, 600), SizeOf(reference.File));
         Assert.Equal(Path.Combine(board.Folder, "Generated", "f1.png"), shotFrame.File);
         Assert.Equal((1280, 720), SizeOf(shotFrame.File));
-        Assert.True(FilmMaker.IsCurrent(board, board.Frame("mira")!));
+        Assert.True(VideoMaker.IsCurrent(board, board.Frame("mira")!));
         // Never bigger than the edit model can use.
         Png(Path.Combine(_dir, "wide.png"), 3000, 1000);
-        FilmMaker.SaveReference(Path.Combine(_dir, "wide.png"), Path.Combine(_dir, "wide.saved.png"));
+        VideoMaker.SaveReference(Path.Combine(_dir, "wide.png"), Path.Combine(_dir, "wide.saved.png"));
         Assert.Equal((2048, 683), SizeOf(Path.Combine(_dir, "wide.saved.png")));
     }
 
@@ -1395,16 +1395,16 @@ public sealed class FilmReferencesTests : IDisposable
         // A folder by its name: the picture named after it, else its first.
         Assert.Equal(Path.Combine(board.ReferencesFolder, "Cafe", "Cafe.png"), board.ReferenceFile("Cafe"));
         Assert.Equal(Path.Combine(board.ReferencesFolder, "Street", "a.png"), board.ReferenceFile("Street"));
-        Assert.Null(board.ReferenceFile("mira")); // a frame of the film, not a file
+        Assert.Null(board.ReferenceFile("mira")); // a frame of the video, not a file
         Assert.Null(board.ReferenceFile("nobody"));
         Assert.Equal(["Cafe/Cafe.png", "Cafe/inside.png", "mira.png", "mira/Front.jpg", "Street/a.png", "Street/b.png"], board.ReferenceFiles().Select(board.InReferences));
 
         // Changing a picture puts what is made from it out of date.
         var frame = board.Frame("f1")!;
-        var stamp = FilmMaker.FrameStamp(board, frame);
+        var stamp = VideoMaker.FrameStamp(board, frame);
         File.SetLastWriteTimeUtc(front, DateTime.UtcNow.AddMinutes(1));
-        Assert.NotEqual(stamp, FilmMaker.FrameStamp(board, frame));
-        var overview = FilmTool.Overview(board);
+        Assert.NotEqual(stamp, VideoMaker.FrameStamp(board, frame));
+        var overview = VideoTool.Overview(board);
         Assert.Contains($"References folder: {board.ReferencesFolder}; the user's pictures there to make frames from, by name in from: " +
                         "Cafe/Cafe.png, Cafe/inside.png, mira/Front.jpg, Street/a.png, Street/b.png.", overview);
 
@@ -1429,7 +1429,7 @@ public sealed class FilmReferencesTests : IDisposable
         Png(named, 50, 80);
         var path = Path.Combine(_dir, "Bunny");
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir };
-        var result = await new FilmTool().ExecuteAsync(new JsonObject
+        var result = await new VideoTool().ExecuteAsync(new JsonObject
         {
             ["action"] = "storyboard",
             ["path"] = path,
@@ -1442,7 +1442,7 @@ public sealed class FilmReferencesTests : IDisposable
         Assert.False(result.IsError, result.Text);
         var board = Storyboard.Load(path);
         var carl = board.ReferencesFolder;
-        // In References, byte for byte, and named so in from: the film keeps it.
+        // In References, byte for byte, and named so in from: the video keeps it.
         Assert.Equal(["CarlLineup.png", "Carl (2).png"], board.Frame("r1")!.From);
         Assert.Equal(bytes, File.ReadAllBytes(Path.Combine(carl, "CarlLineup.png")));
         Assert.Equal(bytes, File.ReadAllBytes(lineup));
@@ -1453,10 +1453,10 @@ public sealed class FilmReferencesTests : IDisposable
         Assert.Equal(["r1", "CarlLineup.png"], board.Frame("f1")!.From);
         Assert.Contains($"{lineup} as \"CarlLineup.png\"", result.Text);
         Assert.Contains("Copied into References as they are", result.Text);
-        Assert.Contains("CarlLineup.png", FilmTool.Overview(board));
+        Assert.Contains("CarlLineup.png", VideoTool.Overview(board));
 
         // Named again in a frame call, it is the copy already there, not another one.
-        var again = await new FilmTool().ExecuteAsync(new JsonObject
+        var again = await new VideoTool().ExecuteAsync(new JsonObject
         {
             ["action"] = "frame", ["path"] = path, ["id"] = "r1", ["from"] = new JsonArray(lineup),
         }, ctx, CancellationToken.None);
@@ -1466,7 +1466,7 @@ public sealed class FilmReferencesTests : IDisposable
     }
 
     [Fact]
-    public void An_edit_template_that_takes_its_size_from_its_first_picture_makes_the_films_size()
+    public void An_edit_template_that_takes_its_size_from_its_first_picture_makes_the_videos_size()
     {
         var wf = ComfyWorkflow.FromApi(ComfyWorkflow.ParseText("""
             {
@@ -1482,11 +1482,11 @@ public sealed class FilmReferencesTests : IDisposable
             {"EmptyImage": {"input": {"required": {"width": ["INT", {}], "height": ["INT", {}], "batch_size": ["INT", {}], "color": ["INT", {}]}}, "output": ["IMAGE"]}}
             """)!.AsObject());
         var missed = new List<string>();
-        FilmRoles.Apply(wf, library, new FilmInputs { Prompt = "her at the cafe", Width = 1280, Height = 720, Pictures = [@"C:\f\mira.png"] }, missed);
+        VideoRoles.Apply(wf, library, new VideoInputs { Prompt = "her at the cafe", Width = 1280, Height = 720, Pictures = [@"C:\f\mira.png"] }, missed);
         Assert.DoesNotContain(missed, m => m.Contains("size", StringComparison.Ordinal));
-        Assert.Equal("""["film_size_433_88",0]""", wf.ValueOf("433:88.pixels")!.ToJsonString());
-        Assert.Equal(1280, (int?)wf.ValueOf("film_size_433_88.width"));
-        Assert.Equal(720, (int?)wf.ValueOf("film_size_433_88.height"));
+        Assert.Equal("""["video_size_433_88",0]""", wf.ValueOf("433:88.pixels")!.ToJsonString());
+        Assert.Equal(1280, (int?)wf.ValueOf("video_size_433_88.width"));
+        Assert.Equal(720, (int?)wf.ValueOf("video_size_433_88.height"));
         // The model still gets the picture as it is.
         Assert.Equal("""["433:117",0]""", wf.ValueOf("433:111.image1")!.ToJsonString());
         Assert.Equal(@"C:\f\mira.png", (string?)wf.ValueOf("78.image"));

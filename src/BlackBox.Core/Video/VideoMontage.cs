@@ -3,40 +3,40 @@ using System.Globalization;
 using System.Text;
 using BlackBox.Core.Media;
 
-namespace BlackBox.Core.Film;
+namespace BlackBox.Core.Video;
 
 /// <summary>
-/// Joins a film's shots into one video with ffmpeg: each clip cut to its length, scaled to the
-/// film's frame and frame rate, one after another with the storyboard's cuts, dissolves and fades,
-/// the sounds of its sound tracks laid over the shots' own sound where they start, the end faded out.
+/// Joins a video's shots into one video with ffmpeg: each clip cut to its length, scaled to the
+/// video's frame and frame rate, one after another with the storyboard's cuts, dissolves and fades,
+/// the sounds of its sound lines laid over the shots' own sound where they start, the end faded out.
 /// </summary>
-public static class FilmMontage
+public static class VideoMontage
 {
-    /// <summary>How the film begins and ends: a short fade in from black, a longer one out.</summary>
+    /// <summary>How the video begins and ends: a short fade in from black, a longer one out.</summary>
     internal const double FadeIn = 0.4, FadeOut = 1.0;
 
-    /// <summary>The ffmpeg command line that joins the film, and how long the film is.</summary>
+    /// <summary>The ffmpeg command line that joins the video, and how long the video is.</summary>
     /// <param name="hasSound">Whether a file has a sound track (shots made without one get silence).</param>
     public static (List<string> Arguments, double Length, List<string> Notes) Plan(Storyboard board, Func<string, bool> hasSound, string output)
     {
         if (board.Shots.Count == 0)
-            throw new FilmException("The film has no shots to join.");
+            throw new VideoException("The video has no shots to join.");
         var missing = board.Shots.Where(s => !File.Exists(board.ShotVideo(s))).Select(s => s.Id).ToList();
         if (missing.Count > 0)
-            throw new FilmException($"These shots have no clip yet: {string.Join(", ", missing)}. Make them first.");
+            throw new VideoException($"These shots have no clip yet: {string.Join(", ", missing)}. Make them first.");
         var notes = new List<string>();
         var (width, height, fps) = (board.Width, board.Height, board.Fps);
-        var sounds = new List<FilmSound>();
+        var sounds = new List<VideoSound>();
         foreach (var sound in board.Sounds)
             if (File.Exists(board.SoundFile(sound)))
                 sounds.Add(sound);
             else
-                notes.Add(sound.Source == FilmSound.Song ? $"The song {sound.Label} isn't made yet, so the film is without it." : $"The sound file {board.SoundFile(sound)} isn't there, so the film is without it.");
+                notes.Add(sound.Source == VideoSound.Song ? $"The song {sound.Label} isn't made yet, so the video is without it." : $"The sound file {board.SoundFile(sound)} isn't there, so the video is without it.");
         // Under a song the shots' own sound is kept at half: LTX makes a shot's sounds well and
         // its music badly (the user's finding), so a shot is asked for its sounds and no music
-        // (FilmMaker.WithoutMusic) and the music is the song. Asked for nothing, LTX's sound was a
+        // (VideoMaker.WithoutMusic) and the music is the song. Asked for nothing, LTX's sound was a
         // muddy wash that took the Paper Boat song from 3.1 to 2.7 on SongEval at 30%.
-        var shotVolume = sounds.Any(s => s.Source == FilmSound.Song) ? 0.5 : 1.0;
+        var shotVolume = sounds.Any(s => s.Source == VideoSound.Song) ? 0.5 : 1.0;
         var args = new List<string> { "-hide_banner", "-y", "-nostats", "-progress", "pipe:1" };
         foreach (var shot in board.Shots)
             args.AddRange(["-i", board.ShotVideo(shot)]);
@@ -84,7 +84,7 @@ public static class FilmMontage
             }
             else
             {
-                var kind = shot.Transition == FilmShot.Fade ? "fadeblack" : "fade";
+                var kind = shot.Transition == VideoShot.Fade ? "fadeblack" : "fade";
                 f.Append($"[{video}][v{i}]xfade=transition={kind}:duration={N(overlap)}:offset={N(length - overlap)}[vj{i}];")
                  .Append($"[{audio}][a{i}]acrossfade=d={N(overlap)}[aj{i}];");
                 length += shot.Seconds - overlap;
@@ -95,8 +95,8 @@ public static class FilmMontage
         f.Append($"[{video}]fade=t=in:d={N(Math.Min(FadeIn, length / 4))},fade=t=out:st={N(length - fadeOut)}:d={N(fadeOut)}[vout];");
         if (sounds.Count > 0)
         {
-            // Each sound as its clip on the track is: its start cut off (trim), as long as it plays,
-            // from where it starts in the film, at its volume; quieter while someone speaks, so the
+            // Each sound as its clip on the sound line is: its start cut off (trim), as long as it plays,
+            // from where it starts in the video, at its volume; quieter while someone speaks, so the
             // line is heard over it.
             var (starts, _) = board.Timing();
             var speaking = lines.Keys.Select(i => $"between(t,{N(starts[i])},{N(starts[i] + board.Shots[i].Seconds)})").ToList();
@@ -114,7 +114,7 @@ public static class FilmMontage
             f.Append(mix).Append($"amix=inputs={sounds.Count + 1}:duration=first:normalize=0[mixed];");
             audio = "mixed";
         }
-        // A sound cut where the film ends fades out over longer than the picture does.
+        // A sound cut where the video ends fades out over longer than the picture does.
         var runsOn = sounds.Any(s => s.Seconds <= 0 || s.Start + s.Seconds > length + 0.05);
         var soundFade = runsOn ? Math.Min(2.5, length / 3) : fadeOut;
         f.Append($"[{audio}]afade=t=out:st={N(length - soundFade)}:d={N(soundFade)},alimiter=limit=0.95[aout]");
@@ -125,20 +125,20 @@ public static class FilmMontage
         return (args, length, notes);
     }
 
-    /// <summary>Joins the film into its file next to the storyboard (named after it); returns where it is and what to know.</summary>
-    public static async Task<FilmMade> JoinAsync(Storyboard board, string? ffmpeg, IMediaDecoder? decoder, Action<string>? progress, CancellationToken ct)
+    /// <summary>Joins the video into its file next to the storyboard (named after it); returns where it is and what to know.</summary>
+    public static async Task<VideoMade> JoinAsync(Storyboard board, string? ffmpeg, IMediaDecoder? decoder, Action<string>? progress, CancellationToken ct)
     {
         if (ffmpeg is null)
-            throw new FilmException("Joining the shots needs ffmpeg, and there is none on this PC: download a portable build (ffmpeg's own site links them, such as gyan.dev's " +
+            throw new VideoException("Joining the shots needs ffmpeg, and there is none on this PC: download a portable build (ffmpeg's own site links them, such as gyan.dev's " +
                                     "ffmpeg-release-essentials.zip) and unpack it into BlackBox's Data\\tools, where it is found, then join again.");
-        var output = board.FilmFile;
+        var output = board.VideoFile;
         var temp = Path.Combine(board.Folder, "." + Path.GetFileNameWithoutExtension(output) + ".joining.mp4");
         var (args, length, notes) = Plan(board, file => decoder?.Probe(file)?.HasAudio ?? true, temp);
         var clock = Stopwatch.StartNew();
         var psi = new ProcessStartInfo(ffmpeg) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
         foreach (var a in args)
             psi.ArgumentList.Add(a);
-        using var process = Process.Start(psi) ?? throw new FilmException($"ffmpeg ({ffmpeg}) didn't start.");
+        using var process = Process.Start(psi) ?? throw new VideoException($"ffmpeg ({ffmpeg}) didn't start.");
         var errors = new StringBuilder();
         var said = Task.Run(async () =>
         {
@@ -174,10 +174,10 @@ public static class FilmMontage
                 tail = string.Join("\n", errors.ToString().Split('\n').Where(l => l.Trim().Length > 0).TakeLast(12));
             try { File.Delete(temp); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-            throw new FilmException($"ffmpeg couldn't join the shots (exit code {process.ExitCode}):\n{tail}");
+            throw new VideoException($"ffmpeg couldn't join the shots (exit code {process.ExitCode}):\n{tail}");
         }
-        MediaRelease.Release(output); // the film joined before may be playing in the chat
+        MediaRelease.Release(output); // the video joined before may be playing in the chat
         File.Move(temp, output, overwrite: true);
-        return new FilmMade(output, null, null, clock.Elapsed, notes);
+        return new VideoMade(output, null, null, clock.Elapsed, notes);
     }
 }

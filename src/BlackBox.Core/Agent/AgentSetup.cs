@@ -41,7 +41,7 @@ public static class AgentSetup
             Comfy = comfy,
             Media = Media.MediaDecoders.Create(platform, paths, comfy),
             ScratchDirectory = paths.ScratchDir,
-            FilmsDirectory = paths.FilmsDir,
+            VideosDirectory = paths.VideosDir,
             ToolsDirectory = paths.ToolsDir,
             IndexDirectory = paths.IndexDir,
             Changes = changes,

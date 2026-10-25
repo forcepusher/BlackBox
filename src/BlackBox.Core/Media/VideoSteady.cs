@@ -7,7 +7,7 @@ namespace BlackBox.Core.Media;
 
 /// <summary>
 /// Holds a camera still after the fact. LTX moves the camera though a prompt says it is locked off
-/// (three shots of three in a night of films pushed in, panned or tilted), and ffmpeg's tripod
+/// (three shots of three in a night of videos pushed in, panned or tilted), and ffmpeg's tripod
 /// stabilizer (vid.stab) neither undoes a push in nor found the background of a snowfield. Here the
 /// camera's path is measured the way <see cref="VideoMotion"/> measures it (what most of the picture
 /// does, a push in from the blocks that move with the camera), and each frame is moved and scaled

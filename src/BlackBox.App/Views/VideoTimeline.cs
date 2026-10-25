@@ -7,7 +7,7 @@ using Avalonia.Media;
 namespace BlackBox.App.Views;
 
 /// <summary>The window's palette (App.axaml), for what the timeline draws itself.</summary>
-internal static class FilmColors
+internal static class VideoColors
 {
     public static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#8B9199"));
     public static readonly IBrush Text = new SolidColorBrush(Color.Parse("#E6E8EB"));
@@ -35,27 +35,27 @@ internal static class FilmColors
 
 /// <summary>
 /// The seconds along the top of the timeline, on the same scale as its rows: a tick a second (or
-/// every few on a long film), a time every so often. Clicking or dragging on it moves the playhead.
+/// every few on a long video), a time every so often. Clicking or dragging on it moves the playhead.
 /// </summary>
-public sealed class FilmRuler : Control
+public sealed class VideoRuler : Control
 {
-    public static readonly StyledProperty<double> PpsProperty = AvaloniaProperty.Register<FilmRuler, double>(nameof(Pps), 64);
-    public static readonly StyledProperty<double> LengthProperty = AvaloniaProperty.Register<FilmRuler, double>(nameof(Length));
-    public static readonly StyledProperty<double> LeadProperty = AvaloniaProperty.Register<FilmRuler, double>(nameof(Lead), 12);
+    public static readonly StyledProperty<double> PpsProperty = AvaloniaProperty.Register<VideoRuler, double>(nameof(Pps), 64);
+    public static readonly StyledProperty<double> LengthProperty = AvaloniaProperty.Register<VideoRuler, double>(nameof(Length));
+    public static readonly StyledProperty<double> LeadProperty = AvaloniaProperty.Register<VideoRuler, double>(nameof(Lead), 12);
 
     /// <summary>Pixels a second.</summary>
     public double Pps { get => GetValue(PpsProperty); set => SetValue(PpsProperty, value); }
 
-    /// <summary>How long the film is: where it ends is marked.</summary>
+    /// <summary>How long the video is: where it ends is marked.</summary>
     public double Length { get => GetValue(LengthProperty); set => SetValue(LengthProperty, value); }
 
-    /// <summary>Where the film's time starts, in pixels.</summary>
+    /// <summary>Where the video's time starts, in pixels.</summary>
     public double Lead { get => GetValue(LeadProperty); set => SetValue(LeadProperty, value); }
 
     /// <summary>The user clicked or dragged on it: the time there.</summary>
     public event Action<double>? Seeked;
 
-    static FilmRuler() => AffectsRender<FilmRuler>(PpsProperty, LengthProperty, LeadProperty);
+    static VideoRuler() => AffectsRender<VideoRuler>(PpsProperty, LengthProperty, LeadProperty);
 
     private bool _dragging;
 
@@ -65,7 +65,7 @@ public sealed class FilmRuler : Control
         _dragging = true;
         e.Pointer.Capture(this);
         Seek(e);
-        // Moving the playhead leaves what is picked as it is (a click on empty timeline picks the film).
+        // Moving the playhead leaves what is picked as it is (a click on empty timeline picks the video).
         e.Handled = true;
     }
 
@@ -102,30 +102,30 @@ public sealed class FilmRuler : Control
         {
             var x = Math.Round(Lead + s * Pps) + 0.5;
             var label = s % labelEvery == 0;
-            context.DrawLine(FilmColors.Tick, new Point(x, h - (label ? 10 : 5)), new Point(x, h));
+            context.DrawLine(VideoColors.Tick, new Point(x, h - (label ? 10 : 5)), new Point(x, h));
             if (label)
-                FilmColors.Draw(context, $"{s / 60}:{s % 60:00}", x + 3, 2, 10, FilmColors.Muted, 60);
+                VideoColors.Draw(context, $"{s / 60}:{s % 60:00}", x + 3, 2, 10, VideoColors.Muted, 60);
         }
         if (Length > 0)
         {
             var end = Math.Round(Lead + Length * Pps) + 0.5;
-            context.DrawLine(FilmColors.End, new Point(end, 0), new Point(end, h));
+            context.DrawLine(VideoColors.End, new Point(end, 0), new Point(end, h));
         }
-        context.DrawLine(FilmColors.Border, new Point(0, h - 0.5), new Point(w, h - 0.5));
+        context.DrawLine(VideoColors.Border, new Point(0, h - 0.5), new Point(w, h - 0.5));
     }
 }
 
-/// <summary>A sound's waveform inside its clip on a sound track: its loudness across the clip, as the part of it that plays.</summary>
-public sealed class FilmWave : Control
+/// <summary>A sound's waveform inside its clip on a sound line: its loudness across the clip, as the part of it that plays.</summary>
+public sealed class VideoWave : Control
 {
-    public static readonly StyledProperty<float[]?> PeaksProperty = AvaloniaProperty.Register<FilmWave, float[]?>(nameof(Peaks));
+    public static readonly StyledProperty<float[]?> PeaksProperty = AvaloniaProperty.Register<VideoWave, float[]?>(nameof(Peaks));
 
     /// <summary>Its loudness from where the clip starts to where it ends, 0 to 1; null while it isn't read.</summary>
     public float[]? Peaks { get => GetValue(PeaksProperty); set => SetValue(PeaksProperty, value); }
 
-    static FilmWave() => AffectsRender<FilmWave>(PeaksProperty);
+    static VideoWave() => AffectsRender<VideoWave>(PeaksProperty);
 
-    public FilmWave() => IsHitTestVisible = false;
+    public VideoWave() => IsHitTestVisible = false;
 
     public override void Render(DrawingContext context)
     {
@@ -137,7 +137,7 @@ public sealed class FilmWave : Control
         {
             var at = (int)Math.Clamp(x / w * peaks.Length, 0, peaks.Length - 1);
             var half = Math.Max(0.5, peaks[at] * (h / 2 - 2));
-            context.DrawLine(FilmColors.WavePen, new Point(x, middle - half), new Point(x, middle + half));
+            context.DrawLine(VideoColors.WavePen, new Point(x, middle - half), new Point(x, middle + half));
         }
     }
 }

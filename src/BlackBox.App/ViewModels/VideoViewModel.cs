@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
-using BlackBox.Core.Film;
+using BlackBox.Core.Video;
 using BlackBox.Core.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -11,15 +11,15 @@ namespace BlackBox.App.ViewModels;
 
 /// <summary>
 /// Video editor, a tool of the chat window's toolkit, in a panel on the left of the chat: a viewer,
-/// and the film on one timeline under one horizontal scroll, where all work on it is done (the
+/// and the video on one timeline under one horizontal scroll, where all work on it is done (the
 /// user's call, 2026-10-24: "work on the film should be done entirely in the timeline"): the
-/// References row (image files and generated images), the takes on the Video row, the lines, and the
-/// sound tracks. What is picked on it goes into the chat's box, where the user says what to do with
-/// it: the agent writes the prompts, picks the models and makes each piece with the film tool in the
-/// chat, in view. The film is its folder (References and Generated, each file with its .json), and
+/// References row (image files and generated images), the clips on the Video clips row, the lines, and the
+/// sound lines. What is picked on it goes into the chat's box, where the user says what to do with
+/// it: the agent writes the prompts, picks the models and makes each piece with the video tool in the
+/// chat, in view. The video is its folder (References and Generated, each file with its .json), and
 /// what the agent changes and makes there shows here as it happens.
 /// </summary>
-public sealed partial class FilmViewModel : ObservableObject, IToolkit
+public sealed partial class VideoViewModel : ObservableObject, IToolkit
 {
     private readonly PreviewServices _previews;
     private readonly MainWindowViewModel _chat;
@@ -31,15 +31,15 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
     private FileSystemWatcher? _watcher;
     private bool _loading;
 
-    /// <summary>Where films go, a folder each: BlackBox's Data\films, next to the exe like the rest of its data.</summary>
-    private readonly string _filmsRoot;
+    /// <summary>Where videos go, a folder each: BlackBox's Data\videos, next to the exe like the rest of its data.</summary>
+    private readonly string _videosRoot;
 
-    /// <param name="chat">The chat the panel is a tool of, where what is said about the film runs.</param>
-    /// <param name="filmsRoot">Where films go (BlackBox's Data\films).</param>
-    /// <param name="folder">The film to open; the latest changed one when null.</param>
-    public FilmViewModel(PreviewServices previews, MainWindowViewModel chat, string filmsRoot, string? folder)
+    /// <param name="chat">The chat the panel is a tool of, where what is said about the video runs.</param>
+    /// <param name="videosRoot">Where videos go (BlackBox's Data\videos).</param>
+    /// <param name="folder">The video to open; the latest changed one when null.</param>
+    public VideoViewModel(PreviewServices previews, MainWindowViewModel chat, string videosRoot, string? folder)
     {
-        _filmsRoot = filmsRoot;
+        _videosRoot = videosRoot;
         _previews = previews;
         _chat = chat;
         _saveTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(400), DispatcherPriority.Background, (_, _) => SaveNow());
@@ -48,83 +48,83 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
             _refreshTimer!.Stop();
             OnFolderChanged();
         });
-        // What the chat is doing, shown here: on the piece the film tool is making.
+        // What the chat is doing, shown here: on the piece the video tool is making.
         _chatTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Background, (_, _) => WatchChat());
         _chatTimer.Start();
         // A pick taken off the box (its ×) is no longer picked here either.
         _chat.Attachments.CollectionChanged += OnBoxChanged;
-        var open = folder ?? Storyboard.Recent(_filmsRoot).FirstOrDefault();
-        if (open is not null && Storyboard.IsFilm(open))
+        var open = folder ?? Storyboard.Recent(_videosRoot).FirstOrDefault();
+        if (open is not null && Storyboard.IsVideo(open))
             Open(open);
         else
             Untitled();
         Watch();
     }
 
-    // ---- the film --------------------------------------------------------------------------------------
+    // ---- the video --------------------------------------------------------------------------------------
 
     public string Folder => _board.Folder;
 
-    /// <summary>The film's name, on the button at the top that opens the films' menu.</summary>
-    public string FilmName => Path.GetFileName(Path.TrimEndingDirectorySeparator(_board.Folder));
+    /// <summary>The video's name, on the button at the top that opens the videos' menu.</summary>
+    public string VideoName => Path.GetFileName(Path.TrimEndingDirectorySeparator(_board.Folder));
 
-    /// <summary>Opens the film in a folder (or of a file in it).</summary>
+    /// <summary>Opens the video in a folder (or of a file in it).</summary>
     public void Open(string path)
     {
         SaveNow();
-        StopPlaying(); // the film left: its sounds played on over the new one's frames
+        StopPlaying(); // the video left: its sounds played on over the new one's frames
         try
         {
             _board = Storyboard.Load(path);
             _savedJson = _board.ToJson();
             _dirty = false;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or VideoException)
         {
-            ShowError($"That film can't be opened: {ex.Message}", ex, path);
+            ShowError($"That video can't be opened: {ex.Message}", ex, path);
             return;
         }
         Opened();
     }
 
     /// <summary>
-    /// A new film in BlackBox's Data\films, its name typed as a new folder's is in Explorer. Its folder
+    /// A new video in BlackBox's Data\videos, its name typed as a new folder's is in Explorer. Its folder
     /// is made with the first change: opening the panel to look leaves nothing behind. The user says
     /// in the chat what it is to be.
     /// </summary>
     [RelayCommand]
-    private void NewFilm()
+    private void NewVideo()
     {
         Untitled();
-        RenameFilmAsked?.Invoke();
+        RenameVideoAsked?.Invoke();
     }
 
-    /// <summary>The film's name is to be typed anew (a new film, or Rename in its menu): the panel shows the box.</summary>
-    public event Action? RenameFilmAsked;
+    /// <summary>The video's name is to be typed anew (a new video, or Rename in its menu): the panel shows the box.</summary>
+    public event Action? RenameVideoAsked;
 
-    /// <summary>A new film, named "Untitled film" (or "Untitled film 2"), not saved yet. Not "New
-    /// film": that is the menu's item that makes it (the user, 2026-10-25).</summary>
+    /// <summary>A new video, named "Untitled video" (or "Untitled video 2"), not saved yet. Not "New
+    /// video": that is the menu's item that makes it (the user, 2026-10-25).</summary>
     private void Untitled()
     {
         SaveNow();
         StopPlaying();
-        var root = _filmsRoot;
-        var name = "Untitled film";
+        var root = _videosRoot;
+        var name = "Untitled video";
         for (var n = 2; Directory.Exists(Path.Combine(root, name)); n++)
-            name = $"Untitled film {n}";
+            name = $"Untitled video {n}";
         _board = Storyboard.New(Path.Combine(root, name), name);
         _savedJson = null;
         _dirty = false;
         Opened();
     }
 
-    /// <summary>Another film is shown: what was picked of the one before goes from the chat's box.</summary>
+    /// <summary>Another video is shown: what was picked of the one before goes from the chat's box.</summary>
     private void Opened()
     {
         Status = "";
         Rebuild();
         OnPropertyChanged(nameof(Folder));
-        OnPropertyChanged(nameof(FilmName));
+        OnPropertyChanged(nameof(VideoName));
         _chat.Pick([]);
         Clear();
     }
@@ -165,28 +165,28 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
         }
     }
 
-    /// <summary>How long the film is, and in how many takes (its size and frame rate are at the top).</summary>
+    /// <summary>How long the video is, and in how many clips (its size and frame rate are at the top).</summary>
     public string LengthText
     {
         get
         {
             var (_, length) = _board.Timing();
-            var made = _board.Shots.Count(s => FilmMaker.IsCurrent(_board, s));
-            return $"{length:0.#} s in {_board.Shots.Count} take{(_board.Shots.Count == 1 ? "" : "s")}" +
+            var made = _board.Shots.Count(s => VideoMaker.IsCurrent(_board, s));
+            return $"{length:0.#} s in {_board.Shots.Count} clip{(_board.Shots.Count == 1 ? "" : "s")}" +
                    (_board.Shots.Count == 0 ? "" : made == _board.Shots.Count ? " · all made" : $" · {made} made");
         }
     }
 
     // ---- the timeline ------------------------------------------------------------------------------------
 
-    /// <summary>Where the film's time starts on each row, in pixels.</summary>
+    /// <summary>Where the video's time starts on each row, in pixels.</summary>
     public const double Lead = 12;
 
     /// <summary>A card on the References row, and the room between two.</summary>
     public const double CardWidth = 96, CardGap = 6;
 
-    /// <summary>How tall a sound track is.</summary>
-    public const double TrackHeight = 48;
+    /// <summary>How tall a sound line is.</summary>
+    public const double SoundLineHeight = 48;
 
     /// <summary>How many pixels a second takes on the timeline: the zoom.</summary>
     [ObservableProperty]
@@ -198,19 +198,19 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
     public ObservableCollection<ShotItem> Shots { get; } = [];
     public ObservableCollection<LineItem> Lines { get; } = [];
     public ObservableCollection<SoundItem> Sounds { get; } = [];
-    public ObservableCollection<TrackItem> Tracks { get; } = [];
+    public ObservableCollection<SoundLineItem> SoundLines { get; } = [];
 
-    /// <summary>How tall the sound tracks are together.</summary>
-    public double TracksHeight => Math.Max(1, Tracks.Count) * TrackHeight;
+    /// <summary>How tall the sound lines are together.</summary>
+    public double SoundLinesHeight => Math.Max(1, SoundLines.Count) * SoundLineHeight;
 
-    /// <summary>How wide the rows are: the film, the sounds and cards past it, and room to make the last take longer.</summary>
+    /// <summary>How wide the rows are: the video, the sounds and cards past it, and room to make the last clip longer.</summary>
     [ObservableProperty]
     private double _timelineWidth = 800;
 
     [ObservableProperty]
     private double _length;
 
-    /// <summary>Where the next take's place is on the Video row, after the last: a click there adds it.</summary>
+    /// <summary>Where the next clip's place is on the Video clips row, after the last: a click there adds it.</summary>
     [ObservableProperty]
     private double _addShotX = Lead;
 
@@ -220,7 +220,7 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
 
     public double PlayheadX => Lead + Math.Max(0, PlayPosition) * Pps;
 
-    /// <summary>Lays the timeline out again: each card, take, line and sound where it is, the width.</summary>
+    /// <summary>Lays the timeline out again: each card, clip, line and sound where it is, the width.</summary>
     public void Relayout()
     {
         var (starts, length) = _board.Timing();
@@ -239,8 +239,8 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
             var shot = Shots[i].Shot;
             if (!Storyboard.Speaks(shot))
                 continue;
-            var seconds = Math.Min(LineSeconds(shot), Math.Max(0.3, shot.Seconds - FilmMaker.LineLead));
-            var x = Lead + (starts[i] + FilmMaker.LineLead) * Pps;
+            var seconds = Math.Min(LineSeconds(shot), Math.Max(0.3, shot.Seconds - VideoMaker.LineLead));
+            var x = Lead + (starts[i] + VideoMaker.LineLead) * Pps;
             Lines.Add(new LineItem(Shots[i], x, Math.Max(12, seconds * Pps), $"“{shot.Line.Trim()}”"));
         }
         var end = length;
@@ -248,7 +248,7 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
         {
             var seconds = sound.PlaySeconds(length);
             sound.X = Lead + sound.Sound.Start * Pps;
-            sound.Y = sound.Sound.Track * TrackHeight + 4;
+            sound.Y = sound.Sound.SoundLine * SoundLineHeight + 4;
             sound.BlockWidth = Math.Max(8, seconds * Pps - 2);
             end = Math.Max(end, sound.Sound.Start + seconds);
             sound.Peaks = PeaksOf(sound);
@@ -257,11 +257,11 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
         TimelineWidth = Math.Max(Lead + end * Pps, AddReferenceX + CardWidth) + 240;
         OnPropertyChanged(nameof(PlayheadX));
         OnPropertyChanged(nameof(LengthText));
-        OnPropertyChanged(nameof(TracksHeight));
+        OnPropertyChanged(nameof(SoundLinesHeight));
     }
 
     /// <summary>How long a line takes: as said, when it is; else about 2.5 words a second.</summary>
-    private double LineSeconds(FilmShot shot)
+    private double LineSeconds(VideoShot shot)
     {
         var file = _board.ShotLine(shot);
         if (File.Exists(file))
@@ -289,7 +289,7 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
     /// <summary>The time under a point of the timeline, in seconds.</summary>
     public double SecondsAt(double x) => Math.Max(0, (x - Lead) / Math.Max(1, Pps));
 
-    // ---- the sounds' audio, read once: for their waveforms and for playing the film ---------------------------
+    // ---- the sounds' audio, read once: for their waveforms and for playing the video ---------------------------
 
     /// <summary>Each sound file's samples, mono, with their rate, by its path and time.</summary>
     private readonly Dictionary<string, (DateTime Stamp, float[] Samples, int Rate)> _audio = new(StringComparer.OrdinalIgnoreCase);
@@ -361,16 +361,16 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
 
     private readonly Dictionary<string, ((float[] Samples, double Trim, double Seconds) Key, float[] Peaks)> _peaks = new(StringComparer.OrdinalIgnoreCase);
 
-    // ---- playing the film: its sounds mixed, with each take's frames -------------------------------------
+    // ---- playing the video: its sounds mixed, with each clip's frames -------------------------------------
 
-    /// <summary>Where the playhead is, in seconds from the film's start.</summary>
+    /// <summary>Where the playhead is, in seconds from the video's start.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PlayheadX), nameof(PlayTime))]
     private double _playPosition;
 
     public string PlayTime => $"{TimeSpan.FromSeconds(Math.Max(0, PlayPosition)):m\\:ss\\.f}";
 
-    /// <summary>The storyboard frame under the playhead: a take's first frame, its last for the second half.</summary>
+    /// <summary>The storyboard frame under the playhead: a clip's first frame, its last for the second half.</summary>
     [ObservableProperty]
     private Bitmap? _playFrame;
 
@@ -391,7 +391,7 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
     private Stopwatch _playClock = new();
     private double _playFrom;
 
-    /// <summary>Plays the sound tracks mixed from the playhead with the frames switching as the takes do, or pauses it.</summary>
+    /// <summary>Plays the sound lines mixed from the playhead with the frames switching as the clips do, or pauses it.</summary>
     [RelayCommand]
     private void PlayStrip()
     {
@@ -418,15 +418,15 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
     private void StartPlaying(double from)
     {
         StopPlaying();
-        // The sounds that are read, mixed as the film joins them; with none, the frames go by the clock.
-        var parts = new List<FilmMix.Part>();
+        // The sounds that are read, mixed as the video joins them; with none, the frames go by the clock.
+        var parts = new List<VideoMix.Part>();
         foreach (var sound in Sounds)
             if (AudioOf(_board.SoundFile(sound.Sound)) is var (samples, rate) && samples.Length > 0)
-                parts.Add(new FilmMix.Part(samples, rate, sound.Sound.Start, sound.Sound.Trim, sound.PlaySeconds(Length), sound.Sound.Volume));
+                parts.Add(new VideoMix.Part(samples, rate, sound.Sound.Start, sound.Sound.Trim, sound.PlaySeconds(Length), sound.Sound.Volume));
         _playEnd = Math.Max(Length, parts.Select(p => p.Start + p.Seconds).DefaultIfEmpty(0).Max());
         if (parts.Count > 0 && _previews.NewAudioOutput() is { } output)
         {
-            var mix = new FilmMix(parts, _playEnd);
+            var mix = new VideoMix(parts, _playEnd);
             mix.Seek(TimeSpan.FromSeconds(from));
             try
             {
@@ -470,7 +470,7 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
         IsPlaying = false;
     }
 
-    /// <summary>The frame of the take at a time: its first frame, its last for the second half (when it has one).</summary>
+    /// <summary>The frame of the clip at a time: its first frame, its last for the second half (when it has one).</summary>
     private void ShowFrameAt(double seconds)
     {
         var (starts, _) = _board.Timing();
@@ -492,10 +492,10 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
 }
 
 /// <summary>
-/// The film's sounds mixed into one, as joining the film lays them over each other: each from where
+/// The video's sounds mixed into one, as joining the video lays them over each other: each from where
 /// it starts, its trim cut off, as long as it plays, at its volume; mono at 48 kHz.
 /// </summary>
-internal sealed class FilmMix(IReadOnlyList<FilmMix.Part> parts, double length) : IAudioReader
+internal sealed class VideoMix(IReadOnlyList<VideoMix.Part> parts, double length) : IAudioReader
 {
     public sealed record Part(float[] Samples, int Rate, double Start, double Trim, double Seconds, double Volume);
 

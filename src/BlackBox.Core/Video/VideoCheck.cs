@@ -4,50 +4,50 @@ using System.Text.RegularExpressions;
 using BlackBox.Core.Media;
 using SkiaSharp;
 
-namespace BlackBox.Core.Film;
+namespace BlackBox.Core.Video;
 
-/// <summary>What a look at a shot or a film found: in words, with the sheet of frames it is based on.</summary>
-/// <param name="Sheet">A JPEG: the storyboard's frames above the clip's (or each shot of the film), with their times.</param>
+/// <summary>What a look at a shot or a video found: in words, with the sheet of frames it is based on.</summary>
+/// <param name="Sheet">A JPEG: the storyboard's frames above the clip's (or each shot of the video), with their times.</param>
 /// <param name="Faults">What is surely wrong (a clip that doesn't start on its frame, a black or frozen clip), to fix before anything else.</param>
 /// <param name="Closer">A JPEG: twelve frames close together from the stretch of a shot where the most changes, cropped to where things move.</param>
-/// <param name="Cuts">For a film: its cuts.</param>
+/// <param name="Cuts">For a video: its cuts.</param>
 /// <param name="Motion">For a shot: how things in it move, measured from its pixels (<see cref="VideoMotion"/>), in words.</param>
-public sealed record FilmLook(string Text, byte[]? Sheet, IReadOnlyList<string> Faults, byte[]? Closer = null, IReadOnlyList<FilmCut>? Cuts = null, string? Motion = null);
+public sealed record VideoLook(string Text, byte[]? Sheet, IReadOnlyList<string> Faults, byte[]? Closer = null, IReadOnlyList<VideoCut>? Cuts = null, string? Motion = null);
 
 /// <summary>A cut as a JPEG: the last frame of the shot before above the first frame of the shot after.</summary>
 /// <param name="At">The index of the shot after the cut.</param>
-public sealed record FilmCut(byte[] Picture, int At);
+public sealed record VideoCut(byte[] Picture, int At);
 
-/// <summary>What the fresh looks at a whole film found: the shots to make again, and why; no reason when it is good.</summary>
-public sealed record FilmVerdict(string Answer, IReadOnlyList<string> Redo, string? Reason);
+/// <summary>What the fresh looks at a whole video found: the shots to make again, and why; no reason when it is good.</summary>
+public sealed record VideoVerdict(string Answer, IReadOnlyList<string> Redo, string? Reason);
 
 /// <summary>
 /// Looks at what was made against the storyboard: whether a clip starts and ends on its frames, how
 /// it moves (frozen, a sudden jump inside a shot), how long it is, whether it has sound; and for the
-/// whole film, each shot side by side and the joins where the camera should go on. The sheet of
+/// whole video, each shot side by side and the joins where the camera should go on. The sheet of
 /// frames goes to a fresh look by the model (see <see cref="JudgeShot"/>), which judges what
 /// numbers can't: whether the action happens, warped faces, the same people all through.
 /// </summary>
-public static partial class FilmCheck
+public static partial class VideoCheck
 {
     private const int SheetWidth = 1024, Small = 48;
 
     // ---- a shot ------------------------------------------------------------------------------------
 
-    public static FilmLook Shot(Storyboard board, FilmShot shot, string clip, IMediaDecoder decoder)
+    public static VideoLook Shot(Storyboard board, VideoShot shot, string clip, IMediaDecoder decoder)
     {
-        var info = decoder.Probe(clip) ?? throw new FilmException($"{clip} can't be read on this PC (ffmpeg in BlackBox's Data\\tools would).");
+        var info = decoder.Probe(clip) ?? throw new VideoException($"{clip} can't be read on this PC (ffmpeg in BlackBox's Data\\tools would).");
         var text = new StringBuilder();
         var faults = new List<string>();
         text.AppendLine($"Shot {shot.Id} ({Path.GetFileName(clip)}): {info.Describe()}; the storyboard gives it {N(shot.Seconds)} s.");
         if (info.Duration.TotalSeconds + 0.25 < shot.Seconds)
-            text.AppendLine($"It is {N(shot.Seconds - info.Duration.TotalSeconds)} s shorter than its shot: the film holds its last frame for the rest.");
-        using var reader = decoder.OpenVideo(clip, 512) ?? throw new FilmException($"{clip} has no picture this PC can read.");
+            text.AppendLine($"It is {N(shot.Seconds - info.Duration.TotalSeconds)} s shorter than its shot: the video holds its last frame for the rest.");
+        using var reader = decoder.OpenVideo(clip, 512) ?? throw new VideoException($"{clip} has no picture this PC can read.");
         var frames = Frames(reader, info, 16);
         try
         {
             if (frames.Count == 0)
-                throw new FilmException($"No frame of {clip} could be read.");
+                throw new VideoException($"No frame of {clip} could be read.");
             var first = board.Frame(shot.First);
             var last = shot.LipSync ? null : board.Frame(shot.Last);
             var firstPicture = first is null ? null : board.FramePicture(first);
@@ -82,7 +82,7 @@ public static partial class FilmCheck
             if (motion.Length > 0)
                 text.AppendLine(motion);
             var closer = CloserLook(reader, small, text);
-            return new FilmLook(text.ToString().TrimEnd(), sheet, faults, closer, Motion: motion.Length > 0 ? motion : null);
+            return new VideoLook(text.ToString().TrimEnd(), sheet, faults, closer, Motion: motion.Length > 0 ? motion : null);
         }
         finally
         {
@@ -102,10 +102,10 @@ public static partial class FilmCheck
     /// </summary>
     /// <param name="closer">Whether a closer look comes with the overview.</param>
     /// <param name="heard">What was heard sung or said under it, if it was listened to.</param>
-    public static string JudgeShot(Storyboard board, FilmShot shot, bool closer, string? heard = null)
+    public static string JudgeShot(Storyboard board, VideoShot shot, bool closer, string? heard = null)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"You are the quality judge for one shot of an AI-made film{Title(board)}. Video models often make \"slop\" that a viewer spots instantly at normal speed: " +
+        sb.AppendLine($"You are the quality judge for one shot of an AI-made video{Title(board)}. Video models often make \"slop\" that a viewer spots instantly at normal speed: " +
                       "physically impossible events and unnatural motion, not just warped faces. Your job is to catch it, and also not to reject a shot for nothing.");
         sb.AppendLine($"The shot lasts {N(shot.Seconds)} s and should show: {shot.Prompt.Trim()}" + (shot.Camera.Trim().Length > 0 ? $" The camera: {shot.Camera.Trim().TrimEnd('.')}." : ""));
         Says(shot, heard, sb);
@@ -137,10 +137,10 @@ public static partial class FilmCheck
     /// talking close-up both times.
     /// </summary>
     /// <param name="motion">The movement measured from the pixels, in words, if any: it says when something moves, where frames a second apart can't.</param>
-    public static string JudgeBehaviour(Storyboard board, FilmShot shot, string? heard = null, string? motion = null)
+    public static string JudgeBehaviour(Storyboard board, VideoShot shot, string? heard = null, string? motion = null)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"You judge one shot of an AI-made film{Title(board)} for ONE thing only: behaviour over time. Video models often make people or animals freeze in a pose, " +
+        sb.AppendLine($"You judge one shot of an AI-made video{Title(board)} for ONE thing only: behaviour over time. Video models often make people or animals freeze in a pose, " +
                       "hold an awkward position far too long, or move in ways no real person would, even when every single frame looks fine.");
         sb.AppendLine($"The shot lasts {N(shot.Seconds)} s and should show: {shot.Prompt.Trim()}");
         Says(shot, heard, sb);
@@ -160,16 +160,16 @@ public static partial class FilmCheck
     }
 
     /// <summary>
-    /// The third fresh look at a shot: whether the world stays put. In a fox film made from one
+    /// The third fresh look at a shot: whether the world stays put. In a fox video made from one
     /// sentence the moon wandered across the sky and the fox drifted against the snow while the
     /// shot was a still camera on a standing fox; the user saw the fox float, and both other looks
     /// had passed it once.
     /// </summary>
     /// <param name="motion">The movement measured from the pixels, in words, if any.</param>
-    public static string JudgeSteadiness(Storyboard board, FilmShot shot, string? motion = null)
+    public static string JudgeSteadiness(Storyboard board, VideoShot shot, string? motion = null)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"You judge one shot of an AI-made film{Title(board)} for ONE thing only: whether the world in it stays put. Video models often let the background drift " +
+        sb.AppendLine($"You judge one shot of an AI-made video{Title(board)} for ONE thing only: whether the world in it stays put. Video models often let the background drift " +
                       "(the moon wandering across the sky, trees or buildings sliding, growing or shrinking) and let people or animals slide, float or sink against the ground, " +
                       "while every single frame looks fine.");
         sb.AppendLine($"The shot lasts {N(shot.Seconds)} s and should show: {shot.Prompt.Trim()}");
@@ -189,15 +189,15 @@ public static partial class FilmCheck
 
     /// <summary>
     /// The fourth fresh look at a shot: whether things move as the shot asks. The user found the
-    /// looks catching botched takes but often missing motion gone wrong: a subject moving the wrong
+    /// looks catching botched clips but often missing motion gone wrong: a subject moving the wrong
     /// way, a pose bending wrong, a prop or a person doing what nobody asked. Each movement asked for
     /// is held against the frames and the movement measured from the pixels (<see cref="VideoMotion"/>).
     /// </summary>
     /// <param name="motion">The measured movement in words; none when it couldn't be measured.</param>
-    public static string JudgeMotion(Storyboard board, FilmShot shot, string? motion)
+    public static string JudgeMotion(Storyboard board, VideoShot shot, string? motion)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"You judge one shot of an AI-made film{Title(board)} for ONE thing only: whether things move as the shot asks. Video models often move a subject the wrong way, " +
+        sb.AppendLine($"You judge one shot of an AI-made video{Title(board)} for ONE thing only: whether things move as the shot asks. Video models often move a subject the wrong way, " +
                       "bend a body into a pose nobody asked for, turn a head or walk toward the wrong side, make a prop move by itself or someone do something unasked, " +
                       "while every single frame looks fine.");
         sb.AppendLine($"The shot lasts {N(shot.Seconds)} s and should show: {shot.Prompt.Trim()}");
@@ -218,7 +218,7 @@ public static partial class FilmCheck
     private static string Title(Storyboard board) => board.Title.Trim().Length > 0 ? $" (\"{board.Title.Trim()}\")" : "";
 
     /// <summary>What the top row of a shot's overview is: the storyboard's frames it should start and end on.</summary>
-    private static string TopRow(Storyboard board, FilmShot shot)
+    private static string TopRow(Storyboard board, VideoShot shot)
     {
         var first = board.Frame(shot.First);
         var last = shot.LipSync ? null : board.Frame(shot.Last);
@@ -227,7 +227,7 @@ public static partial class FilmCheck
               "; under it, ";
     }
 
-    private static void Says(FilmShot shot, string? heard, StringBuilder sb)
+    private static void Says(VideoShot shot, string? heard, StringBuilder sb)
     {
         if (Storyboard.Speaks(shot))
             sb.AppendLine($"The person speaking in it says \"{shot.Line.Trim()}\": their mouth should move with the words, and they should look like they say them.");
@@ -244,7 +244,7 @@ public static partial class FilmCheck
     /// whether things move as asked (<see cref="JudgeMotion"/>).
     /// As one answer ending with one verdict: redo when any asks for it. Null when none could be had.
     /// </summary>
-    public static async Task<string?> JudgeShotAsync(Storyboard board, FilmShot shot, FilmLook look, string? heard,
+    public static async Task<string?> JudgeShotAsync(Storyboard board, VideoShot shot, VideoLook look, string? heard,
         Func<IReadOnlyList<byte[]>, string, CancellationToken, Task<string?>> ask, CancellationToken ct)
     {
         if (look.Sheet is not { } sheet)
@@ -281,7 +281,7 @@ public static partial class FilmCheck
     /// answer ends with a verdict; null when the frame isn't made, is taken from a clip, or the
     /// look couldn't be had.
     /// </summary>
-    public static async Task<string?> JudgeFrameAsync(Storyboard board, FilmFrame frame,
+    public static async Task<string?> JudgeFrameAsync(Storyboard board, VideoFrame frame,
         Func<IReadOnlyList<byte[]>, string, CancellationToken, Task<string?>> ask, CancellationToken ct)
     {
         if (frame.Of is not null || !File.Exists(board.FramePicture(frame)))
@@ -290,12 +290,12 @@ public static partial class FilmCheck
             return null;
         var (before, beside) = Before(board, frame);
         var other = before is null ? null : await Task.Run(() => Picture(board.FramePicture(before), 768), ct).ConfigureAwait(false);
-        var question = $"This picture is {(frame.Reference ? "a reference sheet" : "a frame")} of a film, made from the prompt: \"{frame.Prompt.Trim()}\"" +
+        var question = $"This picture is {(frame.Reference ? "a reference sheet" : "a frame")} of a video, made from the prompt: \"{frame.Prompt.Trim()}\"" +
                        (frame.From.Count > 0 ? $" It was made from other pictures ({string.Join(", ", frame.From.Select(id => board.Frame(id)?.Label ?? Path.GetFileName(id)))}) so the same people and places look the same." : "") +
                        (other is null ? "" : "\n" + beside) +
                        "\nSay briefly and concretely: does it show what the prompt says? Faults a viewer would notice: warped faces or hands, extra fingers or limbs, " +
                        "things that couldn't be (food coming out of a head, a body merged with a chair), garbled text, black bars, a person who doesn't match the prompt, " +
-                       "someone in another style than the picture should be (a cartoon or 3D-render face in a photograph, or a whole picture drawn where the prompt and the film are photographic), " +
+                       "someone in another style than the picture should be (a cartoon or 3D-render face in a photograph, or a whole picture drawn where the prompt and the video are photographic), " +
                        "a camera much closer or farther than the prompt says (a wide view where it says close-up)" + (other is null ? "" : ", and what doesn't agree with the second picture") + ". " +
                        "Mark each SEVERE (a viewer would notice it and it spoils the picture) or MINOR.\nThen end with exactly one line: VERDICT: good, or VERDICT: redo: and the main reason. Redo for any SEVERE problem.";
         return await ask(other is null ? [picture] : [picture, other], question, ct).ConfigureAwait(false);
@@ -303,12 +303,12 @@ public static partial class FilmCheck
 
     /// <summary>
     /// The frame a viewer sees just before this one, and what to compare: the frame its shot starts on
-    /// (the shot moves from one to the other, so what differs slides: the fox film's moon in "the upper
+    /// (the shot moves from one to the other, so what differs slides: the fox video's moon in "the upper
     /// left" and then "directly above" wandered across the sky), or the last frame of the shot before
-    /// (the film cuts from one to the other: the fox film's second shot was made an open clearing with
-    /// the moon on the other side, a jump only the look at the whole film saw, two shots later).
+    /// (the video cuts from one to the other: the fox video's second shot was made an open clearing with
+    /// the moon on the other side, a jump only the look at the whole video saw, two shots later).
     /// </summary>
-    private static (FilmFrame? Frame, string Text) Before(Storyboard board, FilmFrame frame)
+    private static (VideoFrame? Frame, string Text) Before(Storyboard board, VideoFrame frame)
     {
         if (frame.Reference)
             return (null, "");
@@ -323,7 +323,7 @@ public static partial class FilmCheck
                                "the camera at the same angle and distance unless the shot moves it. Something that should stay put but sits elsewhere or is another size is SEVERE: " +
                                "the video would slide it across the screen. So is someone not where the shot takes them: the video would walk them back.");
             if (i > 0 && shot.First == frame.Id && board.Shots[i - 1] is { LipSync: false, Last: { } end } && end != frame.Id && board.Frame(end) is { } last && File.Exists(board.FramePicture(last)))
-                return (last, $"The second picture is {last.Label}, the last frame of the shot before: the film cuts from it to this one. Unless this prompt moves the story to another place " +
+                return (last, $"The second picture is {last.Label}, the last frame of the shot before: the video cuts from it to this one. Unless this prompt moves the story to another place " +
                               "or time, a viewer must take this as the same place a moment later: the same kind of place (not a forest turned into a clearing, not another room), the moon or sun " +
                               "on the same side and about the same size unless the camera turned around, the same light and weather, the same people looking the same. A jump like that is SEVERE.");
         }
@@ -332,12 +332,12 @@ public static partial class FilmCheck
 
     /// <summary>
     /// What to look at when a shot that moves between two frames fails its looks: whatever the two
-    /// frames disagree on moves during the shot. The fox film's frames put the moon "in the upper
-    /// left" and "directly above", and three takes of rewording the action couldn't hold it still; a
-    /// girl a frame's prompt put beside a mailbox stood two steps from it, so every take walked her
+    /// frames disagree on moves during the shot. The fox video's frames put the moon "in the upper
+    /// left" and "directly above", and three tries of rewording the action couldn't hold it still; a
+    /// girl a frame's prompt put beside a mailbox stood two steps from it, so every try walked her
     /// back there, whatever the shot's words. Null for a shot without both frames.
     /// </summary>
-    public static string? FramesAdvice(Storyboard board, FilmShot shot) =>
+    public static string? FramesAdvice(Storyboard board, VideoShot shot) =>
         shot is { LipSync: false } && board.Frame(shot.First) is { } first && board.Frame(shot.Last) is { } last && first != last
             ? $"It moves from {first.Id} (\"{first.Prompt.Trim().ReplaceLineEndings(" ")}\") to {last.Id} (\"{last.Prompt.Trim().ReplaceLineEndings(" ")}\"). " +
               "Compare where the things that stay put (the moon, the trees, the horizon, where someone stands) and the camera's angle are in the two: the shot moves whatever differs, " +
@@ -351,7 +351,7 @@ public static partial class FilmCheck
     /// shot's last frame lost the first's framing (a girl's mailbox moved and grew), and a fix that
     /// dropped the first frame from what it is made from made it worse. Null for any other frame.
     /// </summary>
-    public static string? FramesAdvice(Storyboard board, FilmFrame frame) =>
+    public static string? FramesAdvice(Storyboard board, VideoFrame frame) =>
         board.Shots.FirstOrDefault(s => !s.LipSync && s.Last == frame.Id && s.First is not null && s.First != frame.Id) is { } ending
             ? $"It is the last frame of {ending.Id}, which moves from {ending.First} to it: keep it made from {ending.First} (in its from, with the references), " +
               $"so it keeps {ending.First}'s framing and everything that stays put, and say in its prompt only what the shot changes."
@@ -458,18 +458,18 @@ public static partial class FilmCheck
         }
     }
 
-    // ---- the whole film --------------------------------------------------------------------------------
+    // ---- the whole video --------------------------------------------------------------------------------
 
-    public static FilmLook Film(Storyboard board, string film, IMediaDecoder decoder)
+    public static VideoLook Whole(Storyboard board, string video, IMediaDecoder decoder)
     {
-        var info = decoder.Probe(film) ?? throw new FilmException($"{film} can't be read on this PC.");
+        var info = decoder.Probe(video) ?? throw new VideoException($"{video} can't be read on this PC.");
         var (starts, length) = board.Timing();
         var text = new StringBuilder();
         var faults = new List<string>();
-        text.AppendLine($"The film ({Path.GetFileName(film)}): {info.Describe()}; the storyboard makes it {N(length)} s in {board.Shots.Count} shots.");
+        text.AppendLine($"The video ({Path.GetFileName(video)}): {info.Describe()}; the storyboard makes it {N(length)} s in {board.Shots.Count} shots.");
         if (Math.Abs(info.Duration.TotalSeconds - length) > 1)
             faults.Add($"it is {N(info.Duration.TotalSeconds)} s long where the storyboard makes it {N(length)} s");
-        using var reader = decoder.OpenVideo(film, 512) ?? throw new FilmException($"{film} has no picture this PC can read.");
+        using var reader = decoder.OpenVideo(video, 512) ?? throw new VideoException($"{video} has no picture this PC can read.");
         var middles = new List<(string Label, SKBitmap Frame)>();
         // Near each shot's start as well as its middle, a row a shot: in the middle of a boy's
         // climb he was a small figure from behind, and the side-by-side look passed him drawn as a
@@ -489,7 +489,7 @@ public static partial class FilmCheck
             for (var i = 1; i < board.Shots.Count; i++)
             {
                 var (before, after) = (board.Shots[i - 1], board.Shots[i]);
-                if (after.First is null || after.First != before.Last && board.Frame(after.First)?.Of != before.Id || after.Transition != FilmShot.Cut)
+                if (after.First is null || after.First != before.Last && board.Frame(after.First)?.Of != before.Id || after.Transition != VideoShot.Cut)
                     continue;
                 using var a = FrameAt(reader, starts[i] - 0.06)?.Frame;
                 using var b = FrameAt(reader, starts[i] + 0.06)?.Frame;
@@ -500,7 +500,7 @@ public static partial class FilmCheck
                 if (alike < 0.5)
                     faults.Add($"a jump between shots {before.Id} and {after.Id}, where the camera should go on");
             }
-            if (info.HasAudio && decoder.OpenAudio(film) is { } sound)
+            if (info.HasAudio && decoder.OpenAudio(video) is { } sound)
                 using (sound)
                 {
                     var (mono, rate) = MediaPreview.ReadMono(sound, TimeSpan.FromMinutes(20));
@@ -515,7 +515,7 @@ public static partial class FilmCheck
                 using var grid = GridBitmap(middles, reader.Width, reader.Height, columns: both ? 2 : middles.Count <= 4 ? middles.Count : middles.Count <= 9 ? 3 : 4);
                 sheet = Jpeg(grid);
             }
-            return new FilmLook(text.ToString().TrimEnd(), sheet, faults, Cuts: Cuts(board, decoder));
+            return new VideoLook(text.ToString().TrimEnd(), sheet, faults, Cuts: Cuts(board, decoder));
         }
         finally
         {
@@ -524,12 +524,12 @@ public static partial class FilmCheck
         }
     }
 
-    public static string JudgeFilm(Storyboard board)
+    public static string JudgeVideo(Storyboard board)
     {
         var sb = new StringBuilder();
         sb.AppendLine(board.Shots.Count <= 6
-            ? "You check a short film for the person making it, from a sheet with a row for each shot, in order: a frame near its start and one from its middle, labelled with the shot and the time."
-            : "You check a short film for the person making it, from a sheet with one frame from the middle of each shot, in order, labelled with the shot and its time.");
+            ? "You check a short video for the person making it, from a sheet with a row for each shot, in order: a frame near its start and one from its middle, labelled with the shot and the time."
+            : "You check a short video for the person making it, from a sheet with one frame from the middle of each shot, in order, labelled with the shot and its time.");
         About(board, sb);
         sb.AppendLine("The shots should show:");
         foreach (var s in board.Shots)
@@ -545,8 +545,8 @@ public static partial class FilmCheck
     }
 
     /// <summary>
-    /// The second fresh look at a film: its cuts, each the frame before above the frame after. From
-    /// one frame in the middle of each shot, qwen3.8 found the fox film the same place all through,
+    /// The second fresh look at a video: its cuts, each the frame before above the frame after. From
+    /// one frame in the middle of each shot, qwen3.8 found the fox video the same place all through,
     /// where its second shot had become an open clearing with the moon on the other side of the sky
     /// and the fox facing the other way: frames side by side read as "a snowy forest at night" each.
     /// The two frames of a cut are one above the other, not side by side: side by side, qwen3.8
@@ -557,7 +557,7 @@ public static partial class FilmCheck
     public static string JudgeCuts(Storyboard board, IReadOnlyList<int> at)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"You judge the cuts of an AI-made film{Title(board)} for ONE thing only: whether the world stays the same across each cut. Each shot's frames are made " +
+        sb.AppendLine($"You judge the cuts of an AI-made video{Title(board)} for ONE thing only: whether the world stays the same across each cut. Each shot's frames are made " +
                       "on their own, so the shot after a cut often lands somewhere else: a dense forest becomes an open clearing, a kitchen another kitchen, the moon or sun jumps " +
                       "to the other side of the sky or changes size, day turns to dusk, someone's clothes, hair or fur change, a photo turns into a cartoon, while the story has the same place and moment.");
         sb.AppendLine("The shots should show:");
@@ -590,15 +590,15 @@ public static partial class FilmCheck
     }
 
     /// <summary>
-    /// The fresh looks at a whole film: the shots side by side (<see cref="JudgeFilm"/>), then its
+    /// The fresh looks at a whole video: the shots side by side (<see cref="JudgeVideo"/>), then its
     /// cuts (<see cref="JudgeCuts"/>), up to four at a time. Null when none could be had.
     /// </summary>
-    public static async Task<FilmVerdict?> JudgeFilmAsync(Storyboard board, FilmLook look,
+    public static async Task<VideoVerdict?> JudgeVideoAsync(Storyboard board, VideoLook look,
         Func<IReadOnlyList<byte[]>, string, CancellationToken, Task<string?>> ask, CancellationToken ct)
     {
         var looks = new List<(string Name, string? Answer)>();
         if (look.Sheet is { } sheet)
-            looks.Add(("The shots side by side", await ask([sheet], JudgeFilm(board), ct).ConfigureAwait(false)));
+            looks.Add(("The shots side by side", await ask([sheet], JudgeVideo(board), ct).ConfigureAwait(false)));
         foreach (var cuts in (look.Cuts ?? []).Chunk(4))
             looks.Add(("The cuts", await ask(cuts.Select(c => c.Picture).ToList(), JudgeCuts(board, cuts.Select(c => c.At).ToList()), ct).ConfigureAwait(false)));
         if (looks.All(l => l.Answer is null))
@@ -618,7 +618,7 @@ public static partial class FilmCheck
             sb.AppendLine($"{name}: {answer!.Trim()}").AppendLine();
         var reason = reasons.Count == 0 ? null : string.Join("; ", reasons);
         sb.Append(reason is null ? "VERDICT: good" : $"VERDICT: redo{(redo.Count > 0 ? " shots " + string.Join(", ", redo) : "")}: {reason}");
-        return new FilmVerdict(sb.ToString(), redo, reason);
+        return new VideoVerdict(sb.ToString(), redo, reason);
     }
 
     /// <summary>A redo's reason without the shots it names first ("shots s2, s3: the place changes").</summary>
@@ -633,7 +633,7 @@ public static partial class FilmCheck
     }
 
     /// <summary>The reference pictures a shot's frames are made from, however far back: references by id, the user's pictures in References by name.</summary>
-    private static HashSet<string> Refs(Storyboard board, FilmShot shot)
+    private static HashSet<string> Refs(Storyboard board, VideoShot shot)
     {
         var refs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -661,7 +661,7 @@ public static partial class FilmCheck
     }
 
     /// <summary>A reference by its name, or the first words of its prompt.</summary>
-    private static string Gist(FilmFrame frame)
+    private static string Gist(VideoFrame frame)
     {
         if (frame.Name is { Length: > 0 } name)
             return name;
@@ -670,12 +670,12 @@ public static partial class FilmCheck
     }
 
     /// <summary>
-    /// The cuts of a film from its shots' clips (not the joined film, where a fade would be half
+    /// The cuts of a video from its shots' clips (not the joined video, where a fade would be half
     /// through): the last frame of the shot before above the first of the shot after, a picture each.
     /// </summary>
-    private static List<FilmCut> Cuts(Storyboard board, IMediaDecoder decoder)
+    private static List<VideoCut> Cuts(Storyboard board, IMediaDecoder decoder)
     {
-        var cuts = new List<FilmCut>();
+        var cuts = new List<VideoCut>();
         for (var i = 1; i < board.Shots.Count; i++)
         {
             var (before, after) = (board.Shots[i - 1], board.Shots[i]);
@@ -684,7 +684,7 @@ public static partial class FilmCheck
             if (end is null || start is null)
                 continue;
             using var picture = GridBitmap([($"{before.Id} ends", end), ($"{after.Id} starts", start)], board.Width, board.Height, columns: 1, sheetWidth: 768);
-            cuts.Add(new FilmCut(Jpeg(picture), i));
+            cuts.Add(new VideoCut(Jpeg(picture), i));
         }
         return cuts;
 
@@ -893,7 +893,7 @@ public static partial class FilmCheck
         {
             var (x, y) = (i % columns * (cellW + 4), i / columns * (cellH + 4));
             var frame = cells[i].Frame;
-            // Covering the cell, cut in the middle, as the film shows it.
+            // Covering the cell, cut in the middle, as the video shows it.
             var scale = Math.Max(cellW / (double)frame.Width, cellH / (double)frame.Height);
             var (w, h) = ((float)(frame.Width * scale), (float)(frame.Height * scale));
             canvas.Save();
@@ -980,10 +980,10 @@ public static partial class FilmCheck
 
     private static string N(double d) => d.ToString("0.##", CultureInfo.InvariantCulture);
 
-    /// <summary>The film's title (what it is about and its look are in each frame's and shot's prompt).</summary>
+    /// <summary>The video's title (what it is about and its look are in each frame's and shot's prompt).</summary>
     private static void About(Storyboard board, StringBuilder sb)
     {
         if (board.Title.Trim().Length > 0)
-            sb.AppendLine($"The film is called \"{board.Title.Trim()}\".");
+            sb.AppendLine($"The video is called \"{board.Title.Trim()}\".");
     }
 }

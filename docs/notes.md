@@ -18,7 +18,7 @@ BlackBox/
                tools/ (portable programs the agent downloaded), scratch/ (helper files it made for a task),
                comfyui/ (ComfyUI's address and folder, the log of a server BlackBox started, see Pictures, video and sound),
                pasted/ (pictures pasted into the chat, see Files in a message),
-               films/ (a folder per film: storyboard, frames, shots, song and the film, see Films),
+               videos/ (a folder per video: storyboard, frames, shots, song and the video, see Videos),
                index/ (the indexes of the folders the agent indexed, a file each, see Folder index),
                crash.log (errors no code caught, see below), errors.log (every error shown, see below)
 ```
@@ -34,7 +34,7 @@ with the message box under the taskbar.
 
 Every error BlackBox shows also goes into `Data/errors.log`: when, where it was shown (the chat,
 named by its title and its file in `Data/chats`; the banner under the top bar, with the server's
-address; Video editor, with the film's folder; a start that failed), what it said, and the
+address; Video editor, with the video's folder; a start that failed), what it said, and the
 whole exception behind it, stack trace and all. That covers the red lines in the chat (a run that
 ended on a server's answer or a bug, a run that couldn't start, settings or a pasted picture that
 couldn't be saved, MCP servers that failed), the lines about a server's failure a run went on
@@ -247,7 +247,7 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   holds the opening pose (a wave timed at 3 s stood still 3 s in a 5 s clip), a negative prompt does
   nothing at the distilled templates' CFG 1, and a first frame put in place
   (`LTXVImgToVideoInplace` at 0.7) starts moving where a frame-0 guide holds. It comes with the
-  first LTX template viewed or run in a task, and the film director writes shots by it (shots as
+  first LTX template viewed or run in a task, and the video director writes shots by it (shots as
   long as their action, 2 to 8 s). Its section on exact motion has the template thread's results
   too: motion tracks that fixed a bunny walking at the camera where the prompt said left, a middle
   guide for a pose at a set moment, the Union Control IC-LoRA with SDPose skeletons copying a wave,
@@ -263,7 +263,7 @@ from memory, and those were often wrong, so the model doesn't work from memory h
 
 `read_file` gives the model a look at media as well as pictures: a video as eight frames with their
 times (and how loud its sound is, in words; a clip up to 15 s also with its movement measured from
-the pixels, as the film looks have it: the camera, and what moves where, which way, how far), a sound as its waveform and spectrogram with its
+the pixels, as the video looks have it: the camera, and what moves where, which way, how far), a sound as its waveform and spectrogram with its
 length, loudness, clipping and silences in words, a 3D model (GLB, glTF, OBJ, PLY, STL) from four
 sides, an animated GIF or WebP as frames.
 Video and sound are decoded by Windows' own Media Foundation (MP4/H.264, MOV, MP3, AAC, FLAC, WAV
@@ -291,8 +291,8 @@ would; scrolled away, under the full-screen viewer or with the window minimized 
 long chat decodes only what can be seen (a third of its height showing, or 120 pixels of a tall one,
 counts as on screen). Its pause button holds it until it is played again. The Video editor panel's
 players are not touched by this: they play with sound when asked. Playing, a video holds its file
-open, so a file the film tool is about to write over (a shot made again, the song, the film joined
-again, a take put back) is let go of first (`MediaRelease`): every window's players of it stop, and
+open, so a file the video tool is about to write over (a shot made again, the song, the video joined
+again, a version put back) is let go of first (`MediaRelease`): every window's players of it stop, and
 the writer waits until they have. Making a shot again failed with "the process cannot access the
 file" while its first take played in the chat (2026-10-24, found driving the panel with ComfyUI).
 
@@ -455,64 +455,72 @@ checkpoint, which needed six tries for one lighthouse. Without a tool the agent 
 half minutes getting ComfyUI to stay up and wrote an SD 1.5 workflow from memory. It still sets
 comfyui-mcp up by itself when the user asks for it.
 
-## Films
+## Videos
+(Films until 2026-10-25, when the user had film, take and sound track renamed video, clip and
+sound line everywhere: texts, the model's tool (`video`, was `film`) and guides, code, files and
+saved names, the user's call being no backwards compatibility. `Data\films`, a root .json of kind
+"film", a try's `.take2` and the `tracks`/`track` keys aren't read; videos live in `Data\videos`, a
+shot's tries are `.try2`, the keys `soundLines`/`soundLine`. In code an earlier version of a piece
+is a `VideoVersion` (`VideoVersions`), no longer a take. The tool's description had still named
+the Takes folders of a day before; it names References and Generated now.)
+
 A video of more than one shot (a music video, a story, an ad) is planned as a **storyboard** and
 made piece by piece with ComfyUI: one video model run can't hold a story together for more than
-a few seconds, and not every film is one continuous camera shot. **Video editor**, picked in the
+a few seconds, and not every video is one continuous camera shot. **Video editor**, picked in the
 **Toolkit** dropdown at the top left of the chat window, opens in a panel on the left of the chat
 (see "The Video editor panel" below): what the user picks in it goes into the chat's box, they say
-there what to do with it, and the agent does it with its `film` tool, which reads and writes the
-same film the panel shows. A film can start in either and go on in the other.
+there what to do with it, and the agent does it with its `video` tool, which reads and writes the
+same video the panel shows. A video can start in either and go on in the other.
 
-**A film is its folder** (the user's call, 2026-10-24: "I want the entire film to be
+**A video is its folder** (the user's call, 2026-10-24: "I want the entire film to be
 folder-driven", and "We don't need the film file storyboard.json anymore right?"), in
-`Data/films/<title>` next to the exe like the rest of BlackBox's data (the user's choice: it is
-portable; the first build put films in the PC's Videos folder). A path the model gives that isn't
-from a drive ("lighthouse") is a folder in `Data/films` too: taken from the working folder, as until
+`Data/videos/<title>` next to the exe like the rest of BlackBox's data (the user's choice: it is
+portable; the first build put videos in the PC's Videos folder). A path the model gives that isn't
+from a drive ("lighthouse") is a folder in `Data/videos` too: taken from the working folder, as until
 2026-10-23, qwen3.8's "lighthouse" was made in the user's home, where Video editor doesn't look.
 **Its title is the folder's name** (2026-10-24, with the user's "I want it to work just like a file
-explorer, where you can right click and rename films"): reading a film takes it from the folder, so
-one renamed in Explorer or in the panel is; the film's own .json no longer holds one. A new title
-from the agent (`storyboard={"title": …}`) renames the folder (`Storyboard.Rename`: the joined film
+explorer, where you can right click and rename films"): reading a video takes it from the folder, so
+one renamed in Explorer or in the panel is; the video's own .json no longer holds one. A new title
+from the agent (`storyboard={"title": …}`) renames the folder (`Storyboard.Rename`: the joined video
 and its .json, named after it, go with it; not while a piece is being made), and a title another
-folder there has leaves the name as it was, which the tool says. Saving names the joined film and
+folder there has leaves the name as it was, which the tool says. Saving names the joined video and
 its .json after the folder when Explorer left them under the old name (`NameJoined`).
 
 ```
-Fox Film/
-  Fox Film.mp4 (+ Fox Film.json)  the joined film; its .json: size, frame rate, the lines' voice, the sound tracks, the shots' order
+Fox Video/
+  Fox Video.mp4 (+ Fox Video.json)  the joined video; its .json: size, frame rate, the lines' voice, the sound lines, the shots' order
   References/   what the user gave, copied in, and the generated images frames are made from
-    lineup.jpg, rain.mp3 (+ rain.json: its track, start, trim, length, volume), Fox.png (+ Fox.json, Fox.workflow.json)
+    lineup.jpg, rain.mp3 (+ rain.json: its soundLine, start, trim, length, volume), Fox.png (+ Fox.json, Fox.workflow.json)
   Generated/    what BlackBox makes for the timeline, by id
     f1.png (+ f1.json, f1.workflow.json), s1.mp4 (+ s1.json, s1.workflow.json), a2.mp3 (+ ...)
     Versions/   earlier versions, each with its .json and workflow
 ```
 (The user's call, 2026-10-24: "Films should just contain internal folder for the references and
-generated content and that's about it". For a day the film had a folder per shot, "1 Intro", then
+generated content and that's about it". For a day the video had a folder per shot, "1 Intro", then
 "Takes/Take 1", and a Sound folder.)
 
 Every piece has a .json beside its file, named as it (`Storyboard.MetaOf`: "s1.json" for
 "s1.mp4"; it was a `.meta` as Unity keeps one beside each asset, the user's comparison, until
 they asked for plain .json, 2026-10-24): what it is (`"kind"`, its id, prompt, seed, model, what it
-is made from, a sound's place on its track) and, once made, how (`"made"`: the stamp of the settings
+is made from, a sound's place on its sound line) and, once made, how (`"made"`: the stamp of the settings
 it was made from, the template, when, the settings then, what its look found). Named by the stem, a
 piece's file and its .json need stems no other made file in the folder has, as the workflows did
 already; a .json is a piece's when it has a `"kind"`, and the file it is beside is found by its kind
 (a frame's picture as it is there, else a PNG; a sound's as it is there, else an MP3; a shot's or the
-film's MP4). The workflow beside it is ComfyUI's API format alone, which ComfyUI opens as it is and
+video's MP4). The workflow beside it is ComfyUI's API format alone, which ComfyUI opens as it is and
 the comfyui tool runs (`workflow_file`). A piece is where its .json is: moved or renamed with its
-.json in Explorer it stays in the film, and with its .json deleted it leaves it. Reading a film
+.json in Explorer it stays in the video, and with its .json deleted it leaves it. Reading a video
 gathers them into one storyboard (`StoryboardFolder.cs`; the root, its folders and theirs, not
 Versions), which is what the agent reads and writes as JSON; saving it gives each piece its place
 (`Storyboard.Arrange`) and writes the .json files back, only those that say something new. What
 BlackBox makes goes into Generated named by its id (`s2.mp4`, `f3.png`, `a1.mp3`), which doesn't
-change as takes are put in another order, a generated image into References named after it. A
+change as clips are put in another order, a generated image into References named after it. A
 piece made stays where its file is; one not made yet goes where its id or name says, never onto a
 file a piece taken out left there ("s2 2.mp4"). The .json of a piece taken out goes, so it doesn't
-come back; its files stay. Films from before folders (a `storyboard.json`) aren't read or converted,
-and nor are the film-wide look and templates of older storyboards: the user's call, 2026-10-24,
-"ignore the possibility that anyone was using an old version". In the panel a shot is a **take**
-("Take 1", the user's word); the agent is told which shot a take is. A film is made of:
+come back; its files stay. Videos from before folders (a `storyboard.json`) aren't read or converted,
+and nor are the video-wide look and templates of older storyboards: the user's call, 2026-10-24,
+"ignore the possibility that anyone was using an old version". In the panel a shot is a **clip**
+("Clip 1", the user's word since 2026-10-25, "Take 1" before); the agent is told which shot a clip is. A video is made of:
 
 - **Shots** in order, each going from its **first frame** to its **last frame** in so many seconds,
   with what happens in it, what the camera does, and how it follows the shot before (a cut, a
@@ -521,10 +529,10 @@ and nor are the film-wide look and templates of older storyboards: the user's ca
   Without a last frame a shot goes where its prompt takes it; without a first frame too, it is
   made from words alone.
 - **Frames**: made from a prompt with a fixed seed, or taken from a picture of the user's (cut to
-  the film's frame). A frame can be made **from other frames** (an edit model such as
+  the video's frame). A frame can be made **from other frames** (an edit model such as
   Qwen-Image-Edit gets them as its pictures), so the people and places stay the same from shot to
   shot; **references** (a character, a place) are frames for that alone, in no shot. Their pictures
-  are in the film's **References** folder (the user's call, 2026-10-24: "References (Where either
+  are in the video's **References** folder (the user's call, 2026-10-24: "References (Where either
   image file or generated image present)"), a generated one made there at its own shape, named after
   it ("References/Fox.png"; "Fox/side" is "References/Fox side.png"). Any picture the user puts there
   (File… on a card, dropped on the timeline, or copied there) is an image file, which frames are made
@@ -538,8 +546,8 @@ and nor are the film-wide look and templates of older storyboards: the user's ca
   kept as is"). Asked to make front and back references from a lineup of four poses attached from
   OneDrive, the model, told only that `from` takes pictures in References, cut one figure out with
   Python and saved it as `References/Carl/source.png`, which the panel then showed as the user's
-  picture. Now `from` also takes a picture from elsewhere by its full path, and the film tool copies
-  it into References byte for byte (`Storyboard.TakeInPictures`, after the film is saved): a
+  picture. Now `from` also takes a picture from elsewhere by its full path, and the video tool copies
+  it into References byte for byte (`Storyboard.TakeInPictures`, after the video is saved): a
   reference's into its folder, any other frame's into a folder named after it, as a dropped one
   goes; `from` names the copy ("Carl/CarlLineup.png") and the result says so. The copy never takes a
   name a planned piece will be made as (a `.json` of that name: "Carl (2).png" beside a planned
@@ -547,19 +555,19 @@ and nor are the film-wide look and templates of older storyboards: the user's ca
   uses too). The tool's description and the storyboard guide say never to crop, resize, retouch or
   redraw the user's pictures or save cut-outs beside them, but to name the whole picture and say in
   the prompt which figure to take.
-- **Nothing film-wide that goes into a prompt.** Each frame's and shot's prompt holds all of its
-  own look, and each says what it is made with (`model`). There used to be a film-wide look added
+- **Nothing video-wide that goes into a prompt.** Each frame's and shot's prompt holds all of its
+  own look, and each says what it is made with (`model`). There used to be a video-wide look added
   to every prompt, a story and a template per kind of job, and the user ruled them out: one change
   to them made every frame and shot out of date. A `style` the agent gives with a change goes only
-  into the frames and shots of that change. Only the frame size and frame rate are the film's
+  into the frames and shots of that change. Only the frame size and frame rate are the video's
   (1280x720 at 24 fps unless changed).
-- **Sounds** on sound tracks (see "Sound tracks" below): sound files of the user's and songs made
-  for the film from a style and lyrics, each from where it starts, trimmed, at its volume, over the
+- **Sounds** on sound lines (see "Sound lines" below): sound files of the user's and songs made
+  for the video from a style and lyrics, each from where it starts, trimmed, at its volume, over the
   shots' own sound.
-- **Lines**: what is said in a shot, in the film's voice (a description: "a man in his forties,
+- **Lines**: what is said in a shot, in the video's voice (a description: "a man in his forties,
   warm, deadpan"). VoxCPM2 says the first speaking shot's line from the description and clones
   that line's voice for the others, so every line is the same person; the line is placed 0.4 s into
-  the shot (time to turn to the camera) and the shot is lip-synced to it. In the film the line is
+  the shot (time to turn to the camera) and the shot is lip-synced to it. In the video the line is
   heard as VoxCPM2 said it, not as LTX gives it back, and the sounds drop to 35% under it. A
   line longer than its shot is said to be cut. A small Gemma 4 hears each line back in the check:
   "Honestly? It used to be a lot worse." came back word for word.
@@ -567,22 +575,22 @@ and nor are the film-wide look and templates of older storyboards: the user's ca
 A piece's .json keeps, under `"made"`, a hash of what it was made from: the prompt, seed, size,
 template, and the pictures and sound it started from. A piece whose hash no longer matches its
 settings is out of date, which the panel and the tool say (a frame changed after the clip that
-starts on it was made, a song shorter than the film became). So the panel and the agent never
+starts on it was made, a song shorter than the video became). So the panel and the agent never
 overwrite each other's results, and the same seed and prompt make the same picture again.
 
-**Pictures of another shape.** The user's films came out with heads cut off ("models have
+**Pictures of another shape.** The user's videos came out with heads cut off ("models have
 problems adapting references for video generation, because references (probably?) need to use the
 same resolution as the video", 2026-10-23, from the publish log): a square picture of a character
-was made a reference, which was cut to the film's 16:9 frame, head and all, and the model cropped
+was made a reference, which was cut to the video's 16:9 frame, head and all, and the model cropped
 a band of it with Pillow to get the head back. References don't need the video's size: the edit
-model takes its pictures at any shape. The film's frames do, and they had it from the wrong place:
+model takes its pictures at any shape. The video's frames do, and they had it from the wrong place:
 Qwen-Image-Edit's template samples the latent its first picture is encoded to
 (`FluxKontextImageScale` then `VAEEncode`), so a frame made from a square reference came out square
-and was then cut to 16:9 too. Now a reference keeps its shape (`FilmMaker.SaveReference`: black bars
+and was then cut to 16:9 too. Now a reference keeps its shape (`VideoMaker.SaveReference`: black bars
 cut off, no more than 2048 across), and a template that takes its size from its first picture is
-given a blank picture of the film's size to encode instead, where its sampler draws the picture anew
-(denoise 1; `FilmRoles.SizeFromBlank`), the pictures still going to the model as they are. A frame
-taken from a picture of the user's (`file`) is still cut to the film's frame: to keep all of a
+given a blank picture of the video's size to encode instead, where its sampler draws the picture anew
+(denoise 1; `VideoRoles.SizeFromBlank`), the pictures still going to the model as they are. A frame
+taken from a picture of the user's (`file`) is still cut to the video's frame: to keep all of a
 picture of another shape, make the frame from it.
 
 What a frame, shot or the song is made with is its `model`: words ("furry nova xl", "my pony
@@ -592,7 +600,7 @@ installed: Z-Image Turbo, then Qwen-Image 2512, for frames; Qwen-Image-Edit 2509
 from others; LTX-2.5's first and last frame, image to video and text to video templates for shots,
 and its picture and sound to video for lip-synced ones; ACE-Step 1.5 for the song.
 
-What is installed is listed in full, not searched (`FilmTemplates.OptionsAsync`, the tool's
+What is installed is listed in full, not searched (`VideoTemplates.OptionsAsync`, the tool's
 `action=models`): the template list used to be the known ones plus the six best hits of a word
 search, and the user's Furry Nova XL workflow and checkpoint were in neither. Now every saved
 workflow of the user's, and every ComfyUI template of the right kind, is fetched and judged by the
@@ -614,36 +622,36 @@ prompt by a title such as "Prompt" (a primitive first), else by following the sa
 conditioning back to the text it is made from (through LTX's guides and switches); width, height,
 duration and frame rate by primitives titled so, else the empty latent's own inputs (an LTX length
 in frames is the fewest 8n + 1 that last the shot; a duration taken in whole seconds is rounded up
-and the clip cut in the film); seeds wherever they are set; first and last frames by the loaders'
+and the clip cut in the video); seeds wherever they are set; first and last frames by the loaders'
 titles; pictures past the edit template's one are wired into its encoders' `image2` and `image3`;
 the prompt enhancer LTX's templates switch on is switched off, so the prompt is the one written.
 What the storyboard sets that a template has no place for is said. Every frame is scaled to cover
-the film's frame and cut to it, and black bars along its edges are cut off first: asked for a
-close-up in "a 35mm film look", Qwen-Image-Edit drew the picture letterboxed, and LTX kept the
+the video's frame and cut to it, and black bars along its edges are cut off first: asked for a
+close-up in "a 35mm video look", Qwen-Image-Edit drew the picture letterboxed, and LTX kept the
 bars through the whole clip.
 
 **Joining** is ffmpeg: each clip held on its last frame or cut to its shot's length, scaled and
-cut to the film's frame and frame rate, joined with concat (a cut) or xfade (a dissolve or a fade,
+cut to the video's frame and frame rate, joined with concat (a cut) or xfade (a dissolve or a fade,
 which overlap the shot before by half a second or a second), the sounds over it (the shots' own
 sound at half under a song: LTX's is a muddy wash that took the Paper Boat song from 3.1 to 2.7 on
 SongEval at 30%), a short fade in, a fade out at the end, longer for a sound that runs past it,
 which is cut there. Without ffmpeg the error says where to put a portable one.
 
-**The song** is made a minute long at least and the film uses its start: ACE-Step 1.5 falls apart
+**The song** is made a minute long at least and the video uses its start: ACE-Step 1.5 falls apart
 when asked for a short song. For the Paper Boat's style and lyrics, 21 s songs scored 2.4 to 2.9 of
-5 on SongEval (the user called the films' sound garbage), 30 s 3.2, 45 to 90 s 3.8 to 4.4; the
+5 on SongEval (the user called the videos' sound garbage), 30 s 3.2, 45 to 90 s 3.8 to 4.4; the
 Turbo template beat SFT (3.3) and base (2.6); a tempo the style names ("70 BPM") is ACE-Step's own
 setting, which the templates otherwise fix at 95 or 120. Three songs are made with new seeds and the
-one that sounds best for the part the film uses is kept (the same settings scored 3.3 to 4.2 by the
+one that sounds best for the part the video uses is kept (the same settings scored 3.3 to 4.2 by the
 seed alone), its seed saved in the storyboard.
 
-**Listening** is what no one should have to do for every take, so a song, and the film's sound, are
+**Listening** is what no one should have to do for every take, so a song, and the video's sound, are
 judged by [SongEval](https://github.com/ASLP-lab/SongEval): a scorer trained on 2,400 songs rated
 by musicians, over the MuQ music model, scoring coherence, musicality, memorability, structure and
 natural vocals from 1 to 5. Meta's Audiobox Aesthetics was tried first and rated the two songs the
 user called garbage 8.2 of 10 for production quality: it hears how clean a recording is, not
 whether it is music. SongEval gave them 2.4 and 2.7, a released song 3.9 to 4.3 (10 to 30 s
-excerpts of it too, its intro 3.2), and the Paper Boat film made again 4.1. It is trained on songs
+excerpts of it too, its intro 3.2), and the Paper Boat video made again 4.1. It is trained on songs
 with singing: instrumentals scored 2.5 to 3.3 in every style tried (a soft hummed lullaby 3.7), so
 for an instrumental it is a rough guide. It runs with ComfyUI's own Python (which has PyTorch),
 set up once in `Data/tools/songeval`: MuQ and nnAudio by pip into that folder (ComfyUI's own
@@ -661,8 +669,8 @@ storyboard's frames above eight of the clip's goes to a **fresh look**: the mode
 its own without the run's history, says whether what should happen happens, what is warped or
 changing, whether the people stay the same, and ends with a verdict. The model that made a clip
 judges it too kindly (it called four bunnies mature and true to a reference sheet that the user
-saw as a chubby teenager). `tries=N` makes up to N takes with new seeds until one passes and keeps
-the best. The whole film is checked from a frame of each shot side by side and the joins where the
+saw as a chubby teenager). `tries=N` makes up to N tries with new seeds until one passes and keeps
+the best. The whole video is checked from a frame of each shot side by side and the joins where the
 camera should go on.
 
 **The Video editor panel** ("Filmmaking" until the user renamed it on 2026-10-25; 2026-10-24, the user's design: "Filmmaking window should extend current
@@ -686,78 +694,78 @@ with its new part black for a twentieth more, and the chat jumped back (captured
 2026-10-24). Now the chat stays put and the panel fills in about 50 ms later. The window's place is
 saved without the panel. **Made narrower, the panel gives way first** (`ToolkitColumns`,
 `MainWindow.FitColumns` on the columns' SizeChanged): down to its least (`ToolkitOption.MinWidth`,
-splitter included: Video editor 770, where its top bar still fits in one row with the film's name cut
+splitter included: Video editor 770, where its top bar still fits in one row with the video's name cut
 short; Code changes 560), then the window stops, at the panel's least plus the chat's 660 (no more than
 the screen is wide). It goes back to the width it opened at, or was dragged to, as the window widens
 again; the splitter stops at both leasts. Before (bug of 2026-10-24) the window's least counted any
 panel as 480 while Video editor kept its 960, so the chat was squeezed to a few letters across, and
 opening on a narrow screen left the chat only 330. Video editor also needs the window 600 tall
 (`ToolkitOption.MinHeight`; the chat alone 480), else its viewer is squeezed to nothing over the
-timeline; a shorter window grows to it as the panel opens. The film's name was in a StackPanel across,
+timeline; a shorter window grows to it as the panel opens. The video's name was in a StackPanel across,
 which gives a TextBlock all the room it wants: it was never cut short and pushed the fields over the
 buttons. The panel has a viewer with how the piece shown was made under it, and the
-timeline under that; its top bar has the film's name (its menu, see below), the frame size and frame
-rate, and **Make the film** (the user, 2026-10-24: "Get rid of the settings button
+timeline under that; its top bar has the video's name (its menu, see below), the frame size and frame
+rate, and **Make the video** (the user, 2026-10-24: "Get rid of the settings button
 altogether, put frame size and framerate fields at the top"; the cog's title went with the folder's
-name, its soundtrack and shots' sound sliders with the levels they set). A **New film** button beside
-Make the film went on 2026-10-25: the films' menu has New film. A new film is called "Untitled film"
-("Untitled film 2" when that folder is taken), not "New film", which read as the menu's item.
+name, its soundtrack and shots' sound sliders with the levels they set). A **New video** button beside
+Make the video went on 2026-10-25: the videos' menu has New video. A new video is called "Untitled video"
+("Untitled video 2" when that folder is taken), not "New video", which read as the menu's item.
 
-**All of the film is worked on in the timeline** (the user's call, 2026-10-24: "work on the film
+**All of the video is worked on in the timeline** (the user's call, 2026-10-24: "work on the film
 should be done entirely in the timeline. Right click on timeline -> Create. And then you pick either
 a file reference to copy the file, or hit a generate button. Remove all that folder tab nonsense").
-The films folder as a tree, which the panel had for a day (the user's earlier "I want it to work just
+The videos folder as a tree, which the panel had for a day (the user's earlier "I want it to work just
 like a file explorer"), went with it. Its rows: **References**, a card for each picture frames are made
 from, an image file of the user's or a generated image (a reference of the storyboard), by name, with
-the dashed + after them; **Video**, a block per take (shot) from where it starts for as long as it
+the dashed + after them; **Video clips** ("Video" until 2026-10-25), a block per clip (shot) from where it starts for as long as it
 lasts, its clip's frames inside once made (else its frames and what happens in it), its state under
 it, dragging its right edge making it longer or shorter in half seconds, the dashed + after the last;
-**Lines**, where they are said; and the **sound tracks** (below). A ruler on top moves the playhead
-(click or drag), and the play button plays the sound tracks mixed from there (`FilmMix`, from each
-sound's samples read once for its waveform, as joining lays them over each other) with each take's
-frame in the viewer. The timeline is dragged sideways anywhere but the ruler, a take's edge and a
-sound (the user found its scrollbar "very inconvenient", 2026-10-24; a drag from a take doesn't pick
+**Lines**, where they are said; and the **sound lines** (below). A ruler on top moves the playhead
+(click or drag), and the play button plays the sound lines mixed from there (`VideoMix`, from each
+sound's samples read once for its waveform, as joining lays them over each other) with each clip's
+frame in the viewer. The timeline is dragged sideways anywhere but the ruler, a clip's edge and a
+sound (the user found its scrollbar "very inconvenient", 2026-10-24; a drag from a clip doesn't pick
 it, a press let go without moving 4 pixels does), its scrollbar shows only under the pointer, the
-wheel scrolls sideways and Ctrl+wheel zooms. A take clicked doesn't scroll into view
+wheel scrolls sideways and Ctrl+wheel zooms. A clip clicked doesn't scroll into view
 (`BringIntoViewOnFocusChange` off): partly scrolled out, it moved from under the pointer between
 press and release. A click away from every piece (the timeline's empty space, around the viewer) or
-Esc (not while typing) shows the whole film again, nothing going into the box. The whole films
-folder is watched: what the chat, another window or Explorer changes in the open film shows; its
-folder renamed is followed, and gone, the film changed last opens. Nothing is saved into a folder
+Esc (not while typing) shows the whole video again, nothing going into the box. The whole videos
+folder is watched: what the chat, another window or Explorer changes in the open video shows; its
+folder renamed is followed, and gone, the video changed last opens. Nothing is saved into a folder
 that went: it would come back.
 
 **Creating, renaming, deleting.** Right-click a row away from its cards: **Create**. On References a
 new card ("New image"), a generated image nothing is said of yet, offering **File…** (the Open
 dialog: the picture picked is copied into References as an image file, which the card is from then
 on) and **Generate** (it goes into the chat's box; with a prompt already, "Make it." is sent, else
-the status line asks what it should be); on Video a new take after the last; on a sound track a new
+the status line asks what it should be); on Video clips a new clip after the last; on a sound line a new
 sound ("New sound") from the time clicked, offering the same two. Files dropped on the timeline are
 copied in as they are (`Storyboard.KeepPicture`): pictures into References as image files, sounds
-into References too, laid on the track dropped on from the time dropped at (else the first track from
+into References too, laid on the sound line dropped on from the time dropped at (else the first sound line from
 the playhead); one dropped on a new card or sound becomes it, which is marked while dragged over.
-Right-click a card, take or sound: File…, Generate, Rename (a box over it, as Explorer's: Enter or a
+Right-click a card, clip or sound: File…, Generate, Rename (a box over it, as Explorer's: Enter or a
 click elsewhere keeps it, Esc doesn't; a generated image's picture and what goes with it are renamed
 with it, an image file's frames' `from` told the new name), Delete (to the Recycle Bin,
-`FileSystem.DeleteFile`/`DeleteDirectory` with `SendToRecycleBin`; Windows only for now: a take with
+`FileSystem.DeleteFile`/`DeleteDirectory` with `SendToRecycleBin`; Windows only for now: a clip with
 the frames only it uses, `Storyboard.DeleteShot`, a card or sound with its .json, workflow and
-versions), and Versions; a take also Start frame and End frame, which pick its frames. The film's
-name at the top opens the films' menu: each film to open, New film, Rename (renaming the open film
+versions), and Versions; a clip also Start frame and End frame, which pick its frames. The video's
+name at the top opens the videos' menu: each video to open, New video, Rename (renaming the open video
 lets go of what the viewer plays first: Windows doesn't move a folder a file in it is open from),
-Delete (the film changed last opens) and Show in Explorer. Nothing is renamed or deleted while the
-chat is at work on the film. A line over the timeline says what right-click and dropping do, until
+Delete (the video changed last opens) and Show in Explorer. Nothing is renamed or deleted while the
+chat is at work on the video. A line over the timeline says what right-click and dropping do, until
 the status line has something to say: nothing showed the menu was there (the user, 2026-10-24).
 
-**Sound tracks**, as a video editor has them (the user, 2026-10-24: "Make the sounds line into an
+**Sound lines** ("Sound line 1" on the timeline, the user's word since 2026-10-25; sound tracks before), as a video editor has sound tracks (the user, 2026-10-24: "Make the sounds line into an
 overlay sound editor", "Same as with images, either generated or file copy of a sound", "kinda like
 in any popular video editing software", "we also need to be able to create multiple sound tracks"):
-the film's `tracks` (1 to 12; **+ Track** under their names adds one, right-click a track's name or
-row for Delete track, its sounds going with it and the tracks under it moving up), each sound
-(`Storyboard.Sounds`, ids a1, a2…) a clip on its `track` from its `start` for as long as it plays:
-`seconds`, else what its file has after its `trim`, else, a song not made, to the film's end. Its
-waveform is drawn inside. Dragged, it moves along its track and to another; its left edge cuts its
+the video's `soundLines` (1 to 12; **+ Sound line** under their names adds one, right-click a sound line's name or
+row for Delete sound line, its sounds going with it and the sound lines under it moving up), each sound
+(`Storyboard.Sounds`, ids a1, a2…) a clip on its `soundLine` from its `start` for as long as it plays:
+`seconds`, else what its file has after its `trim`, else, a song not made, to the video's end. Its
+waveform is drawn inside. Dragged, it moves along its sound line and to another; its left edge cuts its
 start (trim and start together), its right edge its end, in tenths of a second, saved once let go.
-Sounds may overlap, on one track or several. A sound is a file of the user's (`"source": "file"`,
-copied into References; one put there in Explorer without a .json comes onto the first track from
+Sounds may overlap, on one sound line or several. A sound is a file of the user's (`"source": "file"`,
+copied into References; one put there in Explorer without a .json comes onto the first sound line from
 the start, `AdoptSounds`) or a song BlackBox makes (`"source": "song"`, into Generated). Joining lays
 each over the shots' own sound with ffmpeg (`atrim`, `adelay`, `amix`), quieter under the lines;
 under a song the shots' own sound is kept at half. The single soundtrack of before (none, a file or
@@ -770,20 +778,20 @@ prompt to describe what you wanna do with it"): a folder, a picture, a clip or a
 timeline, is a chip under the box ("The start of shot 1 · Moon start.png", "not made yet" for a
 piece planned), × takes it off, another pick takes its place, and sent, it goes with the message
 (a piece not made yet as its place, with no file). A message sent while Video editor is open carries
-the film (`IToolkit.About`): over its bubble (`UserInput.Via`, "Video editor · The Fox and the Moon ·
-shot 2"), and for the model before the words (`UserInput.Context`) the film's folder, what each
+the video (`IToolkit.About`): over its bubble (`UserInput.Via`, "Video editor · The Fox and the Moon ·
+shot 2"), and for the model before the words (`UserInput.Context`) the video's folder, what each
 pick is in it (shot s2, the 2nd of 3, from 5 to 9 s, its clip or its folder; frame f1, the start of
 shot 1; the reference "Fox"; a reference's folder, with its pictures and how to name them; a
-picture of theirs in References and how to name it; a take, which
+picture of theirs in References and how to name it; a clip, which
 the panel puts back), and what to do: about picks, read the storyboard, change those pieces alone
 (a shot, its frames too, and the lines' voice) unless they ask for more, and make them again unless
-they only ask a question; with nothing picked, lay the film out or change it and make nothing unless
-asked, and when asked to make the film, make what isn't made in order, fix what each fresh look
-finds up to twice a piece, join, look at the film, fix what that names once, join and look again.
-The film is saved first, so the model reads what the panel shows. The window's own box, its buttons
+they only ask a question; with nothing picked, lay the video out or change it and make nothing unless
+asked, and when asked to make the video, make what isn't made in order, fix what each fresh look
+finds up to twice a piece, join, look at the video, fix what that names once, join and look again.
+The video is saved first, so the model reads what the panel shows. The window's own box, its buttons
 (Make it, Another take, Look at it again, Use a picture of mine, Delete it, Earlier/Later) and the
-picked piece's panel are gone: the user says those in the chat. **Make the film** stays, sending
-"Make the film." as typed. A piece's request also says to fix what its fresh look finds wrong and
+picked piece's panel are gone: the user says those in the chat. **Make the video** stays, sending
+"Make the video." as typed. A piece's request also says to fix what its fresh look finds wrong and
 make it again, up to twice, as the window's own director did with every piece: told only to say how
 it came out, the agent reported the fault and left the piece so. With Claude Opus 5.5 (2026-10-23), Make it on a 3 s shot
 of a paper boat in a gutter: the looks found the first take nearly a still picture (the start
@@ -796,22 +804,22 @@ weighs, not a rule: the user's way of steering it.
 During a run they wait above the box as anything typed in the chat does. The user watches every step
 in the chat, with each frame and clip as it is made, and stops it there. One still waiting when the
 run is stopped, or the chat is left, goes back into the box as any typed message does, and sent
-again while Video editor is open carries the film again. Its context is saved with the message, so
+again while Video editor is open carries the video again. Its context is saved with the message, so
 Continue on one the model never had sends it whole. A chat begun with Video editor open is named after
-the words and the film and picks ("Make it. (Fox Test · start of shot 1)"), not "Make it." alone.
+the words and the video and picks ("Make it. (Fox Test · start of shot 1)"), not "Make it." alone.
 
 The model writes prompts as BlackBox's storyboard guide says (`Comfy/Guides/storyboards.md`, which
-the film tool shows with the first storyboard a chat reads or writes, together with the video
+the video tool shows with the first storyboard a chat reads or writes, together with the video
 guide; a chat that still has it in its conversation, `ToolContext.InConversation`, isn't shown it
 again, and one that lost it to a context reset is): who is in a frame (repeating what makes each person look like themselves), where, framing,
-light, and the film's look in the same words in every prompt; references in that look; a shot's
+light, and the video's look in the same words in every prompt; references in that look; a shot's
 action in order in the present tense, as long as it takes; first and last frames that agree on what
 stays put; lines that fit their shot; a model named only when the user names or describes one. That
-guide is the brief the window's own director (`FilmDirector`) gave the model in a request of its
+guide is the brief the window's own director (`VideoDirector`) gave the model in a request of its
 own, which answered a piece's request in 11 to 30 s without thinking; in the chat the same request
 is a few steps of the agent's (read the storyboard, change it, make the piece). Checked with qwen3.8
 from the window (2026-10-23): "A 4 second clip: a paper boat floats down a rainy street gutter at
-dusk" on a new film was laid out in 2 min 17 s (it read the storyboard and the guide, wrote one shot
+dusk" on a new video was laid out in 2 min 17 s (it read the storyboard and the guide, wrote one shot
 with a first frame only, as the guide says for a drift that goes on to the end, and took out the
 empty starting pieces); "make it darker, closer to night, with the street lamps on" on that frame
 changed its prompt, the shot's look words with it (and said so), and made it with a fresh look, in
@@ -819,11 +827,11 @@ changed its prompt, the shot's look words with it (and said so), and made it wit
 looked at by fresh looks (see below), and what they found is kept in the piece's .json
 (`"made"."look"`, a song's judged sound too) so the panel shows it with the piece.
 
-**The panel and the chat.** It reads twice a second what the chat is doing: on the timeline, the piece the film tool is making or looking at, by the call's arguments, with how it is
-getting on. What the agent changes and makes in the film's folder shows as it happens (the folder is
+**The panel and the chat.** It reads twice a second what the chat is doing: on the timeline, the piece the video tool is making or looking at, by the call's arguments, with how it is
+getting on. What the agent changes and makes in the video's folder shows as it happens (the folder is
 watched, and read again when it changed). Changes made by hand (a shot's length, a new shot, the
-film's size and frame rate, a take put back, pictures dropped into References) are saved at once,
-without the chat. One made while the chat changes the film (a shot's edge dragged as the film tool
+video's size and frame rate, a version put back, pictures dropped into References) are saved at once,
+without the chat. One made while the chat changes the video (a shot's edge dragged as the video tool
 rewrites a prompt or settles a seed) is put together with the chat's (`StoryboardMerge`: key by
 key, frames and shots by id, the panel's hand winning where both changed the same value): saved
 whole, as until 2026-10-23, the window's copy wrote over the chat's change, and the window never
@@ -834,15 +842,15 @@ of it was read over it, the shot snapping back); the timeline laid out again for
 together in the middle of a drag ends the drag where it was, kept, as does losing the mouse
 (Alt+Tab), which before left the drag going for any later move over a shot's edge.
 
-From a review of the window (2026-10-23): a take isn't put back while the chat makes a piece of the
-film (a shot makes its frames first, which don't show as being made, and the finished frame wrote
-over the take); a new piece never gets the files of one taken out that are still in the folder
-(the new s3 came with the old s3's clip and takes, and joining used it); a new film whose folder
-another window's new film took since gets one of its own ("Untitled film 2"); a film named again finds
-its joined video under the old name (`Storyboard.JoinedFile`); switching films stops the old one's
+From a review of the window (2026-10-23): a version isn't put back while the chat makes a piece of the
+video (a shot makes its frames first, which don't show as being made, and the finished frame wrote
+over the version); a new piece never gets the files of one taken out that are still in the folder
+(the new s3 came with the old s3's clip and versions, and joining used it); a new video whose folder
+another window's new video took since gets one of its own ("Untitled video 2"); a video named again finds
+its joined video under the old name (`Storyboard.JoinedFile`); switching videos stops the old one's
 sound.
 
-**Looks that don't let slop through.** The user found the judging dismissive: the fox film passed
+**Looks that don't let slop through.** The user found the judging dismissive: the fox video passed
 with the fox floating up the screen at the cut at 5 s. One question per kind of fault catches more
 than one big question, so a shot gets four, each a request of its own with thinking: physics and
 bodies (the sheet, and a closer look: twelve frames from the ~0.9 s where the most changes, cropped
@@ -850,26 +858,26 @@ to where things move), behaviour over time (frozen or held poses), whether the w
 (where the moon, horizon and trees are in each frame, how big the moon is as a share of the width,
 whether anyone slides or floats), and movement as asked (see below). A frame is looked at beside the frame a viewer sees before it:
 its shot's first frame (what differs between the two, the shot slides across the screen: the fox
-film's moon was "in the upper left" in one and "directly above" in the other) or the last frame of
+video's moon was "in the upper left" in one and "directly above" in the other) or the last frame of
 the shot before (a cut to another kind of place); and against the shot size its prompt names. The
-film tool looks at every frame and shot it makes (`FilmCheck.JudgeFrameAsync`, `JudgeShotAsync`),
+video tool looks at every frame and shot it makes (`VideoCheck.JudgeFrameAsync`, `JudgeShotAsync`),
 and action=check looks at one again. What a look finds wrong comes back to the agent as "To fix:",
 with what to keep: a shot moving between two frames that fails is told the two frames' prompts and
-to compare what stays put in them (`FilmCheck.FramesAdvice`), a failed last frame to stay made from
+to compare what stays put in them (`VideoCheck.FramesAdvice`), a failed last frame to stay made from
 the first. The agent changes what the piece is made from and makes it again; the window's **Make the
-film** asks for up to two fixes a piece, as the window's own loop did, then the join and two looks at
-the whole film: a frame from the middle of each shot side by side (the same people, the story in
+video** asks for up to two fixes a piece, as the window's own loop did, then the join and two looks at
+the whole video: a frame from the middle of each shot side by side (the same people, the story in
 order), and the cuts, each a picture of the last frame of the shot before above the first of the
 shot after (from the clips, so a fade isn't half through), with the references both shots are made
-from. The shots they name are fixed once, the film joined again and looked at again to say what is
-left; the **Look at the film** chip asks for the same for a film already joined.
+from. The shots they name are fixed once, the video joined again and looked at again to say what is
+left; the **Look at the video** chip asks for the same for a video already joined.
 
 The two frames of a cut are one above the other: side by side, qwen3.8 measured where the moon was
 across the whole picture and found a moon that hadn't moved jumping from 0.13 to 0.6 of the width
 (4 runs of 4). Shot prompts that say the camera is locked made the cut look ask for the same framing
 across a cut, so it is told that holds inside a shot only.
 
-On the fox film the old looks passed both shots. The steadiness look found shot 1's moon wandering
+On the fox video the old looks passed both shots. The steadiness look found shot 1's moon wandering
 and shot 2's moon growing from a dot to a full disc (the floating: the camera rising on the fox in
 shot 2's first second); the fixes made each shot's last frame from its first and shot 1 then passed
 all three looks. Shot 2 was rebuilt as an open clearing with the moon on the other side, which all
@@ -877,7 +885,7 @@ of its own looks and the side-by-side look passed ("intended framing changes"). 
 that cut 4 runs of 4 and the user's original cut (the moon shrinking to a dot) 4 of 4; asked from
 the window, it fixed shot 2 by making its first frame from shot 1's last (the same forest and moon)
 in 17 minutes. On the fixed cut it said good 3 runs of 4 (once it found the fox's face different);
-on the spaghetti film's four cuts good 3 of 4 (once it found the man slimmer from s2 to s3, a face
+on the spaghetti video's four cuts good 3 of 4 (once it found the man slimmer from s2 to s3, a face
 drift the side-by-side look had missed before). A look with thinking takes qwen3.8 30 to 100 s, so
 a shot's looks about 3 to 5 minutes.
 
@@ -891,7 +899,7 @@ ninth of the picture. In words, by half second and over the whole clip ("in the 
 moves up 10% of the height against the rest"), it goes to the steadiness look and to a fourth look,
 movement as asked: list each movement the shot asks for (who, which body part, which way on screen,
 from where to where, when), say whether the frames and the measurement show it, then what moves
-that nobody asked for. On the fox film's original takes it read the floating fox (the middle up 10%
+that nobody asked for. On the fox video's original takes it read the floating fox (the middle up 10%
 of the height in shot 2's first two seconds) and shot 1's moon sliding (the top middle right by 21%
 of the width over 5 s; by the frames, from 28% to 52% across). It takes about a second a shot.
 On six fox clips, right and wrong (two played backwards, so the head goes down and the jaw closes;
@@ -905,13 +913,13 @@ redo with the measurement as without ("a bent-double, head-in-the-plate pose fro
 
 **Pictures first, LTX's sounds, the song's music.** Every shot starts on a frame a picture model
 makes: a shot written without one gets one from its words and the references of the frames near it
-(`Storyboard.AddFirstFrames`, when the film tool changes a storyboard and when it makes a shot),
+(`Storyboard.AddFirstFrames`, when the video tool changes a storyboard and when it makes a shot),
 frames not made yet are made first, and LTX is never asked to draw a shot from words. A
 shot's prompt ends with what is heard; LTX is given it with "No music." unless it speaks of music
 (not part of the shot's stamp, so made shots stay up to date), and under a song the shots' own
 sound is kept at half rather than left out.
 
-**The shot looks scored on takes labelled by eye.** Ten takes from three films, six bad (the girl
+**The shot looks scored on takes labelled by eye.** Ten takes from three videos, six bad (the girl
 walking back from the mailbox twice, one with a see-through double; a wave frozen at its end; a
 splash from nowhere; a café cup vanishing; the boy holding still 2 s before his wave) and four good:
 the four looks together failed all six bad ones. Of the good ones they failed one where a girl
@@ -924,7 +932,7 @@ asked-for pause holds still by its nature); both pass now, and the bad ones stil
 weren't always the right ones: the vanishing cup was failed for a freeze at the lips.
 
 **A camera held still after the fact** (`VideoSteady`). LTX moved the camera on every
-locked-off shot of a night of films (a push in of 11%, pans and tilts), whatever the prompt said,
+locked-off shot of a night of videos (a push in of 11%, pans and tilts), whatever the prompt said,
 and a negative prompt does nothing at CFG 1. ffmpeg's tripod stabilizer (vid.stab, `tripod=1`)
 neither undid the push in nor found the snowfield behind a trotting fox. So when a shot's camera or
 prompt says it holds still and its clip's camera moved (1.5% across or 2% in or out), the camera's
@@ -945,7 +953,7 @@ out of date when it is made again. The director's brief and the video guide say 
 also pins the end: the video gets there early and holds it (a wave ending on a raised hand froze
 for the last 1.5 s, twice), so an action that keeps going to the end gets no last frame either.
 Told "let her walk end wherever it ends and have shot 2 go on from exactly where shot 1 ends", the
-director dropped shot 1's last frame and started shot 2 on a frame of s1's end, and the film came
+director dropped shot 1's last frame and started shot 2 on a frame of s1's end, and the video came
 out seamless at the cut (8 s, made in about an hour with the looks and their fixes). Laying out "a
 boy runs across a park from the left to a big oak tree on the right, climbs onto its lowest branch,
 then sits on it and waves" afresh, it gave the run and the climb-and-wave no last frame, and wrote
@@ -959,8 +967,8 @@ With the boy's hand already mid-wave in shot 2's first frame, he waved from the 
 looks still failed it for a slow push-in the prompt didn't ask for, and the cut look passed a boy
 drawn cartoonish in shot 1 (from a character sheet that came out cartoonish) and photoreal in shot 2.
 That sheet's prompt had no look at all, so Z-Image drew a 3D cartoon, and every frame made from it
-was one. Now the brief puts the film's look into references too, the frame look counts a cartoon
-face in a photograph (it failed the boy's first frame, which it had passed), and the whole-film
+was one. Now the brief puts the video's look into references too, the frame look counts a cartoon
+face in a photograph (it failed the boy's first frame, which it had passed), and the whole-video
 sheet has each shot near its start as well as its middle, with a question on style (it then named
 the switch in 1 run of 2; in the middle of the climb the boy was a small figure from behind).
 
@@ -968,16 +976,16 @@ From the merged develop, "a woman in a blue wool coat at a cafe table by the win
 coffee to her lips and takes a sip; the camera holds still" became one 4 s shot from a frame with
 the cup just leaving the saucer: the shot's look failed its first take for a second cup on the
 saucer vanishing, the director took that cup out of the picture, and the second take passed every
-look and the film's, its camera still (measured), in 21 minutes.
+look and the video's, its camera still (measured), in 21 minutes.
 
 **Full screen.** A click on the picture or video in the panel's viewer opens it in the chat's
-full-screen viewer (`MediaViewer`), on the window's screen, with the film's other pictures and
+full-screen viewer (`MediaViewer`), on the window's screen, with the video's other pictures and
 clips an arrow key away, in the timeline's order: the references, each shot's frames and clip, then the
-joined film. A clip playing in the panel stops meanwhile; the play button under it still plays it
+joined video. A clip playing in the panel stops meanwhile; the play button under it still plays it
 in place.
 
-**Versions** (called takes until 2026-10-24, when the user's "Takes" became the shots): before the
-film tool makes a piece again, the one there is kept in its folder's Versions
+**Versions** (called takes until 2026-10-24, when the user's "Takes" became the shots, which are clips since 2026-10-25): before the
+video tool makes a piece again, the one there is kept in its folder's Versions
 (`Generated/Versions/f2.v1.png` with its .json and workflow, `s1.v1.mp4`…), its .json holding the
 settings it was made with (`"made"."settings"`) and what its look found; a make that fails or is
 stopped puts that version back in place, what its .json says of how it was made too (the job had begun
@@ -988,22 +996,22 @@ stopped before one replaced its clip (the versions made so far stay). A speaking
 its line with it (`s1.v1.wav` and `s1.line.v1.flac`): put back without it, the newer line
 played over the older lips, and the shot read as up to date. A version is picked from its piece's
 right-click menu (Versions), and **Use this version** under the viewer puts it back; a sound's goes
-back where the sound is now on its track. A frame or shot call's changes go in only for a piece
+back where the sound is now on its sound line. A frame or shot call's changes go in only for a piece
 of that kind, or a new one it gives a prompt: a frame call with a shot's id added a stray frame.
 A song's tries made before one that fails or is stopped are versions of the song, not stray files.
 Checked with Claude in the window (2026-10-23): "Use a picture of mine…" on the frame shot 1 starts
-on, through the Open dialog, made the frame from the user's picture, cut to the film's size, and
+on, through the Open dialog, made the frame from the user's picture, cut to the video's size, and
 kept it though its look said it didn't match the shot's words, as the request says. A seed settled after several
 tries isn't written over one the panel gave meanwhile (a new seed set by hand, which then made the
 same clip again).
 
 A whole storyboard laid out without `path`, of another title (shots that each say what happens,
-none taken out), while the film used last in the task says what is in it, is a new film: "two ads,
+none taken out), while the video used last in the task says what is in it, is a new video: "two ads,
 coffee and tea" wrote the tea ad over the coffee one. A new title alone, or with changes to some
-pieces, still renames and changes the film in use, and the window's new film (its empty s1, f1 and
-f2) is laid out in place. The takes not kept of several made at once (a shot's `tries`, the song's three) are takes too.
-Picking an earlier take in the window puts it back in the film with those settings (so it is up to
-date again), and the one it replaces becomes a take.
+pieces, still renames and changes the video in use, and the window's new video (its empty s1, f1 and
+f2) is laid out in place. The takes not kept of several made at once (a shot's `tries`, the song's three) are versions too.
+Picking an earlier version in the window puts it back in the video with those settings (so it is up to
+date again), and the one it replaces becomes a version.
 
 From one sentence ("a little red fox in a snowy pine forest at night looks up at the full moon,
 then howls at it, gentle piano") the window laid out two references, four frames made from them,
@@ -1017,32 +1025,32 @@ started is closed when the chat's task is over, as for any job of the agent's.
 **What a review found (2026-10-23).** A piece's stamp is written once its output is in place, not
 when its job is queued: a remake that failed or was stopped left the old picture or clip with the
 new settings' stamp, read as made from them, and skipped by Make what's missing. The song's stamp
-carries its length after a colon (`hash:72`), and a song stays made while it covers the film, as
-one made before (its length in the hash) does too: a shot a second shorter remade a long film's
+carries its length after a colon (`hash:72`), and a song stays made while it covers the video, as
+one made before (its length in the hash) does too: a shot a second shorter remade a long video's
 song with other music. The lines keep a seed of their own (`sound.voiceSeed`, the song's until a
-song is made): remaking the song changed the voice. A take that failed puts the song's seed back. A
-restored take is made now as far as what is made from it goes, and brings back the settings that
+song is made): remaking the song changed the voice. A try that failed puts the song's seed back. A
+restored version is made now as far as what is made from it goes, and brings back the settings that
 were at their defaults when it was made. Ids given in a change are kept and new ones come after them
 (shots before frames when two collide). A frame listed in its own `from`, a title of 79 or more
 characters (the tool went round for ever finding a free folder) and names like "Con" no longer
 break anything. A template a shot was pinned to by an upgraded storyboard gives way to one that can
-do the shot's job once it has a last frame or a line. The film tool saves only the seed a long job
+do the shot's job once it has a last frame or a line. The video tool saves only the seed a long job
 settled onto the storyboard as it is then, and numbers in stamps are written in the invariant culture.
 
-### How films did
+### How videos did
 On this PC (RTX 5070 Ti 16 GB, ComfyUI 0.41.3), at 1280x720 and 24 fps: a frame from words took
 about 20 s (Z-Image Turbo), one made from other frames 25 to 45 s (Qwen-Image-Edit 2509), a 5 s shot
-about 2 minutes (LTX-2.5 distilled; 1280x704 out of the model, cut to the film's frame), a 4 s
+about 2 minutes (LTX-2.5 distilled; 1280x704 out of the model, cut to the video's frame), a 4 s
 lip-synced shot 2 minutes, a 10 s song 15 to 35 s (ACE-Step 1.5 XL Turbo), joining two shots 1 s.
 A fresh look at a shot took qwen3.8 (LM Studio) under a minute.
 
 "The Fox and the Moon", a storyboard of a reference fox, three frames made from it and two shots
 (a leap from a first to a last frame, then a cut by dissolve to a howl from a first frame alone)
-with an instrumental song, handed to qwen3.8 as the window's **Make the film** words it: done in
+with an instrumental song, handed to qwen3.8 as the window's **Make the video** words it: done in
 34 minutes, 21 model calls, 20 tool calls, no errors. It made the frames in the order they depend
 on each other, then the song, then each shot with `tries=3`. The leap passed its first take; the
 howl failed three (the howl broke off, the tail vanished, the framing drifted wider than the
-close-up), passed after the agent made its prompt plainer, and the whole-film check then found
+close-up), passed after the agent made its prompt plainer, and the whole-video check then found
 the fox's world different between the shots (a bare mound, then pine woods): the agent remade the
 first two frames with the woods, made the leap again (its second take passed), joined, and the
 check passed, saying the moon changes sides at the cut. Every frame and clip kept its first frame
@@ -1056,9 +1064,9 @@ song with lyrics; done in 30 minutes, 16 model calls, 15 tool calls, no errors, 
 failed five takes the same way (the boat stays put while the leaves fade in: its two frames had the
 boat in the same place), and the agent first tried to make the boat small in the first frame (the
 image model kept drawing it big), then had the camera glide forward with the boat in the middle,
-which passed, and wrote the next shot the same way. Its film was made in a test folder while the
-tool's description named the Videos folder, so it copied the film there as well; the description
-now names where films go.
+which passed, and wrote the next shot the same way. Its video was made in a test folder while the
+tool's description named the Videos folder, so it copied the video there as well; the description
+now names where videos go.
 A song's words are heard after it is made: ACE-Step's 10 s song for two lines of lyrics came back
 as "I see it's cold now I keep telling", which the model is told to check against the lyrics.
 
@@ -1069,13 +1077,13 @@ four lip-synced shots with lines and an instrumental song; done in 70 minutes, 3
 errors. What it learned on the way: a lip-synced shot whose first frame has spaghetti in the mouth
 doesn't move the mouth (it made new frames with the mouth free); a shot that eats and then talks
 had the line over the eating (it split eating and talking into shots of their own); a frame added
-later from words alone drew another man each time, and the film check caught only one of three.
+later from words alone drew another man each time, and the video check caught only one of three.
 Two more messages fixed it: "make him the same man" (it remade those frames from the sheet, 36
 minutes) and "turn his head to the camera before he talks" (a first frame looking down at the plate,
 19 minutes). It also tripped on things now fixed: taking a shot's line out left the shot
 lip-synced to the song; remaking a frame didn't put the shots on it on the list; the fade in from
-black looked like a fault; and a new task looking for a film by name searched the whole user
-folder. The frame tool now says when a frame is made from words alone in a film with a sheet.
+black looked like a fault; and a new task looking for a video by name searched the whole user
+folder. The frame tool now says when a frame is made from words alone in a video with a sheet.
 
 ## Chat history
 Every chat is saved on its own in `Data/chats/` from its first message on, after every step, and
@@ -1590,7 +1598,7 @@ prints the traceback and exits with 0.
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures, videos, sounds and 3D models to the model; `write_file` makes documents from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
 | `diff` | What changed: a git repository's uncommitted changes, staged ones, one commit, or since a branch, or two files or folders compared without git; the files and their line counts first, then the hunks, in parts (see Diff below) |
 | `comfyui` | Pictures, video, sound, music, speech and 3D models with ComfyUI on this PC, which it installs when there is none: templates, node and model look-ups, models found online and downloaded, checked runs that hand back the files (see Pictures, video and sound) |
-| `film` | Films from a storyboard (the film's folder Video editor shows): plans or changes it, makes its frames, song and shots with ComfyUI, checks each shot against what it should show, joins them with ffmpeg (see Films) |
+| `video` | Videos from a storyboard (the video's folder Video editor shows): plans or changes it, makes its frames, song and shots with ComfyUI, checks each shot against what it should show, joins them with ffmpeg (see Videos) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
 | `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |
@@ -1956,7 +1964,7 @@ presses for it at more points than errors:
   result isn't right ("Dude it's still a kid", "it should fade from transparent"): the first such failure before anything was looked
   up gets a note to search before the next try, and from the third since the last look-up every one
   does, as errors do. A try is a call that does something: a command, a script, a file written, a
-  ComfyUI job, a piece of a film.
+  ComfyUI job, a piece of a video.
 - After ten minutes of tries with nothing looked up (three tries at least, and only time in a run:
   not while the user is away between messages), or eight tries however quick (probing how Blender
   5.2 sets a modifier's inputs, qwen3.8 ran 17 scripts in 7 minutes after its last search and ran

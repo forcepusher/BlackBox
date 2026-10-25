@@ -49,8 +49,8 @@ public sealed partial class MainWindowViewModel
     public IReadOnlyList<ToolkitOption> ToolkitOptions { get; } =
     [
         new("None", "The chat alone", 0, 0, 0, null),
-        new("Video editor", "Plan a film shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960, 770, 600,
-            vm => new FilmViewModel(vm._previews, vm, vm._paths.FilmsDir, null)),
+        new("Video editor", "Plan a video shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960, 770, 600,
+            vm => new VideoViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
         new("Code changes", "See the files the agent changes in this chat as it works: click lines to ask about them", 880, 560, 0,
             vm => new DiffViewModel(vm)),
     ];
@@ -69,7 +69,7 @@ public sealed partial class MainWindowViewModel
     {
         var old = Toolkit;
         Toolkit = null;
-        // What it put in the box goes with it: about a film no longer open, it would be sent bare.
+        // What it put in the box goes with it: about a video no longer open, it would be sent bare.
         foreach (var picked in Attachments.Where(a => a.Picked).ToList())
             RemoveAttachment(picked);
         old?.Dispose();
@@ -101,7 +101,7 @@ public sealed partial class MainWindowViewModel
     /// <summary>The paths picked in the toolkit's panel that are in the box now.</summary>
     internal IReadOnlyList<string> Picked => Attachments.Where(a => a.Picked).Select(a => a.Path).ToList();
 
-    /// <summary>A message from the toolkit's panel (Make the film): into this chat as if typed in the box, with what the tool says about it.</summary>
+    /// <summary>A message from the toolkit's panel (Make the video): into this chat as if typed in the box, with what the tool says about it.</summary>
     internal void SendFromToolkit(string text)
     {
         if (!_closed)
@@ -133,7 +133,7 @@ public sealed partial class MainWindowViewModel
                      .Where(p => string.Equals(Path.GetFullPath(p.Path), path, StringComparison.OrdinalIgnoreCase)))
             if (preview.LetGo() is { } playback)
                 playing.Add(playback);
-        if (Toolkit is FilmViewModel film && film.LetGo(path) is { } shown)
+        if (Toolkit is VideoViewModel video && video.LetGo(path) is { } shown)
             playing.Add(shown);
         return playing;
     }
@@ -168,10 +168,10 @@ public sealed partial class MainWindowViewModel
     /// <summary>Files dropped on the toolkit's panel: the tool takes them, or they go with the next message.</summary>
     internal bool DropOnToolkit(IReadOnlyList<string> paths) => Toolkit?.Drop(paths) == true;
 
-    /// <summary>The film tool's call running in this chat now: what it was given, and how it is getting on; null when none runs.</summary>
-    internal (JsonObject Args, string Status)? FilmCall()
+    /// <summary>The video tool's call running in this chat now: what it was given, and how it is getting on; null when none runs.</summary>
+    internal (JsonObject Args, string Status)? VideoCall()
     {
-        if (!IsBusy || Items.OfType<ToolCallItem>().LastOrDefault(t => t.State == ToolItemState.Running) is not { Name: "film" } call)
+        if (!IsBusy || Items.OfType<ToolCallItem>().LastOrDefault(t => t.State == ToolItemState.Running) is not { Name: "video" } call)
             return null;
         try
         {

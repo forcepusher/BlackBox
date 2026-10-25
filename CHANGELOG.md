@@ -31,23 +31,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A chat open in one window brings that window forward when picked in another's History, and what
   Settings saves applies to every window; each keeps its own model.
 - Video editor: pick it in the **Toolkit** dropdown at the top left, and it opens on the left of the
-  chat, the window growing to that side: a viewer, and the film on one timeline you drag sideways,
-  where all of it is worked on: References (pictures), the takes, the lines and the sound tracks.
-  Right-click a row to create a card, take or sound there: **File…** copies a file of yours in,
+  chat, the window growing to that side: a viewer, and the video on one timeline you drag sideways,
+  where all of it is worked on: References (pictures), the video clips, the lines and the sound lines.
+  Right-click a row to create a card, clip or sound there: **File…** copies a file of yours in,
   **Generate** has BlackBox make it; dropping files on the timeline copies them in too. Click
   anything there and it goes into the chat's box; say what to make or change and BlackBox writes
   the prompts, picks the models, makes it with ComfyUI and looks at it, in the chat, where you watch
   and can stop it. Earlier versions are kept, and **Use this version** puts one back. Or ask for a
-  film in the chat.
-- A film is its folder, with two folders in it: References (your pictures and sounds, copied in, and
-  the images BlackBox generates for frames to be made from) and Generated (each take's frames and
-  clip, the songs), and the joined film. Every file has a `.json` of its name beside it saying what
+  video in the chat.
+- A video is its folder, with two folders in it: References (your pictures and sounds, copied in, and
+  the images BlackBox generates for frames to be made from) and Generated (each clip's frames and
+  file, the songs), and the joined video. Every file has a `.json` of its name beside it saying what
   it is and how it was made (`s1.json` for `s1.mp4`), and the ComfyUI workflow that made it, which
   opens in ComfyUI as it is.
-- Films get sound tracks as in a video editor: add as many as you need, lay your sounds and songs
+- Videos get sound lines, as a video editor has sound tracks: add as many as you need, lay your sounds and songs
   BlackBox makes (about a minute long, the best of three, judged by SongEval) on them, drag each to
-  where it starts or to another track, and trim it at either end. Spoken lines are in one cloned
-  voice with lip sync, and fresh looks at every shot, cut and the whole film catch
+  where it starts or to another sound line, and trim it at either end. Spoken lines are in one cloned
+  voice with lip sync, and fresh looks at every shot, cut and the whole video catch
   broken bodies, frozen or jumping action, a camera that moves when it shouldn't and a change of
   style, and make the pieces again.
 - Measured movement in short clips (which way the camera and what is in the picture moved, and how
@@ -73,33 +73,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A sysadmin benchmark ticket that moves a live game API's database from SQLite to PostgreSQL while
   players keep writing to it.
 - This changelog.
-- Video editor's films are in a menu on the film's name at the top: open another, start a new one, or
-  rename or delete this one (to the Recycle Bin). On the timeline, right-click a card, take or sound
+- Video editor's videos are in a menu on the video's name at the top: open another, start a new one, or
+  rename or delete this one (to the Recycle Bin). On the timeline, right-click a card, clip or sound
   to rename or delete it, or to see an earlier version of it.
 
 ### Changed
 - Asked for code, commands or facts that change (versions, prices, news), the agent looks them up
   on the web before it answers, rather than writing them from memory.
-- A film's name is its folder's: renamed in Video editor, in Explorer, or by the agent giving it a
-  title, the film is.
-- Video editor's frame size and frame rate are at the top of the panel, and a new take is the dashed +
+- A video's name is its folder's: renamed in Video editor, in Explorer, or by the agent giving it a
+  title, the video is.
+- Video editor's frame size and frame rate are at the top of the panel, and a new clip is the dashed +
   after the last one on the timeline.
 - Every dropdown's arrow (Toolkit, History, Model, Effort) is the same solid triangle, and so is the
   Toolkit's arrow to the left.
 - The chat's scrollbar always shows.
-- A frame the film tool makes gets a fresh look, and every piece it makes again keeps the one before
+- A frame the video tool makes gets a fresh look, and every piece it makes again keeps the one before
   as a version; a shot's or song's other tries are versions too.
 - The context slider goes up to 1M.
 - The second BlackBox name and logo under the title bar made way for the Toolkit dropdown.
 - The first-run hints for Ctrl+V and **New window** are reworded.
-- A new film in Video editor is called "Untitled film".
+- A new video in Video editor is called "Untitled video".
+- Video editor says video, not film, everywhere, and so does the agent. Its takes are clips (Clip 1,
+  Clip 2…) on the **Video clips** row, and its sound tracks are sound lines (Sound line 1…).
+  Videos are kept in `Data\videos`; ones made before, in `Data\films`, no longer open.
 
 ### Removed
 - Ctrl+Shift+N: **New window** at the top opens another window.
-- Films kept in a `storyboard.json` (from 1.0.0) no longer open: a film is its folder now.
-- Video editor's film dropdown, its Open… and Show folder buttons, the settings button with the film's
+- Videos kept in a `storyboard.json` (from 1.0.0) no longer open: a video is its folder now.
+- Video editor's video dropdown, its Open… and Show folder buttons, the settings button with the video's
   title, and the soundtrack and shots' own sound sliders.
-- Video editor's **New film** button beside **Make the film**: New film is in the menu on the film's name.
+- Video editor's **New video** button beside **Make the video**: New video is in the menu on the video's name.
 
 ### Fixed
 - The `BlackBox.exe` and `blackbox-cli.exe` that `dotnet build` makes run on a PC without .NET installed,
@@ -114,10 +117,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   headless: the copy Edge hands over to has its window hidden too.
 - With Video editor or Code changes open, the window can no longer be made so narrow that the chat is
   squeezed to a few letters across: the panel gives way first, then the window stops. Video editor
-  also keeps the window tall enough for its viewer, and a long film name is cut short at the top.
+  also keeps the window tall enough for its viewer, and a long video name is cut short at the top.
 - Video editor: a file dropped on a new card or sound becomes it, which is marked while you drag over
   it; a copied file can be renamed. A line over the timeline says what right-click and dropping do,
-  and the viewer names the film and says it is selected instead of "Whole film".
+  and the viewer names the video and says it is selected instead of "Whole video".
 - Picking Video editor widens the window to the left in one smooth step: the chat no longer jumps
   sideways and back, and the new part of the window isn't black while the panel appears.
 - In Video editor, a picture you give for a reference (pasted, attached or dropped) is kept exactly as
@@ -130,12 +133,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Links whose address holds parentheses (Wikipedia's) open whole, and an address followed by
   Chinese or Japanese punctuation no longer takes it in.
 
-- Making a shot, the song or the film again no longer fails with "the process cannot access the
+- Making a shot, the song or the video again no longer fails with "the process cannot access the
   file" while the one before plays in the chat.
 - A frame made from a picture of another shape (a square picture of a character) comes out the
-  film's size with all of the picture in it, and a reference keeps its own shape: both were cut to
-  the film's frame, and the character's head went with it.
-- A film's camera is said to hold still only when that was measured: a pan there and back, or a
+  video's size with all of the picture in it, and a reference keeps its own shape: both were cut to
+  the video's frame, and the character's head went with it.
+- A video's camera is said to hold still only when that was measured: a pan there and back, or a
   plain night sky, no longer reads as a still camera.
 - Look-ups: a search the model means to make after mentioning the screen is made; the words between
   two quoted names aren't searched; a request that is all research no longer gets told to ask the
@@ -159,21 +162,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saving Settings in one window no longer undoes what another window saved while the dialog was
   open; closing a window right after picking another chat no longer marks that chat stopped; a
   window closed while its MCP servers restarted no longer leaves them running.
-- Video editor: Continue sends a message the model never had whole, with the film it was about; chats
-  begun with Video editor open are named after the film and what was picked too, not "Make it." alone;
-  a change made by hand while BlackBox changes the film in the chat no longer writes over BlackBox's
+- Video editor: Continue sends a message the model never had whole, with the video it was about; chats
+  begun with Video editor open are named after the video and what was picked too, not "Make it." alone;
+  a change made by hand while BlackBox changes the video in the chat no longer writes over BlackBox's
   change, nor is a shot's length being dragged lost to it; a shot added after one was deleted no
-  longer brings back the deleted shot's clip; a film named again keeps its joined video; a take isn't
-  put back while BlackBox makes a piece of the film; two new films started in two windows at once no
-  longer share a folder; a piece of the film open is no longer shown as being made when the chat
-  makes another film's.
+  longer brings back the deleted shot's clip; a video named again keeps its joined video; a version isn't
+  put back while BlackBox makes a piece of the video; two new videos started in two windows at once no
+  longer share a folder; a piece of the video open is no longer shown as being made when the chat
+  makes another video's.
 - A piece asked for in Video editor is made again when its look finds something wrong, up to
   twice, as before it ran in the chat; the storyboard guide comes back after the context starts
-  afresh; a stopped shot of several takes no longer keeps a copy of its clip as one more take; a
-  film the model names without a full path goes into `Data\films`, not your home folder; a second
-  film laid out in the same task without a path no longer replaces the first; a remake that fails
-  or is stopped leaves the piece with its settings and look; a take asked for while several were
-  being made is made with its own seed; a speaking shot's take keeps its line.
+  afresh; a stopped shot of several tries no longer keeps a copy of its clip as one more version; a
+  video the model names without a full path goes into `Data\videos`, not your home folder; a second
+  video laid out in the same task without a path no longer replaces the first; a remake that fails
+  or is stopped leaves the piece with its settings and look; a clip asked for while several were
+  being made is made with its own seed; a speaking shot's version keeps its line.
 - A ComfyUI that BlackBox started, with nothing left to do, is closed when BlackBox closes, also
   when its window was closed in the middle of a task.
 - Folder index: projects in OneDrive folders are indexed (only their top folder was), files kept
@@ -186,9 +189,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Claude models point accurately on 4:3 and 5:4 screens.
 - A chat video whose file was deleted no longer restarts over and over, and opening the full-screen
   viewer no longer freezes on a chat that names files on a share that is off.
-- Films: a failed remake no longer leaves a piece looking made; remaking the song keeps the lines'
-  voice and doesn't redo a song that still covers the film; restoring a take restores all of its
-  settings; long titles and names like "Con" work; the film tool no longer writes over changes made
+- Videos: a failed remake no longer leaves a piece looking made; remaking the song keeps the lines'
+  voice and doesn't redo a song that still covers the video; restoring a version restores all of its
+  settings; long titles and names like "Con" work; the video tool no longer writes over changes made
   in Video editor during a long job. A frame changed to be taken from where a shot ends
   is no longer dropped back to its old prompt while the shot still ends on it.
 

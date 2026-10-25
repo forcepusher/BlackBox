@@ -40,7 +40,7 @@ public sealed class ChatWindows
     }
 
     /// <summary>
-    /// A file about to be written over (a shot made again, the film joined again): every window's
+    /// A file about to be written over (a shot made again, the video joined again): every window's
     /// players of it stop, and the writer waits until they have let go of it. From the writer's
     /// thread; the players are found on the window's.
     /// </summary>

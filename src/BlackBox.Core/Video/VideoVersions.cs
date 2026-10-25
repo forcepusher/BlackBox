@@ -2,24 +2,24 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using BlackBox.Core.Comfy;
 
-namespace BlackBox.Core.Film;
+namespace BlackBox.Core.Video;
 
-public enum FilmPieceKind { Frame, Shot, Sound }
+public enum VideoPieceKind { Frame, Shot, Sound }
 
-/// <summary>A piece of a film that is made on its own: a frame (a reference too), a shot's clip, or a sound (a song once made).</summary>
-public sealed record FilmPiece(FilmPieceKind Kind, string Id)
+/// <summary>A piece of a video that is made on its own: a frame (a reference too), a shot's clip, or a sound (a song once made).</summary>
+public sealed record VideoPiece(VideoPieceKind Kind, string Id)
 {
-    public static FilmPiece Of(FilmFrame frame) => new(FilmPieceKind.Frame, frame.Id);
+    public static VideoPiece Of(VideoFrame frame) => new(VideoPieceKind.Frame, frame.Id);
 
-    public static FilmPiece Of(FilmShot shot) => new(FilmPieceKind.Shot, shot.Id);
+    public static VideoPiece Of(VideoShot shot) => new(VideoPieceKind.Shot, shot.Id);
 
-    public static FilmPiece Of(FilmSound sound) => new(FilmPieceKind.Sound, sound.Id);
+    public static VideoPiece Of(VideoSound sound) => new(VideoPieceKind.Sound, sound.Id);
 
     /// <summary>Where it is once made.</summary>
     public string? File(Storyboard board) => Kind switch
     {
-        FilmPieceKind.Frame => board.Frame(Id) is { } f ? board.FramePicture(f) : null,
-        FilmPieceKind.Shot => board.Shot(Id) is { } s ? board.ShotVideo(s) : null,
+        VideoPieceKind.Frame => board.Frame(Id) is { } f ? board.FramePicture(f) : null,
+        VideoPieceKind.Shot => board.Shot(Id) is { } s ? board.ShotVideo(s) : null,
         _ => board.Sound(Id) is { } a ? board.SoundFile(a) : null,
     };
 
@@ -31,9 +31,9 @@ public sealed record FilmPiece(FilmPieceKind Kind, string Id)
     {
         var settings = Kind switch
         {
-            FilmPieceKind.Frame => board.Frame(Id) is { } f ? JsonSerializer.SerializeToNode(f, StoryboardJson.Default.FilmFrame) : null,
-            FilmPieceKind.Shot => board.Shot(Id) is { } s ? JsonSerializer.SerializeToNode(s, StoryboardJson.Default.FilmShot) : null,
-            _ => board.Sound(Id) is { } a ? JsonSerializer.SerializeToNode(a, StoryboardJson.Default.FilmSound) : null,
+            VideoPieceKind.Frame => board.Frame(Id) is { } f ? JsonSerializer.SerializeToNode(f, StoryboardJson.Default.VideoFrame) : null,
+            VideoPieceKind.Shot => board.Shot(Id) is { } s ? JsonSerializer.SerializeToNode(s, StoryboardJson.Default.VideoShot) : null,
+            _ => board.Sound(Id) is { } a ? JsonSerializer.SerializeToNode(a, StoryboardJson.Default.VideoSound) : null,
         };
         (settings as JsonObject)?.Remove("place");
         return settings;
@@ -41,24 +41,24 @@ public sealed record FilmPiece(FilmPieceKind Kind, string Id)
 
     public bool IsCurrent(Storyboard board) => Kind switch
     {
-        FilmPieceKind.Frame => board.Frame(Id) is { } f && FilmMaker.IsCurrent(board, f),
-        FilmPieceKind.Shot => board.Shot(Id) is { } s && FilmMaker.IsCurrent(board, s),
-        _ => board.Sound(Id) is { } a && FilmMaker.IsCurrent(board, a),
+        VideoPieceKind.Frame => board.Frame(Id) is { } f && VideoMaker.IsCurrent(board, f),
+        VideoPieceKind.Shot => board.Shot(Id) is { } s && VideoMaker.IsCurrent(board, s),
+        _ => board.Sound(Id) is { } a && VideoMaker.IsCurrent(board, a),
     };
 }
 
 /// <summary>An earlier version of a piece, kept when it was made again.</summary>
 /// <param name="Meta">Its meta as it was then: what it was made with, and what its look found.</param>
 /// <param name="Settings">The piece's settings it was made with, to put back with it.</param>
-public sealed record FilmTake(int Number, string File, string Meta, DateTime Made, JsonObject? Settings);
+public sealed record VideoVersion(int Number, string File, string Meta, DateTime Made, JsonObject? Settings);
 
 /// <summary>
 /// The versions of a piece: each time a frame, clip or song is made again, the one before is kept in
 /// its folder's Versions (Versions/video.v1.mp4, with its meta and workflow) with the settings it was made
-/// with, and so are the takes not kept of several made at once, so the user can put an earlier one
+/// with, and so are the tries not kept of several made at once, so the user can put an earlier one
 /// back, settings and all.
 /// </summary>
-public static class FilmTakes
+public static class VideoVersions
 {
     /// <summary>Changes what a meta says of how its file was made; false when there is no such meta, or nothing made in it.</summary>
     internal static bool ChangeMade(string meta, Action<JsonObject> change)
@@ -105,7 +105,7 @@ public static class FilmTakes
     /// <summary>A file with what goes beside it: its meta and its workflow.</summary>
     private static string[] Group(string file) => [file, Storyboard.MetaOf(file), Storyboard.WorkflowOf(file)];
 
-    /// <summary>Moves a file with its meta and workflow (one take made beside a piece, in among its takes).</summary>
+    /// <summary>Moves a file with its meta and workflow (one try made beside a piece, in among its versions).</summary>
     private static void MoveGroup(string from, string to)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(to)!);
@@ -115,7 +115,7 @@ public static class FilmTakes
     }
 
     /// <summary>
-    /// Puts a file made beside a piece (the best of several takes) in its place, with its workflow;
+    /// Puts a file made beside a piece (the best of several tries) in its place, with its workflow;
     /// the piece's meta takes what the made file's meta says of how it was made, and keeps what it
     /// says of the piece.
     /// </summary>
@@ -130,7 +130,7 @@ public static class FilmTakes
 
     /// <summary>
     /// What one meta says of how its file was made, into another (a piece's, which keeps what it
-    /// says of the piece: moved whole, a take's meta made beside it left the piece without its
+    /// says of the piece: moved whole, a try's meta made beside it left the piece without its
     /// prompt); the first goes.
     /// </summary>
     private static void MadeInto(string from, string to)
@@ -149,53 +149,53 @@ public static class FilmTakes
         System.IO.File.Delete(from);
     }
 
-    /// <summary>Moves a take's file of a group back over the piece's: its meta gives only how it was made (see <see cref="MadeInto"/>).</summary>
-    private static void Back(string take, string member, string file)
+    /// <summary>Moves a version's file of a group back over the piece's: its meta gives only how it was made (see <see cref="MadeInto"/>).</summary>
+    private static void Back(string version, string member, string file)
     {
         if (string.Equals(member, Storyboard.MetaOf(file), StringComparison.OrdinalIgnoreCase))
-            MadeInto(take, member);
+            MadeInto(version, member);
         else
         {
             Media.MediaRelease.Release(member);
-            System.IO.File.Move(take, member, overwrite: true);
+            System.IO.File.Move(version, member, overwrite: true);
         }
     }
 
     /// <summary>
     /// What a piece is made with beside its own file: a speaking shot's line, as the voice model
-    /// said it and as the shot plays it. A take put back without them played the newer line over
+    /// said it and as the shot plays it. A version put back without them played the newer line over
     /// the older lips, and read as up to date.
     /// </summary>
-    private static IEnumerable<string> Sidecars(Storyboard board, FilmPiece piece) =>
-        piece.Kind == FilmPieceKind.Shot && board.Shot(piece.Id) is { } shot ? [board.ShotAudio(shot), .. Group(board.ShotLine(shot))] : [];
+    private static IEnumerable<string> Sidecars(Storyboard board, VideoPiece piece) =>
+        piece.Kind == VideoPieceKind.Shot && board.Shot(piece.Id) is { } shot ? [board.ShotAudio(shot), .. Group(board.ShotLine(shot))] : [];
 
-    /// <summary>Where version <paramref name="n"/> of a file is kept: "Takes/Take 1/Versions/video.v2.mp4".</summary>
-    private static string TakeFile(string file, int n) =>
+    /// <summary>Where version <paramref name="n"/> of a file is kept: "Generated/Versions/s1.v2.mp4".</summary>
+    private static string VersionFile(string file, int n) =>
         Path.Combine(Path.GetDirectoryName(file)!, Storyboard.VersionsName, $"{Path.GetFileNameWithoutExtension(file)}.v{n}{Path.GetExtension(file)}");
 
     /// <summary>
-    /// Where take <paramref name="n"/> of what goes with <paramref name="file"/> is kept: its .json and
-    /// workflow follow the take's file ("Intro.v2.json", "Intro.v2.workflow.json"); its sound and
-    /// line are named as takes of their own ("Intro.v2.wav", "Intro.line.v2.flac").
+    /// Where version <paramref name="n"/> of what goes with <paramref name="file"/> is kept: its .json and
+    /// workflow follow the version's file ("Intro.v2.json", "Intro.v2.workflow.json"); its sound and
+    /// line are named as versions of their own ("Intro.v2.wav", "Intro.line.v2.flac").
     /// </summary>
-    private static string TakeOf(string member, string file, int n)
+    private static string VersionPath(string member, string file, int n)
     {
         if (string.Equals(member, file, StringComparison.OrdinalIgnoreCase))
-            return TakeFile(file, n);
+            return VersionFile(file, n);
         foreach (var main in new[] { file }.Concat(member.EndsWith(".line.json", StringComparison.OrdinalIgnoreCase) ||
                                                    member.EndsWith(".line.workflow.json", StringComparison.OrdinalIgnoreCase)
                                                        ? [Path.Combine(Path.GetDirectoryName(file)!, Path.GetFileNameWithoutExtension(file) + ".line.flac")] : []))
         {
             if (string.Equals(member, Storyboard.MetaOf(main), StringComparison.OrdinalIgnoreCase))
-                return Storyboard.MetaOf(TakeFile(main, n));
+                return Storyboard.MetaOf(VersionFile(main, n));
             if (string.Equals(member, Storyboard.WorkflowOf(main), StringComparison.OrdinalIgnoreCase))
-                return Storyboard.WorkflowOf(TakeFile(main, n));
+                return Storyboard.WorkflowOf(VersionFile(main, n));
         }
-        return TakeFile(member, n);
+        return VersionFile(member, n);
     }
 
-    /// <summary>The takes kept of a piece, the first first.</summary>
-    public static IReadOnlyList<FilmTake> List(Storyboard board, FilmPiece piece)
+    /// <summary>The versions kept of a piece, the first first.</summary>
+    public static IReadOnlyList<VideoVersion> List(Storyboard board, VideoPiece piece)
     {
         if (piece.File(board) is not { } file)
             return [];
@@ -203,11 +203,11 @@ public static class FilmTakes
         if (!Directory.Exists(dir))
             return [];
         var stem = Path.GetFileNameWithoutExtension(file) + ".v";
-        var takes = new List<FilmTake>();
-        foreach (var take in Directory.EnumerateFiles(dir, stem + "*" + Path.GetExtension(file)))
-            if (int.TryParse(Path.GetFileNameWithoutExtension(take)[stem.Length..], out var n) && n > 0)
-                takes.Add(new FilmTake(n, take, Storyboard.MetaOf(take), System.IO.File.GetLastWriteTimeUtc(take), SettingsIn(Storyboard.MetaOf(take))));
-        return takes.OrderBy(t => t.Number).ToList();
+        var versions = new List<VideoVersion>();
+        foreach (var version in Directory.EnumerateFiles(dir, stem + "*" + Path.GetExtension(file)))
+            if (int.TryParse(Path.GetFileNameWithoutExtension(version)[stem.Length..], out var n) && n > 0)
+                versions.Add(new VideoVersion(n, version, Storyboard.MetaOf(version), System.IO.File.GetLastWriteTimeUtc(version), SettingsIn(Storyboard.MetaOf(version))));
+        return versions.OrderBy(t => t.Number).ToList();
     }
 
     private static JsonObject? SettingsIn(string meta)
@@ -222,29 +222,29 @@ public static class FilmTakes
         }
     }
 
-    /// <summary>Keeps the piece as it is now as a take of its own, before it is made again.</summary>
-    public static FilmTake? Keep(Storyboard board, FilmPiece piece)
+    /// <summary>Keeps the piece as it is now as a version of its own, before it is made again.</summary>
+    public static VideoVersion? Keep(Storyboard board, VideoPiece piece)
     {
         if (piece.File(board) is not { } file || !System.IO.File.Exists(file))
             return null;
         var n = List(board, piece).Select(t => t.Number).DefaultIfEmpty(0).Max() + 1;
-        Directory.CreateDirectory(Path.GetDirectoryName(TakeFile(file, n))!);
+        Directory.CreateDirectory(Path.GetDirectoryName(VersionFile(file, n))!);
         foreach (var member in Group(file).Concat(Sidecars(board, piece)).Where(System.IO.File.Exists))
-            System.IO.File.Copy(member, TakeOf(member, file, n), overwrite: true);
-        return new FilmTake(n, TakeFile(file, n), Storyboard.MetaOf(TakeFile(file, n)), System.IO.File.GetLastWriteTimeUtc(file), SettingsIn(Storyboard.MetaOf(file)));
+            System.IO.File.Copy(member, VersionPath(member, file, n), overwrite: true);
+        return new VideoVersion(n, VersionFile(file, n), Storyboard.MetaOf(VersionFile(file, n)), System.IO.File.GetLastWriteTimeUtc(file), SettingsIn(Storyboard.MetaOf(file)));
     }
 
     /// <summary>
-    /// Moves a file made beside the piece (one take of several, of which another was kept) in among
-    /// its takes, with its meta and workflow, so the user can put it back.
+    /// Moves a file made beside the piece (one try of several, of which another was kept) in among
+    /// its versions, with its meta and workflow, so the user can put it back.
     /// </summary>
-    public static FilmTake? Add(Storyboard board, FilmPiece piece, string made)
+    public static VideoVersion? Add(Storyboard board, VideoPiece piece, string made)
     {
         if (piece.File(board) is not { } file || !System.IO.File.Exists(made))
             return null;
         var n = List(board, piece).Select(t => t.Number).DefaultIfEmpty(0).Max() + 1;
-        MoveGroup(made, TakeFile(file, n));
-        return new FilmTake(n, TakeFile(file, n), Storyboard.MetaOf(TakeFile(file, n)), System.IO.File.GetLastWriteTimeUtc(TakeFile(file, n)), SettingsIn(Storyboard.MetaOf(TakeFile(file, n))));
+        MoveGroup(made, VersionFile(file, n));
+        return new VideoVersion(n, VersionFile(file, n), Storyboard.MetaOf(VersionFile(file, n)), System.IO.File.GetLastWriteTimeUtc(VersionFile(file, n)), SettingsIn(Storyboard.MetaOf(VersionFile(file, n))));
     }
 
     /// <summary>
@@ -252,58 +252,58 @@ public static class FilmTakes
     /// was, with its meta and workflow, which the make had begun to write over. Dropped instead, the
     /// piece lost its settings and look, and read as changed.
     /// </summary>
-    public static void Restore(Storyboard board, FilmPiece piece, FilmTake take)
+    public static void Restore(Storyboard board, VideoPiece piece, VideoVersion version)
     {
         if (piece.File(board) is not { } file)
             return;
         foreach (var member in Group(file).Concat(Sidecars(board, piece)))
             try
             {
-                if (System.IO.File.Exists(TakeOf(member, file, take.Number)))
-                    Back(TakeOf(member, file, take.Number), member, file);
+                if (System.IO.File.Exists(VersionPath(member, file, version.Number)))
+                    Back(VersionPath(member, file, version.Number), member, file);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
-                // In use (a player has the picture open): kept as a take, which the user can put back.
+                // In use (a player has the picture open): kept as a version, which the user can put back.
             }
     }
 
-    /// <summary>Takes back a take <see cref="Keep"/> kept for a make that then made nothing: it is the piece as it still is.</summary>
-    public static void Drop(FilmTake take)
+    /// <summary>Takes back a version <see cref="Keep"/> kept for a make that then made nothing: it is the piece as it still is.</summary>
+    public static void Drop(VideoVersion version)
     {
-        var stem = Path.GetFileNameWithoutExtension(take.File); // "Intro.v2"
-        var dir = Path.GetDirectoryName(take.File)!;
+        var stem = Path.GetFileNameWithoutExtension(version.File); // "Intro.v2"
+        var dir = Path.GetDirectoryName(version.File)!;
         var at = stem.LastIndexOf(".v", StringComparison.Ordinal);
         // With it, what went with it: its meta and workflow, and a shot's line ("Intro.v2.wav", "Intro.line.v2.flac" and theirs).
-        var line = at > 0 ? Path.Combine(dir, $"{stem[..at]}.line.v{take.Number}.flac") : null;
-        foreach (var file in Group(take.File).Append(Path.Combine(dir, stem + ".wav")).Concat(line is null ? [] : Group(line)))
+        var line = at > 0 ? Path.Combine(dir, $"{stem[..at]}.line.v{version.Number}.flac") : null;
+        foreach (var file in Group(version.File).Append(Path.Combine(dir, stem + ".wav")).Concat(line is null ? [] : Group(line)))
             if (System.IO.File.Exists(file))
                 System.IO.File.Delete(file);
     }
 
     /// <summary>
-    /// Puts a take back in the film: the piece as it is now becomes a take, and the take's file and
+    /// Puts a version back in the video: the piece as it is now becomes a version, and the version's file and
     /// the settings it was made with take its place (so it is up to date again).
     /// </summary>
-    public static Storyboard Use(Storyboard board, FilmPiece piece, FilmTake take)
+    public static Storyboard Use(Storyboard board, VideoPiece piece, VideoVersion version)
     {
-        if (piece.File(board) is not { } file || !System.IO.File.Exists(take.File))
+        if (piece.File(board) is not { } file || !System.IO.File.Exists(version.File))
             return board;
         Keep(board, piece);
         Media.MediaRelease.Release(file);
-        System.IO.File.Copy(take.File, file, overwrite: true);
-        // Made now, as far as what is made from it goes: with the take's own time, the film joined
+        System.IO.File.Copy(version.File, file, overwrite: true);
+        // Made now, as far as what is made from it goes: with the version's own time, the video joined
         // since with the piece it replaced still read as made after everything in it.
         System.IO.File.SetLastWriteTimeUtc(file, DateTime.UtcNow);
         foreach (var member in Group(file).Skip(1).Concat(Sidecars(board, piece)))
-            if (System.IO.File.Exists(TakeOf(member, file, take.Number)))
-                Back(TakeOf(member, file, take.Number), member, file);
-        System.IO.File.Delete(take.File);
-        if (take.Settings is not { } settings)
+            if (System.IO.File.Exists(VersionPath(member, file, version.Number)))
+                Back(VersionPath(member, file, version.Number), member, file);
+        System.IO.File.Delete(version.File);
+        if (version.Settings is not { } settings)
             return board;
         var item = (JsonObject)settings.DeepClone();
         // What was at its default then (no last frame, no model: null, false, 0) wasn't written with
-        // the take: put back as such too, or the piece's settings since stayed and it read as changed.
+        // the version: put back as such too, or the piece's settings since stayed and it read as changed.
         if (piece.Settings(board) is JsonObject now)
             foreach (var (key, value) in now)
                 if (key != "id" && !item.ContainsKey(key))
@@ -314,14 +314,14 @@ public static class FilmTakes
                         _ => null,
                     } : null;
         item["id"] = piece.Id;
-        // A sound's place in the film is where it is now, whatever version plays there.
-        if (piece.Kind == FilmPieceKind.Sound)
-            foreach (var key in new[] { "track", "start", "trim", "seconds", "volume", "name" })
+        // A sound's place in the video is where it is now, whatever version plays there.
+        if (piece.Kind == VideoPieceKind.Sound)
+            foreach (var key in new[] { "soundLine", "start", "trim", "seconds", "volume", "name" })
                 item.Remove(key);
         var change = piece.Kind switch
         {
-            FilmPieceKind.Frame => new JsonObject { ["frames"] = new JsonArray(item) },
-            FilmPieceKind.Shot => new JsonObject { ["shots"] = new JsonArray(item) },
+            VideoPieceKind.Frame => new JsonObject { ["frames"] = new JsonArray(item) },
+            VideoPieceKind.Shot => new JsonObject { ["shots"] = new JsonArray(item) },
             _ => new JsonObject { ["sounds"] = new JsonArray(item) },
         };
         var merged = Storyboard.Merge(board, change);

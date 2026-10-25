@@ -2,10 +2,10 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using BlackBox.Core.Comfy;
 
-namespace BlackBox.Core.Film;
+namespace BlackBox.Core.Video;
 
-/// <summary>What a film job puts into its workflow: the prompt, seed, size, length and the files it starts from.</summary>
-public sealed class FilmInputs
+/// <summary>What a video job puts into its workflow: the prompt, seed, size, length and the files it starts from.</summary>
+public sealed class VideoInputs
 {
     public string? Prompt { get; init; }
 
@@ -48,17 +48,17 @@ public sealed class FilmInputs
 }
 
 /// <summary>
-/// Finds, in a template's workflow, the inputs a film job sets (its prompt, seed, size, length,
+/// Finds, in a template's workflow, the inputs a video job sets (its prompt, seed, size, length,
 /// frame rate, pictures and sound) and sets them. Templates name these their own way: LTX-2.5's keep
 /// them in primitives titled "Prompt", "Width", "Duration" inside a subgraph, Z-Image's in the
 /// text encoder and the empty latent, ACE-Step's on its text encoder; so they are found by title
 /// first, then by following the sampler's positive conditioning back to the text it was made from,
 /// then by the inputs' own names.
 /// </summary>
-public static partial class FilmRoles
+public static partial class VideoRoles
 {
     /// <summary>Sets what <paramref name="inputs"/> gives; returns what was set, and adds to <paramref name="missed"/> what had no place.</summary>
-    public static List<string> Apply(ComfyWorkflow workflow, ComfyNodeLibrary library, FilmInputs inputs, List<string> missed)
+    public static List<string> Apply(ComfyWorkflow workflow, ComfyNodeLibrary library, VideoInputs inputs, List<string> missed)
     {
         var set = new List<string>();
         void Put(string id, string input, JsonNode? value)
@@ -333,10 +333,10 @@ public static partial class FilmRoles
     /// <summary>
     /// The size of a picture made from others, in a template that takes it from the first of them:
     /// Qwen-Image-Edit's samples the latent its first picture is encoded to, so a frame made from a
-    /// square or upright reference came out that shape, and was then cut to the film's frame (a
+    /// square or upright reference came out that shape, and was then cut to the video's frame (a
     /// character's head and feet cut off). The sampler draws the picture anew (denoise 1), so the
     /// latent is encoded from a blank picture of the size asked for instead (to whole 16 pixels, for
-    /// the model; the frame is cut to the film's after), and the pictures go to the model as they
+    /// the model; the frame is cut to the video's after), and the pictures go to the model as they
     /// are. False when no sampler starts from an encoded picture that way.
     /// </summary>
     internal static bool SizeFromBlank(ComfyWorkflow workflow, ComfyNodeLibrary library, int width, int height, Action<string, string, JsonNode?> put)
@@ -353,7 +353,7 @@ public static partial class FilmRoles
             var source = ((JsonArray)inputs["latent_image"]!)[0]!.ToString();
             if (workflow.Nodes[source] is not JsonObject encode || ComfyWorkflow.ClassOf(encode) is not ("VAEEncode" or "VAEEncodeTiled") || encode["inputs"] is not JsonObject)
                 continue;
-            var blank = "film_size_" + source.Replace(':', '_');
+            var blank = "video_size_" + source.Replace(':', '_');
             workflow.Nodes[blank] = new JsonObject
             {
                 ["class_type"] = "EmptyImage",
@@ -432,7 +432,7 @@ public static partial class FilmRoles
 
     // ---- pictures ----------------------------------------------------------------------------------
 
-    private static void SetPictures(ComfyWorkflow workflow, ComfyNodeLibrary library, FilmInputs inputs, Action<string, string, JsonNode?> put, List<string> missed)
+    private static void SetPictures(ComfyWorkflow workflow, ComfyNodeLibrary library, VideoInputs inputs, Action<string, string, JsonNode?> put, List<string> missed)
     {
         var loaders = workflow.All().Where(n => ComfyWorkflow.ClassOf(n.Node) == "LoadImage" ||
                                                 library.Find(ComfyWorkflow.ClassOf(n.Node))?.Input("image") is { TakesInputFile: true })
@@ -487,7 +487,7 @@ public static partial class FilmRoles
                 missed.Add($"{extra.Count - used} of the pictures to make it from (the template takes {inputs.Pictures.Count - extra.Count + used})");
                 return;
             }
-            var id = "film_picture_" + (++used + 1);
+            var id = "video_picture_" + (++used + 1);
             workflow.Nodes[id] = new JsonObject
             {
                 ["class_type"] = "LoadImage",

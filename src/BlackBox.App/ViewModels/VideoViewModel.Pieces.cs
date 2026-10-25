@@ -1,10 +1,10 @@
-using BlackBox.Core.Film;
+using BlackBox.Core.Video;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace BlackBox.App.ViewModels;
 
-public sealed partial class FilmViewModel
+public sealed partial class VideoViewModel
 {
     // ---- the pieces --------------------------------------------------------------------------------------------
 
@@ -25,7 +25,7 @@ public sealed partial class FilmViewModel
         _clipStamps.Clear();
         Shots.Clear();
         Sounds.Clear();
-        Tracks.Clear();
+        SoundLines.Clear();
         foreach (var frame in _board.Frames)
             _frames[frame.Id] = new FrameItem(frame);
         for (var i = 0; i < _board.Shots.Count; i++)
@@ -40,14 +40,14 @@ public sealed partial class FilmViewModel
         }
         foreach (var sound in _board.Sounds)
             Sounds.Add(new SoundItem(sound));
-        for (var i = 0; i < _board.Tracks; i++)
-            Tracks.Add(new TrackItem(i));
+        for (var i = 0; i < _board.SoundLines; i++)
+            SoundLines.Add(new SoundLineItem(i));
         _loading = false;
         Relabel();
         RefreshReferences();
         Relayout();
         RefreshStates();
-        foreach (var p in new[] { nameof(FrameWidth), nameof(FrameHeight), nameof(Fps), nameof(LengthText), nameof(HasFilm), nameof(FilmName) })
+        foreach (var p in new[] { nameof(FrameWidth), nameof(FrameHeight), nameof(Fps), nameof(LengthText), nameof(HasJoinedVideo), nameof(VideoName) })
             OnPropertyChanged(p);
     }
 
@@ -74,7 +74,7 @@ public sealed partial class FilmViewModel
         Relayout();
     }
 
-    /// <summary>Names each frame by where it is used: "Start of take 2", "End of take 1, start of take 2", or its name.</summary>
+    /// <summary>Names each frame by where it is used: "Start of clip 2", "End of clip 1, start of clip 2", or its name.</summary>
     public void Relabel()
     {
         foreach (var (id, item) in _frames)
@@ -82,20 +82,20 @@ public sealed partial class FilmViewModel
             var uses = new List<string>();
             for (var i = 0; i < _board.Shots.Count; i++)
             {
-                if (string.Equals(_board.Shots[i].First, id, StringComparison.OrdinalIgnoreCase)) uses.Add($"start of take {i + 1}");
-                if (string.Equals(_board.Shots[i].Last, id, StringComparison.OrdinalIgnoreCase)) uses.Add($"end of take {i + 1}");
+                if (string.Equals(_board.Shots[i].First, id, StringComparison.OrdinalIgnoreCase)) uses.Add($"start of clip {i + 1}");
+                if (string.Equals(_board.Shots[i].Last, id, StringComparison.OrdinalIgnoreCase)) uses.Add($"end of clip {i + 1}");
             }
             item.Label = item.Frame.Name is { Length: > 0 } name ? name : uses.Count > 0 ? Capital(string.Join(", ", uses)) : item.Frame.Reference ? $"Reference {id}" : $"Frame {id}";
         }
     }
 
-    /// <summary>A new take after the last one, going on from where it ends; the user then says in the chat what happens in it.</summary>
+    /// <summary>A new clip after the last one, going on from where it ends; the user then says in the chat what happens in it.</summary>
     [RelayCommand]
     private void AddShot()
     {
         SaveNow();
         var before = _board.Shots.LastOrDefault();
-        // New frames and the take are made with what the ones before are: a copy, so changing one changes only it.
+        // New frames and the clip are made with what the ones before are: a copy, so changing one changes only it.
         var model = FrameModelNear(before);
         string first;
         if (before?.Last is { } end)
@@ -103,52 +103,52 @@ public sealed partial class FilmViewModel
         else
         {
             first = _board.NewId("f");
-            _board.Frames.Add(new FilmFrame { Id = first, Seed = Storyboard.NewSeed(), Model = model, From = FromNear(before) });
+            _board.Frames.Add(new VideoFrame { Id = first, Seed = Storyboard.NewSeed(), Model = model, From = FromNear(before) });
         }
         var last = _board.NewId("f");
-        _board.Frames.Add(new FilmFrame { Id = last, Seed = Storyboard.NewSeed(), Model = model, From = FromNear(before) });
-        var shot = new FilmShot { Id = _board.NewId("s"), First = first, Last = last, Seconds = 5, Seed = Storyboard.NewSeed(), Model = before?.Model };
+        _board.Frames.Add(new VideoFrame { Id = last, Seed = Storyboard.NewSeed(), Model = model, From = FromNear(before) });
+        var shot = new VideoShot { Id = _board.NewId("s"), First = first, Last = last, Seconds = 5, Seed = Storyboard.NewSeed(), Model = before?.Model };
         _board.Shots.Add(shot);
         SaveNow(force: true);
         Rebuild();
         Show(Shots.FirstOrDefault(s => s.Id == shot.Id));
     }
 
-    /// <summary>What a new frame is made with: what the frames of the take it comes after are made with.</summary>
-    private string? FrameModelNear(FilmShot? shot) =>
+    /// <summary>What a new frame is made with: what the frames of the clip it comes after are made with.</summary>
+    private string? FrameModelNear(VideoShot? shot) =>
         _board.Frame(shot?.Last)?.Model ?? _board.Frame(shot?.First)?.Model ?? _board.Frames.LastOrDefault(f => f.Model is not null && !f.Reference)?.Model;
 
-    /// <summary>What a new frame is made from: what the frames of the take it comes after are made from, so the same people stay the same.</summary>
-    private List<string> FromNear(FilmShot? shot) =>
+    /// <summary>What a new frame is made from: what the frames of the clip it comes after are made from, so the same people stay the same.</summary>
+    private List<string> FromNear(VideoShot? shot) =>
         [.. (_board.Frame(shot?.Last) ?? _board.Frame(shot?.First))?.From ?? []];
 
     // ---- versions ------------------------------------------------------------------------------------------------
 
-    /// <summary>Puts the version shown in the viewer back in the film, with the settings it was made with.</summary>
+    /// <summary>Puts the version shown in the viewer back in the video, with the settings it was made with.</summary>
     [RelayCommand]
     private void UseVersion()
     {
         if (Viewing is not { Version: { } kept, VersionOf: { Piece: var piece, IsWorking: false } })
             return;
-        // Not while the chat makes anything of this film: a take makes its frames first, which don't
+        // Not while the chat makes anything of this video: a clip makes its frames first, which don't
         // show as being made, and the frame it finished wrote over the version put back.
-        if (_chat.FilmCall() is { } call && IsThisFilm(call.Args))
+        if (_chat.VideoCall() is { } call && IsThisVideo(call.Args))
         {
-            Status = "BlackBox is making a piece of this film in the chat: put a version back once it is done.";
+            Status = "BlackBox is making a piece of this video in the chat: put a version back once it is done.";
             return;
         }
         SaveNow(force: true);
         try
         {
-            _board = FilmTakes.Use(_board, piece, kept);
+            _board = VideoVersions.Use(_board, piece, kept);
             _savedJson = _board.ToJson();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or VideoException)
         {
             ShowError($"That version couldn't be put back: {ex.Message}", ex);
             return;
         }
-        Status = $"Put version {kept.Number} back in the film; the one before it is a version now.";
+        Status = $"Put version {kept.Number} back in the video; the one before it is a version now.";
         Rebuild();
         Show(ItemOf(piece));
     }
@@ -196,7 +196,7 @@ public sealed partial class FilmViewModel
                 lines.Add($"{s.Seconds:0.#} s · seed {s.Seed}");
                 break;
             case SoundItem { Sound: var a }:
-                if (a.Source == FilmSound.FromFile)
+                if (a.Source == VideoSound.FromFile)
                     lines.Add($"Your sound file: {Path.GetFileName(_board.SoundFile(a))}");
                 else
                 {
@@ -204,39 +204,39 @@ public sealed partial class FilmViewModel
                     lines.Add($"Lyrics: {(a.Lyrics.Trim().Length > 0 ? a.Lyrics.Trim().ReplaceLineEndings(" / ") : "none (an instrumental)")}");
                     lines.Add($"Seed: {a.Seed}");
                 }
-                lines.Add($"Sound {a.Track + 1}, from {a.Start:0.0} s" + (a.Trim > 0 ? $", its first {a.Trim:0.0} s cut" : "") + (Math.Abs(a.Volume - 1) > 0.001 ? $", volume {a.Volume:0.##}" : ""));
+                lines.Add($"Sound line {a.SoundLine + 1}, from {a.Start:0.0} s" + (a.Trim > 0 ? $", its first {a.Trim:0.0} s cut" : "") + (Math.Abs(a.Volume - 1) > 0.001 ? $", volume {a.Volume:0.##}" : ""));
                 break;
         }
         // A version: what it was made with then, as kept with it.
-        if (Viewing?.Version is { } take)
+        if (Viewing?.Version is { } version)
         {
-            lines = [$"Version {take.Number} of {Lower(shown?.Title ?? "the piece")}, kept {take.Made.ToLocalTime():d MMM, HH:mm} when it was made again."];
+            lines = [$"Version {version.Number} of {Lower(shown?.Title ?? "the piece")}, kept {version.Made.ToLocalTime():d MMM, HH:mm} when it was made again."];
             foreach (var (key, name) in new[] { ("prompt", "Prompt"), ("camera", "Camera"), ("tags", "Style"), ("seed", "Seed") })
-                if (take.Settings?[key] is System.Text.Json.Nodes.JsonValue value && value.ToString().Trim() is { Length: > 0 } said)
+                if (version.Settings?[key] is System.Text.Json.Nodes.JsonValue value && value.ToString().Trim() is { Length: > 0 } said)
                     lines.Add($"{name}: {said}");
         }
         Details = string.Join("\n", lines);
         var meta = Viewing?.Version?.Meta ?? (shown is { Piece: var piece } && piece.File(_board) is { } made && File.Exists(made) ? piece.Meta(_board) : null);
-        MadeWith = shown is { Piece: var p } && meta is not null && FilmMaker.MadeWith(meta) is { } t
-            ? "Made with " + (t.StartsWith(FilmTemplates.CheckpointPrefix, StringComparison.OrdinalIgnoreCase) ? Path.GetFileNameWithoutExtension(t) + " (checkpoint)" : Path.GetFileName(t)) +
+        MadeWith = shown is { Piece: var p } && meta is not null && VideoMaker.MadeWith(meta) is { } t
+            ? "Made with " + (t.StartsWith(VideoTemplates.CheckpointPrefix, StringComparison.OrdinalIgnoreCase) ? Path.GetFileNameWithoutExtension(t) + " (checkpoint)" : Path.GetFileName(t)) +
               (ModelWords(p) is { } words ? $", for \"{words}\"" : ", picked by BlackBox")
             : "";
-        var look = FilmTakes.LookIn(meta);
+        var look = VideoVersions.LookIn(meta);
         Look = look is not { } l ? "" : shown is SoundItem ? $"How it sounds: {l.Said}" : $"Looked at: {l.Said}";
         LookFoundFault = look?.Verdict == "redo";
     }
 
-    private string? ModelWords(FilmPiece piece) => piece.Kind switch
+    private string? ModelWords(VideoPiece piece) => piece.Kind switch
     {
-        FilmPieceKind.Frame => _board.Frame(piece.Id)?.Model,
-        FilmPieceKind.Shot => _board.Shot(piece.Id)?.Model,
+        VideoPieceKind.Frame => _board.Frame(piece.Id)?.Model,
+        VideoPieceKind.Shot => _board.Shot(piece.Id)?.Model,
         _ => _board.Sound(piece.Id)?.Model,
     };
 
-    private IFilmPiece? ItemOf(FilmPiece piece) => piece.Kind switch
+    private IVideoPiece? ItemOf(VideoPiece piece) => piece.Kind switch
     {
-        FilmPieceKind.Frame => _frames.GetValueOrDefault(piece.Id),
-        FilmPieceKind.Shot => Shots.FirstOrDefault(s => s.Id == piece.Id),
+        VideoPieceKind.Frame => _frames.GetValueOrDefault(piece.Id),
+        VideoPieceKind.Shot => Shots.FirstOrDefault(s => s.Id == piece.Id),
         _ => Sounds.FirstOrDefault(s => s.Id == piece.Id),
     };
 }

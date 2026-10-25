@@ -3,12 +3,12 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using BlackBox.Core.Comfy;
 
-namespace BlackBox.Core.Film;
+namespace BlackBox.Core.Video;
 
 /// <summary>How a song sounds to SongEval, 1 to 5 each (a real, finished song scores about 4).</summary>
 public sealed record SongScore(double Coherence, double Musicality, double Memorability, double Clarity, double Naturalness)
 {
-    /// <summary>Below this, a song sounds bad to people: the user called two films at 2.4 and 2.7 "garbage".</summary>
+    /// <summary>Below this, a song sounds bad to people: the user called two videos at 2.4 and 2.7 "garbage".</summary>
     public const double Poor = 3.3;
 
     /// <summary>From here on it sounds like a real song: excerpts of a released one scored 3.9 to 4.1.</summary>
@@ -24,9 +24,9 @@ public sealed record SongScore(double Coherence, double Musicality, double Memor
 
 /// <summary>
 /// Listens to a song and says how good it sounds, so a bad one fails like a warped face does: no one
-/// has to hear every take. It is SongEval (ASLP-lab), a scorer trained on 2,400 songs rated by
+/// has to hear every song made. It is SongEval (ASLP-lab), a scorer trained on 2,400 songs rated by
 /// musicians, over MuQ's music features, run by ComfyUI's own Python (which has PyTorch). Meta's
-/// Audiobox Aesthetics was tried first: it rated the two test films' songs 8.2 of 10 for production
+/// Audiobox Aesthetics was tried first: it rated the two test videos' songs 8.2 of 10 for production
 /// quality, the songs the user called garbage, as it hears how clean a recording is rather than
 /// whether it is music; SongEval gave them 2.4 and 2.7 of 5, and a released song about 4.
 /// </summary>
@@ -34,7 +34,7 @@ public sealed record SongScore(double Coherence, double Musicality, double Memor
 /// Set up once in BlackBox's Data\tools\songeval: MuQ and nnAudio by pip (no dependencies, into
 /// that folder: ComfyUI's own packages are left alone), SongEval's 100 MB head from GitHub (its
 /// SHA-256 checked), MuQ's 1.3 GB model from Hugging Face on first use. MuQ's weights are CC BY-NC
-/// 4.0: for the user's own films.
+/// 4.0: for the user's own videos.
 /// </remarks>
 public sealed class SongJudge(string folder)
 {
@@ -50,8 +50,8 @@ public sealed class SongJudge(string folder)
         hub.SavedInstall is { Kind: ComfyInstallKind.Portable or ComfyInstallKind.Venv } install && File.Exists(install.Program) ? install.Program : null;
 
     /// <summary>
-    /// Scores each sound file, its first <paramref name="seconds"/> (the part a film uses; 0: all of
-    /// it); a file it couldn't score is missing from the answer. Throws <see cref="FilmException"/>
+    /// Scores each sound file, its first <paramref name="seconds"/> (the part a video uses; 0: all of
+    /// it); a file it couldn't score is missing from the answer. Throws <see cref="VideoException"/>
     /// when the judge can't run at all (no ComfyUI Python, no network the first time).
     /// </summary>
     public async Task<Dictionary<string, SongScore>> ScoreAsync(IReadOnlyList<string> files, string python, string ffmpeg, double seconds, Action<string>? progress, CancellationToken ct)
@@ -69,7 +69,7 @@ public sealed class SongJudge(string folder)
             psi.Environment["HF_HOME"] = Path.Combine(Folder, "hf");
             psi.Environment["HF_HUB_DISABLE_TELEMETRY"] = "1";
             psi.Environment["PYTHONIOENCODING"] = "utf-8";
-            using var process = Process.Start(psi) ?? throw new FilmException("The song judge didn't start.");
+            using var process = Process.Start(psi) ?? throw new VideoException("The song judge didn't start.");
             var errors = process.StandardError.ReadToEndAsync(ct);
             var scores = new Dictionary<string, SongScore>(StringComparer.OrdinalIgnoreCase);
             while (await process.StandardOutput.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
@@ -87,13 +87,13 @@ public sealed class SongJudge(string folder)
             if (scores.Count == 0)
             {
                 var said = (await errors.ConfigureAwait(false)).Split('\n').Where(l => l.Trim().Length > 0).TakeLast(6);
-                throw new FilmException("The song judge couldn't listen to it:\n" + string.Join("\n", said));
+                throw new VideoException("The song judge couldn't listen to it:\n" + string.Join("\n", said));
             }
             return scores;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new FilmException("The song judge took too long.");
+            throw new VideoException("The song judge took too long.");
         }
         finally
         {
@@ -113,12 +113,12 @@ public sealed class SongJudge(string folder)
             var psi = new ProcessStartInfo(python) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
             foreach (var a in new[] { "-m", "pip", "install", "--no-deps", "--disable-pip-version-check", "-q", "--target", packages, "muq==0.1.0", "nnAudio==0.3.4", "easydict==1.13" })
                 psi.ArgumentList.Add(a);
-            using var pip = Process.Start(psi) ?? throw new FilmException("pip didn't start to set up the song judge.");
+            using var pip = Process.Start(psi) ?? throw new VideoException("pip didn't start to set up the song judge.");
             var said = pip.StandardError.ReadToEndAsync(ct);
             await pip.StandardOutput.ReadToEndAsync(ct).ConfigureAwait(false);
             await pip.WaitForExitAsync(ct).ConfigureAwait(false);
             if (pip.ExitCode != 0)
-                throw new FilmException($"The song judge's packages couldn't be installed (pip exit code {pip.ExitCode}): " + (await said.ConfigureAwait(false)).Trim().Clip(600));
+                throw new VideoException($"The song judge's packages couldn't be installed (pip exit code {pip.ExitCode}): " + (await said.ConfigureAwait(false)).Trim().Clip(600));
         }
         var head = Path.Combine(Folder, "head.safetensors");
         if (!File.Exists(head))

@@ -1,10 +1,10 @@
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
-using BlackBox.Core.Film;
+using BlackBox.Core.Video;
 
 namespace BlackBox.App.ViewModels;
 
-public sealed partial class FilmViewModel
+public sealed partial class VideoViewModel
 {
     // ---- saving --------------------------------------------------------------------------------------------
 
@@ -18,7 +18,7 @@ public sealed partial class FilmViewModel
         _saveTimer.Start();
         OnPropertyChanged(nameof(LengthText));
         // What the change makes out of date shows once it is saved (the stamps are computed from the files).
-        _filmTouched = true;
+        _videoTouched = true;
         _refreshTimer.Stop();
         _refreshTimer.Start();
     }
@@ -31,25 +31,25 @@ public sealed partial class FilmViewModel
 
     private bool _disposing;
 
-    /// <summary>Saves what changed (with <paramref name="force"/>, saves anyway: before a job, which needs the film's folder).</summary>
+    /// <summary>Saves what changed (with <paramref name="force"/>, saves anyway: before a job, which needs the video's folder).</summary>
     private void SaveNow(bool force = false)
     {
         _saveTimer.Stop();
-        // Nothing changed here, and the film is on the disk already: nothing to write.
+        // Nothing changed here, and the video is on the disk already: nothing to write.
         if (_board.Folder.Length == 0 || !_dirty && (!force || _savedJson is not null))
             return;
-        // The film's folder went (renamed or deleted elsewhere): written, it would come back.
+        // The video's folder went (renamed or deleted elsewhere): written, it would come back.
         if (_savedJson is not null && !Directory.Exists(_board.Folder))
             return;
         try
         {
-            // The chat changed the film while a change made here waited to be saved (a shot's
-            // length dragged as the film tool rewrote a prompt): both stay. Saved whole, the
+            // The chat changed the video while a change made here waited to be saved (a shot's
+            // length dragged as the video tool rewrote a prompt): both stay. Saved whole, the
             // panel's copy wrote over the chat's change, and nothing showed it.
             var merged = false;
-            // A new film whose folder another window's new film took since this one was named: a
-            // folder of its own. Both picked "Untitled film", and the second wrote over the first.
-            if (_savedJson is null && Storyboard.IsFilm(_board.Folder))
+            // A new video whose folder another window's new video took since this one was named: a
+            // folder of its own. Both picked "Untitled video", and the second wrote over the first.
+            if (_savedJson is null && Storyboard.IsVideo(_board.Folder))
             {
                 var root = Path.GetDirectoryName(_board.Folder)!;
                 var name = Path.GetFileName(_board.Folder);
@@ -60,11 +60,11 @@ public sealed partial class FilmViewModel
                 Directory.CreateDirectory(_board.Folder);
                 OnPropertyChanged(nameof(Folder));
             }
-            if (_savedJson is not null && Storyboard.IsFilm(_board.Folder))
+            if (_savedJson is not null && Storyboard.IsVideo(_board.Folder))
             {
                 Storyboard? theirs = null;
                 try { theirs = Storyboard.Load(_board.Folder); }
-                catch (FilmException) { /* not a film that can be read: this panel's is written */ }
+                catch (VideoException) { /* not a video that can be read: this panel's is written */ }
                 if (theirs is not null && theirs.ToJson() != _savedJson)
                 {
                     var folder = _board.Folder;
@@ -83,24 +83,24 @@ public sealed partial class FilmViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            ShowError($"The film couldn't be saved: {ex.Message}", ex);
+            ShowError($"The video couldn't be saved: {ex.Message}", ex);
         }
     }
 
     // ---- what is made --------------------------------------------------------------------------------------
 
-    private string StateOf(IFilmPiece item, bool made, bool current)
+    private string StateOf(IVideoPiece item, bool made, bool current)
     {
         if (!made)
             return item is ShotItem s && s.Shot.Prompt.Trim().Length == 0 ? "Say what happens in it" : "Not made yet";
         if (!current)
             return "Changed: make it again";
-        return FilmTakes.LookIn(item.Piece.Meta(_board)) is { } look
+        return VideoVersions.LookIn(item.Piece.Meta(_board)) is { } look
             ? look.Verdict == "redo" ? "Made · the look found a problem" : "Made · looked at"
             : "Made";
     }
 
-    /// <summary>Thumbnails, strips and each piece's state, from the files in the film's folder; the tree and the viewer follow.</summary>
+    /// <summary>Thumbnails, strips and each piece's state, from the files in the video's folder; the tree and the viewer follow.</summary>
     public void RefreshStates()
     {
         foreach (var frame in _frames.Values)
@@ -109,7 +109,7 @@ public sealed partial class FilmViewModel
             var made = File.Exists(path);
             frame.IsMade = made;
             if (!frame.IsWorking)
-                (frame.State, frame.IsError) = (StateOf(frame, made, FilmMaker.IsCurrent(_board, frame.Frame)), false);
+                (frame.State, frame.IsError) = (StateOf(frame, made, VideoMaker.IsCurrent(_board, frame.Frame)), false);
             LoadThumbnail(frame, path);
         }
         foreach (var shot in Shots)
@@ -118,7 +118,7 @@ public sealed partial class FilmViewModel
             var made = File.Exists(path);
             shot.IsMade = made;
             if (!shot.IsWorking)
-                (shot.State, shot.IsError) = (StateOf(shot, made, FilmMaker.IsCurrent(_board, shot.Shot)), false);
+                (shot.State, shot.IsError) = (StateOf(shot, made, VideoMaker.IsCurrent(_board, shot.Shot)), false);
             var stamp = made ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
             if (made && _clipStamps.GetValueOrDefault(shot.Id) != stamp)
             {
@@ -139,10 +139,10 @@ public sealed partial class FilmViewModel
             sound.IsMade = made;
             sound.Refresh();
             if (!sound.IsWorking)
-                (sound.State, sound.IsError) = sound.Sound.Source == FilmSound.FromFile
+                (sound.State, sound.IsError) = sound.Sound.Source == VideoSound.FromFile
                     ? (made ? "Sound file" : "The file isn't there", !made)
                     : sound.IsNew ? ("File… or Generate", false)
-                    : (!made ? "Not made yet" : FilmMaker.IsCurrent(_board, sound.Sound) ? "Made" : "Changed: make it again", false);
+                    : (!made ? "Not made yet" : VideoMaker.IsCurrent(_board, sound.Sound) ? "Made" : "Changed: make it again", false);
         }
         RefreshReferences();
         foreach (var card in References)
@@ -159,7 +159,7 @@ public sealed partial class FilmViewModel
                 LoadCardThumbnail(card);
             }
         }
-        OnPropertyChanged(nameof(HasFilm));
+        OnPropertyChanged(nameof(HasJoinedVideo));
         OnPropertyChanged(nameof(LengthText));
         Relayout();
         RefreshViewer();
@@ -229,7 +229,7 @@ public sealed partial class FilmViewModel
         });
     }
 
-    /// <summary>A take's clip as a row of frames, for its block on the timeline.</summary>
+    /// <summary>A clip as a row of frames, for its block on the timeline.</summary>
     private void LoadStrip(ShotItem shot, string path, DateTime stamp)
     {
         if (_previews.Decoder is not { } decoder)
@@ -237,8 +237,8 @@ public sealed partial class FilmViewModel
         _ = Task.Run(() =>
         {
             byte[]? jpeg = null;
-            try { jpeg = FilmCheck.Strip(path, decoder, 64); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or FilmException) { }
+            try { jpeg = VideoCheck.Strip(path, decoder, 64); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or VideoException) { }
             if (jpeg is null)
                 return;
             using var stream = new MemoryStream(jpeg);
@@ -257,18 +257,18 @@ public sealed partial class FilmViewModel
         });
     }
 
-    // ---- the films folder, as the agent, the jobs and Explorer change it ---------------------------------------
+    // ---- the videos folder, as the agent, the jobs and Explorer change it ---------------------------------------
 
-    /// <summary>Something changed in this film's folder since the last refresh (else elsewhere in the films folder: the tree alone shows it).</summary>
-    private bool _filmTouched;
+    /// <summary>Something changed in this video's folder since the last refresh (else elsewhere in the videos folder: the tree alone shows it).</summary>
+    private bool _videoTouched;
 
-    /// <summary>Where this film's folder was renamed to (in Explorer, by the chat, in another window), to follow it.</summary>
+    /// <summary>Where this video's folder was renamed to (in Explorer, by the chat, in another window), to follow it.</summary>
     private string? _renamedTo;
 
     /// <summary>
-    /// Watches the films folder, all of it: what the agent and the jobs change in this film shows,
-    /// and so does a film made, renamed or deleted elsewhere (the chat, another window, Explorer);
-    /// this film's folder renamed is followed.
+    /// Watches the videos folder, all of it: what the agent and the jobs change in this video shows,
+    /// and so does a video made, renamed or deleted elsewhere (the chat, another window, Explorer);
+    /// this video's folder renamed is followed.
     /// </summary>
     private void Watch()
     {
@@ -276,14 +276,14 @@ public sealed partial class FilmViewModel
         _watcher = null;
         try
         {
-            if (!Directory.Exists(_filmsRoot))
+            if (!Directory.Exists(_videosRoot))
                 return;
-            var watcher = new FileSystemWatcher(_filmsRoot) { IncludeSubdirectories = true, NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.Size };
+            var watcher = new FileSystemWatcher(_videosRoot) { IncludeSubdirectories = true, NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.Size };
             void Changed(string path, string? from) => Dispatcher.UIThread.Post(() =>
             {
                 if (from is not null && SamePath(from, _board.Folder))
                     _renamedTo = path;
-                _filmTouched |= IsIn(path, _board.Folder) || from is not null && IsIn(from, _board.Folder);
+                _videoTouched |= IsIn(path, _board.Folder) || from is not null && IsIn(from, _board.Folder);
                 _refreshTimer.Stop();
                 _refreshTimer.Start();
             });
@@ -305,29 +305,29 @@ public sealed partial class FilmViewModel
         SamePath(path, folder) || Path.GetFullPath(path).StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Something in the films folder changed. In this film's: the agent changed the storyboard in
+    /// Something in the videos folder changed. In this video's: the agent changed the storyboard in
     /// the chat (it is read again, unless a change made here is still to be saved), a frame, clip
-    /// or song was made or put away as a take, or the user put a picture in References: it shows.
-    /// This film's folder renamed: the film is followed there; gone: the latest film opens.
-    /// Elsewhere: the tree shows the films as they are.
+    /// or song was made or put away as a version, or the user put a picture in References: it shows.
+    /// This video's folder renamed: the video is followed there; gone: the latest video opens.
+    /// Elsewhere: the tree shows the videos as they are.
     /// </summary>
     private void OnFolderChanged()
     {
         if (_disposing)
             return;
-        var touched = _filmTouched;
-        _filmTouched = false;
+        var touched = _videoTouched;
+        _videoTouched = false;
         if (_savedJson is not null && !Directory.Exists(_board.Folder))
         {
             var (gone, to) = (Path.GetFileName(_board.Folder), _renamedTo);
             _renamedTo = null;
-            if (to is not null && Storyboard.IsFilm(to))
+            if (to is not null && Storyboard.IsVideo(to))
                 Follow(to);
             else
             {
                 _dirty = false;
                 OpenLatest();
-                Status = $"{gone} isn't in the films folder any more.";
+                Status = $"{gone} isn't in the videos folder any more.";
             }
             return;
         }
@@ -337,7 +337,7 @@ public sealed partial class FilmViewModel
         try
         {
             // Not while a change made here waits to be saved: it is put together with theirs then.
-            if (!_saveTimer.IsEnabled && !_dirty && Storyboard.IsFilm(_board.Folder))
+            if (!_saveTimer.IsEnabled && !_dirty && Storyboard.IsVideo(_board.Folder))
             {
                 var fresh = Storyboard.Load(_board.Folder);
                 var json = fresh.ToJson();
@@ -350,11 +350,11 @@ public sealed partial class FilmViewModel
                 }
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or VideoException) { }
         RefreshStates();
     }
 
-    /// <summary>This film's folder was renamed elsewhere: the film is opened there, with a change made here meanwhile.</summary>
+    /// <summary>This video's folder was renamed elsewhere: the video is opened there, with a change made here meanwhile.</summary>
     private void Follow(string to)
     {
         var from = _board.Folder;
@@ -364,17 +364,17 @@ public sealed partial class FilmViewModel
         Open(to);
     }
 
-    /// <summary>The film's folder moved: what the chat named goes with it.</summary>
+    /// <summary>The video's folder moved: what the chat named goes with it.</summary>
     private void Moved(string from, string to)
     {
-        if (_chatFilm is not null && SamePath(_chatFilm, from))
-            _chatFilm = to;
+        if (_chatVideo is not null && SamePath(_chatVideo, from))
+            _chatVideo = to;
     }
 
-    /// <summary>The film changed last, or a new one when there is none.</summary>
+    /// <summary>The video changed last, or a new one when there is none.</summary>
     private void OpenLatest()
     {
-        if (Storyboard.Recent(_filmsRoot).FirstOrDefault() is { } latest)
+        if (Storyboard.Recent(_videosRoot).FirstOrDefault() is { } latest)
             Open(latest);
         else
             Untitled();

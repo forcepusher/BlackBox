@@ -273,7 +273,7 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
     public string CallId { get; } = callId;
     public string Name { get; } = name;
 
-    /// <summary>What the call was given (JSON), while the run goes on: the Video editor panel reads which piece the film tool is making.</summary>
+    /// <summary>What the call was given (JSON), while the run goes on: the Video editor panel reads which piece the video tool is making.</summary>
     public string Arguments { get; init; } = "";
 
     [ObservableProperty]

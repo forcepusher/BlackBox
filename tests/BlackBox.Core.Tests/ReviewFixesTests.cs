@@ -1,5 +1,5 @@
 using System.Text.Json.Nodes;
-using BlackBox.Core.Film;
+using BlackBox.Core.Video;
 using BlackBox.Core.Llm;
 using Xunit;
 
@@ -66,11 +66,11 @@ public class ReviewFixesTests
     [InlineData("nul.mp4", "nul.mp4_")]
     [InlineData("Console", "Console")]
     [InlineData("COM1", "COM1_")]
-    public void Film_names_are_never_a_devices(string name, string safe) =>
+    public void Video_names_are_never_a_devices(string name, string safe) =>
         Assert.Equal(safe, Storyboard.Safe(name));
 
     [Fact]
-    public void A_song_that_still_covers_the_film_stays_made_when_the_film_gets_shorter()
+    public void A_song_that_still_covers_the_video_stays_made_when_the_video_gets_shorter()
     {
         var folder = Directory.CreateTempSubdirectory("bb-song-").FullName;
         try
@@ -83,13 +83,13 @@ public class ReviewFixesTests
             var song = board.Sounds[0];
             Directory.CreateDirectory(Path.GetDirectoryName(board.SoundFile(song))!);
             File.WriteAllText(board.SoundFile(song), "a song");
-            File.WriteAllText(board.SoundMeta(song), new JsonObject { ["made"] = new JsonObject { ["stamp"] = FilmMaker.SongStamp(board, song) } }.ToJsonString());
-            Assert.True(FilmMaker.IsCurrent(board, song));
+            File.WriteAllText(board.SoundMeta(song), new JsonObject { ["made"] = new JsonObject { ["stamp"] = VideoMaker.SongStamp(board, song) } }.ToJsonString());
+            Assert.True(VideoMaker.IsCurrent(board, song));
 
             board.Shot("s3")!.Seconds = 9; // a second shorter: the song still covers it
-            Assert.True(FilmMaker.IsCurrent(board, song));
+            Assert.True(VideoMaker.IsCurrent(board, song));
             board.Shot("s3")!.Seconds = 20; // longer than the song
-            Assert.False(FilmMaker.IsCurrent(board, song));
+            Assert.False(VideoMaker.IsCurrent(board, song));
         }
         finally
         {

@@ -14,7 +14,7 @@ namespace BlackBox.Core.Settings;
 ///   Data/tools/    (portable programs the agent downloaded for its tasks)
 ///   Data/scratch/  (helper files the agent made for its tasks: scripts and the like)
 ///   Data/pasted/   (pictures pasted into the chat from the clipboard)
-///   Data/films/    (one folder per film: its storyboard, frames, shots, song and the film)
+///   Data/videos/    (one folder per video: its storyboard, frames, shots, song and the video)
 ///   Data/index/    (the indexes of the folders the agent indexed, a file each)
 ///   Data/errors.log (every error BlackBox showed, see <see cref="ErrorLog"/>)
 /// </code>
@@ -53,11 +53,11 @@ public sealed class AppPaths(string root)
     public string PastedDir => Path.Combine(DataDir, "pasted");
 
     /// <summary>
-    /// The films planned in the Video editor panel or asked for in the chat, a folder each (see
-    /// <see cref="Film.Storyboard"/>): portable, like everything else of BlackBox's (the user's
+    /// The videos planned in the Video editor panel or asked for in the chat, a folder each (see
+    /// <see cref="Video.Storyboard"/>): portable, like everything else of BlackBox's (the user's
     /// choice), rather than in the PC's Videos folder.
     /// </summary>
-    public string FilmsDir => Path.Combine(DataDir, "films");
+    public string VideosDir => Path.Combine(DataDir, "videos");
 
     /// <summary>The indexes of the folders the agent indexed, a file each (see <see cref="Projects.FolderIndex"/>).</summary>
     public string IndexDir => Path.Combine(DataDir, "index");

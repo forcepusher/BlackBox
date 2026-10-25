@@ -16,7 +16,7 @@
         "Request flow starts in the UI: MainWindowViewModel (or the CLI's Program.cs) builds the run with AgentSetup.Create",
         "AgentSession (RunAsync) runs the loop: system prompt (SystemPrompt) plus history sent to the model, streamed reply, tool calls run, results appended, repeat until a reply has no tool calls",
         "Names the model client layer: OpenAiChatClient (and/or AnthropicMessages, BackendConnection, ServerProbe)",
-        "Tools: Tool base class / ToolRegistry, with examples of the tool set (screen and input tools, files, shell, ssh, web search, ComfyUI, film, MCP servers); approval of risky tools",
+        "Tools: Tool base class / ToolRegistry, with examples of the tool set (screen and input tools, files, shell, ssh, web search, ComfyUI, video, MCP servers); approval of risky tools",
         "Mentions at least one cross-cutting mechanism correctly: tool-call repair (ToolCallRepair), context reset with a handoff note, fresh-look click aiming, portable Data folder settings (AppPaths/SettingsStore)"
       ]
     },

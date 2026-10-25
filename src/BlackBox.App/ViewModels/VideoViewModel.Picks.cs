@@ -1,17 +1,17 @@
 using System.Collections.Specialized;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
-using BlackBox.Core.Film;
+using BlackBox.Core.Video;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BlackBox.App.ViewModels;
 
-/// <summary>Where files dragged over the timeline would go: a card or sound clip, or a row at a time (a sound track's by its number).</summary>
-public sealed record FilmDropPlace(string Row, double Seconds, int Track, object? Card);
+/// <summary>Where files dragged over the timeline would go: a card or sound clip, or a row at a time (a sound line's by its number).</summary>
+public sealed record VideoDropPlace(string Row, double Seconds, int SoundLine, object? Card);
 
-public sealed partial class FilmViewModel
+public sealed partial class VideoViewModel
 {
-    /// <summary>Names as Explorer orders them: "Film 2" before "Film 10".</summary>
+    /// <summary>Names as Explorer orders them: "Video 2" before "Video 10".</summary>
     private static readonly StringComparer ByName =
         StringComparer.Create(System.Globalization.CultureInfo.CurrentCulture, System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.NumericOrdering);
 
@@ -28,17 +28,17 @@ public sealed partial class FilmViewModel
     /// the box (its ×), or sent, it is no longer in the box; the viewer keeps it.
     /// </summary>
     [ObservableProperty]
-    private FilmPick? _viewing;
+    private VideoPick? _viewing;
 
-    /// <summary>Picks a card, take, frame, sound or version: shown in the viewer, and into the chat's box.</summary>
-    private void Choose(FilmPick pick)
+    /// <summary>Picks a card, clip, frame, sound or version: shown in the viewer, and into the chat's box.</summary>
+    private void Choose(VideoPick pick)
     {
         Viewing = pick;
         _chat.Pick([(pick.Path, pick.Caption)]);
     }
 
-    /// <summary>A piece clicked on the timeline: picked; null shows the whole film.</summary>
-    public void Show(IFilmPiece? piece)
+    /// <summary>A piece clicked on the timeline: picked; null shows the whole video.</summary>
+    public void Show(IVideoPiece? piece)
     {
         if (piece is null)
         {
@@ -46,7 +46,7 @@ public sealed partial class FilmViewModel
             return;
         }
         var path = piece.Piece.File(_board) ?? _board.Folder;
-        Choose(new FilmPick(path, $"{piece.Title} · {Path.GetFileName(path)}") { Piece = piece, IsPlanned = !File.Exists(path) });
+        Choose(new VideoPick(path, $"{piece.Title} · {Path.GetFileName(path)}") { Piece = piece, IsPlanned = !File.Exists(path) });
     }
 
     /// <summary>A card of the References row clicked: its generated image, or the user's image file.</summary>
@@ -55,14 +55,14 @@ public sealed partial class FilmViewModel
         if (card.Frame is { } frame)
             Show(frame);
         else
-            Choose(new FilmPick(card.Path, $"Image file · {Path.GetFileName(card.Path)}"));
+            Choose(new VideoPick(card.Path, $"Image file · {Path.GetFileName(card.Path)}"));
     }
 
     /// <summary>An earlier version of a piece, from its right-click menu: shown, to put back with Use this version.</summary>
-    private void ShowVersion(IFilmPiece piece, FilmTake take) =>
-        Choose(new FilmPick(take.File, $"Version {take.Number} of {Lower(piece.Title)} · {Path.GetFileName(take.File)}") { Version = take, VersionOf = piece });
+    private void ShowVersion(IVideoPiece piece, VideoVersion version) =>
+        Choose(new VideoPick(version.File, $"Version {version.Number} of {Lower(piece.Title)} · {Path.GetFileName(version.File)}") { Version = version, VersionOf = piece });
 
-    /// <summary>Nothing picked: what is said next is about the whole film, which the viewer shows.</summary>
+    /// <summary>Nothing picked: what is said next is about the whole video, which the viewer shows.</summary>
     public void Clear()
     {
         Viewing = null;
@@ -81,11 +81,11 @@ public sealed partial class FilmViewModel
 
     // ---- files dropped -----------------------------------------------------------------------------------------
 
-    /// <summary>Where files dragged over the timeline would go now; null for elsewhere (the viewer: References or a sound track by their kind).</summary>
-    private FilmDropPlace? _drop;
+    /// <summary>Where files dragged over the timeline would go now; null for elsewhere (the viewer: References or a sound line by their kind).</summary>
+    private VideoDropPlace? _drop;
 
     /// <summary>Files dragged over the timeline, at <paramref name="place"/>: the card or clip there is marked as where they go.</summary>
-    public void DragOver(FilmDropPlace? place)
+    public void DragOver(VideoDropPlace? place)
     {
         _drop = place;
         foreach (var card in References)
@@ -97,9 +97,9 @@ public sealed partial class FilmViewModel
     /// <summary>
     /// Files dropped on the panel are copied in, as they are, under names of their own (see
     /// <see cref="Storyboard.KeepPicture"/>): pictures into References as image files (one dropped on
-    /// a new card is what that card is), sounds into References too, laid on the sound track they were
+    /// a new card is what that card is), sounds into References too, laid on the sound line they were
     /// dropped on from where they were dropped (one dropped on a new clip is what that clip is), else
-    /// on the first track from the playhead, one after another. Anything else goes with the next message.
+    /// on the first sound line from the playhead, one after another. Anything else goes with the next message.
     /// </summary>
     public bool Drop(IReadOnlyList<string> paths)
     {
@@ -112,14 +112,14 @@ public sealed partial class FilmViewModel
         var added = new List<string>();
         try
         {
-            SaveNow(force: true); // a new film's folder is made with it
+            SaveNow(force: true); // a new video's folder is made with it
             if (pictures.Count > 0 && place?.Card is ReferenceCard { IsNew: true, Frame: { } fill })
                 added.Add(FillReference(fill, pictures[0]));
             else
                 foreach (var picture in pictures)
                     added.Add(Storyboard.KeepPicture(picture, _board.ReferencesFolder));
             var at = place is { Row: "sounds" } ? place.Seconds : PlayPosition;
-            var track = place is { Row: "sounds" } ? place.Track : 0;
+            var soundLine = place is { Row: "sounds" } ? place.SoundLine : 0;
             foreach (var file in sounds)
             {
                 var copy = Storyboard.KeepPicture(file, _board.ReferencesFolder);
@@ -127,11 +127,11 @@ public sealed partial class FilmViewModel
                 var sound = place?.Card is SoundItem { IsNew: true } clip && file == sounds[0] ? clip.Sound : null;
                 if (sound is null)
                 {
-                    sound = new FilmSound { Id = _board.NewId("a"), Start = at, Track = track };
+                    sound = new VideoSound { Id = _board.NewId("a"), Start = at, SoundLine = soundLine };
                     _board.Sounds.Add(sound);
                 }
                 (sound.Source, sound.Name, sound.Place, sound.Seed, sound.Tags, sound.Lyrics) =
-                    (FilmSound.FromFile, Path.GetFileNameWithoutExtension(copy), Path.GetRelativePath(_board.Folder, copy).Replace(Path.DirectorySeparatorChar, '/'), 0, "", "");
+                    (VideoSound.FromFile, Path.GetFileNameWithoutExtension(copy), Path.GetRelativePath(_board.Folder, copy).Replace(Path.DirectorySeparatorChar, '/'), 0, "", "");
                 at = sound.Start + Math.Max(1, (_previews.Decoder?.Probe(copy)?.Duration.TotalSeconds ?? 0) - sound.Trim);
             }
             if (sounds.Count > 0)
@@ -175,7 +175,7 @@ public sealed partial class FilmViewModel
         return copy;
     }
 
-    /// <summary>Picks what a file in the film is on the timeline: a card, a sound, a take's clip or a frame.</summary>
+    /// <summary>Picks what a file in the video is on the timeline: a card, a sound, a clip or a frame.</summary>
     private void ShowFile(string path)
     {
         if (References.FirstOrDefault(c => SamePath(c.Path, path)) is { } card)
@@ -190,10 +190,10 @@ public sealed partial class FilmViewModel
 
     // ---- the viewer ---------------------------------------------------------------------------------------
 
-    partial void OnViewingChanged(FilmPick? value)
+    partial void OnViewingChanged(VideoPick? value)
     {
         var piece = value?.Piece ?? value?.VersionOf;
-        foreach (var item in _frames.Values.Concat<IFilmPiece>(Shots).Concat(Sounds))
+        foreach (var item in _frames.Values.Concat<IVideoPiece>(Shots).Concat(Sounds))
             item.IsSelected = ReferenceEquals(item, piece);
         foreach (var card in References)
             card.IsSelected = card.Frame is { } f ? ReferenceEquals(f, piece) : value is not null && SamePath(card.Path, value.Path);
@@ -202,10 +202,10 @@ public sealed partial class FilmViewModel
         RefreshDetails();
     }
 
-    /// <summary>A version is shown: it can be put back in the film.</summary>
+    /// <summary>A version is shown: it can be put back in the video.</summary>
     public bool IsVersionShown => Viewing?.Version is not null;
 
-    /// <summary>The viewer's content: a picture, a clip, a sound or the film with its player, or a card for what has none.</summary>
+    /// <summary>The viewer's content: a picture, a clip, a sound or the video with its player, or a card for what has none.</summary>
     [ObservableProperty]
     private object? _viewer;
 
@@ -217,7 +217,7 @@ public sealed partial class FilmViewModel
         if (_disposing)
             return;
         var pick = Viewing;
-        var path = pick?.Path ?? (HasFilm ? _board.JoinedFile : null);
+        var path = pick?.Path ?? (HasJoinedVideo ? _board.JoinedFile : null);
         if (path is not null && pick is not { IsPlanned: true } && File.Exists(path))
         {
             var stamp = StampOf(path);
@@ -269,12 +269,12 @@ public sealed partial class FilmViewModel
             { Piece: FrameItem { Frame.Reference: true, Frame.Prompt.Length: 0 } reference } => new PictureView(null, reference.Title,
                 "A new image: pick a file of yours for it (File… on its card, or drop one there), or say in the chat what to generate."),
             { Piece: SoundItem { IsNew: true } sound } => new PictureView(null, sound.Title,
-                "A new sound: pick a file of yours for it (File… on its clip, or drop one there), or say in the chat what to generate."),
+                "A new sound: pick a file of yours for it (File… on it, or drop one there), or say in the chat what to generate."),
             { Piece: { } piece } => new PictureView(null, $"{piece.Title} is not made yet", "Say in the chat what it should be, or to make it."),
-            // The film's name: what is said with nothing picked is about all of it.
-            null => new PictureView(null, FilmName is { Length: > 0 } name ? name : "The film", _board.Shots.All(s => s.Prompt.Trim().Length == 0)
-                ? "The whole film is selected. Say in the chat what film you want: BlackBox lays out its references, takes and sounds on the timeline. Nothing is made until you ask for it."
-                : "The whole film is selected. Click a card, take or sound on the timeline to work on it instead, or press Make the film."),
+            // The video's name: what is said with nothing picked is about all of it.
+            null => new PictureView(null, VideoName is { Length: > 0 } name ? name : "The video", _board.Shots.All(s => s.Prompt.Trim().Length == 0)
+                ? "The whole video is selected. Say in the chat what video you want: BlackBox lays out its references, clips and sounds on the timeline. Nothing is made until you ask for it."
+                : "The whole video is selected. Click a card, clip or sound on the timeline to work on it instead, or press Make the video."),
             _ => new PictureView(null, pick.Caption, "It isn't there."),
         };
     }
@@ -300,22 +300,22 @@ public sealed partial class FilmViewModel
     /// <summary>The file the viewer shows now, for the full-screen viewer to start from; null with none.</summary>
     public string? ShownFile => _shown?.Path;
 
-    /// <summary>The services the film's previews play with, for the full-screen viewer.</summary>
+    /// <summary>The services the video's previews play with, for the full-screen viewer.</summary>
     public PreviewServices Previews => _previews;
 
     /// <summary>
-    /// The film's pictures and videos as the full-screen viewer goes through them, in the timeline's
-    /// order: the References row, each take's frames and clip, then the joined film; only what is made.
+    /// The video's pictures and clips as the full-screen viewer goes through them, in the timeline's
+    /// order: the References row, each clip's frames and the clip, then the joined video; only what is made.
     /// </summary>
-    public List<MediaEntry> MediaInFilm()
+    public List<MediaEntry> MediaInVideo()
     {
         var files = References.Select(c => (c.Path, Caption: $"{c.Name} · {c.Kind}"))
             .Concat(Shots.SelectMany(s => new[] { s.First, s.Last }.OfType<FrameItem>().Select(f => (Path: _board.FramePicture(f.Frame), Caption: f.Title))
                 .Append((Path: _board.ShotVideo(s.Shot), Caption: s.Title))))
-            .Append((Path: _board.JoinedFile, Caption: "The film"));
+            .Append((Path: _board.JoinedFile, Caption: "The video"));
         return files.Where(f => File.Exists(f.Path) && MainWindowViewModel.Viewable(f.Path)).DistinctBy(f => Path.GetFullPath(f.Path), StringComparer.OrdinalIgnoreCase)
             .Select(f => new MediaEntry(f.Path, f.Path, null, f.Caption)).ToList();
     }
 
-    public bool HasFilm => File.Exists(_board.JoinedFile);
+    public bool HasJoinedVideo => File.Exists(_board.JoinedFile);
 }

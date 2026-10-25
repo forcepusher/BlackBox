@@ -206,7 +206,7 @@ public class GuessworkTests
     [InlineData("Also, let's check the signature of crossfadein/crossfadeout in moviepy 2.x. Let me verify.", null)]
     [InlineData("Let me check the output folder for the new file.", null)]
     [InlineData("So how do we determine whether it's Juggernaut XL or SnowPony?", null)]
-    [InlineData("Now, how does the film tool handle lip-sync?", null)]
+    [InlineData("Now, how does the video tool handle lip-sync?", null)]
     [InlineData("Hmm, write_videofile: does it have an audio parameter?", null)]
     // qwen3.8 in Excel, then answering itself wrongly: "No, the default is None, and Excel displays it."
     [InlineData("Also, maybe I should set delete=False on the x-axis (openpyxl's default axis delete is… in some versions, the default for the axis's `delete` attribute is True?",
