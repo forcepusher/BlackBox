@@ -455,8 +455,9 @@ public partial class VideoPanel : UserControl
     {
         if (!e.GetCurrentPoint(Timeline).Properties.IsLeftButtonPressed || e.Source is not Visual source)
             return;
-        // The seconds move the playhead, a clip's right edge its length, and a sound is dragged itself: no drag of the timeline there.
-        if (source == Ruler || Ruler.IsVisualAncestorOf(source) ||
+        // The seconds move the playhead, a clip's right edge its length, a sound is dragged itself, and the
+        // scroll bar scrolls by its own thumb, arrows and track: no drag of the timeline there.
+        if (source == Ruler || Ruler.IsVisualAncestorOf(source) || source.FindAncestorOfType<ScrollBar>(includeSelf: true) is not null ||
             source.GetSelfAndVisualAncestors().OfType<Border>().Any(b => b.Classes.Contains("handle") || b.Classes.Contains("clip")))
             return;
         var onPiece = source.GetSelfAndVisualAncestors().TakeWhile(v => v != Timeline).Any(v => v is Button);

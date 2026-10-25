@@ -154,6 +154,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - File inspector's **Show in folder**: the file's card in the chat has it.
 
 ### Fixed
+- The scrollbar under Video generator's timeline drags again: its thumb follows the mouse instead
+  of the timeline sliding on its own.
 - With a tool open and little room for the chat, the server's status dot no longer draws over **History**.
 - Picking a tool in the **Toolkit** dropdown, or None, changes the window in one go: no more frame
   of the chat at the wrong width, an empty or black panel, or the list still open over it.

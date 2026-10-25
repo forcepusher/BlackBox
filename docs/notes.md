@@ -789,7 +789,9 @@ and the **sound lines** (below). A clip's spoken line has no row of its own (a *
 sound's samples read once for its waveform, as joining lays them over each other) with each clip's
 frame in the viewer. The timeline is dragged sideways anywhere but the ruler, a clip's edge and a
 sound (the user found its scrollbar "very inconvenient", 2026-10-24; a drag from a clip doesn't pick
-it, a press let go without moving 4 pixels does), its scrollbar shows in full like every other, the
+it, a press let go without moving 4 pixels does), its scrollbar shows in full like every other and
+is never a drag of the timeline (until 2026-10-26 a press on it started one, which took the pointer
+from the thumb after 4 pixels: the thumb stayed put while the timeline slid and snapped back), the
 wheel scrolls sideways and Ctrl+wheel zooms. A clip clicked doesn't scroll into view
 (`BringIntoViewOnFocusChange` off): partly scrolled out, it moved from under the pointer between
 press and release. A click away from every piece (the timeline's empty space, around the viewer) or
