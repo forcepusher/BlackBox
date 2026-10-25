@@ -1178,6 +1178,24 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_question_to_the_user_ends_the_turn_though_a_plan_follows_it()
+    {
+        // Seen in Video editor: its last sentence read as an announced step, and the nudge made the
+        // model ask the user the same question again.
+        var server = new ScriptedServer(
+            Sse.ToolCall("w1", "wait", """{"seconds":0}"""),
+            Sse.Text("Nothing's made yet.\n\nWhat do you want shot s1 to show? I'll set its frames, prompt, camera, and any line, then make the clip."),
+            Sse.Text("(not asked)"));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+
+        await session.RunAsync("Oi", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count);
+        Assert.DoesNotContain(session.History, m => m.Content == AgentSession.NudgeText);
+    }
+
+    [Fact]
     public async Task Only_the_result_whose_screenshot_follows_says_so()
     {
         var calls = new JsonArray(

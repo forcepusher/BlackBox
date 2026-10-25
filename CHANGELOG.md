@@ -105,6 +105,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Video editor's **New video** button beside **Make the video**: New video is in the menu on the video's name.
 
 ### Fixed
+- A reply that asks you something ends the turn, even when it says what the agent will do after your
+  answer: BlackBox no longer tells it to "Continue with the task", which made it ask you again.
 - The `BlackBox.exe` and `blackbox-cli.exe` that `dotnet build` makes run on a PC without .NET installed,
   instead of asking for the .NET Desktop Runtime.
 - A picture BlackBox was reading when a program started no longer stays locked until that program
