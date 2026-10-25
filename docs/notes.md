@@ -1977,6 +1977,16 @@ in two files), Shift or Ctrl held (they add), and any click in the chat, as the 
 ask about them. A plain click on a picked line picks only it; clicked again it stays picked. Lines
 and files handle their own presses, so the panel's handler only sees what no control took
 (scrollbars and the splitter keep the pick too); checked with real clicks on 2026-10-25.
+**A drag over lines** picks every line between, live as it goes, as a Shift+click there would (the
+user, 2026-10-26): the panel notes the row pressed (a tunnel handler, ahead of the line's own pick),
+and once the pointer reaches another row the list takes the pointer and `PickDrag` picks the range
+from the pressed row (Shift+click after it goes on from there). Ctrl+drag adds the range to what
+was picked; Shift+press is a Shift+click and starts no drag. The pointer must move 4 px first: a
+row pressed half in sight is scrolled into it, which slid the next rows under a still pointer and
+picked them. Above or below the diff the list scrolls every 30 ms, faster the further away (up to
+80 px a tick), and the pick follows the first or last row in sight. Checked with real mouse drags
+on 2026-10-26 (a 201-line new file): 7 to 12 and back up, Ctrl+drag, past both edges, and a click
+on a half-shown @@ line still unpicks.
 A right-click on a file in the list offers **Show in folder** (the user, 2026-10-25): Explorer
 opens on its folder with it selected, through the file cards' `FilePreview.ShowInFolder`; greyed
 out for a deleted file. The menu is a plain `ContextMenu`, as the Video editor's are; checked

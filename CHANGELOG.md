@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the chat. Lines you click go into your message, so you can ask about them or have them changed.
 - In File changes, a click away from the lines (or Esc) unpicks them and takes them off your message.
 - In File changes, right-click a file for **Show in folder**.
+- In File changes, drag over lines to pick them all; past the panel's edge the diff scrolls along.
 - The agent's `diff` tool: it looks through what changed in a repository, or between two files or
   folders, instead of reading whole files again.
 - Code blocks in replies and Markdown previews show in a box of their own, with their language and a

@@ -60,7 +60,7 @@ public sealed class DiffRow(DiffFileItem file, DiffLine? line)
 /// The File changes panel, a tool of the chat window's toolkit on the left of the chat: the files the
 /// agent changed in this chat (write_file, edit_file, and what its commands changed), each against
 /// what it held before the agent first changed it, updated as the agent works. Lines picked in it
-/// (click, Shift+click, Ctrl+click) go into the chat's box as the files they are in, and the message
+/// (click, drag, Shift+click, Ctrl+click) go into the chat's box as the files they are in, and the message
 /// sent from there carries them for the model: the user asks about them, has them explained,
 /// reviewed or changed (the user's request, 2026-10-24).
 /// </summary>
@@ -131,7 +131,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     [ObservableProperty]
     private string _status = Hint;
 
-    private const string Hint = "Click lines to put them in your message; Shift+click picks a range, Ctrl+click adds more.";
+    private const string Hint = "Click or drag lines to put them in your message; Shift+click picks a range, Ctrl+click adds more.";
 
     /// <summary>Reads the files again, keeping what was picked where the same lines are still there.</summary>
     private async Task LoadAsync()
@@ -224,6 +224,24 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
         finally
         {
             _picking = false;
+        }
+    }
+
+    /// <summary>
+    /// A drag over the diff from row <paramref name="from"/> to <paramref name="to"/>: every row between
+    /// is picked, as a Shift+click there would, with <paramref name="kept"/> (what was picked before a
+    /// Ctrl+drag) picked too. Called again as the drag goes on, so the pick follows it.
+    /// </summary>
+    internal void PickDrag(int from, int to, IReadOnlyList<int> kept)
+    {
+        using (Selection.BatchUpdate())
+        {
+            Selection.Clear();
+            foreach (var row in kept)
+                Selection.Select(row);
+            Selection.SelectRange(Math.Min(from, to), Math.Max(from, to));
+            // Shift+click after the drag goes on from where it started.
+            Selection.AnchorIndex = from;
         }
     }
 
