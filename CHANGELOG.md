@@ -107,6 +107,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Video editor's **New video** button beside **Make the video**: New video is in the menu on the video's name.
 
 ### Fixed
+- Picking a tool in the **Toolkit** dropdown, or None, changes the window in one go: no more frame
+  of the chat at the wrong width, an empty or black panel, or the list still open over it.
 - A reply that asks you something ends the turn, even when it says what the agent will do after your
   answer: BlackBox no longer tells it to "Continue with the task", which made it ask you again.
 - The `BlackBox.exe` and `blackbox-cli.exe` that `dotnet build` makes run on a PC without .NET installed,

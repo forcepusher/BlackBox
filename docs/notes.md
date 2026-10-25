@@ -687,12 +687,26 @@ that depends on a state, as a plain one loses to what the template sets). Picked
 the window grows to the left by the tool's width (960), so the chat stays where it was on the
 screen, as far as the screen has room; None gives the room back, and a window neither moved nor
 resized since goes back where it was. It moves and resizes in one step (`MainWindow.Place`, one
-SetWindowPos on Windows), with the panel laid out at the new size before and what the window gains
-filled with the panel's background colour at once: moved by Position and widened by Width at the
-next layout, the chat jumped sideways with the window, the window grew a tenth of a second later
-with its new part black for a twentieth more, and the chat jumped back (captured frame by frame,
-2026-10-24). Now the chat stays put and the panel fills in about 50 ms later. The window's place is
-saved without the panel. **Made narrower, the panel gives way first** (`ToolkitColumns`,
+SetWindowPos on Windows), with the panel laid out at the new size before: moved by Position and
+widened by Width at the next layout, the chat jumped sideways with the window, the window grew a
+tenth of a second later with its new part black for a twentieth more, and the chat jumped back
+(captured frame by frame, 2026-10-24). **A switch shows in one frame** (2026-10-25, the user: "still
+visible UI glitches", captured at 60 fps with a BitBlt loop on the laptop): resized, an Avalonia window
+showed what it last drew from its top-left corner for one to five frames (the old panel's left part
+in a window as narrow as the chat, the chat where the panel was to be, the new panel's place empty
+or black), and the GDI fill of what it gained never showed under ANGLE's surface. So the whole
+content is laid out at the new size (`MainWindow.LayOut`: Measure skips what was laid out before at
+the same size, so it invalidates every changed control up to the columns; the new panel was laid out
+a frame late and the dropdown kept its old name's width), drawn into a picture (RenderTargetBitmap),
+and that picture is shown in a layered window over the client area (`WindowCover`) in the same
+DeferWindowPos step as the resize (shown first, the screen showed it a frame before the window
+shrank, the chat twice side by side), and taken away three frames later, when Avalonia has drawn the
+same (it differs in a few anti-aliased corner pixels). One tool for another goes straight from the
+one's width to the other's: the view model sets the new tool in one change (it went through null,
+and the window shrank to the chat and grew back), the window sets the panel's content itself (a
+binding took it after the layout), and the dropdown's list is closed first (it lingered a frame over
+the resized window). Measured after: popup closed, then one frame with all of the switch, for every
+pick of None, Video editor and Code changes either way. The window's place is saved without the panel. **Made narrower, the panel gives way first** (`ToolkitColumns`,
 `MainWindow.FitColumns` on the columns' SizeChanged): down to its least (`ToolkitOption.MinWidth`,
 splitter included: Video editor 770, where its top bar still fits in one row with the video's name cut
 short; Code changes 560), then the window stops, at the panel's least plus the chat's 660 (no more than

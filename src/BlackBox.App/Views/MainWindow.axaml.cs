@@ -3,8 +3,10 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using BlackBox.App.ViewModels;
 using BlackBox.Core.Settings;
 
@@ -182,15 +184,8 @@ public partial class MainWindow : Window
     {
         if (WindowState != WindowState.Normal || !IsVisible)
             return;
-        // Where it was before the toolkit opened, if it is as the toolkit left it.
-        if (_beforeDock is { } before && _afterDock is { } after && Position == after.Position && Math.Abs(Width - after.Width) < 1)
-        {
-            _normal = (before.Position, before.Width, ClientSize.Height);
-            return;
-        }
-        var toolkit = ToolkitWidth;
-        var scaling = (Screens.ScreenFromWindow(this) ?? Screens.Primary)?.Scaling ?? 1;
-        _normal = (new PixelPoint(Position.X + (int)(toolkit * scaling), Position.Y), ClientSize.Width - toolkit, ClientSize.Height);
+        var (position, width) = ChatAlone();
+        _normal = (position, width, ClientSize.Height);
     }
 
     protected override void OnClosed(EventArgs e)
@@ -423,7 +418,7 @@ public partial class MainWindow : Window
         {
             if (change.PropertyName == nameof(MainWindowViewModel.ShowIntro) && !vm.ShowIntro)
                 _stickToBottom = true;
-            if (change.PropertyName == nameof(MainWindowViewModel.HasToolkit))
+            if (change.PropertyName == nameof(MainWindowViewModel.Toolkit))
                 Dock();
         };
         vm.ShowInputOverlay();
@@ -542,19 +537,27 @@ public partial class MainWindow : Window
     /// </summary>
     private void Dock()
     {
-        var width = Vm.HasToolkit ? Vm.SelectedToolkit?.Width ?? 0 : 0;
-        var least = Math.Min(width, Vm.SelectedToolkit?.MinWidth ?? 0);
-        var tall = Math.Max(ChatMinHeight, Vm.SelectedToolkit?.MinHeight ?? 0);
-        var columns = Columns.ColumnDefinitions;
-        // What the user dragged the splitter to: given back as it is.
-        var open = _docked > 0 ? columns[0].ActualWidth + columns[1].ActualWidth : 0;
-        if (width > 0 == _docked > 0)
+        var option = Vm.HasToolkit ? Vm.SelectedToolkit : null;
+        var width = option?.Width ?? 0;
+        var least = Math.Min(width, option?.MinWidth ?? 0);
+        var tall = Math.Max(ChatMinHeight, option?.MinHeight ?? 0);
+        // Set here, not bound: a binding could take it after this lays the window out, which then
+        // showed the panel's place empty for a frame and drew the panel in the next.
+        ToolkitContent.Content = Vm.Toolkit;
+        if (width <= 0 && _docked <= 0)
             return;
+        // Picked, the dropdown's list goes before the window changes: left to the dropdown, it went
+        // after, over the resized window for a frame.
+        ToolkitBox.IsDropDownOpen = false;
+        var columns = Columns.ColumnDefinitions;
         var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
         var scaling = screen?.Scaling ?? 1;
+        // Where the chat alone is: one tool for another goes straight from the one's width to the
+        // other's in one step. Closed and opened again, the window shrank to the chat for a frame and
+        // grew back with the new panel's place empty (captured at 60 fps, 2026-10-25).
+        var chat = WindowState == WindowState.Normal && _docked > 0 ? ChatAlone() : (Position, Width);
         if (width > 0)
         {
-            _beforeDock = _afterDock = null;
             (PixelPoint Position, double Width)? place = null;
             if (WindowState == WindowState.Normal && screen is not null)
             {
@@ -564,15 +567,21 @@ public partial class MainWindow : Window
                 {
                     Height = tall;
                     Position = Position.WithY(Math.Max(area.Y, Math.Min(Position.Y, area.Bottom - (int)((tall + 40) * scaling))));
+                    chat = (chat.Position.WithY(Position.Y), chat.Width);
                 }
-                _beforeDock = (Position, Width);
                 var most = area.Width / scaling - 16;
-                var wide = Math.Min(most, Width + width);
+                var wide = Math.Min(most, chat.Width + width);
                 var add = ToolkitColumns.Panel(wide, width, least);
                 var outer = (int)((wide + 16) * scaling);
-                var x = Math.Max(area.X, Math.Min(Position.X - (int)(add * scaling), area.Right - outer));
-                place = (new PixelPoint(x, Position.Y), wide);
+                var x = Math.Max(area.X, Math.Min(chat.Position.X - (int)(add * scaling), area.Right - outer));
+                place = (new PixelPoint(x, chat.Position.Y), wide);
             }
+            _beforeDock = place is null ? null : chat;
+            _afterDock = null;
+            // As narrow as the panel and the chat may both get, if the screen is as wide: lowered
+            // before the window is resized, which it couldn't be below the least of the tool before.
+            MinWidth = screen is null ? ToolkitColumns.WindowMin(least) : Math.Min(ToolkitColumns.WindowMin(least), screen.WorkingArea.Width / scaling - 16);
+            MinHeight = screen is null ? tall : Math.Min(tall, screen.WorkingArea.Height / scaling - 40);
             // The tool and its column first, laid out at the window's new size before the window
             // grows: the panel took a tenth of a second to lay out the first time, and laid out
             // after, the screen showed the window's new part black meanwhile.
@@ -581,18 +590,14 @@ public partial class MainWindow : Window
             columns[1].Width = new GridLength(ToolkitColumns.Splitter);
             _docked = width;
             _least = least;
-            FitColumns(place?.Width ?? Columns.Bounds.Width);
+            var size = place?.Width ?? Columns.Bounds.Width;
+            FitColumns(size);
+            LayOut(size);
             if (place is { } p)
             {
-                var bounds = Columns.Bounds.WithWidth(p.Width);
-                Columns.Measure(bounds.Size);
-                Columns.Arrange(bounds);
                 Place(p.Position, p.Width);
                 _afterDock = (Position, Width);
             }
-            // As narrow as the panel and the chat may both get, if the screen is as wide.
-            MinWidth = screen is null ? ToolkitColumns.WindowMin(least) : Math.Min(ToolkitColumns.WindowMin(least), screen.WorkingArea.Width / scaling - 16);
-            MinHeight = screen is null ? tall : Math.Min(tall, screen.WorkingArea.Height / scaling - 40);
         }
         else
         {
@@ -605,15 +610,46 @@ public partial class MainWindow : Window
             // Lowered first: the window can't be made narrower than it while it is resized.
             MinWidth = ChatMinWidth;
             MinHeight = ChatMinHeight;
-            // Neither moved nor resized since: back where it was (the screen's edge may have kept it
-            // from growing to the left by all of the tool's width, and the chat moved). Else the
-            // chat stays where it is.
-            if (WindowState == WindowState.Normal && _beforeDock is { } before && _afterDock is { } after && Position == after.Position && Math.Abs(Width - after.Width) < 1)
-                Place(before.Position, before.Width);
-            else if (WindowState == WindowState.Normal && open > 0)
-                Place(new PixelPoint(Position.X + (int)(open * scaling), Position.Y), Math.Max(ChatMinWidth, Width - open));
+            // Neither moved nor resized since it opened: back where it was (the screen's edge may have
+            // kept it from growing to the left by all of the tool's width, and the chat moved). Else
+            // the chat stays where it is.
+            if (WindowState == WindowState.Normal)
+            {
+                LayOut(chat.Width);
+                Place(chat.Position, chat.Width);
+            }
             _beforeDock = _afterDock = null;
         }
+    }
+
+    /// <summary>
+    /// Lays the window's content out <paramref name="width"/> across, as it is about to be, before
+    /// the window is: all of it, the new panel and the Toolkit dropdown's new name too. Measure skips
+    /// what was laid out before at the same size, so the new panel was laid out (and drawn) only at
+    /// the window's next layout, a frame later, and the dropdown was cut to its old name's width.
+    /// </summary>
+    private void LayOut(double width)
+    {
+        foreach (var changed in Columns.GetVisualDescendants().OfType<Layoutable>().Where(c => !c.IsMeasureValid || !c.IsArrangeValid).ToList())
+            for (Visual? v = changed; v is not null && v != Columns; v = v.GetVisualParent())
+                (v as Layoutable)?.InvalidateMeasure();
+        Columns.InvalidateMeasure();
+        var bounds = Columns.Bounds.WithWidth(width);
+        Columns.Measure(bounds.Size);
+        Columns.Arrange(bounds);
+    }
+
+    /// <summary>
+    /// Where the chat alone is on the screen and how wide: where it was before the toolkit opened if
+    /// the window is as the toolkit left it, else the window without the toolkit's column.
+    /// </summary>
+    private (PixelPoint Position, double Width) ChatAlone()
+    {
+        if (_beforeDock is { } before && _afterDock is { } after && Position == after.Position && Math.Abs(Width - after.Width) < 1)
+            return before;
+        var toolkit = ToolkitWidth;
+        var scaling = (Screens.ScreenFromWindow(this) ?? Screens.Primary)?.Scaling ?? 1;
+        return (new PixelPoint(Position.X + (int)(toolkit * scaling), Position.Y), Math.Max(ChatMinWidth, Width - toolkit));
     }
 
     /// <summary>
@@ -624,21 +660,76 @@ public partial class MainWindow : Window
     /// </summary>
     private void Place(PixelPoint position, double width)
     {
+        if (position == Position && Math.Abs(width - Width) < 0.5)
+            return;
 #if WINDOWS
         var fill = this.FindResource("BbBackground") is Avalonia.Media.ISolidColorBrush brush ? brush.Color.ToUInt32() & 0xFFFFFF : 0;
         if (OperatingSystem.IsWindows() && TryGetPlatformHandle()?.Handle is { } hwnd && hwnd != 0
-            && Platform.Windows.WindowsPlatform.MoveAndWiden(hwnd, position.X - Position.X, (int)Math.Round((width - Width) * RenderScaling), fill))
+            && Platform.Windows.WindowsPlatform.MoveAndWiden(hwnd, position.X - Position.X, (int)Math.Round((width - Width) * RenderScaling), fill, Shot(fill, out var across), across))
         {
             // The window told Avalonia its new size as it changed; Width follows it, or the next
             // layout would size the window back.
             Width = width;
             UpdateLayout();
+            Uncover(3);
             return;
         }
 #endif
         Position = position;
         Width = width;
     }
+
+#if WINDOWS
+    /// <summary>
+    /// A picture of the window's content as laid out now (for the size it is about to get), over its
+    /// background <paramref name="fill"/> (0xRRGGBB): BGRA rows from the top, <paramref name="across"/>
+    /// pixels wide, for <see cref="Platform.Windows.WindowCover"/>; null if it couldn't be made.
+    /// </summary>
+    private byte[]? Shot(uint fill, out int across)
+    {
+        across = 0;
+        var scaling = RenderScaling;
+        var size = new PixelSize((int)Math.Ceiling(Columns.Bounds.Width * scaling), (int)Math.Ceiling(Columns.Bounds.Height * scaling));
+        if (size.Width <= 0 || size.Height <= 0)
+            return null;
+        try
+        {
+            using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(size, new Vector(96 * scaling, 96 * scaling));
+            bitmap.Render(Columns);
+            var pixels = new byte[size.Width * size.Height * 4];
+            var handle = System.Runtime.InteropServices.GCHandle.Alloc(pixels, System.Runtime.InteropServices.GCHandleType.Pinned);
+            try { bitmap.CopyPixels(new PixelRect(size), handle.AddrOfPinnedObject(), pixels.Length, size.Width * 4); }
+            finally { handle.Free(); }
+            // Premultiplied: what isn't opaque shows the window's background through.
+            byte r = (byte)(fill >> 16), g = (byte)(fill >> 8), b = (byte)fill;
+            for (var i = 0; i < pixels.Length; i += 4)
+            {
+                var clear = 255 - pixels[i + 3];
+                if (clear == 0)
+                    continue;
+                pixels[i] = (byte)(pixels[i] + b * clear / 255);
+                pixels[i + 1] = (byte)(pixels[i + 1] + g * clear / 255);
+                pixels[i + 2] = (byte)(pixels[i + 2] + r * clear / 255);
+                pixels[i + 3] = 255;
+            }
+            across = size.Width;
+            return pixels;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Takes the cover away once Avalonia has drawn the window at its new size, <paramref name="frames"/> frames on.</summary>
+    private void Uncover(int frames)
+    {
+        if (frames > 0)
+            RequestAnimationFrame(_ => Uncover(frames - 1));
+        else if (OperatingSystem.IsWindows())
+            Platform.Windows.WindowCover.Hide();
+    }
+#endif
 
     /// <summary>
     /// The panel's column in a window <paramref name="width"/> across: as wide as it is to be, as

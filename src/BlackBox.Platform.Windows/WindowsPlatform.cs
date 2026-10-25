@@ -38,16 +38,29 @@ public sealed class WindowsPlatform : IPlatformServices
     /// <summary>
     /// Moves <paramref name="hwnd"/> sideways by <paramref name="dx"/> pixels and makes it
     /// <paramref name="wider"/> pixels wider (narrower when negative) in one step, so the screen never
-    /// shows it moved and not yet resized. What it gains on either side is filled with
-    /// <paramref name="fill"/> (0xRRGGBB) until its program draws there: it showed black for the
-    /// twentieth of a second Avalonia took. False when it couldn't.
+    /// shows it moved and not yet resized. With a <paramref name="cover"/> (a picture of all it is about
+    /// to show, BGRA rows from the top, <paramref name="coverWidth"/> pixels across), that is held over
+    /// it (<see cref="WindowCover"/>) until <see cref="WindowCover.Hide"/>; without, what it gains on
+    /// either side is filled with <paramref name="fill"/> (0xRRGGBB), though under Avalonia's ANGLE
+    /// surface that didn't show in a capture at 60 fps (2026-10-25). False when it couldn't.
     /// </summary>
-    public static bool MoveAndWiden(nint hwnd, int dx, int wider, uint fill)
+    public static bool MoveAndWiden(nint hwnd, int dx, int wider, uint fill, byte[]? cover = null, int coverWidth = 0)
     {
-        if (!GetWindowRect(hwnd, out var r) || !ClientOnScreen(hwnd, out var before)
-            || !SetWindowPos(hwnd, 0, r.Left + dx, r.Top, r.Right - r.Left + wider, r.Bottom - r.Top, SWP_NOZORDER | SWP_NOACTIVATE))
+        if (!GetWindowRect(hwnd, out var r) || !ClientOnScreen(hwnd, out var before))
             return false;
-        if (!ClientOnScreen(hwnd, out var after))
+        var shield = cover is not null && coverWidth > 0 ? WindowCover.Make(hwnd, before.Left + dx, before.Top, coverWidth, cover) : 0;
+        // The cover shown and the window resized in one step.
+        var step = BeginDeferWindowPos(2);
+        if (step != 0 && shield != 0)
+            step = DeferWindowPos(step, shield, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        if (step != 0)
+            step = DeferWindowPos(step, hwnd, 0, r.Left + dx, r.Top, r.Right - r.Left + wider, r.Bottom - r.Top, SWP_NOZORDER | SWP_NOACTIVATE);
+        if (step == 0 || !EndDeferWindowPos(step))
+        {
+            WindowCover.Hide();
+            return false;
+        }
+        if (shield != 0 || !ClientOnScreen(hwnd, out var after))
             return true;
         var dc = GetDC(hwnd);
         var brush = CreateSolidBrush(((fill & 0xFF) << 16) | (fill & 0xFF00) | ((fill >> 16) & 0xFF));
