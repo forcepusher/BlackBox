@@ -84,7 +84,7 @@ public sealed class ToolContext
 
     /// <summary>
     /// Asks the model about a picture in a conversation of its own, without the run's history:
-    /// a fresh look, as at a clip's frames to judge it (see <see cref="FilmTool"/>). The answer, or
+    /// a fresh look, as at a clip's frames to judge it (see <see cref="VideoTool"/>). The answer, or
     /// null when it couldn't be had. Set by the agent session; null when the model can't see.
     /// </summary>
     public Func<IReadOnlyList<byte[]>, string, CancellationToken, Task<string?>>? Ask { get; set; }
@@ -137,8 +137,8 @@ public sealed class ToolContext
     /// <summary>BlackBox's Data/tools, where portable helpers it sets up for a job live (the song judge); null when there is none.</summary>
     public string? ToolsDirectory { get; init; }
 
-    /// <summary>Where films go, a folder each (BlackBox's Data/films, where the Video editor panel finds them); null when there is none.</summary>
-    public string? FilmsDirectory { get; init; }
+    /// <summary>Where videos go, a folder each (BlackBox's Data/videos, where the Video editor panel finds them); null when there is none.</summary>
+    public string? VideosDirectory { get; init; }
 
     /// <summary>Where folder indexes are kept (BlackBox's Data/index, see <see cref="IndexFolderTool"/>); null to keep them in memory only.</summary>
     public string? IndexDirectory { get; init; }

@@ -193,7 +193,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     }
 
     /// <summary>The note for a call's result, or null.</summary>
-    /// <param name="arguments">The call's arguments: what a comfyui or film call does, what a command runs.</param>
+    /// <param name="arguments">The call's arguments: what a comfyui or video call does, what a command runs.</param>
     public string? Check(Tool? tool, ToolResult result, string? arguments = null)
     {
         _calls++;
@@ -269,14 +269,14 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
 
     /// <summary>
     /// Calls that try to get something done, as against looking or reading: running code or a
-    /// command, writing a file, a ComfyUI job, making a piece of a film.
+    /// command, writing a file, a ComfyUI job, making a piece of a video.
     /// </summary>
     internal static bool IsTry(Tool? tool, string? action) => tool switch
     {
         ShellTool or SshTool or WriteFileTool or EditFileTool => true,
         McpTool mcp => mcp.Risk != ToolRisk.ReadOnly,
         ComfyTool => action is "run",
-        FilmTool => action is "frame" or "shot" or "sound" or "join",
+        VideoTool => action is "frame" or "shot" or "sound" or "join",
         _ => false,
     };
 
@@ -524,7 +524,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     // Questions the web can't answer: about the screen, the user, how something looks, what a check
     // would show here, or BlackBox's own tools.
     [GeneratedRegex(@"\b(screen|screenshot|cursor|click|clicked|button|the user|user's|they want|he|she)\b|\b(look|looks|seem|seems)\?$|\blooks? (best|better|good|right|nicer)\b|" +
-                    @"\b(determine|tell|check|see|verify|confirm) (whether|if|which)\b|\b(film|comfyui) tool\b|\bthe tool\b|\bblackbox\b|\bstoryboard\b",
+                    @"\b(determine|tell|check|see|verify|confirm) (whether|if|which)\b|\b(video|comfyui) tool\b|\bthe tool\b|\bblackbox\b|\bstoryboard\b",
         RegexOptions.IgnoreCase)]
     private static partial Regex Screenish();
 }

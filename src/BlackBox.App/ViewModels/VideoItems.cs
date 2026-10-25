@@ -1,15 +1,15 @@
 using Avalonia.Media.Imaging;
-using BlackBox.Core.Film;
+using BlackBox.Core.Video;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BlackBox.App.ViewModels;
 
-/// <summary>A piece of the film the storyboard plans and the film tool makes on its own: a frame, a take (a shot) or a sound.</summary>
-public interface IFilmPiece
+/// <summary>A piece of the video the storyboard plans and the video tool makes on its own: a frame, a clip (a shot) or a sound.</summary>
+public interface IVideoPiece
 {
-    FilmPiece Piece { get; }
+    VideoPiece Piece { get; }
 
-    /// <summary>"Take 3", "Marco", "Start of take 2", "rain".</summary>
+    /// <summary>"Clip 3", "Marco", "Start of clip 2", "rain".</summary>
     string Title { get; }
 
     /// <summary>"Not made yet", "Made · looked at", or how the chat's making of it is getting on ("KSampler, step 3 of 8").</summary>
@@ -20,14 +20,14 @@ public interface IFilmPiece
     bool IsSelected { get; set; }
 }
 
-/// <summary>A picture of the film: a frame a take starts or ends on, or a generated image (a reference) others are made from.</summary>
-public sealed partial class FrameItem(FilmFrame frame) : ObservableObject, IFilmPiece
+/// <summary>A picture of the video: a frame a clip starts or ends on, or a generated image (a reference) others are made from.</summary>
+public sealed partial class FrameItem(VideoFrame frame) : ObservableObject, IVideoPiece
 {
-    public FilmFrame Frame { get; } = frame;
+    public VideoFrame Frame { get; } = frame;
     public string Id => Frame.Id;
-    public FilmPiece Piece => FilmPiece.Of(Frame);
+    public VideoPiece Piece => VideoPiece.Of(Frame);
 
-    /// <summary>"Start of take 2", "End of take 1, start of take 2", or a reference's name.</summary>
+    /// <summary>"Start of clip 2", "End of clip 1, start of clip 2", or a reference's name.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Title))]
     private string _label = frame.Label;
@@ -97,22 +97,22 @@ public sealed partial class ReferenceCard(string path, FrameItem? frame) : Obser
     }
 }
 
-/// <summary>A take (a shot): a block on the Video row from where it starts for as long as it lasts, its clip's frames inside once made.</summary>
-public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : ObservableObject, IFilmPiece
+/// <summary>A clip (a shot): a block on the Video clips row from where it starts for as long as it lasts, its frames inside once made.</summary>
+public sealed partial class ShotItem(VideoViewModel video, VideoShot shot) : ObservableObject, IVideoPiece
 {
-    public FilmShot Shot { get; } = shot;
+    public VideoShot Shot { get; } = shot;
     public string Id => Shot.Id;
-    public FilmPiece Piece => FilmPiece.Of(Shot);
+    public VideoPiece Piece => VideoPiece.Of(Shot);
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Title), nameof(Number))]
     private int _index;
 
-    public string Title => $"Take {Index + 1}";
+    public string Title => $"Clip {Index + 1}";
     public string Number => (Index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>What the camera does, as a name for the block ("static close-up"), else the start of what happens.</summary>
-    public string Name => Shot.Camera.Trim() is { Length: > 0 } camera ? camera : Shot.Prompt.Trim() is { Length: > 0 } p ? p : "a new take";
+    public string Name => Shot.Camera.Trim() is { Length: > 0 } camera ? camera : Shot.Prompt.Trim() is { Length: > 0 } p ? p : "a new clip";
 
     /// <summary>What happens in it, as BlackBox asked for it.</summary>
     public string Summary => Shot.Prompt.Trim() is { Length: > 0 } p ? p : "Nothing said yet: click it and say in the chat what happens in it.";
@@ -148,14 +148,14 @@ public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : Observ
             return;
         Shot.Seconds = seconds;
         OnPropertyChanged(nameof(LengthText));
-        film.Relayout();
+        video.Relayout();
         // A change waiting to be saved from the first step on: the storyboard the chat wrote
         // meanwhile is put together with it then, not read over it in the middle of the drag.
-        film.Changed();
+        video.Changed();
     }
 
     /// <summary>The drag ended: the new length is saved.</summary>
-    public void Stretched() => film.Changed();
+    public void Stretched() => video.Changed();
 
     [ObservableProperty]
     private string _state = "";
@@ -174,29 +174,29 @@ public sealed partial class ShotItem(FilmViewModel film, FilmShot shot) : Observ
 }
 
 /// <summary>
-/// A sound on a sound track, as a clip in a video editor: from where it starts for as long as it
-/// plays, dragged along and between tracks, trimmed at either edge. A sound file of the user's, or
+/// A sound on a sound line, as a clip in a video editor: from where it starts for as long as it
+/// plays, dragged along and between sound lines, trimmed at either edge. A sound file of the user's, or
 /// a song BlackBox makes; a new one not chosen yet offers File… or Generate.
 /// </summary>
-public sealed partial class SoundItem(FilmSound sound) : ObservableObject, IFilmPiece
+public sealed partial class SoundItem(VideoSound sound) : ObservableObject, IVideoPiece
 {
-    public FilmSound Sound { get; } = sound;
+    public VideoSound Sound { get; } = sound;
     public string Id => Sound.Id;
-    public FilmPiece Piece => FilmPiece.Of(Sound);
+    public VideoPiece Piece => VideoPiece.Of(Sound);
     public string Title => Sound.Label;
 
     /// <summary>"Sound file" or "Generated sound".</summary>
-    public string Kind => Sound.Source == FilmSound.FromFile ? "Sound file" : "Generated sound";
+    public string Kind => Sound.Source == VideoSound.FromFile ? "Sound file" : "Generated sound";
 
     /// <summary>A song nothing is said of yet: File… or Generate decides what it is.</summary>
-    public bool IsNew => Sound.Source == FilmSound.Song && !IsMade && Sound.Tags.Trim().Length == 0;
+    public bool IsNew => Sound.Source == VideoSound.Song && !IsMade && Sound.Tags.Trim().Length == 0;
 
     /// <summary>How long its file is, in seconds; 0 while it isn't known.</summary>
     public double FileSeconds { get; set; }
 
-    /// <summary>How long it plays: its own length, else what its file has after the trim, else (a song not made) to the film's end.</summary>
-    public double PlaySeconds(double filmLength) =>
-        Sound.Seconds > 0 ? Sound.Seconds : FileSeconds > 0 ? Math.Max(0.1, FileSeconds - Sound.Trim) : Math.Max(2, filmLength - Sound.Start);
+    /// <summary>How long it plays: its own length, else what its file has after the trim, else (a song not made) to the video's end.</summary>
+    public double PlaySeconds(double videoLength) =>
+        Sound.Seconds > 0 ? Sound.Seconds : FileSeconds > 0 ? Math.Max(0.1, FileSeconds - Sound.Trim) : Math.Max(2, videoLength - Sound.Start);
 
     [ObservableProperty]
     private double _x;
@@ -238,43 +238,43 @@ public sealed partial class SoundItem(FilmSound sound) : ObservableObject, IFilm
     }
 }
 
-/// <summary>A sound track's name at the left of the timeline: "Sound 1".</summary>
-public sealed record TrackItem(int Index)
+/// <summary>A sound line's name at the left of the timeline: "Sound line 1".</summary>
+public sealed record SoundLineItem(int Index)
 {
-    public string Name => $"Sound {Index + 1}";
+    public string Name => $"Sound line {Index + 1}";
 }
 
 /// <summary>
-/// What is picked on the timeline and shown in the viewer: a card, a take, a frame of it, a sound,
+/// What is picked on the timeline and shown in the viewer: a card, a clip, a frame of it, a sound,
 /// or an earlier version of one; it goes into the chat's box, for the user to say what to do with it.
 /// </summary>
-public sealed class FilmPick(string path, string caption)
+public sealed class VideoPick(string path, string caption)
 {
     public string Path { get; } = path;
 
-    /// <summary>How the chat's box names it: "Take 2 · s2.mp4".</summary>
+    /// <summary>How the chat's box names it: "Clip 2 · s2.mp4".</summary>
     public string Caption { get; } = caption;
 
     /// <summary>The piece of the storyboard it is, made or not.</summary>
-    public IFilmPiece? Piece { get; init; }
+    public IVideoPiece? Piece { get; init; }
 
     /// <summary>An earlier version of a piece (<see cref="VersionOf"/>), kept when it was made again.</summary>
-    public FilmTake? Version { get; init; }
+    public VideoVersion? Version { get; init; }
 
-    public IFilmPiece? VersionOf { get; init; }
+    public IVideoPiece? VersionOf { get; init; }
 
     /// <summary>Planned in the storyboard and not made yet: no file there.</summary>
     public bool IsPlanned { get; init; }
 }
 
-/// <summary>A line said in a take, where it is heard on the timeline.</summary>
+/// <summary>A line said in a clip, where it is heard on the timeline.</summary>
 public sealed record LineItem(ShotItem Shot, double X, double Width, string Text);
 
-/// <summary>What the viewer shows for something with no picture to play: a piece not made yet, the film not joined.</summary>
+/// <summary>What the viewer shows for something with no picture to play: a piece not made yet, the video not joined.</summary>
 public sealed record PictureView(Bitmap? Picture, string Caption, string? Missing);
 
 /// <summary>An entry of a right-click menu in the panel: what it says, whether it can be done now, and what it does; with <see cref="Items"/>, a submenu.</summary>
-public sealed record FilmMenuItem(string Header, bool Enabled, Action Do, string? Key = null)
+public sealed record VideoMenuItem(string Header, bool Enabled, Action Do, string? Key = null)
 {
-    public IReadOnlyList<FilmMenuItem?>? Items { get; init; }
+    public IReadOnlyList<VideoMenuItem?>? Items { get; init; }
 }

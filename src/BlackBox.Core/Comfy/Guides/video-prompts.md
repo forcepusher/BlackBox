@@ -1,6 +1,6 @@
 # Writing prompts for video (LTX 2.3 / 2.5)
 
-Most bad takes are motion gone wrong: a subject moving the wrong way, a pose that bends wrong,
+Most bad clips are motion gone wrong: a subject moving the wrong way, a pose that bends wrong,
 a prop that moves by itself, a camera that drifts. LTX takes the words literally and fills in
 whatever they leave open, so say what moves, which way, how far, and what stays still.
 
@@ -15,7 +15,7 @@ whatever they leave open, so say what moves, which way, how far, and what stays 
   during the shot (a moon "upper left" in one and "above" in the other slides across the sky).
 - An edit model changes a pose, a face, a turn or what someone holds well, and moves someone across
   the frame badly: asked for a girl "now beside the mailbox", it left her where she stood, and every
-  take then walked her to the mailbox and back. When someone walks or moves far, animate the first
+  try then walked her to the mailbox and back. When someone walks or moves far, animate the first
   frame alone and say in the prompt where they end up; look at a last frame before using it.
 - A last frame pins the end: the video gets there early and holds it. A wave given a last frame
   with the hand up froze with the hand up for the last second and a half, twice. For an action
@@ -89,7 +89,7 @@ whatever they leave open, so say what moves, which way, how far, and what stays 
 - Say where it ends: "pushes in until her face fills the frame".
 - For a still shot: "static locked-off camera; the frame and the background do not move".
 
-## When a take goes wrong
+## When a clip goes wrong
 - Wrong direction: name both ends on screen and what stays still. Still wrong: motion tracks (below).
 - Pose or body wrong: describe the start and end pose, fewer actions, a shorter shot, or a last
   frame that shows the end pose.

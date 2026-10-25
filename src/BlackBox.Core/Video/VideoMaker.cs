@@ -7,25 +7,25 @@ using BlackBox.Core.Comfy;
 using BlackBox.Core.Media;
 using SkiaSharp;
 
-namespace BlackBox.Core.Film;
+namespace BlackBox.Core.Video;
 
-/// <summary>What a film job made: the file in the film's folder, and the workflow that made it.</summary>
+/// <summary>What a video job made: the file in the video's folder, and the workflow that made it.</summary>
 /// <param name="Notes">What the job couldn't put where the storyboard said, or other things worth knowing.</param>
-public sealed record FilmMade(string File, string? Meta, string? Template, TimeSpan Took, IReadOnlyList<string> Notes)
+public sealed record VideoMade(string File, string? Meta, string? Template, TimeSpan Took, IReadOnlyList<string> Notes)
 {
     /// <summary>How the song sounds to the judge, for a song it heard.</summary>
     public SongScore? Score { get; init; }
 }
 
 /// <summary>A job still running in ComfyUI when the wait for it ended (the user wrote meanwhile): asking for the same thing again waits for it.</summary>
-public sealed class FilmStillRunningException(string message) : Exception(message);
+public sealed class VideoStillRunningException(string message) : Exception(message);
 
 /// <summary>
-/// Makes a film's pieces with ComfyUI: each frame, each shot's clip and the songs, every one with a
+/// Makes a video's pieces with ComfyUI: each frame, each shot's clip and the songs, every one with a
 /// workflow of its own kept beside what it made, its seed fixed, so running it again makes the same
-/// thing. Shared by the Video editor panel and the film tool.
+/// thing. Shared by the Video editor panel and the video tool.
 /// </summary>
-public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
+public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
 {
     /// <summary>How long a job is waited for at most; it goes on in ComfyUI after that.</summary>
     public TimeSpan MaxWait { get; init; } = TimeSpan.FromHours(3);
@@ -55,18 +55,18 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     // ---- frames ----------------------------------------------------------------------------------
 
     /// <summary>The prompt a frame is made with: its own.</summary>
-    public static string FramePrompt(Storyboard board, FilmFrame frame) => frame.Prompt.Trim();
+    public static string FramePrompt(Storyboard board, VideoFrame frame) => frame.Prompt.Trim();
 
     /// <summary>The prompt a shot is made with: what happens and what the camera does.</summary>
-    public static string ShotPrompt(Storyboard board, FilmShot shot) =>
+    public static string ShotPrompt(Storyboard board, VideoShot shot) =>
         Join(shot.Prompt, shot.Camera.Length > 0 ? "Camera: " + shot.Camera.TrimEnd('.') : "");
 
     private static string Join(string a, string b) => Storyboard.JoinText(a, b);
 
     /// <summary>
     /// A shot's prompt as the video model is given it: "No music." at the end unless it speaks of
-    /// music. LTX makes a shot's sounds well and its music badly (the user's finding), and the film's
-    /// music is a song on its sound tracks. Not part of the shot's stamp, so shots made before stay up to date.
+    /// music. LTX makes a shot's sounds well and its music badly (the user's finding), and the video's
+    /// music is a song on its sound lines. Not part of the shot's stamp, so shots made before stay up to date.
     /// </summary>
     internal static string WithoutMusic(string prompt) => MusicWords().IsMatch(prompt) ? prompt : Join(prompt, "No music.");
 
@@ -74,20 +74,20 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     private static partial System.Text.RegularExpressions.Regex MusicWords();
 
     /// <summary>The kind of job a frame is: made from words, or from other frames.</summary>
-    public static FilmJob JobOf(FilmFrame frame) => frame.From.Count > 0 ? FilmJob.Edit : FilmJob.Frame;
+    public static VideoJob JobOf(VideoFrame frame) => frame.From.Count > 0 ? VideoJob.Edit : VideoJob.Frame;
 
     /// <summary>The kind of job a shot is, by its frames and lip sync.</summary>
-    public static FilmJob JobOf(FilmShot shot) =>
-        shot.LipSync ? FilmJob.LipSync : shot.First is null ? FilmJob.ShotFromText : shot.Last is null ? FilmJob.ShotFromFirst : FilmJob.Shot;
+    public static VideoJob JobOf(VideoShot shot) =>
+        shot.LipSync ? VideoJob.LipSync : shot.First is null ? VideoJob.ShotFromText : shot.Last is null ? VideoJob.ShotFromFirst : VideoJob.Shot;
 
-    /// <summary>What a frame is made with, in its own words; none: the best installed (see <see cref="FilmFrame.Model"/>).</summary>
-    public static string? ModelOf(Storyboard board, FilmFrame frame) => frame.Model;
+    /// <summary>What a frame is made with, in its own words; none: the best installed (see <see cref="VideoFrame.Model"/>).</summary>
+    public static string? ModelOf(Storyboard board, VideoFrame frame) => frame.Model;
 
-    public static string? ModelOf(Storyboard board, FilmShot shot) => shot.Model;
+    public static string? ModelOf(Storyboard board, VideoShot shot) => shot.Model;
 
 
     /// <summary>Makes a frame's picture: taken from the user's file, else made from words, or from the frames it is based on.</summary>
-    public async Task<FilmMade> MakeFrameAsync(Storyboard board, FilmFrame frame, Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
+    public async Task<VideoMade> MakeFrameAsync(Storyboard board, VideoFrame frame, Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
     {
         using var making = MakingIn(board);
         var target = board.FramePicture(frame);
@@ -97,13 +97,13 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             var started = DateTime.UtcNow;
             var clip = board.ShotVideo(before);
             if (!File.Exists(clip))
-                throw new FilmException($"{frame.Label} is where shot {before.Id} ends, and shot {before.Id} isn't made yet: make it first.");
+                throw new VideoException($"{frame.Label} is where shot {before.Id} ends, and shot {before.Id} isn't made yet: make it first.");
             if (media is null)
-                throw new FilmException($"Nothing on this PC can read video to take {frame.Label} from shot {before.Id} (ffmpeg in BlackBox's Data\\tools would).");
+                throw new VideoException($"Nothing on this PC can read video to take {frame.Label} from shot {before.Id} (ffmpeg in BlackBox's Data\\tools would).");
             await Task.Run(() =>
             {
-                using var reader = media.OpenVideo(clip, Math.Max(board.Width, board.Height)) ?? throw new FilmException($"{clip} has no picture this PC can read.");
-                using var last = FilmCheck.LastFrame(reader) ?? throw new FilmException($"No frame of {clip} could be read.");
+                using var reader = media.OpenVideo(clip, Math.Max(board.Width, board.Height)) ?? throw new VideoException($"{clip} has no picture this PC can read.");
+                using var last = VideoCheck.LastFrame(reader) ?? throw new VideoException($"No frame of {clip} could be read.");
                 var taken = Path.Combine(Path.GetTempPath(), $"blackbox-{Guid.NewGuid():N}.png");
                 try
                 {
@@ -117,30 +117,30 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
                 }
             }, ct).ConfigureAwait(false);
             WriteStamp(board.FrameMeta(frame), FrameStamp(board, frame), null, null);
-            return new FilmMade(target, null, null, DateTime.UtcNow - started, []);
+            return new VideoMade(target, null, null, DateTime.UtcNow - started, []);
         }
-        // A frame of a shot is the film's size, cut to it; a reference keeps its own shape, as the
-        // pictures made from it are made the film's size (see FilmRoles.SizeFromBlank): cut to the
-        // film's frame, a square picture of a character lost its head, and so did every frame made from it.
+        // A frame of a shot is the video's size, cut to it; a reference keeps its own shape, as the
+        // pictures made from it are made the video's size (see VideoRoles.SizeFromBlank): cut to the
+        // video's frame, a square picture of a character lost its head, and so did every frame made from it.
         Action<string, string> save = frame.Reference ? SaveReference : (source, to) => SaveFrame(source, to, board.Width, board.Height);
         if (frame.File is { Length: > 0 } file)
         {
             var started = DateTime.UtcNow;
             if (!File.Exists(file))
-                throw new FilmException($"{frame.Label}'s picture {file} isn't there.");
+                throw new VideoException($"{frame.Label}'s picture {file} isn't there.");
             await Task.Run(() => save(file, target), ct).ConfigureAwait(false);
             WriteStamp(board.FrameMeta(frame), FrameStamp(board, frame), null, null);
-            return new FilmMade(target, null, null, DateTime.UtcNow - started, []);
+            return new VideoMade(target, null, null, DateTime.UtcNow - started, []);
         }
         if (frame.Prompt.Trim().Length == 0)
-            throw new FilmException($"{frame.Label} has no prompt: say what the picture shows, or give a picture of your own for it.");
+            throw new VideoException($"{frame.Label} has no prompt: say what the picture shows, or give a picture of your own for it.");
         var pictures = new List<string>();
         foreach (var id in frame.From)
         {
             if (board.Frame(id) is not { } from)
             {
-                pictures.Add(board.ReferenceFile(id) ?? throw new FilmException(
-                    $"{frame.Label} is to be made from \"{id}\", which is neither a frame of this film nor a picture in its References folder ({board.ReferencesFolder})" +
+                pictures.Add(board.ReferenceFile(id) ?? throw new VideoException(
+                    $"{frame.Label} is to be made from \"{id}\", which is neither a frame of this video nor a picture in its References folder ({board.ReferencesFolder})" +
                     (board.ReferenceFiles() is { Count: > 0 } there ? $", which has {string.Join(", ", there.Take(20).Select(board.InReferences))}." : ", which is empty.")));
                 continue;
             }
@@ -148,10 +148,10 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
                 continue;
             var picture = board.FramePicture(from);
             if (!File.Exists(picture))
-                throw new FilmException($"{from.Label} isn't made yet, and {frame.Label} is made from it: make {from.Label} first.");
+                throw new VideoException($"{from.Label} isn't made yet, and {frame.Label} is made from it: make {from.Label} first.");
             pictures.Add(picture);
         }
-        var inputs = new FilmInputs
+        var inputs = new VideoInputs
         {
             Prompt = FramePrompt(board, frame),
             Seed = frame.Seed,
@@ -160,13 +160,13 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             Pictures = pictures,
             Prefix = Prefix(board, frame.Id),
         };
-        var job = pictures.Count > 0 ? FilmJob.Edit : FilmJob.Frame;
+        var job = pictures.Count > 0 ? VideoJob.Edit : VideoJob.Frame;
         var stamp = FrameStamp(board, frame);
         var run = await RunAsync(job, ModelOf(board, frame), inputs, frame.Set, board.FrameMeta(frame), stamp, "image", progress, userMessage, ct).ConfigureAwait(false);
         await Task.Run(() => save(run.Output, target), ct).ConfigureAwait(false);
         Restamp(board.FrameMeta(frame), stamp);
-        FilmTakes.Remember(board.FrameMeta(frame), FilmPiece.Of(frame).Settings(board));
-        return new FilmMade(target, board.FrameMeta(frame), run.Template, run.Took, run.Notes);
+        VideoVersions.Remember(board.FrameMeta(frame), VideoPiece.Of(frame).Settings(board));
+        return new VideoMade(target, board.FrameMeta(frame), run.Template, run.Took, run.Notes);
     }
 
     // ---- shots -------------------------------------------------------------------------------------
@@ -175,27 +175,27 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     /// Makes a shot's clip from its frames: first and last, first only, or words only; a speaking
     /// one from its first frame and its line.
     /// </summary>
-    /// <param name="take">Saved as this file instead of the shot's own (one take of several).</param>
-    public async Task<FilmMade> MakeShotAsync(Storyboard board, FilmShot shot, Action<string>? progress, CancellationToken userMessage, CancellationToken ct, string? take = null)
+    /// <param name="tryFile">Saved as this file instead of the shot's own (one try of several).</param>
+    public async Task<VideoMade> MakeShotAsync(Storyboard board, VideoShot shot, Action<string>? progress, CancellationToken userMessage, CancellationToken ct, string? tryFile = null)
     {
         using var making = MakingIn(board);
         var first = board.Frame(shot.First);
         var last = board.Frame(shot.Last);
-        string? Picture(FilmFrame? frame)
+        string? Picture(VideoFrame? frame)
         {
             if (frame is null)
                 return null;
             var path = board.FramePicture(frame);
-            return File.Exists(path) ? path : throw new FilmException($"{frame.Label} isn't made yet, and shot {shot.Id} {(frame == first ? "starts" : "ends")} on it: make it first.");
+            return File.Exists(path) ? path : throw new VideoException($"{frame.Label} isn't made yet, and shot {shot.Id} {(frame == first ? "starts" : "ends")} on it: make it first.");
         }
         var (firstPicture, lastPicture) = (Picture(first), Picture(last));
         var notes = new List<string>();
         string? audio = null;
-        FilmJob job;
+        VideoJob job;
         if (shot.LipSync)
         {
             if (firstPicture is null)
-                throw new FilmException($"Shot {shot.Id} is lip-synced, which needs its first frame to show who sings or speaks: give it one.");
+                throw new VideoException($"Shot {shot.Id} is lip-synced, which needs its first frame to show who sings or speaks: give it one.");
             audio = board.ShotAudio(shot);
             // Its own line, said a moment after the shot starts (a head turns to the camera first).
             if (!LineIsCurrent(board, shot))
@@ -203,7 +203,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             var said = await Task.Run(() => PlaceSound(board.ShotLine(shot), LineLead, shot.Seconds, audio), ct).ConfigureAwait(false);
             if (said + LineLead > shot.Seconds + 0.05)
                 notes.Add($"Its line takes {said:0.0} s, and with the {LineLead:0.0} s before it the shot is {shot.Seconds:0.#} s: the end of the line is cut. Make the shot longer or the line shorter.");
-            job = FilmJob.LipSync;
+            job = VideoJob.LipSync;
             if (lastPicture is not null)
                 notes.Add($"A lip-synced shot is made from its first frame only, so it doesn't end on {last!.Label}.");
             lastPicture = null;
@@ -212,12 +212,12 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         {
             // The video model animates a picture well and draws one badly: a picture model makes it first.
             if (firstPicture is null)
-                throw new FilmException(first is null
+                throw new VideoException(first is null
                     ? $"Shot {shot.Id} has no first frame: a picture model makes the picture a shot starts on, and the video model animates it. Give it a first frame."
                     : $"Shot {shot.Id} starts on {first.Label}, which isn't made yet: make it first.");
-            job = lastPicture is null ? FilmJob.ShotFromFirst : FilmJob.Shot;
+            job = lastPicture is null ? VideoJob.ShotFromFirst : VideoJob.Shot;
         }
-        var inputs = new FilmInputs
+        var inputs = new VideoInputs
         {
             Prompt = shot.LipSync ? ShotPrompt(board, shot) : WithoutMusic(ShotPrompt(board, shot)),
             Seed = shot.Seed,
@@ -231,24 +231,24 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             TextToVideo = firstPicture is null,
             Prefix = Prefix(board, shot.Id),
         };
-        var target = take ?? board.ShotVideo(shot);
-        var workflow = take is null ? board.ShotMeta(shot) : Storyboard.MetaOf(take);
+        var target = tryFile ?? board.ShotVideo(shot);
+        var workflow = tryFile is null ? board.ShotMeta(shot) : Storyboard.MetaOf(tryFile);
         var stamp = ShotStamp(board, shot);
         var run = await RunAsync(job, ModelOf(board, shot), inputs, shot.Set, workflow, stamp, "video", progress, userMessage, ct).ConfigureAwait(false);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-        MediaRelease.Release(target); // its take before may be playing in the chat
+        MediaRelease.Release(target); // its version before may be playing in the chat
         File.Copy(run.Output, target, overwrite: true);
         if (VideoSteady.AsksStill(shot.Camera + "\n" + shot.Prompt) && await HoldStillAsync(target, ct).ConfigureAwait(false) is { } held)
             notes.Add(held);
         Restamp(workflow, stamp);
-        FilmTakes.Remember(workflow, FilmPiece.Of(shot).Settings(board));
-        return new FilmMade(target, workflow, run.Template, run.Took, [.. notes, .. run.Notes]);
+        VideoVersions.Remember(workflow, VideoPiece.Of(shot).Settings(board));
+        return new VideoMade(target, workflow, run.Template, run.Took, [.. notes, .. run.Notes]);
     }
 
     /// <summary>
     /// A clip whose camera moved where its shot holds it still, held still after the fact
     /// (<see cref="VideoSteady"/>): LTX pushed in, panned or tilted on every locked-off shot of a
-    /// night of films. What was done, for the notes; null when the camera held still or nothing could be read.
+    /// night of videos. What was done, for the notes; null when the camera held still or nothing could be read.
     /// </summary>
     private async Task<string?> HoldStillAsync(string clip, CancellationToken ct)
     {
@@ -287,15 +287,15 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     public const double LineLead = 0.4;
 
     /// <summary>
-    /// Says a shot's line in the film's voice with VoxCPM2, ComfyUI's text-to-speech model here. The
+    /// Says a shot's line in the video's voice with VoxCPM2, ComfyUI's text-to-speech model here. The
     /// first speaking shot's line is said from the voice's description; the others clone that
     /// line's voice, so every line sounds like the same person.
     /// </summary>
-    public async Task<FilmMade> MakeLineAsync(Storyboard board, FilmShot shot, Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
+    public async Task<VideoMade> MakeLineAsync(Storyboard board, VideoShot shot, Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
     {
         using var making = MakingIn(board);
         if (!Storyboard.Speaks(shot))
-            throw new FilmException($"Shot {shot.Id} has no line to say.");
+            throw new VideoException($"Shot {shot.Id} has no line to say.");
         var firstSpeaker = board.Shots.First(Storyboard.Speaks);
         string? reference = null;
         if (firstSpeaker != shot)
@@ -309,7 +309,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         var api = await hub.ConnectAsync(null, notes, progress, ct).ConfigureAwait(false);
         var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
         var workflow = SpeechWorkflow(library, shot.Line.Trim(), board.Voice.Trim(), board.VoiceSeed, reference, firstSpeaker.Line.Trim(), Prefix(board, shot.Id + "-line"))
-                       ?? throw new FilmException("Saying a line needs VoxCPM2's nodes in ComfyUI (the ComfyUI-VoxCPM custom node pack), and they aren't installed: " +
+                       ?? throw new VideoException("Saying a line needs VoxCPM2's nodes in ComfyUI (the ComfyUI-VoxCPM custom node pack), and they aren't installed: " +
                                                   "install the pack (it downloads its model on first use).");
         workflow.FillAdvancedDefaults(library);
         var stamp = LineStamp(board, shot);
@@ -318,7 +318,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         MediaRelease.Release(board.ShotLine(shot));
         File.Copy(run.Output, board.ShotLine(shot), overwrite: true);
         Restamp(board.ShotLineMeta(shot), stamp);
-        return new FilmMade(board.ShotLine(shot), board.ShotLineMeta(shot), "VoxCPM2", run.Took, [.. notes, .. run.Notes]);
+        return new VideoMade(board.ShotLine(shot), board.ShotLineMeta(shot), "VoxCPM2", run.Took, [.. notes, .. run.Notes]);
     }
 
     /// <summary>
@@ -357,10 +357,10 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         return ComfyWorkflow.FromApi(nodes);
     }
 
-    public static bool LineIsCurrent(Storyboard board, FilmShot shot) =>
+    public static bool LineIsCurrent(Storyboard board, VideoShot shot) =>
         File.Exists(board.ShotLine(shot)) && MadeStamp(board.ShotLineMeta(shot)) is { } made && made == LineStamp(board, shot);
 
-    public static string LineStamp(Storyboard board, FilmShot shot)
+    public static string LineStamp(Storyboard board, VideoShot shot)
     {
         var first = board.Shots.FirstOrDefault(Storyboard.Speaks);
         var reference = first is null || first == shot ? "" : $"{first.Line.Trim()}|{FileStamp(board.ShotLine(first))}";
@@ -373,7 +373,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     /// </summary>
     public double PlaceSound(string sound, double at, double seconds, string target)
     {
-        using var reader = media?.OpenAudio(sound) ?? throw new FilmException($"{sound} can't be read on this PC (ffmpeg in BlackBox's Data\\tools would).");
+        using var reader = media?.OpenAudio(sound) ?? throw new VideoException($"{sound} can't be read on this PC (ffmpeg in BlackBox's Data\\tools would).");
         var (rate, channels) = (reader.SampleRate, Math.Max(1, reader.Channels));
         var samples = new float[(long)Math.Round(seconds * rate) * channels];
         var offset = (long)Math.Round(at * rate) * channels;
@@ -396,46 +396,46 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     /// <summary>
     /// The shortest song made: ACE-Step 1.5 makes music that falls apart when asked for a short one.
     /// For the same style and lyrics, songs of 21 s scored 2.4 to 2.9 of 5 on SongEval (the user called
-    /// them garbage), 30 s 3.2, 45 to 90 s 3.8 to 4.4. The film uses the song's start and fades it out.
+    /// them garbage), 30 s 3.2, 45 to 90 s 3.8 to 4.4. The video uses the song's start and fades it out.
     /// </summary>
     public const double MinSongSeconds = 60;
 
-    /// <summary>How long a song is made: from where it starts to the film's end and a little more, a minute at least.</summary>
-    public static double SongSeconds(Storyboard board, FilmSound sound) => Math.Max(MinSongSeconds, Math.Ceiling(board.Timing().Length - sound.Start) + 2);
+    /// <summary>How long a song is made: from where it starts to the video's end and a little more, a minute at least.</summary>
+    public static double SongSeconds(Storyboard board, VideoSound sound) => Math.Max(MinSongSeconds, Math.Ceiling(board.Timing().Length - sound.Start) + 2);
 
-    /// <summary>Hears how good a song is, to keep the best of several takes; null when it can't run here.</summary>
+    /// <summary>Hears how good a song is, to keep the best of several tries; null when it can't run here.</summary>
     public SongJudge? Judge { get; init; }
 
     /// <summary>
-    /// Makes a song for a sound track: in its style, with its lyrics (an instrumental without), a
-    /// minute long at least. With a judge, up to <paramref name="takes"/> songs with new
-    /// seeds, each heard for the part the film uses, and the best kept (its seed in the storyboard,
+    /// Makes a song for a sound line: in its style, with its lyrics (an instrumental without), a
+    /// minute long at least. With a judge, up to <paramref name="tries"/> songs with new
+    /// seeds, each heard for the part the video uses, and the best kept (its seed in the storyboard,
     /// which the caller saves): the same settings scored 3.3 to 4.2 by the seed alone.
     /// </summary>
-    public async Task<FilmMade> MakeSongAsync(Storyboard board, FilmSound sound, Action<string>? progress, CancellationToken userMessage, CancellationToken ct, int takes = 1)
+    public async Task<VideoMade> MakeSongAsync(Storyboard board, VideoSound sound, Action<string>? progress, CancellationToken userMessage, CancellationToken ct, int tries = 1)
     {
         using var making = MakingIn(board);
-        if (sound.Source != FilmSound.Song)
-            throw new FilmException($"Sound {sound.Id} is a sound file of the user's: there is nothing to make.");
+        if (sound.Source != VideoSound.Song)
+            throw new VideoException($"Sound {sound.Id} is a sound file of the user's: there is nothing to make.");
         if (sound.Tags.Trim().Length == 0)
-            throw new FilmException("The song has no style: say what it should sound like (genre, instruments, voice, tempo).");
+            throw new VideoException("The song has no style: say what it should sound like (genre, instruments, voice, tempo).");
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var python = Judge is null ? null : SongJudge.PythonOf(hub);
         var ffmpeg = media?.Ffmpeg;
         if (python is null || ffmpeg is null)
-            takes = 1;
+            tries = 1;
         var made = new List<(long Seed, string File, string Workflow, Run Run)>();
         var seedBefore = sound.Seed;
         var song = board.SoundFile(sound);
         var meta = board.SoundMeta(sound);
-        var piece = FilmPiece.Of(sound);
+        var piece = VideoPiece.Of(sound);
         try
         {
-            for (var take = 1; take <= Math.Max(1, takes); take++)
+            for (var attempt = 1; attempt <= Math.Max(1, tries); attempt++)
             {
-                if (take > 1)
+                if (attempt > 1)
                     sound.Seed = Storyboard.NewSeed();
-                var inputs = new FilmInputs
+                var inputs = new VideoInputs
                 {
                     Tags = sound.Tags.Trim(),
                     Lyrics = sound.Lyrics.Trim().Length > 0 ? sound.Lyrics.Trim() : "[Instrumental]",
@@ -444,11 +444,11 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
                     Seconds = SongSeconds(board, sound),
                     Prefix = Prefix(board, sound.Id),
                 };
-                var file = takes <= 1 ? song : Path.Combine(Path.GetDirectoryName(song)!, $"{Path.GetFileNameWithoutExtension(song)}.take{take}.mp3");
+                var file = tries <= 1 ? song : Path.Combine(Path.GetDirectoryName(song)!, $"{Path.GetFileNameWithoutExtension(song)}.try{attempt}.mp3");
                 var workflow = Storyboard.MetaOf(file);
                 var stamp = SongStamp(board, sound);
-                var run = await RunAsync(FilmJob.Song, sound.Model, inputs, sound.Set, workflow, stamp, "audio",
-                    takes <= 1 ? progress : s => progress?.Invoke($"Song {take} of {takes}: {s}"), userMessage, ct).ConfigureAwait(false);
+                var run = await RunAsync(VideoJob.Song, sound.Model, inputs, sound.Set, workflow, stamp, "audio",
+                    tries <= 1 ? progress : s => progress?.Invoke($"Song {attempt} of {tries}: {s}"), userMessage, ct).ConfigureAwait(false);
                 Directory.CreateDirectory(Path.GetDirectoryName(file)!);
                 MediaRelease.Release(file);
                 File.Copy(run.Output, file, overwrite: true);
@@ -458,20 +458,20 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         }
         catch
         {
-            // A take that failed (or was stopped) leaves the board as it was: the song made before
+            // A try that failed (or was stopped) leaves the board as it was: the song made before
             // still matches it, rather than being out of date for a seed nothing was made with.
             sound.Seed = seedBefore;
-            // The tries made before it are takes of the song, as a shot's are, not stray files.
-            if (takes > 1)
+            // The tries made before it are versions of the song, as a shot's are, not stray files.
+            if (tries > 1)
                 foreach (var m in made)
                 {
-                    try { FilmTakes.Add(board, piece, m.File); }
+                    try { VideoVersions.Add(board, piece, m.File); }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
                 }
             throw;
         }
 
-        // Each heard for the part of it the film uses.
+        // Each heard for the part of it the video uses.
         Dictionary<string, SongScore>? scores = null;
         var notes = made.SelectMany(m => m.Run.Notes).Distinct().ToList();
         if (python is not null && ffmpeg is not null)
@@ -480,35 +480,35 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             {
                 scores = await Judge!.ScoreAsync(made.Select(m => m.File).ToList(), python, ffmpeg, Math.Max(1, board.Timing().Length - sound.Start), progress, ct).ConfigureAwait(false);
             }
-            catch (FilmException ex)
+            catch (VideoException ex)
             {
                 notes.Add(ex.Message);
             }
         }
         var best = made.MaxBy(m => scores?.GetValueOrDefault(m.File)?.Musicality ?? 0);
         sound.Seed = best.Seed;
-        // How each sounds, kept with it: the Video editor panel shows it with the song and its takes.
+        // How each sounds, kept with it: the Video editor panel shows it with the song and its versions.
         foreach (var m in made)
             if (scores?.GetValueOrDefault(m.File) is { } heard)
-                FilmTakes.RememberLook(m.Workflow, heard.Musicality < SongScore.Good ? "redo" : "good", heard.Describe());
+                VideoVersions.RememberLook(m.Workflow, heard.Musicality < SongScore.Good ? "redo" : "good", heard.Describe());
         if (made.Count > 1)
         {
             notes.Insert(0, $"Kept song {made.IndexOf(best) + 1} of {made.Count} (seed {best.Seed}); musicality of each: " +
                             string.Join(", ", made.Select(m => scores?.GetValueOrDefault(m.File) is { } s ? s.Musicality.ToString("0.0", CultureInfo.InvariantCulture) : "?")) + ".");
-            FilmTakes.Promote(best.File, song);
-            FilmTakes.Remember(meta, piece.Settings(board));
+            VideoVersions.Promote(best.File, song);
+            VideoVersions.Remember(meta, piece.Settings(board));
             // The others are versions of the song, to put back in the panel.
             foreach (var other in made.Where(m => m != best))
             {
-                FilmTakes.Remember(other.Workflow, piece.Settings(board) is JsonObject settings ? With(settings, other.Seed) : null);
-                FilmTakes.Add(board, piece, other.File);
+                VideoVersions.Remember(other.Workflow, piece.Settings(board) is JsonObject settings ? With(settings, other.Seed) : null);
+                VideoVersions.Add(board, piece, other.File);
             }
         }
         else
-            FilmTakes.Remember(meta, piece.Settings(board));
-        return new FilmMade(song, meta, best.Run.Template, clock.Elapsed, notes) { Score = scores?.GetValueOrDefault(best.File) };
+            VideoVersions.Remember(meta, piece.Settings(board));
+        return new VideoMade(song, meta, best.Run.Template, clock.Elapsed, notes) { Score = scores?.GetValueOrDefault(best.File) };
 
-        // The sound's settings with the seed that take was made with.
+        // The sound's settings with the seed that try was made with.
         static JsonObject With(JsonObject settings, long seed)
         {
             settings["seed"] = seed;
@@ -523,8 +523,8 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
 
     // ---- running a job --------------------------------------------------------------------------------
 
-    /// <summary>Where ComfyUI saves a film's files, under its output folder.</summary>
-    private static string Prefix(Storyboard board, string id) => $"BlackBox films/{Storyboard.Safe(board.Title.Length > 0 ? board.Title : Path.GetFileName(board.Folder))}/{id}";
+    /// <summary>Where ComfyUI saves a video's files, under its output folder.</summary>
+    private static string Prefix(Storyboard board, string id) => $"BlackBox videos/{Storyboard.Safe(board.Title.Length > 0 ? board.Title : Path.GetFileName(board.Folder))}/{id}";
 
     private sealed record Run(string Output, string Template, TimeSpan Took, List<string> Notes);
 
@@ -537,8 +537,8 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     /// Runs the template for a job with the inputs set, and saves the workflow as it ran beside the
     /// result (with the files it loads by their full paths, so the comfyui tool can run it again).
     /// </summary>
-    /// <param name="model">What it is to be made with, in words or by name (<see cref="FilmFrame.Model"/>); null: the best installed.</param>
-    private async Task<Run> RunAsync(FilmJob job, string? model, FilmInputs inputs, JsonObject? extra, string workflowFile, string stamp, string kind,
+    /// <param name="model">What it is to be made with, in words or by name (<see cref="VideoFrame.Model"/>); null: the best installed.</param>
+    private async Task<Run> RunAsync(VideoJob job, string? model, VideoInputs inputs, JsonObject? extra, string workflowFile, string stamp, string kind,
         Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
     {
         Use();
@@ -546,27 +546,27 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         var api = await hub.ConnectAsync(null, notes, progress, ct).ConfigureAwait(false);
         var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
         progress?.Invoke(model is null ? "Getting the workflow ready…" : $"Finding \"{model}\" among what is installed…");
-        var (template, note) = await FilmTemplates.PickAsync(hub, api, model, job, ct).ConfigureAwait(false);
+        var (template, note) = await VideoTemplates.PickAsync(hub, api, model, job, ct).ConfigureAwait(false);
         if (note is not null)
             notes.Add(note);
         if (template is null)
-            throw new FilmException($"No ComfyUI template for {FilmTemplates.Describe(job)} is ready on this PC: " +
+            throw new VideoException($"No ComfyUI template for {VideoTemplates.Describe(job)} is ready on this PC: " +
                                     "every one this needs a model or node that isn't installed. The comfyui tool finds templates (action=templates) and downloads what they need.");
         if (!template.Ready)
-            throw new FilmException($"The template {template.Template.Name} needs {string.Join(", ", template.Missing.Take(6))}, which isn't installed: " +
+            throw new VideoException($"The template {template.Template.Name} needs {string.Join(", ", template.Missing.Take(6))}, which isn't installed: " +
                                     "download it (the comfyui tool's action=templates with its name gives the links), or pick another template for this.");
         var workflow = template.Workflow;
         var missed = new List<string>();
-        var set = FilmRoles.Apply(workflow, library, inputs, missed);
+        var set = VideoRoles.Apply(workflow, library, inputs, missed);
         // What the job can't go without stops it; the rest is said.
         var vital = missed.Where(m => m.StartsWith("the prompt", StringComparison.Ordinal) || m.StartsWith("the first frame", StringComparison.Ordinal) ||
                                       m.StartsWith("the last frame", StringComparison.Ordinal) || m.StartsWith("the sound", StringComparison.Ordinal)).ToList();
         if (vital.Count > 0)
-            throw new FilmException($"The template {template.Template.Name} has no place for {string.Join(", ", vital)}: pick another template for this job, " +
+            throw new VideoException($"The template {template.Template.Name} has no place for {string.Join(", ", vital)}: pick another template for this job, " +
                                     "or say where it goes with set {\"node id.input\": value}.");
         notes.AddRange(missed.Select(m => $"The template {template.Template.Name} had no place for {m}."));
         if (extra is { Count: > 0 } && workflow.Set(extra, library) is { Count: > 0 } wrong)
-            throw new FilmException($"These changes don't fit the template {template.Template.Name}:\n- " + string.Join("\n- ", wrong));
+            throw new VideoException($"These changes don't fit the template {template.Template.Name}:\n- " + string.Join("\n- ", wrong));
         workflow.FillAdvancedDefaults(library);
         var run = await RunWorkflowAsync(api, library, workflow, workflowFile, stamp, template.Template.Name, kind, progress, userMessage, ct).ConfigureAwait(false);
         return run with { Notes = [.. notes, .. run.Notes] };
@@ -600,18 +600,18 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         foreach (var (id, input, path) in workflow.LocalFiles(library, p => p))
         {
             if (!File.Exists(path))
-                throw new FilmException($"{path} isn't there: node {id} loads it.");
+                throw new VideoException($"{path} isn't there: node {id} loads it.");
             progress?.Invoke($"Uploading {Path.GetFileName(path)}…");
             ((JsonObject)workflow.Nodes[id]!["inputs"]!)[input] = await api.UploadAsync(path, ct).ConfigureAwait(false);
             uploaded.Add(id + "." + input);
         }
         var problems = workflow.Validate(library, uploaded);
         if (problems.Count > 0)
-            throw new FilmException($"The workflow from {templateName} can't run:\n- " + string.Join("\n- ", problems.Take(12)));
+            throw new VideoException($"The workflow from {templateName} can't run:\n- " + string.Join("\n- ", problems.Take(12)));
         var clientId = "blackbox-" + Guid.NewGuid().ToString("N")[..12];
         var (promptId, refused) = await ComfyRunner.QueueAsync(api, workflow, clientId, ct).ConfigureAwait(false);
         if (promptId is null)
-            throw new FilmException($"ComfyUI refused the workflow from {templateName}:\n- " + string.Join("\n- ", refused));
+            throw new VideoException($"ComfyUI refused the workflow from {templateName}:\n- " + string.Join("\n- ", refused));
         RanJobs = true;
         var titles = workflow.All().ToDictionary(n => n.Id, n => ComfyWorkflow.TitleOf(n.Node) ?? ComfyWorkflow.ClassOf(n.Node));
         hub.RememberJob(promptId, clientId, titles);
@@ -636,17 +636,17 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             throw;
         }
         if (job.Status is "running" or "queued")
-            throw new FilmStillRunningException($"It is still being made in ComfyUI ({job.Progress ?? job.Status}, {Chats.ChatTimes.Stopwatch(DateTime.UtcNow - pending.Queued)} so far)" +
+            throw new VideoStillRunningException($"It is still being made in ComfyUI ({job.Progress ?? job.Status}, {Chats.ChatTimes.Stopwatch(DateTime.UtcNow - pending.Queued)} so far)" +
                                                 ": asking for the same thing again waits for it.");
         Running.TryRemove(workflowFile, out _);
         if (job.Status != "success")
-            throw new FilmException($"ComfyUI's job from {pending.Template} {(job.Status == "interrupted" ? "was stopped" : "failed")}: {job.Error}");
+            throw new VideoException($"ComfyUI's job from {pending.Template} {(job.Status == "interrupted" ? "was stopped" : "failed")}: {job.Error}");
         var dirs = await ComfyHub.FoldersAsync(api, ct).ConfigureAwait(false) ?? [];
-        var files = await ComfyRunner.LocateAsync(api, job.Files, dirs, Path.Combine(Path.GetTempPath(), "BlackBox films"), ct).ConfigureAwait(false);
+        var files = await ComfyRunner.LocateAsync(api, job.Files, dirs, Path.Combine(Path.GetTempPath(), "BlackBox videos"), ct).ConfigureAwait(false);
         var made = files.Where(f => f.LocalPath is not null && f.Kind == kind || kind == "image" && f.Kind == "animation" && f.LocalPath is not null).ToList();
         var saved = made.Where(f => f.Type == "output").ToList();
         var pick = (saved.Count > 0 ? saved : made).MaxBy(f => new FileInfo(f.LocalPath!).Length)
-                   ?? throw new FilmException($"The job from {pending.Template} made no {kind} (it made {(files.Count == 0 ? "nothing" : string.Join(", ", files.Select(f => f.Filename)))}).");
+                   ?? throw new VideoException($"The job from {pending.Template} made no {kind} (it made {(files.Count == 0 ? "nothing" : string.Join(", ", files.Select(f => f.Filename)))}).");
         return new Run(pick.LocalPath!, pending.Template, job.Elapsed, notes);
     }
 
@@ -655,10 +655,10 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     /// <summary>
     /// What a frame's picture comes from, as a short hash: its prompt, seed, size and what it is made
     /// with, its user's file, the pictures it is based on. A frame whose stamp differs from the one it
-    /// was made with is out of date. Only the frame's own settings and the film's size go in: a
+    /// was made with is out of date. Only the frame's own settings and the video's size go in: a
     /// change to one frame leaves the others made.
     /// </summary>
-    public static string FrameStamp(Storyboard board, FilmFrame frame)
+    public static string FrameStamp(Storyboard board, VideoFrame frame)
     {
         var sb = new StringBuilder();
         if (frame.Of is { } of && board.Shot(of) is { } before)
@@ -677,10 +677,10 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         return Hash(sb.ToString());
     }
 
-    public static string ShotStamp(Storyboard board, FilmShot shot)
+    public static string ShotStamp(Storyboard board, VideoShot shot)
     {
         var sb = new StringBuilder();
-        // Numbers as the invariant culture writes them: a film moved to a PC that writes 5,5 for 5.5 stays made.
+        // Numbers as the invariant culture writes them: a video moved to a PC that writes 5,5 for 5.5 stays made.
         sb.Append(ShotPrompt(board, shot)).Append('|').Append(shot.Seed).Append('|').Append(shot.Seconds.ToString(CultureInfo.InvariantCulture)).Append('|').Append(board.Fps).Append('|')
           .Append(board.Width).Append('x').Append(board.Height).Append('|').Append(shot.LipSync).Append('|').Append(shot.Set?.ToJsonString());
         foreach (var id in new[] { shot.First, shot.LipSync ? null : shot.Last })
@@ -693,20 +693,20 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
 
     /// <summary>
     /// What a song is made from, and after a colon how long it was made: a song stays up to date
-    /// while it covers the film from where it starts. With the length in the hash, any change of a
-    /// film over a minute (a shot a second shorter) put the song out of date, and remaking it changed the music.
+    /// while it covers the video from where it starts. With the length in the hash, any change of a
+    /// video over a minute (a shot a second shorter) put the song out of date, and remaking it changed the music.
     /// </summary>
-    public static string SongStamp(Storyboard board, FilmSound sound) =>
+    public static string SongStamp(Storyboard board, VideoSound sound) =>
         SongHash(sound) + ":" + SongSeconds(board, sound).ToString(CultureInfo.InvariantCulture);
 
-    private static string SongHash(FilmSound sound) =>
+    private static string SongHash(VideoSound sound) =>
         Hash($"{sound.Tags}|{sound.Lyrics}|{sound.Seed}|{sound.Model}|{sound.Set?.ToJsonString()}");
 
     /// <summary>Gives a made piece's meta a new stamp (when it differs).</summary>
     private static void Restamp(string meta, string stamp)
     {
         if (MadeStamp(meta) != stamp)
-            FilmTakes.ChangeMade(meta, made => made["stamp"] = stamp);
+            VideoVersions.ChangeMade(meta, made => made["stamp"] = stamp);
     }
 
     private static string FileStamp(string path)
@@ -755,7 +755,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { json = []; }
         // A line's meta is made here; a frame's, shot's or the song's by the storyboard, with the piece in it.
         if (json["kind"] is null && (meta.EndsWith(".line.json", StringComparison.OrdinalIgnoreCase) ? "line"
-                : Path.GetFileName(meta).Contains(".take", StringComparison.OrdinalIgnoreCase) ? "take" : null) is { } kind)
+                : Path.GetFileName(meta).Contains(".try", StringComparison.OrdinalIgnoreCase) ? "try" : null) is { } kind)
             json["kind"] = kind;
         json["made"] = new JsonObject { ["stamp"] = stamp, ["template"] = template, ["at"] = DateTime.UtcNow.ToString("O") };
         Directory.CreateDirectory(Path.GetDirectoryName(meta)!);
@@ -767,13 +767,13 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
             File.Delete(file); // taken from a file: no workflow made it
     }
 
-    /// <summary>The films a piece is being made of now, by their folders (with how many at once): their folders aren't renamed meanwhile.</summary>
+    /// <summary>The videos a piece is being made of now, by their folders (with how many at once): their folders aren't renamed meanwhile.</summary>
     private static readonly ConcurrentDictionary<string, int> Making = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Whether a piece of the film in <paramref name="folder"/> is being made now (in this BlackBox).</summary>
+    /// <summary>Whether a piece of the video in <paramref name="folder"/> is being made now (in this BlackBox).</summary>
     public static bool IsMaking(string folder) => Making.TryGetValue(Path.GetFullPath(folder), out var n) && n > 0;
 
-    /// <summary>Marks the film as being made until the result is disposed.</summary>
+    /// <summary>Marks the video as being made until the result is disposed.</summary>
     private static IDisposable MakingIn(Storyboard board)
     {
         var folder = Path.GetFullPath(board.Folder);
@@ -793,28 +793,28 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     }
 
     /// <summary>Whether a frame's picture is there and was made from what the storyboard says now.</summary>
-    public static bool IsCurrent(Storyboard board, FilmFrame frame) =>
+    public static bool IsCurrent(Storyboard board, VideoFrame frame) =>
         File.Exists(board.FramePicture(frame)) && MadeStamp(board.FrameMeta(frame)) is { } made && made == FrameStamp(board, frame);
 
-    public static bool IsCurrent(Storyboard board, FilmShot shot) =>
+    public static bool IsCurrent(Storyboard board, VideoShot shot) =>
         File.Exists(board.ShotVideo(shot)) && MadeStamp(board.ShotMeta(shot)) is { } made && made == ShotStamp(board, shot);
 
-    /// <summary>A sound is there and, a song, was made from what the storyboard says now and covers the film from where it starts.</summary>
-    public static bool IsCurrent(Storyboard board, FilmSound sound) =>
+    /// <summary>A sound is there and, a song, was made from what the storyboard says now and covers the video from where it starts.</summary>
+    public static bool IsCurrent(Storyboard board, VideoSound sound) =>
         File.Exists(board.SoundFile(sound)) &&
-        (sound.Source == FilmSound.FromFile || MadeStamp(board.SoundMeta(sound)) is { } made
+        (sound.Source == VideoSound.FromFile || MadeStamp(board.SoundMeta(sound)) is { } made
             && (made.Split(':') is [var hash, var length] && hash == SongHash(sound)
                 && double.TryParse(length, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds >= SongSeconds(board, sound)));
 
     // ---- pictures and sound --------------------------------------------------------------------------------
 
     /// <summary>
-    /// A picture scaled to cover the film's frame and cut to it in the middle, saved as PNG: every
-    /// frame of a film has its size, whatever made it or wherever it came from.
+    /// A picture scaled to cover the video's frame and cut to it in the middle, saved as PNG: every
+    /// frame of a video has its size, whatever made it or wherever it came from.
     /// </summary>
     public static void SaveFrame(string source, string target, int width, int height)
     {
-        using var bitmap = PictureFile.Decode(source) ?? throw new FilmException($"{source} isn't a picture this can read.");
+        using var bitmap = PictureFile.Decode(source) ?? throw new VideoException($"{source} isn't a picture this can read.");
         var inside = Bars(bitmap);
         using var frame = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(frame))
@@ -839,11 +839,11 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     /// <summary>
     /// A reference's picture saved as PNG at its own shape, black bars along its edges cut off and
     /// no bigger than <see cref="ReferenceSide"/> across: what it shows is kept whole, as the frames
-    /// made from it are made the film's size from all of it.
+    /// made from it are made the video's size from all of it.
     /// </summary>
     public static void SaveReference(string source, string target)
     {
-        using var bitmap = PictureFile.Decode(source) ?? throw new FilmException($"{source} isn't a picture this can read.");
+        using var bitmap = PictureFile.Decode(source) ?? throw new VideoException($"{source} isn't a picture this can read.");
         var inside = Bars(bitmap);
         var scale = Math.Min(1, ReferenceSide / (double)Math.Max(inside.Width, inside.Height));
         var (width, height) = (Math.Max(1, (int)Math.Round(inside.Width * scale)), Math.Max(1, (int)Math.Round(inside.Height * scale)));
@@ -864,7 +864,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
     /// <summary>
     /// The picture inside black bars along its edges, if it has some. Asked for a close-up "in a
     /// cinematic 35mm look", Qwen-Image-Edit drew the picture letterboxed, and LTX kept the bars
-    /// through the whole clip; a film's frame is the picture all over.
+    /// through the whole clip; a video's frame is the picture all over.
     /// </summary>
     internal static SKRectI Bars(SKBitmap bitmap)
     {

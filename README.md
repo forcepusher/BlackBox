@@ -5,20 +5,20 @@ until the job is done.
 
 ![BlackBox's start screen](docs/screenshot.png)
 
-It is a single portable `BlackBox.exe`. Nothing gets installed: its settings, chats, films and
+It is a single portable `BlackBox.exe`. Nothing gets installed: its settings, chats, videos and
 whatever it downloads stay in a `Data` folder next to the exe.
 
 ## What it can do
 - **Use any app.** It sees the screen and uses the mouse and keyboard, in any program.
 - **Pictures, video and sound.** It makes them with ComfyUI, installing ComfyUI and the models if needed.
-- **Films.** Pick **Video editor** in the **Toolkit** dropdown at the top left: it opens on the left
-  of the chat with the film on a timeline: References (pictures), takes, lines and sound tracks.
+- **Videos.** Pick **Video editor** in the **Toolkit** dropdown at the top left: it opens on the left
+  of the chat with the video on a timeline: References (pictures), video clips, lines and sound lines.
   Right-click a row to create something there, then pick **File…** to copy in a file of yours or
-  **Generate** to have BlackBox make it; you can also drop files on the timeline. The film's name at
-  the top opens your other films. Click anything on the timeline to put it in your message, and say
-  what you want in plain words (with nothing picked, it is about the whole film). BlackBox writes the
+  **Generate** to have BlackBox make it; you can also drop files on the timeline. The video's name at
+  the top opens your other videos. Click anything on the timeline to put it in your message, and say
+  what you want in plain words (with nothing picked, it is about the whole video). BlackBox writes the
   prompts, picks the models, makes it and looks at it, in the chat, where you can watch it and stop
-  it; right-click a piece to get an earlier version back. Or just ask for a film in the chat.
+  it; right-click a piece to get an earlier version back. Or just ask for a video in the chat.
 - **See what changed.** Pick **Code changes** in the **Toolkit** dropdown: it opens on the left of the chat
   with every file the agent changes in the chat, beside its diff, as it works. Click lines
   (Shift+click for a range, Ctrl+click for more) to put them in your message, then ask about them or

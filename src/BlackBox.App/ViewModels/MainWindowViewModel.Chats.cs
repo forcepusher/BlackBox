@@ -229,11 +229,11 @@ public sealed partial class MainWindowViewModel
         if (_chatTitle is null)
         {
             // A message that is only a file is named after it; one sent with Video editor open after
-            // the film and piece too: History filled with chats named "Make it.".
+            // the video and piece too: History filled with chats named "Make it.".
             var text = first!.HasText ? first.Text : string.Join(", ", first.Attachments.Select(a => a.FileName));
-            // "Make it. (Fox Test · start of shot 1)", without "Video editor" before the film's name.
-            const string film = "Video editor · ";
-            _chatTitle = ChatStore.TitleFrom(first.Via is { } via ? $"{text.Trim().Split('\n')[0]} ({(via.StartsWith(film, StringComparison.Ordinal) ? via[film.Length..] : via)})" : text);
+            // "Make it. (Fox Test · start of shot 1)", without "Video editor" before the video's name.
+            const string video = "Video editor · ";
+            _chatTitle = ChatStore.TitleFrom(first.Via is { } via ? $"{text.Trim().Split('\n')[0]} ({(via.StartsWith(video, StringComparison.Ordinal) ? via[video.Length..] : via)})" : text);
             OnPropertyChanged(nameof(WindowTitle));
         }
         var chat = new SavedChat

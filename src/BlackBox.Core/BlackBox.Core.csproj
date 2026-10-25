@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- How to write what ComfyUI's models are given (ComfyGuides): the comfyui tool and the film director read them. -->
+    <!-- How to write what ComfyUI's models are given (ComfyGuides): the comfyui tool and the video director read them. -->
     <EmbeddedResource Include="Comfy\Guides\*.md" LogicalName="guide:%(Filename)" />
   </ItemGroup>
 

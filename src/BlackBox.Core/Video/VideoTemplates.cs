@@ -4,10 +4,10 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using BlackBox.Core.Comfy;
 
-namespace BlackBox.Core.Film;
+namespace BlackBox.Core.Video;
 
-/// <summary>The kinds of job a film needs ComfyUI for.</summary>
-public enum FilmJob { Frame, Edit, Shot, ShotFromFirst, ShotFromText, LipSync, Song }
+/// <summary>The kinds of job a video needs ComfyUI for.</summary>
+public enum VideoJob { Frame, Edit, Shot, ShotFromFirst, ShotFromText, LipSync, Song }
 
 /// <summary>
 /// A way to do a job that is installed: a workflow of the user's, one of ComfyUI's templates, or (for
@@ -15,7 +15,7 @@ public enum FilmJob { Frame, Edit, Shot, ShotFromFirst, ShotFromText, LipSync, S
 /// </summary>
 /// <param name="Name">What a storyboard names it by: the template's name, or checkpoints/&lt;file&gt;.</param>
 /// <param name="Models">The model files it uses.</param>
-public sealed record FilmOption(string Name, string Title, string Kind, string About, IReadOnlyList<string> Models)
+public sealed record VideoOption(string Name, string Title, string Kind, string About, IReadOnlyList<string> Models)
 {
     public const string Yours = "your workflow", Template = "ComfyUI template", Checkpoint = "checkpoint";
 
@@ -28,7 +28,7 @@ public sealed record FilmOption(string Name, string Title, string Kind, string A
     /// <summary>Those words run together, for words written together ("zimage", "novafurry").</summary>
     internal string Joined => _joined ??= string.Concat(Tokens);
 
-    private IEnumerable<string> Tokens => FilmTemplates.Tokens(
+    private IEnumerable<string> Tokens => VideoTemplates.Tokens(
         $"{Name} {Title} {About} {string.Join(" ", Models)} {Kind} " + (Kind == Yours ? "my mine saved" : Kind == Template ? "comfy" : "ckpt"));
 
     private HashSet<string>? _words;
@@ -40,33 +40,33 @@ public sealed record FilmOption(string Name, string Title, string Kind, string A
 /// by name, else the best one this ComfyUI has every model and node for. Templates are turned into
 /// the API format by ComfyUI's own page once per server start, and kept.
 /// </summary>
-public static partial class FilmTemplates
+public static partial class VideoTemplates
 {
     /// <summary>
     /// Templates known to do each job well, best first, by the end of their names: ComfyUI's own
     /// and the user's copies of them. LTX-2.5 acts out a prompt's beats where 2.3 waved through all
     /// of it, and makes the sound with the picture.
     /// </summary>
-    private static readonly Dictionary<FilmJob, string[]> Known = new()
+    private static readonly Dictionary<VideoJob, string[]> Known = new()
     {
-        [FilmJob.Frame] = ["image_z_image_turbo", "image_qwen_image_2512", "image_z_image", "image_qwen_image", "image_flux2", "flux_dev_checkpoint_example", "blackbox/text_to_image"],
-        [FilmJob.Edit] = ["image_qwen_image_edit_2509", "image_qwen_image_edit_2511", "image_qwen_image_edit", "flux_kontext_dev_basic"],
-        [FilmJob.Shot] = ["video_ltx2_5_flf2v", "video_ltx2_3_flf2v", "video_wan2_2_14b_flf2v"],
-        [FilmJob.ShotFromFirst] = ["video_ltx2_5_i2v", "video_ltx2_3_i2v", "video_wan2_2_14b_i2v"],
-        [FilmJob.ShotFromText] = ["video_ltx2_5_t2v", "video_ltx2_3_t2v", "video_wan2_2_14b_t2v"],
-        [FilmJob.LipSync] = ["ltx2_5_ia2v", "ltx2_3_ia2v", "wan2_2_14b_s2v"],
-        [FilmJob.Song] = ["audio_ace_step1_5_xl_turbo", "audio_ace_step1_5_xl_sft", "audio_ace_step_1_5_checkpoint", "audio_ace_step1_5_xl_base", "audio_ace_step_1_t2a_song"],
+        [VideoJob.Frame] = ["image_z_image_turbo", "image_qwen_image_2512", "image_z_image", "image_qwen_image", "image_flux2", "flux_dev_checkpoint_example", "blackbox/text_to_image"],
+        [VideoJob.Edit] = ["image_qwen_image_edit_2509", "image_qwen_image_edit_2511", "image_qwen_image_edit", "flux_kontext_dev_basic"],
+        [VideoJob.Shot] = ["video_ltx2_5_flf2v", "video_ltx2_3_flf2v", "video_wan2_2_14b_flf2v"],
+        [VideoJob.ShotFromFirst] = ["video_ltx2_5_i2v", "video_ltx2_3_i2v", "video_wan2_2_14b_i2v"],
+        [VideoJob.ShotFromText] = ["video_ltx2_5_t2v", "video_ltx2_3_t2v", "video_wan2_2_14b_t2v"],
+        [VideoJob.LipSync] = ["ltx2_5_ia2v", "ltx2_3_ia2v", "wan2_2_14b_s2v"],
+        [VideoJob.Song] = ["audio_ace_step1_5_xl_turbo", "audio_ace_step1_5_xl_sft", "audio_ace_step_1_5_checkpoint", "audio_ace_step1_5_xl_base", "audio_ace_step_1_t2a_song"],
     };
 
     /// <summary>What each job is, said where a template for it is missing.</summary>
-    public static string Describe(FilmJob job) => job switch
+    public static string Describe(VideoJob job) => job switch
     {
-        FilmJob.Frame => "a picture from words",
-        FilmJob.Edit => "a picture from other pictures (an edit model such as Qwen-Image-Edit)",
-        FilmJob.Shot => "a video from a first and a last frame",
-        FilmJob.ShotFromFirst => "a video from its first frame",
-        FilmJob.ShotFromText => "a video from words",
-        FilmJob.LipSync => "a video from a picture and a sound, lip-synced (LTX's image and audio to video)",
+        VideoJob.Frame => "a picture from words",
+        VideoJob.Edit => "a picture from other pictures (an edit model such as Qwen-Image-Edit)",
+        VideoJob.Shot => "a video from a first and a last frame",
+        VideoJob.ShotFromFirst => "a video from its first frame",
+        VideoJob.ShotFromText => "a video from words",
+        VideoJob.LipSync => "a video from a picture and a sound, lip-synced (LTX's image and audio to video)",
         _ => "a song from a style and lyrics (ACE-Step)",
     };
 
@@ -89,7 +89,7 @@ public static partial class FilmTemplates
             return await CheckpointAsync(hub, api, name[CheckpointPrefix.Length..], ct).ConfigureAwait(false);
         var all = await hub.TemplatesAsync(api, ct).ConfigureAwait(false);
         var template = ComfyTemplates.Resolve(all, name, out var nearest)
-                       ?? throw new FilmException($"There is no ComfyUI template \"{name}\"" + (nearest.Count > 0 ? $"; did you mean {string.Join(", ", nearest)}?" : "."));
+                       ?? throw new VideoException($"There is no ComfyUI template \"{name}\"" + (nearest.Count > 0 ? $"; did you mean {string.Join(", ", nearest)}?" : "."));
         var key = (api.BaseUrl.ToString(), hub.Generation, template.Name);
         if (!Cache.TryGetValue(key, out var loaded))
         {
@@ -122,7 +122,7 @@ public static partial class FilmTemplates
         var workflow = ComfyWorkflow.FromApi(ComfyWorkflow.ParseText(builtin.Workflow));
         ((JsonObject)workflow.Nodes["1"]!["inputs"]!)["ckpt_name"] = file;
         var installed = models.TryGetValue("checkpoints", out var files) && files.Contains(file);
-        var template = new ComfyTemplate(CheckpointPrefix + file, Path.GetFileNameWithoutExtension(file), builtin.Description, "builtin:text_to_image", FilmOption.Checkpoint, ["image"]);
+        var template = new ComfyTemplate(CheckpointPrefix + file, Path.GetFileNameWithoutExtension(file), builtin.Description, "builtin:text_to_image", VideoOption.Checkpoint, ["image"]);
         return new Loaded(template, workflow, installed ? [] : [file]);
     }
 
@@ -132,7 +132,7 @@ public static partial class FilmTemplates
     /// else the first installed way to do it. A note says when the words named something installed
     /// that can't do this job and the best one was used instead.
     /// </summary>
-    public static async Task<(Loaded? Template, string? Note)> PickAsync(ComfyHub hub, ComfyApi api, string? model, FilmJob job, CancellationToken ct)
+    public static async Task<(Loaded? Template, string? Note)> PickAsync(ComfyHub hub, ComfyApi api, string? model, VideoJob job, CancellationToken ct)
     {
         string? note = null;
         if (model?.Trim() is { Length: > 0 } words)
@@ -147,7 +147,7 @@ public static partial class FilmTemplates
             // Installed, but for another kind of job: a picture from words for a frame made from others;
             // a shot that kept the template its job had once (an upgraded storyboard's) and has a last
             // frame or a line since, which that template has no place for.
-            FilmOption? elsewhere = null;
+            VideoOption? elsewhere = null;
             foreach (var other in Siblings(job).Where(j => j != job))
             {
                 var theirs = await OptionsAsync(hub, api, other, ct).ConfigureAwait(false);
@@ -158,7 +158,7 @@ public static partial class FilmTemplates
             if (named && elsewhere is null)
                 return (await LoadAsync(hub, api, words, ct).ConfigureAwait(false), null);
             if (elsewhere is null)
-                throw new FilmException($"Nothing installed for {Describe(job)} matches \"{words}\". " +
+                throw new VideoException($"Nothing installed for {Describe(job)} matches \"{words}\". " +
                                         (options.Count == 0 ? "Nothing installed does this job." : $"What is installed for it: {string.Join("; ", options.Take(25).Select(o => o.Label))}.") +
                                         " Name one of these, or leave it empty for the best one.");
             note = $"\"{words}\" is {elsewhere.Title} ({elsewhere.Kind}), which makes {elsewhere.About}, not {Describe(job)}, so the best installed one for that was used.";
@@ -173,7 +173,7 @@ public static partial class FilmTemplates
                     if (loaded.Ready)
                         return (loaded, note);
                 }
-                catch (Exception ex) when (ex is FilmException or ComfyApiException or ComfyWorkflowException or JsonException) { }
+                catch (Exception ex) when (ex is VideoException or ComfyApiException or ComfyWorkflowException or JsonException) { }
             }
         foreach (var option in await OptionsAsync(hub, api, job, ct).ConfigureAwait(false))
         {
@@ -183,7 +183,7 @@ public static partial class FilmTemplates
                 if (loaded.Ready)
                     return (loaded, note);
             }
-            catch (Exception ex) when (ex is FilmException or ComfyApiException or ComfyWorkflowException or JsonException) { }
+            catch (Exception ex) when (ex is VideoException or ComfyApiException or ComfyWorkflowException or JsonException) { }
         }
         return (null, note);
 
@@ -193,17 +193,17 @@ public static partial class FilmTemplates
     }
 
     /// <summary>The jobs that make the same kind of thing: words for one may name a way to do another.</summary>
-    private static FilmJob[] Siblings(FilmJob job) => job switch
+    private static VideoJob[] Siblings(VideoJob job) => job switch
     {
-        FilmJob.Frame or FilmJob.Edit => [FilmJob.Frame, FilmJob.Edit],
-        FilmJob.Song => [FilmJob.Song],
-        _ => [FilmJob.Shot, FilmJob.ShotFromFirst, FilmJob.ShotFromText, FilmJob.LipSync],
+        VideoJob.Frame or VideoJob.Edit => [VideoJob.Frame, VideoJob.Edit],
+        VideoJob.Song => [VideoJob.Song],
+        _ => [VideoJob.Shot, VideoJob.ShotFromFirst, VideoJob.ShotFromText, VideoJob.LipSync],
     };
 
     // ---- what is installed ----------------------------------------------------------------------------
 
     /// <summary>What each server start offers for each job.</summary>
-    private static readonly ConcurrentDictionary<(string Server, int Generation, FilmJob Job), IReadOnlyList<FilmOption>> Options = new();
+    private static readonly ConcurrentDictionary<(string Server, int Generation, VideoJob Job), IReadOnlyList<VideoOption>> Options = new();
 
     /// <summary>Workflows as the server hands them out (editor or API format), by server start and name.</summary>
     private static readonly ConcurrentDictionary<(string Server, int Generation, string Name), JsonNode?> Fetched = new();
@@ -216,7 +216,7 @@ public static partial class FilmTemplates
     /// checkpoint, run through BlackBox's plain text-to-image workflow. Not a search: nothing
     /// installed that can do the job is left out.
     /// </summary>
-    public static async Task<IReadOnlyList<FilmOption>> OptionsAsync(ComfyHub hub, ComfyApi api, FilmJob job, CancellationToken ct)
+    public static async Task<IReadOnlyList<VideoOption>> OptionsAsync(ComfyHub hub, ComfyApi api, VideoJob job, CancellationToken ct)
     {
         var key = (api.BaseUrl.ToString(), hub.Generation, job);
         if (Options.TryGetValue(key, out var known))
@@ -225,14 +225,14 @@ public static partial class FilmTemplates
         var models = await hub.ModelsAsync(api, ct).ConfigureAwait(false);
         var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
         var files = models.Values.SelectMany(s => s).Select(f => Path.GetFileName(f.Replace('\\', '/'))).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var media = job switch { FilmJob.Frame or FilmJob.Edit => "image", FilmJob.Song => "audio", _ => "video" };
+        var media = job switch { VideoJob.Frame or VideoJob.Edit => "image", VideoJob.Song => "audio", _ => "video" };
         var candidates = all
             .Where(t => t.Kind == "saved" || t.Kind == "ComfyUI template" && (t.Tags.FirstOrDefault()?.Equals(media, StringComparison.OrdinalIgnoreCase) == true || Rank(t.Name, job) < int.MaxValue))
             .Select((t, i) => (Template: t, Order: i))
             .OrderBy(x => Rank(x.Template.Name, job)).ThenBy(x => x.Template.Kind == "saved" ? 0 : 1).ThenBy(x => x.Order)
             .Select(x => x.Template)
             .ToList();
-        var found = new FilmOption?[candidates.Count];
+        var found = new VideoOption?[candidates.Count];
         await Parallel.ForEachAsync(Enumerable.Range(0, candidates.Count), new ParallelOptions { MaxDegreeOfParallelism = 8, CancellationToken = ct }, async (i, token) =>
         {
             var t = candidates[i];
@@ -242,17 +242,17 @@ public static partial class FilmTemplates
             var needs = ModelFiles(json);
             if (needs.Any(f => !files.Contains(Path.GetFileName(f.Replace('\\', '/')))) || MissingNodes(json, library).Count > 0)
                 return;
-            found[i] = new FilmOption(t.Name, t.Title, t.Kind == "saved" ? FilmOption.Yours : FilmOption.Template, t.Description,
+            found[i] = new VideoOption(t.Name, t.Title, t.Kind == "saved" ? VideoOption.Yours : VideoOption.Template, t.Description,
                 needs.Select(f => Path.GetFileName(f.Replace('\\', '/'))).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
         }).ConfigureAwait(false);
-        var options = found.OfType<FilmOption>().ToList();
-        if (job == FilmJob.Frame)
+        var options = found.OfType<VideoOption>().ToList();
+        if (job == VideoJob.Frame)
             options.AddRange(await CheckpointsAsync(api, models, ct).ConfigureAwait(false));
         return Options[key] = options;
     }
 
     /// <summary>Where a template stands among the known good ones for a job (int.MaxValue: not one of them).</summary>
-    private static int Rank(string name, FilmJob job)
+    private static int Rank(string name, VideoJob job)
     {
         var known = Known[job];
         for (var i = 0; i < known.Length; i++)
@@ -300,7 +300,7 @@ public static partial class FilmTemplates
     /// Whether a workflow does a job, by the nodes it runs: what it saves (a picture, a video, a
     /// sound), what it loads (pictures, a sound, a video), and that it takes a prompt.
     /// </summary>
-    internal static bool Fits(JsonNode workflow, FilmJob job)
+    internal static bool Fits(JsonNode workflow, VideoJob job)
     {
         var types = ActiveTypes(workflow);
         bool Any(Func<string, bool> test) => types.Any(test);
@@ -318,12 +318,12 @@ public static partial class FilmTemplates
             return false;
         return job switch
         {
-            FilmJob.Frame => savesImage && !savesVideo && !savesAudio && pictures == 0 && !sound,
-            FilmJob.Edit => savesImage && !savesVideo && !savesAudio && pictures > 0 && !sound,
-            FilmJob.Shot => savesVideo && pictures >= 2 && !sound,
-            FilmJob.ShotFromFirst => savesVideo && pictures == 1 && !sound,
-            FilmJob.ShotFromText => savesVideo && pictures == 0 && !sound,
-            FilmJob.LipSync => savesVideo && pictures >= 1 && sound,
+            VideoJob.Frame => savesImage && !savesVideo && !savesAudio && pictures == 0 && !sound,
+            VideoJob.Edit => savesImage && !savesVideo && !savesAudio && pictures > 0 && !sound,
+            VideoJob.Shot => savesVideo && pictures >= 2 && !sound,
+            VideoJob.ShotFromFirst => savesVideo && pictures == 1 && !sound,
+            VideoJob.ShotFromText => savesVideo && pictures == 0 && !sound,
+            VideoJob.LipSync => savesVideo && pictures >= 1 && sound,
             _ => savesAudio && !savesVideo && pictures == 0 && !sound,
         };
     }
@@ -373,7 +373,7 @@ public static partial class FilmTemplates
     /// video, 3D, sound or pose model in the same folder has other parts, or none of these). A
     /// checkpoint on another PC, which can't be read, is offered as it is.
     /// </summary>
-    private static async Task<List<FilmOption>> CheckpointsAsync(ComfyApi api, Dictionary<string, HashSet<string>> models, CancellationToken ct)
+    private static async Task<List<VideoOption>> CheckpointsAsync(ComfyApi api, Dictionary<string, HashSet<string>> models, CancellationToken ct)
     {
         if (!models.TryGetValue("checkpoints", out var names))
             return [];
@@ -384,14 +384,14 @@ public static partial class FilmTemplates
                 dirs.AddRange(list.OfType<JsonValue>().Select(v => v.TryGetValue<string>(out var s) ? s : null).OfType<string>());
         }
         catch (Exception ex) when (ex is ComfyApiException or JsonException) { }
-        var options = new List<FilmOption>();
+        var options = new List<VideoOption>();
         foreach (var name in names.Order(StringComparer.OrdinalIgnoreCase))
         {
             var path = dirs.Select(d => Path.Combine(d, name)).FirstOrDefault(File.Exists);
             string? kind = null;
             if (path is not null && (kind = CheckpointKind(path)) is null)
                 continue;
-            options.Add(new FilmOption(CheckpointPrefix + name, Path.GetFileNameWithoutExtension(name), FilmOption.Checkpoint,
+            options.Add(new VideoOption(CheckpointPrefix + name, Path.GetFileNameWithoutExtension(name), VideoOption.Checkpoint,
                 $"{(kind is null ? "A checkpoint" : $"An {kind} checkpoint")}, run with BlackBox's plain text-to-image workflow (20 steps, cfg 7).", [name]));
         }
         return options;
@@ -456,7 +456,7 @@ public static partial class FilmTemplates
     /// own workflows first among equals, then ComfyUI's, then bare checkpoints. Null when none has
     /// more than half of them.
     /// </summary>
-    public static FilmOption? Match(IReadOnlyList<FilmOption> options, string words)
+    public static VideoOption? Match(IReadOnlyList<VideoOption> options, string words)
     {
         var said = words.Trim();
         if (options.FirstOrDefault(o => o.Name.Equals(said, StringComparison.OrdinalIgnoreCase) || o.Title.Equals(said, StringComparison.OrdinalIgnoreCase)) is { } named)
@@ -470,13 +470,13 @@ public static partial class FilmTemplates
             // the user's own: a word that names the model has to be found too.
             .Where(x => x.Found.Any(t => t.Length >= 2 && !char.IsDigit(t[0]) && !KindWords.Contains(t)))
             .OrderByDescending(x => x.Found.Count)
-            .ThenBy(x => x.Option.Kind switch { FilmOption.Yours => 0, FilmOption.Template => 1, _ => 2 })
+            .ThenBy(x => x.Option.Kind switch { VideoOption.Yours => 0, VideoOption.Template => 1, _ => 2 })
             .ThenBy(x => x.Order)
             .FirstOrDefault();
         // Most of the words: "ace step" isn't a Qwen workflow with "4 steps" in its notes.
         return best.Option is not null && (asked.Count == 1 || best.Found.Count * 2 > asked.Count) ? best.Option : null;
 
         // A word as one of its words, or a long one written into them ("zimage" in z_image).
-        static bool Has(FilmOption o, string t) => o.Words.Contains(t) || t.Length >= 5 && o.Joined.Contains(t, StringComparison.Ordinal);
+        static bool Has(VideoOption o, string t) => o.Words.Contains(t) || t.Length >= 5 && o.Joined.Contains(t, StringComparison.Ordinal);
     }
 }

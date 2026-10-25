@@ -17,7 +17,7 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
     private readonly Action<AttachmentItem>? _remove;
 
     /// <param name="remove">Takes it off the message being written; null in a sent message's bubble.</param>
-    /// <param name="picked">Picked in the toolkit's panel (a piece of the film): what it is there, "Shot 2 · s2.mp4".</param>
+    /// <param name="picked">Picked in the toolkit's panel (a piece of the video): what it is there, "Shot 2 · s2.mp4".</param>
     public AttachmentItem(string path, Action<AttachmentItem>? remove = null, string? picked = null)
     {
         Path = path;

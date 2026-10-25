@@ -11,15 +11,15 @@ using BlackBox.App.ViewModels;
 
 namespace BlackBox.App.Views;
 
-/// <summary>Video editor's panel, on the left of the chat window: a viewer, and the timeline where the film is worked on.</summary>
-public partial class FilmPanel : UserControl
+/// <summary>Video editor's panel, on the left of the chat window: a viewer, and the timeline where the video is worked on.</summary>
+public partial class VideoPanel : UserControl
 {
-    public FilmPanel()
+    public VideoPanel()
     {
         InitializeComponent();
         // A click or a drag on the seconds moves the playhead there.
-        Ruler.Seeked += seconds => (DataContext as FilmViewModel)?.SeekStrip(seconds);
-        // The timeline is dragged sideways: seen before the takes' buttons, which then don't click.
+        Ruler.Seeked += seconds => (DataContext as VideoViewModel)?.SeekStrip(seconds);
+        // The timeline is dragged sideways: seen before the clips' buttons, which then don't click.
         Timeline.AddHandler(PointerPressedEvent, OnPanPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
         Timeline.AddHandler(PointerMovedEvent, OnPanMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
         Timeline.AddHandler(PointerReleasedEvent, OnPanReleased, RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -29,10 +29,10 @@ public partial class FilmPanel : UserControl
         AddHandler(DragDrop.DragEnterEvent, OnDragOver);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
-        AddHandler(DragDrop.DropEvent, (_, _) => Dispatcher.UIThread.Post(() => (DataContext as FilmViewModel)?.DragOver(null)), handledEventsToo: true);
+        AddHandler(DragDrop.DropEvent, (_, _) => Dispatcher.UIThread.Post(() => (DataContext as VideoViewModel)?.DragOver(null)), handledEventsToo: true);
     }
 
-    private FilmViewModel? _vm;
+    private VideoViewModel? _vm;
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -40,19 +40,19 @@ public partial class FilmPanel : UserControl
         if (_vm is not null)
         {
             _vm.RenameAsked -= OnRenameAsked;
-            _vm.RenameFilmAsked -= OnRenameFilmAsked;
+            _vm.RenameVideoAsked -= OnRenameVideoAsked;
             _vm.PickFiles = null;
         }
-        _vm = DataContext as FilmViewModel;
+        _vm = DataContext as VideoViewModel;
         if (_vm is not null)
         {
             _vm.RenameAsked += OnRenameAsked;
-            _vm.RenameFilmAsked += OnRenameFilmAsked;
+            _vm.RenameVideoAsked += OnRenameVideoAsked;
             _vm.PickFiles = PickFilesAsync;
         }
     }
 
-    private FilmViewModel Vm => (FilmViewModel)DataContext!;
+    private VideoViewModel Vm => (VideoViewModel)DataContext!;
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
@@ -62,25 +62,25 @@ public partial class FilmPanel : UserControl
 
     // ---- where on the timeline: a row and its time, a card or a sound -----------------------------------------
 
-    /// <summary>The row (References, Video or the sound tracks) a visual is in, by its Tag.</summary>
+    /// <summary>The row (References, Video clips or the sound lines) a visual is in, by its Tag.</summary>
     private static Control? RowOf(Visual? visual) =>
         visual?.GetSelfAndVisualAncestors().OfType<Control>().FirstOrDefault(c => c.Tag is "references" or "video" or "sounds");
 
-    /// <summary>Where on the timeline a pointer is: its row, the time there, the sound track, and the card or sound under it.</summary>
-    private FilmDropPlace? PlaceAt(Visual? source, Func<Visual, Point> at)
+    /// <summary>Where on the timeline a pointer is: its row, the time there, the sound line, and the card or sound under it.</summary>
+    private VideoDropPlace? PlaceAt(Visual? source, Func<Visual, Point> at)
     {
         if (RowOf(source) is not { } row)
             return null;
         var p = at(row);
         var card = source!.GetSelfAndVisualAncestors().OfType<StyledElement>().Select(v => v.DataContext).FirstOrDefault(d => d is ReferenceCard or SoundItem);
-        return new FilmDropPlace((string)row.Tag!, Vm.SecondsAt(p.X), Math.Clamp((int)(p.Y / FilmViewModel.TrackHeight), 0, Math.Max(0, Vm.Tracks.Count - 1)), card);
+        return new VideoDropPlace((string)row.Tag!, Vm.SecondsAt(p.X), Math.Clamp((int)(p.Y / VideoViewModel.SoundLineHeight), 0, Math.Max(0, Vm.SoundLines.Count - 1)), card);
     }
 
     // ---- files dragged onto the timeline -------------------------------------------------------------------
 
     private void OnDragOver(object? sender, DragEventArgs e)
     {
-        if (DataContext is not FilmViewModel vm)
+        if (DataContext is not VideoViewModel vm)
             return;
         var files = e.DataTransfer.TryGetFiles() is { } items && items.Select(f => f.TryGetLocalPath()).OfType<string>().Any();
         vm.DragOver(files ? PlaceAt(e.Source as Visual, v => e.GetPosition(v)) : null);
@@ -91,7 +91,7 @@ public partial class FilmPanel : UserControl
     {
         var at = e.GetPosition(this);
         if (at.X <= 1 || at.Y <= 1 || at.X >= Bounds.Width - 1 || at.Y >= Bounds.Height - 1)
-            (DataContext as FilmViewModel)?.DragOver(null);
+            (DataContext as VideoViewModel)?.DragOver(null);
     }
 
     /// <summary>The Open dialog for pictures or sounds of the user's, to copy in.</summary>
@@ -99,7 +99,7 @@ public partial class FilmPanel : UserControl
     {
         if (TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
             return [];
-        var extensions = kind == "image" ? Core.Film.Storyboard.PictureExtensions : Core.Film.Storyboard.SoundExtensions;
+        var extensions = kind == "image" ? Core.Video.Storyboard.PictureExtensions : Core.Video.Storyboard.SoundExtensions;
         var picked = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = kind == "image" ? "A picture to copy in" : "A sound to copy in",
@@ -110,7 +110,7 @@ public partial class FilmPanel : UserControl
 
     // ---- the viewer ----------------------------------------------------------------------------------------
 
-    /// <summary>A click around what the viewer shows (not on it) shows the whole film again, as Esc does: what is said next is about the film.</summary>
+    /// <summary>A click around what the viewer shows (not on it) shows the whole video again, as Esc does: what is said next is about the video.</summary>
     private void OnAwayPressed(object? sender, PointerPressedEventArgs e)
     {
         if (e.Source is Visual source && (source == ViewerBox || ViewerBox.IsVisualAncestorOf(source)))
@@ -131,16 +131,16 @@ public partial class FilmPanel : UserControl
         }
     }
 
-    // ---- menus: the films, a row, a card, a take, a sound, a track ---------------------------------------------
+    // ---- menus: the videos, a row, a card, a clip, a sound, a sound line ---------------------------------------------
 
-    private void OnFilmMenu(object? sender, RoutedEventArgs e) => OpenMenu(Vm.FilmMenu(), FilmButton);
+    private void OnVideoMenu(object? sender, RoutedEventArgs e) => OpenMenu(Vm.VideoMenu(), VideoButton);
 
     /// <summary>Right-click on a row away from its cards: Create, there.</summary>
     private void OnRowMenu(object? sender, ContextRequestedEventArgs e)
     {
         if (e.Handled || PlaceAt(e.Source as Visual, v => e.TryGetPosition(v as Control, out var p) ? p : default) is not { } place)
             return;
-        OpenMenu(Vm.MenuForRow(place.Row, place.Seconds, place.Track), e.Source as Control);
+        OpenMenu(Vm.MenuForRow(place.Row, place.Seconds, place.SoundLine), e.Source as Control);
         e.Handled = true;
     }
 
@@ -171,16 +171,16 @@ public partial class FilmPanel : UserControl
         }
     }
 
-    private void OnTrackMenu(object? sender, ContextRequestedEventArgs e)
+    private void OnSoundLineMenu(object? sender, ContextRequestedEventArgs e)
     {
-        if ((sender as Control)?.DataContext is TrackItem track)
+        if ((sender as Control)?.DataContext is SoundLineItem soundLine)
         {
-            OpenMenu(Vm.MenuForRow("sounds", Vm.PlayPosition, track.Index), sender as Control);
+            OpenMenu(Vm.MenuForRow("sounds", Vm.PlayPosition, soundLine.Index), sender as Control);
             e.Handled = true;
         }
     }
 
-    private static void OpenMenu(IReadOnlyList<FilmMenuItem?> items, Control? at)
+    private static void OpenMenu(IReadOnlyList<VideoMenuItem?> items, Control? at)
     {
         if (items.Count == 0)
             return;
@@ -189,7 +189,7 @@ public partial class FilmPanel : UserControl
             menu.Items.Add(item);
         menu.Open(at);
 
-        static IEnumerable<Control> Entries(IReadOnlyList<FilmMenuItem?> items)
+        static IEnumerable<Control> Entries(IReadOnlyList<VideoMenuItem?> items)
         {
             foreach (var item in items)
             {
@@ -214,7 +214,7 @@ public partial class FilmPanel : UserControl
 
     // ---- renaming: a box with the name, as Explorer's ----------------------------------------------------------
 
-    private void OnRenameFilmAsked() => Dispatcher.UIThread.Post(() => AskName(FilmButton, Vm.FilmName, name => Vm.Rename(null, name)), DispatcherPriority.Background);
+    private void OnRenameVideoAsked() => Dispatcher.UIThread.Post(() => AskName(VideoButton, Vm.VideoName, name => Vm.Rename(null, name)), DispatcherPriority.Background);
 
     private void OnRenameAsked(object target, string name)
     {
@@ -302,7 +302,7 @@ public partial class FilmPanel : UserControl
             create.Do();
     }
 
-    private void OnAddTrack(object? sender, RoutedEventArgs e) => Vm.AddTrack();
+    private void OnAddSoundLine(object? sender, RoutedEventArgs e) => Vm.AddSoundLine();
 
     private void OnShotClick(object? sender, RoutedEventArgs e)
     {
@@ -316,9 +316,9 @@ public partial class FilmPanel : UserControl
             Vm.Show(line.Shot);
     }
 
-    // ---- a take's right edge dragged: its length ------------------------------------------------------------
+    // ---- a clip's right edge dragged: its length ------------------------------------------------------------
 
-    /// <summary>A take's right edge being dragged: the take, where the drag started and how long the take was.</summary>
+    /// <summary>A clip's right edge being dragged: the clip, where the drag started and how long the clip was.</summary>
     private (ShotItem Shot, double StartX, double StartSeconds)? _stretch;
 
     private void OnHandlePressed(object? sender, PointerPressedEventArgs e)
@@ -348,7 +348,7 @@ public partial class FilmPanel : UserControl
 
     /// <summary>
     /// The drag ended without a release (Alt+Tab, the timeline laid out anew): it ends here. Left
-    /// going, a later move over any take's edge went on resizing the take of the drag.
+    /// going, a later move over any clip's edge went on resizing the clip of the drag.
     /// </summary>
     private void OnHandleCaptureLost(object? sender, PointerCaptureLostEventArgs e)
     {
@@ -358,10 +358,10 @@ public partial class FilmPanel : UserControl
         s.Shot.Stretched();
     }
 
-    // ---- a sound dragged: moved along or between tracks, or trimmed at an edge -------------------------------
+    // ---- a sound dragged: moved along or between sound lines, or trimmed at an edge -------------------------------
 
     /// <summary>A sound being dragged: how ("move", "left", "right"), where from, and where it was.</summary>
-    private (SoundItem Sound, string Mode, Point From, double Start, int Track, double Trim, double Seconds, bool Moved)? _sound;
+    private (SoundItem Sound, string Mode, Point From, double Start, int SoundLine, double Trim, double Seconds, bool Moved)? _sound;
 
     private void OnSoundPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -369,7 +369,7 @@ public partial class FilmPanel : UserControl
             return;
         var mode = (e.Source as Visual)?.GetSelfAndVisualAncestors().OfType<Border>().FirstOrDefault(b => b.Classes.Contains("handle"))?.Tag as string ?? "move";
         var a = sound.Sound;
-        _sound = (sound, mode, e.GetPosition(SoundRows), a.Start, a.Track, a.Trim, sound.PlaySeconds(Vm.Length), false);
+        _sound = (sound, mode, e.GetPosition(SoundRows), a.Start, a.SoundLine, a.Trim, sound.PlaySeconds(Vm.Length), false);
         e.Pointer.Capture(clip);
         e.Handled = true;
     }
@@ -389,15 +389,15 @@ public partial class FilmPanel : UserControl
             case "left":
                 // Its start cut: no further back than the file's start, and a tenth of a second kept.
                 dx = Math.Clamp(dx, -Math.Min(s.Trim, s.Start), s.Seconds - 0.2);
-                Vm.MoveSound(s.Sound, s.Start + dx, s.Track, s.Trim + dx, s.Seconds - dx);
+                Vm.MoveSound(s.Sound, s.Start + dx, s.SoundLine, s.Trim + dx, s.Seconds - dx);
                 break;
             case "right":
                 var most = file > 0 ? file - s.Trim : double.MaxValue;
-                Vm.MoveSound(s.Sound, s.Start, s.Track, s.Trim, Math.Clamp(s.Seconds + dx, 0.2, most));
+                Vm.MoveSound(s.Sound, s.Start, s.SoundLine, s.Trim, Math.Clamp(s.Seconds + dx, 0.2, most));
                 break;
             default:
-                var track = s.Track + (int)Math.Round((at.Y - s.From.Y) / FilmViewModel.TrackHeight);
-                Vm.MoveSound(s.Sound, s.Start + dx, track, s.Trim, s.Sound.Sound.Seconds);
+                var soundLine = s.SoundLine + (int)Math.Round((at.Y - s.From.Y) / VideoViewModel.SoundLineHeight);
+                Vm.MoveSound(s.Sound, s.Start + dx, soundLine, s.Trim, s.Sound.Sound.Seconds);
                 break;
         }
     }
@@ -419,7 +419,7 @@ public partial class FilmPanel : UserControl
 
     /// <summary>
     /// A press on the timeline: where, how far it was scrolled, whether it has moved enough to be a
-    /// drag, and whether it was on a piece (a click there picks it; on empty space, the whole film).
+    /// drag, and whether it was on a piece (a click there picks it; on empty space, the whole video).
     /// The user found its scrollbar very inconvenient: the timeline is dragged like a page instead.
     /// </summary>
     private (Point Start, double Offset, bool Dragging, bool OnPiece)? _pan;
@@ -431,7 +431,7 @@ public partial class FilmPanel : UserControl
     {
         if (!e.GetCurrentPoint(Timeline).Properties.IsLeftButtonPressed || e.Source is not Visual source)
             return;
-        // The seconds move the playhead, a take's right edge its length, and a sound is dragged itself: no drag of the timeline there.
+        // The seconds move the playhead, a clip's right edge its length, and a sound is dragged itself: no drag of the timeline there.
         if (source == Ruler || Ruler.IsVisualAncestorOf(source) ||
             source.GetSelfAndVisualAncestors().OfType<Border>().Any(b => b.Classes.Contains("handle") || b.Classes.Contains("clip")))
             return;
@@ -448,7 +448,7 @@ public partial class FilmPanel : UserControl
         {
             if (Math.Abs(dx) < PanSlop)
                 return;
-            // Taken from the take's button, which then doesn't click when let go.
+            // Taken from the clip's button, which then doesn't click when let go.
             _pan = pan with { Dragging = true };
             e.Pointer.Capture(Timeline);
             Timeline.Cursor = new Cursor(StandardCursorType.SizeWestEast);
@@ -467,7 +467,7 @@ public partial class FilmPanel : UserControl
             e.Pointer.Capture(null);
             e.Handled = true;
         }
-        // A click on the timeline away from every piece: the whole film again.
+        // A click on the timeline away from every piece: the whole video again.
         else if (!pan.OnPiece)
             Vm.Clear();
     }
@@ -502,16 +502,16 @@ public partial class FilmPanel : UserControl
     /// <summary>
     /// The picture or video in the viewer, clicked: full screen on this window's screen, as the
     /// chat's are (the user's rule: a click on a picture or video always opens it full screen), with
-    /// the film's other pictures and clips one arrow key away. The clip here stops meanwhile.
+    /// the video's other pictures and clips one arrow key away. The clip here stops meanwhile.
     /// </summary>
     private void OnMediaClick(object? sender, RoutedEventArgs e)
     {
         if ((sender as Control)?.DataContext is not { } clicked || TopLevel.GetTopLevel(this) is not Window window)
             return;
         var shown = clicked is FilePreview preview ? preview.Path : Vm.ShownFile;
-        var entries = Vm.MediaInFilm();
+        var entries = Vm.MediaInVideo();
         var index = shown is null ? -1 : entries.FindIndex(m => string.Equals(m.Path, shown, StringComparison.OrdinalIgnoreCase));
-        // A file the film's pieces don't hold (a version): on its own.
+        // A file the video's pieces don't hold (a version): on its own.
         if (index < 0 && shown is not null && MainWindowViewModel.Viewable(shown))
             (entries, index) = ([new MediaEntry(clicked, shown, null, Path.GetFileName(shown))], 0);
         if (index < 0 || (window.Screens.ScreenFromWindow(window) ?? window.Screens.Primary) is not { } screen)

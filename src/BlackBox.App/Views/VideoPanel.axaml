@@ -2,8 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:BlackBox.App.ViewModels"
              xmlns:views="using:BlackBox.App.Views"
-             x:Class="BlackBox.App.Views.FilmPanel"
-             x:DataType="vm:FilmViewModel"
+             x:Class="BlackBox.App.Views.VideoPanel"
+             x:DataType="vm:VideoViewModel"
              Background="{StaticResource BbBackground}">
 
   <UserControl.Styles>
@@ -14,7 +14,7 @@
     <Style Selector="TextBlock.error">
       <Setter Property="Foreground" Value="{StaticResource BbError}" />
     </Style>
-    <!-- A take, a card or a sound on the timeline; the one shown has the accent around it. -->
+    <!-- A clip, a card or a sound on the timeline; the one shown has the accent around it. -->
     <Style Selector="Border.block">
       <Setter Property="Background" Value="{StaticResource BbSurfaceRaised}" />
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
@@ -86,7 +86,7 @@
   </UserControl.Styles>
 
   <UserControl.DataTemplates>
-    <!-- What the viewer shows: a clip or the film playing, a sound, a picture, a card for what has none. -->
+    <!-- What the viewer shows: a clip or the video playing, a sound, a picture, a card for what has none. -->
     <DataTemplate DataType="vm:VideoPreview">
       <DockPanel>
         <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
@@ -145,20 +145,20 @@
   </UserControl.DataTemplates>
 
   <DockPanel>
-    <!-- The film (its name opens the films' menu), its size and frame rate, changed here and saved at once, and what to do with all of it. -->
+    <!-- The video (its name opens the videos' menu), its size and frame rate, changed here and saved at once, and what to do with all of it. -->
     <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="12,8">
       <DockPanel>
-        <Button DockPanel.Dock="Right" Classes="primary" Content="Make the film" Command="{Binding MakeFilmCommand}"
-                ToolTip.Tip="BlackBox makes in the chat what isn't made yet or has changed, looks at each piece and fixes what it finds, then joins the film and looks at it" />
-        <!-- Short of room (the window made narrower), the film's name is cut short rather than the
+        <Button DockPanel.Dock="Right" Classes="primary" Content="Make the video" Command="{Binding MakeVideoCommand}"
+                ToolTip.Tip="BlackBox makes in the chat what isn't made yet or has changed, looks at each piece and fixes what it finds, then joins the video and looks at it" />
+        <!-- Short of room (the window made narrower), the video's name is cut short rather than the
              fields going over the buttons: its column is the one that gives way. -->
         <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left" Margin="0,0,12,0">
-          <Button x:Name="FilmButton" Classes="ghost" Padding="8,4" Margin="0,0,16,0" Click="OnFilmMenu"
-                  ToolTip.Tip="Your films: open another, or rename or delete this one" AutomationProperties.Name="Films">
+          <Button x:Name="VideoButton" Classes="ghost" Padding="8,4" Margin="0,0,16,0" Click="OnVideoMenu"
+                  ToolTip.Tip="Your videos: open another, or rename or delete this one" AutomationProperties.Name="Videos">
             <!-- Not a StackPanel: across, that gives the name all the room it wants and it is never cut short. -->
             <DockPanel>
               <PathIcon DockPanel.Dock="Right" Data="M7 10l5 5 5-5z" Width="10" Height="10" Margin="8,0,0,0" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding FilmName}" FontWeight="SemiBold" MaxWidth="260" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding VideoName}" FontWeight="SemiBold" MaxWidth="260" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
             </DockPanel>
           </Button>
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
@@ -174,19 +174,19 @@
       </DockPanel>
     </Border>
 
-    <!-- The timeline, where the film is worked on: References, the takes, the lines and the sound tracks, under one scroll.
+    <!-- The timeline, where the video is worked on: References, the clips, the lines and the sound lines, under one scroll.
          Right-click a row to create there; drop files on it to copy them in. -->
     <Border DockPanel.Dock="Bottom" Background="#15171A" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0">
       <DockPanel>
         <Grid DockPanel.Dock="Top" Height="40" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="10,0">
           <Button Width="30" Height="30" CornerRadius="15" Padding="0" Background="{StaticResource BbAccent}" VerticalAlignment="Center"
                   HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                  Command="{Binding PlayStripCommand}" ToolTip.Tip="Play the sound tracks with each take's frames from the playhead" AutomationProperties.Name="Play the storyboard">
+                  Command="{Binding PlayStripCommand}" ToolTip.Tip="Play the sound lines with each clip's frames from the playhead" AutomationProperties.Name="Play the storyboard">
             <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" Foreground="#111214" />
           </Button>
           <TextBlock Grid.Column="1" Text="{Binding PlayTime}" FontFamily="Consolas, monospace" Foreground="{StaticResource BbAccent}" VerticalAlignment="Center" Margin="10,0,12,0" />
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-            <Button Classes="ghost" Content="−" Padding="10,2" Command="{Binding ZoomOutCommand}" ToolTip.Tip="See more of the film (Ctrl + wheel)" AutomationProperties.Name="Zoom out" />
+            <Button Classes="ghost" Content="−" Padding="10,2" Command="{Binding ZoomOutCommand}" ToolTip.Tip="See more of the video (Ctrl + wheel)" AutomationProperties.Name="Zoom out" />
             <Button Classes="ghost" Content="+" Padding="10,2" Command="{Binding ZoomInCommand}" ToolTip.Tip="See it closer (Ctrl + wheel)" AutomationProperties.Name="Zoom in" />
           </StackPanel>
           <!-- What the panel did or what went wrong; else how the timeline is used (nothing showed the right-click menu was there). -->
@@ -194,7 +194,7 @@
                      ToolTip.Tip="{Binding StatusOrHint}" />
           <TextBlock Grid.Column="4" Classes="muted" Text="{Binding LengthText}" VerticalAlignment="Center" FontSize="12" />
         </Grid>
-        <Grid ColumnDefinitions="96,*" Margin="0,0,0,4">
+        <Grid ColumnDefinitions="112,*" Margin="0,0,0,4">
           <!-- The rows' names stay put; what is right of them scrolls as one. -->
           <Border BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,1,0">
             <StackPanel>
@@ -203,33 +203,33 @@
                 <TextBlock Text="References" Margin="10,10,6,0" />
               </Border>
               <StackPanel Height="112" Spacing="4">
-                <TextBlock Text="Video" Margin="10,10,6,0" />
-                <TextBlock Classes="label" TextWrapping="Wrap" FontSize="11" Margin="10,0,6,0" Text="Drag a take's right edge to change its length" />
+                <TextBlock Text="Video clips" Margin="10,10,6,0" />
+                <TextBlock Classes="label" TextWrapping="Wrap" FontSize="11" Margin="10,0,6,0" Text="Drag a clip's right edge to change its length" />
               </StackPanel>
               <Border Height="34">
                 <TextBlock Text="Lines" Margin="10,0,0,0" VerticalAlignment="Center" />
               </Border>
-              <ItemsControl ItemsSource="{Binding Tracks}">
+              <ItemsControl ItemsSource="{Binding SoundLines}">
                 <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:TrackItem">
-                    <Border Height="{x:Static vm:FilmViewModel.TrackHeight}" Background="Transparent" ContextRequested="OnTrackMenu">
+                  <DataTemplate x:DataType="vm:SoundLineItem">
+                    <Border Height="{x:Static vm:VideoViewModel.SoundLineHeight}" Background="Transparent" ContextRequested="OnSoundLineMenu">
                       <TextBlock Text="{Binding Name}" Margin="10,0,0,0" VerticalAlignment="Center" />
                     </Border>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-              <Button Classes="ghost" Content="+ Track" Padding="8,2" Margin="6,2,0,0" Height="26" Click="OnAddTrack"
-                      ToolTip.Tip="Another sound track" AutomationProperties.Name="New sound track" />
+              <Button Classes="ghost" Content="+ Sound line" Padding="8,2" Margin="6,2,0,0" Height="26" Click="OnAddSoundLine"
+                      ToolTip.Tip="Another sound line" AutomationProperties.Name="New sound line" />
             </StackPanel>
           </Border>
 
-          <!-- Dragged sideways anywhere but the ruler, a take's edge and a sound, it scrolls (FilmPanel.Pan);
+          <!-- Dragged sideways anywhere but the ruler, a clip's edge and a sound, it scrolls (VideoPanel.Pan);
                the wheel does too, Ctrl+wheel zooms. Its bar only shows under the pointer. -->
           <ScrollViewer x:Name="Timeline" Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
                         PointerWheelChanged="OnTimelineWheel" Background="Transparent" BringIntoViewOnFocusChange="False" ContextRequested="OnRowMenu">
             <Panel Width="{Binding TimelineWidth}" HorizontalAlignment="Left" ClipToBounds="True">
               <StackPanel>
-                <views:FilmRuler x:Name="Ruler" Height="26" Pps="{Binding Pps}" Length="{Binding Length}" Lead="{x:Static vm:FilmViewModel.Lead}" />
+                <views:VideoRuler x:Name="Ruler" Height="26" Pps="{Binding Pps}" Length="{Binding Length}" Lead="{x:Static vm:VideoViewModel.Lead}" />
 
                 <!-- References: a card each, image files and generated images; the dashed card makes a new one. -->
                 <Panel Height="92" Tag="references" Background="Transparent">
@@ -248,7 +248,7 @@
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:ReferenceCard">
                         <Button Classes="pick" Click="OnCardClick" ContextRequested="OnCardMenu" ToolTip.Tip="{Binding Kind}" AutomationProperties.Name="{Binding Name}">
-                          <Border Classes="block" Classes.selected="{Binding IsSelected}" Classes.drop="{Binding IsDropTarget}" Width="{x:Static vm:FilmViewModel.CardWidth}" Height="84" Cursor="Hand">
+                          <Border Classes="block" Classes.selected="{Binding IsSelected}" Classes.drop="{Binding IsDropTarget}" Width="{x:Static vm:VideoViewModel.CardWidth}" Height="84" Cursor="Hand">
                             <DockPanel>
                               <TextBlock DockPanel.Dock="Bottom" Text="{Binding State}" FontSize="10" Classes="muted" Margin="6,0,6,3" TextTrimming="CharacterEllipsis" />
                               <TextBlock DockPanel.Dock="Bottom" Text="{Binding Name}" FontSize="11" Margin="6,1,6,0" TextTrimming="CharacterEllipsis" />
@@ -277,7 +277,7 @@
                   </Canvas>
                 </Panel>
 
-                <!-- Video: a block per take from where it starts for as long as it lasts. -->
+                <!-- Video clips: a block per clip from where it starts for as long as it lasts. -->
                 <Panel Height="112" Tag="video" Background="Transparent">
                   <ItemsControl ItemsSource="{Binding Shots}">
                     <ItemsControl.ItemsPanel>
@@ -320,11 +320,11 @@
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
-                  <!-- The next take's place, after the last: a click adds it there. -->
+                  <!-- The next clip's place, after the last: a click adds it there. -->
                   <Canvas>
                     <Button Classes="pick" Canvas.Left="{Binding AddShotX}" Canvas.Top="4" Width="56" Height="104" Command="{Binding AddShotCommand}"
                             HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
-                            ToolTip.Tip="A take after the last one; then say in the chat what happens in it" AutomationProperties.Name="New take">
+                            ToolTip.Tip="A clip after the last one; then say in the chat what happens in it" AutomationProperties.Name="New clip">
                       <Panel>
                         <Rectangle Stroke="{StaticResource BbBorder}" StrokeThickness="1.5" StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
                         <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="16" Height="16" Foreground="{StaticResource BbMuted}" />
@@ -356,13 +356,13 @@
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <!-- The sound tracks: each sound a clip from where it starts for as long as it plays, dragged along
-                     and between tracks, trimmed at either edge, overlapping as they please. -->
-                <Panel x:Name="SoundRows" Height="{Binding TracksHeight}" Tag="sounds" Background="Transparent">
-                  <ItemsControl ItemsSource="{Binding Tracks}">
+                <!-- The sound lines: each sound a clip from where it starts for as long as it plays, dragged along
+                     and between sound lines, trimmed at either edge, overlapping as they please. -->
+                <Panel x:Name="SoundRows" Height="{Binding SoundLinesHeight}" Tag="sounds" Background="Transparent">
+                  <ItemsControl ItemsSource="{Binding SoundLines}">
                     <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="vm:TrackItem">
-                        <Border Height="{x:Static vm:FilmViewModel.TrackHeight}" BorderBrush="#1E2024" BorderThickness="0,0,0,1" />
+                      <DataTemplate x:DataType="vm:SoundLineItem">
+                        <Border Height="{x:Static vm:VideoViewModel.SoundLineHeight}" BorderBrush="#1E2024" BorderThickness="0,0,0,1" />
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
@@ -385,7 +385,7 @@
                                 PointerPressed="OnSoundPressed" PointerMoved="OnSoundMoved" PointerReleased="OnSoundReleased" PointerCaptureLost="OnSoundCaptureLost"
                                 ContextRequested="OnSoundMenu">
                           <Panel>
-                            <views:FilmWave Peaks="{Binding Peaks}" Margin="0,4" />
+                            <views:VideoWave Peaks="{Binding Peaks}" Margin="0,4" />
                             <StackPanel Margin="8,2,8,0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
                               <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="SemiBold" />
                               <TextBlock Text="{Binding State}" FontSize="10" Classes="muted" Classes.error="{Binding IsError}" VerticalAlignment="Center" />
@@ -414,14 +414,14 @@
       </DockPanel>
     </Border>
 
-    <!-- The viewer: what is picked on the timeline (it goes into the chat's box), or the whole film; how it was made under it. -->
+    <!-- The viewer: what is picked on the timeline (it goes into the chat's box), or the whole video; how it was made under it. -->
     <DockPanel>
       <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0" MaxHeight="190"
               IsVisible="{Binding Details, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">
           <StackPanel Spacing="6" Margin="14,8">
             <Button Classes="primary" Content="Use this version" Command="{Binding UseVersionCommand}" IsVisible="{Binding IsVersionShown}" HorizontalAlignment="Left"
-                    ToolTip.Tip="Put this version back in the film; the one in it now is kept as a version" />
+                    ToolTip.Tip="Put this version back in the video; the one in it now is kept as a version" />
             <SelectableTextBlock Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" FontSize="12" />
             <TextBlock Classes="muted" Text="{Binding MadeWith}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding MadeWith, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             <SelectableTextBlock Text="{Binding Look}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding HasLook}"
@@ -429,7 +429,7 @@
           </StackPanel>
         </ScrollViewer>
       </Border>
-      <!-- Its margin takes clicks too: away from the picture, they show the whole film. -->
+      <!-- Its margin takes clicks too: away from the picture, they show the whole video. -->
       <Panel Background="Transparent" PointerPressed="OnAwayPressed">
         <Panel x:Name="ViewerBox" Margin="14,12">
           <ContentControl Content="{Binding Viewer}" IsVisible="{Binding !IsPlaying}" />

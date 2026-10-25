@@ -253,8 +253,8 @@
     </DataTemplate>
 
     <!-- The toolkit's panel, on the left of the chat. -->
-    <DataTemplate DataType="vm:FilmViewModel">
-      <views:FilmPanel />
+    <DataTemplate DataType="vm:VideoViewModel">
+      <views:VideoPanel />
     </DataTemplate>
     <DataTemplate DataType="vm:DiffViewModel">
       <views:DiffPanel />
@@ -462,7 +462,7 @@
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Right" />
                 <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="12,8" HorizontalAlignment="Right">
                   <StackPanel Spacing="6">
-                    <!-- Sent with Video editor open: which film, and what was picked in it. -->
+                    <!-- Sent with Video editor open: which video, and what was picked in it. -->
                     <TextBlock Classes="muted" Text="{Binding Via}" IsVisible="{Binding HasVia}" FontSize="12" TextWrapping="Wrap" />
                     <!-- The files that came with it: a picture as itself, anything else by its name; a click opens it. -->
                     <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}" Margin="0,4,0,0">

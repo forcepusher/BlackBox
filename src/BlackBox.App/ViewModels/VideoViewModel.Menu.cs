@@ -1,33 +1,33 @@
 using System.Diagnostics;
-using BlackBox.Core.Film;
+using BlackBox.Core.Video;
 using Microsoft.VisualBasic.FileIO;
 
 namespace BlackBox.App.ViewModels;
 
-public sealed partial class FilmViewModel
+public sealed partial class VideoViewModel
 {
-    // ---- the right-click menus: the timeline is where the film is worked on ------------------------------------
+    // ---- the right-click menus: the timeline is where the video is worked on ------------------------------------
     // (the user's call, 2026-10-24: "Right click on timeline -> Create. And then you pick either a file
     // reference to copy the file, or hit a generate button. Remove all that folder tab nonsense.")
 
     /// <summary>What right-clicking a row of the timeline away from its cards offers: Create, there.</summary>
-    public IReadOnlyList<FilmMenuItem?> MenuForRow(string row, double seconds, int track)
+    public IReadOnlyList<VideoMenuItem?> MenuForRow(string row, double seconds, int soundLine)
     {
         var free = !Busy(_board.Folder);
         return row switch
         {
             "references" => [new("Create", free, CreateReference)],
             "video" => [new("Create", free, AddShot)],
-            "sounds" => [new("Create", free, () => CreateSound(seconds, track)), null, new("Delete track", free && _board.Tracks > 1, () => DeleteTrack(track))],
+            "sounds" => [new("Create", free, () => CreateSound(seconds, soundLine)), null, new("Delete sound line", free && _board.SoundLines > 1, () => DeleteSoundLine(soundLine))],
             _ => [],
         };
     }
 
     /// <summary>What right-clicking a card of the References row offers.</summary>
-    public IReadOnlyList<FilmMenuItem?> MenuFor(ReferenceCard card)
+    public IReadOnlyList<VideoMenuItem?> MenuFor(ReferenceCard card)
     {
         var free = !Busy(_board.Folder);
-        var items = new List<FilmMenuItem?>
+        var items = new List<VideoMenuItem?>
         {
             new("File…", free && (card.Frame is null || !card.Frame.IsMade), () => _ = PickFileForAsync(card)),
             new("Generate", free && card.Frame is not null, () => Generate(card.Frame!)),
@@ -42,11 +42,11 @@ public sealed partial class FilmViewModel
         return items;
     }
 
-    /// <summary>What right-clicking a take on the Video row offers.</summary>
-    public IReadOnlyList<FilmMenuItem?> MenuFor(ShotItem shot)
+    /// <summary>What right-clicking a clip on the Video clips row offers.</summary>
+    public IReadOnlyList<VideoMenuItem?> MenuFor(ShotItem shot)
     {
         var free = !Busy(_board.Folder);
-        var items = new List<FilmMenuItem?>
+        var items = new List<VideoMenuItem?>
         {
             new("Generate", free, () => Generate(shot)),
             new("Start frame", shot.First is not null, () => Show(shot.First)),
@@ -60,14 +60,14 @@ public sealed partial class FilmViewModel
         return items;
     }
 
-    /// <summary>What right-clicking a sound on a sound track offers.</summary>
-    public IReadOnlyList<FilmMenuItem?> MenuFor(SoundItem sound)
+    /// <summary>What right-clicking a sound on a sound line offers.</summary>
+    public IReadOnlyList<VideoMenuItem?> MenuFor(SoundItem sound)
     {
         var free = !Busy(_board.Folder);
-        var items = new List<FilmMenuItem?>
+        var items = new List<VideoMenuItem?>
         {
-            new("File…", free && (sound.Sound.Source == FilmSound.FromFile || !sound.IsMade), () => _ = PickFileForAsync(sound)),
-            new("Generate", free && sound.Sound.Source == FilmSound.Song, () => Generate(sound)),
+            new("File…", free && (sound.Sound.Source == VideoSound.FromFile || !sound.IsMade), () => _ = PickFileForAsync(sound)),
+            new("Generate", free && sound.Sound.Source == VideoSound.Song, () => Generate(sound)),
             null,
             new("Rename", free, () => RenameAsked?.Invoke(sound, sound.Title), "F2"),
             new("Delete", free, () => DeleteSound(sound)),
@@ -76,41 +76,41 @@ public sealed partial class FilmViewModel
         return items;
     }
 
-    /// <summary>What the film's name at the top offers: the films to open, a new one, and this one renamed or deleted.</summary>
-    public IReadOnlyList<FilmMenuItem?> FilmMenu()
+    /// <summary>What the video's name at the top offers: the videos to open, a new one, and this one renamed or deleted.</summary>
+    public IReadOnlyList<VideoMenuItem?> VideoMenu()
     {
         var idle = !Busy(_board.Folder);
-        var items = new List<FilmMenuItem?>();
-        foreach (var film in Storyboard.Recent(_filmsRoot).Append(_board.Folder).Distinct(StringComparer.OrdinalIgnoreCase)
-                     .OrderBy(f => Path.GetRelativePath(_filmsRoot, f), ByName))
+        var items = new List<VideoMenuItem?>();
+        foreach (var video in Storyboard.Recent(_videosRoot).Append(_board.Folder).Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(f => Path.GetRelativePath(_videosRoot, f), ByName))
         {
-            var path = film;
+            var path = video;
             var open = SamePath(path, _board.Folder);
-            items.Add(new((open ? "● " : "") + Path.GetRelativePath(_filmsRoot, path), !open, () => Open(path)));
+            items.Add(new((open ? "● " : "") + Path.GetRelativePath(_videosRoot, path), !open, () => Open(path)));
         }
         items.Add(null);
-        items.Add(new("New film", true, () => NewFilmCommand.Execute(null)));
-        items.Add(new("Rename", idle, () => RenameFilmAsked?.Invoke()));
-        items.Add(new("Delete", idle, DeleteFilm));
+        items.Add(new("New video", true, () => NewVideoCommand.Execute(null)));
+        items.Add(new("Rename", idle, () => RenameVideoAsked?.Invoke()));
+        items.Add(new("Delete", idle, DeleteVideo));
         items.Add(new("Show in Explorer", true, () => ShowInExplorer(_board.Folder)));
         return items;
     }
 
     /// <summary>A piece's earlier versions, as a submenu: picked, one is shown, to put back.</summary>
-    private void AddVersions(List<FilmMenuItem?> items, IFilmPiece piece)
+    private void AddVersions(List<VideoMenuItem?> items, IVideoPiece piece)
     {
-        var versions = FilmTakes.List(_board, piece.Piece);
+        var versions = VideoVersions.List(_board, piece.Piece);
         if (versions.Count == 0)
             return;
         items.Add(new("Versions", true, () => { })
         {
-            Items = versions.Select(v => (FilmMenuItem?)new FilmMenuItem($"Version {v.Number} · {v.Made.ToLocalTime():d MMM, HH:mm}", true, () => ShowVersion(piece, v))).ToList(),
+            Items = versions.Select(v => (VideoMenuItem?)new VideoMenuItem($"Version {v.Number} · {v.Made.ToLocalTime():d MMM, HH:mm}", true, () => ShowVersion(piece, v))).ToList(),
         });
     }
 
-    /// <summary>Whether the film's folder is written into now (a piece being made, the chat at work on it): renamed or deleted, the work went astray.</summary>
+    /// <summary>Whether the video's folder is written into now (a piece being made, the chat at work on it): renamed or deleted, the work went astray.</summary>
     private bool Busy(string folder) =>
-        FilmMaker.IsMaking(folder) || SamePath(folder, _board.Folder) && _chat.FilmCall() is { } call && IsThisFilm(call.Args);
+        VideoMaker.IsMaking(folder) || SamePath(folder, _board.Folder) && _chat.VideoCall() is { } call && IsThisVideo(call.Args);
 
     // ---- creating: a card or clip that is a file of the user's or generated --------------------------------------
 
@@ -121,7 +121,7 @@ public sealed partial class FilmViewModel
         for (var n = 2; _board.Frames.Any(f => f.Reference && string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)) ||
                         File.Exists(Path.Combine(_board.ReferencesFolder, name + ".png")); n++)
             name = $"New image {n}";
-        var frame = new FilmFrame { Id = _board.NewId("r"), Name = name, Reference = true, Seed = Storyboard.NewSeed() };
+        var frame = new VideoFrame { Id = _board.NewId("r"), Name = name, Reference = true, Seed = Storyboard.NewSeed() };
         _board.Frames.Add(frame);
         Changed();
         SaveNow(force: true);
@@ -129,13 +129,13 @@ public sealed partial class FilmViewModel
         Show(_frames.GetValueOrDefault(frame.Id));
     }
 
-    /// <summary>A new sound on a track from <paramref name="seconds"/>, not chosen yet: File… copies a sound in, Generate has BlackBox make a song.</summary>
-    private void CreateSound(double seconds, int track)
+    /// <summary>A new sound on a sound line from <paramref name="seconds"/>, not chosen yet: File… copies a sound in, Generate has BlackBox make a song.</summary>
+    private void CreateSound(double seconds, int soundLine)
     {
         var name = "New sound";
         for (var n = 2; _board.Sounds.Any(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)); n++)
             name = $"New sound {n}";
-        var sound = new FilmSound { Id = _board.NewId("a"), Name = name, Start = Math.Round(seconds * 10) / 10, Track = track, Seed = Storyboard.NewSeed() };
+        var sound = new VideoSound { Id = _board.NewId("a"), Name = name, Start = Math.Round(seconds * 10) / 10, SoundLine = soundLine, Seed = Storyboard.NewSeed() };
         _board.Sounds.Add(sound);
         Changed();
         SaveNow(force: true);
@@ -143,12 +143,12 @@ public sealed partial class FilmViewModel
         Show(Sounds.FirstOrDefault(s => s.Id == sound.Id));
     }
 
-    /// <summary>Another sound track, under the last.</summary>
-    public void AddTrack()
+    /// <summary>Another sound line, under the last.</summary>
+    public void AddSoundLine()
     {
-        if (_board.Tracks >= Storyboard.MaxTracks)
+        if (_board.SoundLines >= Storyboard.MaxSoundLines)
             return;
-        _board.Tracks++;
+        _board.SoundLines++;
         Changed();
         SaveNow(force: true);
         Rebuild();
@@ -192,7 +192,7 @@ public sealed partial class FilmViewModel
     {
         if (PickFiles is null || (await PickFiles("sound")).FirstOrDefault() is not { } file)
             return;
-        DragOver(new FilmDropPlace("sounds", item.Sound.Start, item.Sound.Track, item.IsNew ? item : null));
+        DragOver(new VideoDropPlace("sounds", item.Sound.Start, item.Sound.SoundLine, item.IsNew ? item : null));
         if (!item.IsNew)
         {
             // In its place: the clip there now goes, its place taken by the new file.
@@ -203,7 +203,7 @@ public sealed partial class FilmViewModel
     }
 
     /// <summary>Generate: the piece goes into the chat's box; with what to make said, BlackBox makes it, else the user says what it should be.</summary>
-    private void Generate(IFilmPiece piece)
+    private void Generate(IVideoPiece piece)
     {
         Show(piece);
         var said = piece switch
@@ -224,7 +224,7 @@ public sealed partial class FilmViewModel
     /// <summary>A card or sound is to be renamed: the panel shows a box with its name to type the new one in.</summary>
     public event Action<object, string>? RenameAsked;
 
-    /// <summary>The name typed for a card, a sound, or (with null) the film.</summary>
+    /// <summary>The name typed for a card, a sound, or (with null) the video.</summary>
     public void Rename(object? target, string name)
     {
         name = name.Trim();
@@ -233,7 +233,7 @@ public sealed partial class FilmViewModel
         switch (target)
         {
             case null:
-                RenameFilm(name);
+                RenameVideo(name);
                 break;
             case ReferenceCard { Frame: { } frame }:
                 RenameGenerated(frame, name);
@@ -247,10 +247,10 @@ public sealed partial class FilmViewModel
         }
     }
 
-    /// <summary>Renames the film: its folder, named after it, and the joined film in it.</summary>
-    private void RenameFilm(string name)
+    /// <summary>Renames the video: its folder, named after it, and the joined video in it.</summary>
+    private void RenameVideo(string name)
     {
-        if (name == FilmName)
+        if (name == VideoName)
             return;
         SaveNow();
         // What shows a file of it lets go of it first: the folder can't be moved while a file in it is open.
@@ -265,9 +265,9 @@ public sealed partial class FilmViewModel
                 _savedJson = _board.ToJson();
             Status = "";
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or VideoException)
         {
-            ShowError(ex is FilmException ? $"The film couldn't be renamed: {ex.Message}" : $"The film couldn't be renamed: {ex.Message} A file in it may be open in another program.", ex);
+            ShowError(ex is VideoException ? $"The video couldn't be renamed: {ex.Message}" : $"The video couldn't be renamed: {ex.Message} A file in it may be open in another program.", ex);
         }
         Rebuild();
         OnPropertyChanged(nameof(Folder));
@@ -361,7 +361,7 @@ public sealed partial class FilmViewModel
     {
         var sound = item.Sound;
         SaveNow();
-        if (sound.Source == FilmSound.FromFile && File.Exists(_board.SoundFile(sound)))
+        if (sound.Source == VideoSound.FromFile && File.Exists(_board.SoundFile(sound)))
         {
             var from = _board.SoundFile(sound);
             var to = Path.Combine(Path.GetDirectoryName(from)!, Storyboard.Safe(name) + Path.GetExtension(from));
@@ -415,8 +415,8 @@ public sealed partial class FilmViewModel
             FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
     }
 
-    /// <summary>The open film to the Recycle Bin; the film changed last opens.</summary>
-    private void DeleteFilm()
+    /// <summary>The open video to the Recycle Bin; the video changed last opens.</summary>
+    private void DeleteVideo()
     {
         var folder = _board.Folder;
         StopPlaying();
@@ -428,7 +428,7 @@ public sealed partial class FilmViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
         {
-            ShowError($"The film couldn't be deleted: {ex.Message}", ex, folder);
+            ShowError($"The video couldn't be deleted: {ex.Message}", ex, folder);
             RefreshViewer();
             return;
         }
@@ -439,7 +439,7 @@ public sealed partial class FilmViewModel
         Status = $"{Path.GetFileName(folder)} is in the Recycle Bin.";
     }
 
-    /// <summary>A take out of the film, its files to the Recycle Bin with the frames only it uses (see <see cref="Storyboard.DeleteShot"/>).</summary>
+    /// <summary>A clip out of the video, its files to the Recycle Bin with the frames only it uses (see <see cref="Storyboard.DeleteShot"/>).</summary>
     public void DeleteShot(ShotItem item)
     {
         if (Busy(_board.Folder) || _board.Shot(item.Id) is not { } shot)
@@ -459,7 +459,7 @@ public sealed partial class FilmViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
         {
-            ShowError($"The take couldn't be deleted: {ex.Message}", ex);
+            ShowError($"The clip couldn't be deleted: {ex.Message}", ex);
             Reload();
         }
         Rebuild();
@@ -492,7 +492,7 @@ public sealed partial class FilmViewModel
         Clear();
     }
 
-    /// <summary>A sound off its track, its file to the Recycle Bin (a song with its versions; a sound file of the user's, its copy).</summary>
+    /// <summary>A sound off its sound line, its file to the Recycle Bin (a song with its versions; a sound file of the user's, its copy).</summary>
     private void DeleteSound(SoundItem item)
     {
         SaveNow();
@@ -514,42 +514,42 @@ public sealed partial class FilmViewModel
         Clear();
     }
 
-    /// <summary>A sound track with its sounds; the tracks under it move up.</summary>
-    private void DeleteTrack(int track)
+    /// <summary>A sound line with its sounds; the sound lines under it move up.</summary>
+    private void DeleteSoundLine(int soundLine)
     {
-        foreach (var sound in Sounds.Where(s => s.Sound.Track == track).ToList())
+        foreach (var sound in Sounds.Where(s => s.Sound.SoundLine == soundLine).ToList())
             DeleteSound(sound);
-        foreach (var sound in _board.Sounds.Where(s => s.Track > track))
-            sound.Track--;
-        _board.Tracks = Math.Max(1, _board.Tracks - 1);
+        foreach (var sound in _board.Sounds.Where(s => s.SoundLine > soundLine))
+            sound.SoundLine--;
+        _board.SoundLines = Math.Max(1, _board.SoundLines - 1);
         Changed();
         SaveNow();
         Rebuild();
     }
 
-    /// <summary>The film read again from its folder, after a change to it failed halfway.</summary>
+    /// <summary>The video read again from its folder, after a change to it failed halfway.</summary>
     private void Reload()
     {
         try
         {
-            if (Storyboard.IsFilm(_board.Folder))
+            if (Storyboard.IsVideo(_board.Folder))
             {
                 _board = Storyboard.Load(_board.Folder);
                 _savedJson = _board.ToJson();
                 _dirty = false;
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FilmException) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or VideoException) { }
     }
 
-    // ---- a sound dragged on its track ----------------------------------------------------------------------
+    // ---- a sound dragged on its sound line ----------------------------------------------------------------------
 
-    /// <summary>A sound moved along its track or to another, or trimmed at an edge, as a video editor's clip is; saved once let go.</summary>
-    public void MoveSound(SoundItem item, double start, int track, double trim, double seconds)
+    /// <summary>A sound moved along its sound line or to another, or trimmed at an edge, as a video editor's clip is; saved once let go.</summary>
+    public void MoveSound(SoundItem item, double start, int soundLine, double trim, double seconds)
     {
         var sound = item.Sound;
-        (sound.Start, sound.Track, sound.Trim, sound.Seconds) =
-            (Math.Max(0, Math.Round(start * 10) / 10), Math.Clamp(track, 0, _board.Tracks - 1), Math.Max(0, Math.Round(trim * 10) / 10), Math.Max(0, Math.Round(seconds * 10) / 10));
+        (sound.Start, sound.SoundLine, sound.Trim, sound.Seconds) =
+            (Math.Max(0, Math.Round(start * 10) / 10), Math.Clamp(soundLine, 0, _board.SoundLines - 1), Math.Max(0, Math.Round(trim * 10) / 10), Math.Max(0, Math.Round(seconds * 10) / 10));
         Relayout();
         Changed();
     }
