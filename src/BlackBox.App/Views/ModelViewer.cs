@@ -33,6 +33,14 @@ public sealed class ModelViewer : Control
     public static readonly StyledProperty<double> PanYProperty = AvaloniaProperty.Register<ModelViewer, double>(nameof(PanY), defaultBindingMode: Avalonia.Data.BindingMode.TwoWay);
     public static readonly StyledProperty<double> MinZoomProperty = AvaloniaProperty.Register<ModelViewer, double>(nameof(MinZoom), 0.4);
     public static readonly StyledProperty<bool> CanPanProperty = AvaloniaProperty.Register<ModelViewer, bool>(nameof(CanPan));
+    public static readonly StyledProperty<MeshAnimation?> AnimationProperty = AvaloniaProperty.Register<ModelViewer, MeshAnimation?>(nameof(Animation));
+    public static readonly StyledProperty<double> TimeProperty = AvaloniaProperty.Register<ModelViewer, double>(nameof(Time));
+
+    /// <summary>The animation it is posed in (at <see cref="Time"/>); null at rest. It stays framed as through the whole animation, so it doesn't jump about.</summary>
+    public MeshAnimation? Animation { get => GetValue(AnimationProperty); set => SetValue(AnimationProperty, value); }
+
+    /// <summary>Seconds into <see cref="Animation"/>.</summary>
+    public double Time { get => GetValue(TimeProperty); set => SetValue(TimeProperty, value); }
 
     /// <summary>Degrees around it: 0 from the front, 90 from its right.</summary>
     public double Yaw { get => GetValue(YawProperty); set => SetValue(YawProperty, value); }
@@ -84,7 +92,7 @@ public sealed class ModelViewer : Control
         if (change.Property == MeshProperty || change.Property == BoundsProperty)
             Redraw(smooth: true);
         else if (change.Property == YawProperty || change.Property == PitchProperty || change.Property == ZoomProperty
-                 || change.Property == PanXProperty || change.Property == PanYProperty)
+                 || change.Property == PanXProperty || change.Property == PanYProperty || change.Property == AnimationProperty || change.Property == TimeProperty)
             Redraw(smooth: _dragFrom is null && !_wheeling);
     }
 
@@ -173,7 +181,7 @@ public sealed class ModelViewer : Control
         }
         _drawing = true;
         var request = ++_request;
-        var (yaw, pitch, zoom, panX, panY) = (Yaw, Pitch, Zoom, PanX, PanY);
+        var (yaw, pitch, zoom, panX, panY, animation, time) = (Yaw, Pitch, Zoom, PanX, PanY, Animation, Time);
         var scaling = VisualRoot?.RenderScaling ?? 1;
         var (pw, ph) = ((int)(w * scaling), (int)(h * scaling));
         Task.Run(() =>
@@ -182,7 +190,9 @@ public sealed class ModelViewer : Control
             var rowBytes = 0;
             try
             {
-                using var picture = MeshRenderer.Render(mesh, pw, ph, yaw, pitch, zoom, smooth ? 2 : 1, panX, panY);
+                var posed = animation is not null && mesh.CanMove ? mesh.Pose(animation, time) : null;
+                var bounds = animation is not null && mesh.CanMove ? FrameOf(mesh, animation) : ((System.Numerics.Vector3, System.Numerics.Vector3)?)null;
+                using var picture = MeshRenderer.Render(mesh, pw, ph, yaw, pitch, zoom, smooth ? 2 : 1, panX, panY, posed, bounds);
                 // Copied out while the bitmap still exists: the UI thread gets only the bytes.
                 pixels = new byte[picture.ByteCount];
                 rowBytes = picture.RowBytes;
@@ -214,6 +224,15 @@ public sealed class ModelViewer : Control
                 }
             });
         });
+    }
+
+    /// <summary>The box a model stays in through an animation, worked out once for each (it poses it at 60 times).</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MeshAnimation, Tuple<System.Numerics.Vector3, System.Numerics.Vector3>> Frames = new();
+
+    private static (System.Numerics.Vector3, System.Numerics.Vector3) FrameOf(Mesh mesh, MeshAnimation animation)
+    {
+        var box = Frames.GetValue(animation, a => mesh.Bounds(a) is var (min, max) ? Tuple.Create(min, max) : null!);
+        return (box.Item1, box.Item2);
     }
 
     public override void Render(DrawingContext context)

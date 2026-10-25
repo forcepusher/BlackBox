@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using Avalonia.Threading;
 using BlackBox.Core.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -8,14 +10,137 @@ namespace BlackBox.App.ViewModels;
 /// A 3D model in the File inspector panel (see <see cref="Views.ModelViewer"/>): a left drag turns it,
 /// the wheel comes closer, a right or middle drag moves it about, and buttons show it from the front,
 /// a side, the back or above. Where it is seen from is said under it and told to the model; with
-/// Area on, an area of the view is marked to ask about (the user's request, 2026-10-26).
+/// Area on, an area of the view is marked to ask about (the user's request, 2026-10-26). A model with
+/// animations (an FBX file's takes) plays them over and over and steps a frame at a time.
 /// </summary>
-public sealed partial class InspectorModelViewModel(string path) : ObservableObject, IDisposable
+public sealed partial class InspectorModelViewModel : ObservableObject, IDisposable
 {
-    public string Path { get; } = path;
+    public string Path { get; }
+
+    private readonly DispatcherTimer _timer;
+    private readonly Stopwatch _clock = new();
+    private double _playFrom;
+
+    public InspectorModelViewModel(string path)
+    {
+        Path = path;
+        _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
+        _timer.Tick += (_, _) => Tick();
+    }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Animations), nameof(HasAnimations), nameof(HasTakes))]
     private Mesh? _mesh;
+
+    public IReadOnlyList<MeshAnimation> Animations => Mesh?.CanMove == true ? Mesh.Animations : [];
+
+    public bool HasAnimations => Animations.Count > 0;
+
+    /// <summary>More than one take: a list to pick one from.</summary>
+    public bool HasTakes => Animations.Count > 1;
+
+    partial void OnMeshChanged(Mesh? value) => Animation = Animations.FirstOrDefault();
+
+    /// <summary>The take playing or shown; null for a model that keeps still.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Duration), nameof(TimeText), nameof(LongestTimeText))]
+    private MeshAnimation? _animation;
+
+    partial void OnAnimationChanged(MeshAnimation? value)
+    {
+        Pause();
+        Time = 0;
+    }
+
+    public double Duration => Animation?.Duration ?? 0;
+
+    /// <summary>Seconds into the take.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TimeText), nameof(FrameIndex))]
+    private double _time;
+
+    /// <summary>The frame showing, from 0, at the file's frame rate.</summary>
+    public int FrameIndex => Animation is { } a ? Math.Clamp((int)Math.Round(Time * a.FrameRate), 0, a.FrameCount - 1) : 0;
+
+    /// <summary>"Frame 13 / 25 · 0.500 s".</summary>
+    public string TimeText => Animation is { } a ? $"Frame {FrameIndex + 1:N0} / {a.FrameCount:N0} · {Time:0.000} s" : "";
+
+    /// <summary><see cref="TimeText"/> at its longest, which sizes its slot: the slider beside it keeps still.</summary>
+    public string LongestTimeText => Animation is { } a ? $"Frame {a.FrameCount:N0} / {a.FrameCount:N0} · {a.Duration:0.000} s" : "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PlayIcon))]
+    private bool _isPlaying;
+
+    private static readonly Avalonia.Media.Geometry PlayShape = Avalonia.Media.StreamGeometry.Parse("M8 5v14l11-7z");
+    private static readonly Avalonia.Media.Geometry PauseShape = Avalonia.Media.StreamGeometry.Parse("M6 4h4v16H6zM14 4h4v16h-4z");
+
+    public Avalonia.Media.Geometry PlayIcon => IsPlaying ? PauseShape : PlayShape;
+
+    [RelayCommand]
+    private void Play()
+    {
+        if (IsPlaying)
+        {
+            Pause();
+            return;
+        }
+        if (Animation is null)
+            return;
+        if (Time >= Duration - 1e-6)
+            Time = 0;
+        (_playFrom, IsPlaying) = (Time, true);
+        _clock.Restart();
+        _timer.Start();
+    }
+
+    /// <summary>On the clock, over and over as games play a take.</summary>
+    private void Tick()
+    {
+        if (Animation is not { Duration: > 0 } a)
+        {
+            Pause();
+            return;
+        }
+        _ticking = true;
+        Time = (_playFrom + _clock.Elapsed.TotalSeconds) % a.Duration;
+        _ticking = false;
+    }
+
+    private bool _ticking;
+
+    /// <summary>The slider dragged while it plays: it plays on from there.</summary>
+    partial void OnTimeChanged(double value)
+    {
+        if (_ticking || !IsPlaying)
+            return;
+        _playFrom = value;
+        _clock.Restart();
+    }
+
+    public void Pause()
+    {
+        _timer.Stop();
+        IsPlaying = false;
+    }
+
+    [RelayCommand]
+    private void StepBack() => Step(-1);
+
+    [RelayCommand]
+    private void StepForward() => Step(1);
+
+    /// <summary>One frame or more back or on, at the file's frame rate.</summary>
+    public void Step(int frames)
+    {
+        if (Animation is not { } a)
+            return;
+        Pause();
+        Time = Math.Clamp(FrameIndex + frames, 0, a.FrameCount - 1) / a.FrameRate;
+    }
+
+    /// <summary>What the model is told of the take shown: "at 0.500 s (frame 13 of 25) of its animation Scene, paused"; null for a model that keeps still.</summary>
+    public string? TakeText => Animation is { } a ? $"at {Time:0.000} s (frame {FrameIndex + 1} of {a.FrameCount}, {a.FrameRate:0.##} fps) of its animation \"{a.Name}\" ({a.Duration:0.###} s long){(IsPlaying ? ", playing" : ", paused there")}" : null;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ViewText))]
@@ -95,6 +220,7 @@ public sealed partial class InspectorModelViewModel(string path) : ObservableObj
 
     public void Dispose()
     {
+        Pause();
         Mesh?.Dispose();
         Mesh = null;
     }

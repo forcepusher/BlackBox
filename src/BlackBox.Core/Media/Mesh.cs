@@ -15,10 +15,11 @@ public sealed class MeshMaterial
 }
 
 /// <summary>
-/// A 3D model's triangles, read from glTF/GLB, OBJ, PLY or STL, enough to draw it: positions (with
-/// the file's node transforms applied), texture coordinates, vertex colours and materials.
+/// A 3D model's triangles, read from glTF/GLB, OBJ, PLY, STL or FBX, enough to draw it: positions (with
+/// the file's node transforms applied), texture coordinates, vertex colours and materials; an FBX
+/// file's animations too, to pose it at any time of them (see <see cref="Pose"/>).
 /// </summary>
-public sealed class Mesh : IDisposable
+public sealed partial class Mesh : IDisposable
 {
     public List<Vector3> Positions { get; } = [];
     public List<Vector2> Uvs { get; } = [];
@@ -58,6 +59,8 @@ public sealed class Mesh : IDisposable
         var look = Materials.Any(m => m.Texture is not null) ? "textured" : HasVertexColors ? "with vertex colours" : Materials.Count > 1 ? $"{Materials.Count} materials" : "untextured";
         var text = $"3D model: {TriangleCount:N0} triangles, {Positions.Count:N0} vertices, {look}, " +
                    $"{size.X.ToString("0.###", CultureInfo.InvariantCulture)} × {size.Y.ToString("0.###", CultureInfo.InvariantCulture)} × {size.Z.ToString("0.###", CultureInfo.InvariantCulture)} in size (x × y × z)";
+        if (DescribeMotion() is { } motion)
+            text += ", " + motion;
         return Notes.Count > 0 ? text + " (" + string.Join("; ", Notes.Distinct()) + ")" : text;
     }
 
@@ -67,14 +70,15 @@ public sealed class Mesh : IDisposable
             m.Texture?.Dispose();
     }
 
-    /// <summary>Reads a .glb, .gltf, .obj, .ply or .stl file.</summary>
+    /// <summary>Reads a .glb, .gltf, .obj, .ply, .stl or .fbx file.</summary>
     public static Mesh Load(string path) => Path.GetExtension(path).ToLowerInvariant() switch
     {
         ".glb" or ".gltf" => Gltf.Load(path),
         ".obj" => Obj.Load(path),
         ".ply" => Ply.Load(path),
         ".stl" => Stl.Load(path),
-        var ext => throw new NotSupportedException($"{ext} models can't be read here; .glb, .gltf, .obj, .ply and .stl can."),
+        ".fbx" => Fbx.Load(path),
+        var ext => throw new NotSupportedException($"{ext} models can't be read here; .glb, .gltf, .obj, .ply, .stl and .fbx can."),
     };
 
     private int AddMaterial(MeshMaterial material)

@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:BlackBox.App.ViewModels"
              xmlns:views="using:BlackBox.App.Views"
+             xmlns:core="using:BlackBox.Core.Media"
              x:Class="BlackBox.App.Views.FileInspectorView"
              x:DataType="vm:FileInspectorViewModel">
   <!-- The file itself, as the File inspector panel and the full-screen viewer show it. -->
@@ -41,6 +42,7 @@
       <views:ModelViewer x:Name="ModelView" Mesh="{Binding Model.Mesh}" IsVisible="{Binding ShowsModel}" Margin="16,16,16,8" CanPan="True" MinZoom="1"
                          Yaw="{Binding Model.Yaw, Mode=TwoWay, FallbackValue=0}" Pitch="{Binding Model.Pitch, Mode=TwoWay, FallbackValue=0}"
                          Zoom="{Binding Model.Zoom, Mode=TwoWay, FallbackValue=1}" PanX="{Binding Model.PanX, Mode=TwoWay, FallbackValue=0}" PanY="{Binding Model.PanY, Mode=TwoWay, FallbackValue=0}"
+                         Animation="{Binding Model.Animation}" Time="{Binding Model.Time, FallbackValue=0}"
                          AutomationProperties.Name="3D model" />
 
       <!-- A PDF's pages, drawn by PDFium as they come on screen: the list makes only the pages in view.
@@ -127,9 +129,41 @@
       </DockPanel>
     </Border>
 
-    <!-- A 3D model's views: from the front, a side, the back, above, or as at first; where it is seen from. -->
+    <!-- A 3D model's views: from the front, a side, the back, above, or as at first; where it is seen
+         from. Over them, for a model with animations, its player: a frame back, play, a frame on, its
+         takes, where it is. -->
     <Border Grid.Row="1" IsVisible="{Binding Model, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="10,4,10,10">
-      <DockPanel DataContext="{Binding Model}" x:DataType="vm:InspectorModelViewModel">
+      <StackPanel DataContext="{Binding Model}" x:DataType="vm:InspectorModelViewModel" Spacing="4">
+      <DockPanel IsVisible="{Binding HasAnimations}">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                  Command="{Binding StepBackCommand}" ToolTip.Tip="A frame back (Left)" AutomationProperties.Name="A frame back">
+            <PathIcon Width="13" Height="13" Data="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+          </Button>
+          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                  Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space)" AutomationProperties.Name="Play">
+            <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
+          </Button>
+          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                  Command="{Binding StepForwardCommand}" ToolTip.Tip="A frame on (Right)" AutomationProperties.Name="A frame on">
+            <PathIcon Width="13" Height="13" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+          </Button>
+          <ComboBox ItemsSource="{Binding Animations}" SelectedItem="{Binding Animation}" IsVisible="{Binding HasTakes}" MaxWidth="160" Margin="6,0,0,0"
+                    VerticalAlignment="Center" FontSize="12" ToolTip.Tip="Which animation" AutomationProperties.Name="Animation">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="core:MeshAnimation">
+                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
+        <Panel DockPanel.Dock="Right" Margin="10,0,6,0" VerticalAlignment="Center">
+          <TextBlock Text="{Binding LongestTimeText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
+          <TextBlock Classes="muted" Text="{Binding TimeText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" AutomationProperties.Name="Frame" />
+        </Panel>
+        <Slider Minimum="0" Maximum="{Binding Duration}" Value="{Binding Time}" VerticalAlignment="Center" Margin="8,0,0,0" AutomationProperties.Name="Animation slider" />
+      </DockPanel>
+      <DockPanel>
         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
           <Button Classes="ghost" Height="28" Padding="8,0" Content="Front" FontSize="12" Command="{Binding ViewFromCommand}" CommandParameter="front" ToolTip.Tip="See it from the front" />
           <Button Classes="ghost" Height="28" Padding="8,0" Content="Right" FontSize="12" Command="{Binding ViewFromCommand}" CommandParameter="right" ToolTip.Tip="See it from its right" />
@@ -141,6 +175,7 @@
         <TextBlock Classes="muted" Text="{Binding ViewText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,6,0"
                    TextTrimming="CharacterEllipsis" AutomationProperties.Name="Seen from" />
       </DockPanel>
+      </StackPanel>
     </Border>
 
     <!-- A video's player: a frame back, play, a frame on; where it is; its sound. -->

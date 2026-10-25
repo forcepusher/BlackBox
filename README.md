@@ -25,9 +25,9 @@ whatever it downloads stay in a `Data` folder next to the exe.
   have them changed.
 - **See a file.** Click a file's preview in the chat to see it full screen, or press **Inspect** to
   open it in **File inspector** on the left of the chat. Markdown, PDF, Word, Excel, PowerPoint, tables,
-  text, pictures, video, animations, sound, 3D models, and any other file in hex; Office files look
-  as in Office when Office is installed. Select text in File inspector (cells of a table, lines of
-  code, bytes) to ask about that part, drag a box over a PDF page, a picture or a frame to ask about
+  text, pictures, video, animations, sound, 3D models (an FBX plays its animations), and any other
+  file in hex; Office files look as in Office when Office is installed. Select text in File inspector
+  (cells of a table, lines of code, bytes) to ask about that part, drag a box over a PDF page, a picture or a frame to ask about
   that area (**Area** does it on text, Office files and 3D models), or drag over a sound to ask about
   that stretch. The wheel zooms (Ctrl+wheel on a PDF), a right-drag pans, video and animations step
   frame by frame with the arrow keys, and a left drag turns a 3D model.

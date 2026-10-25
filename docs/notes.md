@@ -264,11 +264,32 @@ from memory, and those were often wrong, so the model doesn't work from memory h
 `read_file` gives the model a look at media as well as pictures: a video as eight frames with their
 times (and how loud its sound is, in words; a clip up to 15 s also with its movement measured from
 the pixels, as the video looks have it: the camera, and what moves where, which way, how far), a sound as its waveform and spectrogram with its
-length, loudness, clipping and silences in words, a 3D model (GLB, glTF, OBJ, PLY, STL) from four
-sides, an animated GIF or WebP as frames.
+length, loudness, clipping and silences in words, a 3D model (GLB, glTF, OBJ, PLY, STL, FBX) from four
+sides (an FBX with animations also at four times of its first, from the front left, in a row under
+them), an animated GIF or WebP as frames.
 Video and sound are decoded by Windows' own Media Foundation (MP4/H.264, MOV, MP3, AAC, FLAC, WAV
 play on every Windows 10 and 11), else by ffmpeg when one is on the PATH, in `Data/tools` or in
 ComfyUI's folder; 3D models are drawn by BlackBox itself.
+
+**FBX** (`Mesh.Fbx`, MeshFbx.cs; the user's choice, 2026-10-26, over Assimp, a 15-20 MB native DLL,
+and Autodesk's SDK, whose licence keeps it out): FBX 7.x read by BlackBox, binary (from 7.5 its
+records' offsets are 64-bit; arrays zlib-packed) or text, FBX 6 refused with how to get a newer one.
+Models make a tree of nodes whose own transform is FBX's T·Roff·Rp·Rpre·R·Rpost⁻¹·Rp⁻¹·Soff·Sp·S·Sp⁻¹
+with its rotation order (`MeshNode`, row vectors as System.Numerics has them), GlobalSettings' axes
+turn the scene y up with +z toward the viewer, meshes take their geometric transform, UVs (v flipped),
+colours and per-polygon materials (DiffuseColor, its diffuse texture embedded in a Video's Content or
+the file it names, beside the FBX or in its .fbm folder). Skins: each cluster's Transform is kept
+in the bone's space in the file (Blender's exporter says so, and its importer reads it as such; the
+SDK hands it out as TransformLink · Transform), so a vertex goes v · Transform · bone's world at the
+time, weighted. Animations: each AnimationStack's first layer, curve nodes tied to Lcl Translation,
+Rotation or Scaling and their d|X/Y/Z curves (KeyTime in 46,186,158,000ths of a second, linear, or
+held where a key is constant), its length from LocalStart/Stop and the frame rate from TimeMode.
+`Mesh.Pose(animation, seconds)` poses every vertex; `Mesh.Bounds(animation)` (60 poses) frames the
+view so a moving model doesn't jump about. Not read: blend shapes (noted), NURBS, cameras, lights,
+animation layers past the first. Checked with Blender 5.2's exporter (.dev\autopick): a textured box
+and cone, the same exported Z-up (same bounds), and a two-bone arm bending 90° at the elbow beside a
+ball keyed on its own, which posed as Blender showed it; unit tests write text and binary 7.4/7.5
+files themselves.
 
 ### Previews
 Files the agent makes or shows appear in the chat: under the tool call that made them, and under
@@ -2063,7 +2084,11 @@ under the panel's bar here and in the full-screen viewer for a card's peek, see 
   or middle drag moves it about (`MeshRenderer.Render` takes a pan in parts of the picture's shorter
   side), a double-click or Reset as at first; Front, Right, Back, Left and Top buttons. Under it where
   it is seen from, "From the front left (-30° round), 15° above", which the model is told with every
-  message. **Area** freezes the view to mark a part of it, as for a text.
+  message. **Area** freezes the view to mark a part of it, as for a text. A model with animations (an
+  FBX's takes) has a player over the view buttons: a frame back, play (over and over, on a 33 ms clock),
+  a frame on, the takes to pick from when there are more, a slider and "Frame 13 / 25 · 0.500 s"; the
+  model is told the take, the time and the frame with each message. `ModelViewer` poses it
+  (`Animation`, `Time`) off the UI thread as it draws.
 - Any other file whose start reads as text: its text in a fixed-width font. Anything else: its first
   64 KB as a hex dump (`FileInspector.Hex`: offset, 16 bytes in hex, the same as text), until
   2026-10-26 "There is no preview for this kind of file".

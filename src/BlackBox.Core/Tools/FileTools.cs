@@ -41,7 +41,7 @@ public sealed class ReadFileTool : Tool
         "Read a file. Text files come back as numbered lines; PDF, Word (.docx), Excel (.xlsx) and PowerPoint (.pptx) files as their text " +
         "(Excel cell by cell, with formulas); a picture (PNG, JPEG, GIF, BMP, WebP) is shown to you as an image; a video (MP4, WebM, MOV…) " +
         "as frames with their times, a sound (WAV, MP3, FLAC, OGG…) as its waveform and spectrogram with its loudness and silences, " +
-        "a 3D model (GLB, glTF, OBJ, PLY, STL) from four sides. Relative paths are resolved against the working directory.";
+        "a 3D model (GLB, glTF, OBJ, PLY, STL, FBX) from four sides, with an FBX's animation at four times. Relative paths are resolved against the working directory.";
     public override ToolRisk Risk => ToolRisk.ReadOnly;
     public override JsonObject Parameters => Schema(
         ("path", Str("File path"), true),

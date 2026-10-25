@@ -391,7 +391,10 @@ public static class MediaPreview
         if (!makeTile || mesh.TriangleCount == 0)
             return (line, null, "");
         const int cell = 510;
-        var tile = new SKBitmap(TileWidth, cell * 2 + 4);
+        // A model that moves: a row of its first animation under the four sides, from the front left.
+        var animation = mesh.CanMove ? mesh.Animations[0] : null;
+        const int small = (TileWidth - 3 * 4) / 4;
+        var tile = new SKBitmap(TileWidth, cell * 2 + 4 + (animation is null ? 0 : small + 4));
         using var canvas = new SKCanvas(tile);
         canvas.Clear(new SKColor(32, 32, 32));
         using var font = new SKFont(SKTypeface.Default, 16);
@@ -405,7 +408,19 @@ public static class MediaPreview
             canvas.DrawBitmap(view, x, y);
             canvas.DrawText(name, x + 8, y + 22, font, text);
         }
-        return (line, tile, "the 3D model from four sides (front, right side, back, and from above), lit from the front");
+        if (animation is null)
+            return (line, tile, "the 3D model from four sides (front, right side, back, and from above), lit from the front");
+        var bounds = mesh.Bounds(animation);
+        for (var i = 0; i < 4; i++)
+        {
+            var at = animation.Duration * i / 4; // a take often ends as it starts, to loop
+            using var view = MeshRenderer.Render(mesh, small, small, -30, 15, positions: mesh.Pose(animation, at), bounds: bounds);
+            var x = i * (small + 4);
+            var y = cell * 2 + 8;
+            canvas.DrawBitmap(view, x, y);
+            canvas.DrawText($"{at.ToString("0.00", CultureInfo.InvariantCulture)} s", x + 6, y + 20, font, text);
+        }
+        return (line, tile, $"the 3D model from four sides (front, right side, back, and from above), lit from the front, and under them its animation \"{animation.Name}\" from the front left at four times, its time on each");
     }
 
     // ---- putting it together -----------------------------------------------------------------

@@ -20,7 +20,10 @@ public static class MeshRenderer
     /// <param name="supersample">Pixels drawn per output pixel along each side, for smooth edges.</param>
     /// <param name="panX">How far the model is moved right on the picture, in parts of its shorter side.</param>
     /// <param name="panY">How far it is moved down, the same.</param>
-    public static SKBitmap Render(Mesh mesh, int width, int height, double yawDegrees, double pitchDegrees, double zoom = 1, int supersample = 2, double panX = 0, double panY = 0)
+    /// <param name="positions">Its vertices posed at a time of an animation (<see cref="Mesh.Pose"/>), in place of those at rest.</param>
+    /// <param name="bounds">The box it is framed by: one it stays in through an animation (<see cref="Mesh.Bounds(MeshAnimation)"/>), so it doesn't jump about as it moves.</param>
+    public static SKBitmap Render(Mesh mesh, int width, int height, double yawDegrees, double pitchDegrees, double zoom = 1, int supersample = 2, double panX = 0, double panY = 0,
+        IReadOnlyList<Vector3>? positions = null, (Vector3 Min, Vector3 Max)? bounds = null)
     {
         var ss = Math.Clamp(supersample, 1, 3);
         var (w, h) = (width * ss, height * ss);
@@ -36,7 +39,8 @@ public static class MeshRenderer
         }
 
         if (mesh.TriangleCount > 0)
-            Draw(mesh, w, h, yawDegrees, pitchDegrees, zoom, color, depth, (float)(panX * Math.Min(w, h)), (float)(panY * Math.Min(w, h)));
+            Draw(mesh, positions is { } posed && posed.Count == mesh.Positions.Count ? posed : mesh.Positions, bounds ?? mesh.Bounds(),
+                w, h, yawDegrees, pitchDegrees, zoom, color, depth, (float)(panX * Math.Min(w, h)), (float)(panY * Math.Min(w, h)));
 
         var full = new SKBitmap(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Opaque));
         System.Runtime.InteropServices.Marshal.Copy((int[])(object)color, 0, full.GetPixels(), color.Length);
@@ -46,13 +50,18 @@ public static class MeshRenderer
             return full.Resize(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque), SKFilterQuality.High);
     }
 
-    private static void Draw(Mesh mesh, int w, int h, double yawDegrees, double pitchDegrees, double zoom, uint[] color, float[] depth, float panX, float panY)
+    private static void Draw(Mesh mesh, IReadOnlyList<Vector3> positions, (Vector3 Min, Vector3 Max) bounds, int w, int h, double yawDegrees, double pitchDegrees, double zoom,
+        uint[] color, float[] depth, float panX, float panY)
     {
-        var (min, max) = mesh.Bounds();
+        var (min, max) = bounds;
         var center = (min + max) / 2;
+        // As far out as the box's corners: what is in the box stays in view (the farthest vertex at rest, without a box of its own).
         var radius = 0f;
-        foreach (var p in mesh.Positions)
-            radius = MathF.Max(radius, Vector3.DistanceSquared(p, center));
+        if (bounds == mesh.Bounds())
+            foreach (var p in mesh.Positions)
+                radius = MathF.Max(radius, Vector3.DistanceSquared(p, center));
+        else
+            radius = Vector3.DistanceSquared(max, center);
         radius = MathF.Max(MathF.Sqrt(radius), 1e-6f);
 
         var rotation = Matrix4x4.CreateRotationY((float)(-yawDegrees * Math.PI / 180)) * Matrix4x4.CreateRotationX((float)(pitchDegrees * Math.PI / 180));
@@ -61,13 +70,13 @@ public static class MeshRenderer
         var light = Vector3.Normalize(new Vector3(-0.35f, 0.55f, 1f));
 
         // Every vertex in view space once: x, y on screen, and its distance from the eye.
-        var count = mesh.Positions.Count;
+        var count = positions.Count;
         var sx = new float[count];
         var sy = new float[count];
         var view = new Vector3[count];
         for (var i = 0; i < count; i++)
         {
-            var q = Vector3.Transform(mesh.Positions[i] - center, rotation);
+            var q = Vector3.Transform(positions[i] - center, rotation);
             view[i] = q;
             var d = distance - q.Z;
             sx[i] = w / 2f + panX + focal * q.X / d;

@@ -282,7 +282,7 @@ public partial class FileInspectorView : UserControl
     }
 
     /// <summary>
-    /// A video or an animation: Left and Right step a frame, Space plays and pauses. A sound: Left and
+    /// A video, an animation or a 3D model's animation: Left and Right step a frame, Space plays and pauses. A sound: Left and
     /// Right move the playhead a hundredth of the view (with Shift a tenth), Home and End to its ends.
     /// </summary>
     protected override void OnKeyDown(KeyEventArgs e)
@@ -307,8 +307,10 @@ public partial class FileInspectorView : UserControl
         }
         if (e.KeyModifiers != KeyModifiers.None)
             return;
-        Action<int>? step1 = _vm.Video is { } video ? video.Step : _vm.Animation is { } animation ? animation.Step : null;
-        System.Windows.Input.ICommand? play = _vm.Video?.PlayCommand ?? (System.Windows.Input.ICommand?)_vm.Animation?.PlayCommand;
+        Action<int>? step1 = _vm.Video is { } video ? video.Step : _vm.Animation is { } animation ? animation.Step
+            : _vm.Model is { HasAnimations: true } model ? model.Step : null;
+        System.Windows.Input.ICommand? play = _vm.Video?.PlayCommand ?? (System.Windows.Input.ICommand?)_vm.Animation?.PlayCommand
+            ?? (_vm.Model is { HasAnimations: true } ? _vm.Model.PlayCommand : null);
         if (step1 is null || play is null)
             return;
         switch (e.Key)

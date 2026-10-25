@@ -563,6 +563,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
         Func<(RawImage? Picture, string Where, string Told)> cut;
         if (Frozen is not null && _frozenPixels is { } frozen)
         {
+            Model?.Pause();
             var told = ShellPath is not null ? "as Windows' previewer showed it in the panel, scrolled where they had it"
                 : Model is not null ? "as the panel drew it in that view"
                 : "as the panel drew it, scrolled where they had it";
@@ -727,7 +728,8 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
             return null;
         var opening = $"[The File inspector panel is open beside the chat, showing {path}. ";
         if (Model is { } shown)
-            opening += $"It draws the 3D model {char.ToLowerInvariant(shown.ViewText[0])}{shown.ViewText[1..]}, at {shown.Zoom * 100:0}% zoom. ";
+            opening += $"It draws the 3D model {char.ToLowerInvariant(shown.ViewText[0])}{shown.ViewText[1..]}, at {shown.Zoom * 100:0}% zoom" +
+                       (shown.TakeText is { } take ? $", posed {take}" : "") + ". ";
         if (_area is { } area && files.Contains(area.Picture, StringComparer.OrdinalIgnoreCase))
             return ($"File inspector · {FileName} · {area.Where}",
                 $"{opening}{area.Told}. The picture {area.Picture} attached below is {area.Shows}, which is what they refer to.]");
