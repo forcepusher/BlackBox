@@ -81,6 +81,9 @@ public sealed partial class MainWindowViewModel
         (Toolkit as DocumentViewModel)?.Show(path);
     }
 
+    /// <summary>The × on the open tool's panel: None in the dropdown.</summary>
+    internal void CloseToolkit() => SelectedToolkit = ToolkitOptions[0];
+
     [ObservableProperty]
     private ToolkitOption? _selectedToolkit;
 

@@ -707,7 +707,7 @@ one's width to the other's: the view model sets the new tool in one change (it w
 and the window shrank to the chat and grew back), the window sets the panel's content itself (a
 binding took it after the layout), and the dropdown's list is closed first (it lingered a frame over
 the resized window). Measured after: popup closed, then one frame with all of the switch, for every
-pick of None, Video editor and Code changes either way. The window's place is saved without the panel. **Made narrower, the panel gives way first** (`ToolkitColumns`,
+pick of None, Video editor and Code changes either way. The window's place is saved without the panel. **The × at the right end of every tool's top bar** closes the tool, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`ToolkitClose`, 30 square as the Toolkit dropdown, 12 right of what is beside it), so it looks and sits the same in each. Video editor's frame fields are 30 high there: their own 32 made its bar 2 px taller (at 125%) than the other tools' and the chat's, and its × sat lower. **Made narrower, the panel gives way first** (`ToolkitColumns`,
 `MainWindow.FitColumns` on the columns' SizeChanged): down to its least (`ToolkitOption.MinWidth`,
 splitter included: Video editor 770, where its top bar still fits in one row with the video's name cut
 short; Code changes 560), then the window stops, at the panel's least plus the chat's 660 (no more than
@@ -1960,7 +1960,7 @@ do?" got an answer about exactly those lines, with no tool call.
 420) shows one file whole on the left of the chat. A card's **Preview** opens it on that file
 (`MainWindowViewModel.PreviewFile`: the dropdown switches to it through the same path as a pick, so
 the window lays the panel out before it grows); picked from the dropdown it waits for a Preview or a
-file dropped on it. Its top bar has the file's name, what it is, and Show in folder. A message sent
+file dropped on it. Its top bar has the file's name, what it is, and the × that closes it; Show in folder was there too until the user had it taken off (2026-10-25), as the file's card in the chat has it. A message sent
 while it shows a file carries "Document preview · name" over the bubble and tells the model which file
 is open, so "what does this say" is about it. Which way a file is shown (`DocumentPreview.KindOf`,
 by its extension, the formats BlackBox already reads and writes):
