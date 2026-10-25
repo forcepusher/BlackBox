@@ -12,7 +12,7 @@ whatever it downloads stay in a `Data` folder next to the exe.
 - **Use any app.** It sees the screen and uses the mouse and keyboard, in any program.
 - **Pictures, video and sound.** It makes them with ComfyUI, installing ComfyUI and the models if needed.
 - **Videos.** Pick **Video generator** in the **Toolkit** dropdown at the top left: it opens on the left
-  of the chat with the video on a timeline: References (pictures), video clips, lines and sound lines.
+  of the chat with the video on a timeline: References (pictures), video clips and sound lines.
   Right-click a row to create something there, then pick **File…** to copy in a file of yours or
   **Generate** to have BlackBox make it; you can also drop files on the timeline. The video's name at
   the top opens your other videos. Click anything on the timeline to put it in your message, and say

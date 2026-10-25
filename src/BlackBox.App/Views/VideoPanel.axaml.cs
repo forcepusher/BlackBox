@@ -310,12 +310,6 @@ public partial class VideoPanel : UserControl
             Vm.Show(shot);
     }
 
-    private void OnLineClick(object? sender, RoutedEventArgs e)
-    {
-        if ((sender as Control)?.DataContext is LineItem line)
-            Vm.Show(line.Shot);
-    }
-
     // ---- a clip's right edge dragged: its length ------------------------------------------------------------
 
     /// <summary>A clip's right edge being dragged: the clip, where the drag started and how long the clip was.</summary>

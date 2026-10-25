@@ -57,12 +57,6 @@
     <Style Selector="Border.block.selected Border.handle">
       <Setter Property="Background" Value="{StaticResource BbAccent}" />
     </Style>
-    <Style Selector="Border.line">
-      <Setter Property="Background" Value="#29E0A64B" />
-      <Setter Property="BorderBrush" Value="#80E0A64B" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="4" />
-    </Style>
     <!-- What is picked on the timeline by a click: no look of a button's own. -->
     <Style Selector="Button.pick">
       <Setter Property="Padding" Value="0" />
@@ -187,7 +181,7 @@
       </DockPanel>
     </Border>
 
-    <!-- The timeline, where the video is worked on: References, the clips, the lines and the sound lines, under one scroll.
+    <!-- The timeline, where the video is worked on: References, the clips and the sound lines, under one scroll.
          Right-click a row to create there; drop files on it to copy them in. -->
     <Border DockPanel.Dock="Bottom" Background="#15171A" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0">
       <DockPanel>
@@ -219,9 +213,6 @@
                 <TextBlock Text="Video clips" Margin="10,10,6,0" />
                 <TextBlock Classes="label" TextWrapping="Wrap" FontSize="11" Margin="10,0,6,0" Text="Drag a clip's right edge to change its length" />
               </StackPanel>
-              <Border Height="34">
-                <TextBlock Text="Lines" Margin="10,0,0,0" VerticalAlignment="Center" />
-              </Border>
               <ItemsControl ItemsSource="{Binding SoundLines}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:SoundLineItem">
@@ -345,29 +336,6 @@
                     </Button>
                   </Canvas>
                 </Panel>
-
-                <ItemsControl ItemsSource="{Binding Lines}" Height="34">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                      <Canvas />
-                    </ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
-                  <ItemsControl.Styles>
-                    <Style Selector="ContentPresenter" x:DataType="vm:LineItem">
-                      <Setter Property="Canvas.Left" Value="{Binding X}" />
-                      <Setter Property="Canvas.Top" Value="4" />
-                    </Style>
-                  </ItemsControl.Styles>
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:LineItem">
-                      <Button Classes="pick" Click="OnLineClick" ToolTip.Tip="{Binding Text}" AutomationProperties.Name="{Binding Text}">
-                        <Border Classes="line" Width="{Binding Width}" Height="26" Cursor="Hand">
-                          <TextBlock Text="{Binding Text}" FontSize="11" VerticalAlignment="Center" Margin="8,0" TextTrimming="CharacterEllipsis" />
-                        </Border>
-                      </Button>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
 
                 <!-- The sound lines: each sound a clip from where it starts for as long as it plays, dragged along
                      and between sound lines, trimmed at either edge, overlapping as they please. -->

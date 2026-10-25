@@ -196,7 +196,6 @@ public sealed partial class VideoViewModel : ObservableObject, IToolkit
 
     public ObservableCollection<ReferenceCard> References { get; } = [];
     public ObservableCollection<ShotItem> Shots { get; } = [];
-    public ObservableCollection<LineItem> Lines { get; } = [];
     public ObservableCollection<SoundItem> Sounds { get; } = [];
     public ObservableCollection<SoundLineItem> SoundLines { get; } = [];
 
@@ -220,7 +219,7 @@ public sealed partial class VideoViewModel : ObservableObject, IToolkit
 
     public double PlayheadX => Lead + Math.Max(0, PlayPosition) * Pps;
 
-    /// <summary>Lays the timeline out again: each card, clip, line and sound where it is, the width.</summary>
+    /// <summary>Lays the timeline out again: each card, clip and sound where it is, the width.</summary>
     public void Relayout()
     {
         var (starts, length) = _board.Timing();
@@ -232,16 +231,6 @@ public sealed partial class VideoViewModel : ObservableObject, IToolkit
         {
             Shots[i].X = Lead + starts[i] * Pps;
             Shots[i].BlockWidth = Math.Max(8, Shots[i].Shot.Seconds * Pps - 2);
-        }
-        Lines.Clear();
-        for (var i = 0; i < Shots.Count && i < starts.Count; i++)
-        {
-            var shot = Shots[i].Shot;
-            if (!Storyboard.Speaks(shot))
-                continue;
-            var seconds = Math.Min(LineSeconds(shot), Math.Max(0.3, shot.Seconds - VideoMaker.LineLead));
-            var x = Lead + (starts[i] + VideoMaker.LineLead) * Pps;
-            Lines.Add(new LineItem(Shots[i], x, Math.Max(12, seconds * Pps), $"“{shot.Line.Trim()}”"));
         }
         var end = length;
         foreach (var sound in Sounds)
@@ -259,26 +248,6 @@ public sealed partial class VideoViewModel : ObservableObject, IToolkit
         OnPropertyChanged(nameof(LengthText));
         OnPropertyChanged(nameof(SoundLinesHeight));
     }
-
-    /// <summary>How long a line takes: as said, when it is; else about 2.5 words a second.</summary>
-    private double LineSeconds(VideoShot shot)
-    {
-        var file = _board.ShotLine(shot);
-        if (File.Exists(file))
-        {
-            var stamp = File.GetLastWriteTimeUtc(file);
-            if (_lineLengths.TryGetValue(file, out var known) && known.Stamp == stamp)
-                return known.Seconds;
-            if (_previews.Decoder?.Probe(file) is { Duration.TotalSeconds: > 0 } info)
-            {
-                _lineLengths[file] = (stamp, info.Duration.TotalSeconds);
-                return info.Duration.TotalSeconds;
-            }
-        }
-        return Math.Max(0.8, shot.Line.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length / 2.5);
-    }
-
-    private readonly Dictionary<string, (DateTime Stamp, double Seconds)> _lineLengths = new(StringComparer.OrdinalIgnoreCase);
 
     [RelayCommand]
     private void ZoomIn() => Pps = Math.Min(240, Pps * 1.25);

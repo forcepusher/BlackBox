@@ -267,9 +267,6 @@ public sealed class VideoPick(string path, string caption)
     public bool IsPlanned { get; init; }
 }
 
-/// <summary>A line said in a clip, where it is heard on the timeline.</summary>
-public sealed record LineItem(ShotItem Shot, double X, double Width, string Text);
-
 /// <summary>What the viewer shows for something with no picture to play: a piece not made yet, the video not joined.</summary>
 public sealed record PictureView(Bitmap? Picture, string Caption, string? Missing);
 

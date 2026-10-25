@@ -783,7 +783,8 @@ from, an image file of the user's or a generated image (a reference of the story
 the dashed + after them; **Video clips** ("Video" until 2026-10-25), a block per clip (shot) from where it starts for as long as it
 lasts, its clip's frames inside once made (else its frames and what happens in it), its state under
 it, dragging its right edge making it longer or shorter in half seconds, the dashed + after the last;
-**Lines**, where they are said; and the **sound lines** (below). A ruler on top moves the playhead
+and the **sound lines** (below). A clip's spoken line has no row of its own (a **Lines** row showed where each was said until
+2026-10-26, when the user had it deleted: nothing could be made there); it is in the clip's details. A ruler on top moves the playhead
 (click or drag), and the play button plays the sound lines mixed from there (`VideoMix`, from each
 sound's samples read once for its waveform, as joining lays them over each other) with each clip's
 frame in the viewer. The timeline is dragged sideways anywhere but the ruler, a clip's edge and a

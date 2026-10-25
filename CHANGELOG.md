@@ -70,7 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Settings saves applies to every window; each keeps its own model.
 - Video generator: pick it in the **Toolkit** dropdown at the top left, and it opens on the left of the
   chat, the window growing to that side: a viewer, and the video on one timeline you drag sideways,
-  where all of it is worked on: References (pictures), the video clips, the lines and the sound lines.
+  where all of it is worked on: References (pictures), the video clips and the sound lines.
   Right-click a row to create a card, clip or sound there: **File…** copies a file of yours in,
   **Generate** has BlackBox make it; dropping files on the timeline copies them in too. Click
   anything there and it goes into the chat's box; say what to make or change and BlackBox writes
