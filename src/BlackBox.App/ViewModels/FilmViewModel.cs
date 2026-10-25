@@ -102,15 +102,16 @@ public sealed partial class FilmViewModel : ObservableObject, IToolkit
     /// <summary>The film's name is to be typed anew (a new film, or Rename in its menu): the panel shows the box.</summary>
     public event Action? RenameFilmAsked;
 
-    /// <summary>A new film, named "New film" (or "New film 2"), not saved yet.</summary>
+    /// <summary>A new film, named "Untitled film" (or "Untitled film 2"), not saved yet. Not "New
+    /// film": that is the menu's item that makes it (the user, 2026-10-25).</summary>
     private void Untitled()
     {
         SaveNow();
         StopPlaying();
         var root = _filmsRoot;
-        var name = "New film";
+        var name = "Untitled film";
         for (var n = 2; Directory.Exists(Path.Combine(root, name)); n++)
-            name = $"New film {n}";
+            name = $"Untitled film {n}";
         _board = Storyboard.New(Path.Combine(root, name), name);
         _savedJson = null;
         _dirty = false;

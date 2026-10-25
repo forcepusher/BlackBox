@@ -48,7 +48,7 @@ public sealed partial class FilmViewModel
             // panel's copy wrote over the chat's change, and nothing showed it.
             var merged = false;
             // A new film whose folder another window's new film took since this one was named: a
-            // folder of its own. Both picked "New film", and the second wrote over the first.
+            // folder of its own. Both picked "Untitled film", and the second wrote over the first.
             if (_savedJson is null && Storyboard.IsFilm(_board.Folder))
             {
                 var root = Path.GetDirectoryName(_board.Folder)!;

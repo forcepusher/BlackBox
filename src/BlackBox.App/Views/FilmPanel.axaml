@@ -150,8 +150,6 @@
       <DockPanel>
         <Button DockPanel.Dock="Right" Classes="primary" Content="Make the film" Command="{Binding MakeFilmCommand}"
                 ToolTip.Tip="BlackBox makes in the chat what isn't made yet or has changed, looks at each piece and fixes what it finds, then joins the film and looks at it" />
-        <Button DockPanel.Dock="Right" Classes="ghost" Content="New film" Command="{Binding NewFilmCommand}" Margin="0,0,6,0"
-                ToolTip.Tip="A film of its own: type its name, then say in the chat what it is to be" />
         <!-- Short of room (the window made narrower), the film's name is cut short rather than the
              fields going over the buttons: its column is the one that gives way. -->
         <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left" Margin="0,0,12,0">

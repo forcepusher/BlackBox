@@ -1208,7 +1208,7 @@ public sealed class FilmToolTests : IDisposable
 
         // The Video editor window's new film (empty s1, f1, f2), read with its path, then laid out
         // without one: in place.
-        var blank = Storyboard.New(Path.Combine(films, "New film"), "New film");
+        var blank = Storyboard.New(Path.Combine(films, "Untitled film"), "Untitled film");
         blank.Save();
         var fresh = new FilmTool();
         Assert.False((await fresh.ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = blank.Folder }, ctx, CancellationToken.None)).IsError);
