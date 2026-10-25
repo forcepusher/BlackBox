@@ -697,9 +697,11 @@ timeline; a shorter window grows to it as the panel opens. The film's name was i
 which gives a TextBlock all the room it wants: it was never cut short and pushed the fields over the
 buttons. The panel has a viewer with how the piece shown was made under it, and the
 timeline under that; its top bar has the film's name (its menu, see below), the frame size and frame
-rate, **New film** and **Make the film** (the user, 2026-10-24: "Get rid of the settings button
+rate, and **Make the film** (the user, 2026-10-24: "Get rid of the settings button
 altogether, put frame size and framerate fields at the top"; the cog's title went with the folder's
-name, its soundtrack and shots' sound sliders with the levels they set).
+name, its soundtrack and shots' sound sliders with the levels they set). A **New film** button beside
+Make the film went on 2026-10-25: the films' menu has New film. A new film is called "Untitled film"
+("Untitled film 2" when that folder is taken), not "New film", which read as the menu's item.
 
 **All of the film is worked on in the timeline** (the user's call, 2026-10-24: "work on the film
 should be done entirely in the timeline. Right click on timeline -> Create. And then you pick either
@@ -836,7 +838,7 @@ From a review of the window (2026-10-23): a take isn't put back while the chat m
 film (a shot makes its frames first, which don't show as being made, and the finished frame wrote
 over the take); a new piece never gets the files of one taken out that are still in the folder
 (the new s3 came with the old s3's clip and takes, and joining used it); a new film whose folder
-another window's new film took since gets one of its own ("New film 2"); a film named again finds
+another window's new film took since gets one of its own ("Untitled film 2"); a film named again finds
 its joined video under the old name (`Storyboard.JoinedFile`); switching films stops the old one's
 sound.
 

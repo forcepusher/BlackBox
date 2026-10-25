@@ -92,12 +92,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The context slider goes up to 1M.
 - The second BlackBox name and logo under the title bar made way for the Toolkit dropdown.
 - The first-run hints for Ctrl+V and **New window** are reworded.
+- A new film in Video editor is called "Untitled film".
 
 ### Removed
 - Ctrl+Shift+N: **New window** at the top opens another window.
 - Films kept in a `storyboard.json` (from 1.0.0) no longer open: a film is its folder now.
 - Video editor's film dropdown, its Open… and Show folder buttons, the settings button with the film's
   title, and the soundtrack and shots' own sound sliders.
+- Video editor's **New film** button beside **Make the film**: New film is in the menu on the film's name.
 
 ### Fixed
 - The `BlackBox.exe` and `blackbox-cli.exe` that `dotnet build` makes run on a PC without .NET installed,
