@@ -615,9 +615,18 @@ public sealed partial class AgentSession(
         if (text.Length == 0)
             return true;
         var tail = text.Length > 240 ? text[^240..] : text;
+        // A question to the user ends the turn, whatever follows it: "What do you want shot s1 to
+        // show? I'll set its frames, then make the clip." was nudged, and the model asked again.
+        if (AsksTheUser().IsMatch(tail))
+            return false;
         // "Let me know how you'd like to proceed." asks the user; it announces no step.
         return tail.EndsWith(':') || AnnouncedAction().IsMatch(tail);
     }
+
+    // A question put to the user, not one the model asks itself ("Did it save? Let me check."), and
+    // ended by its question mark, not one inside quotes ("the 'Save changes?' dialog").
+    [GeneratedRegex(@"\b(you|your|me|shall i|should i)\b[^.!?\n]*[?？][*_)\]]*(\s|$)", RegexOptions.IgnoreCase)]
+    private static partial Regex AsksTheUser();
 
     [GeneratedRegex(@"\b((?<!\b(whether|if|once|when)\s+(the\s+)?)task (is|has been) (now )?(complete|completed|done|finished)|i('ve| have) (successfully )?(completed|finished) (the|your|this) task|everything is done|all done)\b", RegexOptions.IgnoreCase)]
     private static partial Regex CompletionClaim();

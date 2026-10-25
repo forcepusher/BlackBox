@@ -476,6 +476,11 @@ public class ChatClientTests
     [InlineData("Which file do you mean?", false)]
     [InlineData("You've declined both of my PowerShell commands. Could you tell me how you'd like the listing? Let me know and I'll continue.", false)]
     [InlineData("Let me know if you need anything else.", false)]
+    [InlineData("Nothing's made yet.\n\nWhat do you want shot s1 to show? I'll set its frames, prompt, camera, and any line, then make the clip.", false)]
+    [InlineData("Which style do you want, **flat or 3D?** I'll make it then.", false)]
+    [InlineData("The \"Save changes?\" dialog is open. Let me click Save.", true)]
+    [InlineData("Want me to make it now? I'll wait for your answer.", false)]
+    [InlineData("Did it save? Let me take a screenshot.", true)]
     public void Unfinished_replies_are_detected(string content, bool expected) =>
         Assert.Equal(expected, AgentSession.LooksUnfinished(new ChatMessage { Role = ChatRole.Assistant, Content = content }));
 

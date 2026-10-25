@@ -1610,7 +1610,10 @@ prints the traceback and exits with 0.
 Models often fumble tool-call syntax, so BlackBox repairs calls on the fly: Qwen XML, Gemma 4 and
 JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…) and misnamed
 arguments (`coordinate: [x, y]`) are all accepted, and a model that announces a step without taking
-it gets nudged to continue.
+it gets nudged to continue. A reply that puts a question to the user (one with you, your, me, shall I
+or should I in it) ends the turn whatever comes after it: "What do you want shot s1 to show? I'll set
+its frames, then make the clip." was nudged for its last sentence, and the model asked the same
+question again. A question it asks itself ("Did it save? Let me check.") still gets the nudge.
 
 Before it says a task is done, the model is asked to check the result itself, not just that its
 steps ran without errors (a look at it, the file it made, a run of what it built), and to say how
