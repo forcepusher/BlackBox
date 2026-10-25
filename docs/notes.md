@@ -2024,8 +2024,18 @@ under the panel's bar here and in the full-screen viewer for a card's peek, see 
 - Markdown (.md): formatted by the replies' renderer (`MarkdownView`), its first 200,000 characters.
 - .csv, .tsv: a table through the same renderer, the first 500 rows and 40 columns, fields in quotes
   kept whole, a .csv split at semicolons when its first line has more of them than commas.
-- Pictures: fitted to the panel, decoded 1600 wide. Animations, video, sound and 3D: the chat's own
-  player for it (`FilePreview.For` at 1600), played and turned as in the chat.
+- Pictures: in a `ZoomBox`, fitted to the panel (never bigger than they are) and decoded as they are
+  (up to 8192 wide), so zoomed in their pixels show, drawn as squares from 3 screen pixels a pixel.
+- Video: a plain player of the panel's own (`InspectVideoViewModel`; until 2026-10-25 the chat's
+  video card, Prompt/Inspect/Show in folder and all, which the user found "weird"): the frame in a
+  `ZoomBox` (decoded 1920 at most), under it a frame back, play, a frame on, a slider of frames and
+  "Frame 38 / 150 · 1.233 s", and the sound button. Left/Right step a frame, Space plays. Paused, one
+  reader stays open: the next frame is read on, any other sought (`index / fps`, which both
+  decoders find: Media Foundation skips frames more than half a frame early). Steps asked for while
+  one decodes are caught up with, so a held key doesn't queue. Frames count from 0 inside, from 1 on
+  screen and to the model. Playing goes through the chat's `Playback`, whose frames now carry their
+  time, so the counter follows. Animations, sound and 3D: the chat's own player for it
+  (`FilePreview.For` at 1600), played and turned as in the chat.
 - PDF: drawn page by page by BlackBox with PDFium, Chrome's PDF engine (`PdfPages`, pdfium.dll from
   the `bblanchon.PDFium.Win32` package, Apache-2.0/BSD, 7.5 MB; unpacked into Data/runtime with
   the other native libraries in the single-file build). The pages are a virtualized list
@@ -2066,12 +2076,51 @@ nothing, Esc, the card's ×, sending the message or another file unpicks it; scr
 text is `KeptSelectionTextBlock`, which keeps its selection when it loses focus, so it stays marked
 while the user types in the box; a press in one block clears the others'. Windows' previewers (PDF,
 Office, web pages) draw in their own window, whose selection BlackBox can't read: a message is about
-the whole file there. A picture or a video is a whole file too ("whole file" on its card).
+the whole file there, unless an area of it is marked (below). A picture or a video is a whole file
+too ("whole file" on its card).
 Checked on the laptop with real mouse drags on the Debug app (stand-in model logging what it got):
 .md lines 8-9 into the box, kept marked while the box had focus, the model got the two lines and the
 bubble the reference line; .csv one cell (D5, "column Units"), two cells (B4:C4), three rows; .cs lines
 by drag, Shift+click and double-click; click away, Esc and × all went back to the whole-file card;
 the .docx in Word's previewer showed only the whole-document card.
+
+**An area into the message** (the user's request, 2026-10-25: "pixel selection", then zoom and a
+frame-by-frame player). A left drag over a PDF's page, a picture or a video's frame marks a box
+(`DocumentArea`, Core: its sides as parts of what it is on, and the page); a click marks nothing and
+unpicks. On a text, whose drags select text, and on Windows' previewer, which takes the mouse in its
+own window, **Area** in the panel's bar (a toggle, shown for those only) freezes the view: it is read
+off the screen (`WindowPixels`, Platform.Windows: the region of BlackBox's window, its other windows
+over it left out of the capture, as the agent's screenshots do) and shown as a still in a `ZoomBox`
+to drag over; the live previewer's window is hidden meanwhile, as nothing can draw over a native
+window. Esc, Area off, another file or sending turns it back to live. Drawing the text again with
+`RenderTargetBitmap` gave a blank picture, hence the screen. The mark is the accent's outline over
+a faint fill of it (`ZoomBox.DrawMark`, also drawn by `PdfPageView` on its page).
+A picture of the area is then cut and saved as Data/pasted/Area <time>.png (deleted with the chat, as
+pasted pictures are; one unpicked before it is sent is deleted at once) and picked into the box as
+"Area on page 2 · report.pdf", "Area of frame 38 · clip.mp4", "Area · chart.png", with no × as every
+tool's pick. It is cut from the best source: the PDF page drawn again by PDFium for the area alone
+(`PdfPages.RenderArea`: 1600 pixels along its longer side, between the panel's sharpness and 600
+dpi; the page drawn at that scale into a bitmap of the area's size), the picture file decoded whole,
+the frame decoded again at the video's own size, the frozen view's pixels. The message's bubble
+says "Inspect file · report.pdf · area on page 2", and the model gets the file's path, the area in
+the file's units ("x 53-322, y 199-327 of the 612x792 points, from the top left"; pixels of a picture
+or of the frame, with the frame's number and time; pixels of the panel's view, scrolled where the
+user had it, for a frozen view) and the picture, attached to the message as a pasted picture is.
+
+**Zoom.** Pictures, frames and frozen views zoom in their `ZoomBox`: the wheel about the mouse, a
+right or middle drag pans, up to 32x. A PDF's pages zoom in the panel: the wheel scrolls them, so
+Ctrl+wheel zooms (about the mouse), and the same right or middle drag pans; the list is the panel's
+width times the zoom and scrolls sideways, and each page is drawn again sharper (`PdfPageItem.Zoom`,
+up to 3x 1400 pixels, a page some 50 MB). The − / Fit / + buttons at the bottom right do the same for
+whichever shows; a new file is fitted again.
+Checked on the laptop (2026-10-26, Debug app, stand-in model saving the pictures it was sent, real
+mouse drags): q3-report.pdf's table marked, the box showed "Area on page 1 · q3-report.pdf", the model
+got the place in points and a sharp 1601x760 picture of the table; Ctrl+wheel to 244% about the mouse
+and a right-drag pan, sharp; chart.png zoomed to 195% with the wheel and a bar's label marked, the
+crop 103x57 pixels of the file; a 2064x836 screen recording stepped 1, +1, +2, -1 frames exactly,
+played at 30 fps on the counter, and an area of frame 200 went at the video's own size and matched
+what was shown; thank-you.docx frozen in Word's previewer, a line marked and cut, Esc back to the
+live previewer and the whole-document card (the unsent picture deleted); a .md frozen and marked.
 
 Checked on the laptop (2026-10-25, a stand-in model naming six files, Preview pressed on each by UI
 Automation): .md formatted, .docx by Word's previewer, .xlsx with Excel's grid and sheet tabs, .pptx

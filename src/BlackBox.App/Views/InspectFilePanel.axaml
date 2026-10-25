@@ -12,6 +12,16 @@
             PointerReleased="OnBarReleased">
       <DockPanel MinHeight="30">
         <views:ToolkitClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,0,0,0" />
+        <!-- Area: what is shown frozen, to drag over a part of it (a text, whose drags select text;
+             Windows' previewer, which takes the mouse itself). -->
+        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding AreaMode}" IsVisible="{Binding CanFreeze}" Height="30" Padding="8,0"
+                      VerticalAlignment="Center" VerticalContentAlignment="Center" Margin="12,0,0,0"
+                      ToolTip.Tip="Freeze the view to drag over a part of it" AutomationProperties.Name="Area">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Width="13" Height="13" Data="M3 3h4v2H5v2H3zm14 0h4v4h-2V5h-2zM3 17h2v2h2v2H3zm16 0h2v4h-4v-2h2zM9 3h6v2H9zm0 16h6v2H9zM3 9h2v6H3zm16 0h2v6h-2z" />
+            <TextBlock Text="Area" VerticalAlignment="Center" />
+          </StackPanel>
+        </ToggleButton>
         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" ClipToBounds="True">
           <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}" />
           <TextBlock Classes="muted" Text="{Binding Details}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Details}" />

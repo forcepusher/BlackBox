@@ -66,7 +66,7 @@ public sealed partial class MainWindowViewModel
         new("File changes", "See the files the agent changes in this chat as it works: click lines to ask about them", 880, 560, 0,
             vm => new FileChangesViewModel(vm)),
         new(InspectFileName, "See a file from the chat beside it: documents, PDFs, spreadsheets, slides, pictures, text and code", 760, 420, 0,
-            vm => new InspectFileViewModel(vm._previews, vm)),
+            vm => new InspectFileViewModel(vm._previews, vm, vm._paths.PastedDir)),
         new("Video editor", "Plan a video shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960, 770, 600,
             vm => new VideoViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
     ];

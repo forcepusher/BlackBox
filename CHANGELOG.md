@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- In Inspect file, drag a box over a PDF page, a picture or a video frame to ask about that area:
+  it goes into your message as "Area on page 2", and the model gets a picture of it with where it is.
+  **Area** in the panel's bar freezes a text or an Office file's preview to drag over it too.
+- Inspect file zooms pictures, video frames and PDF pages: the wheel (Ctrl+wheel on a PDF), the
+  − and + buttons, and a right or middle drag to pan.
+- Video in Inspect file is a plain player that steps one frame back or on (the buttons, or Left and
+  Right) and says which frame shows and when.
 - "in development" beside the **Toolkit** dropdown: its tools are still being built.
 - With Video editor open and nothing picked in it, the video itself shows over the chat's box, as a
   pick does: what you type is about the whole video.

@@ -134,7 +134,7 @@ public sealed partial class MainWindowViewModel
     }
 
     /// <summary>A line in the chat; an error goes into Data/errors.log too, with the exception behind it.</summary>
-    private void AddNotice(string text, bool isError, Exception? error = null)
+    internal void AddNotice(string text, bool isError, Exception? error = null)
     {
         if (isError)
             Core.ErrorLog.Write(ChatPlace(), text, error);

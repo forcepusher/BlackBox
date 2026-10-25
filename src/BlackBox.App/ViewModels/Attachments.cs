@@ -81,8 +81,11 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
     /// </summary>
     public bool CanRemove => _remove is not null && !Picked;
 
-    /// <summary>A file's name and size, or a folder's name; what a picture's thumbnail is for the rest.</summary>
-    public bool ShowsName => !IsPicture || Thumbnail is null;
+    /// <summary>
+    /// A file's name and size, or a folder's name; what a picture's thumbnail is for the rest. A
+    /// picture picked in a tool's panel (an area marked in Inspect file) shows what it is there.
+    /// </summary>
+    public bool ShowsName => Picked || !IsPicture || Thumbnail is null;
 
     internal static readonly Avalonia.Media.Geometry FileShape =Avalonia.Media.StreamGeometry.Parse(
         "M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z");

@@ -26,6 +26,24 @@ public sealed partial class PdfPageItem(PdfPages pdf, int index) : ObservableObj
     [ObservableProperty]
     private Bitmap? _image;
 
+    /// <summary>How much the panel zooms its pages in (1: as wide as the panel); drawn again sharper when it does.</summary>
+    [ObservableProperty]
+    private double _zoom = 1;
+
+    /// <summary>The area marked on the page, in parts of it; null with none.</summary>
+    [ObservableProperty]
+    private DocumentArea? _mark;
+
+    /// <summary>How wide it is drawn at the zoom: at most 3x <see cref="RenderWidth"/>, a page then some 50 MB.</summary>
+    private int Wanted => (int)Math.Min(RenderWidth * 3, RenderWidth * Zoom);
+
+    /// <summary>Zoomed in past what it was drawn at: drawn again, the picture before showing meanwhile.</summary>
+    partial void OnZoomChanged(double value)
+    {
+        if (_wanted && Image is { } image && image.PixelSize.Width < Wanted * 0.9)
+            Draw();
+    }
+
     /// <summary>On screen: it is to be drawn; false again when it leaves, so a drawing that comes late is let go of.</summary>
     private bool _wanted;
 
@@ -35,23 +53,38 @@ public sealed partial class PdfPageItem(PdfPages pdf, int index) : ObservableObj
     public void Load()
     {
         _wanted = true;
-        if (Image is not null || _drawing)
+        if (Image is not null)
+            return;
+        Draw();
+    }
+
+    private void Draw()
+    {
+        if (_drawing)
             return;
         _drawing = true;
+        var width = Wanted;
         Task.Run(() =>
         {
             Bitmap? bitmap = null;
             try
             {
-                if (pdf.Render(Index, RenderWidth) is { } page)
+                if (pdf.Render(Index, width) is { } page)
                     bitmap = ToBitmap(page.Bgra, page.Width, page.Height);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException) { /* a page PDFium can't draw stays white */ }
             Dispatcher.UIThread.Post(() =>
             {
                 _drawing = false;
-                if (_wanted && Image is null)
+                if (_wanted && bitmap is not null && (Image is null || Image.PixelSize.Width < bitmap.PixelSize.Width))
+                {
+                    var old = Image;
                     Image = bitmap;
+                    old?.Dispose();
+                    // Zoomed in further while it was drawn.
+                    if (bitmap.PixelSize.Width < Wanted * 0.9)
+                        Draw();
+                }
                 else
                     bitmap?.Dispose();
             });

@@ -357,7 +357,7 @@ internal sealed class Playback : IDisposable
 
     /// <param name="width">How wide the frames are decoded.</param>
     /// <param name="sound">False for a video playing without its sound (in the chat): the frames go by the clock.</param>
-    public Playback(string path, PreviewServices services, TimeSpan from, bool video, Action<RawImage>? onFrame, Action<TimeSpan> onPosition, Action onEnded,
+    public Playback(string path, PreviewServices services, TimeSpan from, bool video, Action<TimeSpan, RawImage>? onFrame, Action<TimeSpan> onPosition, Action onEnded,
         int width = FilePreview.Width, bool sound = true)
     {
         _task = Task.Run(() =>
@@ -407,7 +407,7 @@ internal sealed class Playback : IDisposable
                             _stop.Token.WaitHandle.WaitOne(wait > TimeSpan.FromSeconds(1) ? TimeSpan.FromSeconds(1) : wait);
                         if (_stop.IsCancellationRequested)
                             break;
-                        onFrame?.Invoke(frame.Frame);
+                        onFrame?.Invoke(frame.Time, frame.Frame);
                     }
                     else
                     {
@@ -554,7 +554,7 @@ public abstract partial class PlayerPreview(string path, PreviewServices service
     {
         End(_playback);
         IsPlaying = true;
-        _playback = new Playback(Path, Services, from, HasVideo, HasVideo ? ShowFrame : null,
+        _playback = new Playback(Path, Services, from, HasVideo, HasVideo ? (_, frame) => ShowFrame(frame) : null,
             at => Dispatcher.UIThread.Post(() => Report(at.TotalSeconds)),
             () => Dispatcher.UIThread.Post(Ended), FrameWidth, sound: !Muted);
     }

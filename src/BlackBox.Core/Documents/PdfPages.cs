@@ -111,6 +111,52 @@ public sealed class PdfPages : IDisposable
         }
     }
 
+    /// <summary>
+    /// An area of page <paramref name="index"/> alone, as sharp as <paramref name="longSide"/> pixels
+    /// along its longer side make it (as least as sharp as the panel draws the page, at most 600 dpi):
+    /// for the model, a picture of what the user marked. The page is drawn at that scale into a bitmap
+    /// of the area's size, PDFium leaving out all but the area. Null once the document is closed.
+    /// </summary>
+    public (byte[] Bgra, int Width, int Height)? RenderArea(int index, DocumentArea area, int longSide, int leastPageWidth)
+    {
+        lock (Lock)
+        {
+            if (_document == 0 || index < 0 || index >= Sizes.Count)
+                return null;
+            var (w, h) = Sizes[index];
+            w = Math.Max(1, w);
+            h = Math.Max(1, h);
+            // Pixels per point: the area's longer side at longSide, between the panel's and 600 dpi.
+            var scale = longSide / Math.Max((area.Right - area.Left) * w, (area.Bottom - area.Top) * h);
+            scale = Math.Clamp(scale, leastPageWidth / w, 600 / 72.0);
+            var (pageWidth, pageHeight) = ((int)Math.Round(w * scale), (int)Math.Round(h * scale));
+            var (x, y, width, height) = area.Pixels(pageWidth, pageHeight);
+            var page = FPDF_LoadPage(_document, index);
+            if (page == 0)
+                return null;
+            var bitmap = FPDFBitmap_Create(width, height, 1);
+            try
+            {
+                if (bitmap == 0)
+                    return null;
+                FPDFBitmap_FillRect(bitmap, 0, 0, width, height, 0xFFFFFFFF);
+                FPDF_RenderPageBitmap(bitmap, page, -x, -y, pageWidth, pageHeight, 0, FPDF_ANNOT);
+                var stride = FPDFBitmap_GetStride(bitmap);
+                var buffer = FPDFBitmap_GetBuffer(bitmap);
+                var bgra = new byte[width * height * 4];
+                for (var row = 0; row < height; row++)
+                    Marshal.Copy(buffer + row * stride, bgra, row * width * 4, width * 4);
+                return (bgra, width, height);
+            }
+            finally
+            {
+                if (bitmap != 0)
+                    FPDFBitmap_Destroy(bitmap);
+                FPDF_ClosePage(page);
+            }
+        }
+    }
+
     public void Dispose()
     {
         lock (Lock)

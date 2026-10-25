@@ -34,6 +34,16 @@ public sealed class ShellPreviewHost : NativeControlHost
 #endif
     }
 
+    /// <summary>What the previewer shows now, its pixels as on screen; null with nothing shown.</summary>
+    public Core.Platform.RawImage? Snapshot()
+    {
+#if WINDOWS
+        return OperatingSystem.IsWindows() && _hwnd != 0 && _preview is not null ? Platform.Windows.WindowPixels.Of(_hwnd) : null;
+#else
+        return null;
+#endif
+    }
+
 #if WINDOWS
     private nint _hwnd;
     private Platform.Windows.ShellPreview? _preview;

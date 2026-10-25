@@ -158,6 +158,29 @@ public class PdfPagesTests : IDisposable
     }
 
     [Fact]
+    public void An_area_of_a_page_is_drawn_alone_and_sharp()
+    {
+        var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+        var page = builder.AddPage(200, 100);
+        // Black on the left half (PDF's y counts from the bottom).
+        page.DrawRectangle(new UglyToad.PdfPig.Core.PdfPoint(0, 0), 100, 100, 1, fill: true);
+        var path = Path.Combine(_dir, "area.pdf");
+        File.WriteAllBytes(path, builder.Build());
+
+        using var pdf = PdfPages.Open(path);
+        // The middle of the page across the black's edge, 40% of its width and half its height.
+        var area = new DocumentArea(0.3, 0.25, 0.7, 0.75, 0);
+        var (bgra, width, height) = pdf.RenderArea(0, area, 400, 200)!.Value;
+        // 80x50 points at 400 pixels along the longer side: 5 pixels a point.
+        Assert.Equal((400, 250), (width, height));
+        Assert.True(bgra[(125 * width + 50) * 4] < 40); // left of the edge: black
+        Assert.Equal(255, bgra[(125 * width + 350) * 4]); // right of it: white
+        // Never less sharp than the panel draws the page: 1400 wide is 7 pixels a point.
+        Assert.Equal(560, pdf.RenderArea(0, area, 100, 1400)!.Value.Width);
+        Assert.Null(pdf.RenderArea(1, area, 400, 1400));
+    }
+
+    [Fact]
     public void A_file_that_is_not_a_PDF_says_so()
     {
         var path = Path.Combine(_dir, "fake.pdf");

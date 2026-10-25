@@ -228,6 +228,11 @@ internal static partial class Native
 
     public const uint GW_HWNDNEXT = 2, GW_OWNER = 4;
 
+    [LibraryImport("user32.dll")]
+    public static partial nint GetAncestor(nint hWnd, uint gaFlags);
+
+    public const uint GA_ROOT = 2;
+
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT { public int Left, Top, Right, Bottom; }
 

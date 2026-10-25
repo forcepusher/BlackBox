@@ -56,16 +56,46 @@ internal sealed class WindowsScreenCapture : IScreenCapture
     }
 
     /// <summary>
-    /// Leaves this process's visible windows over the region out of screen capture and returns
-    /// them. Windows that are left out already (the click log) are not touched.
+    /// What window <paramref name="hwnd"/> shows on screen, a child window included that another
+    /// process draws in (Windows' previewers): BlackBox's other windows over it (a tooltip, a menu)
+    /// left out. Null when it isn't on screen.
     /// </summary>
-    private static List<nint> HideOwnWindows(ScreenRect region)
+    internal static RawImage? CaptureWindow(nint hwnd) =>
+        GetWindowRect(hwnd, out var r) && r.Right > r.Left && r.Bottom > r.Top
+            ? CaptureIn(hwnd, new ScreenRect(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top))
+            : null;
+
+    /// <summary>The screen's <paramref name="region"/>, of window <paramref name="hwnd"/>'s, with BlackBox's other windows over it left out.</summary>
+    internal static RawImage? CaptureIn(nint hwnd, ScreenRect region)
+    {
+        if (region.Width <= 0 || region.Height <= 0)
+            return null;
+        lock (Gate)
+        {
+            var hidden = HideOwnWindows(region, except: GetAncestor(hwnd, GA_ROOT));
+            try
+            {
+                return CaptureNow(region, includeCursor: false);
+            }
+            finally
+            {
+                foreach (var w in hidden)
+                    SetWindowDisplayAffinity(w, WDA_NONE);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Leaves this process's visible windows over the region out of screen capture and returns
+    /// them. Windows that are left out already (the click log) are not touched, nor <paramref name="except"/>.
+    /// </summary>
+    private static List<nint> HideOwnWindows(ScreenRect region, nint except = 0)
     {
         var hidden = new List<nint>();
         var process = (uint)Environment.ProcessId;
         EnumWindows((hwnd, _) =>
         {
-            if (GetWindowThreadProcessId(hwnd, out var owner) != 0 && owner == process && IsWindowVisible(hwnd) && !IsIconic(hwnd)
+            if (hwnd != except && GetWindowThreadProcessId(hwnd, out var owner) != 0 && owner == process && IsWindowVisible(hwnd) && !IsIconic(hwnd)
                 && GetWindowRect(hwnd, out var r) && r.Left < region.X + region.Width && r.Right > region.X && r.Top < region.Y + region.Height && r.Bottom > region.Y
                 && GetWindowDisplayAffinity(hwnd, out var affinity) && affinity == WDA_NONE
                 && SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE))
