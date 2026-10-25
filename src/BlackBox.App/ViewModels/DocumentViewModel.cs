@@ -10,7 +10,8 @@ namespace BlackBox.App.ViewModels;
 /// The Document preview panel, a tool of the chat window's toolkit on the left of the chat: one file
 /// shown whole, opened by the Preview button of its card in the chat or dropped on the panel. BlackBox
 /// draws Markdown (as a reply), tables, text and pictures itself, and the chat's players play the rest
-/// of the media; PDF, Office files and web pages are drawn by the previewer Windows has for them, as
+/// of the media, and PDF pages are drawn by PDFium (<see cref="PdfPages"/>); Office files and web pages
+/// (and a PDF PDFium can't open) are drawn by the previewer Windows has for them, as
 /// in Explorer's preview pane, else shown as their text (<see cref="DocumentPreview"/>). With the
 /// panel open a message is about the file shown; text selected in the text BlackBox draws goes into
 /// the chat's box as where it is in the file ("Lines 12-20 · notes.md", "Cells B4:C4 · data.csv"),
@@ -81,6 +82,14 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
     [NotifyPropertyChangedFor(nameof(Whole))]
     private FilePreview? _media;
 
+    /// <summary>A PDF's pages, drawn by PDFium as they come on screen; null for any other file.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Whole))]
+    private IReadOnlyList<PdfPageItem>? _pages;
+
+    /// <summary>The PDF the pages are drawn from, open while it is shown.</summary>
+    private PdfPages? _pdf;
+
     /// <summary>The file for Windows' previewer to draw (see <see cref="Views.ShellPreviewHost"/>).</summary>
     [ObservableProperty]
     private string? _shellPath;
@@ -149,6 +158,8 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
                             Message = null;
                         });
                         break;
+                    case DocumentKind.Document when ShowPdf(load, path, size):
+                        break;
                     case DocumentKind.Document when OperatingSystem.IsWindows() && Views.ShellPreviewHost.CanShow(path):
                         Post(load, () => (ShellPath, Details, Message) = (path, size, null));
                         break;
@@ -165,6 +176,31 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
                 Post(load, () => Message = $"Can't be shown: {ex.Message}");
             }
         });
+    }
+
+    /// <summary>
+    /// A PDF's pages, drawn by BlackBox with PDFium; false for any other file, and for a PDF PDFium
+    /// can't open (damaged, with a password, or pdfium.dll missing), which Windows' previewer or its
+    /// text then shows.
+    /// </summary>
+    private bool ShowPdf(int load, string path, string size)
+    {
+        if (!System.IO.Path.GetExtension(path).Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+            return false;
+        PdfPages pdf;
+        try { pdf = PdfPages.Open(path); }
+        catch (Exception ex) when (ex is InvalidDataException or DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or IOException)
+        {
+            return false;
+        }
+        var pages = Enumerable.Range(0, pdf.Sizes.Count).Select(i => new PdfPageItem(pdf, i)).ToList();
+        var details = $"PDF, {pages.Count:N0} page{(pages.Count == 1 ? "" : "s")}, {size}";
+        Post(load, () =>
+        {
+            _pdf = pdf;
+            (Pages, Details, Message) = (pages, details, pages.Count == 0 ? "The PDF has no pages." : null);
+        }, pdf.Dispose);
+        return true;
     }
 
     /// <summary>Windows' previewer couldn't show the file: its text, as without one.</summary>
@@ -223,6 +259,12 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
     private void Clear()
     {
         Markdown = Text = ShellPath = null;
+        if (Pages is { } pages)
+            foreach (var page in pages)
+                page.Unload();
+        Pages = null;
+        _pdf?.Dispose();
+        _pdf = null;
         Picture?.Dispose();
         Picture = null;
         Media?.Dispose();

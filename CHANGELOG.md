@@ -19,8 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **Copy** button.
 - **Document preview** in the **Toolkit** dropdown: a file from the chat shown whole on the left of
   the chat. Markdown is formatted as replies are, .csv as a table, text and code as they are, and
-  pictures, video and sound as in the chat; PDF, Word, Excel, PowerPoint and web pages show as in
-  Explorer's preview pane.
+  pictures, video and sound as in the chat, PDF pages drawn by BlackBox itself (with PDFium, Chrome's
+  PDF engine); Word, Excel, PowerPoint and web pages show as in Explorer's preview pane.
 - With Document preview open, the file shows over the chat's box, and text you select in it goes into
   your message as where it is (lines, or cells of a table), so you can ask about that part. A click
   elsewhere in the panel, or Esc, lets go of it.

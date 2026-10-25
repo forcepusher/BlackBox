@@ -72,3 +72,39 @@ public class DocumentPreviewTests : IDisposable
         Assert.Equal(DocumentPreview.MaxRows + 2, markdown.Count(c => c == '\n'));
     }
 }
+
+// PDF pages drawn by PDFium for the panel.
+public class PdfPagesTests : IDisposable
+{
+    private readonly string _dir = Directory.CreateTempSubdirectory("bb-pdfpages-").FullName;
+
+    public void Dispose() => Directory.Delete(_dir, recursive: true);
+
+    [Fact]
+    public void Pages_are_counted_sized_and_drawn()
+    {
+        var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+        var first = builder.AddPage(200, 100);
+        first.DrawRectangle(new UglyToad.PdfPig.Core.PdfPoint(0, 0), 100, 100, 1, fill: true);
+        builder.AddPage(300, 600);
+        var path = Path.Combine(_dir, "two pages ü.pdf");
+        File.WriteAllBytes(path, builder.Build());
+
+        using var pdf = PdfPages.Open(path);
+        Assert.Equal([(200.0, 100.0), (300.0, 600.0)], pdf.Sizes);
+        var (bgra, width, height) = pdf.Render(0, 400)!.Value;
+        Assert.Equal((400, 200), (width, height));
+        // The rectangle fills the left half black; the right half stays white.
+        Assert.True(bgra[(100 * width + 50) * 4] < 40);
+        Assert.Equal(255, bgra[(100 * width + 350) * 4]);
+        Assert.Null(pdf.Render(2, 400));
+    }
+
+    [Fact]
+    public void A_file_that_is_not_a_PDF_says_so()
+    {
+        var path = Path.Combine(_dir, "fake.pdf");
+        File.WriteAllText(path, "not a pdf");
+        Assert.Throws<InvalidDataException>(() => PdfPages.Open(path));
+    }
+}

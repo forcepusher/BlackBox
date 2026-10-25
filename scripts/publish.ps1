@@ -4,7 +4,7 @@
 
 .DESCRIPTION
   Default: one BlackBox.exe, trimmed to the parts of .NET and the libraries BlackBox uses and
-  compressed (about 26 MB instead of 102). The native UI libraries (Skia, HarfBuzz, ANGLE) are
+  compressed (about 26 MB instead of 102). The native libraries (Skia, HarfBuzz, ANGLE, PDFium) are
   embedded and unpacked into Data/runtime next to the exe on first run. Copy just the exe anywhere
   and run it.
 
