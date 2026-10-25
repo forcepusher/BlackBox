@@ -8,7 +8,7 @@ using Xunit;
 
 namespace BlackBox.Core.Tests;
 
-// The diff tool and what the Diff panel reads: git's changes parsed, two files or folders compared
+// The diff tool and what the File changes panel reads: git's changes parsed, two files or folders compared
 // without git, and the model's view of them, summary first and in parts.
 public class DiffTests : IDisposable
 {

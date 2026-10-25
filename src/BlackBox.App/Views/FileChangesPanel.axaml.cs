@@ -6,10 +6,10 @@ using BlackBox.App.ViewModels;
 
 namespace BlackBox.App.Views;
 
-/// <summary>The Code changes panel, on the left of the chat window: the files the agent changed, and their diff, whose lines are picked by a click.</summary>
-public partial class DiffPanel : UserControl
+/// <summary>The File changes panel, on the left of the chat window: the files the agent changed, and their diff, whose lines are picked by a click.</summary>
+public partial class FileChangesPanel : UserControl
 {
-    public DiffPanel()
+    public FileChangesPanel()
     {
         InitializeComponent();
         // Lines and files take their own clicks; what gets here is a click away from them.
@@ -36,14 +36,14 @@ public partial class DiffPanel : UserControl
             e.Handled = true;
     }
 
-    private DiffViewModel? _vm;
+    private FileChangesViewModel? _vm;
 
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
         if (_vm is not null)
             _vm.GoToRow -= OnGoToRow;
-        _vm = DataContext as DiffViewModel;
+        _vm = DataContext as FileChangesViewModel;
         if (_vm is not null)
             _vm.GoToRow += OnGoToRow;
     }

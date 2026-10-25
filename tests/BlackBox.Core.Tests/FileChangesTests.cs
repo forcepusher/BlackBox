@@ -9,7 +9,7 @@ using Xunit;
 
 namespace BlackBox.Core.Tests;
 
-// What the Code changes panel shows: the files the agent changed in a chat, each against what it held
+// What the File changes panel shows: the files the agent changed in a chat, each against what it held
 // before the first change, from write_file and edit_file and from what a command changed.
 public class FileChangesTests : IDisposable
 {

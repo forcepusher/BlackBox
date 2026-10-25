@@ -2,8 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:BlackBox.App.ViewModels"
              xmlns:views="using:BlackBox.App.Views"
-             x:Class="BlackBox.App.Views.DiffPanel"
-             x:DataType="vm:DiffViewModel"
+             x:Class="BlackBox.App.Views.FileChangesPanel"
+             x:DataType="vm:FileChangesViewModel"
              Background="{StaticResource BbBackground}">
 
   <UserControl.Styles>

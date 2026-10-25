@@ -12,7 +12,7 @@ public class ToolkitColumnsTests
 {
     [Theory]
     [InlineData(960, 770)] // Video editor
-    [InlineData(880, 560)] // Code changes
+    [InlineData(880, 560)] // File changes
     public void At_the_least_width_with_a_panel_open_both_keep_their_least(double opened, double least)
     {
         var window = ToolkitColumns.WindowMin(least);

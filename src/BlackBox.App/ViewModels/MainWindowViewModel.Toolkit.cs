@@ -10,7 +10,7 @@ namespace BlackBox.App.ViewModels;
 
 /// <summary>
 /// A tool that opens on the left of the chat window, picked in the Toolkit dropdown at the top of
-/// it (Video editor, Diff). It works through the chat: what is picked in it goes into the
+/// it (Video editor, File changes). It works through the chat: what is picked in it goes into the
 /// chat's box, and what the user sends from there is done by the agent in the chat, in view.
 /// </summary>
 public interface IToolkit : IDisposable
@@ -65,8 +65,8 @@ public sealed partial class MainWindowViewModel
         new("None", "The chat alone", 0, 0, 0, null),
         new("Video editor", "Plan a video shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960, 770, 600,
             vm => new VideoViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
-        new("Code changes", "See the files the agent changes in this chat as it works: click lines to ask about them", 880, 560, 0,
-            vm => new DiffViewModel(vm)),
+        new("File changes", "See the files the agent changes in this chat as it works: click lines to ask about them", 880, 560, 0,
+            vm => new FileChangesViewModel(vm)),
         new(DocumentPreviewName, "See a file from the chat beside it: documents, PDFs, spreadsheets, slides, pictures, text and code", 760, 420, 0,
             vm => new DocumentViewModel(vm._previews, vm)),
     ];
@@ -149,7 +149,7 @@ public sealed partial class MainWindowViewModel
     /// <summary>
     /// What is picked in the toolkit's panel, into the box (one picked there before taken out): the
     /// user then says what to do with it. A piece not made yet has no file: it goes as its place.
-    /// One picked again under another caption (more lines of a file in the Diff panel) is put back with it.
+    /// One picked again under another caption (more lines of a file in the File changes panel) is put back with it.
     /// </summary>
     internal void Pick(IReadOnlyList<(string Path, string Caption)> picked)
     {
@@ -160,7 +160,7 @@ public sealed partial class MainWindowViewModel
             if (Attachments.Any(a => a.Picked && string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase)))
                 continue;
             // The same file put in the box by the user goes as the pick: left there, the pick wasn't
-            // added and the message lost what was picked in it (BlackBox's own review of the Diff panel).
+            // added and the message lost what was picked in it (BlackBox's own review of the File changes panel).
             foreach (var same in Attachments.Where(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase)).ToList())
                 RemoveAttachment(same);
             Attachments.Add(new AttachmentItem(path, RemoveAttachment, caption));
@@ -207,7 +207,7 @@ public sealed partial class MainWindowViewModel
         return playing;
     }
 
-    // ---- the files the agent changed in this chat (the Code changes panel) -------------------------
+    // ---- the files the agent changed in this chat (the File changes panel) -------------------------
 
     /// <summary>The files the agent changed in the chat on screen, each with what it held before.</summary>
     internal FileChanges Changes { get; private set; } = null!;

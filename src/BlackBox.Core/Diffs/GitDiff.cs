@@ -15,7 +15,7 @@ public sealed record DiffRequest(string Path, string? Against = null, string? Co
 /// <summary>
 /// Changes in a git repository, read from the git on this PC (on the PATH, or where Git for
 /// Windows, GitHub Desktop or Sourcetree put theirs) and parsed into <see cref="DiffResult"/>:
-/// for the diff tool and the Diff panel. Only reads: no command here changes the repository.
+/// for the diff tool and the File changes panel. Only reads: no command here changes the repository.
 /// </summary>
 public static partial class GitDiff
 {

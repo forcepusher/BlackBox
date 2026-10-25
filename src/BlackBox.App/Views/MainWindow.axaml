@@ -242,8 +242,8 @@
     <DataTemplate DataType="vm:VideoViewModel">
       <views:VideoPanel />
     </DataTemplate>
-    <DataTemplate DataType="vm:DiffViewModel">
-      <views:DiffPanel />
+    <DataTemplate DataType="vm:FileChangesViewModel">
+      <views:FileChangesPanel />
     </DataTemplate>
     <DataTemplate DataType="vm:DocumentViewModel">
       <views:DocumentPanel />

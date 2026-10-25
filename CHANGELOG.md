@@ -9,11 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - "in development" beside the **Toolkit** dropdown: its tools are still being built.
 - With Video editor open and nothing picked in it, the video itself shows over the chat's box, as a
   pick does: what you type is about the whole video.
-- **Code changes** in the **Toolkit** dropdown: every file the agent changes in the chat (writes, edits, and
+- **File changes** in the **Toolkit** dropdown: every file the agent changes in the chat (writes, edits, and
   what its commands change) on the left of the chat, each beside its diff, updated as it works and kept
   with the chat. Lines you click go into your message, so you can ask about them or have them changed.
-- In Code changes, a click away from the lines (or Esc) unpicks them and takes them off your message.
-- In Code changes, right-click a file for **Show in folder**.
+- In File changes, a click away from the lines (or Esc) unpicks them and takes them off your message.
+- In File changes, right-click a file for **Show in folder**.
 - The agent's `diff` tool: it looks through what changed in a repository, or between two files or
   folders, instead of reading whole files again.
 - Code blocks in replies and Markdown previews show in a box of their own, with their language and a
@@ -88,7 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Video editor's videos are in a menu on the video's name at the top: open another, start a new one, or
   rename or delete this one (to the Recycle Bin). On the timeline, right-click a card, clip or sound
   to rename or delete it, or to see an earlier version of it.
-- A × at the top right of Video editor, Code changes and Document preview closes the tool.
+- A × at the top right of Video editor, File changes and Document preview closes the tool.
 
 ### Changed
 - Asked for code, commands or facts that change (versions, prices, news), the agent looks them up
@@ -135,7 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   starts loading the model, and each later connection to it no longer waits 2 seconds.
 - ComfyUI templates no longer leave an Edge button on the taskbar where Edge isn't allowed to run
   headless: the copy Edge hands over to has its window hidden too.
-- With Video editor or Code changes open, the window can no longer be made so narrow that the chat is
+- With Video editor or File changes open, the window can no longer be made so narrow that the chat is
   squeezed to a few letters across: the panel gives way first, then the window stops. Video editor
   also keeps the window tall enough for its viewer, and a long video name is cut short at the top.
 - Video editor: a file dropped on a new card or sound becomes it, which is marked while you drag over

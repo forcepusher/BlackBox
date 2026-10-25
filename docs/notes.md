@@ -707,10 +707,10 @@ one's width to the other's: the view model sets the new tool in one change (it w
 and the window shrank to the chat and grew back), the window sets the panel's content itself (a
 binding took it after the layout), and the dropdown's list is closed first (it lingered a frame over
 the resized window). Measured after: popup closed, then one frame with all of the switch, for every
-pick of None, Video editor and Code changes either way. The window's place is saved without the panel. **The × at the right end of every tool's top bar** closes the tool, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`ToolkitClose`, 30 square as the Toolkit dropdown, 12 right of what is beside it), so it looks and sits the same in each. Video editor's frame fields are 30 high there: their own 32 made its bar 2 px taller (at 125%) than the other tools' and the chat's, and its × sat lower. **Made narrower, the panel gives way first** (`ToolkitColumns`,
+pick of None, Video editor and File changes either way. The window's place is saved without the panel. **The × at the right end of every tool's top bar** closes the tool, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`ToolkitClose`, 30 square as the Toolkit dropdown, 12 right of what is beside it), so it looks and sits the same in each. Video editor's frame fields are 30 high there: their own 32 made its bar 2 px taller (at 125%) than the other tools' and the chat's, and its × sat lower. **Made narrower, the panel gives way first** (`ToolkitColumns`,
 `MainWindow.FitColumns` on the columns' SizeChanged): down to its least (`ToolkitOption.MinWidth`,
 splitter included: Video editor 770, where its top bar still fits in one row with the video's name cut
-short; Code changes 560), then the window stops, at the panel's least plus the chat's 660 (no more than
+short; File changes 560), then the window stops, at the panel's least plus the chat's 660 (no more than
 the screen is wide). It goes back to the width it opened at, or was dragged to, as the window widens
 again; the splitter stops at both leasts. Before (bug of 2026-10-24) the window's least counted any
 panel as 480 while Video editor kept its 960, so the chat was squeezed to a few letters across, and
@@ -1896,7 +1896,7 @@ Not indexed: folders on SSH hosts (`ssh` with grep works there).
 
 ### Diff
 The model's `diff` tool reads a repository's changes, or two files or folders compared (`Core/Diffs`),
-so "review what you changed" costs a diff instead of whole files read again. The user's **Code changes**
+so "review what you changed" costs a diff instead of whole files read again. The user's **File changes**
 panel shows what the agent changed in the chat (`FileChanges`, below), and lines picked there reach
 the model as exact lines.
 
@@ -1938,8 +1938,8 @@ share; a file back as it was, or made and deleted again, drops out. The list is 
 in `Data/chats/changes/<id>.json` (written after each call, deleted with the chat), so a chat opened
 again from History shows it again; a new chat starts empty.
 
-**The panel** (Toolkit, Code changes; "Diff", then "Code diff", until the user renamed it twice on
-2026-10-24) opens on the left of the chat as Video editor does, with the changed files listed on the
+**The panel** (Toolkit, File changes; "Diff", then "Code diff", then "Code changes", until the user renamed it on
+2026-10-24 and 2026-10-25) opens on the left of the chat as Video editor does, with the changed files listed on the
 left and their diff beside them. It reads them again 250 ms after a call that may have changed files (a file written in
 parts is read once), keeping the picked lines picked. Lines are picked with a click,
 Shift+click and Ctrl+click (a header or @@ line picks nothing) and go into the chat's box as their
@@ -2005,7 +2005,7 @@ by its extension, the formats BlackBox already reads and writes):
 - Any other file whose start reads as text (no NUL in its first 8 KB in its own encoding): its text
   in a fixed-width font. Anything else: "There is no preview for this kind of file".
 
-**Selected text into the message** (the user's request, 2026-10-25, as Video editor and Code changes
+**Selected text into the message** (the user's request, 2026-10-25, as Video editor and File changes
 do). With a file shown and nothing selected, the file is a card over the chat's box ("notes.md ·
 whole document", `IToolkit.Whole`, which now also gives the card's tooltip and icon). Text selected
 in what BlackBox draws (Markdown, a table, text) goes into the box as a pick (`MainWindowViewModel.Pick`)

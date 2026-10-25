@@ -14,7 +14,7 @@ namespace BlackBox.App.ViewModels;
 /// in Explorer's preview pane, else shown as their text (<see cref="DocumentPreview"/>). With the
 /// panel open a message is about the file shown; text selected in the text BlackBox draws goes into
 /// the chat's box as where it is in the file ("Lines 12-20 · notes.md", "Cells B4:C4 · data.csv"),
-/// and the message carries it for the model, as Code changes does with lines (the user's request,
+/// and the message carries it for the model, as File changes does with lines (the user's request,
 /// 2026-10-25). Windows' previewers draw in a window of their own, whose selection BlackBox can't
 /// read: there the message is about the whole file.
 /// </summary>
