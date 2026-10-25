@@ -112,13 +112,13 @@ public sealed partial class MainWindowViewModel
     partial void OnSelectedToolkitChanged(ToolkitOption? value)
     {
         var old = Toolkit;
-        Toolkit = null;
         // What it put in the box goes with it: about a video no longer open, it would be sent bare.
         foreach (var picked in Attachments.Where(a => a.Picked).ToList())
             RemoveAttachment(picked);
+        // One tool for another in one change, so the window goes from the one's panel to the other's
+        // without closing between.
+        Toolkit = value?.Open is { } open && !_closed ? open(this) : null;
         old?.Dispose();
-        if (value?.Open is { } open && !_closed)
-            Toolkit = open(this);
     }
 
     /// <summary>

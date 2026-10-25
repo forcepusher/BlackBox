@@ -398,4 +398,32 @@ internal static partial class Native
 
     [LibraryImport("kernel32.dll", EntryPoint = "GetModuleHandleW", StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint GetModuleHandle(string? name);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SIZE { public int cx; public int cy; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct BLENDFUNCTION { public byte BlendOp, BlendFlags, SourceConstantAlpha, AlphaFormat; }
+
+    public const byte AC_SRC_ALPHA = 1;
+    public const uint ULW_ALPHA = 2;
+    public const int SW_SHOWNOACTIVATE = 4;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool UpdateLayeredWindow(nint hWnd, nint hdcDst, ref POINT pptDst, ref SIZE psize, nint hdcSrc, ref POINT pptSrc, uint crKey, ref BLENDFUNCTION pblend, uint dwFlags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool DestroyWindow(nint hWnd);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint BeginDeferWindowPos(int nNumWindows);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint DeferWindowPos(nint hWinPosInfo, nint hWnd, nint hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool EndDeferWindowPos(nint hWinPosInfo);
 }

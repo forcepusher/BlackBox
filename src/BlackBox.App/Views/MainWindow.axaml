@@ -275,7 +275,7 @@
        Shown and hidden by the window as it makes room for it (MainWindow.Dock). -->
   <Grid x:Name="Columns" ColumnDefinitions="0,0,*">
     <Border x:Name="ToolkitHost" Grid.Column="0" IsVisible="False">
-      <ContentControl Content="{Binding Toolkit}" />
+      <ContentControl x:Name="ToolkitContent" />
     </Border>
     <GridSplitter x:Name="ToolkitSplitter" Grid.Column="1" IsVisible="False" Background="{StaticResource BbBorder}" ResizeDirection="Columns" />
 
