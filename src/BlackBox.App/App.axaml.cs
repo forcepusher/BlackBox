@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Primitives;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using BlackBox.Core.Platform;
@@ -9,7 +10,15 @@ namespace BlackBox.App;
 
 public partial class App : Application
 {
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    public override void Initialize()
+    {
+        // Every scrollbar is the full one, arrows and thumb, never the thin line that grows under the
+        // pointer (the user, 2026-10-26). A default, not a style: the theme's ScrollViewers take it from
+        // their owner (a ListBox, a TextBox) by template binding, which a style setter loses to.
+        // Each ScrollViewer hands it on to its bars.
+        ScrollViewer.AllowAutoHideProperty.OverrideDefaultValue<TemplatedControl>(false);
+        AvaloniaXamlLoader.Load(this);
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {

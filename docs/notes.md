@@ -740,7 +740,7 @@ it, dragging its right edge making it longer or shorter in half seconds, the das
 sound's samples read once for its waveform, as joining lays them over each other) with each clip's
 frame in the viewer. The timeline is dragged sideways anywhere but the ruler, a clip's edge and a
 sound (the user found its scrollbar "very inconvenient", 2026-10-24; a drag from a clip doesn't pick
-it, a press let go without moving 4 pixels does), its scrollbar shows only under the pointer, the
+it, a press let go without moving 4 pixels does), its scrollbar shows in full like every other, the
 wheel scrolls sideways and Ctrl+wheel zooms. A clip clicked doesn't scroll into view
 (`BringIntoViewOnFocusChange` off): partly scrolled out, it moved from under the pointer between
 press and release. A click away from every piece (the timeline's empty space, around the viewer) or
@@ -1130,6 +1130,15 @@ wait for your OK doesn't count), and a notice when it came up. A step that only 
 its line too. A call that runs past a few seconds counts its time like the wait for the model does,
 and the line a task ended with says under it how long the whole task took ("Worked for 25 min 13 s").
 The times are saved with the chat; a chat saved before they were kept shows none.
+
+## Scrollbars
+Every scrollbar is the full one, arrows and thumb, all the time: the user didn't want the thin line
+Fluent shows until the pointer comes near (2026-10-26; the chat's had been full since 2026-10-24).
+`App.Initialize` makes `ScrollViewer.AllowAutoHide` false by default for every templated control, so
+it covers the ScrollViewers in the markup and the ones inside a ListBox's or TextBox's template, which
+take it from their owner by template binding (a style setter loses to that). Overriding it on
+`Control`, or `ScrollBar.AllowAutoHide` on `ScrollBar`, throws at startup: both already have their
+metadata there. Fluent lays the bars over the content, so a bar covers the strip it sits on.
 
 ## Several windows
 **New window** in the top bar opens another chat window, with its own chat, agent

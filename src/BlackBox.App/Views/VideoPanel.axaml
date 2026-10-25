@@ -237,7 +237,7 @@
           </Border>
 
           <!-- Dragged sideways anywhere but the ruler, a clip's edge and a sound, it scrolls (VideoPanel.Pan);
-               the wheel does too, Ctrl+wheel zooms. Its bar only shows under the pointer. -->
+               the wheel does too, Ctrl+wheel zooms. -->
           <ScrollViewer x:Name="Timeline" Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
                         PointerWheelChanged="OnTimelineWheel" Background="Transparent" BringIntoViewOnFocusChange="False" ContextRequested="OnRowMenu">
             <Panel Width="{Binding TimelineWidth}" HorizontalAlignment="Left" ClipToBounds="True">

@@ -99,7 +99,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after the last one on the timeline.
 - Every dropdown's arrow (Toolkit, History, Model, Effort) is the same solid triangle, and so is the
   Toolkit's arrow to the left.
-- The chat's scrollbar always shows.
+- Every scrollbar (the chat, panels, lists, previews) always shows in full, with its arrows,
+  instead of a thin line that grows under the pointer.
 - A frame the video tool makes gets a fresh look, and every piece it makes again keeps the one before
   as a version; a shot's or song's other tries are versions too.
 - The context slider goes up to 1M.
