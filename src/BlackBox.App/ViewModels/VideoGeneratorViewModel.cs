@@ -173,7 +173,7 @@ public sealed partial class VideoGeneratorViewModel : ObservableObject, IToolkit
             var (_, length) = _board.Timing();
             var made = _board.Shots.Count(s => VideoMaker.IsCurrent(_board, s));
             return $"{length:0.#} s in {_board.Shots.Count} clip{(_board.Shots.Count == 1 ? "" : "s")}" +
-                   (_board.Shots.Count == 0 ? "" : made == _board.Shots.Count ? " · all made" : $" · {made} made");
+                   (_board.Shots.Count == 0 ? "" : made < _board.Shots.Count ? $" · {made} made" : _board.JoinedIsStale ? " · all made, not joined since" : " · all made");
         }
     }
 

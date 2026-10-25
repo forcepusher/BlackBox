@@ -401,13 +401,12 @@ public sealed class VideoGeneratorTool : Tool
         if (board.Shots.Any(Storyboard.Speaks))
             sb.AppendLine("The lines' voice: " + (board.Voice.Trim().Length > 0 ? board.Voice.Trim() : "not described (voice): the voice model picks one") + ".");
         var video = board.JoinedFile;
-        var newest = board.Shots.Select(s => board.ShotVideo(s)).Concat(board.Sounds.Select(board.SoundFile)).Where(p => p is not null && File.Exists(p))
-            .Select(p => File.GetLastWriteTimeUtc(p!)).DefaultIfEmpty(DateTime.MinValue).Max();
         var joined = File.Exists(video);
-        sb.AppendLine("Video: " + (!joined ? "not joined yet." : File.GetLastWriteTimeUtc(video) >= newest ? video : $"{video}, joined before the latest changes."));
+        var behind = board.JoinedIsStale;
+        sb.AppendLine("Video: " + (!joined ? "not joined yet." : !behind ? video : $"{video}, joined before the latest changes."));
         if (todo.Count > 0)
-            sb.Append("To make: " + string.Join(", ", todo) + (todo.Count > 0 ? ", then join." : "."));
-        else if (!joined || File.GetLastWriteTimeUtc(video) < newest)
+            sb.Append("To make: " + string.Join(", ", todo) + ", then join.");
+        else if (!joined || behind)
             sb.Append("Everything is made: join it (action=join), then check the video.");
         else
             sb.Append("Everything is made and joined.");

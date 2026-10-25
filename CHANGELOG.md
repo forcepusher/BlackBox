@@ -139,6 +139,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The first-run hint for Ctrl+V is reworded.
 
 ### Fixed
+- Video generator says when the joined video is older than a clip or sound in it (one made again, or
+  a version put back): "all made, not joined since", until you join it again.
 - The scrollbar under Video generator's timeline drags again: its thumb follows the mouse instead
   of the timeline sliding on its own.
 - With a tool open and little room for the chat, the server's status dot no longer draws over **History**.

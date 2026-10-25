@@ -391,6 +391,23 @@ public sealed partial class Storyboard
     }
 
     /// <summary>
+    /// Whether the joined video is older than a clip or sound in it (one made again, or a version put
+    /// back): it then shows what was there before, until it is joined again.
+    /// </summary>
+    public bool JoinedIsStale
+    {
+        get
+        {
+            var video = JoinedFile;
+            if (!File.Exists(video))
+                return false;
+            var newest = Shots.Select(ShotVideo).Concat(Sounds.Select(SoundFile)).Where(File.Exists)
+                .Select(File.GetLastWriteTimeUtc).DefaultIfEmpty(DateTime.MinValue).Max();
+            return File.GetLastWriteTimeUtc(video) < newest;
+        }
+    }
+
+    /// <summary>
     /// A name made safe as a file name: no character Windows forbids, at most 80 long, and not a
     /// device's name (a video called "Con" got the console for its folder, and nothing saved).
     /// </summary>

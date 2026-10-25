@@ -33,7 +33,7 @@ public sealed partial class VideoGeneratorViewModel
     /// Over the chat's box while nothing is picked: the video, as a pick is shown, so the user sees what
     /// a message is about then ("Untitled video", "whole video · not made yet" until it is joined).
     /// </summary>
-    public (string Title, string Details)? Whole => (VideoName, HasJoinedVideo ? "whole video" : "whole video · not made yet");
+    public (string Title, string Details)? Whole => (VideoName, !HasJoinedVideo ? "whole video · not made yet" : _board.JoinedIsStale ? "whole video · not joined since the latest changes" : "whole video");
 
     public string WholeTip => "What you type is about this video. Pick something in it to ask about that.";
 

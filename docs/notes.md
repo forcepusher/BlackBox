@@ -1153,7 +1153,11 @@ stopped before one replaced its clip (the versions made so far stay). A speaking
 its line with it (`s1.v1.wav` and `s1.line.v1.flac`): put back without it, the newer line
 played over the older lips, and the shot read as up to date. A version is picked from its piece's
 right-click menu (Versions), and **Use this version** under the viewer puts it back; a sound's goes
-back where the sound is now on its sound line. A frame or shot call's changes go in only for a piece
+back where the sound is now on its sound line. The joined video then holds the old clip: a joined
+video older than a clip or sound file in it (`Storyboard.JoinedIsStale`, by file times) reads "all
+made, not joined since" in the panel and "not joined since the latest changes" on the whole video's
+card, and the video tool says to join again (release QA, 2026-10-26: until then both said all made
+after Use this version). A frame or shot call's changes go in only for a piece
 of that kind, or a new one it gives a prompt: a frame call with a shot's id added a stray frame.
 A song's tries made before one that fails or is stopped are versions of the song, not stray files.
 Checked with Claude in the window (2026-10-23): "Use a picture of mine…" on the frame shot 1 starts
