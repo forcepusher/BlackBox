@@ -1,9 +1,9 @@
 namespace BlackBox.Core.Media;
 
-/// <summary>Markdown files (.md), which the chat previews formatted, as it does a reply.</summary>
+/// <summary>Markdown files (.md), which the Document preview panel shows formatted, as the chat does a reply.</summary>
 public static class MarkdownFiles
 {
-    /// <summary>The most of a file the chat shows: a long one shows its start, Open shows the rest.</summary>
+    /// <summary>The most of a file <see cref="ReadStart"/> reads unless told otherwise: a long one gives its start.</summary>
     public const int MaxChars = 100_000;
 
     public static bool Handles(string path) =>

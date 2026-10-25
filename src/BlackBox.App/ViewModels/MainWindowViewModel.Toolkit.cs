@@ -61,7 +61,19 @@ public sealed partial class MainWindowViewModel
             vm => new VideoViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
         new("Code changes", "See the files the agent changes in this chat as it works: click lines to ask about them", 880, 560, 0,
             vm => new DiffViewModel(vm)),
+        new(DocumentPreviewName, "See a file from the chat beside it: documents, PDFs, spreadsheets, slides, pictures, text and code", 760, 420, 0,
+            vm => new DocumentViewModel(vm._previews)),
     ];
+
+    private const string DocumentPreviewName = "Document preview";
+
+    /// <summary>A card's Preview: the file in the Document preview panel, which opens in place of the tool open (if another).</summary>
+    internal void PreviewFile(string path)
+    {
+        if (Toolkit is not DocumentViewModel)
+            SelectedToolkit = ToolkitOptions.First(o => o.Name == DocumentPreviewName);
+        (Toolkit as DocumentViewModel)?.Show(path);
+    }
 
     [ObservableProperty]
     private ToolkitOption? _selectedToolkit;

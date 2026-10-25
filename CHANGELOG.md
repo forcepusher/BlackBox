@@ -17,9 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folders, instead of reading whole files again.
 - Code blocks in replies and Markdown previews show in a box of their own, with their language and a
   **Copy** button.
-- Markdown files (.md) preview formatted in the chat, as replies are: headings, lists, code, tables
-  and links, in a box that scrolls. They show under the reply that names them and under write_file
-  when the agent writes one.
+- **Document preview** in the **Toolkit** dropdown: a file from the chat shown whole on the left of
+  the chat. Markdown is formatted as replies are, .csv as a table, text and code as they are, and
+  pictures, video and sound as in the chat; PDF, Word, Excel, PowerPoint and web pages show as in
+  Explorer's preview pane.
+- **Preview** on every file in the chat opens it in Document preview, in place of **Open**, which the
+  full-screen viewer no longer has either.
+- Markdown files (.md) get a card like other documents, under the reply that names them and under
+  write_file when the agent writes one.
 - `Data\errors.log`: every error BlackBox shows (in the chat, in the banner under the top bar, in
   Video editor, or when it can't start), with the details behind it, to read after the chat or the
   window is gone.

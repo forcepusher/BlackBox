@@ -238,27 +238,15 @@
       </Border>
     </DataTemplate>
 
-    <!-- A Markdown file formatted as a reply is, in a box that scrolls (the chat goes on scrolling at its ends). -->
-    <DataTemplate DataType="vm:MarkdownPreview">
-      <Border Classes="preview" Width="498">
-        <StackPanel Spacing="8">
-          <!-- The box's left padding is inside the scroller, so the text's selection margin isn't cut off. -->
-          <Border Background="{StaticResource BbSurface}" CornerRadius="6" Padding="0,10,4,10">
-            <ScrollViewer MaxHeight="420" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Markdown preview">
-              <views:MarkdownView Source="{Binding Text}" Margin="12,0,10,0" />
-            </ScrollViewer>
-          </Border>
-          <views:PreviewFooter />
-        </StackPanel>
-      </Border>
-    </DataTemplate>
-
     <!-- The toolkit's panel, on the left of the chat. -->
     <DataTemplate DataType="vm:VideoViewModel">
       <views:VideoPanel />
     </DataTemplate>
     <DataTemplate DataType="vm:DiffViewModel">
       <views:DiffPanel />
+    </DataTemplate>
+    <DataTemplate DataType="vm:DocumentViewModel">
+      <views:DocumentPanel />
     </DataTemplate>
 
     <DataTemplate DataType="vm:FileCardPreview">

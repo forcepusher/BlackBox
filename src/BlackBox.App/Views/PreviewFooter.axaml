@@ -4,8 +4,9 @@
              xmlns:views="using:BlackBox.App.Views"
              x:Class="BlackBox.App.Views.PreviewFooter"
              x:DataType="vm:FilePreview">
-  <!-- Under every preview: the file's name and what it is, and buttons to open it or find it; for a
-       file made with a prompt, Prompt shows that prompt and the settings it was made with. -->
+  <!-- Under every preview: the file's name and what it is, and buttons to see it in the Document
+       preview panel or find it; for a file made with a prompt, Prompt shows that prompt and the
+       settings it was made with. -->
   <DockPanel>
     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="10,0,0,0">
       <Button Classes="ghost" Padding="10,3" Content="Prompt" IsVisible="{Binding HasRecipe}"
@@ -18,7 +19,7 @@
           </Flyout>
         </Button.Flyout>
       </Button>
-      <Button Classes="ghost" Padding="10,3" Content="Open" Command="{Binding OpenCommand}" ToolTip.Tip="Open it in its own program" />
+      <Button Classes="ghost" Padding="10,3" Content="Preview" Click="OnPreview" ToolTip.Tip="See it in the Document preview panel" />
       <Button Classes="ghost" Padding="10,3" Content="Show in folder" Command="{Binding ShowInFolderCommand}" ToolTip.Tip="{Binding Path}" />
     </StackPanel>
     <StackPanel Spacing="1" VerticalAlignment="Center">
