@@ -131,7 +131,7 @@
 
     <!-- A 3D model's views: from the front, a side, the back, above, or as at first; where it is seen
          from. Over them, for a model with animations, its player: a frame back, play, a frame on, its
-         takes, where it is. -->
+         animations, where it is. -->
     <Border Grid.Row="1" IsVisible="{Binding Model, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="10,4,10,10">
       <StackPanel DataContext="{Binding Model}" x:DataType="vm:InspectorModelViewModel" Spacing="4">
       <DockPanel IsVisible="{Binding HasAnimations}">
@@ -148,7 +148,7 @@
                   Command="{Binding StepForwardCommand}" ToolTip.Tip="A frame on (Right)" AutomationProperties.Name="A frame on">
             <PathIcon Width="13" Height="13" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
           </Button>
-          <ComboBox ItemsSource="{Binding Animations}" SelectedItem="{Binding Animation}" IsVisible="{Binding HasTakes}" MaxWidth="160" Margin="6,0,0,0"
+          <ComboBox ItemsSource="{Binding Animations}" SelectedItem="{Binding Animation}" IsVisible="{Binding HasSeveralAnimations}" MaxWidth="160" Margin="6,0,0,0"
                     VerticalAlignment="Center" FontSize="12" ToolTip.Tip="Which animation" AutomationProperties.Name="Animation">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="core:MeshAnimation">

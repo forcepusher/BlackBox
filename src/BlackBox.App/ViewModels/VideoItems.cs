@@ -101,7 +101,7 @@ public sealed partial class ReferenceCard(string path, FrameItem? frame) : Obser
 }
 
 /// <summary>A clip (a shot): a block on the Video clips row from where it starts for as long as it lasts, its frames inside once made.</summary>
-public sealed partial class ShotItem(VideoViewModel video, VideoShot shot) : ObservableObject, IVideoPiece
+public sealed partial class ShotItem(VideoGeneratorViewModel video, VideoShot shot) : ObservableObject, IVideoPiece
 {
     public VideoShot Shot { get; } = shot;
     public string Id => Shot.Id;

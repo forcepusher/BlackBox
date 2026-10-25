@@ -1132,7 +1132,7 @@ public sealed class VideoCheckTests
         Assert.Equal(verdict, VideoCheck.Verdict(answer));
 }
 
-public sealed class VideoToolTests : IDisposable
+public sealed class VideoGeneratorToolTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-videotool-" + Guid.NewGuid().ToString("N")[..8]);
 
@@ -1151,7 +1151,7 @@ public sealed class VideoToolTests : IDisposable
              "sounds": [{"id": "a1", "source": "song", "tags": "folk", "lyrics": "la"}]}
             """);
         board.Folder = _dir;
-        var text = VideoTool.Overview(board);
+        var text = VideoGeneratorTool.Overview(board);
         Assert.Contains("To make: frame f1, frame f2, shot s1, shot s2, sound a1 (action=sound), then join.", text);
         Assert.Contains("s2, clip 2 (5–10 s, 5 s, goes on from s1)", text);
         Assert.Contains("(lip-synced, first frame only)", text);
@@ -1167,7 +1167,7 @@ public sealed class VideoToolTests : IDisposable
         board.Folder = _dir;
         Directory.CreateDirectory(board.ReferencesFolder);
         File.WriteAllText(Path.Combine(board.ReferencesFolder, "dance.mp4"), "moves");
-        var text = VideoTool.Overview(board);
+        var text = VideoGeneratorTool.Overview(board);
         Assert.Contains("The user's videos there, by name in a shot's motion, a frame's of or from: dance.mp4.", text);
         Assert.Contains("Moves as the video dance.mp4.", text);
         Assert.Contains("where the video walk.mp4 ends", text);
@@ -1191,7 +1191,7 @@ public sealed class VideoToolTests : IDisposable
             Made(board.FramePicture(board.Frame(id)!), board.FrameMeta(board.Frame(id)!), VideoMaker.FrameStamp(board, board.Frame(id)!));
         foreach (var shot in board.Shots)
             Made(board.ShotVideo(shot), board.ShotMeta(shot), VideoMaker.ShotStamp(board, shot));
-        var text = VideoTool.Overview(board);
+        var text = VideoGeneratorTool.Overview(board);
         Assert.Contains("To make: frame f1, frame f2, shot s1, then join.", text);
         Assert.Contains("made, but to be made again after f1", text);
         Assert.Contains("Made, but to be made again after frame f2", text);
@@ -1200,7 +1200,7 @@ public sealed class VideoToolTests : IDisposable
     [Fact]
     public async Task Without_a_path_a_new_video_goes_into_the_videos_folder_and_never_over_another()
     {
-        var tool = new VideoTool();
+        var tool = new VideoGeneratorTool();
         var videos = Path.Combine(_dir, "Data", "videos");
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, VideosDirectory = videos };
         JsonObject Call() => new()
@@ -1209,15 +1209,15 @@ public sealed class VideoToolTests : IDisposable
             ["storyboard"] = JsonNode.Parse("""{"title": "Paper Boat", "shots": [{"id": "s1", "prompt": "it sails"}]}"""),
         };
         Assert.False((await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).IsError);
-        Assert.False((await new VideoTool().ExecuteAsync(Call(), ctx, CancellationToken.None)).IsError);
+        Assert.False((await new VideoGeneratorTool().ExecuteAsync(Call(), ctx, CancellationToken.None)).IsError);
         Assert.True(Storyboard.IsVideo(Path.Combine(videos, "Paper Boat")));
         Assert.True(Storyboard.IsVideo(Path.Combine(videos, "Paper Boat 2")));
 
         // Another task finds a video by its name, or is told which videos there are.
-        var byName = await new VideoTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = "Paper Boat 2" }, ctx, CancellationToken.None);
+        var byName = await new VideoGeneratorTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = "Paper Boat 2" }, ctx, CancellationToken.None);
         Assert.False(byName.IsError);
         Assert.Contains(Path.Combine(videos, "Paper Boat 2"), byName.Text);
-        var unsaid = await new VideoTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard" }, ctx, CancellationToken.None);
+        var unsaid = await new VideoGeneratorTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard" }, ctx, CancellationToken.None);
         Assert.True(unsaid.IsError);
         Assert.Contains(Path.Combine(videos, "Paper Boat 2"), unsaid.Text);
     }
@@ -1225,7 +1225,7 @@ public sealed class VideoToolTests : IDisposable
     [Fact]
     public async Task A_new_storyboard_goes_where_the_path_says_and_a_shot_call_changes_it_first()
     {
-        var tool = new VideoTool();
+        var tool = new VideoGeneratorTool();
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir };
         var made = await tool.ExecuteAsync(new JsonObject
         {
@@ -1250,21 +1250,21 @@ public sealed class VideoToolTests : IDisposable
         JsonObject Call() => new() { ["action"] = "storyboard", ["path"] = path, ["storyboard"] = JsonNode.Parse("""{"title": "Keeper", "shots": [{"id": "s1", "prompt": "he waves"}]}""") };
         var said = new List<string>();
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, InConversation = t => said.Any(s => s.Contains(t)) };
-        var first = await new VideoTool().ExecuteAsync(Call(), ctx, CancellationToken.None);
-        Assert.Contains(VideoTool.GuideHead, first.Text);
+        var first = await new VideoGeneratorTool().ExecuteAsync(Call(), ctx, CancellationToken.None);
+        Assert.Contains(VideoGeneratorTool.GuideHead, first.Text);
         Assert.Contains("make the last frame from the first", first.Text); // the storyboard guide
         Assert.Contains("Direction and distance", first.Text); // and how LTX reads a shot's prompt
         said.Add(first.Text);
         // The next run in the same chat: the conversation has it.
-        Assert.DoesNotContain(VideoTool.GuideHead, (await new VideoTool().ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
+        Assert.DoesNotContain(VideoGeneratorTool.GuideHead, (await new VideoGeneratorTool().ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
 
         // The same run, after its context started afresh: the guide went with the rest.
-        var tool = new VideoTool();
+        var tool = new VideoGeneratorTool();
         said.Clear();
-        Assert.Contains(VideoTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
-        Assert.DoesNotContain(VideoTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
+        Assert.Contains(VideoGeneratorTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
+        Assert.DoesNotContain(VideoGeneratorTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
         ctx.ContextResets++;
-        Assert.Contains(VideoTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
+        Assert.Contains(VideoGeneratorTool.GuideHead, (await tool.ExecuteAsync(Call(), ctx, CancellationToken.None)).Text);
     }
 
     [Fact]
@@ -1273,7 +1273,7 @@ public sealed class VideoToolTests : IDisposable
         // "Two ads, coffee and tea": the tea ad, without a path, was written over the coffee one.
         var videos = Path.Combine(_dir, "Data", "videos");
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, VideosDirectory = videos };
-        var tool = new VideoTool();
+        var tool = new VideoGeneratorTool();
         JsonObject Call(string json) => new() { ["action"] = "storyboard", ["storyboard"] = JsonNode.Parse(json) };
         Assert.False((await tool.ExecuteAsync(Call("""{"title": "Coffee", "shots": [{"id": "s1", "prompt": "a cup steams"}]}"""), ctx, CancellationToken.None)).IsError);
         Assert.False((await tool.ExecuteAsync(Call("""{"title": "Tea", "shots": [{"id": "s1", "prompt": "a teapot pours"}]}"""), ctx, CancellationToken.None)).IsError);
@@ -1296,7 +1296,7 @@ public sealed class VideoToolTests : IDisposable
         // without one: in place.
         var blank = Storyboard.New(Path.Combine(videos, "Untitled video"), "Untitled video");
         blank.Save();
-        var fresh = new VideoTool();
+        var fresh = new VideoGeneratorTool();
         Assert.False((await fresh.ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = blank.Folder }, ctx, CancellationToken.None)).IsError);
         Assert.False((await fresh.ExecuteAsync(Call("""{"title": "Lighthouse", "shots": [{"id": "s1", "prompt": "the beam sweeps the sea"}]}"""), ctx, CancellationToken.None)).IsError);
         Assert.Equal("the beam sweeps the sea", Storyboard.Load(Path.Combine(videos, "Lighthouse")).Shots[0].Prompt);
@@ -1357,7 +1357,7 @@ public sealed class VideoToolTests : IDisposable
         // qwen3.8 gave path "lighthouse": the video was made in the user's home folder.
         var videos = Path.Combine(_dir, "Data", "videos");
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir, VideosDirectory = videos };
-        var made = await new VideoTool().ExecuteAsync(new JsonObject
+        var made = await new VideoGeneratorTool().ExecuteAsync(new JsonObject
         {
             ["action"] = "storyboard",
             ["path"] = "lighthouse",
@@ -1367,7 +1367,7 @@ public sealed class VideoToolTests : IDisposable
         Assert.True(Storyboard.IsVideo(Path.Combine(videos, "lighthouse")));
         Assert.False(Directory.Exists(Path.Combine(_dir, "lighthouse")));
         // And found by that name again.
-        Assert.False((await new VideoTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = "lighthouse" }, ctx, CancellationToken.None)).IsError);
+        Assert.False((await new VideoGeneratorTool().ExecuteAsync(new JsonObject { ["action"] = "storyboard", ["path"] = "lighthouse" }, ctx, CancellationToken.None)).IsError);
     }
 
     [Fact]
@@ -1392,7 +1392,7 @@ public sealed class VideoToolTests : IDisposable
             Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir,
             Ask = (_, _, _) => Task.FromResult<string?>("His left hand has six fingers. SEVERE.\nVERDICT: redo: his hand has six fingers"),
         };
-        var looked = await new VideoTool().ExecuteAsync(new JsonObject { ["action"] = "check", ["id"] = "f1", ["path"] = board.Folder }, ctx, CancellationToken.None);
+        var looked = await new VideoGeneratorTool().ExecuteAsync(new JsonObject { ["action"] = "check", ["id"] = "f1", ["path"] = board.Folder }, ctx, CancellationToken.None);
         Assert.False(looked.IsError, looked.Text);
         Assert.Contains("To fix: his hand has six fingers", looked.Text);
         Assert.Equal(("redo", "It needs another go: his hand has six fingers."), VideoVersions.LookIn(board.FrameMeta(frame)));
@@ -1490,7 +1490,7 @@ public sealed class VideoReferencesTests : IDisposable
         var stamp = VideoMaker.FrameStamp(board, frame);
         File.SetLastWriteTimeUtc(front, DateTime.UtcNow.AddMinutes(1));
         Assert.NotEqual(stamp, VideoMaker.FrameStamp(board, frame));
-        var overview = VideoTool.Overview(board);
+        var overview = VideoGeneratorTool.Overview(board);
         Assert.Contains($"References folder: {board.ReferencesFolder}; the user's pictures there to make frames from, by name in from: " +
                         "Cafe/Cafe.png, Cafe/inside.png, mira/Front.jpg, Street/a.png, Street/b.png.", overview);
 
@@ -1515,7 +1515,7 @@ public sealed class VideoReferencesTests : IDisposable
         Png(named, 50, 80);
         var path = Path.Combine(_dir, "Bunny");
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new Settings.AgentSettings(), WorkingDirectory = _dir };
-        var result = await new VideoTool().ExecuteAsync(new JsonObject
+        var result = await new VideoGeneratorTool().ExecuteAsync(new JsonObject
         {
             ["action"] = "storyboard",
             ["path"] = path,
@@ -1539,10 +1539,10 @@ public sealed class VideoReferencesTests : IDisposable
         Assert.Equal(["r1", "CarlLineup.png"], board.Frame("f1")!.From);
         Assert.Contains($"{lineup} as \"CarlLineup.png\"", result.Text);
         Assert.Contains("Copied into References as they are", result.Text);
-        Assert.Contains("CarlLineup.png", VideoTool.Overview(board));
+        Assert.Contains("CarlLineup.png", VideoGeneratorTool.Overview(board));
 
         // Named again in a frame call, it is the copy already there, not another one.
-        var again = await new VideoTool().ExecuteAsync(new JsonObject
+        var again = await new VideoGeneratorTool().ExecuteAsync(new JsonObject
         {
             ["action"] = "frame", ["path"] = path, ["id"] = "r1", ["from"] = new JsonArray(lineup),
         }, ctx, CancellationToken.None);

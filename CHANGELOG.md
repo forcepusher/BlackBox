@@ -128,38 +128,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A × at the top right of Video generator, File changes and File inspector closes the tool.
 
 ### Changed
-- Video editor is now called **Video generator**.
-- Inspect file is now called **File inspector**.
-- What you pick in a toolkit panel has no × in the chat's box: unpick it in the panel (a click away, or Esc).
-- A toolkit panel's card comes before your own files, in the box and in the sent message, with a small arrow toward its panel.
-- The **Toolkit** dropdown reads None, File changes, File inspector, Video generator.
 - Asked for code, commands or facts that change (versions, prices, news), the agent looks them up
   on the web before it answers, rather than writing them from memory.
-- A video's name is its folder's: renamed in Video generator, in Explorer, or by the agent giving it a
-  title, the video is.
-- Video generator's frame size and frame rate are at the top of the panel, and a new clip is the dashed +
-  after the last one on the timeline.
 - Every dropdown's arrow (Toolkit, History, Model, Effort) is the same solid triangle, and so is the
   Toolkit's arrow to the left.
 - Every scrollbar (the chat, panels, lists, previews) always shows in full, with its arrows,
   instead of a thin line that grows under the pointer.
-- A frame the video tool makes gets a fresh look, and every piece it makes again keeps the one before
-  as a version; a shot's or song's other tries are versions too.
 - The context slider goes up to 1M.
 - The second BlackBox name and logo under the title bar made way for the Toolkit dropdown.
-- The first-run hints for Ctrl+V and **New window** are reworded.
-- A new video in Video generator is called "Untitled video".
-- Video generator says video, not film, everywhere, and so does the agent. Its takes are clips (Clip 1,
-  Clip 2…) on the **Video clips** row, and its sound tracks are sound lines (Sound line 1…).
-  Videos are kept in `Data\videos`; ones made before, in `Data\films`, no longer open.
-
-### Removed
-- Ctrl+Shift+N: **New window** at the top opens another window.
-- Videos kept in a `storyboard.json` (from 1.0.0) no longer open: a video is its folder now.
-- Video generator's video dropdown, its Open… and Show folder buttons, the settings button with the video's
-  title, and the soundtrack and shots' own sound sliders.
-- Video generator's **New video** button beside **Make the video**: New video is in the menu on the video's name.
-- File inspector's **Show in folder**: the file's card in the chat has it.
+- The first-run hint for Ctrl+V is reworded.
 
 ### Fixed
 - The scrollbar under Video generator's timeline drags again: its thumb follows the mouse instead

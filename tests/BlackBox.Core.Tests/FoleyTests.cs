@@ -58,7 +58,7 @@ public sealed class FoleyTests : IDisposable
         board.Save();
         var again = Storyboard.Load(_dir);
         Assert.Equal([0.5, 2, 1], again.SoundLineVolumes);
-        Assert.Contains("sound line 0 at volume 0.5, sound line 1 at volume 2", VideoTool.Overview(again));
+        Assert.Contains("sound line 0 at volume 0.5, sound line 1 at volume 2", VideoGeneratorTool.Overview(again));
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public sealed class FoleyTests : IDisposable
         var board = Video("""
             {"shots": [{"id": "s1", "seconds": 5, "prompt": "rain on a tin roof"}], "sounds": [{"id": "a1", "source": "foley", "tags": "rain"}]}
             """, made: false);
-        var text = VideoTool.Overview(board);
+        var text = VideoGeneratorTool.Overview(board);
         Assert.Contains("a1 \"a1\" (soundLine 0, from 0 s): foley, made from what the clips show from 0 to 5 s, heard as \"rain\"", text);
         Assert.Contains("To make: shot s1, sound a1 (action=sound), then join.", text);
     }

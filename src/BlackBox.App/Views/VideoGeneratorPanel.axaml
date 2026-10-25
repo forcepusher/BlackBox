@@ -2,8 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:BlackBox.App.ViewModels"
              xmlns:views="using:BlackBox.App.Views"
-             x:Class="BlackBox.App.Views.VideoPanel"
-             x:DataType="vm:VideoViewModel"
+             x:Class="BlackBox.App.Views.VideoGeneratorPanel"
+             x:DataType="vm:VideoGeneratorViewModel"
              Background="{StaticResource BbBackground}">
 
   <UserControl.Styles>
@@ -270,7 +270,7 @@
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:SoundLineItem">
                     <!-- Its name, and its volume under it. -->
-                    <Border Height="{x:Static vm:VideoViewModel.SoundLineHeight}" Background="Transparent" ContextRequested="OnSoundLineMenu">
+                    <Border Height="{x:Static vm:VideoGeneratorViewModel.SoundLineHeight}" Background="Transparent" ContextRequested="OnSoundLineMenu">
                       <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="{Binding Name}" Margin="10,0,0,0" />
                         <Slider Classes="volume" Minimum="0" Maximum="2" Value="{Binding Volume}" SmallChange="0.05" LargeChange="0.25" Margin="8,-8,8,-12"
@@ -285,13 +285,13 @@
             </StackPanel>
           </Border>
 
-          <!-- Dragged sideways anywhere but the ruler, a clip's edge and a sound, it scrolls (VideoPanel.Pan);
+          <!-- Dragged sideways anywhere but the ruler, a clip's edge and a sound, it scrolls (VideoGeneratorPanel.Pan);
                the wheel does too, Ctrl+wheel zooms. -->
           <ScrollViewer x:Name="Timeline" Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
                         PointerWheelChanged="OnTimelineWheel" Background="Transparent" BringIntoViewOnFocusChange="False" ContextRequested="OnRowMenu">
             <Panel Width="{Binding TimelineWidth}" HorizontalAlignment="Left" ClipToBounds="True">
               <StackPanel>
-                <views:VideoRuler x:Name="Ruler" Height="26" Pps="{Binding Pps}" Length="{Binding Length}" Lead="{x:Static vm:VideoViewModel.Lead}" />
+                <views:VideoRuler x:Name="Ruler" Height="26" Pps="{Binding Pps}" Length="{Binding Length}" Lead="{x:Static vm:VideoGeneratorViewModel.Lead}" />
 
                 <!-- References: a card each, image files, video files and generated images; the dashed card makes a new one. -->
                 <Panel Height="92" Tag="references" Background="Transparent">
@@ -310,7 +310,7 @@
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:ReferenceCard">
                         <Button Classes="pick" Click="OnCardClick" ContextRequested="OnCardMenu" ToolTip.Tip="{Binding Kind}" AutomationProperties.Name="{Binding Name}">
-                          <Border Classes="block" Classes.selected="{Binding IsSelected}" Classes.drop="{Binding IsDropTarget}" Width="{x:Static vm:VideoViewModel.CardWidth}" Height="84" Cursor="Hand">
+                          <Border Classes="block" Classes.selected="{Binding IsSelected}" Classes.drop="{Binding IsDropTarget}" Width="{x:Static vm:VideoGeneratorViewModel.CardWidth}" Height="84" Cursor="Hand">
                             <DockPanel>
                               <TextBlock DockPanel.Dock="Bottom" Text="{Binding State}" FontSize="10" Classes="muted" Margin="6,0,6,3" TextTrimming="CharacterEllipsis" />
                               <TextBlock DockPanel.Dock="Bottom" Text="{Binding Name}" FontSize="11" Margin="6,1,6,0" TextTrimming="CharacterEllipsis" />
@@ -408,7 +408,7 @@
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:SoundLineItem">
                         <!-- The line, and its dashed + after its last sound: a click makes a new sound there. -->
-                        <Border Height="{x:Static vm:VideoViewModel.SoundLineHeight}" BorderBrush="#1E2024" BorderThickness="0,0,0,1">
+                        <Border Height="{x:Static vm:VideoGeneratorViewModel.SoundLineHeight}" BorderBrush="#1E2024" BorderThickness="0,0,0,1">
                           <Canvas>
                             <Button Classes="pick" Canvas.Left="{Binding AddX}" Canvas.Top="4" Width="56" Height="40" Click="OnCreateSound"
                                     HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"

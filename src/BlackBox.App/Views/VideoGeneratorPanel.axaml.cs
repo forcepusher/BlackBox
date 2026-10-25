@@ -12,13 +12,13 @@ using BlackBox.App.ViewModels;
 namespace BlackBox.App.Views;
 
 /// <summary>Video generator's panel, on the left of the chat window: a viewer, and the timeline where the video is worked on.</summary>
-public partial class VideoPanel : UserControl
+public partial class VideoGeneratorPanel : UserControl
 {
-    public VideoPanel()
+    public VideoGeneratorPanel()
     {
         InitializeComponent();
         // A click or a drag on the seconds moves the playhead there.
-        Ruler.Seeked += seconds => (DataContext as VideoViewModel)?.SeekStrip(seconds);
+        Ruler.Seeked += seconds => (DataContext as VideoGeneratorViewModel)?.SeekStrip(seconds);
         // The timeline is dragged sideways: seen before the clips' buttons, which then don't click.
         Timeline.AddHandler(PointerPressedEvent, OnPanPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
         Timeline.AddHandler(PointerMovedEvent, OnPanMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -29,10 +29,10 @@ public partial class VideoPanel : UserControl
         AddHandler(DragDrop.DragEnterEvent, OnDragOver);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
-        AddHandler(DragDrop.DropEvent, (_, _) => Dispatcher.UIThread.Post(() => (DataContext as VideoViewModel)?.DragOver(null)), handledEventsToo: true);
+        AddHandler(DragDrop.DropEvent, (_, _) => Dispatcher.UIThread.Post(() => (DataContext as VideoGeneratorViewModel)?.DragOver(null)), handledEventsToo: true);
     }
 
-    private VideoViewModel? _vm;
+    private VideoGeneratorViewModel? _vm;
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -43,7 +43,7 @@ public partial class VideoPanel : UserControl
             _vm.RenameVideoAsked -= OnRenameVideoAsked;
             _vm.PickFiles = null;
         }
-        _vm = DataContext as VideoViewModel;
+        _vm = DataContext as VideoGeneratorViewModel;
         if (_vm is not null)
         {
             _vm.RenameAsked += OnRenameAsked;
@@ -52,7 +52,7 @@ public partial class VideoPanel : UserControl
         }
     }
 
-    private VideoViewModel Vm => (VideoViewModel)DataContext!;
+    private VideoGeneratorViewModel Vm => (VideoGeneratorViewModel)DataContext!;
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
@@ -73,14 +73,14 @@ public partial class VideoPanel : UserControl
             return null;
         var p = at(row);
         var card = source!.GetSelfAndVisualAncestors().OfType<StyledElement>().Select(v => v.DataContext).FirstOrDefault(d => d is ReferenceCard or SoundItem);
-        return new VideoDropPlace((string)row.Tag!, Vm.SecondsAt(p.X), Math.Clamp((int)(p.Y / VideoViewModel.SoundLineHeight), 0, Math.Max(0, Vm.SoundLines.Count - 1)), card);
+        return new VideoDropPlace((string)row.Tag!, Vm.SecondsAt(p.X), Math.Clamp((int)(p.Y / VideoGeneratorViewModel.SoundLineHeight), 0, Math.Max(0, Vm.SoundLines.Count - 1)), card);
     }
 
     // ---- files dragged onto the timeline -------------------------------------------------------------------
 
     private void OnDragOver(object? sender, DragEventArgs e)
     {
-        if (DataContext is not VideoViewModel vm)
+        if (DataContext is not VideoGeneratorViewModel vm)
             return;
         var files = e.DataTransfer.TryGetFiles() is { } items && items.Select(f => f.TryGetLocalPath()).OfType<string>().Any();
         vm.DragOver(files ? PlaceAt(e.Source as Visual, v => e.GetPosition(v)) : null);
@@ -91,7 +91,7 @@ public partial class VideoPanel : UserControl
     {
         var at = e.GetPosition(this);
         if (at.X <= 1 || at.Y <= 1 || at.X >= Bounds.Width - 1 || at.Y >= Bounds.Height - 1)
-            (DataContext as VideoViewModel)?.DragOver(null);
+            (DataContext as VideoGeneratorViewModel)?.DragOver(null);
     }
 
     /// <summary>The Open dialog for pictures ("image"), pictures or videos ("reference") or sounds of the user's, to copy in.</summary>
@@ -439,7 +439,7 @@ public partial class VideoPanel : UserControl
                 Vm.MoveSound(s.Sound, s.Start, s.SoundLine, s.Trim, Math.Clamp(s.Seconds + dx, 0.2, most));
                 break;
             default:
-                var soundLine = s.SoundLine + (int)Math.Round((at.Y - s.From.Y) / VideoViewModel.SoundLineHeight);
+                var soundLine = s.SoundLine + (int)Math.Round((at.Y - s.From.Y) / VideoGeneratorViewModel.SoundLineHeight);
                 Vm.MoveSound(s.Sound, s.Start + dx, soundLine, s.Trim, s.Sound.Sound.Seconds);
                 break;
         }

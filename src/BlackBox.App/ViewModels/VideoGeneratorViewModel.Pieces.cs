@@ -4,7 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BlackBox.App.ViewModels;
 
-public sealed partial class VideoViewModel
+public sealed partial class VideoGeneratorViewModel
 {
     // ---- the pieces --------------------------------------------------------------------------------------------
 

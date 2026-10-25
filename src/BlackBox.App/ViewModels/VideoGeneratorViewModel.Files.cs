@@ -4,7 +4,7 @@ using BlackBox.Core.Video;
 
 namespace BlackBox.App.ViewModels;
 
-public sealed partial class VideoViewModel
+public sealed partial class VideoGeneratorViewModel
 {
     // ---- saving --------------------------------------------------------------------------------------------
 
@@ -167,9 +167,9 @@ public sealed partial class VideoViewModel
 
     private static string Capital(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
-    /// <summary>A title in a sentence: "shot 3", "the song", "start of shot 2"; a name ("Marco") as it is.</summary>
+    /// <summary>A title in a sentence: "clip 3", "the song", "start of clip 2"; a name ("Marco") as it is.</summary>
     private static string Lower(string s) =>
-        new[] { "Shot ", "The ", "Start of", "End of", "Frame ", "Reference ", "A " }.Any(p => s.StartsWith(p, StringComparison.Ordinal)) ? char.ToLowerInvariant(s[0]) + s[1..] : s;
+        new[] { "Clip ", "The ", "Start of", "End of", "Frame ", "Reference ", "A " }.Any(p => s.StartsWith(p, StringComparison.Ordinal)) ? char.ToLowerInvariant(s[0]) + s[1..] : s;
 
     private readonly Dictionary<string, DateTime> _clipStamps = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<FrameItem, DateTime> _thumbStamps = [];

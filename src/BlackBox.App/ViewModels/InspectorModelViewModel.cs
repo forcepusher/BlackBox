@@ -11,7 +11,7 @@ namespace BlackBox.App.ViewModels;
 /// the wheel comes closer, a right or middle drag moves it about, and buttons show it from the front,
 /// a side, the back or above. Where it is seen from is said under it and told to the model; with
 /// Area on, an area of the view is marked to ask about (the user's request, 2026-10-26). A model with
-/// animations (an FBX file's takes) plays them over and over and steps a frame at a time.
+/// animations (an FBX file can hold several) plays them over and over and steps a frame at a time.
 /// </summary>
 public sealed partial class InspectorModelViewModel : ObservableObject, IDisposable
 {
@@ -29,19 +29,19 @@ public sealed partial class InspectorModelViewModel : ObservableObject, IDisposa
     }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Animations), nameof(HasAnimations), nameof(HasTakes))]
+    [NotifyPropertyChangedFor(nameof(Animations), nameof(HasAnimations), nameof(HasSeveralAnimations))]
     private Mesh? _mesh;
 
     public IReadOnlyList<MeshAnimation> Animations => Mesh?.CanMove == true ? Mesh.Animations : [];
 
     public bool HasAnimations => Animations.Count > 0;
 
-    /// <summary>More than one take: a list to pick one from.</summary>
-    public bool HasTakes => Animations.Count > 1;
+    /// <summary>More than one animation: a list to pick one from.</summary>
+    public bool HasSeveralAnimations => Animations.Count > 1;
 
     partial void OnMeshChanged(Mesh? value) => Animation = Animations.FirstOrDefault();
 
-    /// <summary>The take playing or shown; null for a model that keeps still.</summary>
+    /// <summary>The animation playing or shown; null for a model that keeps still.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Duration), nameof(TimeText), nameof(LongestTimeText))]
     private MeshAnimation? _animation;
@@ -54,7 +54,7 @@ public sealed partial class InspectorModelViewModel : ObservableObject, IDisposa
 
     public double Duration => Animation?.Duration ?? 0;
 
-    /// <summary>Seconds into the take.</summary>
+    /// <summary>Seconds into the animation.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TimeText), nameof(FrameIndex))]
     private double _time;
@@ -94,7 +94,7 @@ public sealed partial class InspectorModelViewModel : ObservableObject, IDisposa
         _timer.Start();
     }
 
-    /// <summary>On the clock, over and over as games play a take.</summary>
+    /// <summary>On the clock, over and over as games play an animation.</summary>
     private void Tick()
     {
         if (Animation is not { Duration: > 0 } a)
@@ -139,7 +139,7 @@ public sealed partial class InspectorModelViewModel : ObservableObject, IDisposa
         Time = Math.Clamp(FrameIndex + frames, 0, a.FrameCount - 1) / a.FrameRate;
     }
 
-    /// <summary>What the model is told of the take shown: "at 0.500 s (frame 13 of 25) of its animation Scene, paused"; null for a model that keeps still.</summary>
+    /// <summary>What the model is told of the animation shown: "at 0.500 s (frame 13 of 25) of its animation Scene, paused"; null for a model that keeps still.</summary>
     public string? TakeText => Animation is { } a ? $"at {Time:0.000} s (frame {FrameIndex + 1} of {a.FrameCount}, {a.FrameRate:0.##} fps) of its animation \"{a.Name}\" ({a.Duration:0.###} s long){(IsPlaying ? ", playing" : ", paused there")}" : null;
 
     [ObservableProperty]

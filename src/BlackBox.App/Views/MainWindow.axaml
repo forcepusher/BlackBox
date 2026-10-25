@@ -248,8 +248,8 @@
     </DataTemplate>
 
     <!-- The toolkit's panel, on the left of the chat. -->
-    <DataTemplate DataType="vm:VideoViewModel">
-      <views:VideoPanel />
+    <DataTemplate DataType="vm:VideoGeneratorViewModel">
+      <views:VideoGeneratorPanel />
     </DataTemplate>
     <DataTemplate DataType="vm:FileChangesViewModel">
       <views:FileChangesPanel />

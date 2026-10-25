@@ -9,7 +9,7 @@ namespace BlackBox.App.ViewModels;
 /// <summary>Where files dragged over the timeline would go: a card or sound clip, or a row at a time (a sound line's by its number).</summary>
 public sealed record VideoDropPlace(string Row, double Seconds, int SoundLine, object? Card);
 
-public sealed partial class VideoViewModel
+public sealed partial class VideoGeneratorViewModel
 {
     /// <summary>Names as Explorer orders them: "Video 2" before "Video 10".</summary>
     private static readonly StringComparer ByName =

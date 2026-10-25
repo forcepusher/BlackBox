@@ -19,7 +19,7 @@ namespace BlackBox.App.ViewModels;
 /// chat, in view. The video is its folder (References and Generated, each file with its .json), and
 /// what the agent changes and makes there shows here as it happens.
 /// </summary>
-public sealed partial class VideoViewModel : ObservableObject, IToolkit
+public sealed partial class VideoGeneratorViewModel : ObservableObject, IToolkit
 {
     private readonly PreviewServices _previews;
     private readonly MainWindowViewModel _chat;
@@ -37,7 +37,7 @@ public sealed partial class VideoViewModel : ObservableObject, IToolkit
     /// <param name="chat">The chat the panel is a tool of, where what is said about the video runs.</param>
     /// <param name="videosRoot">Where videos go (BlackBox's Data\videos).</param>
     /// <param name="folder">The video to open; the latest changed one when null.</param>
-    public VideoViewModel(PreviewServices previews, MainWindowViewModel chat, string videosRoot, string? folder)
+    public VideoGeneratorViewModel(PreviewServices previews, MainWindowViewModel chat, string videosRoot, string? folder)
     {
         _videosRoot = videosRoot;
         _previews = previews;

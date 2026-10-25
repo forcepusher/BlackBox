@@ -6,13 +6,13 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BlackBox.App.ViewModels;
 
-public sealed partial class VideoViewModel
+public sealed partial class VideoGeneratorViewModel
 {
     // ---- what a message sent while the panel is open carries ----------------------------------------
 
     /// <summary>
     /// What a message sent from the chat's box carries while Video generator is open: over its bubble,
-    /// the video and what was picked in it ("Video generator · The Fox and the Moon · shot 2"); for the
+    /// the video and what was picked in it ("Video generator · The Fox and the Moon · clip 2"); for the
     /// model, the video's folder, what each pick is in it (a shot, a frame, a reference, a clip…),
     /// and how pieces are made and fixed, as the window's buttons used to ask. The video is saved
     /// first, so the model reads what the panel shows.
@@ -37,7 +37,7 @@ public sealed partial class VideoViewModel
 
     public string WholeTip => "What you type is about this video. Pick something in it to ask about that.";
 
-    /// <summary>A strip of film.</summary>
+    /// <summary>A clapperboard (Material's movie icon).</summary>
     public string WholeIcon => "M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z";
 
     // Whole follows the name and the joined video, wherever those are told.

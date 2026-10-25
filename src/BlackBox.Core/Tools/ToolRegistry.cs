@@ -41,7 +41,7 @@ public sealed class ToolRegistry
         yield return new SshTool();
         yield return new CopyTool();
         yield return new ComfyTool();
-        yield return new VideoTool();
+        yield return new VideoGeneratorTool();
         if (includeWebTools)
         {
             yield return new WebSearchTool();

@@ -68,7 +68,7 @@ public sealed partial class MainWindowViewModel
         new(FileInspectorName, "See a file from the chat beside it: documents, spreadsheets, pictures, video, sound, 3D, code", 760, 420, 0,
             vm => new FileInspectorViewModel(vm._previews, vm, vm._paths.PastedDir)),
         new("Video generator", "Plan a video shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960, 770, 600,
-            vm => new VideoViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
+            vm => new VideoGeneratorViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
     ];
 
     private const string FileInspectorName = "File inspector";
@@ -227,7 +227,7 @@ public sealed partial class MainWindowViewModel
                      .Where(p => string.Equals(Path.GetFullPath(p.Path), path, StringComparison.OrdinalIgnoreCase)))
             if (preview.LetGo() is { } playback)
                 playing.Add(playback);
-        if (Toolkit is VideoViewModel video && video.LetGo(path) is { } shown)
+        if (Toolkit is VideoGeneratorViewModel video && video.LetGo(path) is { } shown)
             playing.Add(shown);
         return playing;
     }

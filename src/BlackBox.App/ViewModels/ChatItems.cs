@@ -65,7 +65,7 @@ public sealed class UserMessageItem(string text, IReadOnlyList<string>? files = 
     public string Text { get; } = text;
     public bool HasText => Text.Length > 0;
 
-    /// <summary>Where it was written, when not in the chat's box ("Video generator · The Fox and the Moon · shot 2").</summary>
+    /// <summary>Where it was written, when not in the chat's box ("Video generator · The Fox and the Moon · clip 2").</summary>
     public string? Via { get; init; }
 
     /// <summary>Shown over its words only for a message saved before tools gave cards: those show it now.</summary>

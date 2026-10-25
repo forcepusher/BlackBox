@@ -84,7 +84,7 @@ public sealed class ToolContext
 
     /// <summary>
     /// Asks the model about a picture in a conversation of its own, without the run's history:
-    /// a fresh look, as at a clip's frames to judge it (see <see cref="VideoTool"/>). The answer, or
+    /// a fresh look, as at a clip's frames to judge it (see <see cref="VideoGeneratorTool"/>). The answer, or
     /// null when it couldn't be had. Set by the agent session; null when the model can't see.
     /// </summary>
     public Func<IReadOnlyList<byte[]>, string, CancellationToken, Task<string?>>? Ask { get; set; }

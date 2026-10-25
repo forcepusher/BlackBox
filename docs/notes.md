@@ -240,9 +240,9 @@ from memory, and those were often wrong, so the model doesn't work from memory h
   node) adds a note.
 - **A guide to video prompts** (`Comfy/Guides/video-prompts.md`, built into the exe;
   `action=guide`): LTX's own prompting guide (docs.ltx.io) and motion control, and what ruined
-  BlackBox's takes: say which way things move on screen, from where to where, how far, which body
+  BlackBox's clips: say which way things move on screen, from where to where, how far, which body
   part, what stays still, who holds what; one main action per 3 to 4 seconds; the camera move named
-  first; how to fix a take that went wrong; motion tracks (the Motion Control IC-LoRA) when a path
+  first; how to fix a clip that went wrong; motion tracks (the Motion Control IC-LoRA) when a path
   must be followed exactly; and, from the LTX template thread's tests: a clip longer than its action
   holds the opening pose (a wave timed at 3 s stood still 3 s in a 5 s clip), a negative prompt does
   nothing at the distilled templates' CFG 1, and a first frame put in place
@@ -347,7 +347,7 @@ players are not touched by this: they play with sound when asked. Playing, a vid
 open, so a file the video tool is about to write over (a shot made again, the song, the video joined
 again, a version put back) is let go of first (`MediaRelease`): every window's players of it stop, and
 the writer waits until they have. Making a shot again failed with "the process cannot access the
-file" while its first take played in the chat (2026-10-24, found driving the panel with ComfyUI).
+file" while its first clip played in the chat (2026-10-24, found driving the panel with ComfyUI).
 
 A click on a picture or a video (a preview, a picture that came with a message or waits under the
 box to go with one, a tool's screenshot) opens the full-screen viewer on the chat's screen, rather than another program: a
@@ -726,7 +726,7 @@ setting, which the templates otherwise fix at 95 or 120. Three songs are made wi
 one that sounds best for the part the video uses is kept (the same settings scored 3.3 to 4.2 by the
 seed alone), its seed saved in the storyboard.
 
-**Listening** is what no one should have to do for every take, so a song, and the video's sound, are
+**Listening** is what no one should have to do for every try, so a song, and the video's sound, are
 judged by [SongEval](https://github.com/ASLP-lab/SongEval): a scorer trained on 2,400 songs rated
 by musicians, over the MuQ music model, scoring coherence, musicality, memorability, structure and
 natural vocals from 1 to 5. Meta's Audiobox Aesthetics was tried first and rated the two songs the
@@ -951,12 +951,12 @@ picked piece's panel are gone: the user says those in the chat. **Make the video
 "Make the video." as typed. A piece's request also says to fix what its fresh look finds wrong and
 make it again, up to twice, as the window's own director did with every piece: told only to say how
 it came out, the agent reported the fault and left the piece so. With Claude Opus 5.5 (2026-10-23), Make it on a 3 s shot
-of a paper boat in a gutter: the looks found the first take nearly a still picture (the start
+of a paper boat in a gutter: the looks found the first try nearly a still picture (the start
 frame had the boat on the dry kerb), so it made the frame again with the boat in the water,
 changed the camera to suit it and the seed, made the shot again, and all four looks passed, in
 7 minutes. qwen3.8 the same morning, on a 4 s shot of the same idea: one look said the boat drifted
 the wrong way (left and up); it looked at the frames itself, judged that the boat drifts down a
-gutter that recedes up the picture, kept the take and said why. The clause is a guideline the model
+gutter that recedes up the picture, kept the clip and said why. The clause is a guideline the model
 weighs, not a rule: the user's way of steering it.
 During a run they wait above the box as anything typed in the chat does. The user watches every step
 in the chat, with each frame and clip as it is made, and stops it there. One still waiting when the
@@ -1060,12 +1060,12 @@ that nobody asked for. On the fox video's original takes it read the floating fo
 of the height in shot 2's first two seconds) and shot 1's moon sliding (the top middle right by 21%
 of the width over 5 s; by the frames, from 28% to 52% across). It takes about a second a shot.
 On six fox clips, right and wrong (two played backwards, so the head goes down and the jaw closes;
-the floating take; the sliding moon), the movement look asked for a redo on all four wrong ones
+the floating clip; the sliding moon), the movement look asked for a redo on all four wrong ones
 and passed the jaw opening as asked; without the measurement it passed the head
 going down. It also failed the fixed shot 1, whose fox looks up and then back down, which nothing
 asked for. With the measurement the steadiness look named the user's fault in its words: "the fox
 floats upward off the snow". The measurement doesn't cost the behaviour look what it caught before:
-on the spaghetti take with the man frozen face-down in his plate for its last 2.5 s it asks for a
+on the spaghetti clip with the man frozen face-down in his plate for its last 2.5 s it asks for a
 redo with the measurement as without ("a bent-double, head-in-the-plate pose from ~1.9 s to 4.0 s").
 
 **Pictures first, LTX's sounds, the song's music.** Every shot starts on a frame a picture model
@@ -1076,7 +1076,7 @@ shot's prompt ends with what is heard; LTX is given it with "No music." unless i
 (not part of the shot's stamp, so made shots stay up to date), and under a song the shots' own
 sound is kept at half rather than left out.
 
-**The shot looks scored on takes labelled by eye.** Ten takes from three videos, six bad (the girl
+**The shot looks scored on clips labelled by eye.** Ten clips from three videos, six bad (the girl
 walking back from the mailbox twice, one with a see-through double; a wave frozen at its end; a
 splash from nowhere; a café cup vanishing; the boy holding still 2 s before his wave) and four good:
 the four looks together failed all six bad ones. Of the good ones they failed one where a girl
@@ -1102,7 +1102,7 @@ clip is left as it is and the note says so. About 9 s for a 5 s shot.
 **A shot that goes on from where the one before ends.** The edit model that makes a shot's last
 frame from its first changes a pose, a face or what someone holds well, and moves someone across
 the frame badly: asked for the girl of "The Letter in the Rain" "now beside the mailbox", it left
-her where she stood, and every take of the shot walked her to the mailbox and back (its looks
+her where she stood, and every try of the shot walked her to the mailbox and back (its looks
 caught each one: walking back, teleporting, a see-through double). So a shot where someone walks
 far gets no last frame, and the shot after can start on a frame taken from where its clip ends
 (`{"id": "f5", "of": "s1"}`, no prompt): the clip's last picture, made once that shot is made and
@@ -1131,8 +1131,8 @@ the switch in 1 run of 2; in the middle of the climb the boy was a small figure 
 
 From the merged develop, "a woman in a blue wool coat at a cafe table by the window lifts her cup of
 coffee to her lips and takes a sip; the camera holds still" became one 4 s shot from a frame with
-the cup just leaving the saucer: the shot's look failed its first take for a second cup on the
-saucer vanishing, the director took that cup out of the picture, and the second take passed every
+the cup just leaving the saucer: the shot's look failed its first try for a second cup on the
+saucer vanishing, the director took that cup out of the picture, and the second try passed every
 look and the video's, its camera still (measured), in 21 minutes.
 
 **Full screen.** A click on the picture or video in the panel's viewer opens it in the chat's
@@ -1205,11 +1205,11 @@ A fresh look at a shot took qwen3.8 (LM Studio) under a minute.
 (a leap from a first to a last frame, then a cut by dissolve to a howl from a first frame alone)
 with an instrumental song, handed to qwen3.8 as the window's **Make the video** words it: done in
 34 minutes, 21 model calls, 20 tool calls, no errors. It made the frames in the order they depend
-on each other, then the song, then each shot with `tries=3`. The leap passed its first take; the
+on each other, then the song, then each shot with `tries=3`. The leap passed its first try; the
 howl failed three (the howl broke off, the tail vanished, the framing drifted wider than the
 close-up), passed after the agent made its prompt plainer, and the whole-video check then found
 the fox's world different between the shots (a bare mound, then pine woods): the agent remade the
-first two frames with the woods, made the leap again (its second take passed), joined, and the
+first two frames with the woods, made the leap again (its second try passed), joined, and the
 check passed, saying the moon changes sides at the cut. Every frame and clip kept its first frame
 0.98 alike to the storyboard's.
 

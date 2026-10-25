@@ -16,7 +16,7 @@ namespace BlackBox.Core.Tools;
 /// a sheet of its frames: the model that made a clip judged its own too kindly (four bunnies it
 /// called mature and true to the sheet, which the user saw as a chubby teenager).
 /// </summary>
-public sealed class VideoTool : Tool
+public sealed class VideoGeneratorTool : Tool
 {
     public override string Name => "video";
 
@@ -264,7 +264,7 @@ public sealed class VideoTool : Tool
             _maker = new VideoMaker(hub, ctx.Media) { Judge = ctx.ToolsDirectory is { } tools ? new SongJudge(Path.Combine(tools, "songeval")) : null };
             // From before it may be started: when the task is over, a ComfyUI BlackBox started is closed.
             _maker.Use();
-            ctx.AfterRun(nameof(VideoTool), () =>
+            ctx.AfterRun(nameof(VideoGeneratorTool), () =>
             {
                 var maker = _maker;
                 _maker = null;

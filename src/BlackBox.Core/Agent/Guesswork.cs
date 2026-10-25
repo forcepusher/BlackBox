@@ -276,7 +276,7 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
         ShellTool or SshTool or WriteFileTool or EditFileTool => true,
         McpTool mcp => mcp.Risk != ToolRisk.ReadOnly,
         ComfyTool => action is "run",
-        VideoTool => action is "frame" or "shot" or "sound" or "join",
+        VideoGeneratorTool => action is "frame" or "shot" or "sound" or "join",
         _ => false,
     };
 

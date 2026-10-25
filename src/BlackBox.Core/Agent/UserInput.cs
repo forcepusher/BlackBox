@@ -15,7 +15,7 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
 
     /// <summary>
     /// Where it was written, when not in the chat's own box ("Video generator · The Fox and the Moon ·
-    /// shot 2"): shown over it in the chat. Null for a message typed in the chat.
+    /// clip 2"): shown over it in the chat. Null for a message typed in the chat.
     /// </summary>
     public string? Via { get; init; }
 

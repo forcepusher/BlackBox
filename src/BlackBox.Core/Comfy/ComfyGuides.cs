@@ -6,7 +6,7 @@ namespace BlackBox.Core.Comfy;
 /// <summary>
 /// How to write what ComfyUI's models are given, as BlackBox carries it (Comfy/Guides/*.md, built
 /// in). The video guide is LTX's own advice (docs.ltx.io's prompting guide and motion control) and
-/// what went wrong in BlackBox's videos: the user found most takes ruined by motion going the wrong
+/// what went wrong in BlackBox's videos: the user found most clips ruined by motion going the wrong
 /// way, poses bending wrong and props moving by themselves, and LTX drawing its own first picture
 /// badly. The comfyui tool shows it with a video workflow, and the video tool with the storyboard
 /// guide (how to write a video's frames, shots, lines and song).
