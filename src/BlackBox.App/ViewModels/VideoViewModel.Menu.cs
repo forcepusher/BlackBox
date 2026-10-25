@@ -49,14 +49,26 @@ public sealed partial class VideoViewModel
         var items = new List<VideoMenuItem?>
         {
             new("Generate", free, () => Generate(shot)),
-            new("Start frame", shot.First is not null, () => Show(shot.First)),
-            new("End frame", shot.Last is not null, () => Show(shot.Last)),
             null,
             new("Delete", free, () => DeleteShot(shot)),
         };
         AddVersions(items, shot);
         items.Add(null);
         items.Add(new("Create", free, AddShot));
+        return items;
+    }
+
+    /// <summary>What right-clicking a clip's start or end frame offers; File… and Generate are on a slot not made too, when it has room.</summary>
+    public IReadOnlyList<VideoMenuItem?> MenuFor(FrameSlot slot)
+    {
+        var free = !Busy(_board.Folder);
+        var items = new List<VideoMenuItem?>
+        {
+            new("File…", free && slot.Frame is not { IsMade: true }, () => _ = PickFileForAsync(slot)),
+            new("Generate", free, () => Generate(FrameFor(slot))),
+        };
+        if (slot.Frame is { } frame)
+            AddVersions(items, frame);
         return items;
     }
 
@@ -201,6 +213,56 @@ public sealed partial class VideoViewModel
         }
         Drop([file]);
     }
+    /// <summary>File… on a clip's frame: the picture picked is that frame, cut to the video's size, at once.</summary>
+    private async Task PickFileForAsync(FrameSlot slot)
+    {
+        if (PickFiles is null || (await PickFiles("image")).FirstOrDefault() is not { } picture)
+            return;
+        var item = FrameFor(slot);
+        try
+        {
+            // The user's picture, where it is, as the chat gives one ("file"); not the clip before's end any more.
+            (item.Frame.File, item.Frame.Of) = (picture, null);
+            Changed();
+            SaveNow(force: true);
+            VideoMaker.TakeFile(_board, item.Frame);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or VideoException)
+        {
+            ShowError($"The picture couldn't be used: {ex.Message}", ex);
+        }
+        Rebuild();
+        Show(_frames.GetValueOrDefault(item.Id));
+    }
+
+    /// <summary>
+    /// A clip's frame at a slot; a clip with none there gets a new one, made with what the clip's other
+    /// frame is (or the frames before), for the user to say in the chat what it shows.
+    /// </summary>
+    private FrameItem FrameFor(FrameSlot slot)
+    {
+        if (slot.Frame is { } had)
+            return had;
+        SaveNow();
+        var shot = slot.Shot.Shot;
+        var near = _board.Frame(shot.First) ?? _board.Frame(shot.Last);
+        var frame = new VideoFrame
+        {
+            Id = _board.NewId("f"), Seed = Storyboard.NewSeed(),
+            Model = near?.Model ?? FrameModelNear(_board.Shots.TakeWhile(s => s != shot).LastOrDefault()),
+            From = [.. near?.From ?? FromNear(_board.Shots.TakeWhile(s => s != shot).LastOrDefault())],
+        };
+        _board.Frames.Add(frame);
+        if (slot.IsEnd)
+            shot.Last = frame.Id;
+        else
+            shot.First = frame.Id;
+        Changed();
+        SaveNow(force: true);
+        Rebuild();
+        return _frames[frame.Id];
+    }
+
 
     /// <summary>Generate: the piece goes into the chat's box; with what to make said, BlackBox makes it, else the user says what it should be.</summary>
     private void Generate(IVideoPiece piece)

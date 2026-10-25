@@ -162,6 +162,15 @@ public partial class VideoPanel : UserControl
         }
     }
 
+    private void OnSlotMenu(object? sender, ContextRequestedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is FrameSlot slot)
+        {
+            OpenMenu(Vm.MenuFor(slot), sender as Control);
+            e.Handled = true;
+        }
+    }
+
     private void OnSoundMenu(object? sender, ContextRequestedEventArgs e)
     {
         if ((sender as Control)?.DataContext is SoundItem sound)
@@ -323,6 +332,27 @@ public partial class VideoPanel : UserControl
         e.Pointer.Capture(handle);
         e.Handled = true;
         Vm.Show(shot);
+    private void OnSlotClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is FrameSlot slot)
+            Vm.Show(slot);
+        e.Handled = true;
+    }
+
+    private void OnSlotFile(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is FrameSlot slot && Vm.MenuFor(slot).FirstOrDefault() is { Enabled: true } file)
+            file.Do();
+        e.Handled = true;
+    }
+
+    private void OnSlotGenerate(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is FrameSlot slot && Vm.MenuFor(slot).ElementAtOrDefault(1) is { Enabled: true } generate)
+            generate.Do();
+        e.Handled = true;
+    }
+
     }
 
     private void OnHandleMoved(object? sender, PointerEventArgs e)

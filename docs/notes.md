@@ -812,12 +812,25 @@ click elsewhere keeps it, Esc doesn't; a generated image's picture and what goes
 with it, an image file's frames' `from` told the new name), Delete (to the Recycle Bin,
 `FileSystem.DeleteFile`/`DeleteDirectory` with `SendToRecycleBin`; Windows only for now: a clip with
 the frames only it uses, `Storyboard.DeleteShot`, a card or sound with its .json, workflow and
-versions), and Versions; a clip also Start frame and End frame, which pick its frames. The video's
+versions), and Versions. The video's
 name at the top opens the videos' menu: each video to open, New video, Rename (renaming the open video
 lets go of what the viewer plays first: Windows doesn't move a folder a file in it is open from),
 Delete (the video changed last opens) and Show in Explorer. Nothing is renamed or deleted while the
 chat is at work on the video. A line over the timeline says what right-click and dropping do, until
 the status line has something to say: nothing showed the menu was there (the user, 2026-10-24).
+
+**A clip's frames** sit as slots at its block's ends (`FrameSlot`, 2026-10-26: the user found them
+only on the clip's right-click menu, which went then, as two controls for one thing). Made, a slot
+shows the frame; not, a dashed place with **File…** (the picture picked is the frame's `file`, where
+it is, as the chat gives one, and `VideoMaker.TakeFile` cuts it to the video's size at once; it is no
+longer the clip before's end, `of`) and **Generate**, as a new card. A click picks the frame into the
+chat's box ("Start of clip 1 · f1.png"); right-click has File…, Generate and Versions. A clip with no
+frame there (no `last`: it goes where its prompt takes it) gets a new one, made with what the clip's
+other frame is, when its slot is used. A slot is 72 DIPs wide at most, 4 from the block's left, 4
+between, 8 from the right past the length handle; narrower clips get half the room each and show
+File… and Generate only on the right-click menu, and under 32 DIPs (0.5 s at the default zoom) the
+slots go: the clip is picked whole there. What happens in a clip not made shows between its frames
+only with 40 DIPs for it (the tooltip has it all): at 20 it broke words letter by letter.
 
 **Sound lines** ("Sound line 1" on the timeline, the user's word since 2026-10-25; sound tracks before), as a video editor has sound tracks (the user, 2026-10-24: "Make the sounds line into an
 overlay sound editor", "Same as with images, either generated or file copy of a sound", "kinda like

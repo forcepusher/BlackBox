@@ -58,6 +58,9 @@ public sealed partial class VideoViewModel
             Choose(new VideoPick(card.Path, $"Image file · {Path.GetFileName(card.Path)}"));
     }
 
+    /// <summary>A clip's start or end frame clicked: picked (a clip with none there gets one).</summary>
+    public void Show(FrameSlot slot) => Show(FrameFor(slot));
+
     /// <summary>An earlier version of a piece, from its right-click menu: shown, to put back with Use this version.</summary>
     private void ShowVersion(IVideoPiece piece, VideoVersion version) =>
         Choose(new VideoPick(version.File, $"Version {version.Number} of {Lower(piece.Title)} · {Path.GetFileName(version.File)}") { Version = version, VersionOf = piece });

@@ -73,6 +73,35 @@
       <Setter Property="FontSize" Value="11" />
       <Setter Property="MinHeight" Value="0" />
     </Style>
+    <!-- A clip's start or end frame: its picture, else a dashed place; the one picked has the accent around it. -->
+    <Style Selector="Border.slot">
+      <Setter Property="Background" Value="#0B0C0E" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Rectangle.slot">
+      <Setter Property="Stroke" Value="{StaticResource BbBorder}" />
+      <Setter Property="StrokeThickness" Value="1.5" />
+      <Setter Property="StrokeDashArray" Value="4,3" />
+      <Setter Property="RadiusX" Value="4" />
+      <Setter Property="RadiusY" Value="4" />
+    </Style>
+    <Style Selector="Button.slot:pointerover Border.slot">
+      <Setter Property="BorderBrush" Value="{StaticResource BbMuted}" />
+    </Style>
+    <Style Selector="Button.slot:pointerover Rectangle.slot">
+      <Setter Property="Stroke" Value="{StaticResource BbMuted}" />
+    </Style>
+    <Style Selector="Border.slot.selected">
+      <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="Rectangle.slot.selected">
+      <Setter Property="Stroke" Value="{StaticResource BbAccent}" />
+      <Setter Property="StrokeThickness" Value="2" />
+    </Style>
     <Style Selector="Button.thumb">
       <Setter Property="Padding" Value="0" />
       <Setter Property="Background" Value="Transparent" />
@@ -92,6 +121,26 @@
   </UserControl.Styles>
 
   <UserControl.DataTemplates>
+    <!-- A clip's start or end frame at its block's end: clicked, the frame is picked; not made, File… or Generate when it has room. -->
+    <DataTemplate DataType="vm:FrameSlot">
+      <Button Classes="pick slot" Width="{Binding Shot.SlotWidth}" VerticalAlignment="Stretch" Click="OnSlotClick" ContextRequested="OnSlotMenu"
+              HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
+              ToolTip.Tip="{Binding Tip}" AutomationProperties.Name="{Binding Name}">
+        <Panel>
+          <Border Classes="slot" Classes.selected="{Binding Frame.IsSelected, FallbackValue=False}"
+                  IsVisible="{Binding Frame.Thumbnail, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}">
+            <Image Source="{Binding Frame.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
+          </Border>
+          <Panel IsVisible="{Binding Frame.Thumbnail, Converter={x:Static ObjectConverters.IsNull}, FallbackValue=True}">
+            <Rectangle Classes="slot" Classes.selected="{Binding Frame.IsSelected, FallbackValue=False}" />
+            <StackPanel IsVisible="{Binding Shot.SlotsRoomy}" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center">
+              <Button Classes="choice" Content="File…" Click="OnSlotFile" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" ToolTip.Tip="Use a picture of yours" />
+              <Button Classes="choice" Content="Generate" Click="OnSlotGenerate" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" ToolTip.Tip="BlackBox makes it: say in the chat what it should be" />
+            </StackPanel>
+          </Panel>
+        </Panel>
+      </Button>
+    </DataTemplate>
     <!-- What the viewer shows: a clip or the video playing, a sound, a picture, a card for what has none. -->
     <DataTemplate DataType="vm:VideoPreview">
       <DockPanel>
@@ -301,20 +350,22 @@
                           <Border Classes="block" Classes.selected="{Binding IsSelected}" Width="{Binding BlockWidth}" Height="104" Cursor="Hand">
                             <Panel>
                               <DockPanel>
-                                <Grid DockPanel.Dock="Top" Height="20" ColumnDefinitions="Auto,*,Auto" Margin="7,0,10,0">
+                                <Grid DockPanel.Dock="Top" Height="20" ColumnDefinitions="Auto,*,Auto" Margin="8,0,12,0">
                                   <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
-                                  <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" Margin="6,0" VerticalAlignment="Center" />
+                                  <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" Margin="4,0" VerticalAlignment="Center" />
                                   <TextBlock Grid.Column="2" Text="{Binding LengthText}" Classes="muted" FontSize="12" VerticalAlignment="Center" />
                                 </Grid>
-                                <TextBlock DockPanel.Dock="Bottom" Height="18" Text="{Binding State}" FontSize="11" Margin="7,2,10,0" Classes="muted" Classes.error="{Binding IsError}" TextTrimming="CharacterEllipsis" />
-                                <Panel ClipToBounds="True">
-                                  <Image Source="{Binding Strip}" Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Top" IsVisible="{Binding HasStrip}" />
-                                  <Grid ColumnDefinitions="*,*" IsVisible="{Binding !HasStrip}" Opacity="0.65">
-                                    <Image Source="{Binding First.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
-                                    <Image Grid.Column="1" Source="{Binding Last.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
-                                  </Grid>
-                                  <TextBlock Text="{Binding Summary}" IsVisible="{Binding !IsMade}" Classes="muted" FontSize="11" TextWrapping="Wrap" Margin="7,2,8,0" MaxLines="3" TextTrimming="CharacterEllipsis" />
-                                </Panel>
+                                <TextBlock DockPanel.Dock="Bottom" Height="20" Text="{Binding State}" FontSize="11" Margin="8,0,12,0" Classes="muted" Classes.error="{Binding IsError}" TextTrimming="CharacterEllipsis" />
+                                <!-- The start frame, the clip (its frames once made, else what happens in it), the end frame;
+                                     the end's margin clears the edge's handle. -->
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                  <ContentControl Content="{Binding StartSlot}" IsVisible="{Binding HasSlots}" Margin="4,4,0,4" VerticalContentAlignment="Stretch" />
+                                  <Panel Grid.Column="1" Margin="4" ClipToBounds="True">
+                                    <Image Source="{Binding Strip}" Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Top" IsVisible="{Binding HasStrip}" />
+                                    <TextBlock Text="{Binding Summary}" IsVisible="{Binding ShowsSummary}" Classes="muted" FontSize="11" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                                  </Panel>
+                                  <ContentControl Grid.Column="2" Content="{Binding EndSlot}" IsVisible="{Binding HasSlots}" Margin="0,4,8,4" VerticalContentAlignment="Stretch" />
+                                </Grid>
                               </DockPanel>
                               <Border Classes="handle" Width="7" HorizontalAlignment="Right" Cursor="SizeWestEast" ToolTip.Tip="Drag to make it longer or shorter"
                                       PointerPressed="OnHandlePressed" PointerMoved="OnHandleMoved" PointerReleased="OnHandleReleased" PointerCaptureLost="OnHandleCaptureLost" />

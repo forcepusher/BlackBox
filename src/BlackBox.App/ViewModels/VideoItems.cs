@@ -125,13 +125,36 @@ public sealed partial class ShotItem(VideoViewModel video, VideoShot shot) : Obs
     [ObservableProperty]
     private FrameItem? _last;
 
+    /// <summary>Its start and end frames as slots at the block's ends: clicked, the frame is picked; not made, File… or Generate.</summary>
+    public FrameSlot StartSlot => _startSlot ??= new(this, false);
+
+    public FrameSlot EndSlot => _endSlot ??= new(this, true);
+
+    private FrameSlot? _startSlot, _endSlot;
+
     // ---- where it sits on the timeline ----------------------------------------------------------------
 
     [ObservableProperty]
     private double _x;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SlotWidth), nameof(HasSlots), nameof(SlotsRoomy), nameof(ShowsSummary))]
     private double _blockWidth;
+
+    /// <summary>The widest a frame slot is: room for File… and Generate.</summary>
+    public const double FullSlotWidth = 72;
+
+    /// <summary>How wide each frame slot is: full, else half the block less its margins (4 left, 4 between, 8 right past the edge's handle).</summary>
+    public double SlotWidth => Math.Min(FullSlotWidth, Math.Floor((BlockWidth - 16) / 2));
+
+    /// <summary>The block has room for its frame slots; a narrower one is picked whole (zoom in to reach its frames).</summary>
+    public bool HasSlots => SlotWidth >= 8;
+
+    /// <summary>The slots are full size: one not made shows File… and Generate (a narrower one has them on its right-click menu).</summary>
+    public bool SlotsRoomy => SlotWidth >= FullSlotWidth;
+
+    /// <summary>What happens in it shows between its frames while it isn't made, with room for a word a line (its tooltip has it all).</summary>
+    public bool ShowsSummary => !IsMade && (HasSlots ? BlockWidth - 2 * SlotWidth - 22 : BlockWidth - 10) >= 40;
 
     /// <summary>Its clip as a row of frames, once made.</summary>
     [ObservableProperty]
@@ -167,10 +190,27 @@ public sealed partial class ShotItem(VideoViewModel video, VideoShot shot) : Obs
     private bool _isWorking;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsSummary))]
     private bool _isMade;
 
     [ObservableProperty]
     private bool _isSelected;
+}
+
+/// <summary>
+/// A clip's start or end frame as a slot at its block's end: the frame's picture once made, else a
+/// dashed place offering File… or Generate. A clip with no frame there yet gets one when the slot is used.
+/// </summary>
+public sealed class FrameSlot(ShotItem shot, bool end)
+{
+    public ShotItem Shot { get; } = shot;
+    public bool IsEnd { get; } = end;
+    public FrameItem? Frame => IsEnd ? Shot.Last : Shot.First;
+
+    /// <summary>"Start frame", "End frame".</summary>
+    public string Name => IsEnd ? "End frame" : "Start frame";
+
+    public string Tip => $"{Name}: click to pick it; right-click for File… or Generate";
 }
 
 /// <summary>

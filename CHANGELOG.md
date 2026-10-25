@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Every clip in Video generator shows its start and end frames at its ends: click one to pick it, or,
+  not made yet, File… or Generate on it. They left the clip's right-click menu.
 - In File inspector, drag a box over a PDF page, a picture or a video frame to ask about that area:
   it goes into your message as "Area on page 2", and the model gets a picture of it with where it is.
   **Area** in the panel's bar freezes a text or an Office file's preview to drag over it too.

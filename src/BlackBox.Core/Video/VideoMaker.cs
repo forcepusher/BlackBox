@@ -123,13 +123,10 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
         // pictures made from it are made the video's size (see VideoRoles.SizeFromBlank): cut to the
         // video's frame, a square picture of a character lost its head, and so did every frame made from it.
         Action<string, string> save = frame.Reference ? SaveReference : (source, to) => SaveFrame(source, to, board.Width, board.Height);
-        if (frame.File is { Length: > 0 } file)
+        if (frame.File is { Length: > 0 })
         {
             var started = DateTime.UtcNow;
-            if (!File.Exists(file))
-                throw new VideoException($"{frame.Label}'s picture {file} isn't there.");
-            await Task.Run(() => save(file, target), ct).ConfigureAwait(false);
-            WriteStamp(board.FrameMeta(frame), FrameStamp(board, frame), null, null);
+            await Task.Run(() => TakeFile(board, frame), ct).ConfigureAwait(false);
             return new VideoMade(target, null, null, DateTime.UtcNow - started, []);
         }
         if (frame.Prompt.Trim().Length == 0)
@@ -807,6 +804,22 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
                 && double.TryParse(length, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds >= SongSeconds(board, sound)));
 
     // ---- pictures and sound --------------------------------------------------------------------------------
+
+    /// <summary>
+    /// A frame made from the user's picture (<see cref="VideoFrame.File"/>), at once: a frame of a
+    /// shot cut to the video's size, a reference at its own shape, and marked made from it.
+    /// </summary>
+    public static void TakeFile(Storyboard board, VideoFrame frame)
+    {
+        if (frame.File is not { Length: > 0 } file || !File.Exists(file))
+            throw new VideoException($"{frame.Label}'s picture {frame.File} isn't there.");
+        var target = board.FramePicture(frame);
+        if (frame.Reference)
+            SaveReference(file, target);
+        else
+            SaveFrame(file, target, board.Width, board.Height);
+        WriteStamp(board.FrameMeta(frame), FrameStamp(board, frame), null, null);
+    }
 
     /// <summary>
     /// A picture scaled to cover the video's frame and cut to it in the middle, saved as PNG: every
