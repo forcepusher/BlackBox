@@ -3,8 +3,8 @@ using Xunit;
 
 namespace BlackBox.Core.Tests;
 
-// The Inspect file panel: which way it shows a file, and the tables and text it draws itself.
-public class InspectFileTests : IDisposable
+// The File inspector panel: which way it shows a file, and the tables and text it draws itself.
+public class FileInspectorTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("bb-inspect-").FullName;
 
@@ -18,37 +18,37 @@ public class InspectFileTests : IDisposable
     }
 
     [Theory]
-    [InlineData("notes.md", InspectKind.Markdown)]
-    [InlineData("data.csv", InspectKind.Table)]
-    [InlineData("data.TSV", InspectKind.Table)]
-    [InlineData("report.pdf", InspectKind.Document)]
-    [InlineData("letter.docx", InspectKind.Document)]
-    [InlineData("sheet.xlsx", InspectKind.Document)]
-    [InlineData("deck.pptx", InspectKind.Document)]
-    [InlineData("page.html", InspectKind.Document)]
-    [InlineData("photo.jpg", InspectKind.Picture)]
-    [InlineData("clip.mp4", InspectKind.Media)]
-    [InlineData("loop.gif", InspectKind.Media)]
-    public void Kinds_by_extension(string name, InspectKind kind) => Assert.Equal(kind, InspectFile.KindOf(Path.Combine(_dir, name)));
+    [InlineData("notes.md", InspectorKind.Markdown)]
+    [InlineData("data.csv", InspectorKind.Table)]
+    [InlineData("data.TSV", InspectorKind.Table)]
+    [InlineData("report.pdf", InspectorKind.Document)]
+    [InlineData("letter.docx", InspectorKind.Document)]
+    [InlineData("sheet.xlsx", InspectorKind.Document)]
+    [InlineData("deck.pptx", InspectorKind.Document)]
+    [InlineData("page.html", InspectorKind.Document)]
+    [InlineData("photo.jpg", InspectorKind.Picture)]
+    [InlineData("clip.mp4", InspectorKind.Media)]
+    [InlineData("loop.gif", InspectorKind.Media)]
+    public void Kinds_by_extension(string name, InspectorKind kind) => Assert.Equal(kind, FileInspector.KindOf(Path.Combine(_dir, name)));
 
     [Fact]
     public void Other_files_are_text_unless_they_hold_binary()
     {
-        Assert.Equal(InspectKind.Text, InspectFile.KindOf(Write("Program.cs", "class A { }\n")));
-        Assert.Equal(InspectKind.Text, InspectFile.KindOf(Write("README", "plain words\n")));
+        Assert.Equal(InspectorKind.Text, FileInspector.KindOf(Write("Program.cs", "class A { }\n")));
+        Assert.Equal(InspectorKind.Text, FileInspector.KindOf(Write("README", "plain words\n")));
         var binary = Path.Combine(_dir, "blob.bin");
         File.WriteAllBytes(binary, [0x4D, 0x5A, 0x00, 0x01, 0x02]);
-        Assert.Equal(InspectKind.None, InspectFile.KindOf(binary));
+        Assert.Equal(InspectorKind.None, FileInspector.KindOf(binary));
         // UTF-16 has zero bytes between its letters, but none once read in its own encoding.
         var wide = Path.Combine(_dir, "wide.log");
         File.WriteAllText(wide, "hello\n", System.Text.Encoding.Unicode);
-        Assert.Equal(InspectKind.Text, InspectFile.KindOf(wide));
+        Assert.Equal(InspectorKind.Text, FileInspector.KindOf(wide));
     }
 
     [Fact]
     public void A_csv_becomes_a_table_with_quoted_fields_kept_whole()
     {
-        var (markdown, rows, columns) = InspectFile.Table(Write("t.csv", "name,note\n\"Smith, J\",\"says \"\"hi\"\"\"\nLee,\"two\nlines\"\nPipe,a|b\n"));
+        var (markdown, rows, columns) = FileInspector.Table(Write("t.csv", "name,note\n\"Smith, J\",\"says \"\"hi\"\"\"\nLee,\"two\nlines\"\nPipe,a|b\n"));
         Assert.Equal(3, rows);
         Assert.Equal(2, columns);
         Assert.Equal(
@@ -58,7 +58,7 @@ public class InspectFileTests : IDisposable
     [Fact]
     public void A_csv_with_semicolons_is_split_at_them()
     {
-        var (markdown, rows, columns) = InspectFile.Table(Write("eu.csv", "Name;Preis\nKaffee;2,50\n"));
+        var (markdown, rows, columns) = FileInspector.Table(Write("eu.csv", "Name;Preis\nKaffee;2,50\n"));
         Assert.Equal((1, 2), (rows, columns));
         Assert.Contains("| Kaffee | 2,50 |", markdown);
     }
@@ -66,46 +66,46 @@ public class InspectFileTests : IDisposable
     [Fact]
     public void A_long_table_shows_its_first_rows_and_counts_them_all()
     {
-        var text = "n\n" + string.Concat(Enumerable.Range(1, InspectFile.MaxRows + 20).Select(i => $"{i}\n"));
-        var (markdown, rows, _) = InspectFile.Table(Write("long.csv", text));
-        Assert.Equal(InspectFile.MaxRows + 20, rows);
-        Assert.Equal(InspectFile.MaxRows + 2, markdown.Count(c => c == '\n'));
+        var text = "n\n" + string.Concat(Enumerable.Range(1, FileInspector.MaxRows + 20).Select(i => $"{i}\n"));
+        var (markdown, rows, _) = FileInspector.Table(Write("long.csv", text));
+        Assert.Equal(FileInspector.MaxRows + 20, rows);
+        Assert.Equal(FileInspector.MaxRows + 2, markdown.Count(c => c == '\n'));
     }
 
     [Fact]
     public void A_peek_is_the_start_of_the_file_as_the_panel_draws_it()
     {
-        var md = InspectFile.Peek(Write("notes.md", "\n\n# Title\n" + string.Concat(Enumerable.Range(1, 40).Select(i => $"line {i}\n"))), InspectKind.Markdown);
+        var md = FileInspector.Peek(Write("notes.md", "\n\n# Title\n" + string.Concat(Enumerable.Range(1, 40).Select(i => $"line {i}\n"))), InspectorKind.Markdown);
         Assert.Null(md.Text);
         Assert.StartsWith("# Title\nline 1\n", md.Markdown);
-        Assert.Equal(InspectFile.PeekLines, md.Markdown!.Split('\n').Length);
+        Assert.Equal(FileInspector.PeekLines, md.Markdown!.Split('\n').Length);
 
-        var table = InspectFile.Peek(Write("t.csv", "a,b\n" + string.Concat(Enumerable.Range(1, 30).Select(i => $"{i},x\n"))), InspectKind.Table);
+        var table = FileInspector.Peek(Write("t.csv", "a,b\n" + string.Concat(Enumerable.Range(1, 30).Select(i => $"{i},x\n"))), InspectorKind.Table);
         Assert.StartsWith("| a | b |\n| --- | --- |\n| 1 | x |", table.Markdown);
         Assert.Equal(1 + 1 + 8, table.Markdown!.TrimEnd('\n').Split('\n').Length);
 
-        var code = InspectFile.Peek(Write("Program.cs", "class A\r\n{\r\n}\r\n"), InspectKind.Text);
+        var code = FileInspector.Peek(Write("Program.cs", "class A\r\n{\r\n}\r\n"), InspectorKind.Text);
         Assert.Equal((null, "class A\n{\n}"), code);
 
-        Assert.Equal((null, null), InspectFile.Peek(Write("blank.txt", "\n  \n"), InspectKind.Text));
+        Assert.Equal((null, null), FileInspector.Peek(Write("blank.txt", "\n  \n"), InspectorKind.Text));
     }
 
     [Fact]
     public void A_web_page_peeks_as_its_text()
     {
-        var (markdown, text) = InspectFile.Peek(Write("page.html", "<html><head><title>Prices</title><script>var x=1;</script></head><body><h1>Prices</h1><p>Coffee costs 2.50</p></body></html>"), InspectKind.Document);
+        var (markdown, text) = FileInspector.Peek(Write("page.html", "<html><head><title>Prices</title><script>var x=1;</script></head><body><h1>Prices</h1><p>Coffee costs 2.50</p></body></html>"), InspectorKind.Document);
         Assert.Null(text);
         Assert.Equal("# Prices\n\nCoffee costs 2.50", markdown);
 
-        Assert.Equal(("Only a title", null), InspectFile.Peek(Write("empty.html", "<html><head><title>Only a title</title></head><body></body></html>"), InspectKind.Document));
+        Assert.Equal(("Only a title", null), FileInspector.Peek(Write("empty.html", "<html><head><title>Only a title</title></head><body></body></html>"), InspectorKind.Document));
     }
 
     [Fact]
     public void An_excel_peek_is_its_first_sheet_as_a_table()
     {
         var text = "# Sheet \"Budget\" (B2:D4)\nB2 Category | C2 Planned | D2 Difference\nB3 Rent | C3 $1,200.00 | D3 =C3-B9 → $0.00\nB4 Fun | D4 =C4-B9 → \n(bold: B2, C2)\n(1 chart)\n# Sheet \"Other\"\nA1 Elsewhere\n";
-        Assert.Equal("| Category | Planned | Difference |\n| --- | --- | --- |\n| Rent | $1,200.00 | $0.00 |\n| Fun |  |  |\n", InspectFile.SheetTable(text));
-        Assert.Null(InspectFile.SheetTable("# Sheet \"Empty\"\n"));
+        Assert.Equal("| Category | Planned | Difference |\n| --- | --- | --- |\n| Rent | $1,200.00 | $0.00 |\n| Fun |  |  |\n", FileInspector.SheetTable(text));
+        Assert.Null(FileInspector.SheetTable("# Sheet \"Empty\"\n"));
     }
 
     [Fact]
@@ -118,15 +118,15 @@ public class InspectFileTests : IDisposable
             using (var s = zip.CreateEntry("ppt/presentation.xml").Open()) s.WriteByte(0);
             using (var s = zip.CreateEntry("docProps/thumbnail.jpeg").Open()) s.Write(png);
         }
-        Assert.Equal(png, InspectFile.SavedThumbnail(with));
+        Assert.Equal(png, FileInspector.SavedThumbnail(with));
 
         var without = Path.Combine(_dir, "letter.docx");
         using (var zip = System.IO.Compression.ZipFile.Open(without, System.IO.Compression.ZipArchiveMode.Create))
         using (var s = zip.CreateEntry("word/document.xml").Open()) s.WriteByte(0);
-        Assert.Null(InspectFile.SavedThumbnail(without));
+        Assert.Null(FileInspector.SavedThumbnail(without));
 
-        Assert.Null(InspectFile.SavedThumbnail(Write("broken.xlsx", "not a zip")));
-        Assert.Null(InspectFile.SavedThumbnail(Write("notes.md", "# hi")));
+        Assert.Null(FileInspector.SavedThumbnail(Write("broken.xlsx", "not a zip")));
+        Assert.Null(FileInspector.SavedThumbnail(Write("notes.md", "# hi")));
     }
 }
 

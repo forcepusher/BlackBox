@@ -6,7 +6,7 @@ using Avalonia.Threading;
 namespace BlackBox.App.Views;
 
 /// <summary>
-/// A window of Windows' own in the Inspect file panel, in which the previewer Windows has for a
+/// A window of Windows' own in the File inspector panel, in which the previewer Windows has for a
 /// file draws it (Word, Excel, PowerPoint, the PDF reader's, Windows' for HTML), as Explorer's preview
 /// pane does (<see cref="Platform.Windows.ShellPreview"/>). Elsewhere than on Windows it shows nothing.
 /// </summary>

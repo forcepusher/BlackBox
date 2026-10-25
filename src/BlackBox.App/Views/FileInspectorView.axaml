@@ -2,16 +2,16 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:BlackBox.App.ViewModels"
              xmlns:views="using:BlackBox.App.Views"
-             x:Class="BlackBox.App.Views.InspectFileView"
-             x:DataType="vm:InspectFileViewModel">
-  <!-- The file itself, as the Inspect file panel and the full-screen viewer show it. -->
+             x:Class="BlackBox.App.Views.FileInspectorView"
+             x:DataType="vm:FileInspectorViewModel">
+  <!-- The file itself, as the File inspector panel and the full-screen viewer show it. -->
   <Grid RowDefinitions="*,Auto">
     <Panel>
       <TextBlock Classes="muted" Text="{Binding Message}" IsVisible="{Binding HasMessage}" HorizontalAlignment="Center" VerticalAlignment="Center"
                  TextWrapping="Wrap" MaxWidth="360" TextAlignment="Center" />
 
       <!-- Markdown and tables, as a reply is drawn; text selected in it, or in the text below, goes
-           into the chat's box (see InspectFileView.axaml.cs). The left margin is inside the scroller, so the
+           into the chat's box (see FileInspectorView.axaml.cs). The left margin is inside the scroller, so the
            text's selection margin isn't cut off. -->
       <ScrollViewer x:Name="DocumentScroll" IsVisible="{Binding ShowsMarkdown}" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Document">
         <views:MarkdownView x:Name="Document" KeepsSelection="True" Source="{Binding Markdown}" Margin="20,16,20,20" />
@@ -78,7 +78,7 @@
 
     <!-- A video's player: a frame back, play, a frame on; where it is; its sound. -->
     <Border Grid.Row="1" IsVisible="{Binding Video, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="10,4,10,10">
-      <DockPanel DataContext="{Binding Video}" x:DataType="vm:InspectVideoViewModel">
+      <DockPanel DataContext="{Binding Video}" x:DataType="vm:InspectorVideoViewModel">
         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
           <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                   Command="{Binding StepBackCommand}" ToolTip.Tip="A frame back (Left)" AutomationProperties.Name="A frame back">

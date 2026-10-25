@@ -8,7 +8,7 @@ using BlackBox.Core.Documents;
 namespace BlackBox.App.Views;
 
 /// <summary>
-/// A picture in the Inspect file panel that zooms and pans, and on which an area is marked to ask
+/// A picture in the File inspector panel that zooms and pans, and on which an area is marked to ask
 /// about it: a picture file, a video's frame, or what the panel showed frozen for marking (a text,
 /// Windows' previewer). At zoom 1 it fits, never shown bigger than it is. The wheel zooms about the
 /// mouse, a right or middle drag pans, a left drag marks an area (with <see cref="CanMark"/>);

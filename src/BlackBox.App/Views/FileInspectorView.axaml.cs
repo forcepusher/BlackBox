@@ -12,19 +12,19 @@ using RawImage = BlackBox.Core.Platform.RawImage;
 namespace BlackBox.App.Views;
 
 /// <summary>
-/// A file shown whole, in the Inspect file panel on the left of the chat window or in the full-screen
+/// A file shown whole, in the File inspector panel on the left of the chat window or in the full-screen
 /// viewer: text selected in it, or an area dragged over it, goes into the chat's box (in the panel;
 /// the viewer's file has no chat). Pictures and frames zoom in their <see cref="ZoomBox"/>; a PDF's
 /// pages zoom here, with Ctrl+wheel (the wheel scrolls them) or the buttons, and pan with a right or
 /// middle drag as a picture does.
 /// </summary>
-public partial class InspectFileView : UserControl
+public partial class FileInspectorView : UserControl
 {
-    public InspectFileView()
+    public FileInspectorView()
     {
         InitializeComponent();
         // Windows' previewer couldn't show it: the file's text instead.
-        Shell.Failed += why => (DataContext as InspectFileViewModel)?.ShellFailed(why);
+        Shell.Failed += why => (DataContext as FileInspectorViewModel)?.ShellFailed(why);
         // The text takes the presses and releases for selecting: these see them anyway.
         AddHandler(PointerPressedEvent, OnPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerReleasedEvent, OnReleased, handledEventsToo: true);
@@ -40,7 +40,7 @@ public partial class InspectFileView : UserControl
         PdfScroll.GetObservable(ScrollViewer.ViewportProperty).Subscribe(new Watch<Size>(_ => SizePages()));
     }
 
-    private InspectFileViewModel? _vm;
+    private FileInspectorViewModel? _vm;
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -50,7 +50,7 @@ public partial class InspectFileView : UserControl
             _vm.Unpicked -= ClearSelection;
             _vm.PropertyChanged -= OnVmChanged;
         }
-        _vm = DataContext as InspectFileViewModel;
+        _vm = DataContext as FileInspectorViewModel;
         if (_vm is not null)
         {
             _vm.Unpicked += ClearSelection;
@@ -64,14 +64,14 @@ public partial class InspectFileView : UserControl
     {
         if (_vm is null)
             return;
-        if (e.PropertyName == nameof(InspectFileViewModel.Zoom) && _vm.Pages is not null && _vm.Frozen is null)
+        if (e.PropertyName == nameof(FileInspectorViewModel.Zoom) && _vm.Pages is not null && _vm.Frozen is null)
             ZoomPages();
-        else if (e.PropertyName == nameof(InspectFileViewModel.Pages))
+        else if (e.PropertyName == nameof(FileInspectorViewModel.Pages))
         {
             _pdfZoom = 1;
             SizePages();
         }
-        else if (e.PropertyName == nameof(InspectFileViewModel.AreaMode) && _vm.AreaMode && _vm.Frozen is null)
+        else if (e.PropertyName == nameof(FileInspectorViewModel.AreaMode) && _vm.AreaMode && _vm.Frozen is null)
             Freeze();
     }
 

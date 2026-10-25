@@ -10,13 +10,13 @@ using CommunityToolkit.Mvvm.Input;
 namespace BlackBox.App.ViewModels;
 
 /// <summary>
-/// A video in the Inspect file panel: a plain player, frame by frame. It plays with its sound and
+/// A video in the File inspector panel: a plain player, frame by frame. It plays with its sound and
 /// steps one frame back or on (the buttons, or Left and Right), and says which frame shows and when;
 /// an area marked on the frame goes to the model cut from the frame at the video's own size (the
 /// user's request, 2026-10-25: the chat's video card in the panel was "weird"). Frames are counted
 /// from 0 here, shown and told to the model from 1.
 /// </summary>
-public sealed partial class InspectVideoViewModel : ObservableObject, IDisposable
+public sealed partial class InspectorVideoViewModel : ObservableObject, IDisposable
 {
     private readonly PreviewServices _services;
 
@@ -25,7 +25,7 @@ public sealed partial class InspectVideoViewModel : ObservableObject, IDisposabl
 
     public string Path { get; }
 
-    public InspectVideoViewModel(string path, PreviewServices services)
+    public InspectorVideoViewModel(string path, PreviewServices services)
     {
         Path = path;
         _services = services;

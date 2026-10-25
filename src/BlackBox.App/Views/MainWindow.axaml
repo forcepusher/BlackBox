@@ -245,11 +245,11 @@
     <DataTemplate DataType="vm:FileChangesViewModel">
       <views:FileChangesPanel />
     </DataTemplate>
-    <DataTemplate DataType="vm:InspectFileViewModel">
-      <views:InspectFilePanel />
+    <DataTemplate DataType="vm:FileInspectorViewModel">
+      <views:FileInspectorPanel />
     </DataTemplate>
 
-    <!-- A document: a peek at its start as the Inspect file panel draws it, which opens full screen,
+    <!-- A document: a peek at its start as the File inspector panel draws it, which opens full screen,
          over the card with its name. The peek is the box of a picture's thumbnail in a message (at most
          300x180 in a 1-pixel frame); what doesn't fit it is cut off. -->
     <DataTemplate DataType="vm:FileCardPreview">

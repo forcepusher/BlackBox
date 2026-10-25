@@ -6,12 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- In Inspect file, drag a box over a PDF page, a picture or a video frame to ask about that area:
+- In File inspector, drag a box over a PDF page, a picture or a video frame to ask about that area:
   it goes into your message as "Area on page 2", and the model gets a picture of it with where it is.
   **Area** in the panel's bar freezes a text or an Office file's preview to drag over it too.
-- Inspect file zooms pictures, video frames and PDF pages: the wheel (Ctrl+wheel on a PDF), the
+- File inspector zooms pictures, video frames and PDF pages: the wheel (Ctrl+wheel on a PDF), the
   − and + buttons, and a right or middle drag to pan.
-- Video in Inspect file is a plain player that steps one frame back or on (the buttons, or Left and
+- Video in File inspector is a plain player that steps one frame back or on (the buttons, or Left and
   Right) and says which frame shows and when.
 - "in development" beside the **Toolkit** dropdown: its tools are still being built.
 - With Video editor open and nothing picked in it, the video itself shows over the chat's box, as a
@@ -29,14 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folders, instead of reading whole files again.
 - Code blocks in replies and Markdown previews show in a box of their own, with their language and a
   **Copy** button.
-- **Inspect file** in the **Toolkit** dropdown: a file from the chat shown whole on the left of
+- **File inspector** in the **Toolkit** dropdown: a file from the chat shown whole on the left of
   the chat. Markdown is formatted as replies are, .csv as a table, text and code as they are, and
   pictures, video and sound as in the chat, PDF pages drawn by BlackBox itself (with PDFium, Chrome's
   PDF engine); Word, Excel, PowerPoint and web pages show as in Explorer's preview pane.
-- With Inspect file open, the file shows over the chat's box, and text you select in it goes into
+- With File inspector open, the file shows over the chat's box, and text you select in it goes into
   your message as where it is (lines, or cells of a table), so you can ask about that part. A click
   elsewhere in the panel, or Esc, lets go of it.
-- **Inspect** on every file in the chat opens it in Inspect file, in place of **Open**, which the
+- **Inspect** on every file in the chat opens it in File inspector, in place of **Open**, which the
   full-screen viewer no longer has either.
 - Documents in the chat (Markdown, tables, text and code, PDF, Word, Excel, PowerPoint, web pages)
   show a small preview on their card, as big as a picture pasted into a message: a PDF's first
@@ -104,11 +104,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Video editor's videos are in a menu on the video's name at the top: open another, start a new one, or
   rename or delete this one (to the Recycle Bin). On the timeline, right-click a card, clip or sound
   to rename or delete it, or to see an earlier version of it.
-- A × at the top right of Video editor, File changes and Inspect file closes the tool.
+- A × at the top right of Video editor, File changes and File inspector closes the tool.
 
 ### Changed
+- Inspect file is now called **File inspector**.
 - What you pick in a toolkit panel has no × in the chat's box: unpick it in the panel (a click away, or Esc).
-- The **Toolkit** dropdown reads None, File changes, Inspect file, Video editor.
+- The **Toolkit** dropdown reads None, File changes, File inspector, Video editor.
 - Asked for code, commands or facts that change (versions, prices, news), the agent looks them up
   on the web before it answers, rather than writing them from memory.
 - A video's name is its folder's: renamed in Video editor, in Explorer, or by the agent giving it a
@@ -135,7 +136,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Video editor's video dropdown, its Open… and Show folder buttons, the settings button with the video's
   title, and the soundtrack and shots' own sound sliders.
 - Video editor's **New video** button beside **Make the video**: New video is in the menu on the video's name.
-- Inspect file's **Show in folder**: the file's card in the chat has it.
+- File inspector's **Show in folder**: the file's card in the chat has it.
 
 ### Fixed
 - Picking a tool in the **Toolkit** dropdown, or None, changes the window in one go: no more frame

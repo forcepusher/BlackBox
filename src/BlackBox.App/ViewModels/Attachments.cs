@@ -83,7 +83,7 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
 
     /// <summary>
     /// A file's name and size, or a folder's name; what a picture's thumbnail is for the rest. A
-    /// picture picked in a tool's panel (an area marked in Inspect file) shows what it is there.
+    /// picture picked in a tool's panel (an area marked in File inspector) shows what it is there.
     /// </summary>
     public bool ShowsName => Picked || !IsPicture || Thumbnail is null;
 

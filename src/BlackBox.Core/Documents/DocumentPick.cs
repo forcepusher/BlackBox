@@ -3,7 +3,7 @@ using BlackBox.Core.Chats;
 namespace BlackBox.Core.Documents;
 
 /// <summary>
-/// Text selected in the Inspect file panel, and where it is in the file: "lines 12-20" of a
+/// Text selected in the File inspector panel, and where it is in the file: "lines 12-20" of a
 /// Markdown file or a text file, "cells B4:C4" or "rows 3-7" of a CSV table. <paramref name="Columns"/>
 /// names the table's columns the selection is in, from its header row; null outside a table.
 /// </summary>
@@ -28,7 +28,7 @@ public sealed record DocumentPick(string Text, string Where, IReadOnlyList<strin
     /// A selection in one of the blocks <see cref="MarkdownLite.Blocks(string)"/> cuts
     /// <paramref name="markdown"/> into, from character <paramref name="start"/> to <paramref name="end"/>
     /// of the block's lines as shown, joined by line breaks. Where it is: the lines of the Markdown;
-    /// with <paramref name="table"/> (a CSV shown as a table, <see cref="InspectFile.Table"/>), the
+    /// with <paramref name="table"/> (a CSV shown as a table, <see cref="FileInspector.Table"/>), the
     /// table's rows and cells as a spreadsheet names them, its header row 1. Null with nothing selected.
     /// </summary>
     public static DocumentPick? InMarkdown(string markdown, int block, int start, int end, bool table)

@@ -2,8 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:BlackBox.App.ViewModels"
              xmlns:views="using:BlackBox.App.Views"
-             x:Class="BlackBox.App.Views.InspectFilePanel"
-             x:DataType="vm:InspectFileViewModel"
+             x:Class="BlackBox.App.Views.FileInspectorPanel"
+             x:DataType="vm:FileInspectorViewModel"
              Background="{StaticResource BbBackground}">
   <DockPanel>
     <!-- The file's name and what it is, and where it is; × closes the panel. As tall as the chat's top
@@ -29,6 +29,6 @@
       </DockPanel>
     </Border>
 
-    <views:InspectFileView />
+    <views:FileInspectorView />
   </DockPanel>
 </UserControl>

@@ -6,7 +6,7 @@ using SkiaSharp;
 namespace BlackBox.Core.Documents;
 
 /// <summary>
-/// An area dragged over a file in the Inspect file panel: its sides as parts of what it was dragged
+/// An area dragged over a file in the File inspector panel: its sides as parts of what it was dragged
 /// on (0 the left or top, 1 the right or bottom), of a PDF's page <paramref name="Page"/> (from 0), a
 /// picture, or the panel's view of the file. The model gets it as a picture of the area and where it is.
 /// </summary>

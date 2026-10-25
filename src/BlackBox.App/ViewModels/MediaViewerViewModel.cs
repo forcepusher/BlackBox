@@ -15,7 +15,7 @@ public sealed record MediaEntry(object Source, string? Path, byte[]? Picture, st
 /// <summary>
 /// The full-screen viewer, over the screen the chat is on: a picture at the screen's size (the
 /// wheel comes closer), an animation, or a video playing with its sound, and the chat's other
-/// pictures, videos and documents one arrow key away (a document shown as in the Inspect file panel).
+/// pictures, videos and documents one arrow key away (a document shown as in the File inspector panel).
 /// Prompt shows what the file was made with.
 /// </summary>
 public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
@@ -33,7 +33,7 @@ public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
         ShowEntry(Math.Clamp(index, 0, entries.Count - 1));
     }
 
-    /// <summary>What is on screen: a <see cref="ViewerPicture"/>, an <see cref="AnimationPreview"/>, a <see cref="VideoPreview"/> or an <see cref="InspectFileViewModel"/>.</summary>
+    /// <summary>What is on screen: a <see cref="ViewerPicture"/>, an <see cref="AnimationPreview"/>, a <see cref="VideoPreview"/> or an <see cref="FileInspectorViewModel"/>.</summary>
     [ObservableProperty]
     private object? _shown;
 
@@ -107,10 +107,10 @@ public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
             Shown = new ViewerPicture(null, entry.Picture, _width * 2, PictureLoaded);
             return;
         }
-        // A document from its card in the chat: as the Inspect file panel shows it.
+        // A document from its card in the chat: as the File inspector panel shows it.
         if (entry.Source is FileCardPreview)
         {
-            var document = new InspectFileViewModel(_services);
+            var document = new FileInspectorViewModel(_services);
             document.PropertyChanged += OnDocumentChanged;
             document.Show(path);
             Shown = document;
@@ -150,15 +150,15 @@ public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
     /// <summary>A document's details ("PDF, 12 pages, 1.1 MB"), as the panel reads them.</summary>
     private void OnDocumentChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (ReferenceEquals(sender, Shown) && e.PropertyName == nameof(InspectFileViewModel.Details))
-            Details = ((InspectFileViewModel)sender!).Details;
+        if (ReferenceEquals(sender, Shown) && e.PropertyName == nameof(FileInspectorViewModel.Details))
+            Details = ((FileInspectorViewModel)sender!).Details;
     }
 
     private void Release()
     {
         if (Shown is FilePreview preview)
             preview.PropertyChanged -= OnPreviewChanged;
-        if (Shown is InspectFileViewModel document)
+        if (Shown is FileInspectorViewModel document)
             document.PropertyChanged -= OnDocumentChanged;
         (Shown as IDisposable)?.Dispose();
         Shown = null;

@@ -4,7 +4,7 @@ using BlackBox.Core.Platform;
 namespace BlackBox.Platform.Windows;
 
 /// <summary>
-/// What a window of BlackBox's shows on screen, read off the screen: for the Inspect file panel's Area,
+/// What a window of BlackBox's shows on screen, read off the screen: for the File inspector panel's Area,
 /// which freezes what it shows to mark an area on, a previewer drawing from another process included.
 /// BlackBox's other windows over it (a tooltip, a menu) are left out.
 /// </summary>

@@ -4,8 +4,8 @@ using BlackBox.Core.Tools;
 
 namespace BlackBox.Core.Documents;
 
-/// <summary>How the Inspect file panel shows a file.</summary>
-public enum InspectKind
+/// <summary>How the File inspector panel shows a file.</summary>
+public enum InspectorKind
 {
     /// <summary>Formatted as a reply is (.md).</summary>
     Markdown,
@@ -34,10 +34,10 @@ public enum InspectKind
 }
 
 /// <summary>
-/// What the Inspect file panel reads of a file: which kind it is, and its text for the kinds
+/// What the File inspector panel reads of a file: which kind it is, and its text for the kinds
 /// BlackBox draws itself.
 /// </summary>
-public static partial class InspectFile
+public static partial class FileInspector
 {
     /// <summary>The most of a text file the panel shows: a long one shows its start.</summary>
     public const int MaxChars = 200_000;
@@ -48,21 +48,21 @@ public static partial class InspectFile
     /// <summary>The most columns of a table the panel shows.</summary>
     public const int MaxColumns = 40;
 
-    public static InspectKind KindOf(string path)
+    public static InspectorKind KindOf(string path)
     {
         if (MarkdownFiles.Handles(path))
-            return InspectKind.Markdown;
+            return InspectorKind.Markdown;
         var ext = Path.GetExtension(path).ToLowerInvariant();
         if (ext is ".csv" or ".tsv")
-            return InspectKind.Table;
+            return InspectorKind.Table;
         if (DocumentText.Handles(path) || ext is ".html" or ".htm" or ".xhtml" or ".mht" or ".mhtml" or ".rtf" or ".doc" or ".xls" or ".ppt" or ".odt" or ".ods" or ".odp")
-            return InspectKind.Document;
+            return InspectorKind.Document;
         switch (MediaPreview.KindOf(path))
         {
-            case "image": return InspectKind.Picture;
-            case "animation" or "video" or "audio" or "3d": return InspectKind.Media;
+            case "image": return InspectorKind.Picture;
+            case "animation" or "video" or "audio" or "3d": return InspectorKind.Media;
         }
-        return LooksLikeText(path) ? InspectKind.Text : InspectKind.None;
+        return LooksLikeText(path) ? InspectorKind.Text : InspectorKind.None;
     }
 
     /// <summary>
@@ -205,18 +205,18 @@ public static partial class InspectFile
     /// The card looks for a PDF's first page and an Office file's own picture of itself
     /// (<see cref="SavedThumbnail"/>) first.
     /// </summary>
-    public static (string? Markdown, string? Text) Peek(string path, InspectKind kind)
+    public static (string? Markdown, string? Text) Peek(string path, InspectorKind kind)
     {
         switch (kind)
         {
-            case InspectKind.Markdown:
+            case InspectorKind.Markdown:
                 return (Start(MarkdownFiles.ReadStart(path, 4000).Text), null);
-            case InspectKind.Table:
+            case InspectorKind.Table:
                 var table = Table(path, maxRows: 8, maxColumns: 8, read: 64_000).Markdown;
                 return (table.Length > 0 ? table : null, null);
-            case InspectKind.Text:
+            case InspectorKind.Text:
                 return (null, Start(MarkdownFiles.ReadStart(path, 4000).Text));
-            case InspectKind.Document:
+            case InspectorKind.Document:
                 var ext = Path.GetExtension(path).ToLowerInvariant();
                 if (ext is ".html" or ".htm" or ".xhtml")
                     return (Start(PageText(path)), null);

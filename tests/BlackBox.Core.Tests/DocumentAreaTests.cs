@@ -4,7 +4,7 @@ using Xunit;
 
 namespace BlackBox.Core.Tests;
 
-// An area dragged over a page, a picture or a frame in the Inspect file panel.
+// An area dragged over a page, a picture or a frame in the File inspector panel.
 public class DocumentAreaTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("bb-area-").FullName;

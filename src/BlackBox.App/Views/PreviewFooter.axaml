@@ -4,7 +4,7 @@
              xmlns:views="using:BlackBox.App.Views"
              x:Class="BlackBox.App.Views.PreviewFooter"
              x:DataType="vm:FilePreview">
-  <!-- Under every preview: the file's name and what it is, and buttons to see it in the Inspect file
+  <!-- Under every preview: the file's name and what it is, and buttons to see it in the File inspector
        panel or find it; for a file made with a prompt, Prompt shows that prompt and the
        settings it was made with. -->
   <DockPanel>
@@ -19,7 +19,7 @@
           </Flyout>
         </Button.Flyout>
       </Button>
-      <Button Classes="ghost" Padding="10,3" Content="Inspect" Click="OnInspect" ToolTip.Tip="See it in the Inspect file panel" />
+      <Button Classes="ghost" Padding="10,3" Content="Inspect" Click="OnInspect" ToolTip.Tip="See it in the File inspector panel" />
       <Button Classes="ghost" Padding="10,3" Content="Show in folder" Command="{Binding ShowInFolderCommand}" ToolTip.Tip="{Binding Path}" />
     </StackPanel>
     <StackPanel Spacing="1" VerticalAlignment="Center">

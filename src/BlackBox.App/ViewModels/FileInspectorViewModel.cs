@@ -8,13 +8,13 @@ using CommunityToolkit.Mvvm.Input;
 namespace BlackBox.App.ViewModels;
 
 /// <summary>
-/// The Inspect file panel, a tool of the chat window's toolkit on the left of the chat: one file
+/// The File inspector panel, a tool of the chat window's toolkit on the left of the chat: one file
 /// shown whole, opened by the Inspect button of its card in the chat or dropped on the panel. BlackBox
 /// draws Markdown (as a reply), tables, text and pictures itself, plays videos frame by frame
-/// (<see cref="InspectVideoViewModel"/>) and the chat's players play the rest of the media, and PDF
+/// (<see cref="InspectorVideoViewModel"/>) and the chat's players play the rest of the media, and PDF
 /// pages are drawn by PDFium (<see cref="PdfPages"/>); Office files and web pages
 /// (and a PDF PDFium can't open) are drawn by the previewer Windows has for them, as
-/// in Explorer's preview pane, else shown as their text (<see cref="InspectFile"/>). With the
+/// in Explorer's preview pane, else shown as their text (<see cref="FileInspector"/>). With the
 /// panel open a message is about the file shown; text selected in the text BlackBox draws goes into
 /// the chat's box as where it is in the file ("Lines 12-20 · notes.md", "Cells B4:C4 · data.csv"),
 /// and the message carries it for the model, as File changes does with lines (the user's request,
@@ -23,7 +23,7 @@ namespace BlackBox.App.ViewModels;
 /// frozen: a text, or Windows' previewer, which draws in a window of its own whose selection
 /// BlackBox can't read. Pictures, frames and pages zoom and pan.
 /// </summary>
-public sealed partial class InspectFileViewModel : ObservableObject, IToolkit
+public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
 {
     private readonly PreviewServices _previews;
     private readonly MainWindowViewModel? _chat;
@@ -43,7 +43,7 @@ public sealed partial class InspectFileViewModel : ObservableObject, IToolkit
 
     /// <param name="chat">The chat the panel is a tool of, where what is selected in it goes; null with none.</param>
     /// <param name="areasDir">Where pictures of marked areas are saved; with a chat.</param>
-    public InspectFileViewModel(PreviewServices previews, MainWindowViewModel? chat = null, string? areasDir = null)
+    public FileInspectorViewModel(PreviewServices previews, MainWindowViewModel? chat = null, string? areasDir = null)
     {
         _previews = previews;
         _chat = chat;
@@ -98,7 +98,7 @@ public sealed partial class InspectFileViewModel : ObservableObject, IToolkit
     /// <summary>A video, in a player of the panel's own: frame by frame, zoomed, an area marked on a frame.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Whole), nameof(WholeTip), nameof(CanZoom))]
-    private InspectVideoViewModel? _video;
+    private InspectorVideoViewModel? _video;
 
     /// <summary>An animation, a sound or a 3D model, in the chat's player.</summary>
     [ObservableProperty]
@@ -143,32 +143,32 @@ public sealed partial class InspectFileViewModel : ObservableObject, IToolkit
                     return;
                 }
                 var size = FilePreview.Size(path);
-                var kind = InspectFile.KindOf(path);
+                var kind = FileInspector.KindOf(path);
                 switch (kind)
                 {
-                    case InspectKind.Markdown:
+                    case InspectorKind.Markdown:
                     {
-                        var (text, cut) = InspectFile.ReadText(path);
+                        var (text, cut) = FileInspector.ReadText(path);
                         var lines = Lines(text);
                         Post(load, () => (_shown, Markdown, Details, Message) = (Shown.File, text, $"Markdown, {(cut ? "first " : "")}{lines:N0} line{(lines == 1 ? "" : "s")}, {size}", null));
                         break;
                     }
-                    case InspectKind.Text:
+                    case InspectorKind.Text:
                     {
-                        var (text, cut) = InspectFile.ReadText(path);
+                        var (text, cut) = FileInspector.ReadText(path);
                         var lines = Lines(text);
                         Post(load, () => (_shown, Text, Details, Message) = (Shown.File, text, $"{(cut ? "first " : "")}{lines:N0} line{(lines == 1 ? "" : "s")}, {size}", null));
                         break;
                     }
-                    case InspectKind.Table:
+                    case InspectorKind.Table:
                     {
-                        var (table, rows, columns) = InspectFile.Table(path);
-                        var shown = rows > InspectFile.MaxRows || columns > InspectFile.MaxColumns
-                            ? $", the first {Math.Min(rows, InspectFile.MaxRows):N0} rows and {Math.Min(columns, InspectFile.MaxColumns)} columns" : "";
+                        var (table, rows, columns) = FileInspector.Table(path);
+                        var shown = rows > FileInspector.MaxRows || columns > FileInspector.MaxColumns
+                            ? $", the first {Math.Min(rows, FileInspector.MaxRows):N0} rows and {Math.Min(columns, FileInspector.MaxColumns)} columns" : "";
                         Post(load, () => (_shown, Markdown, Details, Message) = (Shown.Table, table, $"{rows:N0} rows, {columns} columns{shown}, {size}", table.Length == 0 ? "The table is empty." : null));
                         break;
                     }
-                    case InspectKind.Picture:
+                    case InspectorKind.Picture:
                     {
                         using var probe = Core.Media.PictureFile.Codec(path);
                         var own = probe is null ? (0, 0) : (probe.Info.Width, probe.Info.Height);
@@ -181,7 +181,7 @@ public sealed partial class InspectFileViewModel : ObservableObject, IToolkit
                         Post(load, () => (_pictureSize, Picture, Details, Message) = (own, bitmap, details, null), bitmap.Dispose);
                         break;
                     }
-                    case InspectKind.Media when Core.Media.MediaPreview.KindOf(path) == "video" && new InspectVideoViewModel(path, _previews) is var video:
+                    case InspectorKind.Media when Core.Media.MediaPreview.KindOf(path) == "video" && new InspectorVideoViewModel(path, _previews) is var video:
                         if (video.Load())
                             Post(load, () => (Video, Details, Message) = (video, $"{video.Details}, {size}", null), video.Dispose);
                         else
@@ -190,19 +190,19 @@ public sealed partial class InspectFileViewModel : ObservableObject, IToolkit
                             Post(load, () => (Details, Message) = (size, "Nothing on this PC can play this video."));
                         }
                         break;
-                    case InspectKind.Media:
+                    case InspectorKind.Media:
                         Post(load, () =>
                         {
                             Media = FilePreview.For(path, _previews, PictureWidth);
                             Message = null;
                         });
                         break;
-                    case InspectKind.Document when ShowPdf(load, path, size):
+                    case InspectorKind.Document when ShowPdf(load, path, size):
                         break;
-                    case InspectKind.Document when OperatingSystem.IsWindows() && Views.ShellPreviewHost.CanShow(path):
+                    case InspectorKind.Document when OperatingSystem.IsWindows() && Views.ShellPreviewHost.CanShow(path):
                         Post(load, () => (ShellPath, Details, Message) = (path, size, null));
                         break;
-                    case InspectKind.Document:
+                    case InspectorKind.Document:
                         ShowAsText(load, path, size);
                         break;
                     default:
@@ -265,7 +265,7 @@ public sealed partial class InspectFileViewModel : ObservableObject, IToolkit
     private void ShowAsText(int load, string path, string size, string why = "")
     {
         var details = $"{size}, its text only{why}";
-        if (InspectFile.DocumentAsText(path) is { } text)
+        if (FileInspector.DocumentAsText(path) is { } text)
         {
             var markdown = System.IO.Path.GetExtension(path).ToLowerInvariant() is ".docx" or ".docm" or ".dotx" or ".pptx" or ".pptm" or ".potx";
             Post(load, () =>
@@ -277,12 +277,12 @@ public sealed partial class InspectFileViewModel : ObservableObject, IToolkit
             });
             return;
         }
-        if (!InspectFile.LooksLikeText(path))
+        if (!FileInspector.LooksLikeText(path))
         {
             Post(load, () => (Details, Message) = (size, "Nothing on this PC previews this kind of file. Its card in the chat has Show in folder."));
             return;
         }
-        var (source, _) = InspectFile.ReadText(path);
+        var (source, _) = FileInspector.ReadText(path);
         Post(load, () => (_shown, Text, Details, Message) = (Shown.File, source, details, null));
     }
 
@@ -603,12 +603,12 @@ public sealed partial class InspectFileViewModel : ObservableObject, IToolkit
     {
         if (Path is not { } path)
             return null;
-        var opening = $"[The Inspect file panel is open beside the chat, showing {path}. ";
+        var opening = $"[The File inspector panel is open beside the chat, showing {path}. ";
         if (_area is { } area && files.Contains(area.Picture, StringComparer.OrdinalIgnoreCase))
-            return ($"Inspect file · {FileName} · {area.Where}",
+            return ($"File inspector · {FileName} · {area.Where}",
                 $"{opening}{area.Told}. The picture {area.Picture} attached below is that area, cut from it, which is what they refer to.]");
         if (_pick is not { } pick || !files.Contains(path, StringComparer.OrdinalIgnoreCase))
-            return ("Inspect file · " + FileName, opening + "What they say is about this file unless they say otherwise.]");
+            return ("File inspector · " + FileName, opening + "What they say is about this file unless they say otherwise.]");
         var where = Where(pick);
         var context = new System.Text.StringBuilder(opening);
         context.Append(_shown switch
@@ -621,7 +621,7 @@ public sealed partial class InspectFileViewModel : ObservableObject, IToolkit
         var text = pick.Text.TrimEnd('\r', '\n');
         context.Append(text.Length <= MaxPickedChars ? text : text[..MaxPickedChars] + $"\n[... {text.Length - MaxPickedChars:N0} more selected characters]");
         context.Append("\n]");
-        return ($"Inspect file · {FileName} · {where}", context.ToString());
+        return ($"File inspector · {FileName} · {where}", context.ToString());
     }
 
     /// <summary>The message went with the selection: it is no longer selected (an area's picture went with it, and stays).</summary>

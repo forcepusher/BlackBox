@@ -23,7 +23,7 @@ public sealed class PreviewServices(IMediaDecoder? decoder, Func<IAudioOutput?> 
 /// <summary>
 /// A file the agent made or showed, previewed in the chat: a picture, an animation, a video or a
 /// sound with a player, a 3D model to turn around, or a card for anything else (a document, a
-/// Markdown file) with a peek at its start. Each opens in the Inspect file panel or shows in its folder.
+/// Markdown file) with a peek at its start. Each opens in the File inspector panel or shows in its folder.
 /// </summary>
 public abstract partial class FilePreview(string path) : ObservableObject, IDisposable
 {
@@ -239,7 +239,7 @@ public sealed partial class AnimationPreview(string path, int width = FilePrevie
 
 /// <summary>
 /// A document, a Markdown file, a table, code: its name and size on a card, over a peek at its start
-/// as the Inspect file panel draws it (a PDF's first page, an Office file's own picture of itself, or
+/// as the File inspector panel draws it (a PDF's first page, an Office file's own picture of itself, or
 /// its first lines). A click on the peek opens the file in the full-screen viewer, as a picture's
 /// does (the user's request, 2026-10-26); Inspect opens it in the panel.
 /// </summary>
@@ -284,13 +284,13 @@ public sealed partial class FileCardPreview(string path) : FilePreview(path)
         }
         var size = Size(Path);
         Show(() => Details = size);
-        var kind = InspectFile.KindOf(Path);
-        if (kind == InspectKind.Document && Picture() is { } picture)
+        var kind = FileInspector.KindOf(Path);
+        if (kind == InspectorKind.Document && Picture() is { } picture)
         {
             Show(() => Thumbnail = picture, picture.Dispose);
             return;
         }
-        var (markdown, text) = InspectFile.Peek(Path, kind);
+        var (markdown, text) = FileInspector.Peek(Path, kind);
         if (markdown is not null || text is not null)
             Show(() => (PeekMarkdown, PeekText) = (markdown, text));
     });
@@ -311,7 +311,7 @@ public sealed partial class FileCardPreview(string path) : FilePreview(path)
             catch (Exception ex) when (ex is InvalidDataException or DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or IOException) { }
             return null; // its text, as in the panel
         }
-        if (InspectFile.SavedThumbnail(Path) is not { } bytes)
+        if (FileInspector.SavedThumbnail(Path) is not { } bytes)
             return null;
         try
         {

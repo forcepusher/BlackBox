@@ -65,20 +65,20 @@ public sealed partial class MainWindowViewModel
         new("None", "The chat alone", 0, 0, 0, null),
         new("File changes", "See the files the agent changes in this chat as it works: click lines to ask about them", 880, 560, 0,
             vm => new FileChangesViewModel(vm)),
-        new(InspectFileName, "See a file from the chat beside it: documents, PDFs, spreadsheets, slides, pictures, text and code", 760, 420, 0,
-            vm => new InspectFileViewModel(vm._previews, vm, vm._paths.PastedDir)),
+        new(FileInspectorName, "See a file from the chat beside it: documents, PDFs, spreadsheets, slides, pictures, text and code", 760, 420, 0,
+            vm => new FileInspectorViewModel(vm._previews, vm, vm._paths.PastedDir)),
         new("Video editor", "Plan a video shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960, 770, 600,
             vm => new VideoViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
     ];
 
-    private const string InspectFileName = "Inspect file";
+    private const string FileInspectorName = "File inspector";
 
-    /// <summary>A card's Inspect: the file in the Inspect file panel, which opens in place of the tool open (if another).</summary>
+    /// <summary>A card's Inspect: the file in the File inspector panel, which opens in place of the tool open (if another).</summary>
     internal void Inspect(string path)
     {
-        if (Toolkit is not InspectFileViewModel)
-            SelectedToolkit = ToolkitOptions.First(o => o.Name == InspectFileName);
-        (Toolkit as InspectFileViewModel)?.Show(path);
+        if (Toolkit is not FileInspectorViewModel)
+            SelectedToolkit = ToolkitOptions.First(o => o.Name == FileInspectorName);
+        (Toolkit as FileInspectorViewModel)?.Show(path);
     }
 
     /// <summary>The × on the open tool's panel: None in the dropdown.</summary>
