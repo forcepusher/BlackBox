@@ -7,7 +7,7 @@ using BlackBox.App.ViewModels;
 namespace BlackBox.App.Views;
 
 /// <summary>
-/// Pictures and videos from the chat at the size of the screen, opened by a click on one: Esc, the
+/// Pictures, videos and documents from the chat at the size of the screen, opened by a click on one: Esc, the
 /// × or a click beside it goes back to the chat, the arrow keys go through the chat's others, Space
 /// plays or pauses a video and M turns its sound on or off.
 /// </summary>

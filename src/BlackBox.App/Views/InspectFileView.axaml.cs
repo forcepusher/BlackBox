@@ -6,28 +6,31 @@ using BlackBox.App.ViewModels;
 
 namespace BlackBox.App.Views;
 
-/// <summary>The Document preview panel, on the left of the chat window: one file shown whole, whose text selected goes into the chat's box.</summary>
-public partial class DocumentPanel : UserControl
+/// <summary>
+/// A file shown whole, in the Inspect file panel on the left of the chat window or in the full-screen
+/// viewer: text selected in it goes into the chat's box (in the panel; the viewer's file has no chat).
+/// </summary>
+public partial class InspectFileView : UserControl
 {
-    public DocumentPanel()
+    public InspectFileView()
     {
         InitializeComponent();
         // Windows' previewer couldn't show it: the file's text instead.
-        Shell.Failed += why => (DataContext as DocumentViewModel)?.ShellFailed(why);
+        Shell.Failed += why => (DataContext as InspectFileViewModel)?.ShellFailed(why);
         // The text takes the presses and releases for selecting: these see them anyway.
         AddHandler(PointerPressedEvent, OnPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerReleasedEvent, OnReleased, handledEventsToo: true);
         AddHandler(KeyUpEvent, OnKeyUp, handledEventsToo: true);
     }
 
-    private DocumentViewModel? _vm;
+    private InspectFileViewModel? _vm;
 
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
         if (_vm is not null)
             _vm.Unpicked -= ClearSelection;
-        _vm = DataContext as DocumentViewModel;
+        _vm = DataContext as InspectFileViewModel;
         if (_vm is not null)
             _vm.Unpicked += ClearSelection;
     }

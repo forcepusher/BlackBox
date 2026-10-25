@@ -6,19 +6,19 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace BlackBox.App.ViewModels;
 
 /// <summary>
-/// The Document preview panel, a tool of the chat window's toolkit on the left of the chat: one file
-/// shown whole, opened by the Preview button of its card in the chat or dropped on the panel. BlackBox
+/// The Inspect file panel, a tool of the chat window's toolkit on the left of the chat: one file
+/// shown whole, opened by the Inspect button of its card in the chat or dropped on the panel. BlackBox
 /// draws Markdown (as a reply), tables, text and pictures itself, and the chat's players play the rest
 /// of the media, and PDF pages are drawn by PDFium (<see cref="PdfPages"/>); Office files and web pages
 /// (and a PDF PDFium can't open) are drawn by the previewer Windows has for them, as
-/// in Explorer's preview pane, else shown as their text (<see cref="DocumentPreview"/>). With the
+/// in Explorer's preview pane, else shown as their text (<see cref="InspectFile"/>). With the
 /// panel open a message is about the file shown; text selected in the text BlackBox draws goes into
 /// the chat's box as where it is in the file ("Lines 12-20 · notes.md", "Cells B4:C4 · data.csv"),
-/// and the message carries it for the model, as File changes does with lines (the user's request,
+/// and the message carries it for the model, as Code changes does with lines (the user's request,
 /// 2026-10-25). Windows' previewers draw in a window of their own, whose selection BlackBox can't
 /// read: there the message is about the whole file.
 /// </summary>
-public sealed partial class DocumentViewModel : ObservableObject, IToolkit
+public sealed partial class InspectFileViewModel : ObservableObject, IToolkit
 {
     private readonly PreviewServices _previews;
     private readonly MainWindowViewModel? _chat;
@@ -31,7 +31,7 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
     private const int MaxPickedChars = 20_000;
 
     /// <param name="chat">The chat the panel is a tool of, where what is selected in it goes; null with none.</param>
-    public DocumentViewModel(PreviewServices previews, MainWindowViewModel? chat = null)
+    public InspectFileViewModel(PreviewServices previews, MainWindowViewModel? chat = null)
     {
         _previews = previews;
         _chat = chat;
@@ -54,7 +54,7 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
     /// <summary>Said in the middle of the panel: how to open a file in it, that it is loading, or why it can't be shown.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMessage))]
-    private string? _message = "Press Preview on a file in the chat, or drop one here.";
+    private string? _message = "Press Inspect on a file in the chat, or drop one here.";
 
     public bool HasMessage => Message is not null;
 
@@ -116,32 +116,32 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
                     return;
                 }
                 var size = FilePreview.Size(path);
-                var kind = DocumentPreview.KindOf(path);
+                var kind = InspectFile.KindOf(path);
                 switch (kind)
                 {
-                    case DocumentKind.Markdown:
+                    case InspectKind.Markdown:
                     {
-                        var (text, cut) = DocumentPreview.ReadText(path);
+                        var (text, cut) = InspectFile.ReadText(path);
                         var lines = Lines(text);
                         Post(load, () => (_shown, Markdown, Details, Message) = (Shown.File, text, $"Markdown, {(cut ? "first " : "")}{lines:N0} line{(lines == 1 ? "" : "s")}, {size}", null));
                         break;
                     }
-                    case DocumentKind.Text:
+                    case InspectKind.Text:
                     {
-                        var (text, cut) = DocumentPreview.ReadText(path);
+                        var (text, cut) = InspectFile.ReadText(path);
                         var lines = Lines(text);
                         Post(load, () => (_shown, Text, Details, Message) = (Shown.File, text, $"{(cut ? "first " : "")}{lines:N0} line{(lines == 1 ? "" : "s")}, {size}", null));
                         break;
                     }
-                    case DocumentKind.Table:
+                    case InspectKind.Table:
                     {
-                        var (table, rows, columns) = DocumentPreview.Table(path);
-                        var shown = rows > DocumentPreview.MaxRows || columns > DocumentPreview.MaxColumns
-                            ? $", the first {Math.Min(rows, DocumentPreview.MaxRows):N0} rows and {Math.Min(columns, DocumentPreview.MaxColumns)} columns" : "";
+                        var (table, rows, columns) = InspectFile.Table(path);
+                        var shown = rows > InspectFile.MaxRows || columns > InspectFile.MaxColumns
+                            ? $", the first {Math.Min(rows, InspectFile.MaxRows):N0} rows and {Math.Min(columns, InspectFile.MaxColumns)} columns" : "";
                         Post(load, () => (_shown, Markdown, Details, Message) = (Shown.Table, table, $"{rows:N0} rows, {columns} columns{shown}, {size}", table.Length == 0 ? "The table is empty." : null));
                         break;
                     }
-                    case DocumentKind.Picture:
+                    case InspectKind.Picture:
                     {
                         using var stream = File.OpenRead(path);
                         var bitmap = Bitmap.DecodeToWidth(stream, PictureWidth, BitmapInterpolationMode.HighQuality);
@@ -150,19 +150,19 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
                         Post(load, () => (Picture, Details, Message) = (bitmap, details, null), bitmap.Dispose);
                         break;
                     }
-                    case DocumentKind.Media:
+                    case InspectKind.Media:
                         Post(load, () =>
                         {
                             Media = FilePreview.For(path, _previews, PictureWidth);
                             Message = null;
                         });
                         break;
-                    case DocumentKind.Document when ShowPdf(load, path, size):
+                    case InspectKind.Document when ShowPdf(load, path, size):
                         break;
-                    case DocumentKind.Document when OperatingSystem.IsWindows() && Views.ShellPreviewHost.CanShow(path):
+                    case InspectKind.Document when OperatingSystem.IsWindows() && Views.ShellPreviewHost.CanShow(path):
                         Post(load, () => (ShellPath, Details, Message) = (path, size, null));
                         break;
-                    case DocumentKind.Document:
+                    case InspectKind.Document:
                         ShowAsText(load, path, size);
                         break;
                     default:
@@ -224,7 +224,7 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
     private void ShowAsText(int load, string path, string size, string why = "")
     {
         var details = $"{size}, its text only{why}";
-        if (DocumentPreview.DocumentAsText(path) is { } text)
+        if (InspectFile.DocumentAsText(path) is { } text)
         {
             var markdown = System.IO.Path.GetExtension(path).ToLowerInvariant() is ".docx" or ".docm" or ".dotx" or ".pptx" or ".pptm" or ".potx";
             Post(load, () =>
@@ -236,12 +236,12 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
             });
             return;
         }
-        if (!DocumentPreview.LooksLikeText(path))
+        if (!InspectFile.LooksLikeText(path))
         {
             Post(load, () => (Details, Message) = (size, "Nothing on this PC previews this kind of file. Its card in the chat has Show in folder."));
             return;
         }
-        var (source, _) = DocumentPreview.ReadText(path);
+        var (source, _) = InspectFile.ReadText(path);
         Post(load, () => (_shown, Text, Details, Message) = (Shown.File, source, details, null));
     }
 
@@ -351,9 +351,9 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
     {
         if (Path is not { } path)
             return null;
-        var opening = $"[The Document preview panel is open beside the chat, showing {path}. ";
+        var opening = $"[The Inspect file panel is open beside the chat, showing {path}. ";
         if (_pick is not { } pick || !files.Contains(path, StringComparer.OrdinalIgnoreCase))
-            return ("Document preview · " + FileName, opening + "What they say is about this file unless they say otherwise.]");
+            return ("Inspect file · " + FileName, opening + "What they say is about this file unless they say otherwise.]");
         var where = Where(pick);
         var context = new System.Text.StringBuilder(opening);
         context.Append(_shown switch
@@ -366,7 +366,7 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
         var text = pick.Text.TrimEnd('\r', '\n');
         context.Append(text.Length <= MaxPickedChars ? text : text[..MaxPickedChars] + $"\n[... {text.Length - MaxPickedChars:N0} more selected characters]");
         context.Append("\n]");
-        return ($"Document preview · {FileName} · {where}", context.ToString());
+        return ($"Inspect file · {FileName} · {where}", context.ToString());
     }
 
     /// <summary>The message went with the selection: it is no longer selected.</summary>

@@ -4,7 +4,7 @@ namespace BlackBox.Core.Documents;
 
 /// <summary>
 /// A PDF drawn page by page by PDFium, Chrome's PDF engine (pdfium.dll from bblanchon.PDFium), for the
-/// Document preview panel: BlackBox draws a PDF itself, whatever the PC has for PDFs. Windows'
+/// Inspect file panel: BlackBox draws a PDF itself, whatever the PC has for PDFs. Windows'
 /// previewer for PDFs was the one the PDF's program registered, and Acrobat's failed on every PDF on
 /// the laptop (2026-10-25). PDFium isn't safe to call from two threads at once: every call here holds
 /// one lock, so several panels (windows) take turns.

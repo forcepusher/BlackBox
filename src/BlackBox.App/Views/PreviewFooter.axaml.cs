@@ -8,10 +8,10 @@ public partial class PreviewFooter : UserControl
 {
     public PreviewFooter() => InitializeComponent();
 
-    /// <summary>Preview: the file in the Document preview panel of the chat window it is in.</summary>
-    private void OnPreview(object? sender, RoutedEventArgs e)
+    /// <summary>Inspect: the file in the Inspect file panel of the chat window it is in.</summary>
+    private void OnInspect(object? sender, RoutedEventArgs e)
     {
         if (DataContext is FilePreview preview && TopLevel.GetTopLevel(this)?.DataContext is MainWindowViewModel chat)
-            chat.PreviewFile(preview.Path);
+            chat.Inspect(preview.Path);
     }
 }

@@ -9,7 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace BlackBox.App.ViewModels;
 
 /// <summary>
-/// A page of a PDF in the Document preview panel (see <see cref="PdfPages"/>): drawn when it comes
+/// A page of a PDF in the Inspect file panel (see <see cref="PdfPages"/>): drawn when it comes
 /// into the panel's list and let go of when it leaves it, so a PDF of hundreds of pages holds only the
 /// few on screen (<see cref="Views.PdfPageView"/>).
 /// </summary>
@@ -67,7 +67,8 @@ public sealed partial class PdfPageItem(PdfPages pdf, int index) : ObservableObj
         image?.Dispose();
     }
 
-    private static Bitmap ToBitmap(byte[] bgra, int width, int height)
+    /// <summary>A page drawn by PDFium as a bitmap; with <paramref name="height"/> less than its own, its top only.</summary>
+    internal static Bitmap ToBitmap(byte[] bgra, int width, int height)
     {
         var pinned = GCHandle.Alloc(bgra, GCHandleType.Pinned);
         try

@@ -84,6 +84,17 @@
         </Panel>
       </DockPanel>
     </DataTemplate>
+
+    <!-- A document, as the Inspect file panel shows it: in a column clear of the bar and the arrows
+         (Windows' previewers draw in a window of their own, over anything laid on them). A click on
+         the dark beside it goes back to the chat. -->
+    <DataTemplate DataType="vm:InspectFileViewModel">
+      <Panel Background="Transparent" PointerReleased="OnBackdropReleased">
+        <Border MaxWidth="1100" Margin="96,56,96,24" Background="{StaticResource BbBackground}" CornerRadius="8" ClipToBounds="True">
+          <views:InspectFileView />
+        </Border>
+      </Panel>
+    </DataTemplate>
   </Window.DataTemplates>
 
   <Grid ColumnDefinitions="*,Auto">

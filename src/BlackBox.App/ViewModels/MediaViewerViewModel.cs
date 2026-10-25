@@ -8,14 +8,15 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BlackBox.App.ViewModels;
 
-/// <summary>A picture or video the full-screen viewer shows: a file, or a screenshot that has none.</summary>
+/// <summary>A picture, video or document the full-screen viewer shows: a file, or a screenshot that has none.</summary>
 /// <param name="Source">What was clicked for it in the chat (a preview, an attachment, a tool call), to start there.</param>
 public sealed record MediaEntry(object Source, string? Path, byte[]? Picture, string Name);
 
 /// <summary>
 /// The full-screen viewer, over the screen the chat is on: a picture at the screen's size (the
 /// wheel comes closer), an animation, or a video playing with its sound, and the chat's other
-/// pictures and videos one arrow key away. Prompt shows what the file was made with.
+/// pictures, videos and documents one arrow key away (a document shown as in the Inspect file panel).
+/// Prompt shows what the file was made with.
 /// </summary>
 public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
 {
@@ -32,7 +33,7 @@ public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
         ShowEntry(Math.Clamp(index, 0, entries.Count - 1));
     }
 
-    /// <summary>What is on screen: a <see cref="ViewerPicture"/>, an <see cref="AnimationPreview"/> or a <see cref="VideoPreview"/>.</summary>
+    /// <summary>What is on screen: a <see cref="ViewerPicture"/>, an <see cref="AnimationPreview"/>, a <see cref="VideoPreview"/> or an <see cref="InspectFileViewModel"/>.</summary>
     [ObservableProperty]
     private object? _shown;
 
@@ -106,6 +107,15 @@ public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
             Shown = new ViewerPicture(null, entry.Picture, _width * 2, PictureLoaded);
             return;
         }
+        // A document from its card in the chat: as the Inspect file panel shows it.
+        if (entry.Source is FileCardPreview)
+        {
+            var document = new InspectFileViewModel(_services);
+            document.PropertyChanged += OnDocumentChanged;
+            document.Show(path);
+            Shown = document;
+            return;
+        }
         if (MediaPreview.KindOf(path) is "video" or "animation")
         {
             var preview = FilePreview.For(path, _services, _width);
@@ -137,10 +147,19 @@ public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
             Recipe = preview.Recipe;
     }
 
+    /// <summary>A document's details ("PDF, 12 pages, 1.1 MB"), as the panel reads them.</summary>
+    private void OnDocumentChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (ReferenceEquals(sender, Shown) && e.PropertyName == nameof(InspectFileViewModel.Details))
+            Details = ((InspectFileViewModel)sender!).Details;
+    }
+
     private void Release()
     {
         if (Shown is FilePreview preview)
             preview.PropertyChanged -= OnPreviewChanged;
+        if (Shown is InspectFileViewModel document)
+            document.PropertyChanged -= OnDocumentChanged;
         (Shown as IDisposable)?.Dispose();
         Shown = null;
     }

@@ -4,7 +4,7 @@ using Xunit;
 
 namespace BlackBox.Core.Tests;
 
-// Text selected in the Document preview panel: where it is in the file, for the chat's box and the model.
+// Text selected in the Inspect file panel: where it is in the file, for the chat's box and the model.
 public class DocumentPickTests
 {
     [Fact]

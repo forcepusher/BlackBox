@@ -12,7 +12,7 @@
     <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
     <!-- PDF text for read_file; fully managed, no dependencies (Apache-2.0). -->
     <PackageReference Include="PdfPig" Version="0.1.16" />
-    <!-- PDF pages drawn for the Document preview panel: Chrome's PDF engine, prebuilt (BSD-3 and Apache-2.0); native, 7.5 MB (win-x64). -->
+    <!-- PDF pages drawn for the Inspect file panel: Chrome's PDF engine, prebuilt (BSD-3 and Apache-2.0); native, 7.5 MB (win-x64). -->
     <PackageReference Include="bblanchon.PDFium.Win32" Version="157.0.8100" />
     <!-- Same SkiaSharp line as Avalonia 11 so the app ships a single native Skia. -->
     <PackageReference Include="SkiaSharp" Version="2.88.9" />

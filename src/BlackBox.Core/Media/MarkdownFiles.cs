@@ -1,6 +1,6 @@
 namespace BlackBox.Core.Media;
 
-/// <summary>Markdown files (.md), which the Document preview panel shows formatted, as the chat does a reply.</summary>
+/// <summary>Markdown files (.md), which the Inspect file panel shows formatted, as the chat does a reply.</summary>
 public static class MarkdownFiles
 {
     /// <summary>The most of a file <see cref="ReadStart"/> reads unless told otherwise: a long one gives its start.</summary>

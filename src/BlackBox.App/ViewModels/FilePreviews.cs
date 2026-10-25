@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using BlackBox.Core.Documents;
 using BlackBox.Core.Media;
 using BlackBox.Core.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -22,7 +23,7 @@ public sealed class PreviewServices(IMediaDecoder? decoder, Func<IAudioOutput?> 
 /// <summary>
 /// A file the agent made or showed, previewed in the chat: a picture, an animation, a video or a
 /// sound with a player, a 3D model to turn around, or a card for anything else (a document, a
-/// Markdown file). Each opens in the Document preview panel or shows in its folder.
+/// Markdown file) with a peek at its start. Each opens in the Inspect file panel or shows in its folder.
 /// </summary>
 public abstract partial class FilePreview(string path) : ObservableObject, IDisposable
 {
@@ -237,16 +238,85 @@ public sealed partial class AnimationPreview(string path, int width = FilePrevie
 }
 
 /// <summary>
-/// A file with nothing to show inside the chat (a document, a Markdown file): its name and size, to
-/// see in the Document preview panel or find.
+/// A document, a Markdown file, a table, code: its name and size on a card, over a peek at its start
+/// as the Inspect file panel draws it (a PDF's first page, an Office file's own picture of itself, or
+/// its first lines). A click on the peek opens the file in the full-screen viewer, as a picture's
+/// does (the user's request, 2026-10-26); Inspect opens it in the panel.
 /// </summary>
-public sealed class FileCardPreview(string path) : FilePreview(path)
+public sealed partial class FileCardPreview(string path) : FilePreview(path)
 {
+    /// <summary>How tall the peek is at most: what is below is cut off.</summary>
+    public const int PeekHeight = 240;
+
+    /// <summary>A PDF's first page (its top, as wide as the card) or an Office file's picture of its first page or slide.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPeek))]
+    private Bitmap? _thumbnail;
+
+    /// <summary>Its start drawn as a reply is: Markdown, a table, a Word or PowerPoint file's text.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPeek))]
+    private string? _peekMarkdown;
+
+    /// <summary>Its start in a fixed-width font: code, text, an Excel file's cells, a PDF's text.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPeek))]
+    private string? _peekText;
+
+    /// <summary>There is something of the file to show, and so to open full screen.</summary>
+    public bool HasPeek => Thumbnail is not null || PeekMarkdown is not null || PeekText is not null;
+
     protected override void Load() => Background(() =>
     {
-        var details = File.Exists(Path) ? Size(Path) : "The file is no longer there.";
-        Show(() => Details = details);
+        if (!File.Exists(Path))
+        {
+            Show(() => Details = "The file is no longer there.");
+            return;
+        }
+        var size = Size(Path);
+        Show(() => Details = size);
+        var kind = InspectFile.KindOf(Path);
+        if (kind == InspectKind.Document && Picture() is { } picture)
+        {
+            Show(() => Thumbnail = picture, picture.Dispose);
+            return;
+        }
+        var (markdown, text) = InspectFile.Peek(Path, kind);
+        if (markdown is not null || text is not null)
+            Show(() => (PeekMarkdown, PeekText) = (markdown, text));
     });
+
+    /// <summary>A PDF's first page drawn by PDFium, or the picture an Office or OpenDocument file keeps of itself; null for neither.</summary>
+    private Bitmap? Picture()
+    {
+        if (System.IO.Path.GetExtension(Path).Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                using var pdf = PdfPages.Open(Path);
+                // Twice the card's width, for a sharp page on a scaled screen; its top only when it
+                // is taller than the peek.
+                if (pdf.Render(0, Width * 2) is { } page)
+                    return PdfPageItem.ToBitmap(page.Bgra, page.Width, Math.Min(page.Height, page.Width * PeekHeight / Width));
+            }
+            catch (Exception ex) when (ex is InvalidDataException or DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or IOException) { }
+            return null; // its text, as in the panel
+        }
+        if (InspectFile.SavedThumbnail(Path) is not { } bytes)
+            return null;
+        try
+        {
+            using var stream = new MemoryStream(bytes);
+            return new Bitmap(stream);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException) { return null; }
+    }
+
+    protected override void Release()
+    {
+        Thumbnail?.Dispose();
+        Thumbnail = null;
+    }
 }
 
 /// <summary>A 3D model, turned around with the mouse (see <see cref="Views.ModelViewer"/>).</summary>

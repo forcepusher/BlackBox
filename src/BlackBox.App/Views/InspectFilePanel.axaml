@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:BlackBox.App.ViewModels"
+             xmlns:views="using:BlackBox.App.Views"
+             x:Class="BlackBox.App.Views.InspectFilePanel"
+             x:DataType="vm:InspectFileViewModel"
+             Background="{StaticResource BbBackground}">
+  <DockPanel>
+    <!-- The file's name and what it is, and where it is; × closes the panel. As tall as the chat's top
+         bar beside it, whose Toolkit dropdown is 30 high. A click on it lets go of the text selected. -->
+    <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="12,8"
+            PointerReleased="OnBarReleased">
+      <DockPanel MinHeight="30">
+        <views:ToolkitClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,0,0,0" />
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" ClipToBounds="True">
+          <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}" />
+          <TextBlock Classes="muted" Text="{Binding Details}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Details}" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <views:InspectFileView />
+  </DockPanel>
+</UserControl>

@@ -445,7 +445,7 @@ public partial class MainWindow : Window
     /// <summary>The full-screen viewer, while it is open.</summary>
     private MediaViewer? _viewer;
 
-    /// <summary>A picture or video preview in the chat: full screen.</summary>
+    /// <summary>A picture or video preview in the chat, or a document's peek: full screen.</summary>
     private void OnPictureClick(object? sender, RoutedEventArgs e)
     {
         if ((sender as Control)?.DataContext is FilePreview preview)

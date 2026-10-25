@@ -7,7 +7,7 @@ using BlackBox.App.ViewModels;
 namespace BlackBox.App.Views;
 
 /// <summary>
-/// A page of a PDF in the Document preview panel: as wide as the panel lets it be (never wider than it
+/// A page of a PDF in the Inspect file panel: as wide as the panel lets it be (never wider than it
 /// was drawn), as tall as the page's shape makes that, white until its picture is in. It asks for its
 /// picture while it is in the panel's list and lets it go when the list recycles it for another page.
 /// </summary>

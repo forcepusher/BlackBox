@@ -163,8 +163,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     public PreviewServices Previews => _previews;
 
     /// <summary>
-    /// The chat's pictures and videos from the top, for the full-screen viewer to go through: those
-    /// that came with messages, tools' screenshots, and what tools made or replies named.
+    /// The chat's pictures, videos and documents from the top, for the full-screen viewer to go through: those
+    /// that came with messages, tools' screenshots, and what tools made or replies named (a document
+    /// with a peek on its card).
     /// </summary>
     public List<MediaEntry> MediaInChat()
     {
@@ -175,7 +176,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 all.AddRange(message.Attachments.Where(a => Viewable(a.Path)).Select(a => new MediaEntry(a, a.Path, null, a.FileName)));
             if (item is ToolCallItem { ScreenshotData: { } shot } tool)
                 all.Add(new MediaEntry(tool, null, shot, $"Screenshot, {tool.TimeText}"));
-            all.AddRange(item.Previews.Where(p => Viewable(p.Path)).Select(p => new MediaEntry(p, p.Path, null, p.FileName)));
+            all.AddRange(item.Previews.Where(p => p is FileCardPreview { HasPeek: true } || Viewable(p.Path)).Select(p => new MediaEntry(p, p.Path, null, p.FileName)));
         }
         return all;
     }
