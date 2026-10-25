@@ -11,7 +11,7 @@ using BlackBox.App.ViewModels;
 
 namespace BlackBox.App.Views;
 
-/// <summary>Video editor's panel, on the left of the chat window: a viewer, and the timeline where the video is worked on.</summary>
+/// <summary>Video generator's panel, on the left of the chat window: a viewer, and the timeline where the video is worked on.</summary>
 public partial class VideoPanel : UserControl
 {
     public VideoPanel()

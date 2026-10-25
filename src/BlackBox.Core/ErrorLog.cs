@@ -26,7 +26,7 @@ public static class ErrorLog
     public static void Stop() => _file = null;
 
     /// <summary>
-    /// Adds what was shown <paramref name="where"/> ("chat \"Build it\"", "Video editor") to the log,
+    /// Adds what was shown <paramref name="where"/> ("chat \"Build it\"", "Video generator") to the log,
     /// with the exception behind it, if the Data folder takes it.
     /// </summary>
     public static void Write(string where, string shown, Exception? error = null)

@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   have Front, Right, Back, Left and Top views; **Area** marks a part of the view to ask about.
 - File inspector shows any other file as hex; select bytes to ask about them.
 - "in development" beside the **Toolkit** dropdown: its tools are still being built.
-- With Video editor open and nothing picked in it, the video itself shows over the chat's box, as a
+- With Video generator open and nothing picked in it, the video itself shows over the chat's box, as a
   pick does: what you type is about the whole video.
 - **File changes** in the **Toolkit** dropdown: every file the agent changes in the chat (writes, edits, and
   what its commands change) on the left of the chat, each beside its diff, updated as it works and kept
@@ -54,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Markdown files (.md) get a card like other documents, under the reply that names them and under
   write_file when the agent writes one.
 - `Data\errors.log`: every error BlackBox shows (in the chat, in the banner under the top bar, in
-  Video editor, or when it can't start), with the details behind it, to read after the chat or the
+  Video generator, or when it can't start), with the details behind it, to read after the chat or the
   window is gone.
 - Folder index: before it works on a project or a big folder, BlackBox indexes it by itself, as
   Cursor does: what kind of project it is, its README, its folders and what its main files define,
@@ -66,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other's screenshots, all pause while you type in any of them, and one Pause/Break stops them all.
   A chat open in one window brings that window forward when picked in another's History, and what
   Settings saves applies to every window; each keeps its own model.
-- Video editor: pick it in the **Toolkit** dropdown at the top left, and it opens on the left of the
+- Video generator: pick it in the **Toolkit** dropdown at the top left, and it opens on the left of the
   chat, the window growing to that side: a viewer, and the video on one timeline you drag sideways,
   where all of it is worked on: References (pictures), the video clips, the lines and the sound lines.
   Right-click a row to create a card, clip or sound there: **File…** copies a file of yours in,
@@ -100,7 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   take one.
 - Messages sent while BlackBox works wait above the box until the model reads them: × takes one
   back, and **Interrupt the model** (or Ctrl+Enter) has it read at once.
-- A full-screen viewer for the pictures and videos in the chat and in Video editor, with the others
+- A full-screen viewer for the pictures and videos in the chat and in Video generator, with the others
   an arrow key away. Videos in the chat play by themselves, muted, while they are on screen.
 - **Prompt** under a picture made with ComfyUI or AUTOMATIC1111 shows the prompts and settings it
   was made with, read back from the file.
@@ -109,21 +109,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A sysadmin benchmark ticket that moves a live game API's database from SQLite to PostgreSQL while
   players keep writing to it.
 - This changelog.
-- Video editor's videos are in a menu on the video's name at the top: open another, start a new one, or
+- Video generator's videos are in a menu on the video's name at the top: open another, start a new one, or
   rename or delete this one (to the Recycle Bin). On the timeline, right-click a card, clip or sound
   to rename or delete it, or to see an earlier version of it.
-- A × at the top right of Video editor, File changes and File inspector closes the tool.
+- A × at the top right of Video generator, File changes and File inspector closes the tool.
 
 ### Changed
+- Video editor is now called **Video generator**.
 - Inspect file is now called **File inspector**.
 - What you pick in a toolkit panel has no × in the chat's box: unpick it in the panel (a click away, or Esc).
 - A toolkit panel's card comes before your own files, in the box and in the sent message, with a small arrow toward its panel.
-- The **Toolkit** dropdown reads None, File changes, File inspector, Video editor.
+- The **Toolkit** dropdown reads None, File changes, File inspector, Video generator.
 - Asked for code, commands or facts that change (versions, prices, news), the agent looks them up
   on the web before it answers, rather than writing them from memory.
-- A video's name is its folder's: renamed in Video editor, in Explorer, or by the agent giving it a
+- A video's name is its folder's: renamed in Video generator, in Explorer, or by the agent giving it a
   title, the video is.
-- Video editor's frame size and frame rate are at the top of the panel, and a new clip is the dashed +
+- Video generator's frame size and frame rate are at the top of the panel, and a new clip is the dashed +
   after the last one on the timeline.
 - Every dropdown's arrow (Toolkit, History, Model, Effort) is the same solid triangle, and so is the
   Toolkit's arrow to the left.
@@ -134,20 +135,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The context slider goes up to 1M.
 - The second BlackBox name and logo under the title bar made way for the Toolkit dropdown.
 - The first-run hints for Ctrl+V and **New window** are reworded.
-- A new video in Video editor is called "Untitled video".
-- Video editor says video, not film, everywhere, and so does the agent. Its takes are clips (Clip 1,
+- A new video in Video generator is called "Untitled video".
+- Video generator says video, not film, everywhere, and so does the agent. Its takes are clips (Clip 1,
   Clip 2…) on the **Video clips** row, and its sound tracks are sound lines (Sound line 1…).
   Videos are kept in `Data\videos`; ones made before, in `Data\films`, no longer open.
 
 ### Removed
 - Ctrl+Shift+N: **New window** at the top opens another window.
 - Videos kept in a `storyboard.json` (from 1.0.0) no longer open: a video is its folder now.
-- Video editor's video dropdown, its Open… and Show folder buttons, the settings button with the video's
+- Video generator's video dropdown, its Open… and Show folder buttons, the settings button with the video's
   title, and the soundtrack and shots' own sound sliders.
-- Video editor's **New video** button beside **Make the video**: New video is in the menu on the video's name.
+- Video generator's **New video** button beside **Make the video**: New video is in the menu on the video's name.
 - File inspector's **Show in folder**: the file's card in the chat has it.
 
 ### Fixed
+- With a tool open and little room for the chat, the server's status dot no longer draws over **History**.
 - Picking a tool in the **Toolkit** dropdown, or None, changes the window in one go: no more frame
   of the chat at the wrong width, an empty or black panel, or the list still open over it.
 - A reply that asks you something ends the turn, even when it says what the agent will do after your
@@ -163,15 +165,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   starts loading the model, and each later connection to it no longer waits 2 seconds.
 - ComfyUI templates no longer leave an Edge button on the taskbar where Edge isn't allowed to run
   headless: the copy Edge hands over to has its window hidden too.
-- With Video editor or File changes open, the window can no longer be made so narrow that the chat is
-  squeezed to a few letters across: the panel gives way first, then the window stops. Video editor
+- With Video generator or File changes open, the window can no longer be made so narrow that the chat is
+  squeezed to a few letters across: the panel gives way first, then the window stops. Video generator
   also keeps the window tall enough for its viewer, and a long video name is cut short at the top.
-- Video editor: a file dropped on a new card or sound becomes it, which is marked while you drag over
+- Video generator: a file dropped on a new card or sound becomes it, which is marked while you drag over
   it; a copied file can be renamed. A line over the timeline says what right-click and dropping do,
   and the viewer names the video and says it is selected instead of "Whole video".
-- Picking Video editor widens the window to the left in one smooth step: the chat no longer jumps
+- Picking Video generator widens the window to the left in one smooth step: the chat no longer jumps
   sideways and back, and the new part of the window isn't black while the panel appears.
-- In Video editor, a picture you give for a reference (pasted, attached or dropped) is kept exactly as
+- In Video generator, a picture you give for a reference (pasted, attached or dropped) is kept exactly as
   it is, in References, and the references are made from all of it: BlackBox cut one
   pose out of a character lineup and showed the cut-out as your picture.
 - A task whose last step the server failed a few times before answering no longer looks as if it
@@ -210,15 +212,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saving Settings in one window no longer undoes what another window saved while the dialog was
   open; closing a window right after picking another chat no longer marks that chat stopped; a
   window closed while its MCP servers restarted no longer leaves them running.
-- Video editor: Continue sends a message the model never had whole, with the video it was about; chats
-  begun with Video editor open are named after the video and what was picked too, not "Make it." alone;
+- Video generator: Continue sends a message the model never had whole, with the video it was about; chats
+  begun with Video generator open are named after the video and what was picked too, not "Make it." alone;
   a change made by hand while BlackBox changes the video in the chat no longer writes over BlackBox's
   change, nor is a shot's length being dragged lost to it; a shot added after one was deleted no
   longer brings back the deleted shot's clip; a video named again keeps its joined video; a version isn't
   put back while BlackBox makes a piece of the video; two new videos started in two windows at once no
   longer share a folder; a piece of the video open is no longer shown as being made when the chat
   makes another video's.
-- A piece asked for in Video editor is made again when its look finds something wrong, up to
+- A piece asked for in Video generator is made again when its look finds something wrong, up to
   twice, as before it ran in the chat; the storyboard guide comes back after the context starts
   afresh; a stopped shot of several tries no longer keeps a copy of its clip as one more version; a
   video the model names without a full path goes into `Data\videos`, not your home folder; a second
@@ -240,7 +242,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Videos: a failed remake no longer leaves a piece looking made; remaking the song keeps the lines'
   voice and doesn't redo a song that still covers the video; restoring a version restores all of its
   settings; long titles and names like "Con" work; the video tool no longer writes over changes made
-  in Video editor during a long job. A frame changed to be taken from where a shot ends
+  in Video generator during a long job. A frame changed to be taken from where a shot ends
   is no longer dropped back to its old prompt while the shot still ends on it.
 
 ## [1.0.0] - 2026-10-19

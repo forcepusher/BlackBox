@@ -53,7 +53,7 @@ public sealed class AppPaths(string root)
     public string PastedDir => Path.Combine(DataDir, "pasted");
 
     /// <summary>
-    /// The videos planned in the Video editor panel or asked for in the chat, a folder each (see
+    /// The videos planned in the Video generator panel or asked for in the chat, a folder each (see
     /// <see cref="Video.Storyboard"/>): portable, like everything else of BlackBox's (the user's
     /// choice), rather than in the PC's Videos folder.
     /// </summary>

@@ -289,7 +289,7 @@
     </DataTemplate>
   </Window.DataTemplates>
 
-  <!-- A tool of the toolkit (Video editor) in a column of its own on the left, the chat on the right.
+  <!-- A tool of the toolkit (Video generator) in a column of its own on the left, the chat on the right.
        Shown and hidden by the window as it makes room for it (MainWindow.Dock). -->
   <Grid x:Name="Columns" ColumnDefinitions="0,0,*">
     <Border x:Name="ToolkitHost" Grid.Column="0" IsVisible="False">
@@ -373,8 +373,9 @@
           <Button Classes="ghost" Content="Settings" Click="OnSettingsClick" />
         </StackPanel>
         <!-- The server's state, between the name and the buttons: what gets shorter in a narrow window,
-             so the buttons keep their names. -->
-        <DockPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0">
+             so the buttons keep their names. With no room at all it is clipped away rather than drawn
+             over History (Video generator's panel at its default width). -->
+        <DockPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0" ClipToBounds="True">
           <Ellipse DockPanel.Dock="Left" Classes="status" Classes.checking="{Binding IsChecking}" Classes.connected="{Binding IsConnected}" Classes.failed="{Binding IsFailed}"
                    Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,6,0" />
           <TextBlock DockPanel.Dock="Left" Classes="muted" Text="{Binding ServerStatusText}" TextTrimming="CharacterEllipsis"

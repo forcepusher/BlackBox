@@ -30,10 +30,10 @@ public class ToolCardTests : IDisposable
             Entries =
             [
                 new ChatEntry { Kind = ChatEntryKind.User, Text = "what is this", Via = "File changes · notes.md", Cards = [new ToolCard("Lines 3-5 · notes.md", Path: @"C:\w\notes.md")] },
-                new ChatEntry { Kind = ChatEntryKind.User, Text = "make it", Via = "Video editor · Fox", Cards = [new ToolCard("Fox", "whole video", Icon: film)] },
+                new ChatEntry { Kind = ChatEntryKind.User, Text = "make it", Via = "Video generator · Fox", Cards = [new ToolCard("Fox", "whole video", Icon: film)] },
             ],
         });
-        File.WriteAllText(Path.Combine(_dir, "old.json"), """{"id":"old","title":"Old","entries":[{"kind":"User","text":"Hi","via":"Video editor · Fox"}]}""");
+        File.WriteAllText(Path.Combine(_dir, "old.json"), """{"id":"old","title":"Old","entries":[{"kind":"User","text":"Hi","via":"Video generator · Fox"}]}""");
 
         var entries = store.Load("cards")!.Entries;
         Assert.Equal(new ToolCard("Lines 3-5 · notes.md", Path: @"C:\w\notes.md"), Assert.Single(entries[0].Cards!));

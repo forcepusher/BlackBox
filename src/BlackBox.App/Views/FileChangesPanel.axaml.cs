@@ -182,7 +182,7 @@ public partial class FileChangesPanel : UserControl
     }
 
     /// <summary>
-    /// A right-click on a file: Show in folder, in the look of the Video editor's menus. A deleted
+    /// A right-click on a file: Show in folder, in the look of the Video generator's menus. A deleted
     /// file has nothing to show, so the entry is greyed out.
     /// </summary>
     private void OnFileMenu(object? sender, ContextRequestedEventArgs e)

@@ -1206,7 +1206,7 @@ public sealed class VideoToolTests : IDisposable
         Assert.Contains("keeps the name \"Dawn Tea\"", taken.Text);
         Assert.Equal("a cup steams", Storyboard.Load(Path.Combine(videos, "Coffee")).Shots[0].Prompt);
 
-        // The Video editor window's new video (empty s1, f1, f2), read with its path, then laid out
+        // The Video generator window's new video (empty s1, f1, f2), read with its path, then laid out
         // without one: in place.
         var blank = Storyboard.New(Path.Combine(videos, "Untitled video"), "Untitled video");
         blank.Save();

@@ -34,7 +34,7 @@ with the message box under the taskbar.
 
 Every error BlackBox shows also goes into `Data/errors.log`: when, where it was shown (the chat,
 named by its title and its file in `Data/chats`; the banner under the top bar, with the server's
-address; Video editor, with the video's folder; a start that failed), what it said, and the
+address; Video generator, with the video's folder; a start that failed), what it said, and the
 whole exception behind it, stack trace and all. That covers the red lines in the chat (a run that
 ended on a server's answer or a bug, a run that couldn't start, settings or a pasted picture that
 couldn't be saved, MCP servers that failed), the lines about a server's failure a run went on
@@ -316,7 +316,7 @@ writes don't, and read_file shows none (the agent reads many READMEs while it wo
 A video plays by itself while it is on screen, over and over and without its sound, as a GIF
 would; scrolled away, under the full-screen viewer or with the window minimized it pauses, so a
 long chat decodes only what can be seen (a third of its height showing, or 120 pixels of a tall one,
-counts as on screen). Its pause button holds it until it is played again. The Video editor panel's
+counts as on screen). Its pause button holds it until it is played again. The Video generator panel's
 players are not touched by this: they play with sound when asked. Playing, a video holds its file
 open, so a file the video tool is about to write over (a shot made again, the song, the video joined
 again, a version put back) is let go of first (`MediaRelease`): every window's players of it stop, and
@@ -330,7 +330,7 @@ click between that and its own size (from twice its size its pixels stay square,
 video plays with its sound (M or the speaker turns it off), Space plays or pauses. The arrow keys
 and the side buttons go through the chat's other pictures and videos, Esc, × or a click beside the
 picture goes back. The agent's clicks step it aside as they do the chat's window, and its keys go to
-the window under both (before, from the chat they could go to the Video editor window there was then).
+the window under both (before, from the chat they could go to the Video generator window there was then).
 
 **Prompt** under a picture, video or sound made with ComfyUI shows the prompts it was made with and
 the settings that matter for making it again (model, LoRAs with their strength, shift, sampler,
@@ -493,9 +493,9 @@ the Takes folders of a day before; it names References and Generated now.)
 
 A video of more than one shot (a music video, a story, an ad) is planned as a **storyboard** and
 made piece by piece with ComfyUI: one video model run can't hold a story together for more than
-a few seconds, and not every video is one continuous camera shot. **Video editor**, picked in the
+a few seconds, and not every video is one continuous camera shot. **Video generator**, picked in the
 **Toolkit** dropdown at the top left of the chat window, opens in a panel on the left of the chat
-(see "The Video editor panel" below): what the user picks in it goes into the chat's box, they say
+(see "The Video generator panel" below): what the user picks in it goes into the chat's box, they say
 there what to do with it, and the agent does it with its `video` tool, which reads and writes the
 same video the panel shows. A video can start in either and go on in the other.
 
@@ -504,7 +504,7 @@ folder-driven", and "We don't need the film file storyboard.json anymore right?"
 `Data/videos/<title>` next to the exe like the rest of BlackBox's data (the user's choice: it is
 portable; the first build put videos in the PC's Videos folder). A path the model gives that isn't
 from a drive ("lighthouse") is a folder in `Data/videos` too: taken from the working folder, as until
-2026-10-23, qwen3.8's "lighthouse" was made in the user's home, where Video editor doesn't look.
+2026-10-23, qwen3.8's "lighthouse" was made in the user's home, where Video generator doesn't look.
 **Its title is the folder's name** (2026-10-24, with the user's "I want it to work just like a file
 explorer, where you can right click and rename films"): reading a video takes it from the folder, so
 one renamed in Explorer or in the panel is; the video's own .json no longer holds one. A new title
@@ -700,13 +700,13 @@ saw as a chubby teenager). `tries=N` makes up to N tries with new seeds until on
 the best. The whole video is checked from a frame of each shot side by side and the joins where the
 camera should go on.
 
-**The Video editor panel** ("Filmmaking" until the user renamed it on 2026-10-25; 2026-10-24, the user's design: "Filmmaking window should extend current
+**The Video generator panel** ("Filmmaking" until the user renamed it Video editor on 2026-10-25, and Video generator on 2026-10-26; 2026-10-24, the user's design: "Filmmaking window should extend current
 window to the left side instead of opening a new separate window... Use the main chat for film
 making... Put filmmaking button under Toolkit dropdown menu with None and Filmmaking options. There
 will be more tools extending to the left side of the screen later."). The **Toolkit** dropdown
 takes the place of the second BlackBox logo and name under the title bar, an arrow on it pointing
-left, where its tools open: None or Video editor (`ToolkitOption`, `IToolkit`, more to come); it
-now reads None, File changes, File inspector, Video editor (the user, 2026-10-26). A muted "in development" beside it (the
+left, where its tools open: None or Video generator (`ToolkitOption`, `IToolkit`, more to come); it
+now reads None, File changes, File inspector, Video generator (the user, 2026-10-26). A muted "in development" beside it (the
 user, 2026-10-24) says its tools are still being built: the header's `muted` text, 10 px right of
 the dropdown and centred on it. Its
 arrows are solid triangles, the left one and the dropdown's, as History's and every dropdown's are
@@ -734,14 +734,14 @@ one's width to the other's: the view model sets the new tool in one change (it w
 and the window shrank to the chat and grew back), the window sets the panel's content itself (a
 binding took it after the layout), and the dropdown's list is closed first (it lingered a frame over
 the resized window). Measured after: popup closed, then one frame with all of the switch, for every
-pick of None, Video editor and File changes either way. The window's place is saved without the panel. **What a tool gives a message is always a card** over the box (the user, 2026-10-25, after a message sent with File changes open showed only a grey "File changes" over its words): a pick (`MainWindowViewModel.Pick`, an `AttachmentItem` with a caption) or, with none, what the message is about there (`IToolkit.Whole`, a `ToolCardItem`; a tool showing nothing yet gets one naming it, "nothing in it yet", and the model is told the panel is open). Neither has the × the user's own files have (`AttachmentItem.CanRemove` is false for a pick; the user's call: a pick is unpicked in its panel, a click away or Esc, which brings the whole card back, so box and panel can't disagree). Every panel puts what it picks in the box through `Pick`, so a new one gets this as is; `ToolCardTests` fails if a × in the box is shown for anything but `CanRemove`. Sent, the cards go with the message (`UserInput.Cards`, kept in the chat as `ChatEntry.Cards`) and show in its bubble as its files do, a pick by its caption; a chat saved before shows its grey line as it was. **The × at the right end of every tool's top bar** closes the tool, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`ToolkitClose`, 30 square as the Toolkit dropdown, 12 right of what is beside it), so it looks and sits the same in each. Video editor's frame fields are 30 high there: their own 32 made its bar 2 px taller (at 125%) than the other tools' and the chat's, and its × sat lower. **Made narrower, the panel gives way first** (`ToolkitColumns`,
+pick of None, Video generator and File changes either way. The window's place is saved without the panel. **What a tool gives a message is always a card** over the box (the user, 2026-10-25, after a message sent with File changes open showed only a grey "File changes" over its words): a pick (`MainWindowViewModel.Pick`, an `AttachmentItem` with a caption) or, with none, what the message is about there (`IToolkit.Whole`, a `ToolCardItem`; a tool showing nothing yet gets one naming it, "nothing in it yet", and the model is told the panel is open). Neither has the × the user's own files have (`AttachmentItem.CanRemove` is false for a pick; the user's call: a pick is unpicked in its panel, a click away or Esc, which brings the whole card back, so box and panel can't disagree). Every panel puts what it picks in the box through `Pick`, so a new one gets this as is; `ToolCardTests` fails if a × in the box is shown for anything but `CanRemove`. Sent, the cards go with the message (`UserInput.Cards`, kept in the chat as `ChatEntry.Cards`) and show in its bubble as its files do, a pick by its caption; a chat saved before shows its grey line as it was. **The × at the right end of every tool's top bar** closes the tool, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`ToolkitClose`, 30 square as the Toolkit dropdown, 12 right of what is beside it), so it looks and sits the same in each. Video generator's frame fields are 30 high there: their own 32 made its bar 2 px taller (at 125%) than the other tools' and the chat's, and its × sat lower. **Made narrower, the panel gives way first** (`ToolkitColumns`,
 `MainWindow.FitColumns` on the columns' SizeChanged): down to its least (`ToolkitOption.MinWidth`,
-splitter included: Video editor 770, where its top bar still fits in one row with the video's name cut
+splitter included: Video generator 770, where its top bar still fits in one row with the video's name cut
 short; File changes 560), then the window stops, at the panel's least plus the chat's 660 (no more than
 the screen is wide). It goes back to the width it opened at, or was dragged to, as the window widens
 again; the splitter stops at both leasts. Before (bug of 2026-10-24) the window's least counted any
-panel as 480 while Video editor kept its 960, so the chat was squeezed to a few letters across, and
-opening on a narrow screen left the chat only 330. Video editor also needs the window 600 tall
+panel as 480 while Video generator kept its 960, so the chat was squeezed to a few letters across, and
+opening on a narrow screen left the chat only 330. Video generator also needs the window 600 tall
 (`ToolkitOption.MinHeight`; the chat alone 480), else its viewer is squeezed to nothing over the
 timeline; a shorter window grows to it as the panel opens. The video's name was in a StackPanel across,
 which gives a TextBlock all the room it wants: it was never cut short and pushed the fields over the
@@ -826,9 +826,9 @@ takes its place; it shows what the model is told then, the whole video (the user
 goes with the panel. A tool's cards, this one or the picks, come before the user's own files, over
 the box and in the sent bubble, and each has a small muted ◀ at its left, pointing at the panel it
 comes from (the user, 2026-10-26; style `PathIcon.toolArrow`, 8 px, 4 px from the icon). Checked in
-the app on 2026-10-26 with File inspector and Video editor open and a pasted file of the user's.
-A message sent while Video editor is open carries
-the video (`IToolkit.About`): over its bubble (`UserInput.Via`, "Video editor · The Fox and the Moon ·
+the app on 2026-10-26 with File inspector and Video generator open and a pasted file of the user's.
+A message sent while Video generator is open carries
+the video (`IToolkit.About`): over its bubble (`UserInput.Via`, "Video generator · The Fox and the Moon ·
 shot 2"), and for the model before the words (`UserInput.Context`) the video's folder, what each
 pick is in it (shot s2, the 2nd of 3, from 5 to 9 s, its clip or its folder; frame f1, the start of
 shot 1; the reference "Fox"; a reference's folder, with its pictures and how to name them; a
@@ -854,8 +854,8 @@ weighs, not a rule: the user's way of steering it.
 During a run they wait above the box as anything typed in the chat does. The user watches every step
 in the chat, with each frame and clip as it is made, and stops it there. One still waiting when the
 run is stopped, or the chat is left, goes back into the box as any typed message does, and sent
-again while Video editor is open carries the video again. Its context is saved with the message, so
-Continue on one the model never had sends it whole. A chat begun with Video editor open is named after
+again while Video generator is open carries the video again. Its context is saved with the message, so
+Continue on one the model never had sends it whole. A chat begun with Video generator open is named after
 the words and the video and picks ("Make it. (Fox Test · start of shot 1)"), not "Make it." alone.
 
 The model writes prompts as BlackBox's storyboard guide says (`Comfy/Guides/storyboards.md`, which
@@ -1203,7 +1203,7 @@ window in front, at its size, kept on the screen, as Windows cascades windows: r
 a second window looked as if nothing had opened. A window closed where it opened beside another
 doesn't save its place, so BlackBox doesn't creep down a step with every second window. The title
 bar names the chat ("keys 6 - BlackBox"), to tell the windows apart on the taskbar. A window's
-Video editor panel and full-screen viewer close with it, and so does all it had going: its run
+Video generator panel and full-screen viewer close with it, and so does all it had going: its run
 stops (the chat says so, with Continue, when it is opened again; it ended without a word before),
 what that run still reports is dropped (another window may open the chat meanwhile), the
 sounds in its chat stop, and no run or MCP server of its starts again. Its videos hold still while
@@ -1223,7 +1223,7 @@ What they share, and how they keep out of each other's way:
   button), and picking it brings that window forward. History rereads the folder whenever it opens,
   for the chats other windows started. One saver writes every window's chats, so a window opening a
   chat another just left waits for its last version.
-- **The screen.** Every window, Video editor, the viewer and a dialog is the process's own, so all of
+- **The screen.** Every window, Video generator, the viewer and a dialog is the process's own, so all of
   them are left out of every agent's screenshots, and a click that lands on any of them pushes it to
   the bottom for the click, as for the chat alone.
 - **The mouse and keyboard.** One agent at a time (`DesktopTurn`): from its first click or key
@@ -1670,7 +1670,7 @@ prints the traceback and exits with 0.
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures, videos, sounds and 3D models to the model; `write_file` makes documents from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
 | `diff` | What changed: a git repository's uncommitted changes, staged ones, one commit, or since a branch, or two files or folders compared without git; the files and their line counts first, then the hunks, in parts (see Diff below) |
 | `comfyui` | Pictures, video, sound, music, speech and 3D models with ComfyUI on this PC, which it installs when there is none: templates, node and model look-ups, models found online and downloaded, checked runs that hand back the files (see Pictures, video and sound) |
-| `video` | Videos from a storyboard (the video's folder Video editor shows): plans or changes it, makes its frames, song and shots with ComfyUI, checks each shot against what it should show, joins them with ffmpeg (see Videos) |
+| `video` | Videos from a storyboard (the video's folder Video generator shows): plans or changes it, makes its frames, song and shots with ComfyUI, checks each shot against what it should show, joins them with ffmpeg (see Videos) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
 | `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |
@@ -1970,7 +1970,7 @@ in `Data/chats/changes/<id>.json` (written after each call, deleted with the cha
 again from History shows it again; a new chat starts empty.
 
 **The panel** (Toolkit, File changes; "Diff", then "Code diff", then "Code changes", until the user renamed it on
-2026-10-24 and 2026-10-25) opens on the left of the chat as Video editor does, with the changed files listed on the
+2026-10-24 and 2026-10-25) opens on the left of the chat as Video generator does, with the changed files listed on the
 left and their diff beside them. It reads them again 250 ms after a call that may have changed files (a file written in
 parts is read once), keeping the picked lines picked. Lines are picked with a click,
 Shift+click and Ctrl+click (a header or @@ line picks nothing) and go into the chat's box as their
@@ -1981,7 +1981,7 @@ says only that these are the lines the user refers to, not that they are to be c
 picks lines to ask about them as much as to have them changed (the user, 2026-10-24). Sent, they
 are no longer picked. A click in the
 panel away from the lines (below the last, a header or @@ line, the bar at the top, the file list
-below its files) unpicks them all, as Esc does there, like the Video editor's click away (the user,
+below its files) unpicks them all, as Esc does there, like the Video generator's click away (the user,
 2026-10-25). What keeps them: a click on a file in the list (it only goes there, so lines are picked
 in two files), Shift or Ctrl held (they add), and any click in the chat, as the box is clicked to
 ask about them. A plain click on a picked line picks only it; clicked again it stays picked. Lines
@@ -1999,7 +1999,7 @@ on 2026-10-26 (a 201-line new file): 7 to 12 and back up, Ctrl+drag, past both e
 on a half-shown @@ line still unpicks.
 A right-click on a file in the list offers **Show in folder** (the user, 2026-10-25): Explorer
 opens on its folder with it selected, through the file cards' `FilePreview.ShowInFolder`; greyed
-out for a deleted file. The menu is a plain `ContextMenu`, as the Video editor's are; checked
+out for a deleted file. The menu is a plain `ContextMenu`, as the Video generator's are; checked
 with a real right-click on 2026-10-26.
 **With no lines picked, the file selected in the list** is what a message is about (the user,
 2026-10-25: "currently selected changed file should be visible in the chat context"): its card over the
@@ -2088,7 +2088,7 @@ under the panel's bar here and in the full-screen viewer for a card's peek, see 
   previewer, or when it fails, the panel shows the file's text as read_file gives the agent
   (`DocumentText`; Word's and PowerPoint's as Markdown), a web page its source.
 
-**Selected text into the message** (the user's request, 2026-10-25, as Video editor and File changes
+**Selected text into the message** (the user's request, 2026-10-25, as Video generator and File changes
 do). With a file shown and nothing selected, the file is a card over the chat's box ("notes.md ·
 whole document", `IToolkit.Whole`, which now also gives the card's tooltip and icon). Text selected
 in what BlackBox draws (Markdown, a table, text) goes into the box as a pick (`MainWindowViewModel.Pick`)
@@ -2430,7 +2430,7 @@ as if "Continue." had been sent (a stop before the model had the message runs th
 A chat that ended stopped shows it again when opened from History. BlackBox
 stays on screen while it works but is left out of the agent's screenshots, and steps behind other
 windows for the moment a click lands on it: all of its windows (every chat window, the viewer,
-Video editor, a dialog), found by their process (see Several windows). It is left out only for the instant each screenshot is
+Video generator, a dialog), found by their process (see Several windows). It is left out only for the instant each screenshot is
 taken, so screen recorders and screen sharing show it the rest of the time (before, an option hid
 it from them for good). Every click and key press the agent makes shows up in a
 log in the bottom-right corner that fades after 15 seconds, with a ring where it clicked. The agent

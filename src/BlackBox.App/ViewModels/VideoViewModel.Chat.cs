@@ -11,8 +11,8 @@ public sealed partial class VideoViewModel
     // ---- what a message sent while the panel is open carries ----------------------------------------
 
     /// <summary>
-    /// What a message sent from the chat's box carries while Video editor is open: over its bubble,
-    /// the video and what was picked in it ("Video editor · The Fox and the Moon · shot 2"); for the
+    /// What a message sent from the chat's box carries while Video generator is open: over its bubble,
+    /// the video and what was picked in it ("Video generator · The Fox and the Moon · shot 2"); for the
     /// model, the video's folder, what each pick is in it (a shot, a frame, a reference, a clip…),
     /// and how pieces are made and fixed, as the window's buttons used to ask. The video is saved
     /// first, so the model reads what the panel shows.
@@ -22,8 +22,8 @@ public sealed partial class VideoViewModel
         SaveNow(force: true);
         var title = _board.Title.Trim().Length > 0 ? _board.Title.Trim() : Path.GetFileName(_board.Folder);
         var picks = files.Select(Describe).ToList();
-        var via = $"Video editor · {title}" + (picks.Count == 0 ? "" : " · " + string.Join(", ", picks.Select(p => p.Short)));
-        var context = $"[Video editor is open beside the chat on the video \"{title}\" (its folder: {_board.Folder}; video action=storyboard path=\"{_board.Folder}\" shows it all). " +
+        var via = $"Video generator · {title}" + (picks.Count == 0 ? "" : " · " + string.Join(", ", picks.Select(p => p.Short)));
+        var context = $"[Video generator is open beside the chat on the video \"{title}\" (its folder: {_board.Folder}; video action=storyboard path=\"{_board.Folder}\" shows it all). " +
                       "What they say about a video is about this one unless they say otherwise. " +
                       (picks.Count == 0 ? WholeVideoNote() : $"They picked in it: {string.Join("; ", picks.Select(p => p.Long))}. {PieceNote(picks.Any(p => p.Piece is not null))}") + "]";
         return (via, context);
@@ -157,7 +157,7 @@ public sealed partial class VideoViewModel
     private void ShowError(string text, Exception error, string? folder = null)
     {
         Status = text;
-        Core.ErrorLog.Write($"Video editor, {folder ?? _board.Folder}", text, error);
+        Core.ErrorLog.Write($"Video generator, {folder ?? _board.Folder}", text, error);
     }
 
     /// <summary>The piece the video tool is making or looking at in the chat now, shown working on the timeline and in the tree.</summary>

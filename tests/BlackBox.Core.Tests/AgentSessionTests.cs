@@ -923,13 +923,13 @@ public class AgentSessionTests
     }
 
     [Fact]
-    public void A_message_from_the_video_editor_window_tells_the_model_what_it_is_about()
+    public void A_message_from_the_video_generator_window_tells_the_model_what_it_is_about()
     {
-        var input = new UserInput("make him smile") { Via = "Video editor · Keeper · shot 2", Context = "[From the Video editor window, about shot s2.]" };
-        Assert.Equal("[From the Video editor window, about shot s2.]\nmake him smile", input.ToMessage(seesImages: true).Content);
+        var input = new UserInput("make him smile") { Via = "Video generator · Keeper · shot 2", Context = "[From the Video generator window, about shot s2.]" };
+        Assert.Equal("[From the Video generator window, about shot s2.]\nmake him smile", input.ToMessage(seesImages: true).Content);
         Assert.Same(input, UserInput.Join([input])); // alone, as it is
         var joined = UserInput.Join([new UserInput("and quicker"), input]);
-        Assert.Equal("and quicker\n\n[From the Video editor window, about shot s2.]\nmake him smile", joined.Text);
+        Assert.Equal("and quicker\n\n[From the Video generator window, about shot s2.]\nmake him smile", joined.Text);
     }
 
     [Fact]
@@ -1180,7 +1180,7 @@ public class AgentSessionTests
     [Fact]
     public async Task A_question_to_the_user_ends_the_turn_though_a_plan_follows_it()
     {
-        // Seen in Video editor: its last sentence read as an announced step, and the nudge made the
+        // Seen in Video generator: its last sentence read as an announced step, and the nudge made the
         // model ask the user the same question again.
         var server = new ScriptedServer(
             Sse.ToolCall("w1", "wait", """{"seconds":0}"""),

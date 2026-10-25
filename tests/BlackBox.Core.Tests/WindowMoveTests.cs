@@ -8,7 +8,7 @@ using static BlackBox.Platform.Windows.Native;
 namespace BlackBox.Core.Tests;
 
 /// <summary>
-/// The chat window making room for a tool on its left (Video editor): moved and widened in one step,
+/// The chat window making room for a tool on its left (Video generator): moved and widened in one step,
 /// and what it gained filled at once rather than black until it draws there. Moved, then widened at
 /// the next layout, the chat jumped sideways and back. Puts a small red window near the screen
 /// corner for a moment.

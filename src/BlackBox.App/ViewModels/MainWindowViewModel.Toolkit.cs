@@ -10,7 +10,7 @@ namespace BlackBox.App.ViewModels;
 
 /// <summary>
 /// A tool that opens on the left of the chat window, picked in the Toolkit dropdown at the top of
-/// it (Video editor, File changes). It works through the chat: what is picked in it goes into the
+/// it (Video generator, File changes). It works through the chat: what is picked in it goes into the
 /// chat's box, and what the user sends from there is done by the agent in the chat, in view.
 /// </summary>
 public interface IToolkit : IDisposable
@@ -67,7 +67,7 @@ public sealed partial class MainWindowViewModel
             vm => new FileChangesViewModel(vm)),
         new(FileInspectorName, "See a file from the chat beside it: documents, spreadsheets, pictures, video, sound, 3D, code", 760, 420, 0,
             vm => new FileInspectorViewModel(vm._previews, vm, vm._paths.PastedDir)),
-        new("Video editor", "Plan a video shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960, 770, 600,
+        new("Video generator", "Plan a video shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960, 770, 600,
             vm => new VideoViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
     ];
 

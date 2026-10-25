@@ -68,7 +68,7 @@ public interface IInputController
 /// BlackBox's own window. It stays on screen while the agent works, so it is kept out of the
 /// agent's way: left out of its screenshots by <see cref="IScreenCapture"/> where the OS allows,
 /// and pushed behind other windows for the moment an action lands on it: all of BlackBox's
-/// windows (every chat window, the viewer, Video editor, a dialog).
+/// windows (every chat window, the viewer, Video generator, a dialog).
 /// </summary>
 public interface IHostWindow
 {

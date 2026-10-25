@@ -65,7 +65,7 @@ public sealed class UserMessageItem(string text, IReadOnlyList<string>? files = 
     public string Text { get; } = text;
     public bool HasText => Text.Length > 0;
 
-    /// <summary>Where it was written, when not in the chat's box ("Video editor · The Fox and the Moon · shot 2").</summary>
+    /// <summary>Where it was written, when not in the chat's box ("Video generator · The Fox and the Moon · shot 2").</summary>
     public string? Via { get; init; }
 
     /// <summary>Shown over its words only for a message saved before tools gave cards: those show it now.</summary>
@@ -295,7 +295,7 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
     public string CallId { get; } = callId;
     public string Name { get; } = name;
 
-    /// <summary>What the call was given (JSON), while the run goes on: the Video editor panel reads which piece the video tool is making.</summary>
+    /// <summary>What the call was given (JSON), while the run goes on: the Video generator panel reads which piece the video tool is making.</summary>
     public string Arguments { get; init; } = "";
 
     [ObservableProperty]
