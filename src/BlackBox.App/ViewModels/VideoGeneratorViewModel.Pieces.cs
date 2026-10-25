@@ -110,6 +110,9 @@ public sealed partial class VideoGeneratorViewModel
         _board.Frames.Add(new VideoFrame { Id = last, Seed = Storyboard.NewSeed(), Model = model, From = FromNear(before) });
         var shot = new VideoShot { Id = _board.NewId("s"), First = first, Last = last, Seconds = 5, Seed = Storyboard.NewSeed(), Model = before?.Model };
         _board.Shots.Add(shot);
+        // Marked changed, as every other piece made here is: a forced save of a video read from its
+        // folder writes only what changed, so New clip on a video just opened was never saved.
+        Changed();
         SaveNow(force: true);
         Rebuild();
         Show(Shots.FirstOrDefault(s => s.Id == shot.Id));
