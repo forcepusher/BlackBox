@@ -316,6 +316,15 @@ public sealed partial class DiffViewModel : ObservableObject, IToolkit
         finally { _picking = false; }
     }
 
+    /// <summary>A click away from the lines, or Esc: none is picked, and their files leave the box. False when none was.</summary>
+    public bool Unpick()
+    {
+        if (Selection.Count == 0)
+            return false;
+        Selection.Clear();
+        return true;
+    }
+
     /// <summary>A file taken off the box (its ×): its lines are no longer picked here either.</summary>
     private void OnBoxChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {

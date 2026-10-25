@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Threading;
 using BlackBox.App.ViewModels;
 
@@ -10,6 +11,28 @@ public partial class DiffPanel : UserControl
     public DiffPanel()
     {
         InitializeComponent();
+        // Lines and files take their own clicks; what gets here is a click away from them.
+        AddHandler(PointerPressedEvent, OnAwayPressed);
+    }
+
+    /// <summary>
+    /// A click in the panel away from its lines (below the last, on the bar at the top, on the list
+    /// of files but not on a file) unpicks them, as Esc does. A click on a file only goes there, so
+    /// lines are picked in one file and Ctrl+clicked in another; a click in the chat keeps them, as
+    /// the box is clicked to ask about them. Shift or Ctrl held keeps them too: those add.
+    /// </summary>
+    private void OnAwayPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.Handled || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control)) != 0)
+            return;
+        _vm?.Unpick();
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (!e.Handled && e.Key == Key.Escape && _vm?.Unpick() == true)
+            e.Handled = true;
     }
 
     private DiffViewModel? _vm;

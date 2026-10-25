@@ -1938,7 +1938,14 @@ cut there). A message sent then carries, for the model, the files changed (up to
 picked line with its number and +/-, at most 300 lines; nothing while no file has changed. It
 says only that these are the lines the user refers to, not that they are to be changed: the user
 picks lines to ask about them as much as to have them changed (the user, 2026-10-24). Sent, they
-are no longer picked; one taken off the box (its ×) is unpicked in the panel too.
+are no longer picked; one taken off the box (its ×) is unpicked in the panel too. A click in the
+panel away from the lines (below the last, a header or @@ line, the bar at the top, the file list
+below its files) unpicks them all, as Esc does there, like the Video editor's click away (the user,
+2026-10-25). What keeps them: a click on a file in the list (it only goes there, so lines are picked
+in two files), Shift or Ctrl held (they add), and any click in the chat, as the box is clicked to
+ask about them. A plain click on a picked line picks only it; clicked again it stays picked. Lines
+and files handle their own presses, so the panel's handler only sees what no control took
+(scrollbars and the splitter keep the pick too); checked with real clicks on 2026-10-25.
 
 **Checked on qwen3.8** (2026-10-24, blackbox-cli): asked to review the commit that added all this, it
 listed the commit with `diff summary=true`, then read the whole diff (about 110,000 characters) in 11
