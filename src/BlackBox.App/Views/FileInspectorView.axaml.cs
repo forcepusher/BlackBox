@@ -31,6 +31,7 @@ public partial class FileInspectorView : UserControl
         AddHandler(KeyUpEvent, OnKeyUp, handledEventsToo: true);
         PictureBox.Marked += area => _vm?.PickArea(area);
         FrameBox.Marked += area => _vm?.PickArea(area);
+        AnimationBox.Marked += area => _vm?.PickArea(area);
         FrozenBox.Marked += area => _vm?.PickArea(area);
         // A PDF's pages: Ctrl+wheel zooms, a right or middle drag pans, a left drag on a page marks an area.
         PdfScroll.AddHandler(PointerWheelChangedEvent, OnPdfWheel, RoutingStrategies.Tunnel);
@@ -96,7 +97,7 @@ public partial class FileInspectorView : UserControl
         {
             if (_vm is not { AreaMode: true, Frozen: null })
                 return;
-            Control? shown = _vm.Markdown is not null ? DocumentScroll : _vm.Text is not null ? TextScroll : null;
+            Control? shown = _vm.Markdown is not null ? DocumentScroll : _vm.Text is not null ? TextScroll : _vm.Model is not null ? ModelView : null;
             Frozen(shown is null ? null : OnScreen(shown));
         }, TimeSpan.FromMilliseconds(80));
     }
@@ -280,22 +281,46 @@ public partial class FileInspectorView : UserControl
             Picked();
     }
 
-    /// <summary>A video: Left and Right step a frame, Space plays and pauses.</summary>
+    /// <summary>
+    /// A video or an animation: Left and Right step a frame, Space plays and pauses. A sound: Left and
+    /// Right move the playhead a hundredth of the view (with Shift a tenth), Home and End to its ends.
+    /// </summary>
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
-        if (e.Handled || _vm?.Video is not { } video || e.KeyModifiers != KeyModifiers.None)
+        if (e.Handled || _vm is null)
+            return;
+        if (_vm.Sound is { } sound && (e.KeyModifiers & ~KeyModifiers.Shift) == KeyModifiers.None)
+        {
+            var step = (e.KeyModifiers & KeyModifiers.Shift) != 0 ? 0.1 : 0.01;
+            switch (e.Key)
+            {
+                case Key.Left: sound.Nudge(-step); break;
+                case Key.Right: sound.Nudge(step); break;
+                case Key.Home: sound.Seek(0); break;
+                case Key.End: sound.Seek(sound.Length); break;
+                case Key.Space: sound.PlayCommand.Execute(null); break;
+                default: return;
+            }
+            e.Handled = true;
+            return;
+        }
+        if (e.KeyModifiers != KeyModifiers.None)
+            return;
+        Action<int>? step1 = _vm.Video is { } video ? video.Step : _vm.Animation is { } animation ? animation.Step : null;
+        System.Windows.Input.ICommand? play = _vm.Video?.PlayCommand ?? (System.Windows.Input.ICommand?)_vm.Animation?.PlayCommand;
+        if (step1 is null || play is null)
             return;
         switch (e.Key)
         {
             case Key.Left:
-                video.Step(-1);
+                step1(-1);
                 break;
             case Key.Right:
-                video.Step(1);
+                step1(1);
                 break;
             case Key.Space:
-                video.PlayCommand.Execute(null);
+                play.Execute(null);
                 break;
             default:
                 return;

@@ -16,8 +16,17 @@ public enum InspectorKind
     /// <summary>A picture, fitted to the panel.</summary>
     Picture,
 
-    /// <summary>An animation, a video, a sound or a 3D model, with the chat's player for it.</summary>
-    Media,
+    /// <summary>An animated GIF, WebP or PNG, frame by frame (one with a single frame is a picture).</summary>
+    Animation,
+
+    /// <summary>A video, frame by frame.</summary>
+    Video,
+
+    /// <summary>A sound, as a waveform to zoom into and pick a stretch of.</summary>
+    Sound,
+
+    /// <summary>A 3D model, to turn, zoom and move about.</summary>
+    Model,
 
     /// <summary>
     /// A file whose look only its own program knows (PDF, Word, Excel, PowerPoint, HTML, RTF): shown
@@ -29,7 +38,7 @@ public enum InspectorKind
     /// <summary>Any other file that is text (code, .txt, .json, a log), in a fixed-width font.</summary>
     Text,
 
-    /// <summary>Nothing to show of it: its name and size.</summary>
+    /// <summary>Any other file: its bytes, in hex (<see cref="FileInspector.Hex"/>).</summary>
     None,
 }
 
@@ -60,9 +69,49 @@ public static partial class FileInspector
         switch (MediaPreview.KindOf(path))
         {
             case "image": return InspectorKind.Picture;
-            case "animation" or "video" or "audio" or "3d": return InspectorKind.Media;
+            case "animation": return InspectorKind.Animation;
+            case "video": return InspectorKind.Video;
+            case "audio": return InspectorKind.Sound;
+            case "3d": return InspectorKind.Model;
         }
         return LooksLikeText(path) ? InspectorKind.Text : InspectorKind.None;
+    }
+
+    /// <summary>The most of a file <see cref="Hex"/> shows: its start.</summary>
+    public const int MaxHexBytes = 64 * 1024;
+
+    /// <summary>Bytes shown on each line of <see cref="Hex"/>.</summary>
+    public const int HexRow = 16;
+
+    /// <summary>
+    /// A file's first <paramref name="max"/> bytes as a hex dump, a line each 16: "00000040  4D 5A 90 00
+    /// …  MZ..", the offset first and the bytes as text (a dot for those that aren't letters) after;
+    /// with how many bytes the file has.
+    /// </summary>
+    public static (string Text, long Length) Hex(string path, int max = MaxHexBytes)
+    {
+        using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        var bytes = new byte[(int)Math.Min(max, file.Length)];
+        var read = 0;
+        for (int n; read < bytes.Length && (n = file.Read(bytes, read, bytes.Length - read)) > 0;)
+            read += n;
+        var sb = new StringBuilder(read / HexRow * 80);
+        for (var at = 0; at < read; at += HexRow)
+        {
+            if (at > 0)
+                sb.Append('\n');
+            sb.Append(at.ToString("X8", System.Globalization.CultureInfo.InvariantCulture)).Append("  ");
+            for (var i = 0; i < HexRow; i++)
+            {
+                if (i == 8)
+                    sb.Append(' ');
+                sb.Append(at + i < read ? bytes[at + i].ToString("X2", System.Globalization.CultureInfo.InvariantCulture) + " " : "   ");
+            }
+            sb.Append(' ');
+            for (var i = at; i < Math.Min(read, at + HexRow); i++)
+                sb.Append(bytes[i] is >= 0x20 and < 0x7F ? (char)bytes[i] : '.');
+        }
+        return (sb.ToString(), file.Length);
     }
 
     /// <summary>

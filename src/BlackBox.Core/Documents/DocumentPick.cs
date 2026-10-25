@@ -75,6 +75,53 @@ public sealed record DocumentPick(string Text, string Where, IReadOnlyList<strin
         return new DocumentPick(text, a == b ? $"cell {Letters(a)}{row}" : $"cells {Letters(a)}{row}:{Letters(b)}{row}", names);
     }
 
+    /// <summary>
+    /// A selection from character <paramref name="start"/> to <paramref name="end"/> of a hex dump as
+    /// <see cref="FileInspector.Hex"/> writes one: the bytes it covers, in its hex or its text
+    /// ("bytes 0x40-0x4F"), with <see cref="Bytes"/> the first and last; null with nothing selected.
+    /// </summary>
+    public static DocumentPick? InHex(string dump, int start, int end)
+    {
+        (start, end) = (Math.Clamp(Math.Min(start, end), 0, dump.Length), Math.Clamp(Math.Max(start, end), 0, dump.Length));
+        if (start == end)
+            return null;
+        var first = ByteAt(dump, start, last: false);
+        var last = ByteAt(dump, end - 1, last: true);
+        if (first is not { } a || last is not { } b || b < a)
+            return null;
+        return new DocumentPick(dump[start..end], a == b ? $"byte 0x{a:X}" : $"bytes 0x{a:X}-0x{b:X}") { Bytes = (a, b) };
+    }
+
+    /// <summary>The first and last byte of a selection in a hex dump; null elsewhere.</summary>
+    public (long First, long Last)? Bytes { get; init; }
+
+    /// <summary>The byte a character of a hex dump is on: in its hex or its text; before the hex, the line's first (or the one before, for where a selection ends).</summary>
+    private static long? ByteAt(string dump, int index, bool last)
+    {
+        // A line's break is its last character.
+        var lineStart = index == 0 ? 0 : dump.LastIndexOf('\n', index - 1) + 1;
+        var lineEnd = dump.IndexOf('\n', lineStart);
+        var line = dump[lineStart..(lineEnd < 0 ? dump.Length : lineEnd)];
+        if (line.Length < 8 || !long.TryParse(line.AsSpan(0, 8), System.Globalization.NumberStyles.HexNumber, null, out var offset))
+            return null;
+        var count = Math.Clamp(line.Length - TextColumn, 1, FileInspector.HexRow);
+        var column = index - lineStart;
+        int at;
+        if (column < HexColumn)
+            return last ? offset - 1 : offset;
+        if (column < TextColumn - 1)
+        {
+            var i = column - HexColumn;
+            at = (i >= 8 * 3 ? i - 1 : i) / 3;
+        }
+        else
+            at = column - TextColumn;
+        return offset + Math.Clamp(at, 0, count - 1);
+    }
+
+    /// <summary>Where a hex dump's line has its bytes in hex, and as text.</summary>
+    private const int HexColumn = 10, TextColumn = HexColumn + FileInspector.HexRow * 3 + 2;
+
     private static string Shown(List<MdSpan> line) => string.Concat(line.Select(s => s.Text));
 
     private static int LineAt(string text, int index)

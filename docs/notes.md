@@ -2038,8 +2038,35 @@ under the panel's bar here and in the full-screen viewer for a card's peek, see 
   decoders find: Media Foundation skips frames more than half a frame early). Steps asked for while
   one decodes are caught up with, so a held key doesn't queue. Frames count from 0 inside, from 1 on
   screen and to the model. Playing goes through the chat's `Playback`, whose frames now carry their
-  time, so the counter follows. Animations, sound and 3D: the chat's own player for it
-  (`FilePreview.For` at 1600), played and turned as in the chat.
+  time, so the counter follows.
+- Animations (.gif, .webp, .apng; until 2026-10-26 these, sound and 3D showed the chat's card in the
+  panel, play button, name and Inspect/Show in folder and all, which the user said was no inspector):
+  `InspectorAnimationViewModel`, the video's player for frames decoded at once (each builds on the
+  ones before it), at their own size within 512 MB, the first 2,000 at most. It plays over and over at
+  the frames' own times; Left/Right step, Space plays; "Frame 4 / 12 · 0.060 s" counts from 1. An
+  area of a frame is cut from the frame decoded again at its own size. One with a single frame is a
+  picture.
+- Sound: `InspectorSoundViewModel` and `WaveformView`. The whole sound is read once as one channel (30
+  minutes at most) with each 256 samples' lowest and highest kept, so a long sound draws at once; the
+  waveform is drawn at the screen's pixels into a bitmap only when the view or the size changes (the
+  playhead and the stretch are drawn over it), as tall as the waveform's loudest part allows (up to
+  ten times). A ruler of times along the top; a click sets the playhead, a drag picks a stretch
+  (scrolling past the edge), a press or drag on the ruler scrubs (playing pauses meanwhile, as each
+  new position opens the sound again, and goes on from where it is let go). The wheel zooms about the
+  mouse down to some 200 samples across, Shift+wheel or a right/middle drag scrolls, and the panel's
+  − / Fit / + follow it. Play plays the stretch picked and stops at its end, else from the playhead;
+  the playhead moves on a 16 ms clock between `Playback`'s reports (five a second), from the first
+  report, as the sound takes a moment to open. "0.812 s / 3.400 s" in a slot as wide as its longest
+  text. Left/Right move the playhead a hundredth of the view (Shift: a tenth), Home/End, Space.
+- 3D models: `ModelViewer` (the chat's, now with its camera in bindable properties and a pan) in the
+  panel: a left drag turns, the wheel comes closer (1x to 8x, on the panel's zoom buttons too), a right
+  or middle drag moves it about (`MeshRenderer.Render` takes a pan in parts of the picture's shorter
+  side), a double-click or Reset as at first; Front, Right, Back, Left and Top buttons. Under it where
+  it is seen from, "From the front left (-30° round), 15° above", which the model is told with every
+  message. **Area** freezes the view to mark a part of it, as for a text.
+- Any other file whose start reads as text: its text in a fixed-width font. Anything else: its first
+  64 KB as a hex dump (`FileInspector.Hex`: offset, 16 bytes in hex, the same as text), until
+  2026-10-26 "There is no preview for this kind of file".
 - PDF: drawn page by page by BlackBox with PDFium, Chrome's PDF engine (`PdfPages`, pdfium.dll from
   the `bblanchon.PDFium.Win32` package, Apache-2.0/BSD, 7.5 MB; unpacked into Data/runtime with
   the other native libraries in the single-file build). The pages are a virtualized list
@@ -2060,8 +2087,6 @@ under the panel's bar here and in the full-screen viewer for a card's peek, see 
   fails; called through the interfaces' tables, as the trimmed build has no COM interop. Without a
   previewer, or when it fails, the panel shows the file's text as read_file gives the agent
   (`DocumentText`; Word's and PowerPoint's as Markdown), a web page its source.
-- Any other file whose start reads as text (no NUL in its first 8 KB in its own encoding): its text
-  in a fixed-width font. Anything else: "There is no preview for this kind of file".
 
 **Selected text into the message** (the user's request, 2026-10-25, as Video editor and File changes
 do). With a file shown and nothing selected, the file is a card over the chat's box ("notes.md ·
@@ -2082,6 +2107,9 @@ while the user types in the box; a press in one block clears the others'. Window
 Office, web pages) draw in their own window, whose selection BlackBox can't read: a message is about
 the whole file there, unless an area of it is marked (below). A picture or a video is a whole file
 too ("whole file" on its card).
+Bytes selected in a hex dump go in as "Bytes 0x20-0x23 · blob.bin" (`DocumentPick.InHex`: in the hex or
+the text beside it, the first and last byte covered), the model told the offset and count and given
+the dump's lines.
 Checked on the laptop with real mouse drags on the Debug app (stand-in model logging what it got):
 .md lines 8-9 into the box, kept marked while the box had focus, the model got the two lines and the
 bubble the reference line; .csv one cell (D5, "column Units"), two cells (B4:C4), three rows; .cs lines
@@ -2105,13 +2133,19 @@ pasted pictures are; one unpicked before it is sent is deleted at once) and pick
 tool's pick. It is cut from the best source: the PDF page drawn again by PDFium for the area alone
 (`PdfPages.RenderArea`: 1600 pixels along its longer side, between the panel's sharpness and 600
 dpi; the page drawn at that scale into a bitmap of the area's size), the picture file decoded whole,
-the frame decoded again at the video's own size, the frozen view's pixels. The message's bubble
+the frame decoded again at the video's own size, the frozen view's pixels. A stretch of a sound goes the
+same way, as "0.80-1.45 s · song.mp3" (thousandths under a tenth of a second, "1:01.50-1:05.25" past a
+minute): its picture is the stretch's waveform over its spectrogram, as the agent's own look at a
+sound draws one (`MediaPreview.SoundPicture` for samples from-to, its marks in the sound's seconds and
+the spectrogram's windows reaching past the stretch's ends), and the model is told the times to the
+thousandth, the samples and how it sounds there (`SoundRange.Told`: peak, average, silences), since it
+can't hear it. The message's bubble
 says "File inspector · report.pdf · area on page 2", and the model gets the file's path, the area in
 the file's units ("x 53-322, y 199-327 of the 612x792 points, from the top left"; pixels of a picture
 or of the frame, with the frame's number and time; pixels of the panel's view, scrolled where the
 user had it, for a frozen view) and the picture, attached to the message as a pasted picture is.
 
-**Zoom.** Pictures, frames and frozen views zoom in their `ZoomBox`: the wheel about the mouse, a
+**Zoom.** Pictures, frames (a video's, an animation's) and frozen views zoom in their `ZoomBox`: the wheel about the mouse, a
 right or middle drag pans, up to 32x. A PDF's pages zoom in the panel: the wheel scrolls them, so
 Ctrl+wheel zooms (about the mouse), and the same right or middle drag pans; the list is the panel's
 width times the zoom and scrolls sideways, and each page is drawn again sharper (`PdfPageItem.Zoom`,
@@ -2126,6 +2160,13 @@ played at 30 fps on the counter, and an area of frame 200 went at the video's ow
 what was shown; thank-you.docx frozen in Word's previewer, a line marked and cut, Esc back to the
 live previewer and the whole-document card (the unsent picture deleted); a .md frozen and marked.
 
+Checked on the laptop (2026-10-26, Debug app, stand-in model saving the pictures it was sent): a 3.4 s
+48 kHz WAV (tone, silence, chirp) drawn whole, zoomed to 596% with the wheel about the mouse, played
+from a click with the view following, a stretch 0.64-1.47 s dragged went in as "0.64-1.47 s ·
+marvelous.wav" and the model got samples 30,836-70,510, "silent for the last 0.4 s" and the picture;
+a 30 s MP3 drawn whole. A 12-frame GIF stepped to frame 4 and an area of it cut at 240x120. An OBJ
+turned (-102° round), zoomed to 152% and moved, Top and Right set the view, Area froze it and a part
+went in with the view told. A 300-byte .bin as hex, bytes 0x20-0x23 selected and sent.
 Checked on the laptop (2026-10-25, a stand-in model naming six files, Preview pressed on each by UI
 Automation): .md formatted, .docx by Word's previewer, .xlsx with Excel's grid and sheet tabs, .pptx
 slide by slide, .csv as a table, and .pdf by Edge's previewer. The PDF previewer registered there was

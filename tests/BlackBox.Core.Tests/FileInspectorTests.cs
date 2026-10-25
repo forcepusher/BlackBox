@@ -27,8 +27,10 @@ public class FileInspectorTests : IDisposable
     [InlineData("deck.pptx", InspectorKind.Document)]
     [InlineData("page.html", InspectorKind.Document)]
     [InlineData("photo.jpg", InspectorKind.Picture)]
-    [InlineData("clip.mp4", InspectorKind.Media)]
-    [InlineData("loop.gif", InspectorKind.Media)]
+    [InlineData("clip.mp4", InspectorKind.Video)]
+    [InlineData("loop.gif", InspectorKind.Animation)]
+    [InlineData("song.mp3", InspectorKind.Sound)]
+    [InlineData("chair.glb", InspectorKind.Model)]
     public void Kinds_by_extension(string name, InspectorKind kind) => Assert.Equal(kind, FileInspector.KindOf(Path.Combine(_dir, name)));
 
     [Fact]

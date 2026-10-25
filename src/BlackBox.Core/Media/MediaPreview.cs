@@ -254,19 +254,28 @@ public static class MediaPreview
         return (mono.ToArray(), reader.SampleRate);
     }
 
-    /// <summary>Waveform over spectrogram, with a mark each second (or each 5, 10, 30 for long sounds).</summary>
-    private static SKBitmap SoundPicture(float[] mono, int rate)
+    /// <summary>
+    /// Waveform over spectrogram, with a mark each second (each 5, 10, 30 for long sounds; tenths or
+    /// quarters for a short stretch). With <paramref name="from"/> and <paramref name="to"/>, only those
+    /// samples (a stretch picked in the File inspector), the marks in the sound's own seconds and the
+    /// spectrogram's windows reaching past the stretch's ends into the sound around it.
+    /// </summary>
+    public static SKBitmap SoundPicture(float[] mono, int rate, int from = 0, int to = -1)
     {
+        if (to < 0)
+            to = mono.Length;
+        var start = from / (double)rate;
+        var length = Math.Max(1, to - from);
         const int waveH = 160, specH = 256, axisH = 22;
         var bitmap = new SKBitmap(TileWidth, waveH + specH + axisH);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(new SKColor(24, 24, 28));
         var columns = TileWidth;
-        var perColumn = Math.Max(1, mono.Length / (double)columns);
+        var perColumn = Math.Max(1, length / (double)columns);
         // Drawn as loud as the picture allows (up to ten times): a quiet sound is still seen; the
         // words beside the picture say how loud it really is.
         var peak = 0f;
-        foreach (var s in mono) peak = Math.Max(peak, Math.Abs(s));
+        for (var i = from; i < to; i++) peak = Math.Max(peak, Math.Abs(mono[i]));
         var gain = peak > 0 ? Math.Min(10f, 0.95f / peak) : 1f;
 
         using (var wave = new SKPaint { Color = new SKColor(90, 200, 255), StrokeWidth = 1 })
@@ -275,11 +284,11 @@ public static class MediaPreview
             canvas.DrawLine(0, waveH / 2f, TileWidth, waveH / 2f, mid);
             for (var x = 0; x < columns; x++)
             {
-                var from = (int)(x * perColumn);
-                var to = Math.Min(mono.Length, (int)((x + 1) * perColumn));
-                if (from >= to) continue;
+                var a = from + (int)(x * perColumn);
+                var b = Math.Min(to, from + (int)((x + 1) * perColumn));
+                if (a >= b) continue;
                 float lo = 0, hi = 0;
-                for (var i = from; i < to; i++) { lo = Math.Min(lo, mono[i]); hi = Math.Max(hi, mono[i]); }
+                for (var i = a; i < b; i++) { lo = Math.Min(lo, mono[i]); hi = Math.Max(hi, mono[i]); }
                 canvas.DrawLine(x, waveH / 2f - hi * gain * (waveH / 2f - 4), x, waveH / 2f - lo * gain * (waveH / 2f - 4) + 1, wave);
             }
         }
@@ -293,7 +302,7 @@ public static class MediaPreview
         var pixels = new SKColor[TileWidth * specH];
         for (var x = 0; x < columns; x++)
         {
-            var center = (int)((x + 0.5) * mono.Length / columns);
+            var center = from + (int)((x + 0.5) * length / columns);
             for (var i = 0; i < n; i++)
             {
                 var at = center - n / 2 + i;
@@ -318,16 +327,17 @@ public static class MediaPreview
         }
 
         // Seconds along the bottom.
-        var seconds = mono.Length / (double)rate;
-        var step = seconds <= 12 ? 1 : seconds <= 60 ? 5 : seconds <= 180 ? 10 : 30;
+        var seconds = length / (double)rate;
+        var step = seconds <= 1.2 ? 0.1 : seconds <= 3 ? 0.25 : seconds <= 12 ? 1 : seconds <= 60 ? 5 : seconds <= 180 ? 10 : 30;
         using var tick = new SKPaint { Color = new SKColor(255, 255, 255, 90), StrokeWidth = 1 };
         using var font = new SKFont(SKTypeface.Default, 14);
         using var label = new SKPaint { Color = SKColors.White, IsAntialias = true };
-        for (var s = 0; s <= seconds + 1e-6; s += step)
+        for (var k = (long)Math.Ceiling(start / step - 1e-6); k * step <= start + seconds + 1e-6; k++)
         {
-            var x = (float)(s / seconds * (TileWidth - 1));
+            var s = k * step;
+            var x = (float)((s - start) / seconds * (TileWidth - 1));
             canvas.DrawLine(x, 0, x, waveH + specH, tick);
-            canvas.DrawText($"{s}s", Math.Min(x + 2, TileWidth - 30), waveH + specH + 16, font, label);
+            canvas.DrawText(s.ToString(step < 1 ? "0.0#" : "0", CultureInfo.InvariantCulture) + "s", Math.Min(x + 2, TileWidth - 44), waveH + specH + 16, font, label);
         }
         return bitmap;
     }

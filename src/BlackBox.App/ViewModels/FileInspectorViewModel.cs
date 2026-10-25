@@ -10,8 +10,10 @@ namespace BlackBox.App.ViewModels;
 /// <summary>
 /// The File inspector panel, a tool of the chat window's toolkit on the left of the chat: one file
 /// shown whole, opened by the Inspect button of its card in the chat or dropped on the panel. BlackBox
-/// draws Markdown (as a reply), tables, text and pictures itself, plays videos frame by frame
-/// (<see cref="InspectorVideoViewModel"/>) and the chat's players play the rest of the media, and PDF
+/// draws Markdown (as a reply), tables, text and pictures itself, plays videos and animations frame
+/// by frame (<see cref="InspectorVideoViewModel"/>, <see cref="InspectorAnimationViewModel"/>), draws a
+/// sound's waveform to zoom into and pick a stretch of (<see cref="InspectorSoundViewModel"/>), turns
+/// 3D models about (<see cref="InspectorModelViewModel"/>), shows any other file's bytes in hex, and PDF
 /// pages are drawn by PDFium (<see cref="PdfPages"/>); Office files and web pages
 /// (and a PDF PDFium can't open) are drawn by the previewer Windows has for them, as
 /// in Explorer's preview pane, else shown as their text (<see cref="FileInspector"/>). With the
@@ -20,17 +22,15 @@ namespace BlackBox.App.ViewModels;
 /// and the message carries it for the model, as File changes does with lines (the user's request,
 /// 2026-10-25). An area dragged over a PDF's page, a picture or a video's frame goes in as a picture
 /// of it with where it is ("Area on page 2 · report.pdf"); with Area on, over what the panel shows
-/// frozen: a text, or Windows' previewer, which draws in a window of its own whose selection
-/// BlackBox can't read. Pictures, frames and pages zoom and pan.
+/// frozen: a text, a 3D model's view, or Windows' previewer, which draws in a window of its own whose
+/// selection BlackBox can't read. A stretch dragged over a sound goes in as "0.80-1.45 s · song.mp3",
+/// with a picture of it. Pictures, frames, pages and sounds zoom and pan.
 /// </summary>
 public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
 {
     private readonly PreviewServices _previews;
     private readonly MainWindowViewModel? _chat;
     private bool _picking;
-
-    /// <summary>How wide the chat's players decode what the panel plays with them (animations, sound, 3D).</summary>
-    private const int PictureWidth = 1600;
 
     /// <summary>How wide a picture is decoded at most: as it is, so zoomed in its pixels show, up to this.</summary>
     private const int MaxPictureWidth = 8192;
@@ -84,7 +84,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
     private string? _text;
 
     /// <summary>What <see cref="Markdown"/> or <see cref="Text"/> is: the file as written (its lines are the file's), a CSV drawn as a table, or a document's text only.</summary>
-    private enum Shown { File, Table, TextOnly }
+    private enum Shown { File, Table, TextOnly, Hex }
 
     private Shown _shown;
 
@@ -100,10 +100,22 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
     [NotifyPropertyChangedFor(nameof(Whole), nameof(WholeTip), nameof(CanZoom))]
     private InspectorVideoViewModel? _video;
 
-    /// <summary>An animation, a sound or a 3D model, in the chat's player.</summary>
+    /// <summary>An animation, frame by frame as a video is.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Whole))]
-    private FilePreview? _media;
+    [NotifyPropertyChangedFor(nameof(Whole), nameof(WholeTip), nameof(CanZoom))]
+    private InspectorAnimationViewModel? _animation;
+
+    /// <summary>A sound, as its waveform.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Whole), nameof(WholeTip), nameof(CanZoom), nameof(MaxZoom))]
+    private InspectorSoundViewModel? _sound;
+
+    /// <summary>A 3D model, to turn about.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Whole), nameof(WholeTip), nameof(CanZoom), nameof(MaxZoom), nameof(CanFreeze), nameof(ShowsModel))]
+    private InspectorModelViewModel? _model;
+
+    public bool ShowsModel => Model is not null && Frozen is null;
 
     /// <summary>A PDF's pages, drawn by PDFium as they come on screen; null for any other file.</summary>
     [ObservableProperty]
@@ -169,19 +181,9 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
                         break;
                     }
                     case InspectorKind.Picture:
-                    {
-                        using var probe = Core.Media.PictureFile.Codec(path);
-                        var own = probe is null ? (0, 0) : (probe.Info.Width, probe.Info.Height);
-                        using var stream = File.OpenRead(path);
-                        // As it is, so its pixels show zoomed in; a huge one at most 8192 wide.
-                        var bitmap = own.Item1 is > 0 and <= MaxPictureWidth ? new Bitmap(stream) : Bitmap.DecodeToWidth(stream, MaxPictureWidth, BitmapInterpolationMode.HighQuality);
-                        if (own.Item1 == 0)
-                            own = (bitmap.PixelSize.Width, bitmap.PixelSize.Height);
-                        var details = probe is null ? size : $"{own.Item1}x{own.Item2}, {size}";
-                        Post(load, () => (_pictureSize, Picture, Details, Message) = (own, bitmap, details, null), bitmap.Dispose);
+                        ShowPicture(load, path, size);
                         break;
-                    }
-                    case InspectorKind.Media when Core.Media.MediaPreview.KindOf(path) == "video" && new InspectorVideoViewModel(path, _previews) is var video:
+                    case InspectorKind.Video when new InspectorVideoViewModel(path, _previews) is var video:
                         if (video.Load())
                             Post(load, () => (Video, Details, Message) = (video, $"{video.Details}, {size}", null), video.Dispose);
                         else
@@ -190,13 +192,44 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
                             Post(load, () => (Details, Message) = (size, "Nothing on this PC can play this video."));
                         }
                         break;
-                    case InspectorKind.Media:
+                    case InspectorKind.Animation when new InspectorAnimationViewModel(path) is var animation:
+                        if (animation.Load())
+                            Post(load, () => (Animation, Details, Message) = (animation, $"{animation.Details}, {size}", null), animation.Dispose);
+                        else
+                        {
+                            animation.Dispose();
+                            ShowPicture(load, path, size);
+                        }
+                        break;
+                    case InspectorKind.Sound when new InspectorSoundViewModel(path, _previews) is var sound:
+                        if (sound.Load())
+                            Post(load, () =>
+                            {
+                                sound.Picked += PickRange;
+                                sound.PropertyChanged += OnPartZoomed;
+                                (Sound, Details, Message) = (sound, $"{sound.Details}, {size}", sound.Samples.Length == 0 ? "The sound is empty." : null);
+                            }, sound.Dispose);
+                        else
+                        {
+                            sound.Dispose();
+                            Post(load, () => (Details, Message) = (size, "Nothing on this PC can play this sound."));
+                        }
+                        break;
+                    case InspectorKind.Model when new InspectorModelViewModel(path) is var model:
+                    {
+                        var mesh = model.Load();
                         Post(load, () =>
                         {
-                            Media = FilePreview.For(path, _previews, PictureWidth);
-                            Message = null;
+                            model.Mesh = mesh;
+                            model.PropertyChanged += OnPartZoomed;
+                            (Model, Details, Message) = (model, $"{model.Details}, {size}", mesh.TriangleCount == 0 ? "The model has no triangles to draw." : null);
+                        }, () =>
+                        {
+                            mesh.Dispose();
+                            model.Dispose();
                         });
                         break;
+                    }
                     case InspectorKind.Document when ShowPdf(load, path, size):
                         break;
                     case InspectorKind.Document when OperatingSystem.IsWindows() && Views.ShellPreviewHost.CanShow(path):
@@ -206,8 +239,12 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
                         ShowAsText(load, path, size);
                         break;
                     default:
-                        Post(load, () => (Details, Message) = (size, "There is no preview for this kind of file. Its card in the chat has Show in folder."));
+                    {
+                        var (hex, length) = FileInspector.Hex(path);
+                        var details = length > FileInspector.MaxHexBytes ? $"{size}, its first {Core.Strings.Bytes(FileInspector.MaxHexBytes)} in hex" : $"{size}, in hex";
+                        Post(load, () => (_shown, Text, Details, Message) = (Shown.Hex, hex, details, hex.Length == 0 ? "The file is empty." : null));
                         break;
+                    }
                 }
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -215,6 +252,26 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
                 Post(load, () => Message = $"Can't be shown: {ex.Message}");
             }
         });
+    }
+
+    /// <summary>A picture, as it is, so its pixels show zoomed in; a huge one at most 8192 wide.</summary>
+    private void ShowPicture(int load, string path, string size)
+    {
+        using var probe = Core.Media.PictureFile.Codec(path);
+        var own = probe is null ? (0, 0) : (probe.Info.Width, probe.Info.Height);
+        using var stream = File.OpenRead(path);
+        var bitmap = own.Item1 is > 0 and <= MaxPictureWidth ? new Bitmap(stream) : Bitmap.DecodeToWidth(stream, MaxPictureWidth, BitmapInterpolationMode.HighQuality);
+        if (own.Item1 == 0)
+            own = (bitmap.PixelSize.Width, bitmap.PixelSize.Height);
+        var details = probe is null ? size : $"{own.Item1}x{own.Item2}, {size}";
+        Post(load, () => (_pictureSize, Picture, Details, Message) = (own, bitmap, details, null), bitmap.Dispose);
+    }
+
+    /// <summary>A sound's or a model's own zoom (the wheel over it) shows on the panel's zoom buttons.</summary>
+    private void OnPartZoomed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(InspectorSoundViewModel.Zoom))
+            Zoom = sender is InspectorSoundViewModel s ? s.Zoom : sender is InspectorModelViewModel m ? m.Zoom : Zoom;
     }
 
     /// <summary>
@@ -309,20 +366,34 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
         Picture = null;
         Video?.Dispose();
         Video = null;
-        Media?.Dispose();
-        Media = null;
+        Animation?.Dispose();
+        Animation = null;
+        if (Sound is { } sound)
+        {
+            sound.Picked -= PickRange;
+            sound.PropertyChanged -= OnPartZoomed;
+            sound.Dispose();
+        }
+        Sound = null;
+        if (Model is { } model)
+        {
+            model.PropertyChanged -= OnPartZoomed;
+            model.Dispose();
+        }
+        Model = null;
     }
 
     /// <summary>
     /// Over the chat's box while nothing is selected: the file, as a selection is shown, so the user
     /// sees what a message is about ("notes.md", "whole document").
     /// </summary>
-    public (string Title, string Details)? Whole => Path is null ? null : (FileName, Picture is not null || Media is not null || Video is not null ? "whole file" : "whole document");
+    public (string Title, string Details)? Whole => Path is null ? null : (FileName, Markdown is not null || Text is not null && _shown != Shown.Hex || Pages is not null || ShellPath is not null ? "whole document" : "whole file");
 
     public string WholeTip => Markdown is not null || Text is not null
         ? "What you type is about this file. Select text in it, or drag over it with Area on, to ask about that."
-        : ShellPath is not null ? "What you type is about this file. Drag over it with Area on to ask about a part."
-        : Pages is not null || Picture is not null || Video is not null ? "What you type is about this file. Drag over it to ask about an area."
+        : ShellPath is not null || Model is not null ? "What you type is about this file. Drag over it with Area on to ask about a part."
+        : Sound is not null ? "What you type is about this sound. Drag over it to ask about a stretch."
+        : Pages is not null || Picture is not null || Video is not null || Animation is not null ? "What you type is about this file. Drag over it to ask about an area."
         : "What you type is about this file.";
 
     // ---- zoom -----------------------------------------------------------------------------------
@@ -332,11 +403,12 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
     [NotifyPropertyChangedFor(nameof(ZoomText))]
     private double _zoom = 1;
 
-    /// <summary>What zooms: pictures, frames, a PDF's pages, and what is frozen for marking.</summary>
-    public bool CanZoom => Pages is not null || Picture is not null || Video is not null || Frozen is not null;
+    /// <summary>What zooms: pictures, frames, a PDF's pages, a sound, a 3D model, and what is frozen for marking.</summary>
+    public bool CanZoom => Pages is not null || Picture is not null || Video is not null || Animation is not null || Sound is not null || Model is not null || Frozen is not null;
 
-    /// <summary>Pages are drawn sharp up to 3 times the panel's width; pictures and frames go to their pixels.</summary>
-    public double MaxZoom => Pages is not null && Frozen is null ? 3 : Views.ZoomBox.MaxZoom;
+    /// <summary>Pages are drawn sharp up to 3 times the panel's width; pictures and frames go to their pixels, a sound to its samples.</summary>
+    public double MaxZoom => Frozen is not null ? Views.ZoomBox.MaxZoom : Pages is not null ? 3 : Sound is { } sound ? sound.MaxZoom
+        : Model is not null ? InspectorModelViewModel.MaxZoom : Views.ZoomBox.MaxZoom;
 
     public string ZoomText => Zoom <= 1.001 ? "Fit" : $"{Zoom * 100:0}%";
 
@@ -345,6 +417,10 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
         if (Pages is { } pages)
             foreach (var page in pages)
                 page.Zoom = Frozen is null ? value : 1;
+        if (Frozen is null && Sound is { } sound && Math.Abs(sound.Zoom - value) > 1e-9)
+            sound.Zoom = value;
+        if (Frozen is null && Model is { } model && Math.Abs(model.Zoom - value) > 1e-9)
+            model.Zoom = value;
     }
 
     [RelayCommand]
@@ -366,11 +442,11 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
     private bool _areaMode;
 
     /// <summary>What shows a text or Windows' previewer: Area can be turned on (in the panel).</summary>
-    public bool CanFreeze => CanPick && (ShellPath is not null || Markdown is not null || Text is not null);
+    public bool CanFreeze => CanPick && (ShellPath is not null || Markdown is not null || Text is not null || Model is not null);
 
     /// <summary>The panel's view of the file, frozen while Area is on; null otherwise.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsShell), nameof(ShowsMarkdown), nameof(ShowsText), nameof(CanZoom), nameof(MaxZoom))]
+    [NotifyPropertyChangedFor(nameof(ShowsShell), nameof(ShowsMarkdown), nameof(ShowsText), nameof(ShowsModel), nameof(CanZoom), nameof(MaxZoom))]
     private Bitmap? _frozen;
 
     private RawImage? _frozenPixels;
@@ -406,7 +482,8 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
         Frozen = null;
         frozen.Dispose();
         _frozenPixels = null;
-        Zoom = 1;
+        // A model or a sound zoomed before keeps its zoom.
+        Zoom = Model?.Zoom ?? Sound?.Zoom ?? 1;
     }
 
     // ---- what is selected, into the chat's box ---------------------------------------------------
@@ -418,7 +495,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
     /// The area marked in the panel that is in the box: the picture of it saved for the model, where
     /// it is as the card says it ("area on page 2") and as the model is told it; null with none.
     /// </summary>
-    private sealed record PickedArea(string Picture, string Where, string Told, bool Frozen);
+    private sealed record PickedArea(string Picture, string Where, string Told, bool Frozen, string Shows = "that area, cut from it");
 
     private PickedArea? _area;
 
@@ -431,6 +508,8 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
         if (Pages is { } pages)
             foreach (var page in pages)
                 page.Mark = value is { Page: { } p } && p == page.Index ? value : null;
+        if (value is null && Sound is { } sound)
+            sound.Range = null;
     }
 
     /// <summary>The selection was taken off the box, sent or let go of: the panel clears it on screen too.</summary>
@@ -438,7 +517,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
 
     /// <summary>Text selected in <see cref="Text"/>, from character <paramref name="start"/> to <paramref name="end"/>; nothing when they are the same.</summary>
     public void SelectedInText(int start, int end) =>
-        Picked(Text is { } text ? DocumentPick.InText(text, start, end) : null);
+        Picked(Text is not { } text ? null : _shown == Shown.Hex ? DocumentPick.InHex(text, start, end) : DocumentPick.InText(text, start, end));
 
     /// <summary>Text selected in block <paramref name="block"/> of <see cref="Markdown"/> as drawn (see <see cref="DocumentPick.InMarkdown"/>).</summary>
     public void SelectedInMarkdown(int block, int start, int end) =>
@@ -481,13 +560,11 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
             return;
         }
         Mark = area;
-        var load = _loading;
-        var name = FileName;
         Func<(RawImage? Picture, string Where, string Told)> cut;
         if (Frozen is not null && _frozenPixels is { } frozen)
         {
-            var told = ShellPath is not null
-                ? "as Windows' previewer showed it in the panel, scrolled where they had it"
+            var told = ShellPath is not null ? "as Windows' previewer showed it in the panel, scrolled where they had it"
+                : Model is not null ? "as the panel drew it in that view"
                 : "as the panel drew it, scrolled where they had it";
             cut = () => (area.Crop(frozen), area.Where, $"They marked an area of it {told}: {area.Place(frozen.Width, frozen.Height, "pixels of the panel's view")}");
         }
@@ -512,9 +589,54 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
                 $"They marked an area of frame {frame + 1:N0} of its {video.FrameCount:N0} (at {at:0.000} s; frames counted from 1): " +
                 area.Place(video.Size.Width, video.Size.Height, "pixels"));
         }
+        else if (Animation is { } animation)
+        {
+            animation.Pause();
+            var frame = animation.FrameIndex;
+            var where = $"area of frame {frame + 1}";
+            var at = animation.TimeOf(frame).TotalSeconds;
+            cut = () => (animation.FullFrame(frame) is { } full ? area.Crop(full) : null, where,
+                $"They marked an area of frame {frame + 1:N0} of its {animation.FileFrames:N0} (at {at:0.000} s; frames counted from 1): " +
+                area.Place(animation.Size.Width, animation.Size.Height, "pixels"));
+        }
         else
             return;
-        var dir = _areasDir;
+        Save(cut, area);
+    }
+
+    /// <summary>
+    /// A stretch dragged over the sound, from <c>From</c> to <c>To</c> seconds: a picture of it (its
+    /// waveform over its spectrogram, as the model hears a sound) is saved and goes into the box as
+    /// "0.80-1.45 s · song.mp3", the model told where it is to the sample. Null (a click) takes out what was picked.
+    /// </summary>
+    private void PickRange((double From, double To)? range)
+    {
+        if (range is not { } r || Sound is not { } sound || _areasDir is null || Path is null)
+        {
+            Unpick();
+            return;
+        }
+        // A stretch, like an area, is told apart from another by its marks: one mark stands for it.
+        var area = new DocumentArea(r.From / sound.Length, 0, r.To / sound.Length, 1);
+        Mark = area;
+        var where = Core.Media.SoundRange.Label(r.From, r.To);
+        Save(() =>
+        {
+            using var picture = Core.Media.SoundRange.Picture(sound.Samples, sound.Rate, r.From, r.To);
+            var bgra = new byte[picture.Width * picture.Height * 4];
+            using (var copy = picture.Copy(SkiaSharp.SKColorType.Bgra8888))
+                for (var row = 0; row < copy.Height; row++)
+                    System.Runtime.InteropServices.Marshal.Copy(copy.GetPixels() + row * copy.RowBytes, bgra, row * copy.Width * 4, copy.Width * 4);
+            return (new RawImage(picture.Width, picture.Height, bgra), where, Core.Media.SoundRange.Told(sound.Samples, sound.Rate, r.From, r.To));
+        }, area, "that stretch's waveform (top) and spectrogram (bottom, low notes at the bottom, louder is brighter), its seconds marked");
+    }
+
+    /// <summary>Cuts the picture of what was picked off the UI thread, saves it, and puts it in the box if it is still what is marked.</summary>
+    private void Save(Func<(RawImage? Picture, string Where, string Told)> cut, DocumentArea area, string? shows = null)
+    {
+        var load = _loading;
+        var name = FileName;
+        var dir = _areasDir!;
         Task.Run(() =>
         {
             try
@@ -538,7 +660,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
                     }
                     _pick = null;
                     DropArea();
-                    _area = new PickedArea(file, where, told, Frozen is not null);
+                    _area = shows is null ? new PickedArea(file, where, told, Frozen is not null) : new PickedArea(file, where, told, Frozen is not null, shows);
                     _picking = true;
                     try { _chat?.Pick([(file, $"{Capital(where)} · {name}")]); }
                     finally { _picking = false; }
@@ -604,9 +726,11 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
         if (Path is not { } path)
             return null;
         var opening = $"[The File inspector panel is open beside the chat, showing {path}. ";
+        if (Model is { } shown)
+            opening += $"It draws the 3D model {char.ToLowerInvariant(shown.ViewText[0])}{shown.ViewText[1..]}, at {shown.Zoom * 100:0}% zoom. ";
         if (_area is { } area && files.Contains(area.Picture, StringComparer.OrdinalIgnoreCase))
             return ($"File inspector · {FileName} · {area.Where}",
-                $"{opening}{area.Told}. The picture {area.Picture} attached below is that area, cut from it, which is what they refer to.]");
+                $"{opening}{area.Told}. The picture {area.Picture} attached below is {area.Shows}, which is what they refer to.]");
         if (_pick is not { } pick || !files.Contains(path, StringComparer.OrdinalIgnoreCase))
             return ("File inspector · " + FileName, opening + "What they say is about this file unless they say otherwise.]");
         var where = Where(pick);
@@ -615,6 +739,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
         {
             Shown.Table => $"They selected {where} of it (shown as a table, its first row the header as row 1{(pick.Columns is { Count: > 0 } columns ? $"; {(columns.Count == 1 ? "column" : "columns")} {string.Join(", ", columns)}" : "")})",
             Shown.TextOnly => "They selected this in its text (as read_file gives it, so not lines of the file)",
+            Shown.Hex when pick.Bytes is { } bytes => $"They selected {where} of it ({(bytes.Last - bytes.First + 1):N0} bytes from offset {bytes.First:N0}; the panel shows its start as a hex dump: each line an offset, 16 bytes in hex, and those bytes as text, a dot for any that isn't a letter)",
             _ when Markdown is not null => $"They selected {where} of it (the panel draws its Markdown formatted: the text below is as shown, without the marks)",
             _ => $"They selected {where} of it",
         }).Append(", which is what they refer to:\n");

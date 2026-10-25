@@ -18,7 +18,9 @@ public static class MeshRenderer
     /// </summary>
     /// <param name="zoom">1 fits the whole model; more comes closer.</param>
     /// <param name="supersample">Pixels drawn per output pixel along each side, for smooth edges.</param>
-    public static SKBitmap Render(Mesh mesh, int width, int height, double yawDegrees, double pitchDegrees, double zoom = 1, int supersample = 2)
+    /// <param name="panX">How far the model is moved right on the picture, in parts of its shorter side.</param>
+    /// <param name="panY">How far it is moved down, the same.</param>
+    public static SKBitmap Render(Mesh mesh, int width, int height, double yawDegrees, double pitchDegrees, double zoom = 1, int supersample = 2, double panX = 0, double panY = 0)
     {
         var ss = Math.Clamp(supersample, 1, 3);
         var (w, h) = (width * ss, height * ss);
@@ -34,7 +36,7 @@ public static class MeshRenderer
         }
 
         if (mesh.TriangleCount > 0)
-            Draw(mesh, w, h, yawDegrees, pitchDegrees, zoom, color, depth);
+            Draw(mesh, w, h, yawDegrees, pitchDegrees, zoom, color, depth, (float)(panX * Math.Min(w, h)), (float)(panY * Math.Min(w, h)));
 
         var full = new SKBitmap(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Opaque));
         System.Runtime.InteropServices.Marshal.Copy((int[])(object)color, 0, full.GetPixels(), color.Length);
@@ -44,7 +46,7 @@ public static class MeshRenderer
             return full.Resize(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque), SKFilterQuality.High);
     }
 
-    private static void Draw(Mesh mesh, int w, int h, double yawDegrees, double pitchDegrees, double zoom, uint[] color, float[] depth)
+    private static void Draw(Mesh mesh, int w, int h, double yawDegrees, double pitchDegrees, double zoom, uint[] color, float[] depth, float panX, float panY)
     {
         var (min, max) = mesh.Bounds();
         var center = (min + max) / 2;
@@ -68,8 +70,8 @@ public static class MeshRenderer
             var q = Vector3.Transform(mesh.Positions[i] - center, rotation);
             view[i] = q;
             var d = distance - q.Z;
-            sx[i] = w / 2f + focal * q.X / d;
-            sy[i] = h / 2f - focal * q.Y / d;
+            sx[i] = w / 2f + panX + focal * q.X / d;
+            sy[i] = h / 2f + panY - focal * q.Y / d;
         }
 
         // Textures as plain colour arrays, read once.

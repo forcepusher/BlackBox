@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   − and + buttons, and a right or middle drag to pan.
 - Video in File inspector is a plain player that steps one frame back or on (the buttons, or Left and
   Right) and says which frame shows and when.
+- Sound in File inspector is a waveform you zoom into and click or scrub to set the playhead, with the
+  time to the thousandth. Drag over it to ask about a stretch: it goes into your message as
+  "0.80-1.45 s", and the model gets the times, how it sounds there and a picture of it.
+- Animations (GIF, WebP, APNG) in File inspector step frame by frame like video, and an area of a frame
+  can be asked about.
+- 3D models in File inspector turn with a left drag, zoom with the wheel, move with a right drag, and
+  have Front, Right, Back, Left and Top views; **Area** marks a part of the view to ask about.
+- File inspector shows any other file as hex; select bytes to ask about them.
 - "in development" beside the **Toolkit** dropdown: its tools are still being built.
 - With Video editor open and nothing picked in it, the video itself shows over the chat's box, as a
   pick does: what you type is about the whole video.

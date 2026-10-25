@@ -29,10 +29,19 @@
       <views:ZoomBox x:Name="FrameBox" Source="{Binding Video.Frame}" IsVisible="{Binding Video, Converter={x:Static ObjectConverters.IsNotNull}}" Margin="16,16,16,8"
                      Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Video frame" />
 
-      <!-- An animation, a sound or a 3D model: as in the chat. -->
-      <ScrollViewer IsVisible="{Binding Media, Converter={x:Static ObjectConverters.IsNotNull}}" HorizontalScrollBarVisibility="Disabled">
-        <ContentControl Content="{Binding Media}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16" />
-      </ScrollViewer>
+      <!-- An animation's frame, the same; its player is under it. -->
+      <views:ZoomBox x:Name="AnimationBox" Source="{Binding Animation.Frame}" IsVisible="{Binding Animation, Converter={x:Static ObjectConverters.IsNotNull}}" Margin="16,16,16,8"
+                     Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Animation frame" />
+
+      <!-- A sound's waveform: a click sets the playhead, a drag picks a stretch, the ruler scrubs, the wheel zooms. -->
+      <views:WaveformView x:Name="Waveform" Sound="{Binding Sound}" IsVisible="{Binding Sound, Converter={x:Static ObjectConverters.IsNotNull}}"
+                          Margin="16,16,16,8" AutomationProperties.Name="Waveform" />
+
+      <!-- A 3D model: a left drag turns it, the wheel comes closer, a right or middle drag moves it. -->
+      <views:ModelViewer x:Name="ModelView" Mesh="{Binding Model.Mesh}" IsVisible="{Binding ShowsModel}" Margin="16,16,16,8" CanPan="True" MinZoom="1"
+                         Yaw="{Binding Model.Yaw, Mode=TwoWay, FallbackValue=0}" Pitch="{Binding Model.Pitch, Mode=TwoWay, FallbackValue=0}"
+                         Zoom="{Binding Model.Zoom, Mode=TwoWay, FallbackValue=1}" PanX="{Binding Model.PanX, Mode=TwoWay, FallbackValue=0}" PanY="{Binding Model.PanY, Mode=TwoWay, FallbackValue=0}"
+                         AutomationProperties.Name="3D model" />
 
       <!-- A PDF's pages, drawn by PDFium as they come on screen: the list makes only the pages in view.
            Its width is set in code: the panel's, times the zoom (Ctrl+wheel or the buttons). -->
@@ -75,6 +84,64 @@
         </StackPanel>
       </Border>
     </Panel>
+
+    <!-- An animation's player: a frame back, play, a frame on; where it is. -->
+    <Border Grid.Row="1" IsVisible="{Binding Animation, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="10,4,10,10">
+      <DockPanel DataContext="{Binding Animation}" x:DataType="vm:InspectorAnimationViewModel">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                  Command="{Binding StepBackCommand}" ToolTip.Tip="A frame back (Left)" AutomationProperties.Name="A frame back">
+            <PathIcon Width="13" Height="13" Data="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+          </Button>
+          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                  Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space)" AutomationProperties.Name="Play">
+            <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
+          </Button>
+          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                  Command="{Binding StepForwardCommand}" ToolTip.Tip="A frame on (Right)" AutomationProperties.Name="A frame on">
+            <PathIcon Width="13" Height="13" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+          </Button>
+        </StackPanel>
+        <Panel DockPanel.Dock="Right" Margin="10,0,6,0" VerticalAlignment="Center">
+          <TextBlock Text="{Binding LongestFrameText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
+          <TextBlock Classes="muted" Text="{Binding FrameText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" AutomationProperties.Name="Frame" />
+        </Panel>
+        <Slider Minimum="0" Maximum="{Binding LastFrame}" Value="{Binding SliderFrame}" SmallChange="1" LargeChange="10" VerticalAlignment="Center" Margin="8,0,0,0"
+                AutomationProperties.Name="Frame slider" />
+      </DockPanel>
+    </Border>
+
+    <!-- A sound's player: play (the stretch picked, else from the playhead); where the playhead is; the stretch picked. -->
+    <Border Grid.Row="1" IsVisible="{Binding Sound, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="10,4,10,10">
+      <DockPanel DataContext="{Binding Sound}" x:DataType="vm:InspectorSoundViewModel">
+        <Button DockPanel.Dock="Left" Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space): the stretch picked, else from the playhead" AutomationProperties.Name="Play">
+          <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
+        </Button>
+        <Panel DockPanel.Dock="Left" Margin="8,0,0,0" VerticalAlignment="Center">
+          <TextBlock Text="{Binding LongestTimeText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
+          <TextBlock Classes="muted" Text="{Binding TimeText}" FontSize="12" FontFeatures="+tnum" AutomationProperties.Name="Time" />
+        </Panel>
+        <TextBlock Text="{Binding RangeText}" IsVisible="{Binding HasRange}" FontSize="12" FontFeatures="+tnum" Foreground="{StaticResource BbAccent}"
+                   HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,6,0" TextTrimming="CharacterEllipsis" AutomationProperties.Name="Stretch picked" />
+      </DockPanel>
+    </Border>
+
+    <!-- A 3D model's views: from the front, a side, the back, above, or as at first; where it is seen from. -->
+    <Border Grid.Row="1" IsVisible="{Binding Model, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="10,4,10,10">
+      <DockPanel DataContext="{Binding Model}" x:DataType="vm:InspectorModelViewModel">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+          <Button Classes="ghost" Height="28" Padding="8,0" Content="Front" FontSize="12" Command="{Binding ViewFromCommand}" CommandParameter="front" ToolTip.Tip="See it from the front" />
+          <Button Classes="ghost" Height="28" Padding="8,0" Content="Right" FontSize="12" Command="{Binding ViewFromCommand}" CommandParameter="right" ToolTip.Tip="See it from its right" />
+          <Button Classes="ghost" Height="28" Padding="8,0" Content="Back" FontSize="12" Command="{Binding ViewFromCommand}" CommandParameter="back" ToolTip.Tip="See it from the back" />
+          <Button Classes="ghost" Height="28" Padding="8,0" Content="Left" FontSize="12" Command="{Binding ViewFromCommand}" CommandParameter="left" ToolTip.Tip="See it from its left" />
+          <Button Classes="ghost" Height="28" Padding="8,0" Content="Top" FontSize="12" Command="{Binding ViewFromCommand}" CommandParameter="top" ToolTip.Tip="See it from above" />
+          <Button Classes="ghost" Height="28" Padding="8,0" Content="Reset" FontSize="12" Command="{Binding ViewFromCommand}" CommandParameter="start" ToolTip.Tip="As at first (or double-click it)" />
+        </StackPanel>
+        <TextBlock Classes="muted" Text="{Binding ViewText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,6,0"
+                   TextTrimming="CharacterEllipsis" AutomationProperties.Name="Seen from" />
+      </DockPanel>
+    </Border>
 
     <!-- A video's player: a frame back, play, a frame on; where it is; its sound. -->
     <Border Grid.Row="1" IsVisible="{Binding Video, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="10,4,10,10">
