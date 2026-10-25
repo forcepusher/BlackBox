@@ -6,12 +6,11 @@
              x:DataType="vm:DocumentViewModel"
              Background="{StaticResource BbBackground}">
   <DockPanel>
-    <!-- The file's name and what it is, and where it is. As tall as the chat's top bar beside it,
-         whose Toolkit dropdown is 30 high. -->
+    <!-- The file's name and what it is, and where it is; × closes the panel. As tall as the chat's top
+         bar beside it, whose Toolkit dropdown is 30 high. -->
     <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="12,8">
       <DockPanel MinHeight="30">
-        <Button DockPanel.Dock="Right" Classes="ghost" Padding="10,3" Content="Show in folder" Command="{Binding ShowInFolderCommand}" IsVisible="{Binding HasFile}"
-                VerticalAlignment="Center" Margin="12,0,0,0" ToolTip.Tip="{Binding Path}" />
+        <views:ToolkitClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,0,0,0" />
         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" ClipToBounds="True">
           <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}" />
           <TextBlock Classes="muted" Text="{Binding Details}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Details}" />

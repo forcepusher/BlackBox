@@ -7,6 +7,18 @@
              Background="{StaticResource BbBackground}">
 
   <UserControl.Styles>
+    <!-- The top bar's fields as tall as the Toolkit dropdown (30, not their own 32), so the bar is as
+         tall as the other tools' and the chat's, and its × sits where theirs does. -->
+    <Style Selector="DockPanel.bar NumericUpDown">
+      <Setter Property="Height" Value="30" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="10,4,6,4" />
+    </Style>
+    <Style Selector="DockPanel.bar NumericUpDown /template/ TextBox">
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="Padding" Value="10,4,6,4" />
+    </Style>
     <Style Selector="TextBlock.label">
       <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
       <Setter Property="FontSize" Value="12" />
@@ -145,9 +157,10 @@
   </UserControl.DataTemplates>
 
   <DockPanel>
-    <!-- The video (its name opens the videos' menu), its size and frame rate, changed here and saved at once, and what to do with all of it. -->
+    <!-- The video (its name opens the videos' menu), its size and frame rate, changed here and saved at once, and what to do with all of it; × closes the panel. -->
     <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="12,8">
-      <DockPanel>
+      <DockPanel Classes="bar" MinHeight="30">
+        <views:ToolkitClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,0,0,0" />
         <Button DockPanel.Dock="Right" Classes="primary" Content="Make the video" Command="{Binding MakeVideoCommand}"
                 ToolTip.Tip="BlackBox makes in the chat what isn't made yet or has changed, looks at each piece and fixes what it finds, then joins the video and looks at it" />
         <!-- Short of room (the window made narrower), the video's name is cut short rather than the

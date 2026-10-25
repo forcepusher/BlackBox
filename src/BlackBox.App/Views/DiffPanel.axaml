@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:BlackBox.App.ViewModels"
+             xmlns:views="using:BlackBox.App.Views"
              x:Class="BlackBox.App.Views.DiffPanel"
              x:DataType="vm:DiffViewModel"
              Background="{StaticResource BbBackground}">
@@ -79,10 +80,11 @@
   </UserControl.Styles>
 
   <DockPanel>
-    <!-- How the panel is used, or what went wrong; how much changed on the right. As tall as the
-         chat's top bar beside it, whose Toolkit dropdown is 30 high. -->
+    <!-- How the panel is used, or what went wrong; how much changed on the right, then × to close the
+         panel. As tall as the chat's top bar beside it, whose Toolkit dropdown is 30 high. -->
     <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="12,8">
       <DockPanel MinHeight="30">
+        <views:ToolkitClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,0,0,0" />
         <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding Summary}" Margin="12,0,0,0" VerticalAlignment="Center" ToolTip.Tip="{Binding Folder}" />
         <TextBlock Classes="muted" Text="{Binding Status}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Status}" />
       </DockPanel>

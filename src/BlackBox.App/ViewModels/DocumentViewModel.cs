@@ -2,7 +2,6 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using BlackBox.Core.Documents;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 
 namespace BlackBox.App.ViewModels;
 
@@ -167,7 +166,7 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
                         ShowAsText(load, path, size);
                         break;
                     default:
-                        Post(load, () => (Details, Message) = (size, "There is no preview for this kind of file. Show in folder finds it."));
+                        Post(load, () => (Details, Message) = (size, "There is no preview for this kind of file. Its card in the chat has Show in folder."));
                         break;
                 }
             }
@@ -239,7 +238,7 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
         }
         if (!DocumentPreview.LooksLikeText(path))
         {
-            Post(load, () => (Details, Message) = (size, "Nothing on this PC previews this kind of file. Show in folder finds it."));
+            Post(load, () => (Details, Message) = (size, "Nothing on this PC previews this kind of file. Its card in the chat has Show in folder."));
             return;
         }
         var (source, _) = DocumentPreview.ReadText(path);
@@ -269,13 +268,6 @@ public sealed partial class DocumentViewModel : ObservableObject, IToolkit
         Picture = null;
         Media?.Dispose();
         Media = null;
-    }
-
-    [RelayCommand]
-    private void ShowInFolder()
-    {
-        if (Path is { } path)
-            FilePreview.ShowInFolder(path);
     }
 
     /// <summary>

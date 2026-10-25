@@ -87,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Video editor's videos are in a menu on the video's name at the top: open another, start a new one, or
   rename or delete this one (to the Recycle Bin). On the timeline, right-click a card, clip or sound
   to rename or delete it, or to see an earlier version of it.
+- A × at the top right of Video editor, Code changes and Document preview closes the tool.
 
 ### Changed
 - Asked for code, commands or facts that change (versions, prices, news), the agent looks them up
@@ -114,6 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Video editor's video dropdown, its Open… and Show folder buttons, the settings button with the video's
   title, and the soundtrack and shots' own sound sliders.
 - Video editor's **New video** button beside **Make the video**: New video is in the menu on the video's name.
+- Document preview's **Show in folder**: the file's card in the chat has it.
 
 ### Fixed
 - Picking a tool in the **Toolkit** dropdown, or None, changes the window in one go: no more frame
