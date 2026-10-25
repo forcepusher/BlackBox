@@ -7,7 +7,7 @@ using BlackBox.Core.Comfy;
 namespace BlackBox.Core.Video;
 
 /// <summary>The kinds of job a video needs ComfyUI for.</summary>
-public enum VideoJob { Frame, Edit, Shot, ShotFromFirst, ShotFromText, LipSync, Song }
+public enum VideoJob { Frame, Edit, Shot, ShotFromFirst, ShotFromText, LipSync, Song, Foley }
 
 /// <summary>
 /// A way to do a job that is installed: a workflow of the user's, one of ComfyUI's templates, or (for
@@ -56,6 +56,7 @@ public static partial class VideoTemplates
         [VideoJob.ShotFromText] = ["video_ltx2_5_t2v", "video_ltx2_3_t2v", "video_wan2_2_14b_t2v"],
         [VideoJob.LipSync] = ["ltx2_5_ia2v", "ltx2_3_ia2v", "wan2_2_14b_s2v"],
         [VideoJob.Song] = ["audio_ace_step1_5_xl_turbo", "audio_ace_step1_5_xl_sft", "audio_ace_step_1_5_checkpoint", "audio_ace_step1_5_xl_base", "audio_ace_step_1_t2a_song"],
+        [VideoJob.Foley] = ["blackbox/video_to_audio", "mmaudio"],
     };
 
     /// <summary>What each job is, said where a template for it is missing.</summary>
@@ -67,6 +68,7 @@ public static partial class VideoTemplates
         VideoJob.ShotFromFirst => "a video from its first frame",
         VideoJob.ShotFromText => "a video from words",
         VideoJob.LipSync => "a video from a picture and a sound, lip-synced (LTX's image and audio to video)",
+        VideoJob.Foley => "foley, a sound from a video (MMAudio)",
         _ => "a song from a style and lyrics (ACE-Step)",
     };
 
@@ -197,6 +199,7 @@ public static partial class VideoTemplates
     {
         VideoJob.Frame or VideoJob.Edit => [VideoJob.Frame, VideoJob.Edit],
         VideoJob.Song => [VideoJob.Song],
+        VideoJob.Foley => [VideoJob.Foley],
         _ => [VideoJob.Shot, VideoJob.ShotFromFirst, VideoJob.ShotFromText, VideoJob.LipSync],
     };
 
@@ -225,7 +228,7 @@ public static partial class VideoTemplates
         var models = await hub.ModelsAsync(api, ct).ConfigureAwait(false);
         var library = await hub.LibraryAsync(api, ct).ConfigureAwait(false);
         var files = models.Values.SelectMany(s => s).Select(f => Path.GetFileName(f.Replace('\\', '/'))).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var media = job switch { VideoJob.Frame or VideoJob.Edit => "image", VideoJob.Song => "audio", _ => "video" };
+        var media = job switch { VideoJob.Frame or VideoJob.Edit => "image", VideoJob.Song or VideoJob.Foley => "audio", _ => "video" };
         var candidates = all
             .Where(t => t.Kind == "saved" || t.Kind == "ComfyUI template" && (t.Tags.FirstOrDefault()?.Equals(media, StringComparison.OrdinalIgnoreCase) == true || Rank(t.Name, job) < int.MaxValue))
             .Select((t, i) => (Template: t, Order: i))
@@ -298,7 +301,7 @@ public static partial class VideoTemplates
 
     /// <summary>
     /// Whether a workflow does a job, by the nodes it runs: what it saves (a picture, a video, a
-    /// sound), what it loads (pictures, a sound, a video), and that it takes a prompt.
+    /// sound), what it loads (pictures, a sound, a video), and that it takes a prompt (foley needn't).
     /// </summary>
     internal static bool Fits(JsonNode workflow, VideoJob job)
     {
@@ -314,6 +317,9 @@ public static partial class VideoTemplates
         var sound = Any(t => t.StartsWith("LoadAudio", StringComparison.OrdinalIgnoreCase));
         var video = Any(t => t.Contains("LoadVideo", StringComparison.OrdinalIgnoreCase));
         var prompt = Any(t => t.Contains("TextEncode", StringComparison.OrdinalIgnoreCase));
+        // Foley is heard from a video: its prompt (what is heard) is the sampler's own, if it has one.
+        if (job == VideoJob.Foley)
+            return video && savesAudio && !savesMesh;
         if (!prompt || savesMesh || video)
             return false;
         return job switch

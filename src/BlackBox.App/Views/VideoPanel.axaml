@@ -102,6 +102,10 @@
       <Setter Property="Stroke" Value="{StaticResource BbAccent}" />
       <Setter Property="StrokeThickness" Value="2" />
     </Style>
+    <!-- A sound line's volume: a short slider under its name. -->
+    <Style Selector="Slider.volume">
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
     <Style Selector="Button.thumb">
       <Setter Property="Padding" Value="0" />
       <Setter Property="Background" Value="Transparent" />
@@ -265,8 +269,13 @@
               <ItemsControl ItemsSource="{Binding SoundLines}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:SoundLineItem">
+                    <!-- Its name, and its volume under it. -->
                     <Border Height="{x:Static vm:VideoViewModel.SoundLineHeight}" Background="Transparent" ContextRequested="OnSoundLineMenu">
-                      <TextBlock Text="{Binding Name}" Margin="10,0,0,0" VerticalAlignment="Center" />
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}" Margin="10,0,0,0" />
+                        <Slider Classes="volume" Minimum="0" Maximum="2" Value="{Binding Volume}" SmallChange="0.05" LargeChange="0.25" Margin="8,-8,8,-12"
+                                ToolTip.Tip="{Binding VolumeTip}" AutomationProperties.Name="{Binding VolumeTip}" />
+                      </StackPanel>
                     </Border>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -394,7 +403,19 @@
                   <ItemsControl ItemsSource="{Binding SoundLines}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:SoundLineItem">
-                        <Border Height="{x:Static vm:VideoViewModel.SoundLineHeight}" BorderBrush="#1E2024" BorderThickness="0,0,0,1" />
+                        <!-- The line, and its dashed + after its last sound: a click makes a new sound there. -->
+                        <Border Height="{x:Static vm:VideoViewModel.SoundLineHeight}" BorderBrush="#1E2024" BorderThickness="0,0,0,1">
+                          <Canvas>
+                            <Button Classes="pick" Canvas.Left="{Binding AddX}" Canvas.Top="4" Width="56" Height="40" Click="OnCreateSound"
+                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
+                                    ToolTip.Tip="A new sound: a file of yours, foley for the clips under it, or music" AutomationProperties.Name="New sound">
+                              <Panel>
+                                <Rectangle Stroke="{StaticResource BbBorder}" StrokeThickness="1.5" StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
+                                <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="16" Height="16" Foreground="{StaticResource BbMuted}" />
+                              </Panel>
+                            </Button>
+                          </Canvas>
+                        </Border>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
@@ -413,7 +434,7 @@
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:SoundItem">
                         <Border Classes="block clip" Classes.selected="{Binding IsSelected}" Classes.drop="{Binding IsDropTarget}" Classes.planned="{Binding !IsMade}"
-                                Width="{Binding BlockWidth}" Height="40" Cursor="Hand" ToolTip.Tip="{Binding Kind}" AutomationProperties.Name="{Binding Title}"
+                                Width="{Binding BlockWidth}" Height="40" Cursor="Hand" ToolTip.Tip="{Binding Summary}" AutomationProperties.Name="{Binding Title}"
                                 PointerPressed="OnSoundPressed" PointerMoved="OnSoundMoved" PointerReleased="OnSoundReleased" PointerCaptureLost="OnSoundCaptureLost"
                                 ContextRequested="OnSoundMenu">
                           <Panel>
@@ -424,7 +445,8 @@
                             </StackPanel>
                             <StackPanel IsVisible="{Binding IsNew}" Orientation="Horizontal" Spacing="4" Margin="8,0,8,3" VerticalAlignment="Bottom">
                               <Button Classes="choice" Content="File…" Click="OnSoundFile" ToolTip.Tip="Copy a sound of yours in" />
-                              <Button Classes="choice" Content="Generate" Click="OnSoundGenerate" ToolTip.Tip="BlackBox makes it: say in the chat what it should be" />
+                              <Button Classes="choice" Content="Foley" Click="OnSoundFoley" ToolTip.Tip="BlackBox makes the sounds of what the clips under it show" />
+                              <Button Classes="choice" Content="Music" Click="OnSoundMusic" ToolTip.Tip="BlackBox makes a song: say in the chat what it should be" />
                             </StackPanel>
                             <Border Classes="handle" Tag="left" Width="6" HorizontalAlignment="Left" Cursor="SizeWestEast" ToolTip.Tip="Drag to cut its start" />
                             <Border Classes="handle" Tag="right" Width="6" HorizontalAlignment="Right" Cursor="SizeWestEast" ToolTip.Tip="Drag to cut its end" />

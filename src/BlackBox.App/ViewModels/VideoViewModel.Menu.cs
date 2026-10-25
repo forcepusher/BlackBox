@@ -72,14 +72,16 @@ public sealed partial class VideoViewModel
         return items;
     }
 
-    /// <summary>What right-clicking a sound on a sound line offers.</summary>
+    /// <summary>What right-clicking a sound on a sound line offers: File…, Foley and Music first, as a new one's buttons are.</summary>
     public IReadOnlyList<VideoMenuItem?> MenuFor(SoundItem sound)
     {
         var free = !Busy(_board.Folder);
+        var generated = sound.Sound.Source != VideoSound.FromFile;
         var items = new List<VideoMenuItem?>
         {
-            new("File…", free && (sound.Sound.Source == VideoSound.FromFile || !sound.IsMade), () => _ = PickFileForAsync(sound)),
-            new("Generate", free && sound.Sound.Source == VideoSound.Song, () => Generate(sound)),
+            new("File…", free && (!generated || !sound.IsMade), () => _ = PickFileForAsync(sound)),
+            new("Foley", free && generated, () => MakeFoley(sound)),
+            new("Music", free && generated, () => MakeMusic(sound)),
             null,
             new("Rename", free, () => RenameAsked?.Invoke(sound, sound.Title), "F2"),
             new("Delete", free, () => DeleteSound(sound)),
@@ -141,7 +143,17 @@ public sealed partial class VideoViewModel
         Show(_frames.GetValueOrDefault(frame.Id));
     }
 
-    /// <summary>A new sound on a sound line from <paramref name="seconds"/>, not chosen yet: File… copies a sound in, Generate has BlackBox make a song.</summary>
+    /// <summary>The dashed + on a sound line: a new sound there, after its last.</summary>
+    public void CreateSound(SoundLineItem line)
+    {
+        if (!Busy(_board.Folder))
+            CreateSound(line.AddSeconds, line.Index);
+    }
+
+    /// <summary>
+    /// A new sound on a sound line from <paramref name="seconds"/>, not chosen yet: File… copies a
+    /// sound in, Foley has BlackBox make the sounds of what the clips under it show, Music a song.
+    /// </summary>
     private void CreateSound(double seconds, int soundLine)
     {
         var name = "New sound";
@@ -161,6 +173,8 @@ public sealed partial class VideoViewModel
         if (_board.SoundLines >= Storyboard.MaxSoundLines)
             return;
         _board.SoundLines++;
+        while (_board.SoundLineVolumes.Count < _board.SoundLines)
+            _board.SoundLineVolumes.Add(1);
         Changed();
         SaveNow(force: true);
         Rebuild();
@@ -199,20 +213,6 @@ public sealed partial class VideoViewModel
         }
     }
 
-    /// <summary>File… on a sound: the sound picked is copied into References and plays in that clip's place.</summary>
-    private async Task PickFileForAsync(SoundItem item)
-    {
-        if (PickFiles is null || (await PickFiles("sound")).FirstOrDefault() is not { } file)
-            return;
-        DragOver(new VideoDropPlace("sounds", item.Sound.Start, item.Sound.SoundLine, item.IsNew ? item : null));
-        if (!item.IsNew)
-        {
-            // In its place: the clip there now goes, its place taken by the new file.
-            _board.Sounds.Remove(item.Sound);
-            Changed();
-        }
-        Drop([file]);
-    }
     /// <summary>File… on a clip's frame: the picture picked is that frame, cut to the video's size, at once.</summary>
     private async Task PickFileForAsync(FrameSlot slot)
     {
@@ -263,6 +263,70 @@ public sealed partial class VideoViewModel
         return _frames[frame.Id];
     }
 
+    /// <summary>File… on a sound: the sound picked is copied into References and plays in that clip's place.</summary>
+    private async Task PickFileForAsync(SoundItem item)
+    {
+        if (PickFiles is null || (await PickFiles("sound")).FirstOrDefault() is not { } file)
+            return;
+        DragOver(new VideoDropPlace("sounds", item.Sound.Start, item.Sound.SoundLine, item.IsNew ? item : null));
+        if (!item.IsNew)
+        {
+            // In its place: the clip there now goes, its place taken by the new file.
+            _board.Sounds.Remove(item.Sound);
+            Changed();
+        }
+        Drop([file]);
+    }
+
+    /// <summary>A sound line's slider moved: its volume, saved with the video.</summary>
+    private void SetLineVolume(int soundLine, double volume)
+    {
+        if (_loading)
+            return;
+        while (_board.SoundLineVolumes.Count <= soundLine)
+            _board.SoundLineVolumes.Add(1);
+        var level = Math.Round(Math.Clamp(volume, 0, 2), 2);
+        if (_board.SoundLineVolumes[soundLine] == level)
+            return;
+        _board.SoundLineVolumes[soundLine] = level;
+        Changed();
+    }
+
+    /// <summary>
+    /// Foley on a sound: it is made from what the clips under it show, so there is nothing to say
+    /// first: into the chat's box, and BlackBox makes it (what is heard can be said in the chat too).
+    /// </summary>
+    private void MakeFoley(SoundItem item)
+    {
+        if (item.Sound.Source != VideoSound.Foley)
+        {
+            item.Sound.Source = VideoSound.Foley;
+            Changed();
+            SaveNow(force: true);
+            Rebuild();
+        }
+        if (Sounds.FirstOrDefault(s => s.Id == item.Id) is not { } sound)
+            return;
+        Show(sound);
+        _chat.SendFromToolkit("Make it.", withPicks: true);
+    }
+
+    /// <summary>Music on a sound: a song, made once the chat is told its style (else at once, its style said).</summary>
+    private void MakeMusic(SoundItem item)
+    {
+        if (item.Sound.Source != VideoSound.Song)
+        {
+            item.Sound.Source = VideoSound.Song;
+            Changed();
+            SaveNow(force: true);
+            Rebuild();
+        }
+        if (Sounds.FirstOrDefault(s => s.Id == item.Id) is not { } sound)
+            return;
+        Generate(sound);
+        if (sound.Sound.Tags.Trim().Length == 0)
+            Status = $"Say in the chat what music {Lower(sound.Title)} should be (its style, and words if it is sung), and BlackBox makes it.";
+    }
 
     /// <summary>Generate: the piece goes into the chat's box; with what to make said, BlackBox makes it, else the user says what it should be.</summary>
     private void Generate(IVideoPiece piece)
@@ -276,7 +340,7 @@ public sealed partial class VideoViewModel
             _ => false,
         };
         if (said)
-            _chat.SendFromToolkit("Make it.");
+            _chat.SendFromToolkit("Make it.", withPicks: true);
         else
             Status = $"Say in the chat what {Lower(piece.Title)} should be, and BlackBox makes it.";
     }
@@ -583,6 +647,8 @@ public sealed partial class VideoViewModel
             DeleteSound(sound);
         foreach (var sound in _board.Sounds.Where(s => s.SoundLine > soundLine))
             sound.SoundLine--;
+        if (soundLine < _board.SoundLineVolumes.Count && _board.SoundLines > 1)
+            _board.SoundLineVolumes.RemoveAt(soundLine);
         _board.SoundLines = Math.Max(1, _board.SoundLines - 1);
         Changed();
         SaveNow();

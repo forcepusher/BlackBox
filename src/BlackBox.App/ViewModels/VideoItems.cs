@@ -215,8 +215,8 @@ public sealed class FrameSlot(ShotItem shot, bool end)
 
 /// <summary>
 /// A sound on a sound line, as a clip in a video editor: from where it starts for as long as it
-/// plays, dragged along and between sound lines, trimmed at either edge. A sound file of the user's, or
-/// a song BlackBox makes; a new one not chosen yet offers File… or Generate.
+/// plays, dragged along and between sound lines, trimmed at either edge. A sound file of the user's,
+/// music or foley BlackBox makes; a new one not chosen yet offers File…, Foley or Music.
 /// </summary>
 public sealed partial class SoundItem(VideoSound sound) : ObservableObject, IVideoPiece
 {
@@ -225,11 +225,16 @@ public sealed partial class SoundItem(VideoSound sound) : ObservableObject, IVid
     public VideoPiece Piece => VideoPiece.Of(Sound);
     public string Title => Sound.Label;
 
-    /// <summary>"Sound file" or "Generated sound".</summary>
-    public string Kind => Sound.Source == VideoSound.FromFile ? "Sound file" : "Generated sound";
+    /// <summary>"Sound file", "Foley" or "Music".</summary>
+    public string Kind => Sound.Source switch { VideoSound.FromFile => "Sound file", VideoSound.Foley => "Foley", _ => "Music" };
 
-    /// <summary>A song nothing is said of yet: File… or Generate decides what it is.</summary>
+    /// <summary>A song nothing is said of yet: File…, Foley or Music decides what it is.</summary>
     public bool IsNew => Sound.Source == VideoSound.Song && !IsMade && Sound.Tags.Trim().Length == 0;
+
+    /// <summary>What it is, for its tooltip: a new one, what to do with it.</summary>
+    public string Summary => IsNew ? "Nothing said yet: click it and say in the chat what it should be, or pick File…, Foley or Music."
+        : Sound.Source == VideoSound.Foley ? "Foley: the sounds of what the clips under it show" + (Sound.Tags.Trim() is { Length: > 0 } heard ? $" ({heard})" : "")
+        : Sound.Source == VideoSound.Song ? $"Music: {Sound.Tags.Trim()}" : Kind;
 
     /// <summary>How long its file is, in seconds; 0 while it isn't known.</summary>
     public double FileSeconds { get; set; }
@@ -275,13 +280,34 @@ public sealed partial class SoundItem(VideoSound sound) : ObservableObject, IVid
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(Kind));
         OnPropertyChanged(nameof(IsNew));
+        OnPropertyChanged(nameof(Summary));
     }
 }
 
-/// <summary>A sound line's name at the left of the timeline: "Sound line 1".</summary>
-public sealed record SoundLineItem(int Index)
+/// <summary>
+/// A sound line: its name and volume at the left of the timeline ("Sound line 1"), and the dashed +
+/// after its last sound, where a new one is made.
+/// </summary>
+public sealed partial class SoundLineItem(int index, double volume, Action<int, double> setVolume) : ObservableObject
 {
+    public int Index { get; } = index;
     public string Name => $"Sound line {Index + 1}";
+
+    /// <summary>How loud the line is, 1 as its sounds are; changed with its slider, saved with the video.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VolumeTip))]
+    private double _volume = volume;
+
+    partial void OnVolumeChanged(double value) => setVolume(Index, value);
+
+    public string VolumeTip => $"Volume of sound line {Index + 1}: {Volume * 100:0}%";
+
+    /// <summary>Where its dashed + is: after its last sound.</summary>
+    [ObservableProperty]
+    private double _addX;
+
+    /// <summary>Where on the line a sound made from the + starts, in seconds.</summary>
+    public double AddSeconds { get; set; }
 }
 
 /// <summary>

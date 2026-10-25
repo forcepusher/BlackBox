@@ -80,6 +80,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the prompts, picks the models, makes it with ComfyUI and looks at it, in the chat, where you watch
   and can stop it. Earlier versions are kept, and **Use this version** puts one back. Or ask for a
   video in the chat.
+- In Video generator each sound line has a dashed **+** after its last sound. The new sound offers
+  **File…**, **Foley** (the sounds of what the clips under it show, made from them with MMAudio in
+  ComfyUI) and **Music** (a song).
+- Each sound line in Video generator has a volume slider under its name, kept with the video and
+  heard when you play it and in the joined video.
 - A video is its folder, with two folders in it: References (your pictures and sounds, copied in, and
   the images BlackBox generates for frames to be made from) and Generated (each clip's frames and
   file, the songs), and the joined video. Every file has a `.json` of its name beside it saying what

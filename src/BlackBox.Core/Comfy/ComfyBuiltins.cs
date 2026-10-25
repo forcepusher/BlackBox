@@ -5,7 +5,8 @@ namespace BlackBox.Core.Comfy;
 /// image and image to image for any single-file checkpoint (SD 1.5, SD 2, SDXL). ComfyUI's own
 /// templates are all for big new models now (Z-Image, Flux, Qwen-Image, 6 to 20 GB), and its
 /// classic SD 1.5 ones are gone, so on a PC without a graphics card none of them was usable; these
-/// run with a 2 GB SD 1.5 checkpoint on the CPU, and with any checkpoint on a graphics card.
+/// run with a 2 GB SD 1.5 checkpoint on the CPU, and with any checkpoint on a graphics card. And foley
+/// from a video (video to audio, MMAudio), which no template of ComfyUI's does.
 /// </summary>
 public static class ComfyBuiltins
 {
@@ -21,7 +22,15 @@ public static class ComfyBuiltins
         ["sd_xl_base_1.0.safetensors"] = ("checkpoints", "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors"),
         ["sd_xl_turbo_1.0_fp16.safetensors"] = ("checkpoints", "https://huggingface.co/stabilityai/sdxl-turbo/resolve/main/sd_xl_turbo_1.0_fp16.safetensors"),
         ["4x-UltraSharp.pth"] = ("upscale_models", "https://huggingface.co/lokCX/4x-Ultrasharp/resolve/main/4x-UltraSharp.pth"),
+        // MMAudio, for blackbox/video_to_audio: kijai's safetensors of it, in the folder his nodes add.
+        ["mmaudio_large_44k_v2_fp16.safetensors"] = ("mmaudio", "https://huggingface.co/Kijai/MMAudio_safetensors/resolve/main/mmaudio_large_44k_v2_fp16.safetensors"),
+        ["mmaudio_vae_44k_fp16.safetensors"] = ("mmaudio", "https://huggingface.co/Kijai/MMAudio_safetensors/resolve/main/mmaudio_vae_44k_fp16.safetensors"),
+        ["mmaudio_synchformer_fp16.safetensors"] = ("mmaudio", "https://huggingface.co/Kijai/MMAudio_safetensors/resolve/main/mmaudio_synchformer_fp16.safetensors"),
+        ["apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors"] = ("mmaudio", "https://huggingface.co/Kijai/MMAudio_safetensors/resolve/main/apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors"),
     };
+
+    /// <summary>Where the custom nodes blackbox/video_to_audio runs come from.</summary>
+    public const string MmAudioNodes = "https://github.com/kijai/ComfyUI-MMAudio";
 
     private const string Checkpoint = "v1-5-pruned-emaonly-fp16.safetensors";
 
@@ -72,6 +81,28 @@ public static class ComfyBuiltins
             }
             """,
             ["image", "image to image", "img2img", "edit", "style", "photo", "picture", "SD 1.5", "SDXL", "checkpoint", "cpu"]),
+        new("video_to_audio", "Video to audio (foley) with MMAudio",
+            "The sounds of a video, made to match what it shows and when (footsteps, a door, rain, an engine): MMAudio, from kijai's ComfyUI-MMAudio nodes.",
+            "1.file is the video (a full local path is uploaded); 25 frames a second suit it, which is how the video tool hands its clips over. " +
+            "5.duration is how many seconds to make (8 is what MMAudio learnt on; up to about 10 holds up), 5.prompt what is heard " +
+            "(\"footsteps on gravel, wind\"; it can be left empty), 5.negative_prompt what to keep out. " +
+            $"Its nodes are a custom node pack: clone {MmAudioNodes} into ComfyUI's custom_nodes folder, install its requirements.txt with ComfyUI's own Python " +
+            "(the portable build: python_embeded\\python.exe -m pip install -r ComfyUI\\custom_nodes\\ComfyUI-MMAudio\\requirements.txt), then action=restart. " +
+            "Its four models go into models/mmaudio (action=download with model_folder=mmaudio); the first run also fetches NVIDIA's BigVGAN vocoder by itself. " +
+            "On a PC without a graphics card set 3.base_precision and 4.precision to fp32.",
+            """
+            {
+              "1": {"class_type": "LoadVideo", "inputs": {"file": "example.mp4"}, "_meta": {"title": "Video"}},
+              "2": {"class_type": "GetVideoComponents", "inputs": {"video": ["1", 0]}},
+              "3": {"class_type": "MMAudioModelLoader", "inputs": {"mmaudio_model": "mmaudio_large_44k_v2_fp16.safetensors", "base_precision": "fp16"}},
+              "4": {"class_type": "MMAudioFeatureUtilsLoader", "inputs": {"vae_model": "mmaudio_vae_44k_fp16.safetensors", "synchformer_model": "mmaudio_synchformer_fp16.safetensors",
+                    "clip_model": "apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors", "mode": "44k", "precision": "fp16"}},
+              "5": {"class_type": "MMAudioSampler", "inputs": {"mmaudio_model": ["3", 0], "feature_utils": ["4", 0], "images": ["2", 0], "duration": 8, "steps": 25, "cfg": 4.5,
+                    "seed": 42, "prompt": "", "negative_prompt": "music, speech, singing", "mask_away_clip": false, "force_offload": true}, "_meta": {"title": "Sampler"}},
+              "6": {"class_type": "SaveAudioMP3", "inputs": {"audio": ["5", 0], "filename_prefix": "BlackBox_foley", "quality": "V0"}}
+            }
+            """,
+            ["audio", "sound", "foley", "sfx", "sound effects", "video to audio", "mmaudio"]),
     ];
 
     private const string Prefix = "builtin:";

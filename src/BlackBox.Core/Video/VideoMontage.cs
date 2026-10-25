@@ -31,7 +31,7 @@ public static class VideoMontage
             if (File.Exists(board.SoundFile(sound)))
                 sounds.Add(sound);
             else
-                notes.Add(sound.Source == VideoSound.Song ? $"The song {sound.Label} isn't made yet, so the video is without it." : $"The sound file {board.SoundFile(sound)} isn't there, so the video is without it.");
+                notes.Add(sound.Source == VideoSound.FromFile ? $"The sound file {board.SoundFile(sound)} isn't there, so the video is without it." : $"The {(sound.Source == VideoSound.Foley ? "foley" : "song")} {sound.Label} isn't made yet, so the video is without it.");
         // Under a song the shots' own sound is kept at half: LTX makes a shot's sounds well and
         // its music badly (the user's finding), so a shot is asked for its sounds and no music
         // (VideoMaker.WithoutMusic) and the music is the song. Asked for nothing, LTX's sound was a
@@ -107,7 +107,7 @@ public static class VideoMontage
                 var sound = sounds[k];
                 var cut = sound.Seconds > 0 ? $",atrim=duration={N(sound.Seconds)}" : "";
                 var delay = (long)Math.Round(sound.Start * 1000);
-                f.Append($"[{board.Shots.Count + k}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,atrim=start={N(sound.Trim)},asetpts=PTS-STARTPTS{cut},volume={N(sound.Volume)},")
+                f.Append($"[{board.Shots.Count + k}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,atrim=start={N(sound.Trim)},asetpts=PTS-STARTPTS{cut},volume={N(sound.Volume * board.LineVolume(sound.SoundLine))},")
                  .Append($"adelay={delay}|{delay},apad=whole_dur={N(length)},atrim=duration={N(length)},asetpts=PTS-STARTPTS{duck}[s{k}];");
                 mix.Append($"[s{k}]");
             }
@@ -125,16 +125,59 @@ public static class VideoMontage
         return (args, length, notes);
     }
 
-    /// <summary>Joins the video into its file next to the storyboard (named after it); returns where it is and what to know.</summary>
-    public static async Task<VideoMade> JoinAsync(Storyboard board, string? ffmpeg, IMediaDecoder? decoder, Action<string>? progress, CancellationToken ct)
+    /// <summary>Foley is made from what the video shows at 25 frames a second (MMAudio's own rate), small.</summary>
+    internal const int FoleyFps = 25, FoleyHeight = 384;
+
+    /// <summary>
+    /// The ffmpeg command line that cuts a stretch of the video out of its clips, as the joined video
+    /// would show it (cuts, dissolves and fades), without sound, at <see cref="FoleyFps"/>: what foley
+    /// is made from. Only the clips under the stretch are needed, and they must be made.
+    /// </summary>
+    public static List<string> StretchPlan(Storyboard board, double start, double seconds, string output)
     {
-        if (ffmpeg is null)
-            throw new VideoException("Joining the shots needs ffmpeg, and there is none on this PC: download a portable build (ffmpeg's own site links them, such as gyan.dev's " +
-                                    "ffmpeg-release-essentials.zip) and unpack it into BlackBox's Data\\tools, where it is found, then join again.");
-        var output = board.VideoFile;
-        var temp = Path.Combine(board.Folder, "." + Path.GetFileNameWithoutExtension(output) + ".joining.mp4");
-        var (args, length, notes) = Plan(board, file => decoder?.Probe(file)?.HasAudio ?? true, temp);
-        var clock = Stopwatch.StartNew();
+        var (starts, length) = board.Timing();
+        var end = Math.Min(length, start + seconds);
+        if (end - start < 0.5)
+            throw new VideoException(start >= length ? $"No clip is under {N(start)} s: the video is {N(length)} s long." : "The stretch is too short to make a sound from.");
+        var under = Enumerable.Range(0, board.Shots.Count).Where(i => starts[i] < end - 1e-6 && starts[i] + board.Shots[i].Seconds > start + 1e-6).ToList();
+        var missing = under.Where(i => !File.Exists(board.ShotVideo(board.Shots[i]))).Select(i => board.Shots[i].Id).ToList();
+        if (missing.Count > 0)
+            throw new VideoException($"The clips under it aren't made yet: {string.Join(", ", missing)}. Make them first: the sound is made from what they show.");
+        var (width, height) = (board.Width, board.Height);
+        var args = new List<string> { "-hide_banner", "-y", "-nostats", "-progress", "pipe:1" };
+        foreach (var i in under)
+            args.AddRange(["-i", board.ShotVideo(board.Shots[i])]);
+        var f = new StringBuilder();
+        for (var k = 0; k < under.Count; k++)
+        {
+            var s = board.Shots[under[k]].Seconds;
+            f.Append($"[{k}:v]tpad=stop_mode=clone:stop_duration={N(s)},trim=duration={N(s)},setpts=PTS-STARTPTS,")
+             .Append($"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1,fps={FoleyFps},format=yuv420p[v{k}];");
+        }
+        var (video, joined) = ("v0", board.Shots[under[0]].Seconds);
+        for (var k = 1; k < under.Count; k++)
+        {
+            var shot = board.Shots[under[k]];
+            var overlap = Storyboard.Overlap(shot);
+            if (overlap <= 0)
+                f.Append($"[{video}][v{k}]concat=n=2:v=1:a=0[vj{k}];");
+            else
+                f.Append($"[{video}][v{k}]xfade=transition={(shot.Transition == VideoShot.Fade ? "fadeblack" : "fade")}:duration={N(overlap)}:offset={N(joined - overlap)}[vj{k}];");
+            joined += shot.Seconds - overlap;
+            video = $"vj{k}";
+        }
+        f.Append($"[{video}]trim=start={N(start - starts[under[0]])}:duration={N(end - start)},setpts=PTS-STARTPTS,scale=-2:{FoleyHeight}[vout]");
+        args.AddRange(["-filter_complex", f.ToString(), "-map", "[vout]", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+            "-r", FoleyFps.ToString(CultureInfo.InvariantCulture), "-t", N(end - start), output]);
+        return args;
+    }
+
+    private static string N(double d) => d.ToString("0.###", CultureInfo.InvariantCulture);
+
+    /// <summary>Runs ffmpeg to make <paramref name="output"/> (written to a temporary file next to it first), saying how far it has got.</summary>
+    internal static async Task RunAsync(string ffmpeg, List<string> args, string output, double length, string doing, string task, Action<string>? progress, CancellationToken ct)
+    {
+        var temp = args[^1];
         var psi = new ProcessStartInfo(ffmpeg) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
         foreach (var a in args)
             psi.ArgumentList.Add(a);
@@ -154,7 +197,7 @@ public static class VideoMontage
         {
             while (await process.StandardOutput.ReadLineAsync(ct).ConfigureAwait(false) is { } line)
                 if (line.StartsWith("out_time_us=", StringComparison.Ordinal) && long.TryParse(line[12..], out var us) && us > 0)
-                    progress?.Invoke($"Joining the shots… {us / 1e6:0.0} of {length:0.0} s");
+                    progress?.Invoke($"{doing}… {us / 1e6:0.0} of {length:0.0} s");
             await process.WaitForExitAsync(ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -174,10 +217,26 @@ public static class VideoMontage
                 tail = string.Join("\n", errors.ToString().Split('\n').Where(l => l.Trim().Length > 0).TakeLast(12));
             try { File.Delete(temp); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-            throw new VideoException($"ffmpeg couldn't join the shots (exit code {process.ExitCode}):\n{tail}");
+            throw new VideoException($"ffmpeg couldn't {task} (exit code {process.ExitCode}):\n{tail}");
         }
-        MediaRelease.Release(output); // the video joined before may be playing in the chat
-        File.Move(temp, output, overwrite: true);
+        if (!string.Equals(temp, output, StringComparison.OrdinalIgnoreCase))
+        {
+            MediaRelease.Release(output); // the one made before may be playing in the chat
+            File.Move(temp, output, overwrite: true);
+        }
+    }
+
+    /// <summary>Joins the video into its file next to the storyboard (named after it); returns where it is and what to know.</summary>
+    public static async Task<VideoMade> JoinAsync(Storyboard board, string? ffmpeg, IMediaDecoder? decoder, Action<string>? progress, CancellationToken ct)
+    {
+        if (ffmpeg is null)
+            throw new VideoException("Joining the shots needs ffmpeg, and there is none on this PC: download a portable build (ffmpeg's own site links them, such as gyan.dev's " +
+                                    "ffmpeg-release-essentials.zip) and unpack it into BlackBox's Data\\tools, where it is found, then join again.");
+        var output = board.VideoFile;
+        var temp = Path.Combine(board.Folder, "." + Path.GetFileNameWithoutExtension(output) + ".joining.mp4");
+        var (args, length, notes) = Plan(board, file => decoder?.Probe(file)?.HasAudio ?? true, temp);
+        var clock = Stopwatch.StartNew();
+        await RunAsync(ffmpeg, args, output, length, "Joining the shots", "join the shots", progress, ct).ConfigureAwait(false);
         return new VideoMade(output, null, null, clock.Elapsed, notes);
     }
 }

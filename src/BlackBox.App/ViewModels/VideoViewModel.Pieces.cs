@@ -41,7 +41,7 @@ public sealed partial class VideoViewModel
         foreach (var sound in _board.Sounds)
             Sounds.Add(new SoundItem(sound));
         for (var i = 0; i < _board.SoundLines; i++)
-            SoundLines.Add(new SoundLineItem(i));
+            SoundLines.Add(new SoundLineItem(i, _board.LineVolume(i), SetLineVolume));
         _loading = false;
         Relabel();
         RefreshReferences();
@@ -198,6 +198,15 @@ public sealed partial class VideoViewModel
             case SoundItem { Sound: var a }:
                 if (a.Source == VideoSound.FromFile)
                     lines.Add($"Your sound file: {Path.GetFileName(_board.SoundFile(a))}");
+                else if (shown is SoundItem { IsNew: true })
+                    lines.Add("Not picked yet: a file of yours, foley or music.");
+                else if (a.Source == VideoSound.Foley)
+                {
+                    var (from, to) = VideoMaker.FoleyStretch(_board, a);
+                    lines.Add($"Foley, from what the clips show from {from:0.#} to {to:0.#} s");
+                    lines.Add($"Heard as: {(a.Tags.Trim().Length > 0 ? a.Tags.Trim() : "(not said: what the clips show)")}");
+                    lines.Add($"Seed: {a.Seed}");
+                }
                 else
                 {
                     lines.Add($"Style: {(a.Tags.Trim().Length > 0 ? a.Tags.Trim() : "(none yet)")}");

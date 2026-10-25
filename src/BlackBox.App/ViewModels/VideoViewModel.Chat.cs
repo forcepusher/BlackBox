@@ -78,7 +78,12 @@ public sealed partial class VideoViewModel
         foreach (var sound in _board.Sounds)
             if (Is(_board.SoundFile(sound)))
                 return new(sound.Label, FormattableString.Invariant($"sound {sound.Id} \"{sound.Label}\" on sound line {sound.SoundLine + 1} from {sound.Start:0.#} s, ") +
-                    (sound.Source == VideoSound.FromFile ? $"a sound file of theirs ({full})" : $"a song BlackBox makes ({full}{state})" + (sound.Tags.Trim().Length == 0 && !made ? ": nothing said of it yet" : "")), VideoPiece.Of(sound));
+                    sound.Source switch
+                    {
+                        VideoSound.FromFile => $"a sound file of theirs ({full})",
+                        VideoSound.Foley => $"foley BlackBox makes from what the clips under it show ({full}{state})" + (sound.Tags.Trim().Length == 0 ? ": nothing said of what is heard, which it can do without" : ""),
+                        _ => $"a song BlackBox makes ({full}{state})" + (sound.Tags.Trim().Length == 0 && !made ? ": nothing said of it yet, so it is still to be picked: a file of theirs, foley or music" : ""),
+                    }, VideoPiece.Of(sound));
         if (Is(_board.Folder) || Is(_board.JoinedFile))
             return new("the whole video", $"the whole video ({full})", null);
         if (Viewing is { Version: { } version, VersionOf: { } of } && Is(version.File))

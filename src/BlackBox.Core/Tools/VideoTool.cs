@@ -27,13 +27,14 @@ public sealed class VideoTool : Tool
         "Each file has a .json of its name beside it (what it is and how it was made: video.json for video.mp4) and the ComfyUI workflow that made it (video.workflow.json). " +
         "The storyboard is all of it at once: shots in order, each going from a first frame to an optional last frame in so many seconds, the pictures they start and end on, and the sounds over them. " +
         "action=storyboard shows it (path: the video's folder), with BlackBox's guide to writing one the first time in a chat, or makes or changes it with storyboard={...}: title (the video's folder is named after it: a new one renames it), " +
-        "width, height, fps, voice (who says the lines: age, voice, manner), soundLines (how many sound lines), frames:[{id, prompt (what it shows and its look), model, seed, from: [what it is made from, to keep people and places the same: frames' ids, " +
+        "width, height, fps, voice (who says the lines: age, voice, manner), soundLines (how many sound lines), soundLineVolumes (each sound line's volume, 1 as its sounds are: [1, 0.5]), frames:[{id, prompt (what it shows and its look), model, seed, from: [what it is made from, to keep people and places the same: frames' ids, " +
         "a picture in the References folder by its name (\"Mira\" or \"Mira.png\"), or a picture of the user's from elsewhere by its full path (one they attached: it is copied into References as it is)], " +
         "file (a picture of the user's, cut to the video's frame), name, reference: true for a character or place sheet, made at its own shape into References/<name>.png, " +
         "of: a shot's id, for a frame taken from where that shot's clip ends, so the shot that starts on it goes on from that moment (after a shot without a last frame)}], " +
         "shots:[{id, name (a few words naming it, \"intro\", \"the leap\"), first, last (frame ids), seconds, prompt (what happens, and its look), camera, model, transition: cut|dissolve|fade, " +
         "line (what is said in it, lip-synced, in the video's voice; it starts 0.4 s in, so leave time for it), seed}], " +
-        "sounds:[{id, name, source: song (made by BlackBox: tags = its style, lyrics, model, seed) or file (the user's: file = its full path, copied into Sounds), soundLine (from 0), start (seconds into the video), " +
+        "sounds:[{id, name, source: song (made by BlackBox: tags = its style, lyrics, model, seed), foley (made by BlackBox from what the clips under it show: tags = what is heard, which it can do without; model, seed) " +
+        "or file (the user's: file = its full path, copied into Sounds), soundLine (from 0), start (seconds into the video), " +
         "trim (seconds cut off its start), seconds (how long it plays; 0 to its end), volume (1 as it is)}]: sounds overlap as they please, as on a video editor's sound lines. " +
         "Frames, shots and sounds are matched by id; {\"id\": …, \"delete\": true} removes one, and a field set to null is taken out (a shot's \"last\": null). " +
         "Nothing is video-wide, so a change remakes only what it changes: write the video's look into every frame's and shot's prompt. " +
@@ -50,12 +51,12 @@ public sealed class VideoTool : Tool
         "The user's pictures stay as they gave them: never crop, resize, retouch or redraw one, or put pictures of your own beside them (a cut-out, a padded copy); " +
         "name the whole picture in from and say in the prompt who or what in it to take (\"the rabbit on the left, in the grey t-shirt\"): the picture model picks one out of a lineup or a sheet. " +
         "action=frame id= makes a frame's picture (a reference's too) and has a fresh look at it; action=sound id= makes a song, a minute long at least (the video uses its start), the best of tries=3 by a judge " +
-        "of how good music sounds (SongEval); write lyrics for the part the video uses. action=shot id= makes a shot's clip and checks it (does it start and end on its frames, " +
+        "of how good music sounds (SongEval); write lyrics for the part the video uses; for foley it makes its sound from the clips under it, which are made first. action=shot id= makes a shot's clip and checks it (does it start and end on its frames, " +
         "how it moves, and a fresh look at what happens, faults and whether people stay the same); tries=N makes up to N tries with new seeds until one passes. " +
         "What is made again keeps the one before as a version (in Versions, in its folder), which the user can put back in the Video generator panel. " +
         "Fix a frame or shot the look finds wrong: a plainer prompt, another seed, frames closer to each other, or a new frame. " +
         "action=join puts the shots and the sounds together into the video; action=check looks at a frame or shot (id) or, without id, the whole video. " +
-        "Order: frames (those others are made from first), the shots, the songs, then join and check the video. " +
+        "Order: frames (those others are made from first), the shots, the songs and foley, then join and check the video. " +
         "prompt, camera, seconds, seed, model and from given with action=frame or shot change the storyboard before it is made.";
 
     public override ToolRisk Risk => ToolRisk.Risky;
@@ -71,7 +72,7 @@ public sealed class VideoTool : Tool
         ("seed", Int("action=frame or shot: a new seed (another result from the same prompt)"), false),
         ("model", Str("action=frame or shot: what it is made with, a model or workflow in words or by name (\"\" for the best installed)"), false),
         ("from", StrArray("action=frame: what it is made from: frames' ids, references' folders (\"Mira\") or pictures in them (\"Mira/side.png\") in References, or a picture of the user's from elsewhere by its full path"), false),
-        ("tries", Int("action=shot: up to this many tries, each with a new seed, until the check passes (default 1); action=sound: songs to make, the best kept (default 3)"), false));
+        ("tries", Int("action=shot: up to this many tries, each with a new seed, until the check passes (default 1); action=sound: songs to make, the best kept (default 3; foley is made once)"), false));
 
     public override string Describe(JsonObject args)
     {
@@ -82,7 +83,7 @@ public sealed class VideoTool : Tool
             "storyboard" => args["storyboard"] is JsonObject ? "Change the storyboard" + (GetString(args, "path") is { } p ? $" in {p}" : "") : $"Storyboard of {GetString(args, "path") ?? "the video"}",
             "frame" => $"Make frame {id}",
             "shot" => $"Make shot {id}" + (GetNumber(args, "tries") is > 1 and var t ? $" ({t} tries at most)" : ""),
-            "sound" => $"Make song {id}",
+            "sound" => $"Make sound {id}",
             "join" => "Join the video",
             "check" => id is null ? "Check the video" : $"Check {id}",
             "models" => "List the installed models for videos",
@@ -364,7 +365,8 @@ public sealed class VideoTool : Tool
             if (!current)
                 todo.Add($"shot {s.Id}");
         }
-        sb.AppendLine($"Sounds ({board.SoundLines} sound line{(board.SoundLines == 1 ? "" : "s")}, over each shot's own sound):" + (board.Sounds.Count == 0 ? " none." : ""));
+        var turned = board.SoundLineVolumes.Select((v, i) => (v, i)).Where(p => Math.Abs(p.v - 1) > 0.001).Select(p => $"sound line {p.i} at volume {N(p.v)}").ToList();
+        sb.AppendLine($"Sounds ({board.SoundLines} sound line{(board.SoundLines == 1 ? "" : "s")}{(turned.Count > 0 ? ", " + string.Join(", ", turned) : "")}, over each shot's own sound):" + (board.Sounds.Count == 0 ? " none." : ""));
         foreach (var a in board.Sounds)
         {
             var file = board.SoundFile(a);
@@ -372,6 +374,16 @@ public sealed class VideoTool : Tool
                         (Math.Abs(a.Volume - 1) > 0.001 ? $", volume {N(a.Volume)}" : "");
             if (a.Source == VideoSound.FromFile)
                 sb.AppendLine($"  {a.Id} \"{a.Label}\" ({where}): the user's sound file " + (File.Exists(file) ? file : $"{file}, which isn't there."));
+            else if (a.Source == VideoSound.Foley)
+            {
+                var current = VideoMaker.IsCurrent(board, a);
+                var (from, to) = VideoMaker.FoleyStretch(board, a);
+                sb.AppendLine($"  {a.Id} \"{a.Label}\" ({where}): foley, made from what the clips show from {N(from)} to {N(to)} s" +
+                              (a.Tags.Trim().Length > 0 ? $", heard as \"{a.Tags.Trim()}\"" : "") + (a.Model is { } model ? $", made with \"{model}\"" : "") + $", seed {a.Seed}. " +
+                              (!File.Exists(file) ? "Not made." : current ? $"Made: {file}" : $"Made, but out of date (the clips under it or what it should sound like changed): {file}"));
+                if (!current)
+                    todo.Add($"sound {a.Id} (action=sound)");
+            }
             else
             {
                 var current = VideoMaker.IsCurrent(board, a);
@@ -513,14 +525,16 @@ public sealed class VideoTool : Tool
 
     private async Task<ToolResult> SoundAsync(Storyboard board, string? id, int tries, ToolContext ctx, CancellationToken ct)
     {
-        var songs = board.Sounds.Where(s => s.Source == VideoSound.Song).ToList();
+        var songs = board.Sounds.Where(s => s.Source != VideoSound.FromFile).ToList();
         var sound = id is { Length: > 0 } ? board.Sound(id.Trim()) : songs.Count == 1 ? songs[0] : null;
         if (sound is null)
             throw new VideoException(songs.Count == 0
-                ? "The storyboard has no song to make: add one to sounds [{\"id\": \"a1\", \"source\": \"song\", \"tags\": …, \"lyrics\": …, \"start\": 0}] first."
+                ? "The storyboard has no song or foley to make: add one to sounds [{\"id\": \"a1\", \"source\": \"song\", \"tags\": …, \"lyrics\": …, \"start\": 0}] first."
                 : $"Which sound? Give its id: {string.Join(", ", board.Sounds.Select(s => s.Id))}.");
         if (sound.Source == VideoSound.FromFile)
             return new ToolResult(File.Exists(board.SoundFile(sound)) ? $"Sound {sound.Id} is the user's file {board.SoundFile(sound)}; nothing to make." : $"Sound {sound.Id} is a file of the user's, and it isn't there.");
+        if (sound.Source == VideoSound.Foley)
+            return await FoleyAsync(board, sound, ctx, ct).ConfigureAwait(false);
         var songSeed = sound.Seed;
         var made = await KeepingVersionAsync(board, VideoPiece.Of(sound), () => Maker(ctx).MakeSongAsync(board, sound, ctx.Progress, ctx.UserMessage, ct, tries)).ConfigureAwait(false);
         // The seed of the song kept; not over a seed the Video generator panel gave meanwhile.
@@ -541,6 +555,20 @@ public sealed class VideoTool : Tool
         foreach (var note in made.Notes)
             sb.AppendLine("Note: " + note);
         return new ToolResult(sb.ToString().TrimEnd(), preview.Image, ImageCaption: preview.Image is null ? null : "The song:", Files: [made.File]);
+    }
+
+    private async Task<ToolResult> FoleyAsync(Storyboard board, VideoSound sound, ToolContext ctx, CancellationToken ct)
+    {
+        var made = await KeepingVersionAsync(board, VideoPiece.Of(sound), () => Maker(ctx).MakeFoleyAsync(board, sound, ctx.Progress, ctx.UserMessage, ct)).ConfigureAwait(false);
+        var preview = MediaPreview.ForFiles([made.File], ctx.Media, ctx.SeesImages);
+        var (from, to) = VideoMaker.FoleyStretch(board, sound);
+        var sb = new StringBuilder();
+        sb.AppendLine($"The foley is made in {Chats.ChatTimes.Stopwatch(made.Took)} with {made.Template}, from what the clips show from {N(from)} to {N(to)} s: {made.File}");
+        sb.AppendLine(string.Join("\n", preview.Lines));
+        sb.AppendLine("Does what is heard fit what the clips show, where they show it? If not, say what is heard in its tags, or change its seed, and make it again.");
+        foreach (var note in made.Notes)
+            sb.AppendLine("Note: " + note);
+        return new ToolResult(sb.ToString().TrimEnd(), preview.Image, ImageCaption: preview.Image is null ? null : "The foley:", Files: [made.File]);
     }
 
     private async Task<ToolResult> ShotAsync(Storyboard board, string id, int tries, ToolContext ctx, CancellationToken ct)

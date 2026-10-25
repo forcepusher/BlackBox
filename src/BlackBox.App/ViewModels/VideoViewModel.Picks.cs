@@ -272,7 +272,9 @@ public sealed partial class VideoViewModel
             { Piece: FrameItem { Frame.Reference: true, Frame.Prompt.Length: 0 } reference } => new PictureView(null, reference.Title,
                 "A new image: pick a file of yours for it (File… on its card, or drop one there), or say in the chat what to generate."),
             { Piece: SoundItem { IsNew: true } sound } => new PictureView(null, sound.Title,
-                "A new sound: pick a file of yours for it (File… on it, or drop one there), or say in the chat what to generate."),
+                "A new sound: File… copies a sound of yours in (or drop one there), Foley makes the sounds of what the clips under it show, Music makes a song. Or say in the chat what it should be."),
+            { Piece: SoundItem { Sound.Source: VideoSound.Foley } foley } => new PictureView(null, $"{foley.Title} is not made yet",
+                "Foley: BlackBox makes the sounds of what the clips under it show. Say in the chat to make it, or what should be heard."),
             { Piece: { } piece } => new PictureView(null, $"{piece.Title} is not made yet", "Say in the chat what it should be, or to make it."),
             // The video's name: what is said with nothing picked is about all of it.
             null => new PictureView(null, VideoName is { Length: > 0 } name ? name : "The video", _board.Shots.All(s => s.Prompt.Trim().Length == 0)

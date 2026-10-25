@@ -38,6 +38,7 @@ public static class ComfyModelFolders
         "embeddings" => $"Use it by writing embedding:{Path.GetFileNameWithoutExtension(file)} in a prompt.",
         "diffusion_models" => $"Load it with UNETLoader (unet_name \"{file}\").",
         "text_encoders" => $"Load it with CLIPLoader or DualCLIPLoader (clip_name \"{file}\").",
+        "mmaudio" => $"kijai's MMAudio nodes load it (blackbox/video_to_audio names its four files).",
         _ => $"It is in ComfyUI's {folder} folder; look up the node that loads it with action=nodes.",
     };
 }

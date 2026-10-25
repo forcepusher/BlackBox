@@ -29,6 +29,9 @@ public sealed class VideoInputs
     /// <summary>A sound the video is made with (lip sync).</summary>
     public string? Audio { get; init; }
 
+    /// <summary>A video a sound is made from (foley).</summary>
+    public string? Video { get; init; }
+
     /// <summary>A song's style and words.</summary>
     public string? Tags { get; init; }
 
@@ -80,7 +83,7 @@ public static partial class VideoRoles
         if (inputs.Negative is { } negative)
         {
             var positive = PromptInput(workflow, library, negative: false);
-            if (PromptInput(workflow, library, negative: true) is { } at && at.Id != positive?.Id)
+            if (PromptInput(workflow, library, negative: true) is { } at && at != positive)
                 Put(at.Id, at.Input, negative);
         }
 
@@ -144,6 +147,15 @@ public static partial class VideoRoles
             foreach (var (id, node) in workflow.All().Where(n => ComfyWorkflow.ClassOf(n.Node) == "TrimAudioDuration").ToList())
                 if (node["inputs"]?["start_index"] is JsonValue)
                     Put(id, "start_index", 0);
+        }
+
+        if (inputs.Video is { } video)
+        {
+            var loader = workflow.All().FirstOrDefault(n => ComfyWorkflow.ClassOf(n.Node) is "LoadVideo" or "VHS_LoadVideo" or "VHS_LoadVideoPath");
+            if (loader.Node?["inputs"] is not JsonObject own)
+                missed.Add("the video (no LoadVideo node)");
+            else
+                Put(loader.Id, own.ContainsKey("file") ? "file" : "video", video);
         }
 
         if (inputs.Tags is not null || inputs.Lyrics is not null || inputs.Bpm is not null)
@@ -213,6 +225,10 @@ public static partial class VideoRoles
             if (Trace(workflow, library, from, negative, [], 0) is { } found)
                 return found;
         }
+        // A sampler that takes its words itself (MMAudio's prompt and negative_prompt).
+        foreach (var (id, node) in workflow.All())
+            if (node["inputs"] is JsonObject own && own["prompt"] is JsonValue && own["negative_prompt"] is JsonValue)
+                return (id, negative ? "negative_prompt" : "prompt");
         return null;
     }
 

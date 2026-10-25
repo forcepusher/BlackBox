@@ -89,7 +89,11 @@ they want), so write them well.
 - A song BlackBox makes ("source": "song"): "tags" (genre, instruments, mood, tempo such as
   "100 BPM") and "lyrics" ([verse] and [chorus] lines; none for an instrumental). It is made a
   minute long at least and the video uses its start.
+- Foley BlackBox makes ("source": "foley"): the sounds of what the clips under it show (footsteps,
+  a door, rain), made from the clips themselves, so make them first. "tags" says what is heard
+  ("gravel footsteps, wind"); it can be left empty. For music use a song: foley keeps music out.
 - A sound file of the person's ("source": "file") is copied into the video's Sounds folder as it is.
+- "soundLineVolumes" turns whole sound lines up or down, one number for each (1 as they are).
 
 ## Models and changes
 - "model" is what a piece is made with. Set it only when the person names or describes a model or

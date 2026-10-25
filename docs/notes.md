@@ -850,6 +850,43 @@ each over the shots' own sound with ffmpeg (`atrim`, `adelay`, `amix`), quieter 
 under a song the shots' own sound is kept at half. The single soundtrack of before (none, a file or
 a song, in a Sound folder, with lip sync to its part under a shot) went with it.
 
+**A new sound** (2026-10-26, as a clip is made: the user's screenshot showed empty sound lines with no
+place to start one): each sound line has the dashed + after its last sound (`SoundLineItem.AddX`), and
+right-click on the line still has Create. The new sound offers **File…** (copies a sound in, as
+dropping one there does), **Foley** and **Music**, as buttons on it while it is new and first on its
+right-click menu after; its tooltip says "Nothing said yet: …" as a new clip's does. Foley turns it
+into `"source": "foley"` and sends "Make it." at once (there is nothing to say first); Music keeps it a
+song and sends "Make it." once its style is said, else the status line asks for it. Either sends with
+the pick in the box, as a message the user sends does: `SendFromToolkit("Make it.")` used to go with
+nothing picked, which the model is told means the whole video, so Generate on a clip or card asked
+for all of it to be made.
+
+**Foley** (`VideoMaker.MakeFoleyAsync`) is the sounds of what the clips under a sound show, made from
+the clips themselves with a video-to-audio model. Its stretch is from where its file starts playing
+(its start less its trim) to where it stops, or the video's end (`FoleyStretch`). `VideoMontage.StretchPlan`
+cuts that stretch out of the clips under it as the joined video shows it (cuts, dissolves, fades), at
+25 frames a second and 384 high, without sound, and the stretch goes to the model in even pieces of at
+most 8 s (what MMAudio learnt on), each with the sound's seed plus its number, joined with ffmpeg's
+concat into the sound's .mp3. Its stamp holds what is heard (`tags`, which it can do without), seed,
+model, the stretch and the stamps of the clips under it: a clip under it made again puts it out of
+date, one elsewhere doesn't. ComfyUI has no template for it (its MMAudio code is only the VAE, for
+other models), so it is the built-in **blackbox/video_to_audio**: kijai's ComfyUI-MMAudio nodes
+(`MMAudioModelLoader`, `MMAudioFeatureUtilsLoader`, `MMAudioSampler`) on core `LoadVideo` and
+`GetVideoComponents`, saved with `SaveAudioMP3`; its four fp16 models (5.1 GB: the 44k v2 large model,
+its VAE, Synchformer, Apple's DFN5B CLIP) have their Hugging Face links in `ComfyBuiltins.Known`,
+into `models/mmaudio`, and the first run fetches NVIDIA's BigVGAN itself. A workflow fits foley when
+it loads a video and saves a sound; one that saves a video (the MMaudio_*.mp4 of kijai's example,
+`VHS_VideoCombine`) doesn't, as nothing would take the sound out of it. MMAudio's sampler cuts its
+frames from the start of what it is given (8 a second for CLIP, 25 for Synchformer, no frame rate
+read), so the stretch is handed over at 25. Its prompt and negative prompt are the sampler's own
+inputs: `VideoRoles.PromptInput` finds them there when no sampler's conditioning leads to a text.
+
+**Each sound line's volume** (the user, 2026-10-26: "Each sound line needs a volume slider"): a
+slider under its name, 0 to 2, saved in the video's .json as `soundLineVolumes` (left out while all
+are 1), one for each sound line (a deleted line's goes with it). Playing and joining multiply each
+sound's own volume by its line's; the video tool lists the lines turned up or down and takes
+`soundLineVolumes` in a storyboard change.
+
 **The user never writes a prompt** (their rule): there are no prompt fields. **What they pick
 goes into the chat's box** (the user's call, 2026-10-24: "in order to generate something you either
 select folder or image or video, it shows up in main chat window prompt, and then you write the

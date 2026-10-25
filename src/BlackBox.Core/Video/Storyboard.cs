@@ -39,6 +39,12 @@ public sealed partial class Storyboard
     /// <summary>How many sound lines the video has, the sounds on them by <see cref="VideoSound.SoundLine"/> (the user: "we also need to be able to create multiple sound tracks").</summary>
     public int SoundLines { get; set; } = 1;
 
+    /// <summary>Each sound line's volume, 1 as its sounds are (the user: "Each sound line needs a volume slider"); one for each sound line.</summary>
+    public List<double> SoundLineVolumes { get; set; } = [];
+
+    /// <summary>How loud a sound line is: 1 unless it is turned up or down.</summary>
+    public double LineVolume(int soundLine) => soundLine >= 0 && soundLine < SoundLineVolumes.Count ? SoundLineVolumes[soundLine] : 1;
+
     /// <summary>The voice the shots' lines are said in ("a man in his forties, warm and a little hoarse, deadpan").</summary>
     public string Voice { get; set; } = "";
 
@@ -556,8 +562,13 @@ public sealed partial class Storyboard
             if (renamed.Contains(a))
                 a.Id = NextFree("a", seen);
             a.Id = a.Id.Trim();
-            a.Source = a.Source?.Trim().ToLowerInvariant() is VideoSound.FromFile or "audio" or "user" ? VideoSound.FromFile : VideoSound.Song;
-            if (a.Source == VideoSound.Song && a.Seed <= 0)
+            a.Source = a.Source?.Trim().ToLowerInvariant() switch
+            {
+                VideoSound.FromFile or "audio" or "user" => VideoSound.FromFile,
+                VideoSound.Foley or "sfx" or "sound effects" or "effects" or "video to audio" => VideoSound.Foley,
+                _ => VideoSound.Song,
+            };
+            if (a.Source != VideoSound.FromFile && a.Seed <= 0)
                 a.Seed = NewSeed();
             a.Tags ??= "";
             a.Lyrics ??= "";
@@ -570,6 +581,7 @@ public sealed partial class Storyboard
             a.SoundLine = Math.Clamp(a.SoundLine, 0, MaxSoundLines - 1);
         }
         SoundLines = Math.Clamp(Math.Max(SoundLines, Sounds.Select(a => a.SoundLine + 1).DefaultIfEmpty(1).Max()), 1, MaxSoundLines);
+        SoundLineVolumes = [.. Enumerable.Range(0, SoundLines).Select(i => i < (SoundLineVolumes?.Count ?? 0) ? Math.Round(Math.Clamp(SoundLineVolumes![i], 0, 2), 2) : 1)];
         if (VoiceSeed <= 0)
             VoiceSeed = NewSeed();
 
@@ -817,19 +829,19 @@ public sealed class VideoShot
 
 /// <summary>
 /// A sound laid over the video, as a clip on a video editor's sound line: a sound file of the
-/// user's (copied into Sounds) or a song BlackBox makes, from where it starts in the video, trimmed
-/// at either end, at its volume.
+/// user's (copied into Sounds), a song BlackBox makes, or foley BlackBox makes from the clips under
+/// it, from where it starts in the video, trimmed at either end, at its volume.
 /// </summary>
 public sealed class VideoSound
 {
-    public const string FromFile = "file", Song = "song";
+    public const string FromFile = "file", Song = "song", Foley = "foley";
 
     public string Id { get; set; } = "";
 
     /// <summary>What it is called; a song's file in Sounds is named after it.</summary>
     public string? Name { get; set; }
 
-    /// <summary>file (the user's) or song (made with a music model).</summary>
+    /// <summary>file (the user's), song (made with a music model) or foley (made from the clips under it with a video-to-audio model).</summary>
     public string Source { get; set; } = Song;
 
     /// <summary>A sound of the user's from elsewhere, by its full path: copied into Sounds as it is when the video is saved.</summary>
@@ -850,13 +862,13 @@ public sealed class VideoSound
     /// <summary>How loud, 1 as it is.</summary>
     public double Volume { get; set; } = 1;
 
-    /// <summary>A song's style: genre, instruments, voice, tempo ("dreamy synthwave, female vocals, 90 BPM").</summary>
+    /// <summary>A song's style: genre, instruments, voice, tempo ("dreamy synthwave, female vocals, 90 BPM"); foley's, what is heard ("footsteps on gravel, wind"), which it can do without.</summary>
     public string Tags { get; set; } = "";
 
     /// <summary>A song's words; none makes an instrumental.</summary>
     public string Lyrics { get; set; } = "";
 
-    /// <summary>What a song is made with, as <see cref="VideoFrame.Model"/>: a music model or workflow.</summary>
+    /// <summary>What a song or foley is made with, as <see cref="VideoFrame.Model"/>: a music or video-to-audio model or workflow.</summary>
     public string? Model { get; set; }
 
     public long Seed { get; set; }

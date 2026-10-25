@@ -35,7 +35,7 @@ public sealed partial class ComfyTool : Tool
         "image to image keeps the photo's look at low denoise and loses the subject at high. " +
         "A video starts from a picture: make it with an image model first and look at it, then animate it with an image-to-video template (first and last frames " +
         "when where it ends matters); text-to-video draws its own picture badly, so only when the user asks for it. LTX makes the video's sound (speech, " +
-        "footsteps, wind) but not music: say \"no music\" and make music with a music model (ACE-Step). Before writing a video prompt, read action=guide " +
+        "footsteps, wind) but not music: say \"no music\" and make music with a music model (ACE-Step); foley for a video that has no sound is blackbox/video_to_audio (MMAudio). Before writing a video prompt, read action=guide " +
         "search=\"video\": motion, direction, poses and props are what ruin most takes. " +
         "A checkpoint's or LoRA's card (with action=models search=its file name, a template's view, or after its first run) says how its maker uses it: " +
         "the prompt style, size, sampler, CFG and negative prompt to start from. " +

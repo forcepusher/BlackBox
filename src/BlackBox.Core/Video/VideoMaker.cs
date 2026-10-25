@@ -413,7 +413,7 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
     {
         using var making = MakingIn(board);
         if (sound.Source != VideoSound.Song)
-            throw new VideoException($"Sound {sound.Id} is a sound file of the user's: there is nothing to make.");
+            throw new VideoException(sound.Source == VideoSound.Foley ? $"Sound {sound.Id} is foley, not a song." : $"Sound {sound.Id} is a sound file of the user's: there is nothing to make.");
         if (sound.Tags.Trim().Length == 0)
             throw new VideoException("The song has no style: say what it should sound like (genre, instruments, voice, tempo).");
         var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -518,6 +518,111 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
         System.Text.RegularExpressions.Regex.Match(tags, @"(\d{2,3})\s*bpm", System.Text.RegularExpressions.RegexOptions.IgnoreCase) is { Success: true } m &&
         int.TryParse(m.Groups[1].Value, out var bpm) && bpm is >= 30 and <= 300 ? bpm : null;
 
+    // ---- foley ----------------------------------------------------------------------------------------
+
+    /// <summary>Foley is made in even pieces of at most this long: MMAudio learnt on 8 s clips, and longer comes out worse.</summary>
+    public const double FoleyPiece = 8;
+
+    /// <summary>
+    /// The stretch of the video foley is made for, in seconds: from where its file starts playing
+    /// (its start, less what is trimmed off) to where it stops, or the video's end.
+    /// </summary>
+    public static (double From, double To) FoleyStretch(Storyboard board, VideoSound sound)
+    {
+        var length = board.Timing().Length;
+        var to = sound.Seconds > 0 ? Math.Min(length, sound.Start + sound.Seconds) : length;
+        return (Math.Round(Math.Max(0, sound.Start - sound.Trim), 2), Math.Round(to, 2));
+    }
+
+    /// <summary>
+    /// Makes foley for a sound line: what the clips under it show, heard (footsteps, a door, rain),
+    /// with a video-to-audio model (MMAudio). The stretch is cut out of the clips as the joined video
+    /// shows it, in pieces of up to <see cref="FoleyPiece"/> seconds, each made with the sound's seed
+    /// and the next, and joined.
+    /// </summary>
+    public async Task<VideoMade> MakeFoleyAsync(Storyboard board, VideoSound sound, Action<string>? progress, CancellationToken userMessage, CancellationToken ct)
+    {
+        using var making = MakingIn(board);
+        if (sound.Source != VideoSound.Foley)
+            throw new VideoException($"Sound {sound.Id} isn't foley.");
+        var ffmpeg = media?.Ffmpeg ?? throw new VideoException("Foley is made from the clips under it, cut out with ffmpeg, and there is none on this PC: download a portable build " +
+                                                              "(gyan.dev's ffmpeg-release-essentials.zip) and unpack it into BlackBox's Data\\tools, where it is found.");
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var (from, to) = FoleyStretch(board, sound);
+        var count = Math.Max(1, (int)Math.Ceiling((to - from) / FoleyPiece - 1e-6));
+        var each = (to - from) / count;
+        var file = board.SoundFile(sound);
+        var meta = board.SoundMeta(sound);
+        var stamp = FoleyStamp(board, sound);
+        var work = Path.Combine(Path.GetTempPath(), "BlackBox videos", "foley-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(work);
+        try
+        {
+            var pieces = new List<string>();
+            var notes = new List<string>();
+            string? template = null;
+            for (var k = 0; k < count; k++)
+            {
+                var at = from + k * each;
+                var clip = Path.Combine(work, $"{sound.Id}-{k + 1}.mp4");
+                var tell = count == 1 ? progress : s => progress?.Invoke($"Piece {k + 1} of {count}: {s}");
+                await VideoMontage.RunAsync(ffmpeg, VideoMontage.StretchPlan(board, at, each, clip), clip, each, "Cutting out the clips under it", "cut out the clips under it", tell, ct).ConfigureAwait(false);
+                var inputs = new VideoInputs
+                {
+                    Video = clip,
+                    Prompt = sound.Tags.Trim(),
+                    Seed = sound.Seed + k,
+                    Seconds = Math.Round(each, 2),
+                    Prefix = Prefix(board, sound.Id),
+                };
+                // The first piece's workflow is kept with the sound; the others are only run.
+                var workflow = k == 0 ? meta : Path.Combine(work, $"{sound.Id}-{k + 1}.json");
+                var run = await RunAsync(VideoJob.Foley, sound.Model, inputs, sound.Set, workflow, stamp, "audio", tell, userMessage, ct).ConfigureAwait(false);
+                template = run.Template;
+                notes.AddRange(run.Notes);
+                pieces.Add(run.Output);
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            if (pieces.Count == 1)
+            {
+                MediaRelease.Release(file);
+                File.Copy(pieces[0], file, overwrite: true);
+            }
+            else
+            {
+                var args = new List<string> { "-hide_banner", "-y", "-nostats", "-progress", "pipe:1" };
+                foreach (var p in pieces)
+                    args.AddRange(["-i", p]);
+                var join = string.Concat(Enumerable.Range(0, pieces.Count).Select(i => $"[{i}:a]")) + $"concat=n={pieces.Count}:v=0:a=1[a]";
+                var temp = Path.Combine(work, "foley.mp3");
+                args.AddRange(["-filter_complex", join, "-map", "[a]", "-c:a", "libmp3lame", "-q:a", "2", temp]);
+                await VideoMontage.RunAsync(ffmpeg, args, file, to - from, "Joining its pieces", "join the foley's pieces", progress, ct).ConfigureAwait(false);
+            }
+            Restamp(meta, stamp);
+            VideoVersions.Remember(meta, VideoPiece.Of(sound).Settings(board));
+            if (count > 1)
+                notes.Insert(0, $"Made in {count} pieces of {each:0.#} s, joined.");
+            return new VideoMade(file, meta, template, clock.Elapsed, notes.Distinct().ToList());
+        }
+        finally
+        {
+            try { Directory.Delete(work, recursive: true); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    /// <summary>What foley is made from: what is heard, its seed and model, the stretch, and the clips under it as they are now.</summary>
+    public static string FoleyStamp(Storyboard board, VideoSound sound)
+    {
+        var (from, to) = FoleyStretch(board, sound);
+        var (starts, _) = board.Timing();
+        var sb = new StringBuilder($"foley|{sound.Tags.Trim()}|{sound.Seed}|{sound.Model}|{sound.Set?.ToJsonString()}|{from.ToString(CultureInfo.InvariantCulture)}|{to.ToString(CultureInfo.InvariantCulture)}");
+        for (var i = 0; i < board.Shots.Count; i++)
+            if (starts[i] < to && starts[i] + board.Shots[i].Seconds > from)
+                sb.Append('|').Append(board.Shots[i].Id).Append(' ').Append(FileStamp(board.ShotVideo(board.Shots[i])));
+        return Hash(sb.ToString());
+    }
+
     // ---- running a job --------------------------------------------------------------------------------
 
     /// <summary>Where ComfyUI saves a video's files, under its output folder.</summary>
@@ -557,7 +662,8 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
         var set = VideoRoles.Apply(workflow, library, inputs, missed);
         // What the job can't go without stops it; the rest is said.
         var vital = missed.Where(m => m.StartsWith("the prompt", StringComparison.Ordinal) || m.StartsWith("the first frame", StringComparison.Ordinal) ||
-                                      m.StartsWith("the last frame", StringComparison.Ordinal) || m.StartsWith("the sound", StringComparison.Ordinal)).ToList();
+                                      m.StartsWith("the last frame", StringComparison.Ordinal) || m.StartsWith("the sound", StringComparison.Ordinal) ||
+                                      m.StartsWith("the video", StringComparison.Ordinal)).ToList();
         if (vital.Count > 0)
             throw new VideoException($"The template {template.Template.Name} has no place for {string.Join(", ", vital)}: pick another template for this job, " +
                                     "or say where it goes with set {\"node id.input\": value}.");
@@ -796,12 +902,19 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
     public static bool IsCurrent(Storyboard board, VideoShot shot) =>
         File.Exists(board.ShotVideo(shot)) && MadeStamp(board.ShotMeta(shot)) is { } made && made == ShotStamp(board, shot);
 
-    /// <summary>A sound is there and, a song, was made from what the storyboard says now and covers the video from where it starts.</summary>
+    /// <summary>
+    /// A sound is there and, a song, was made from what the storyboard says now and covers the video
+    /// from where it starts; foley, from what it says and the clips under it as they are now.
+    /// </summary>
     public static bool IsCurrent(Storyboard board, VideoSound sound) =>
         File.Exists(board.SoundFile(sound)) &&
-        (sound.Source == VideoSound.FromFile || MadeStamp(board.SoundMeta(sound)) is { } made
-            && (made.Split(':') is [var hash, var length] && hash == SongHash(sound)
-                && double.TryParse(length, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds >= SongSeconds(board, sound)));
+        sound.Source switch
+        {
+            VideoSound.FromFile => true,
+            VideoSound.Foley => MadeStamp(board.SoundMeta(sound)) == FoleyStamp(board, sound),
+            _ => MadeStamp(board.SoundMeta(sound)) is { } made && made.Split(':') is [var hash, var length] && hash == SongHash(sound)
+                 && double.TryParse(length, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds >= SongSeconds(board, sound),
+        };
 
     // ---- pictures and sound --------------------------------------------------------------------------------
 

@@ -242,6 +242,13 @@ public sealed partial class VideoViewModel : ObservableObject, IToolkit
             end = Math.Max(end, sound.Sound.Start + seconds);
             sound.Peaks = PeaksOf(sound);
         }
+        // Each sound line's +: after its last sound.
+        foreach (var line in SoundLines)
+        {
+            line.AddSeconds = Math.Round(Sounds.Where(s => s.Sound.SoundLine == line.Index).Select(s => s.Sound.Start + s.PlaySeconds(length)).DefaultIfEmpty(0).Max() * 10) / 10;
+            line.AddX = Lead + line.AddSeconds * Pps + 4;
+            end = Math.Max(end, line.AddSeconds + 56 / Pps);
+        }
         AddShotX = Lead + length * Pps + 4;
         TimelineWidth = Math.Max(Lead + end * Pps, AddReferenceX + CardWidth) + 240;
         OnPropertyChanged(nameof(PlayheadX));
@@ -391,7 +398,7 @@ public sealed partial class VideoViewModel : ObservableObject, IToolkit
         var parts = new List<VideoMix.Part>();
         foreach (var sound in Sounds)
             if (AudioOf(_board.SoundFile(sound.Sound)) is var (samples, rate) && samples.Length > 0)
-                parts.Add(new VideoMix.Part(samples, rate, sound.Sound.Start, sound.Sound.Trim, sound.PlaySeconds(Length), sound.Sound.Volume));
+                parts.Add(new VideoMix.Part(samples, rate, sound.Sound.Start, sound.Sound.Trim, sound.PlaySeconds(Length), sound.Sound.Volume * _board.LineVolume(sound.Sound.SoundLine)));
         _playEnd = Math.Max(Length, parts.Select(p => p.Start + p.Seconds).DefaultIfEmpty(0).Max());
         if (parts.Count > 0 && _previews.NewAudioOutput() is { } output)
         {

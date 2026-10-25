@@ -14,7 +14,8 @@ whatever it downloads stay in a `Data` folder next to the exe.
 - **Videos.** Pick **Video generator** in the **Toolkit** dropdown at the top left: it opens on the left
   of the chat with the video on a timeline: References (pictures), video clips and sound lines.
   Right-click a row to create something there, then pick **File…** to copy in a file of yours or
-  **Generate** to have BlackBox make it; you can also drop files on the timeline. The video's name at
+  **Generate** to have BlackBox make it; you can also drop files on the timeline. A sound line's **+**
+  makes a sound: a file of yours, **Foley** for what the clips under it show, or **Music**. The video's name at
   the top opens your other videos. Click anything on the timeline to put it in your message, and say
   what you want in plain words (with nothing picked, it is about the whole video). BlackBox writes the
   prompts, picks the models, makes it and looks at it, in the chat, where you can watch it and stop

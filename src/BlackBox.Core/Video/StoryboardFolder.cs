@@ -282,6 +282,7 @@ public sealed partial class Storyboard
             ["voice"] = Voice.Length > 0 ? Voice : null,
             ["voiceSeed"] = VoiceSeed,
             ["soundLines"] = SoundLines,
+            ["soundLineVolumes"] = SoundLineVolumes.All(v => v == 1) ? null : new JsonArray([.. SoundLineVolumes.Select(v => (JsonNode)JsonValue.Create(v))]),
             ["shots"] = new JsonArray([.. Shots.Select(s => (JsonNode)JsonValue.Create(s.Id))]),
         }));
         foreach (var (meta, kind, _) in Metas(Folder).ToList())

@@ -173,11 +173,26 @@ public sealed partial class MainWindowViewModel
     /// <summary>The paths picked in the toolkit's panel that are in the box now.</summary>
     internal IReadOnlyList<string> Picked => Attachments.Where(a => a.Picked).Select(a => a.Path).ToList();
 
-    /// <summary>A message from the toolkit's panel (Make the video): into this chat as if typed in the box, with what the tool says about it.</summary>
-    internal void SendFromToolkit(string text)
+    /// <summary>
+    /// A message from the toolkit's panel (Make the video): into this chat as if typed in the box, with
+    /// what the tool says about it. With <paramref name="withPicks"/> (Generate on a piece), about
+    /// what is picked in the box, which goes with it as when the user sends: "Make it." sent bare was
+    /// about the whole video, and the model was asked to make all of it.
+    /// </summary>
+    internal void SendFromToolkit(string text, bool withPicks = false)
     {
-        if (!_closed)
+        if (_closed)
+            return;
+        if (!withPicks)
+        {
             _ = SendAsync(WithToolkit(new UserInput(text), []));
+            return;
+        }
+        var picked = Attachments.Where(a => a.Picked).ToList();
+        var input = WithToolkit(new UserInput(text, picked.Where(a => File.Exists(a.Path) || Directory.Exists(a.Path)).Select(a => a.Path).ToList()), Picked);
+        foreach (var pick in picked)
+            RemoveAttachment(pick);
+        _ = SendAsync(input);
     }
 
     /// <summary>

@@ -141,7 +141,7 @@ public sealed partial class VideoViewModel
             if (!sound.IsWorking)
                 (sound.State, sound.IsError) = sound.Sound.Source == VideoSound.FromFile
                     ? (made ? "Sound file" : "The file isn't there", !made)
-                    : sound.IsNew ? ("File… or Generate", false)
+                    : sound.IsNew ? ("File…, Foley or Music", false)
                     : (!made ? "Not made yet" : VideoMaker.IsCurrent(_board, sound.Sound) ? "Made" : "Changed: make it again", false);
         }
         RefreshReferences();

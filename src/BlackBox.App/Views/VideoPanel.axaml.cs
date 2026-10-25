@@ -298,11 +298,24 @@ public partial class VideoPanel : UserControl
         e.Handled = true;
     }
 
-    private void OnSoundGenerate(object? sender, RoutedEventArgs e)
+    private void OnSoundFoley(object? sender, RoutedEventArgs e)
     {
-        if ((sender as Control)?.DataContext is SoundItem sound && Vm.MenuFor(sound).ElementAtOrDefault(1) is { Enabled: true } generate)
-            generate.Do();
+        if ((sender as Control)?.DataContext is SoundItem sound && Vm.MenuFor(sound).ElementAtOrDefault(1) is { Enabled: true } foley)
+            foley.Do();
         e.Handled = true;
+    }
+
+    private void OnSoundMusic(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is SoundItem sound && Vm.MenuFor(sound).ElementAtOrDefault(2) is { Enabled: true } music)
+            music.Do();
+        e.Handled = true;
+    }
+
+    private void OnCreateSound(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is SoundLineItem line)
+            Vm.CreateSound(line);
     }
 
     private void OnCreateReference(object? sender, RoutedEventArgs e)
@@ -319,19 +332,6 @@ public partial class VideoPanel : UserControl
             Vm.Show(shot);
     }
 
-    // ---- a clip's right edge dragged: its length ------------------------------------------------------------
-
-    /// <summary>A clip's right edge being dragged: the clip, where the drag started and how long the clip was.</summary>
-    private (ShotItem Shot, double StartX, double StartSeconds)? _stretch;
-
-    private void OnHandlePressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (sender is not Control handle || handle.DataContext is not ShotItem shot)
-            return;
-        _stretch = (shot, e.GetPosition(Timeline).X, shot.Shot.Seconds);
-        e.Pointer.Capture(handle);
-        e.Handled = true;
-        Vm.Show(shot);
     private void OnSlotClick(object? sender, RoutedEventArgs e)
     {
         if ((sender as Control)?.DataContext is FrameSlot slot)
@@ -353,6 +353,19 @@ public partial class VideoPanel : UserControl
         e.Handled = true;
     }
 
+    // ---- a clip's right edge dragged: its length ------------------------------------------------------------
+
+    /// <summary>A clip's right edge being dragged: the clip, where the drag started and how long the clip was.</summary>
+    private (ShotItem Shot, double StartX, double StartSeconds)? _stretch;
+
+    private void OnHandlePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Control handle || handle.DataContext is not ShotItem shot)
+            return;
+        _stretch = (shot, e.GetPosition(Timeline).X, shot.Shot.Seconds);
+        e.Pointer.Capture(handle);
+        e.Handled = true;
+        Vm.Show(shot);
     }
 
     private void OnHandleMoved(object? sender, PointerEventArgs e)
