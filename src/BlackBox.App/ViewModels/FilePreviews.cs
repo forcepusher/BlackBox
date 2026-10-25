@@ -245,8 +245,11 @@ public sealed partial class AnimationPreview(string path, int width = FilePrevie
 /// </summary>
 public sealed partial class FileCardPreview(string path) : FilePreview(path)
 {
-    /// <summary>How tall the peek is at most: what is below is cut off.</summary>
-    public const int PeekHeight = 240;
+    /// <summary>
+    /// How wide and tall the peek is at most, what is beyond cut off: the box of a picture's thumbnail
+    /// in a message (the user found 480x240 too big, 2026-10-26).
+    /// </summary>
+    public const int PeekWidth = 300, PeekHeight = 180;
 
     /// <summary>A PDF's first page (its top, as wide as the card) or an Office file's picture of its first page or slide.</summary>
     [ObservableProperty]
@@ -255,13 +258,19 @@ public sealed partial class FileCardPreview(string path) : FilePreview(path)
 
     /// <summary>Its start drawn as a reply is: Markdown, a table, a Word or PowerPoint file's text.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasPeek))]
+    [NotifyPropertyChangedFor(nameof(HasPeek), nameof(PeekMarkdownWidth))]
     private string? _peekMarkdown;
 
     /// <summary>Its start in a fixed-width font: code, text, an Excel file's cells, a PDF's text.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPeek))]
     private string? _peekText;
+
+    /// <summary>
+    /// How wide the Markdown is laid out: a table (a CSV's, an Excel sheet's) wider than the peek, so its
+    /// rows are cut off on the right rather than wrapped; anything else to the peek's width (NaN).
+    /// </summary>
+    public double PeekMarkdownWidth => PeekMarkdown?.StartsWith('|') == true ? PeekWidth * 2 : double.NaN;
 
     /// <summary>There is something of the file to show, and so to open full screen.</summary>
     public bool HasPeek => Thumbnail is not null || PeekMarkdown is not null || PeekText is not null;
@@ -294,10 +303,10 @@ public sealed partial class FileCardPreview(string path) : FilePreview(path)
             try
             {
                 using var pdf = PdfPages.Open(Path);
-                // Twice the card's width, for a sharp page on a scaled screen; its top only when it
+                // Twice the peek's width, for a sharp page on a scaled screen; its top only when it
                 // is taller than the peek.
-                if (pdf.Render(0, Width * 2) is { } page)
-                    return PdfPageItem.ToBitmap(page.Bgra, page.Width, Math.Min(page.Height, page.Width * PeekHeight / Width));
+                if (pdf.Render(0, PeekWidth * 2) is { } page)
+                    return PdfPageItem.ToBitmap(page.Bgra, page.Width, Math.Min(page.Height, page.Width * PeekHeight / PeekWidth));
             }
             catch (Exception ex) when (ex is InvalidDataException or DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or IOException) { }
             return null; // its text, as in the panel

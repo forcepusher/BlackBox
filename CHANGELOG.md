@@ -32,9 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Inspect** on every file in the chat opens it in Inspect file, in place of **Open**, which the
   full-screen viewer no longer has either.
 - Documents in the chat (Markdown, tables, text and code, PDF, Word, Excel, PowerPoint, web pages)
-  show a small preview on their card: a PDF's first page, the picture an Office file keeps of
-  itself, or the start of the text. Click it to see the file full screen, as pictures and videos
-  open, with the arrow keys going on to the chat's other files.
+  show a small preview on their card, as big as a picture pasted into a message: a PDF's first
+  page, the picture an Office file keeps of itself, or the start of the text. Click it to see the
+  file full screen, as pictures and videos open, with the arrow keys going on to the chat's other
+  files.
 - Markdown files (.md) get a card like other documents, under the reply that names them and under
   write_file when the agent writes one.
 - `Data\errors.log`: every error BlackBox shows (in the chat, in the banner under the top bar, in

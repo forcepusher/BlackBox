@@ -284,14 +284,17 @@ the full-screen viewer of pictures and videos lost its Open too.
 
 A document's card (every kind the panel shows that isn't a picture or media: Markdown, CSV/TSV, text
 and code, PDF, Office, web pages) has a peek over its name since 2026-10-26, the user's "one universal
-experience" for every file: at most 240 pixels tall, cut off below (`FileCardPreview`,
-`InspectFile.Peek`). A PDF shows its first page, drawn by PDFium at twice the card's width and kept to
-its top 2:1; an Office or OpenDocument file the picture it keeps of itself (`InspectFile.SavedThumbnail`:
+experience" for every file: in the box of a picture's thumbnail in a message (at most 300x180 in a
+1-pixel frame, `Border.attachment`), cut off beyond it (`FileCardPreview`, `InspectFile.Peek`). It was
+480 wide and up to 240 tall until the user found it too big beside pictures (2026-10-26, "as small as
+image preview"); a picture under a reply is still up to 480x480. A PDF shows its first page, drawn by
+PDFium at twice the peek's width and kept to its top 5:3; an Office or OpenDocument file the picture it keeps of itself (`InspectFile.SavedThumbnail`:
 docProps/thumbnail.jpeg, Thumbnails/thumbnail.png, which PowerPoint saves by default, Word and Excel only
 with "Save thumbnail", OpenDocument always: what Explorer's thumbnail is); else the start of its text
 as the panel draws it, 14 lines from the first that isn't blank: a .md or a Word or PowerPoint file's
 text formatted, a CSV's first 8 rows and 8 columns as a table, an Excel file's first sheet as a table
-of its cells' values (`SheetTable`, from read_file's text), a web page's text as fetch_page reads it,
+of its cells' values (`SheetTable`, from read_file's text; a table is laid out 600 wide, so its rows
+are cut off on the right rather than wrapped in the 300 of the peek), a web page's text as fetch_page reads it,
 code and a PDF's text (PDFium failing) in a fixed-width font. A file with nothing to show keeps the bare
 card. A click on the peek opens the full-screen viewer on the file, shown by the panel's own view
 (`InspectFileView`, also the panel's body) in a column at most 1100 wide, kept 96 from the sides and 56
@@ -300,7 +303,9 @@ cover the bar and the arrows; the arrow keys go on through the chat's pictures, 
 Checked on the laptop (a stand-in model naming .md, .csv, .cs, .pdf, .docx, .xlsx, .pptx and .html, UIA
 invokes): every card had its peek; each opened full screen (Word's and Excel's previewers in the
 column), Right went from the .md to the .csv, Esc closed each. The sample .docx, .xlsx and .pptx keep
-no picture of themselves, so they peek as text.
+no picture of themselves, so they peek as text. At 300x180 (125% scale, UIA rectangles): a 1920x1080
+picture pasted into the message showed as 302x171 with its frame, every peek as 302x182 (a short .cs
+302x173), the same box.
 
 A Markdown file (.md, .markdown) gets a card like a .docx: from 2026-10-23 to 10-25 it was drawn
 formatted in the chat, in a box up to 420 pixels tall that scrolled, which the user found too big in

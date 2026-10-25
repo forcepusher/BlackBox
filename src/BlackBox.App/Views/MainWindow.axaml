@@ -250,20 +250,23 @@
     </DataTemplate>
 
     <!-- A document: a peek at its start as the Inspect file panel draws it, which opens full screen,
-         over the card with its name. What doesn't fit the peek is cut off. -->
+         over the card with its name. The peek is the box of a picture's thumbnail in a message (at most
+         300x180 in a 1-pixel frame); what doesn't fit it is cut off. -->
     <DataTemplate DataType="vm:FileCardPreview">
       <Border Classes="preview" Width="498">
         <StackPanel Spacing="8">
-          <Button Classes="picture" Click="OnPictureClick" IsVisible="{Binding HasPeek}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+          <Button Classes="picture" Click="OnPictureClick" IsVisible="{Binding HasPeek}" HorizontalAlignment="Left"
                   ToolTip.Tip="See it full screen" AutomationProperties.Name="{Binding FileName}">
-            <Border MaxHeight="240" ClipToBounds="True" CornerRadius="6" Background="{StaticResource BbBackground}">
+            <Border Classes="attachment" Background="{StaticResource BbBackground}">
               <Panel>
-                <Image Source="{Binding Thumbnail}" IsVisible="{Binding Thumbnail, Converter={x:Static ObjectConverters.IsNotNull}}" MaxWidth="480" MaxHeight="240"
-                       Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Top" RenderOptions.BitmapInterpolationMode="HighQuality" />
-                <views:MarkdownView Source="{Binding PeekMarkdown}" IsVisible="{Binding PeekMarkdown, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                    IsHitTestVisible="False" Margin="14,10" VerticalAlignment="Top" />
-                <TextBlock Text="{Binding PeekText}" IsVisible="{Binding PeekText, Converter={x:Static ObjectConverters.IsNotNull}}" IsHitTestVisible="False"
-                           FontFamily="Cascadia Mono,Consolas,monospace" FontSize="11" TextWrapping="NoWrap" Margin="12,10" VerticalAlignment="Top" />
+                <Image Source="{Binding Thumbnail}" IsVisible="{Binding Thumbnail, Converter={x:Static ObjectConverters.IsNotNull}}" MaxWidth="300" MaxHeight="180"
+                       Stretch="Uniform" RenderOptions.BitmapInterpolationMode="HighQuality" />
+                <Panel Width="300" MaxHeight="180" ClipToBounds="True" IsVisible="{Binding Thumbnail, Converter={x:Static ObjectConverters.IsNull}}">
+                  <views:MarkdownView Source="{Binding PeekMarkdown}" IsVisible="{Binding PeekMarkdown, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                      Width="{Binding PeekMarkdownWidth}" IsHitTestVisible="False" Margin="12,8" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                  <TextBlock Text="{Binding PeekText}" IsVisible="{Binding PeekText, Converter={x:Static ObjectConverters.IsNotNull}}" IsHitTestVisible="False"
+                             FontFamily="Cascadia Mono,Consolas,monospace" FontSize="11" TextWrapping="NoWrap" Margin="12,8" VerticalAlignment="Top" />
+                </Panel>
               </Panel>
             </Border>
           </Button>
