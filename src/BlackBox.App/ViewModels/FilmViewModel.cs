@@ -10,7 +10,7 @@ using CommunityToolkit.Mvvm.Input;
 namespace BlackBox.App.ViewModels;
 
 /// <summary>
-/// Filmmaking, a tool of the chat window's toolkit, in a panel on the left of the chat: a viewer,
+/// Video editor, a tool of the chat window's toolkit, in a panel on the left of the chat: a viewer,
 /// and the film on one timeline under one horizontal scroll, where all work on it is done (the
 /// user's call, 2026-10-24: "work on the film should be done entirely in the timeline"): the
 /// References row (image files and generated images), the takes on the Video row, the lines, and the

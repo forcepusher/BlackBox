@@ -9,7 +9,7 @@ namespace BlackBox.App.ViewModels;
 
 /// <summary>
 /// A tool that opens on the left of the chat window, picked in the Toolkit dropdown at the top of
-/// it (Filmmaking, Diff). It works through the chat: what is picked in it goes into the
+/// it (Video editor, Diff). It works through the chat: what is picked in it goes into the
 /// chat's box, and what the user sends from there is done by the agent in the chat, in view.
 /// </summary>
 public interface IToolkit : IDisposable
@@ -49,7 +49,7 @@ public sealed partial class MainWindowViewModel
     public IReadOnlyList<ToolkitOption> ToolkitOptions { get; } =
     [
         new("None", "The chat alone", 0, 0, 0, null),
-        new("Filmmaking", "Plan a film shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960, 770, 600,
+        new("Video editor", "Plan a film shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960, 770, 600,
             vm => new FilmViewModel(vm._previews, vm, vm._paths.FilmsDir, null)),
         new("Code changes", "See the files the agent changes in this chat as it works: click lines to ask about them", 880, 560, 0,
             vm => new DiffViewModel(vm)),

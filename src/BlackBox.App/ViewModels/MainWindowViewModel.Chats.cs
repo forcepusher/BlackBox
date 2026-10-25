@@ -228,11 +228,11 @@ public sealed partial class MainWindowViewModel
         Changes.KeepIn(ChangesFile(_chatId));
         if (_chatTitle is null)
         {
-            // A message that is only a file is named after it; one sent with Filmmaking open after
+            // A message that is only a file is named after it; one sent with Video editor open after
             // the film and piece too: History filled with chats named "Make it.".
             var text = first!.HasText ? first.Text : string.Join(", ", first.Attachments.Select(a => a.FileName));
-            // "Make it. (Fox Test · start of shot 1)", without "Filmmaking" before the film's name.
-            const string film = "Filmmaking · ";
+            // "Make it. (Fox Test · start of shot 1)", without "Video editor" before the film's name.
+            const string film = "Video editor · ";
             _chatTitle = ChatStore.TitleFrom(first.Via is { } via ? $"{text.Trim().Split('\n')[0]} ({(via.StartsWith(film, StringComparison.Ordinal) ? via[film.Length..] : via)})" : text);
             OnPropertyChanged(nameof(WindowTitle));
         }

@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and links, in a box that scrolls. They show under the reply that names them and under write_file
   when the agent writes one.
 - `Data\errors.log`: every error BlackBox shows (in the chat, in the banner under the top bar, in
-  Filmmaking, or when it can't start), with the details behind it, to read after the chat or the
+  Video editor, or when it can't start), with the details behind it, to read after the chat or the
   window is gone.
 - Folder index: before it works on a project or a big folder, BlackBox indexes it by itself, as
   Cursor does: what kind of project it is, its README, its folders and what its main files define,
@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other's screenshots, all pause while you type in any of them, and one Pause/Break stops them all.
   A chat open in one window brings that window forward when picked in another's History, and what
   Settings saves applies to every window; each keeps its own model.
-- Filmmaking: pick it in the **Toolkit** dropdown at the top left, and it opens on the left of the
+- Video editor: pick it in the **Toolkit** dropdown at the top left, and it opens on the left of the
   chat, the window growing to that side: a viewer, and the film on one timeline you drag sideways,
   where all of it is worked on: References (pictures), the takes, the lines and the sound tracks.
   Right-click a row to create a card, take or sound there: **File…** copies a file of yours in,
@@ -64,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   take one.
 - Messages sent while BlackBox works wait above the box until the model reads them: × takes one
   back, and **Interrupt the model** (or Ctrl+Enter) has it read at once.
-- A full-screen viewer for the pictures and videos in the chat and in Filmmaking, with the others
+- A full-screen viewer for the pictures and videos in the chat and in Video editor, with the others
   an arrow key away. Videos in the chat play by themselves, muted, while they are on screen.
 - **Prompt** under a picture made with ComfyUI or AUTOMATIC1111 shows the prompts and settings it
   was made with, read back from the file.
@@ -73,16 +73,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A sysadmin benchmark ticket that moves a live game API's database from SQLite to PostgreSQL while
   players keep writing to it.
 - This changelog.
-- Filmmaking's films are in a menu on the film's name at the top: open another, start a new one, or
+- Video editor's films are in a menu on the film's name at the top: open another, start a new one, or
   rename or delete this one (to the Recycle Bin). On the timeline, right-click a card, take or sound
   to rename or delete it, or to see an earlier version of it.
 
 ### Changed
 - Asked for code, commands or facts that change (versions, prices, news), the agent looks them up
   on the web before it answers, rather than writing them from memory.
-- A film's name is its folder's: renamed in Filmmaking, in Explorer, or by the agent giving it a
+- A film's name is its folder's: renamed in Video editor, in Explorer, or by the agent giving it a
   title, the film is.
-- Filmmaking's frame size and frame rate are at the top of the panel, and a new take is the dashed +
+- Video editor's frame size and frame rate are at the top of the panel, and a new take is the dashed +
   after the last one on the timeline.
 - Every dropdown's arrow (Toolkit, History, Model, Effort) is the same solid triangle, and so is the
   Toolkit's arrow to the left.
@@ -96,7 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Ctrl+Shift+N: **New window** at the top opens another window.
 - Films kept in a `storyboard.json` (from 1.0.0) no longer open: a film is its folder now.
-- Filmmaking's film dropdown, its Open… and Show folder buttons, the settings button with the film's
+- Video editor's film dropdown, its Open… and Show folder buttons, the settings button with the film's
   title, and the soundtrack and shots' own sound sliders.
 
 ### Fixed
@@ -110,15 +110,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   starts loading the model, and each later connection to it no longer waits 2 seconds.
 - ComfyUI templates no longer leave an Edge button on the taskbar where Edge isn't allowed to run
   headless: the copy Edge hands over to has its window hidden too.
-- With Filmmaking or Code changes open, the window can no longer be made so narrow that the chat is
-  squeezed to a few letters across: the panel gives way first, then the window stops. Filmmaking
+- With Video editor or Code changes open, the window can no longer be made so narrow that the chat is
+  squeezed to a few letters across: the panel gives way first, then the window stops. Video editor
   also keeps the window tall enough for its viewer, and a long film name is cut short at the top.
-- Filmmaking: a file dropped on a new card or sound becomes it, which is marked while you drag over
+- Video editor: a file dropped on a new card or sound becomes it, which is marked while you drag over
   it; a copied file can be renamed. A line over the timeline says what right-click and dropping do,
   and the viewer names the film and says it is selected instead of "Whole film".
-- Picking Filmmaking widens the window to the left in one smooth step: the chat no longer jumps
+- Picking Video editor widens the window to the left in one smooth step: the chat no longer jumps
   sideways and back, and the new part of the window isn't black while the panel appears.
-- In Filmmaking, a picture you give for a reference (pasted, attached or dropped) is kept exactly as
+- In Video editor, a picture you give for a reference (pasted, attached or dropped) is kept exactly as
   it is, in References, and the references are made from all of it: BlackBox cut one
   pose out of a character lineup and showed the cut-out as your picture.
 - A task whose last step the server failed a few times before answering no longer looks as if it
@@ -157,15 +157,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saving Settings in one window no longer undoes what another window saved while the dialog was
   open; closing a window right after picking another chat no longer marks that chat stopped; a
   window closed while its MCP servers restarted no longer leaves them running.
-- Filmmaking: Continue sends a message the model never had whole, with the film it was about; chats
-  begun with Filmmaking open are named after the film and what was picked too, not "Make it." alone;
+- Video editor: Continue sends a message the model never had whole, with the film it was about; chats
+  begun with Video editor open are named after the film and what was picked too, not "Make it." alone;
   a change made by hand while BlackBox changes the film in the chat no longer writes over BlackBox's
   change, nor is a shot's length being dragged lost to it; a shot added after one was deleted no
   longer brings back the deleted shot's clip; a film named again keeps its joined video; a take isn't
   put back while BlackBox makes a piece of the film; two new films started in two windows at once no
   longer share a folder; a piece of the film open is no longer shown as being made when the chat
   makes another film's.
-- A piece asked for in Filmmaking is made again when its look finds something wrong, up to
+- A piece asked for in Video editor is made again when its look finds something wrong, up to
   twice, as before it ran in the chat; the storyboard guide comes back after the context starts
   afresh; a stopped shot of several takes no longer keeps a copy of its clip as one more take; a
   film the model names without a full path goes into `Data\films`, not your home folder; a second
@@ -187,7 +187,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Films: a failed remake no longer leaves a piece looking made; remaking the song keeps the lines'
   voice and doesn't redo a song that still covers the film; restoring a take restores all of its
   settings; long titles and names like "Con" work; the film tool no longer writes over changes made
-  in Filmmaking during a long job. A frame changed to be taken from where a shot ends
+  in Video editor during a long job. A frame changed to be taken from where a shot ends
   is no longer dropped back to its old prompt while the shot still ends on it.
 
 ## [1.0.0] - 2026-10-19

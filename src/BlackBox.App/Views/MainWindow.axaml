@@ -271,7 +271,7 @@
     </DataTemplate>
   </Window.DataTemplates>
 
-  <!-- A tool of the toolkit (Filmmaking) in a column of its own on the left, the chat on the right.
+  <!-- A tool of the toolkit (Video editor) in a column of its own on the left, the chat on the right.
        Shown and hidden by the window as it makes room for it (MainWindow.Dock). -->
   <Grid x:Name="Columns" ColumnDefinitions="0,0,*">
     <Border x:Name="ToolkitHost" Grid.Column="0" IsVisible="False">
@@ -462,7 +462,7 @@
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Right" />
                 <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="12,8" HorizontalAlignment="Right">
                   <StackPanel Spacing="6">
-                    <!-- Sent with Filmmaking open: which film, and what was picked in it. -->
+                    <!-- Sent with Video editor open: which film, and what was picked in it. -->
                     <TextBlock Classes="muted" Text="{Binding Via}" IsVisible="{Binding HasVia}" FontSize="12" TextWrapping="Wrap" />
                     <!-- The files that came with it: a picture as itself, anything else by its name; a click opens it. -->
                     <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}" Margin="0,4,0,0">

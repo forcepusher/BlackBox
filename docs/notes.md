@@ -34,7 +34,7 @@ with the message box under the taskbar.
 
 Every error BlackBox shows also goes into `Data/errors.log`: when, where it was shown (the chat,
 named by its title and its file in `Data/chats`; the banner under the top bar, with the server's
-address; Filmmaking, with the film's folder; a start that failed), what it said, and the
+address; Video editor, with the film's folder; a start that failed), what it said, and the
 whole exception behind it, stack trace and all. That covers the red lines in the chat (a run that
 ended on a server's answer or a bug, a run that couldn't start, settings or a pasted picture that
 couldn't be saved, MCP servers that failed), the lines about a server's failure a run went on
@@ -289,7 +289,7 @@ works). Before, a .md had only a card with its name and size.
 A video plays by itself while it is on screen, over and over and without its sound, as a GIF
 would; scrolled away, under the full-screen viewer or with the window minimized it pauses, so a
 long chat decodes only what can be seen (a third of its height showing, or 120 pixels of a tall one,
-counts as on screen). Its pause button holds it until it is played again. The Filmmaking panel's
+counts as on screen). Its pause button holds it until it is played again. The Video editor panel's
 players are not touched by this: they play with sound when asked. Playing, a video holds its file
 open, so a file the film tool is about to write over (a shot made again, the song, the film joined
 again, a take put back) is let go of first (`MediaRelease`): every window's players of it stop, and
@@ -303,7 +303,7 @@ click between that and its own size (from twice its size its pixels stay square,
 video plays with its sound (M or the speaker turns it off), Space plays or pauses. The arrow keys
 and the side buttons go through the chat's other pictures and videos, Esc, × or a click beside the
 picture goes back. The agent's clicks step it aside as they do the chat's window, and its keys go to
-the window under both (before, from the chat they could go to the Filmmaking window there was then).
+the window under both (before, from the chat they could go to the Video editor window there was then).
 
 **Prompt** under a picture, video or sound made with ComfyUI shows the prompts it was made with and
 the settings that matter for making it again (model, LoRAs with their strength, shift, sampler,
@@ -458,9 +458,9 @@ comfyui-mcp up by itself when the user asks for it.
 ## Films
 A video of more than one shot (a music video, a story, an ad) is planned as a **storyboard** and
 made piece by piece with ComfyUI: one video model run can't hold a story together for more than
-a few seconds, and not every film is one continuous camera shot. **Filmmaking**, picked in the
+a few seconds, and not every film is one continuous camera shot. **Video editor**, picked in the
 **Toolkit** dropdown at the top left of the chat window, opens in a panel on the left of the chat
-(see "The Filmmaking panel" below): what the user picks in it goes into the chat's box, they say
+(see "The Video editor panel" below): what the user picks in it goes into the chat's box, they say
 there what to do with it, and the agent does it with its `film` tool, which reads and writes the
 same film the panel shows. A film can start in either and go on in the other.
 
@@ -469,7 +469,7 @@ folder-driven", and "We don't need the film file storyboard.json anymore right?"
 `Data/films/<title>` next to the exe like the rest of BlackBox's data (the user's choice: it is
 portable; the first build put films in the PC's Videos folder). A path the model gives that isn't
 from a drive ("lighthouse") is a folder in `Data/films` too: taken from the working folder, as until
-2026-10-23, qwen3.8's "lighthouse" was made in the user's home, where Filmmaking doesn't look.
+2026-10-23, qwen3.8's "lighthouse" was made in the user's home, where Video editor doesn't look.
 **Its title is the folder's name** (2026-10-24, with the user's "I want it to work just like a file
 explorer, where you can right click and rename films"): reading a film takes it from the folder, so
 one renamed in Explorer or in the panel is; the film's own .json no longer holds one. A new title
@@ -665,12 +665,12 @@ saw as a chubby teenager). `tries=N` makes up to N takes with new seeds until on
 the best. The whole film is checked from a frame of each shot side by side and the joins where the
 camera should go on.
 
-**The Filmmaking panel** (2026-10-24, the user's design: "Filmmaking window should extend current
+**The Video editor panel** ("Filmmaking" until the user renamed it on 2026-10-25; 2026-10-24, the user's design: "Filmmaking window should extend current
 window to the left side instead of opening a new separate window... Use the main chat for film
 making... Put filmmaking button under Toolkit dropdown menu with None and Filmmaking options. There
 will be more tools extending to the left side of the screen later."). The **Toolkit** dropdown
 takes the place of the second BlackBox logo and name under the title bar, an arrow on it pointing
-left, where its tools open: None or Filmmaking (`ToolkitOption`, `IToolkit`, more to come). A muted "in development" beside it (the
+left, where its tools open: None or Video editor (`ToolkitOption`, `IToolkit`, more to come). A muted "in development" beside it (the
 user, 2026-10-24) says its tools are still being built: the header's `muted` text, 10 px right of
 the dropdown and centred on it. Its
 arrows are solid triangles, the left one and the dropdown's, as History's and every dropdown's are
@@ -686,12 +686,12 @@ with its new part black for a twentieth more, and the chat jumped back (captured
 2026-10-24). Now the chat stays put and the panel fills in about 50 ms later. The window's place is
 saved without the panel. **Made narrower, the panel gives way first** (`ToolkitColumns`,
 `MainWindow.FitColumns` on the columns' SizeChanged): down to its least (`ToolkitOption.MinWidth`,
-splitter included: Filmmaking 770, where its top bar still fits in one row with the film's name cut
+splitter included: Video editor 770, where its top bar still fits in one row with the film's name cut
 short; Code changes 560), then the window stops, at the panel's least plus the chat's 660 (no more than
 the screen is wide). It goes back to the width it opened at, or was dragged to, as the window widens
 again; the splitter stops at both leasts. Before (bug of 2026-10-24) the window's least counted any
-panel as 480 while Filmmaking kept its 960, so the chat was squeezed to a few letters across, and
-opening on a narrow screen left the chat only 330. Filmmaking also needs the window 600 tall
+panel as 480 while Video editor kept its 960, so the chat was squeezed to a few letters across, and
+opening on a narrow screen left the chat only 330. Video editor also needs the window 600 tall
 (`ToolkitOption.MinHeight`; the chat alone 480), else its viewer is squeezed to nothing over the
 timeline; a shorter window grows to it as the panel opens. The film's name was in a StackPanel across,
 which gives a TextBlock all the room it wants: it was never cut short and pushed the fields over the
@@ -767,8 +767,8 @@ select folder or image or video, it shows up in main chat window prompt, and the
 prompt to describe what you wanna do with it"): a folder, a picture, a clip or a sound on the
 timeline, is a chip under the box ("The start of shot 1 · Moon start.png", "not made yet" for a
 piece planned), × takes it off, another pick takes its place, and sent, it goes with the message
-(a piece not made yet as its place, with no file). A message sent while Filmmaking is open carries
-the film (`IToolkit.About`): over its bubble (`UserInput.Via`, "Filmmaking · The Fox and the Moon ·
+(a piece not made yet as its place, with no file). A message sent while Video editor is open carries
+the film (`IToolkit.About`): over its bubble (`UserInput.Via`, "Video editor · The Fox and the Moon ·
 shot 2"), and for the model before the words (`UserInput.Context`) the film's folder, what each
 pick is in it (shot s2, the 2nd of 3, from 5 to 9 s, its clip or its folder; frame f1, the start of
 shot 1; the reference "Fox"; a reference's folder, with its pictures and how to name them; a
@@ -794,8 +794,8 @@ weighs, not a rule: the user's way of steering it.
 During a run they wait above the box as anything typed in the chat does. The user watches every step
 in the chat, with each frame and clip as it is made, and stops it there. One still waiting when the
 run is stopped, or the chat is left, goes back into the box as any typed message does, and sent
-again while Filmmaking is open carries the film again. Its context is saved with the message, so
-Continue on one the model never had sends it whole. A chat begun with Filmmaking open is named after
+again while Video editor is open carries the film again. Its context is saved with the message, so
+Continue on one the model never had sends it whole. A chat begun with Video editor open is named after
 the words and the film and picks ("Make it. (Fox Test · start of shot 1)"), not "Make it." alone.
 
 The model writes prompts as BlackBox's storyboard guide says (`Comfy/Guides/storyboards.md`, which
@@ -1134,7 +1134,7 @@ window in front, at its size, kept on the screen, as Windows cascades windows: r
 a second window looked as if nothing had opened. A window closed where it opened beside another
 doesn't save its place, so BlackBox doesn't creep down a step with every second window. The title
 bar names the chat ("keys 6 - BlackBox"), to tell the windows apart on the taskbar. A window's
-Filmmaking panel and full-screen viewer close with it, and so does all it had going: its run
+Video editor panel and full-screen viewer close with it, and so does all it had going: its run
 stops (the chat says so, with Continue, when it is opened again; it ended without a word before),
 what that run still reports is dropped (another window may open the chat meanwhile), the
 sounds in its chat stop, and no run or MCP server of its starts again. Its videos hold still while
@@ -1154,7 +1154,7 @@ What they share, and how they keep out of each other's way:
   button), and picking it brings that window forward. History rereads the folder whenever it opens,
   for the chats other windows started. One saver writes every window's chats, so a window opening a
   chat another just left waits for its last version.
-- **The screen.** Every window, Filmmaking, the viewer and a dialog is the process's own, so all of
+- **The screen.** Every window, Video editor, the viewer and a dialog is the process's own, so all of
   them are left out of every agent's screenshots, and a click that lands on any of them pushes it to
   the bottom for the click, as for the chat alone.
 - **The mouse and keyboard.** One agent at a time (`DesktopTurn`): from its first click or key
@@ -1588,7 +1588,7 @@ prints the traceback and exits with 0.
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures, videos, sounds and 3D models to the model; `write_file` makes documents from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
 | `diff` | What changed: a git repository's uncommitted changes, staged ones, one commit, or since a branch, or two files or folders compared without git; the files and their line counts first, then the hunks, in parts (see Diff below) |
 | `comfyui` | Pictures, video, sound, music, speech and 3D models with ComfyUI on this PC, which it installs when there is none: templates, node and model look-ups, models found online and downloaded, checked runs that hand back the files (see Pictures, video and sound) |
-| `film` | Films from a storyboard (the film's folder Filmmaking shows): plans or changes it, makes its frames, song and shots with ComfyUI, checks each shot against what it should show, joins them with ffmpeg (see Films) |
+| `film` | Films from a storyboard (the film's folder Video editor shows): plans or changes it, makes its frames, song and shots with ComfyUI, checks each shot against what it should show, joins them with ffmpeg (see Films) |
 | `run_shell` | PowerShell on Windows, `sh` elsewhere |
 | `ssh` | Commands on another computer over SSH, in a terminal that stays open between calls (see below) |
 | `copy` | Files and folders between this PC and an SSH host, or from one host to another (`user@host:/path`, as for scp), byte for byte |
@@ -1885,7 +1885,7 @@ in `Data/chats/changes/<id>.json` (written after each call, deleted with the cha
 again from History shows it again; a new chat starts empty.
 
 **The panel** (Toolkit, Code changes; "Diff", then "Code diff", until the user renamed it twice on
-2026-10-24) opens on the left of the chat as Filmmaking does, with the changed files listed on the
+2026-10-24) opens on the left of the chat as Video editor does, with the changed files listed on the
 left and their diff beside them. It reads them again 250 ms after a call that may have changed files (a file written in
 parts is read once), keeping the picked lines picked. Lines are picked with a click,
 Shift+click and Ctrl+click (a header or @@ line picks nothing) and go into the chat's box as their
@@ -2151,7 +2151,7 @@ as if "Continue." had been sent (a stop before the model had the message runs th
 A chat that ended stopped shows it again when opened from History. BlackBox
 stays on screen while it works but is left out of the agent's screenshots, and steps behind other
 windows for the moment a click lands on it: all of its windows (every chat window, the viewer,
-Filmmaking, a dialog), found by their process (see Several windows). It is left out only for the instant each screenshot is
+Video editor, a dialog), found by their process (see Several windows). It is left out only for the instant each screenshot is
 taken, so screen recorders and screen sharing show it the rest of the time (before, an option hid
 it from them for good). Every click and key press the agent makes shows up in a
 log in the bottom-right corner that fades after 15 seconds, with a ring where it clicked. The agent
