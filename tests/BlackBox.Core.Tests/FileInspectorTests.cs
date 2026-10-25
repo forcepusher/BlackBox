@@ -33,6 +33,18 @@ public class FileInspectorTests : IDisposable
     [InlineData("chair.glb", InspectorKind.Model)]
     public void Kinds_by_extension(string name, InspectorKind kind) => Assert.Equal(kind, FileInspector.KindOf(Path.Combine(_dir, name)));
 
+    // Open file's picker lists each kind's extensions: each must open as that kind (text ones, written, as text).
+    [Fact]
+    public void Picker_types_open_as_their_kind()
+    {
+        foreach (var (name, kind, extensions) in FileInspector.PickerTypes)
+            foreach (var ext in extensions)
+            {
+                var path = kind == InspectorKind.Text ? Write("file" + ext, "some text\n") : Path.Combine(_dir, "file" + ext);
+                Assert.True(kind == FileInspector.KindOf(path), $"{name}: {ext} opens as {FileInspector.KindOf(path)}");
+            }
+    }
+
     [Fact]
     public void Other_files_are_text_unless_they_hold_binary()
     {

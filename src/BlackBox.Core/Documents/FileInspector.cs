@@ -77,6 +77,26 @@ public static partial class FileInspector
         return LooksLikeText(path) ? InspectorKind.Text : InspectorKind.None;
     }
 
+    /// <summary>
+    /// The kinds of file the panel's Open file picker lists, each with its extensions (as
+    /// <see cref="KindOf"/> sorts them; text is open-ended, so the common ones). Any other file opens too, in hex.
+    /// </summary>
+    public static readonly IReadOnlyList<(string Name, InspectorKind Kind, string[] Extensions)> PickerTypes =
+    [
+        ("Documents", InspectorKind.Document, [".pdf", ".docx", ".docm", ".dotx", ".doc", ".xlsx", ".xlsm", ".xltx", ".xls", ".pptx", ".pptm", ".potx", ".ppt",
+            ".odt", ".ods", ".odp", ".rtf", ".html", ".htm", ".xhtml", ".mht", ".mhtml"]),
+        ("Markdown", InspectorKind.Markdown, [".md", ".markdown", ".mdown", ".mkd"]),
+        ("Tables", InspectorKind.Table, [".csv", ".tsv"]),
+        ("Pictures", InspectorKind.Picture, [".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".exr"]),
+        ("Animations", InspectorKind.Animation, [".gif", ".webp", ".apng"]),
+        ("Videos", InspectorKind.Video, [".mp4", ".webm", ".mov", ".mkv", ".avi", ".m4v"]),
+        ("Sounds", InspectorKind.Sound, [".wav", ".mp3", ".flac", ".ogg", ".opus", ".m4a", ".aac"]),
+        ("3D models", InspectorKind.Model, [".glb", ".gltf", ".obj", ".ply", ".stl", ".fbx", ".usdz", ".3mf", ".dae"]),
+        ("Text and code", InspectorKind.Text, [".txt", ".log", ".json", ".xml", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".csproj", ".sln",
+            ".cs", ".axaml", ".xaml", ".py", ".js", ".ts", ".tsx", ".jsx", ".css", ".c", ".h", ".cpp", ".hpp", ".java", ".kt", ".go", ".rs",
+            ".rb", ".php", ".lua", ".gd", ".shader", ".hlsl", ".glsl", ".sql", ".ps1", ".bat", ".cmd", ".sh"]),
+    ];
+
     /// <summary>The most of a file <see cref="Hex"/> shows: its start.</summary>
     public const int MaxHexBytes = 64 * 1024;
 

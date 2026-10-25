@@ -9,7 +9,8 @@ namespace BlackBox.App.ViewModels;
 
 /// <summary>
 /// The File inspector panel, a tool of the chat window's toolkit on the left of the chat: one file
-/// shown whole, opened by the Inspect button of its card in the chat or dropped on the panel. BlackBox
+/// shown whole, opened by the Inspect button of its card in the chat, picked with the panel's Open
+/// file button, or dropped on the panel. BlackBox
 /// draws Markdown (as a reply), tables, text and pictures itself, plays videos and animations frame
 /// by frame (<see cref="InspectorVideoViewModel"/>, <see cref="InspectorAnimationViewModel"/>), draws a
 /// sound's waveform to zoom into and pick a stretch of (<see cref="InspectorSoundViewModel"/>), turns
@@ -70,7 +71,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
     /// <summary>Said in the middle of the panel: how to open a file in it, that it is loading, or why it can't be shown.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMessage))]
-    private string? _message = "Press Inspect on a file in the chat, or drop one here.";
+    private string? _message = "Press Inspect on a file in the chat, open one with the folder above, or drop one here.";
 
     public bool HasMessage => Message is not null;
 

@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 3D models in File inspector turn with a left drag, zoom with the wheel, move with a right drag, and
   have Front, Right, Back, Left and Top views; **Area** marks a part of the view to ask about.
 - File inspector shows any other file as hex; select bytes to ask about them.
+- The folder button in File inspector's bar opens a file from your PC in it.
 - FBX 3D models open in the chat and in File inspector, their animations playing there frame by
   frame, and the agent's `read_file` shows them, an animation at four times too.
 - "in development" beside the **Toolkit** dropdown: its tools are still being built.

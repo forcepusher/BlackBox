@@ -2041,8 +2041,11 @@ do?" got an answer about exactly those lines, with no tool call.
 **File inspector** in the Toolkit dropdown (`FileInspectorViewModel`, `FileInspectorPanel`; 760 wide, least
 420) shows one file whole on the left of the chat. A card's **Inspect** opens it on that file
 (`MainWindowViewModel.Inspect`: the dropdown switches to it through the same path as a pick, so
-the window lays the panel out before it grows); picked from the dropdown it waits for an Inspect or a
-file dropped on it. Its top bar has the file's name, what it is, and the × that closes it; Show in folder was there too until the user had it taken off (2026-10-25), as the file's card in the chat has it. A message sent
+the window lays the panel out before it grows); picked from the dropdown it waits for an Inspect, a
+file dropped on it, or one picked with the folder button. Its top bar has the file's name, what it is, the folder (Open
+file: a picker in the shown file's folder, listing "Files it shows" first, then each kind from
+`FileInspector.PickerTypes`, then All files, since anything else opens in hex; the user's request,
+2026-10-26, not Open in the default program, which the cards no longer have) and the × that closes it; Show in folder was there too until the user had it taken off (2026-10-25), as the file's card in the chat has it. A message sent
 while it shows a file carries "File inspector · name" over the bubble and tells the model which file
 is open, so "what does this say" is about it. Which way a file is shown (`FileInspector.KindOf`,
 by its extension, the formats BlackBox already reads and writes; the file itself is `FileInspectorView`,

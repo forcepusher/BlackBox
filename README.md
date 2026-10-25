@@ -24,7 +24,7 @@ whatever it downloads stay in a `Data` folder next to the exe.
   (Shift+click for a range, Ctrl+click for more) to put them in your message, then ask about them or
   have them changed.
 - **See a file.** Click a file's preview in the chat to see it full screen, or press **Inspect** to
-  open it in **File inspector** on the left of the chat. Markdown, PDF, Word, Excel, PowerPoint, tables,
+  open it in **File inspector** on the left of the chat (its folder button opens any file). Markdown, PDF, Word, Excel, PowerPoint, tables,
   text, pictures, video, animations, sound, 3D models (an FBX plays its animations), and any other
   file in hex; Office files look as in Office when Office is installed. Select text in File inspector
   (cells of a table, lines of code, bytes) to ask about that part, drag a box over a PDF page, a picture or a frame to ask about
