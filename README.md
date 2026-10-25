@@ -23,6 +23,9 @@ whatever it downloads stay in a `Data` folder next to the exe.
   with every file the agent changes in the chat, beside its diff, as it works. Click lines
   (Shift+click for a range, Ctrl+click for more) to put them in your message, then ask about them or
   have them changed.
+- **See a file.** Press **Preview** on a file in the chat: it opens in **Document preview** on the left
+  of the chat. Markdown, PDF, Word, Excel, PowerPoint, tables, text, pictures and video; Office files
+  look as in Office when Office is installed.
 - **Game development.** It makes games in any engine (Unity, Unreal, Godot) and play-tests them.
 - **Know your projects.** Before it works on a project or a big folder, it indexes it, as Cursor
   does: what is in it, what its files define, and a search that finds where anything is.

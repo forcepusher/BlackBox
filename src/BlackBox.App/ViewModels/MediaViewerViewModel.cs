@@ -38,7 +38,7 @@ public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Name), nameof(Counter), nameof(HasFile))]
-    [NotifyCanExecuteChangedFor(nameof(PreviousCommand), nameof(NextCommand), nameof(OpenCommand), nameof(ShowInFolderCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PreviousCommand), nameof(NextCommand), nameof(ShowInFolderCommand))]
     private int _index;
 
     public MediaEntry Current => _entries[Index];
@@ -81,17 +81,6 @@ public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
     {
         if (Shown is VideoPreview video)
             video.PlayCommand.Execute(null);
-    }
-
-    [RelayCommand(CanExecute = nameof(HasFile))]
-    private void Open()
-    {
-        var path = Current.Path!;
-        Task.Run(() =>
-        {
-            try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose(); }
-            catch (Exception ex) when (ex is Win32Exception or InvalidOperationException) { }
-        });
     }
 
     [RelayCommand(CanExecute = nameof(HasFile))]

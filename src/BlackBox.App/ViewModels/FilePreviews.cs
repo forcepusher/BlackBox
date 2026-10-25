@@ -21,8 +21,8 @@ public sealed class PreviewServices(IMediaDecoder? decoder, Func<IAudioOutput?> 
 
 /// <summary>
 /// A file the agent made or showed, previewed in the chat: a picture, an animation, a video or a
-/// sound with a player, a 3D model to turn around, or a card for anything else. Each opens in its
-/// own program or shows in its folder.
+/// sound with a player, a 3D model to turn around, or a card for anything else (a document, a
+/// Markdown file). Each opens in the Document preview panel or shows in its folder.
 /// </summary>
 public abstract partial class FilePreview(string path) : ObservableObject, IDisposable
 {
@@ -54,26 +54,21 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
         catch (Exception ex) when (ex is not OutOfMemoryException) { /* a workflow the reader didn't expect: no button */ }
     });
 
-    // Both off the UI thread: Windows' opening of a file on a share that is off waits for the share.
     [RelayCommand]
-    private void Open() => Task.Run(() =>
-    {
-        try { Process.Start(new ProcessStartInfo(Path) { UseShellExecute = true })?.Dispose(); }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
-        {
-            Dispatcher.UIThread.Post(() => Details = "Nothing on this PC opens it.");
-        }
-    });
+    private void ShowInFolder() => ShowInFolder(Path);
 
-    [RelayCommand]
-    private void ShowInFolder() => Task.Run(() =>
+    /// <summary>
+    /// Opens the folder of <paramref name="path"/> with it selected; off the UI thread, as Windows'
+    /// showing of a file on a share that is off waits for the share.
+    /// </summary>
+    internal static void ShowInFolder(string path) => Task.Run(() =>
     {
         try
         {
             if (OperatingSystem.IsWindows())
-                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{Path}\"") { UseShellExecute = true })?.Dispose();
+                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true })?.Dispose();
             else
-                Process.Start(new ProcessStartInfo(System.IO.Path.GetDirectoryName(Path)!) { UseShellExecute = true })?.Dispose();
+                Process.Start(new ProcessStartInfo(System.IO.Path.GetDirectoryName(path)!) { UseShellExecute = true })?.Dispose();
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     });
@@ -113,7 +108,6 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
             "video" => new VideoPreview(path, services, width),
             "audio" => new AudioPreview(path, services),
             "3d" => new ModelPreview(path),
-            _ when MarkdownFiles.Handles(path) => new MarkdownPreview(path),
             _ => new FileCardPreview(path),
         };
         preview.Load();
@@ -242,7 +236,10 @@ public sealed partial class AnimationPreview(string path, int width = FilePrevie
     }
 }
 
-/// <summary>A file with nothing to show inside the chat: its name and size, to open or find.</summary>
+/// <summary>
+/// A file with nothing to show inside the chat (a document, a Markdown file): its name and size, to
+/// see in the Document preview panel or find.
+/// </summary>
 public sealed class FileCardPreview(string path) : FilePreview(path)
 {
     protected override void Load() => Background(() =>
@@ -250,26 +247,6 @@ public sealed class FileCardPreview(string path) : FilePreview(path)
         var details = File.Exists(Path) ? Size(Path) : "The file is no longer there.";
         Show(() => Details = details);
     });
-}
-
-/// <summary>
-/// A Markdown file, formatted as a reply is (headings, lists, code, tables, links) in a box that
-/// scrolls; a long one shows its first <see cref="MarkdownFiles.MaxChars"/> characters.
-/// </summary>
-public sealed partial class MarkdownPreview(string path) : FilePreview(path)
-{
-    [ObservableProperty]
-    private string? _text;
-
-    protected override void Load() => Background(() =>
-    {
-        var (text, cut) = MarkdownFiles.ReadStart(Path);
-        var lines = text.Length == 0 ? 0 : text.TrimEnd('\n', '\r').Count(c => c == '\n') + 1;
-        var details = $"Markdown, {(cut ? $"first {lines:N0}" : $"{lines:N0}")} line{(lines == 1 ? "" : "s")}, {Size(Path)}";
-        Show(() => (Text, Details) = (text, details));
-    });
-
-    protected override void Release() => Text = null;
 }
 
 /// <summary>A 3D model, turned around with the mouse (see <see cref="Views.ModelViewer"/>).</summary>
@@ -587,7 +564,7 @@ public sealed partial class VideoPreview(string path, PreviewServices services, 
         var info = decoder?.Probe(Path);
         if (info is not { HasVideo: true })
         {
-            Dispatcher.UIThread.Post(() => Details = $"{Size(Path)} (nothing on this PC can play it here; Open uses your player)");
+            Dispatcher.UIThread.Post(() => Details = $"{Size(Path)} (nothing on this PC can play it here)");
             return;
         }
         using var reader = decoder!.OpenVideo(Path, FrameWidth);
@@ -716,7 +693,7 @@ public sealed partial class AudioPreview(string path, PreviewServices services) 
         using var reader = Services.Decoder?.OpenAudio(Path);
         if (reader is null)
         {
-            Dispatcher.UIThread.Post(() => Details = $"{Size(Path)} (nothing on this PC can play it here; Open uses your player)");
+            Dispatcher.UIThread.Post(() => Details = $"{Size(Path)} (nothing on this PC can play it here)");
             return;
         }
         var (mono, rate) = MediaPreview.ReadMono(reader, TimeSpan.FromMinutes(20));

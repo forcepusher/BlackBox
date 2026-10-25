@@ -275,16 +275,17 @@ Files the agent makes or shows appear in the chat: under the tool call that made
 a reply that names them by their full path (whatever made them: ComfyUI, a script, Blender, a
 download). Pictures are shown at the chat's width, animations play, a sound plays over its
 waveform, a 3D model turns with the mouse (the wheel comes closer, a double click resets it), and
-any other file gets a card. Each has Open (its own program) and Show in folder. A saved chat shows
-them again when it is opened, as long as the files are still there.
+any other file gets a card. Each has Preview (the file in the Document preview panel, see
+[Document preview](#document-preview)) and Show in folder. A saved chat shows them again when it is
+opened, as long as the files are still there. Open (the file's own program) was on every card until
+2026-10-25: the user had it taken off for Preview, as the panel shows a file without leaving BlackBox;
+the full-screen viewer of pictures and videos lost its Open too.
 
-A Markdown file (.md, .markdown) is shown formatted by the same renderer as replies
-(`MarkdownLite` through `MarkdownView`), in a box up to 420 pixels tall that scrolls; at its ends
-the wheel goes on scrolling the chat. Its first 100,000 characters are read, in the file's own
-encoding (`TextFiles`), cut at a whole line; the details then say "first N lines". write_file
-reports a Markdown file it writes or appends to as a file of the call, so it shows under the call;
-other text files it writes don't, and read_file shows none (the agent reads many READMEs while it
-works). Before, a .md had only a card with its name and size.
+A Markdown file (.md, .markdown) gets a card like a .docx: from 2026-10-23 to 10-25 it was drawn
+formatted in the chat, in a box up to 420 pixels tall that scrolled, which the user found too big in
+the chat log; it is drawn so in the Document preview panel now. write_file reports a Markdown file
+it writes or appends to as a file of the call, so its card shows under the call; other text files it
+writes don't, and read_file shows none (the agent reads many READMEs while it works).
 
 A video plays by itself while it is on screen, over and over and without its sound, as a GIF
 would; scrolled away, under the full-screen viewer or with the window minimized it pauses, so a
@@ -1953,6 +1954,45 @@ parts by `start`, and named three faults, all fixed since: a file already in the
 its pick out of the message, the row cap was checked only between files, and a mode that needs a
 commit showed no hint. In the app, two lines picked in the panel and "What do the selected lines
 do?" got an answer about exactly those lines, with no tool call.
+
+### Document preview
+**Document preview** in the Toolkit dropdown (`DocumentViewModel`, `DocumentPanel`; 760 wide, least
+420) shows one file whole on the left of the chat. A card's **Preview** opens it on that file
+(`MainWindowViewModel.PreviewFile`: the dropdown switches to it through the same path as a pick, so
+the window lays the panel out before it grows); picked from the dropdown it waits for a Preview or a
+file dropped on it. Its top bar has the file's name, what it is, and Show in folder. A message sent
+while it shows a file carries "Document preview · name" over the bubble and tells the model which file
+is open, so "what does this say" is about it. Which way a file is shown (`DocumentPreview.KindOf`,
+by its extension, the formats BlackBox already reads and writes):
+- Markdown (.md): formatted by the replies' renderer (`MarkdownView`), its first 200,000 characters.
+- .csv, .tsv: a table through the same renderer, the first 500 rows and 40 columns, fields in quotes
+  kept whole, a .csv split at semicolons when its first line has more of them than commas.
+- Pictures: fitted to the panel, decoded 1600 wide. Animations, video, sound and 3D: the chat's own
+  player for it (`FilePreview.For` at 1600), played and turned as in the chat.
+- PDF, Word, Excel, PowerPoint (and .doc/.xls/.ppt, OpenDocument, HTML, RTF): drawn by the previewer
+  Windows has for the kind, as in Explorer's preview pane (`ShellPreview`, `ShellPreviewHost`): a
+  native window of the panel's in which Word's, Excel's, PowerPoint's (Office installed), the PDF
+  reader's or Windows' own HTML previewer draws the file, faithful and with nothing added to
+  BlackBox. Asked for out of process (`CLSCTX_LOCAL_SERVER`: Office serves its previewers from
+  WINWORD/EXCEL/POWERPNT `-Embedding`, others from prevhost.exe), in BlackBox's process only if that
+  fails; called through the interfaces' tables, as the trimmed build has no COM interop. Without a
+  previewer, or when it fails, the panel shows the file's text as read_file gives the agent
+  (`DocumentText`; Word's and PowerPoint's as Markdown), a web page its source.
+- Any other file whose start reads as text (no NUL in its first 8 KB in its own encoding): its text
+  in a fixed-width font. Anything else: "There is no preview for this kind of file".
+
+Checked on the laptop (2026-10-25, a stand-in model naming six files, Preview pressed on each by UI
+Automation): .md formatted, .docx by Word's previewer, .xlsx with Excel's grid and sheet tabs, .pptx
+slide by slide, .csv as a table, and .pdf by Edge's previewer. The PDF previewer registered there was
+Acrobat's ("for Vista"), which failed with E_FAIL on SetWindow/DoPreview for every PDF, so for a PDF
+Edge's previewer (`{3A84F9C2-…}`, on every Windows 10 and 11) is tried after the registered one.
+Each Preview returned in under 170 ms; the previewer loads after the panel is drawn. Office's
+previewers keep WINWORD.EXE `-Embedding` running after they are let go, even after BlackBox exits (as
+from Explorer); Word automation (`New-Object -ComObject Word.Application`) still got its own Word and
+quit cleanly beside it. UI Automation walks into the previewer's window, which made whole-window
+searches of BlackBox's tree slow or fail while an Office file was shown: find elements before, or
+under ChatScroll.
+
 ### Web search
 A local model's memory of APIs is where it slips most (qwen3.8 writes Unity's `KeyCode.Left`, which
 doesn't exist, for `KeyCode.LeftArrow`), so the agent can look things up. Told to whenever it wasn't

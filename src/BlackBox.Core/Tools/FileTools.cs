@@ -262,7 +262,7 @@ public sealed class WriteFileTool : Tool
         return new ToolResult($"{(existed ? "Overwrote" : "Created")} {path} ({content.Length} chars).", Files: Shown(path));
     }
 
-    /// <summary>A Markdown file written is shown formatted under the call; other text files aren't shown.</summary>
+    /// <summary>A Markdown file written gets its card under the call (Preview shows it formatted); other text files aren't shown.</summary>
     private static List<string>? Shown(string path) => Media.MarkdownFiles.Handles(path) ? [path] : null;
 }
 

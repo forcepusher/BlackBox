@@ -1,0 +1,48 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:BlackBox.App.ViewModels"
+             xmlns:views="using:BlackBox.App.Views"
+             x:Class="BlackBox.App.Views.DocumentPanel"
+             x:DataType="vm:DocumentViewModel"
+             Background="{StaticResource BbBackground}">
+  <DockPanel>
+    <!-- The file's name and what it is, and where it is. As tall as the chat's top bar beside it,
+         whose Toolkit dropdown is 30 high. -->
+    <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="12,8">
+      <DockPanel MinHeight="30">
+        <Button DockPanel.Dock="Right" Classes="ghost" Padding="10,3" Content="Show in folder" Command="{Binding ShowInFolderCommand}" IsVisible="{Binding HasFile}"
+                VerticalAlignment="Center" Margin="12,0,0,0" ToolTip.Tip="{Binding Path}" />
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" ClipToBounds="True">
+          <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}" />
+          <TextBlock Classes="muted" Text="{Binding Details}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Details}" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <Panel>
+      <TextBlock Classes="muted" Text="{Binding Message}" IsVisible="{Binding HasMessage}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                 TextWrapping="Wrap" MaxWidth="360" TextAlignment="Center" />
+
+      <!-- Markdown and tables, as a reply is drawn. The left margin is inside the scroller, so the
+           text's selection margin isn't cut off. -->
+      <ScrollViewer IsVisible="{Binding Markdown, Converter={x:Static ObjectConverters.IsNotNull}}" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Document">
+        <views:MarkdownView Source="{Binding Markdown}" Margin="20,16,20,20" />
+      </ScrollViewer>
+
+      <ScrollViewer IsVisible="{Binding Text, Converter={x:Static ObjectConverters.IsNotNull}}" HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="Document text">
+        <SelectableTextBlock Text="{Binding Text}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Margin="16,12,16,16" TextWrapping="NoWrap" />
+      </ScrollViewer>
+
+      <Image Source="{Binding Picture}" IsVisible="{Binding Picture, Converter={x:Static ObjectConverters.IsNotNull}}" Margin="16" Stretch="Uniform" StretchDirection="DownOnly"
+             RenderOptions.BitmapInterpolationMode="HighQuality" />
+
+      <!-- An animation, a video, a sound or a 3D model: as in the chat. -->
+      <ScrollViewer IsVisible="{Binding Media, Converter={x:Static ObjectConverters.IsNotNull}}" HorizontalScrollBarVisibility="Disabled">
+        <ContentControl Content="{Binding Media}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16" />
+      </ScrollViewer>
+
+      <!-- PDF, Office files and web pages, drawn by Windows' previewer for them. -->
+      <views:ShellPreviewHost x:Name="Shell" Path="{Binding ShellPath}" IsVisible="{Binding ShellPath, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    </Panel>
+  </DockPanel>
+</UserControl>
