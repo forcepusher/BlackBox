@@ -1,7 +1,6 @@
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using BlackBox.Core.Llm;
-using BlackBox.Core.Mcp;
 using BlackBox.Core.Settings;
 using BlackBox.Core.Tools;
 

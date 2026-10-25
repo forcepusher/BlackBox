@@ -55,10 +55,10 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
     // ---- frames ----------------------------------------------------------------------------------
 
     /// <summary>The prompt a frame is made with: its own.</summary>
-    public static string FramePrompt(Storyboard board, VideoFrame frame) => frame.Prompt.Trim();
+    public static string FramePrompt(VideoFrame frame) => frame.Prompt.Trim();
 
     /// <summary>The prompt a shot is made with: what happens and what the camera does.</summary>
-    public static string ShotPrompt(Storyboard board, VideoShot shot) =>
+    public static string ShotPrompt(VideoShot shot) =>
         Join(shot.Prompt, shot.Camera.Length > 0 ? "Camera: " + shot.Camera.TrimEnd('.') : "");
 
     private static string Join(string a, string b) => Storyboard.JoinText(a, b);
@@ -79,11 +79,6 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
     /// <summary>The kind of job a shot is, by its frames and lip sync.</summary>
     public static VideoJob JobOf(VideoShot shot) =>
         shot.LipSync ? VideoJob.LipSync : shot.Motion is not null ? VideoJob.Motion : shot.First is null ? VideoJob.ShotFromText : shot.Last is null ? VideoJob.ShotFromFirst : VideoJob.Shot;
-
-    /// <summary>What a frame is made with, in its own words; none: the best installed (see <see cref="VideoFrame.Model"/>).</summary>
-    public static string? ModelOf(Storyboard board, VideoFrame frame) => frame.Model;
-
-    public static string? ModelOf(Storyboard board, VideoShot shot) => shot.Model;
 
 
     /// <summary>Makes a frame's picture: taken from the user's file, else made from words, or from the frames it is based on.</summary>
@@ -162,7 +157,7 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
         {
             var inputs = new VideoInputs
             {
-                Prompt = FramePrompt(board, frame),
+                Prompt = FramePrompt(frame),
                 Seed = frame.Seed,
                 Width = board.Width,
                 Height = board.Height,
@@ -171,7 +166,7 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
             };
             var job = pictures.Count > 0 ? VideoJob.Edit : VideoJob.Frame;
             var stamp = FrameStamp(board, frame);
-            var run = await RunAsync(job, ModelOf(board, frame), inputs, frame.Set, board.FrameMeta(frame), stamp, "image", progress, userMessage, ct).ConfigureAwait(false);
+            var run = await RunAsync(job, frame.Model, inputs, frame.Set, board.FrameMeta(frame), stamp, "image", progress, userMessage, ct).ConfigureAwait(false);
             await Task.Run(() => save(run.Output, target), ct).ConfigureAwait(false);
             Restamp(board.FrameMeta(frame), stamp);
             VideoVersions.Remember(board.FrameMeta(frame), VideoPiece.Of(frame).Settings(board));
@@ -257,7 +252,7 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
         }
         var inputs = new VideoInputs
         {
-            Prompt = shot.LipSync ? ShotPrompt(board, shot) : WithoutMusic(ShotPrompt(board, shot)),
+            Prompt = shot.LipSync ? ShotPrompt(shot) : WithoutMusic(ShotPrompt(shot)),
             Seed = shot.Seed,
             Width = board.Width,
             Height = board.Height,
@@ -273,7 +268,7 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
         var target = tryFile ?? board.ShotVideo(shot);
         var workflow = tryFile is null ? board.ShotMeta(shot) : Storyboard.MetaOf(tryFile);
         var stamp = ShotStamp(board, shot);
-        var run = await RunAsync(job, ModelOf(board, shot), inputs, shot.Set, workflow, stamp, "video", progress, userMessage, ct).ConfigureAwait(false);
+        var run = await RunAsync(job, shot.Model, inputs, shot.Set, workflow, stamp, "video", progress, userMessage, ct).ConfigureAwait(false);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         MediaRelease.Release(target); // its version before may be playing in the chat
         File.Copy(run.Output, target, overwrite: true);
@@ -814,8 +809,8 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
             sb.Append("file|").Append(file).Append('|').Append(FileStamp(file));
         else
         {
-            sb.Append(FramePrompt(board, frame)).Append('|').Append(frame.Seed).Append('|')
-              .Append(ModelOf(board, frame)).Append('|').Append(frame.Set?.ToJsonString());
+            sb.Append(FramePrompt(frame)).Append('|').Append(frame.Seed).Append('|')
+              .Append(frame.Model).Append('|').Append(frame.Set?.ToJsonString());
             // Not itself, which making it skips: its own picture changes with every make, and it was never up to date.
             foreach (var id in frame.From.Where(id => id != frame.Id))
                 sb.Append("|from ").Append(id).Append(' ').Append(board.Frame(id) is { } from ? FileStamp(board.FramePicture(from)) : (board.ReferenceFile(id) ?? board.ReferenceVideo(id)) is { } picture ? FileStamp(picture) : "");
@@ -828,11 +823,11 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
     {
         var sb = new StringBuilder();
         // Numbers as the invariant culture writes them: a video moved to a PC that writes 5,5 for 5.5 stays made.
-        sb.Append(ShotPrompt(board, shot)).Append('|').Append(shot.Seed).Append('|').Append(shot.Seconds.ToString(CultureInfo.InvariantCulture)).Append('|').Append(board.Fps).Append('|')
+        sb.Append(ShotPrompt(shot)).Append('|').Append(shot.Seed).Append('|').Append(shot.Seconds.ToString(CultureInfo.InvariantCulture)).Append('|').Append(board.Fps).Append('|')
           .Append(board.Width).Append('x').Append(board.Height).Append('|').Append(shot.LipSync).Append('|').Append(shot.Set?.ToJsonString());
         foreach (var id in new[] { shot.First, shot.LipSync ? null : shot.Last })
             sb.Append('|').Append(board.Frame(id) is { } frame ? FileStamp(board.FramePicture(frame)) : "none");
-        sb.Append('|').Append(ModelOf(board, shot));
+        sb.Append('|').Append(shot.Model);
         // Only a shot that follows a video has it in its stamp: those made before stay up to date.
         if (shot.Motion is { } motion && !shot.LipSync)
             sb.Append("|motion ").Append(motion).Append(' ').Append(board.ReferenceVideo(motion) is { } file ? FileStamp(file) : "none");

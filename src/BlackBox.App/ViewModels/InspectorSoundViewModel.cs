@@ -183,9 +183,7 @@ public sealed partial class InspectorSoundViewModel : ObservableObject, IDisposa
 
     private Playback? _playback;
 
-    /// <summary>Where the playing started and how long ago, and where it stops (a stretch's end).</summary>
-    private double _playFrom;
-
+    /// <summary>Where the playing stops (a stretch's end); null: the end of the sound.</summary>
     private double? _playTo;
 
     private readonly Stopwatch _played = new();
@@ -213,7 +211,7 @@ public sealed partial class InspectorSoundViewModel : ObservableObject, IDisposa
     {
         End(_playback);
         IsPlaying = true;
-        (_playFrom, _playTo, _reported) = (from, to, from);
+        (_playTo, _reported) = (to, from);
         Position = from;
         // The clock runs from the playback's first report: before it the sound is still opening.
         _played.Reset();

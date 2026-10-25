@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using BlackBox.Core.Diffs;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using static BlackBox.Core.Strings;
 
 namespace BlackBox.App.ViewModels;
 
@@ -372,7 +373,6 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             .Append(' ').Append(number).Append('\t').Append(line.Text).Append('\n');
     }
 
-    private static string Capital(string text) => text.Length > 0 ? char.ToUpperInvariant(text[0]) + text[1..] : text;
 
     /// <summary>The message went with the picked lines: they are no longer picked.</summary>
     public void Sent()

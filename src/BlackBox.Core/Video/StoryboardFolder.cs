@@ -50,8 +50,6 @@ public sealed partial class Storyboard
 
     private string Full(string place) => Path.GetFullPath(Path.Combine(Folder, place.Replace('/', Path.DirectorySeparatorChar)));
 
-    private static string? DirOf(string place) => place.LastIndexOf('/') is var at and > 0 ? place[..at] : null;
-
     // ---- where each piece goes ----------------------------------------------------------------
 
     /// <summary>Where a shot's clip goes, for one not placed yet: "Generated/s2.mp4", by its id, which doesn't change as the shots are put in another order.</summary>

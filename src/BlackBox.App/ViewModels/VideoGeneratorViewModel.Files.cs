@@ -1,6 +1,7 @@
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using BlackBox.Core.Video;
+using static BlackBox.Core.Strings;
 
 namespace BlackBox.App.ViewModels;
 
@@ -165,7 +166,6 @@ public sealed partial class VideoGeneratorViewModel
         RefreshViewer();
     }
 
-    private static string Capital(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
     /// <summary>A title in a sentence: "clip 3", "the song", "start of clip 2"; a name ("Marco") as it is.</summary>
     private static string Lower(string s) =>

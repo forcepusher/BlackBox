@@ -141,7 +141,7 @@ public class DiffTests : IDisposable
         File.Delete(Path.Combine(repo, "src", "b.txt"));
         Git(repo, "add", "src/b.txt");
 
-        var all = await GitDiff.ChangesAsync(new DiffRequest(repo), default);
+        var all = await GitDiff.ChangesAsync(new DiffRequest(repo), TestContext.Current.CancellationToken);
         Assert.Equal("Uncommitted changes", all.Title);
         Assert.Equal(Path.GetFullPath(repo), all.Root, ignoreCase: true);
         Assert.Equal(["a.txt", "src/b.txt"], all.Files.Select(f => f.Path));
@@ -150,32 +150,32 @@ public class DiffTests : IDisposable
         Assert.True(all.NewIsOnDisk);
         Assert.Equal(7, all.Files[0].Lines.Single(l => l.Kind == DiffLineKind.Added).New);
 
-        var staged = await GitDiff.ChangesAsync(new DiffRequest(repo, Staged: true), default);
+        var staged = await GitDiff.ChangesAsync(new DiffRequest(repo, Staged: true), TestContext.Current.CancellationToken);
         Assert.Equal("src/b.txt", Assert.Single(staged.Files).Path);
         Assert.False(staged.NewIsOnDisk);
 
         // A file's path narrows it to that file; a deleted one's too.
-        Assert.Equal("src/b.txt", Assert.Single((await GitDiff.ChangesAsync(new DiffRequest(Path.Combine(repo, "src", "b.txt")), default)).Files).Path);
+        Assert.Equal("src/b.txt", Assert.Single((await GitDiff.ChangesAsync(new DiffRequest(Path.Combine(repo, "src", "b.txt")), TestContext.Current.CancellationToken)).Files).Path);
 
-        var commit = await GitDiff.ChangesAsync(new DiffRequest(repo, Commit: "HEAD"), default);
+        var commit = await GitDiff.ChangesAsync(new DiffRequest(repo, Commit: "HEAD"), TestContext.Current.CancellationToken);
         Assert.StartsWith("Commit ", commit.Title);
         Assert.Contains("by Tester", commit.About);
         Assert.Contains("Second: TWO and six\n\nWith a body.", commit.About);
         Assert.Equal(["a.txt", "src/b.txt"], commit.Files.Select(f => f.Path));
         Assert.Equal((2, 1), (commit.Files[0].Added, commit.Files[0].Removed));
         // The first commit has no parent: all of it is new.
-        var first = await GitDiff.ChangesAsync(new DiffRequest(repo, Commit: "HEAD~1"), default);
+        var first = await GitDiff.ChangesAsync(new DiffRequest(repo, Commit: "HEAD~1"), TestContext.Current.CancellationToken);
         Assert.All(first.Files, f => Assert.Equal("added", f.Status));
 
-        var since = await GitDiff.ChangesAsync(new DiffRequest(repo, Against: "HEAD~1"), default);
+        var since = await GitDiff.ChangesAsync(new DiffRequest(repo, Against: "HEAD~1"), TestContext.Current.CancellationToken);
         Assert.Equal("Changes since HEAD~1", since.Title);
         Assert.Equal("a.txt", Assert.Single(since.Files).Path); // b.txt came after it and is gone again
 
-        await Assert.ThrowsAsync<DiffException>(() => GitDiff.ChangesAsync(new DiffRequest(repo, Against: "--output=x.txt"), default));
+        await Assert.ThrowsAsync<DiffException>(() => GitDiff.ChangesAsync(new DiffRequest(repo, Against: "--output=x.txt"), TestContext.Current.CancellationToken));
         Assert.False(File.Exists(Path.Combine(repo, "x.txt")));
-        var none = await Assert.ThrowsAsync<DiffException>(() => GitDiff.ChangesAsync(new DiffRequest(repo, Commit: "nosuch"), default));
+        var none = await Assert.ThrowsAsync<DiffException>(() => GitDiff.ChangesAsync(new DiffRequest(repo, Commit: "nosuch"), TestContext.Current.CancellationToken));
         Assert.Contains("no commit \"nosuch\"", none.Message);
-        var outside = await Assert.ThrowsAsync<DiffException>(() => GitDiff.ChangesAsync(new DiffRequest(_root), default));
+        var outside = await Assert.ThrowsAsync<DiffException>(() => GitDiff.ChangesAsync(new DiffRequest(_root), TestContext.Current.CancellationToken));
         Assert.True(outside.NotRepository);
 
         // A repository with nothing committed yet: what is added is all new.
@@ -184,7 +184,7 @@ public class DiffTests : IDisposable
         Git(fresh, "init", "-q");
         File.WriteAllText(Path.Combine(fresh, "first.txt"), "hello\n");
         Git(fresh, "add", "first.txt");
-        var added = Assert.Single((await GitDiff.ChangesAsync(new DiffRequest(fresh), default)).Files);
+        var added = Assert.Single((await GitDiff.ChangesAsync(new DiffRequest(fresh), TestContext.Current.CancellationToken)).Files);
         Assert.Equal(("first.txt", "added", 1), (added.Path, added.Status, added.Added));
     }
 
@@ -201,7 +201,7 @@ public class DiffTests : IDisposable
         File.WriteAllText(Path.Combine(repo, "big.txt"), string.Concat(Enumerable.Range(1, 2_000).Select(i => $"line number {i} of the big file\n")));
 
         var tool = new DiffTool();
-        var result = await tool.ExecuteAsync(new JsonObject { ["path"] = repo }, Ctx(_root), default);
+        var result = await tool.ExecuteAsync(new JsonObject { ["path"] = repo }, Ctx(_root), TestContext.Current.CancellationToken);
         Assert.False(result.IsError, result.Text);
         var lines = result.Text.Split('\n');
         Assert.Equal($"Uncommitted changes in {Path.GetFullPath(repo)}: 2 files changed, 2001 lines added, 1 removed", lines[0]);
@@ -212,17 +212,17 @@ public class DiffTests : IDisposable
         var more = System.Text.RegularExpressions.Regex.Match(result.Text, @"diff with start=(\d+) reads on");
         Assert.True(more.Success, result.Text[^300..]);
 
-        var next = await tool.ExecuteAsync(new JsonObject { ["path"] = repo, ["start"] = int.Parse(more.Groups[1].Value) }, Ctx(_root), default);
+        var next = await tool.ExecuteAsync(new JsonObject { ["path"] = repo, ["start"] = int.Parse(more.Groups[1].Value) }, Ctx(_root), TestContext.Current.CancellationToken);
         Assert.StartsWith("(characters ", next.Text);
         Assert.Contains("going on in big.txt (modified)", next.Text.Split('\n')[0]);
         Assert.StartsWith("+line number", next.Text.Split('\n')[1]);
 
-        var summary = await tool.ExecuteAsync(new JsonObject { ["path"] = repo, ["summary"] = true }, Ctx(_root), default);
+        var summary = await tool.ExecuteAsync(new JsonObject { ["path"] = repo, ["summary"] = true }, Ctx(_root), TestContext.Current.CancellationToken);
         Assert.Equal(3, summary.Text.Split('\n').Length);
-        var commit = await tool.ExecuteAsync(new JsonObject { ["path"] = repo, ["commit"] = "HEAD~1" }, Ctx(_root), default);
+        var commit = await tool.ExecuteAsync(new JsonObject { ["path"] = repo, ["commit"] = "HEAD~1" }, Ctx(_root), TestContext.Current.CancellationToken);
         Assert.Contains("Second: TWO and six", commit.Text);
 
-        var outside = await tool.ExecuteAsync(new JsonObject { ["path"] = _root }, Ctx(_root), default);
+        var outside = await tool.ExecuteAsync(new JsonObject { ["path"] = _root }, Ctx(_root), TestContext.Current.CancellationToken);
         Assert.True(outside.IsError);
         Assert.Contains("give the second one as other", outside.Text);
     }
@@ -243,7 +243,7 @@ public class DiffTests : IDisposable
         File.WriteAllBytes(Path.Combine(after, "pic.bin"), [1, 0, 3]);
 
         var tool = new DiffTool();
-        var result = await tool.ExecuteAsync(new JsonObject { ["path"] = before, ["other"] = after }, Ctx(_root), default);
+        var result = await tool.ExecuteAsync(new JsonObject { ["path"] = before, ["other"] = after }, Ctx(_root), TestContext.Current.CancellationToken);
         Assert.False(result.IsError, result.Text);
         var lines = result.Text.Split('\n');
         Assert.Equal($"How {after} differs from {before}: 4 files changed, 3 lines added, 2 removed", lines[0]);
@@ -253,7 +253,7 @@ public class DiffTests : IDisposable
         // Two files: only the encoding differs.
         File.WriteAllText(Path.Combine(_root, "x1.txt"), "same\n");
         File.WriteAllText(Path.Combine(_root, "x2.txt"), "same\r\n");
-        var endings = await tool.ExecuteAsync(new JsonObject { ["path"] = Path.Combine(_root, "x1.txt"), ["other"] = Path.Combine(_root, "x2.txt") }, Ctx(_root), default);
+        var endings = await tool.ExecuteAsync(new JsonObject { ["path"] = Path.Combine(_root, "x1.txt"), ["other"] = Path.Combine(_root, "x2.txt") }, Ctx(_root), TestContext.Current.CancellationToken);
         Assert.Contains("Only the encoding or the line endings differ.", endings.Text);
     }
 

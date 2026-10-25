@@ -4,6 +4,7 @@ using BlackBox.Core.Documents;
 using BlackBox.Core.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using static BlackBox.Core.Strings;
 
 namespace BlackBox.App.ViewModels;
 
@@ -545,7 +546,6 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
     /// <summary>"lines 12-20", "cells B4:C4"; "selected text" in a document's text, whose lines aren't the file's.</summary>
     private string Where(DocumentPick pick) => _shown == Shown.TextOnly ? "selected text" : pick.Where;
 
-    private static string Capital(string text) => text.Length > 0 ? char.ToUpperInvariant(text[0]) + text[1..] : text;
 
     /// <summary>
     /// An area marked by a drag, on page <see cref="DocumentArea.Page"/> of the PDF, the picture, the

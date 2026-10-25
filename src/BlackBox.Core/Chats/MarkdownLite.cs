@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using static BlackBox.Core.Chats.MarkdownSyntax;
 
 namespace BlackBox.Core.Chats;
 
@@ -268,7 +269,7 @@ public static partial class MarkdownLite
                     continue;
                 }
             }
-            if (c == '*' && OpensItalic(text, i) && FindItalicEnd(text, i + 1) is var close and > 0)
+            if (c == '*' && OpensItalic(text, i) && FindItalicEnd(text, i + 1, '*') is var close and > 0)
             {
                 Flush(style);
                 spans.AddRange(Inline(text[(i + 1)..close], style | MdStyle.Italic));
@@ -300,26 +301,7 @@ public static partial class MarkdownLite
         return spans;
     }
 
-    private static char At(string s, int i) => i < s.Length ? s[i] : ' ';
-
-    /// <summary>A single * that starts a word ("*very*"), not one in "5 * 3" or "*.txt" or "a*b".</summary>
-    private static bool OpensItalic(string s, int i) =>
-        (i == 0 || char.IsWhiteSpace(s[i - 1]) || "([\"'".Contains(s[i - 1])) && At(s, i + 1) is var next && char.IsLetterOrDigit(next);
-
-    private static int FindItalicEnd(string s, int from)
-    {
-        for (var j = from + 1; j < s.Length; j++)
-        {
-            if (s[j] != '*' || (j + 1 < s.Length && s[j + 1] == '*')) continue;
-            if (!char.IsWhiteSpace(s[j - 1]) && (j + 1 == s.Length || !char.IsLetterOrDigit(s[j + 1])))
-                return j;
-        }
-        return -1;
-    }
-
     // ---- tables ------------------------------------------------------------------------------
-
-    private static bool IsTableRow(string line) => line.TrimStart().StartsWith('|') && line.Trim().Length > 1;
 
     /// <summary>
     /// Rows with their columns lined up in monospace; the header bold, the |---| line left out. Each

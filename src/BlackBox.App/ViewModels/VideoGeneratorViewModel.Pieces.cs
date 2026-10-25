@@ -1,6 +1,7 @@
 using BlackBox.Core.Video;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using static BlackBox.Core.Strings;
 
 namespace BlackBox.App.ViewModels;
 

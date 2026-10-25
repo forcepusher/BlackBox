@@ -120,8 +120,6 @@ internal sealed class FolderIndex
             return _termIds.GetValueOrDefault(term, -1);
     }
 
-    internal string TermName(int id) => _terms[id];
-
     private int Intern(string term)
     {
         if (_termIds.TryGetValue(term, out var id))

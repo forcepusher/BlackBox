@@ -94,10 +94,6 @@ internal sealed partial class FreshLook(OpenAiChatClient client, ChatRequestOpti
     public Task<string?> AskAsync(IReadOnlyList<byte[]> pictures, string question, CancellationToken ct) =>
         AskAsync("You look at pictures carefully and say plainly what you see, faults included. You don't praise what isn't good.", question, pictures, 8192, TimeSpan.FromMinutes(5), ct);
 
-    /// <summary>A question without a picture, in a conversation of its own; only the answer comes back, or null when the request failed.</summary>
-    public Task<string?> AskTextAsync(string question, CancellationToken ct) =>
-        AskAsync("You answer exactly what is asked, briefly.", question, [], 4096, TimeSpan.FromMinutes(2), ct);
-
     /// <summary>
     /// A question in a conversation of its own, with its own instructions and pictures or none:
     /// only the answer comes back (the thinking before it left out), or null when the request failed.

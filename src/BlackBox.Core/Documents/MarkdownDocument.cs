@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using static BlackBox.Core.Chats.MarkdownSyntax;
 
 namespace BlackBox.Core.Documents;
 
@@ -269,26 +270,7 @@ internal static partial class MarkdownDocument
         return spans;
     }
 
-    private static char At(string s, int i) => i < s.Length ? s[i] : ' ';
-
-    /// <summary>A single * or _ that starts a word ("*very*"), not one in "5 * 3", "*.txt" or "snake_case".</summary>
-    private static bool OpensItalic(string s, int i) =>
-        (i == 0 || char.IsWhiteSpace(s[i - 1]) || "([\"'".Contains(s[i - 1])) && char.IsLetterOrDigit(At(s, i + 1));
-
-    private static int FindItalicEnd(string s, int from, char marker)
-    {
-        for (var j = from + 1; j < s.Length; j++)
-        {
-            if (s[j] != marker || (j + 1 < s.Length && s[j + 1] == marker)) continue;
-            if (!char.IsWhiteSpace(s[j - 1]) && (j + 1 == s.Length || !char.IsLetterOrDigit(s[j + 1])))
-                return j;
-        }
-        return -1;
-    }
-
     // ---- tables ------------------------------------------------------------------------------------
-
-    private static bool IsTableRow(string line) => line.TrimStart().StartsWith('|') && line.Trim().Length > 1;
 
     private static TableBlock Table(List<string> lines)
     {
