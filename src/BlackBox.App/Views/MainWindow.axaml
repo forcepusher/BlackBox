@@ -95,6 +95,15 @@
       <Setter Property="Foreground" Value="{StaticResource BbAccent}" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+    <!-- On a card from an open tool (a pick, or what the message is about there): points at its panel,
+         which docks left of the chat. 4 from the icon after it. -->
+    <Style Selector="Border.attachment PathIcon.toolArrow">
+      <Setter Property="Width" Value="8" />
+      <Setter Property="Height" Value="8" />
+      <Setter Property="Margin" Value="0,0,-4,0" />
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+      <Setter Property="Data" Value="M16 4 6 12 16 20z" />
+    </Style>
     <Style Selector="Button.removeAttachment">
       <Setter Property="Width" Value="20" />
       <Setter Property="Height" Value="20" />
@@ -477,8 +486,24 @@
                     <TextBlock Classes="muted" Text="{Binding Via}" IsVisible="{Binding HasVia}" FontSize="12" TextWrapping="Wrap" />
                     <!-- The files that came with it: a picture as itself, anything else by its name; a click opens it.
                          A tool's pick shows as what it is there, and with nothing picked, the card of what
-                         the message was about in the tool follows, as they showed over the box. -->
+                         the message was about in the tool; either comes first, as they showed over the box. -->
                     <WrapPanel IsVisible="{Binding HasAttachments}" HorizontalAlignment="Right" Margin="0,4,0,0">
+                    <ItemsControl ItemsSource="{Binding Wholes}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ToolCardItem">
+                          <Border Classes="attachment file" Margin="6,0,0,6" ToolTip.Tip="{Binding Tip}" AutomationProperties.Name="{Binding Title}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                              <PathIcon Classes="toolArrow" />
+                              <PathIcon Data="{Binding Icon}" />
+                              <StackPanel Spacing="1">
+                                <TextBlock Text="{Binding Title}" MaxWidth="260" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Classes="muted" Text="{Binding Details}" />
+                              </StackPanel>
+                            </StackPanel>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                     <ItemsControl ItemsSource="{Binding Attachments}">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -500,6 +525,7 @@
                               </Border>
                               <Border Classes="attachment file" IsVisible="{Binding ShowsName}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
+                                  <PathIcon Classes="toolArrow" IsVisible="{Binding Picked}" />
                                   <PathIcon Data="{Binding Icon}" />
                                   <StackPanel Spacing="1">
                                     <TextBlock Text="{Binding Title}" MaxWidth="260" TextTrimming="CharacterEllipsis" />
@@ -509,21 +535,6 @@
                               </Border>
                             </Panel>
                           </Button>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <ItemsControl ItemsSource="{Binding Wholes}">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:ToolCardItem">
-                          <Border Classes="attachment file" Margin="6,0,0,6" ToolTip.Tip="{Binding Tip}" AutomationProperties.Name="{Binding Title}">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                              <PathIcon Data="{Binding Icon}" />
-                              <StackPanel Spacing="1">
-                                <TextBlock Text="{Binding Title}" MaxWidth="260" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Classes="muted" Text="{Binding Details}" />
-                              </StackPanel>
-                            </StackPanel>
-                          </Border>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -835,6 +846,27 @@
                  item keeps room above and to its right for the × that sits over its corner: the
                  list clips what goes past its edges, and the ×'s top was cut off. -->
             <WrapPanel Grid.Row="0" Grid.ColumnSpan="3" IsVisible="{Binding ShowsBoxRow}" Margin="4,2,4,6">
+              <!-- With nothing picked in the open tool, what a message is about there (the whole video, the document shown;
+                   the tool itself while it shows nothing), as a pick shows and where it would come: before the user's own files. -->
+              <ContentControl Content="{Binding WholeCard}" IsVisible="{Binding ShowsWhole}">
+                <ContentControl.ContentTemplate>
+                  <DataTemplate x:DataType="vm:ToolCardItem">
+                    <Panel Margin="0,8,12,0" ToolTip.Tip="{Binding Tip}">
+                      <Border Classes="attachment file" MinHeight="36" AutomationProperties.Name="{Binding Title}">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,10,0">
+                          <PathIcon Classes="toolArrow" />
+                          <PathIcon Data="{Binding Icon}" />
+                          <StackPanel Spacing="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}" MaxWidth="220" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Classes="muted" Text="{Binding Details}" />
+                          </StackPanel>
+                        </StackPanel>
+                      </Border>
+                    </Panel>
+                  </DataTemplate>
+                </ContentControl.ContentTemplate>
+              </ContentControl>
+              <!-- A tool's picks come first in the list (see MainWindowViewModel.Pick). -->
               <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
@@ -855,6 +887,7 @@
                       </Border>
                       <Border Classes="attachment file" IsVisible="{Binding ShowsName}" MinHeight="36">
                         <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,10,0">
+                          <PathIcon Classes="toolArrow" IsVisible="{Binding Picked}" />
                           <PathIcon Data="{Binding Icon}" />
                           <StackPanel Spacing="1" VerticalAlignment="Center">
                             <TextBlock Text="{Binding Title}" MaxWidth="220" TextTrimming="CharacterEllipsis" />
@@ -871,25 +904,6 @@
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-              <!-- With nothing picked in the open tool, what a message is about there (the whole video, the document shown;
-                   the tool itself while it shows nothing), as a pick shows and where it would come: after the user's own files. -->
-              <ContentControl Content="{Binding WholeCard}" IsVisible="{Binding ShowsWhole}">
-                <ContentControl.ContentTemplate>
-                  <DataTemplate x:DataType="vm:ToolCardItem">
-                    <Panel Margin="0,8,12,0" ToolTip.Tip="{Binding Tip}">
-                      <Border Classes="attachment file" MinHeight="36" AutomationProperties.Name="{Binding Title}">
-                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,10,0">
-                          <PathIcon Data="{Binding Icon}" />
-                          <StackPanel Spacing="1" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding Title}" MaxWidth="220" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Classes="muted" Text="{Binding Details}" />
-                          </StackPanel>
-                        </StackPanel>
-                      </Border>
-                    </Panel>
-                  </DataTemplate>
-                </ContentControl.ContentTemplate>
-              </ContentControl>
             </WrapPanel>
             <!-- Files go with a message from here too, besides dropping them on the window or pasting them. -->
             <Button x:Name="AttachButton" Grid.Row="1" Grid.Column="0" Classes="ghost" BorderThickness="0" Padding="6" Margin="0,0,4,0" VerticalAlignment="Bottom" MinHeight="32"

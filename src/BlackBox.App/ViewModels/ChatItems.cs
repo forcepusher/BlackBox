@@ -81,16 +81,19 @@ public sealed class UserMessageItem(string text, IReadOnlyList<string>? files = 
     public UserInput Input => new(Text, Files) { Via = Via, Context = Context, Cards = Cards };
 
     /// <summary>
-    /// The files as their cards, a pick by what it is in the tool ("Lines 12-18 · DiffTool.cs"), then
-    /// the picks that have no file yet (a shot not made).
+    /// The files as their cards, the tool's first as over the box (the user, 2026-10-26): a pick by what
+    /// it is in the tool ("Lines 12-18 · DiffTool.cs"), the picks that have no file yet (a shot not
+    /// made), then the user's own files.
     /// </summary>
     public IReadOnlyList<AttachmentItem> Attachments { get; } =
     [
-        .. (files ?? []).Select(f => new AttachmentItem(f, picked: cards?.FirstOrDefault(c => string.Equals(c.Path, f, StringComparison.OrdinalIgnoreCase))?.Title)),
+        .. (files ?? []).Select(f => (File: f, Card: cards?.FirstOrDefault(c => string.Equals(c.Path, f, StringComparison.OrdinalIgnoreCase))))
+            .Where(p => p.Card is not null).Select(p => new AttachmentItem(p.File, picked: p.Card!.Title)),
         .. (cards ?? []).Where(c => c.Path is { } p && files?.Contains(p, StringComparer.OrdinalIgnoreCase) != true).Select(c => new AttachmentItem(c.Path!, picked: c.Title)),
+        .. (files ?? []).Where(f => cards?.Any(c => string.Equals(c.Path, f, StringComparison.OrdinalIgnoreCase)) != true).Select(f => new AttachmentItem(f)),
     ];
 
-    /// <summary>With nothing picked in the open tool, what the message was about there, after the files.</summary>
+    /// <summary>With nothing picked in the open tool, what the message was about there, before the files.</summary>
     public IReadOnlyList<ToolCardItem> Wholes { get; } = (cards ?? []).Where(c => c.Path is null).Select(c => new ToolCardItem(c)).ToList();
 
     public bool HasAttachments => Attachments.Count > 0 || Wholes.Count > 0;

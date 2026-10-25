@@ -821,9 +821,13 @@ timeline, is a chip under the box ("The start of shot 1 · Moon start.png", "not
 piece planned), a click away or Esc takes it off, another pick takes its place, and sent, it goes with the message
 (a piece not made yet as its place, with no file). With nothing picked, the same chip stands there for
 the video itself (`IToolkit.Whole`: its name, "whole video", "· not made yet" until it is joined,
-no ×), after the user's own files where a pick would come, so the row keeps its height when a pick
+no ×), where a pick would come, so the row keeps its height when a pick
 takes its place; it shows what the model is told then, the whole video (the user, 2026-10-25), and
-goes with the panel. A message sent while Video editor is open carries
+goes with the panel. A tool's cards, this one or the picks, come before the user's own files, over
+the box and in the sent bubble, and each has a small muted ◀ at its left, pointing at the panel it
+comes from (the user, 2026-10-26; style `PathIcon.toolArrow`, 8 px, 4 px from the icon). Checked in
+the app on 2026-10-26 with File inspector and Video editor open and a pasted file of the user's.
+A message sent while Video editor is open carries
 the video (`IToolkit.About`): over its bubble (`UserInput.Via`, "Video editor · The Fox and the Moon ·
 shot 2"), and for the model before the words (`UserInput.Context`) the video's folder, what each
 pick is in it (shot s2, the 2nd of 3, from 5 to 9 s, its clip or its folder; frame f1, the start of

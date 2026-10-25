@@ -165,7 +165,8 @@ public sealed partial class MainWindowViewModel
             // added and the message lost what was picked in it (BlackBox's own review of the File changes panel).
             foreach (var same in Attachments.Where(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase)).ToList())
                 RemoveAttachment(same);
-            Attachments.Add(new AttachmentItem(path, RemoveAttachment, caption));
+            // After the other picks, before the user's own files: what comes from the tool goes first (the user, 2026-10-26).
+            Attachments.Insert(Attachments.Count(a => a.Picked), new AttachmentItem(path, RemoveAttachment, caption));
         }
     }
 

@@ -109,6 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Inspect file is now called **File inspector**.
 - What you pick in a toolkit panel has no × in the chat's box: unpick it in the panel (a click away, or Esc).
+- A toolkit panel's card comes before your own files, in the box and in the sent message, with a small arrow toward its panel.
 - The **Toolkit** dropdown reads None, File changes, File inspector, Video editor.
 - Asked for code, commands or facts that change (versions, prices, news), the agent looks them up
   on the web before it answers, rather than writing them from memory.
