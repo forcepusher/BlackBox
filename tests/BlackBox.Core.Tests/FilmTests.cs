@@ -1206,7 +1206,7 @@ public sealed class FilmToolTests : IDisposable
         Assert.Contains("keeps the name \"Dawn Tea\"", taken.Text);
         Assert.Equal("a cup steams", Storyboard.Load(Path.Combine(films, "Coffee")).Shots[0].Prompt);
 
-        // The Filmmaking window's new film (empty s1, f1, f2), read with its path, then laid out
+        // The Video editor window's new film (empty s1, f1, f2), read with its path, then laid out
         // without one: in place.
         var blank = Storyboard.New(Path.Combine(films, "New film"), "New film");
         blank.Save();

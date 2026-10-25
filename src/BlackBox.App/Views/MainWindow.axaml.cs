@@ -559,7 +559,7 @@ public partial class MainWindow : Window
             if (WindowState == WindowState.Normal && screen is not null)
             {
                 var area = screen.WorkingArea;
-                // As tall as the panel needs (Filmmaking's viewer over its timeline), kept on the screen.
+                // As tall as the panel needs (Video editor's viewer over its timeline), kept on the screen.
                 if (Height < tall && tall <= area.Height / scaling - 40)
                 {
                     Height = tall;
@@ -619,7 +619,7 @@ public partial class MainWindow : Window
     /// <summary>
     /// Moves the window and sets its width in one step, laid out at once for the new size. Set one
     /// after the other, Position moved it at once and Width only at the next layout, which the
-    /// Filmmaking panel took a tenth of a second over: the chat jumped sideways with the window, then
+    /// Video editor panel took a tenth of a second over: the chat jumped sideways with the window, then
     /// the window grew with nothing drawn in it, and then the chat jumped back with the panel beside it.
     /// </summary>
     private void Place(PixelPoint position, double width)

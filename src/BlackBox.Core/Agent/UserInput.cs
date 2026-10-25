@@ -14,14 +14,14 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
     public UserInput(string text) : this(text, []) { }
 
     /// <summary>
-    /// Where it was written, when not in the chat's own box ("Filmmaking · The Fox and the Moon ·
+    /// Where it was written, when not in the chat's own box ("Video editor · The Fox and the Moon ·
     /// shot 2"): shown over it in the chat. Null for a message typed in the chat.
     /// </summary>
     public string? Via { get; init; }
 
     /// <summary>
     /// What the model is told with it, before the user's words, and the chat doesn't show: where it
-    /// was written and what it is about (the film and the piece picked in the Filmmaking panel).
+    /// was written and what it is about (the film and the piece picked in the Video editor panel).
     /// </summary>
     public string? Context { get; init; }
 

@@ -23,7 +23,7 @@ public sealed class FilmStillRunningException(string message) : Exception(messag
 /// <summary>
 /// Makes a film's pieces with ComfyUI: each frame, each shot's clip and the songs, every one with a
 /// workflow of its own kept beside what it made, its seed fixed, so running it again makes the same
-/// thing. Shared by the Filmmaking panel and the film tool.
+/// thing. Shared by the Video editor panel and the film tool.
 /// </summary>
 public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
 {
@@ -487,7 +487,7 @@ public sealed partial class FilmMaker(ComfyHub hub, IMediaDecoder? media)
         }
         var best = made.MaxBy(m => scores?.GetValueOrDefault(m.File)?.Musicality ?? 0);
         sound.Seed = best.Seed;
-        // How each sounds, kept with it: the Filmmaking panel shows it with the song and its takes.
+        // How each sounds, kept with it: the Video editor panel shows it with the song and its takes.
         foreach (var m in made)
             if (scores?.GetValueOrDefault(m.File) is { } heard)
                 FilmTakes.RememberLook(m.Workflow, heard.Musicality < SongScore.Good ? "redo" : "good", heard.Describe());

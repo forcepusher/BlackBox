@@ -6,7 +6,7 @@ namespace BlackBox.Platform.Windows;
 
 /// <summary>
 /// Keeps BlackBox's windows visible to the user but out of the agent's way: the main window, the
-/// full-screen viewer, Filmmaking and dialogs, of every chat window.
+/// full-screen viewer, Video editor and dialogs, of every chat window.
 /// <list type="bullet">
 /// <item>Screenshots show what is behind them (see <see cref="WindowsScreenCapture"/>).</item>
 /// <item>When a click or drag lands on one, it is pushed to the bottom of the z-order for that action.</item>

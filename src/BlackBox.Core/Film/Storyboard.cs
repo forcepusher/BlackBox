@@ -9,7 +9,7 @@ namespace BlackBox.Core.Film;
 /// last one in so many seconds, the pictures they start and end on, and the sounds laid over them.
 /// The film is its folder (see StoryboardFolder.cs): References with the pictures frames are made
 /// from, Takes with a folder for each shot ("Take 1"), and Sounds, each file with a .json beside it saying what it is
-/// and how it was made, and its ComfyUI workflow; the Filmmaking panel and the film tool both read
+/// and how it was made, and its ComfyUI workflow; the Video editor panel and the film tool both read
 /// and write it. Here it is the whole film at once, as the agent writes and reads it in JSON.
 /// </summary>
 public sealed partial class Storyboard
@@ -155,7 +155,7 @@ public sealed partial class Storyboard
     /// <summary>
     /// The pictures from outside the film that frames are made from, named in "from" by their full
     /// paths (one the user attached to a message), copied into References as they are (see
-    /// <see cref="KeepPicture"/>), as one dropped on the Filmmaking panel goes; "from" names the copy
+    /// <see cref="KeepPicture"/>), as one dropped on the Video editor panel goes; "from" names the copy
     /// then ("CarlLineup.png"). Told only that from takes pictures in References, the model
     /// cut one figure out of the user's lineup of four and saved that there as the source; and a
     /// pasted picture goes with its chat when the chat is deleted. Called once the film is saved, so
