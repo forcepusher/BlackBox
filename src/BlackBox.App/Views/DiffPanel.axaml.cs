@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using BlackBox.App.ViewModels;
 
@@ -61,5 +62,21 @@ public partial class DiffPanel : UserControl
     {
         if (FileList.SelectedItem is DiffFileItem file)
             _vm?.GoToCommand.Execute(file);
+    }
+
+    /// <summary>
+    /// A right-click on a file: Show in folder, in the look of the Video editor's menus. A deleted
+    /// file has nothing to show, so the entry is greyed out.
+    /// </summary>
+    private void OnFileMenu(object? sender, ContextRequestedEventArgs e)
+    {
+        if ((e.Source as Control)?.FindLogicalAncestorOfType<ListBoxItem>(includeSelf: true) is not { DataContext: DiffFileItem file } item)
+            return;
+        e.Handled = true;
+        var show = new MenuItem { Header = "Show in folder", IsEnabled = File.Exists(file.FullPath) };
+        show.Click += (_, _) => FilePreview.ShowInFolder(file.FullPath);
+        var menu = new ContextMenu();
+        menu.Items.Add(show);
+        menu.Open(item);
     }
 }

@@ -1947,6 +1947,10 @@ in two files), Shift or Ctrl held (they add), and any click in the chat, as the 
 ask about them. A plain click on a picked line picks only it; clicked again it stays picked. Lines
 and files handle their own presses, so the panel's handler only sees what no control took
 (scrollbars and the splitter keep the pick too); checked with real clicks on 2026-10-25.
+A right-click on a file in the list offers **Show in folder** (the user, 2026-10-25): Explorer
+opens on its folder with it selected, through the file cards' `FilePreview.ShowInFolder`; greyed
+out for a deleted file. The menu is a plain `ContextMenu`, as the Video editor's are; checked
+with a real right-click on 2026-10-26.
 
 **Checked on qwen3.8** (2026-10-24, blackbox-cli): asked to review the commit that added all this, it
 listed the commit with `diff summary=true`, then read the whole diff (about 110,000 characters) in 11
