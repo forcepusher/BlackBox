@@ -289,7 +289,12 @@ view so a moving model doesn't jump about. Not read: blend shapes (noted), NURBS
 animation layers past the first. Checked with Blender 5.2's exporter (.dev\autopick): a textured box
 and cone, the same exported Z-up (same bounds), and a two-bone arm bending 90° at the elbow beside a
 ball keyed on its own, which posed as Blender showed it; unit tests write text and binary 7.4/7.5
-files themselves.
+files themselves. Then (the user's OK, 2026-10-26) ten of Assimp's test FBX files (BSD, from its
+GitHub test/models/FBX): Maya's and 3ds Max's text 7.5/7.7 with pivots, mirroring and a Z-up
+pre-rotation, Blender's binary ones with skeletons (huesitos' 8 bones bending, a 14-bone bar
+waving), a spider; all read, the binary ones side by side with Blender's own importer's renders,
+alike (Blender reads no text FBX). Two fixes came of it: byte arrays (type "c"), and a skinned vertex
+at rest goes through its bones' worlds at the bind (TransformLink), not its mesh's node.
 
 ### Previews
 Files the agent makes or shows appear in the chat: under the tool call that made them, and under

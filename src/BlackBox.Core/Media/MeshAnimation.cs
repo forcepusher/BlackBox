@@ -110,8 +110,8 @@ internal sealed class MeshNode
     }
 }
 
-/// <summary>A bone of a skin: the node it follows, and the matrix from the mesh's space into the bone's at the bind pose.</summary>
-internal readonly record struct MeshBone(int Node, Matrix4x4 Bind);
+/// <summary>A bone of a skin: the node it follows, the matrix from the mesh's space into the bone's at the bind pose, and the bone's own world then (without the axes).</summary>
+internal readonly record struct MeshBone(int Node, Matrix4x4 Bind, Matrix4x4 Link);
 
 public sealed partial class Mesh
 {
@@ -173,6 +173,28 @@ public sealed partial class Mesh
             posed[i] = Vector3.Transform(source, world[VertexNodes[i]]);
         }
         return posed;
+    }
+
+    /// <summary>
+    /// The vertices at the bind pose, as the skin was made: a skinned one through its bones' worlds
+    /// then (the file's, which the nodes' own values at rest needn't match), any other through its node.
+    /// </summary>
+    internal void Rest()
+    {
+        var world = NodeWorlds(null, 0);
+        for (var i = 0; i < SourcePositions.Count; i++)
+        {
+            var source = SourcePositions[i];
+            if (VertexBones[i] is { Length: > 0 } influences && influences.Sum(b => b.Weight) is var weights and > 0)
+            {
+                var sum = Vector3.Zero;
+                foreach (var (bone, weight) in influences)
+                    sum += Vector3.Transform(source, Bones[bone].Bind * Bones[bone].Link * Axes) * weight;
+                Positions[i] = sum / weights;
+            }
+            else
+                Positions[i] = Vector3.Transform(source, world[VertexNodes[i]]);
+        }
     }
 
     /// <summary>Every node's world transform (with the axes) at <paramref name="time"/> of <paramref name="animation"/>, in the file's seconds; at rest with none.</summary>

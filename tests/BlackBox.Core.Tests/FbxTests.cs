@@ -122,7 +122,9 @@ public class FbxTests : IDisposable
             N("Objects", [],
                 N("Geometry", [100L, "Strip\0\u0001Geometry", "Mesh"],
                     N("Vertices", [new double[] { 0, 0, 0, 0.1, 0, 0, 0.1, 2, 0, 0, 2, 0 }]),
-                    N("PolygonVertexIndex", [new[] { 0, 1, 2, -4 }])),
+                    N("PolygonVertexIndex", [new[] { 0, 1, 2, -4 }]),
+                    // A byte array ("c"), as some exporters write material indices.
+                    N("LayerElementMaterial", [0], N("MappingInformationType", ["AllSame"]), N("Materials", [new sbyte[] { 0 }]))),
                 N("Model", [200L, "Strip\0\u0001Model", "Mesh"]),
                 N("Model", [210L, "Lower\0\u0001Model", "LimbNode"]),
                 N("Model", [220L, "Upper\0\u0001Model", "LimbNode"], Props(("Lcl Translation", [0.0, 1.0, 0.0]))),
@@ -259,6 +261,7 @@ public class FbxTests : IDisposable
             case float[] a: Array(w, 'f', a.SelectMany(BitConverter.GetBytes).ToArray(), a.Length, compress: false); break;
             case long[] a: Array(w, 'l', a.SelectMany(BitConverter.GetBytes).ToArray(), a.Length, compress: true); break;
             case int[] a: Array(w, 'i', a.SelectMany(BitConverter.GetBytes).ToArray(), a.Length, compress: false); break;
+            case sbyte[] a: Array(w, 'c', a.Select(x => (byte)x).ToArray(), a.Length, compress: false); break;
             default: throw new ArgumentException(p.GetType().Name);
         }
     }

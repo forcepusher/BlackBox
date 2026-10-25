@@ -118,13 +118,13 @@ public sealed partial class Mesh
                     var data = s.Slice(4, length);
                     return type == 'S' ? Encoding.UTF8.GetString(data) : data.ToArray();
                 }
-                case 'f' or 'd' or 'l' or 'i' or 'b':
+                case 'f' or 'd' or 'l' or 'i' or 'b' or 'c':
                 {
                     var count = (int)BinaryPrimitives.ReadUInt32LittleEndian(s);
                     var encoding = BinaryPrimitives.ReadUInt32LittleEndian(s[4..]);
                     var stored = (int)BinaryPrimitives.ReadUInt32LittleEndian(s[8..]);
                     at += 12 + stored;
-                    var size = type is 'd' or 'l' ? 8 : type == 'b' ? 1 : 4;
+                    var size = type is 'd' or 'l' ? 8 : type is 'b' or 'c' ? 1 : 4;
                     var raw = s.Slice(12, stored).ToArray();
                     if (encoding == 1)
                     {
@@ -160,6 +160,8 @@ public sealed partial class Mesh
                             for (var i = 0; i < count; i++) a[i] = BinaryPrimitives.ReadInt32LittleEndian(raw.AsSpan(i * 4));
                             return a;
                         }
+                        case 'c':
+                            return raw.Take(count).Select(x => (int)x).ToArray(); // bytes, as some exporters write small numbers
                         default:
                             return raw.Take(count).Select(x => x != 0).ToArray();
                     }
@@ -435,10 +437,7 @@ public sealed partial class Mesh
             if (objects.Values.Any(o => o.Name == "Deformer" && ClassOf(o) == "BlendShape"))
                 mesh.Notes.Add("its blend shapes aren't played");
 
-            // At rest: each vertex through its node.
-            var rest = mesh.NodeWorlds(null, 0);
-            for (var i = 0; i < mesh.SourcePositions.Count; i++)
-                mesh.Positions[i] = Vector3.Transform(mesh.SourcePositions[i], rest[mesh.VertexNodes[i]]);
+            mesh.Rest();
 
             ReadAnimations(mesh, objects.Values, ChildrenOf, nodeOf, FrameRate(settings));
             return mesh;
@@ -600,7 +599,7 @@ public sealed partial class Mesh
                     // The file keeps Transform in the bone's space (the FBX SDK hands it out as the mesh's
                     // world, TransformLink times it): from the mesh into the bone at the bind pose, as is.
                     var boneIndex = mesh.Bones.Count;
-                    mesh.Bones.Add(new MeshBone(boneNode, Matrix(cluster.Value("Transform"))));
+                    mesh.Bones.Add(new MeshBone(boneNode, Matrix(cluster.Value("Transform")), Matrix(cluster.Value("TransformLink"))));
                     weights ??= new List<(int, float)>[count];
                     for (var i = 0; i < indexes.Length; i++)
                         if (indexes[i] >= 0 && indexes[i] < count && (i < w.Length ? w[i] : 0) is var weight and > 0)
