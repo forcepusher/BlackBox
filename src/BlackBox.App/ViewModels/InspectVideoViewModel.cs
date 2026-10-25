@@ -44,7 +44,7 @@ public sealed partial class InspectVideoViewModel : ObservableObject, IDisposabl
     private double _sliderFrame;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FrameText), nameof(LastFrame))]
+    [NotifyPropertyChangedFor(nameof(FrameText), nameof(LastFrame), nameof(LongestFrameText))]
     private int _frameCount = 1;
 
     public int LastFrame => Math.Max(0, FrameCount - 1);
@@ -59,6 +59,12 @@ public sealed partial class InspectVideoViewModel : ObservableObject, IDisposabl
 
     /// <summary>"Frame 38 / 150 · 1.233 s".</summary>
     public string FrameText => $"Frame {FrameIndex + 1:N0} / {FrameCount:N0} · {TimeOf(FrameIndex).TotalSeconds:0.000} s";
+
+    /// <summary>
+    /// <see cref="FrameText"/> at its longest for this video (its last frame), which sizes the slot it
+    /// shows in: as it played, the text's width changed and the slider beside it wobbled (the user, 2026-10-25).
+    /// </summary>
+    public string LongestFrameText => $"Frame {FrameCount:N0} / {FrameCount:N0} · {TimeOf(LastFrame).TotalSeconds:0.000} s";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PlayIcon))]

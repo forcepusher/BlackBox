@@ -97,7 +97,12 @@
                 Command="{Binding ToggleSoundCommand}" ToolTip.Tip="Sound on or off" AutomationProperties.Name="Sound">
           <PathIcon Width="14" Height="14" Data="{Binding SoundIcon}" />
         </Button>
-        <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding FrameText}" FontSize="12" VerticalAlignment="Center" Margin="10,0,6,0" AutomationProperties.Name="Frame" />
+        <!-- Where it is, in a slot as wide as its longest text for this video (hidden under it), its
+             figures all as wide: the slider beside it keeps still as the text changes. -->
+        <Panel DockPanel.Dock="Right" Margin="10,0,6,0" VerticalAlignment="Center">
+          <TextBlock Text="{Binding LongestFrameText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
+          <TextBlock Classes="muted" Text="{Binding FrameText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" AutomationProperties.Name="Frame" />
+        </Panel>
         <Slider Minimum="0" Maximum="{Binding LastFrame}" Value="{Binding SliderFrame}" SmallChange="1" LargeChange="10" VerticalAlignment="Center" Margin="8,0,0,0"
                 AutomationProperties.Name="Frame slider" />
       </DockPanel>
