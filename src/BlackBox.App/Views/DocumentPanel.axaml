@@ -42,7 +42,23 @@
         <ContentControl Content="{Binding Media}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16" />
       </ScrollViewer>
 
-      <!-- PDF, Office files and web pages, drawn by Windows' previewer for them. -->
+      <!-- A PDF's pages, drawn by PDFium as they come on screen: the list makes only the pages in view. -->
+      <ScrollViewer IsVisible="{Binding Pages, Converter={x:Static ObjectConverters.IsNotNull}}" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="PDF pages">
+        <ItemsControl ItemsSource="{Binding Pages}" Margin="16,12,16,16">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <VirtualizingStackPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:PdfPageItem">
+              <views:PdfPageView HorizontalAlignment="Center" Margin="0,0,0,12" AutomationProperties.Name="{Binding}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <!-- Office files and web pages (and a PDF PDFium can't open), drawn by Windows' previewer for them. -->
       <views:ShellPreviewHost x:Name="Shell" Path="{Binding ShellPath}" IsVisible="{Binding ShellPath, Converter={x:Static ObjectConverters.IsNotNull}}" />
     </Panel>
   </DockPanel>

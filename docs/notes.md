@@ -1969,7 +1969,18 @@ by its extension, the formats BlackBox already reads and writes):
   kept whole, a .csv split at semicolons when its first line has more of them than commas.
 - Pictures: fitted to the panel, decoded 1600 wide. Animations, video, sound and 3D: the chat's own
   player for it (`FilePreview.For` at 1600), played and turned as in the chat.
-- PDF, Word, Excel, PowerPoint (and .doc/.xls/.ppt, OpenDocument, HTML, RTF): drawn by the previewer
+- PDF: drawn page by page by BlackBox with PDFium, Chrome's PDF engine (`PdfPages`, pdfium.dll from
+  the `bblanchon.PDFium.Win32` package, Apache-2.0/BSD, 7.5 MB; unpacked into Data/runtime with
+  the other native libraries in the single-file build). The pages are a virtualized list
+  (`PdfPageItem`, `PdfPageView`): a page is drawn 1400 pixels wide when it comes into the list and let
+  go of when it leaves, so a 300-page PDF scrolled end to end kept BlackBox at 295-400 MB. PDFium is
+  called under one lock (it isn't thread-safe) and reads the file from memory (its paths are in the
+  ANSI code page, and the file stays free to be written over). A PDF it can't open (damaged, a
+  password) goes to Windows' previewer below, then to its text. The user asked for an open-source
+  engine as PDF preview is "quite critical" (2026-10-25): Windows' PDF previewer is whatever the PDF
+  program registered, and Acrobat's failed on every PDF on the laptop. MuPDF (AGPL) and Poppler (GPL)
+  were ruled out by their licences, pdf.js by needing a browser view.
+- Word, Excel, PowerPoint (and .doc/.xls/.ppt, OpenDocument, HTML, RTF): drawn by the previewer
   Windows has for the kind, as in Explorer's preview pane (`ShellPreview`, `ShellPreviewHost`): a
   native window of the panel's in which Word's, Excel's, PowerPoint's (Office installed), the PDF
   reader's or Windows' own HTML previewer draws the file, faithful and with nothing added to
@@ -2015,7 +2026,9 @@ previewers keep WINWORD.EXE `-Embedding` running after they are let go, even aft
 from Explorer); Word automation (`New-Object -ComObject Word.Application`) still got its own Word and
 quit cleanly beside it. UI Automation walks into the previewer's window, which made whole-window
 searches of BlackBox's tree slow or fail while an Office file was shown: find elements before, or
-under ChatScroll.
+under ChatScroll. With PDFium (the same day): q3-report.pdf, a 3-page Intel overview with pictures and
+coloured headings, and a 300-page test PDF drew sharp at the panel's width, white pages on the dark
+panel, page 151 in place at half way.
 
 ### Web search
 A local model's memory of APIs is where it slips most (qwen3.8 writes Unity's `KeyCode.Left`, which
