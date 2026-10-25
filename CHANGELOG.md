@@ -96,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A × at the top right of Video editor, File changes and Inspect file closes the tool.
 
 ### Changed
+- The **Toolkit** dropdown reads None, File changes, Inspect file, Video editor.
 - Asked for code, commands or facts that change (versions, prices, news), the agent looks them up
   on the web before it answers, rather than writing them from memory.
 - A video's name is its folder's: renamed in Video editor, in Explorer, or by the agent giving it a

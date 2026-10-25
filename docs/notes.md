@@ -700,7 +700,8 @@ window to the left side instead of opening a new separate window... Use the main
 making... Put filmmaking button under Toolkit dropdown menu with None and Filmmaking options. There
 will be more tools extending to the left side of the screen later."). The **Toolkit** dropdown
 takes the place of the second BlackBox logo and name under the title bar, an arrow on it pointing
-left, where its tools open: None or Video editor (`ToolkitOption`, `IToolkit`, more to come). A muted "in development" beside it (the
+left, where its tools open: None or Video editor (`ToolkitOption`, `IToolkit`, more to come); it
+now reads None, File changes, Inspect file, Video editor (the user, 2026-10-26). A muted "in development" beside it (the
 user, 2026-10-24) says its tools are still being built: the header's `muted` text, 10 px right of
 the dropdown and centred on it. Its
 arrows are solid triangles, the left one and the dropdown's, as History's and every dropdown's are
