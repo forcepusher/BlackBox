@@ -470,10 +470,13 @@
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Right" />
                 <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="12,8" HorizontalAlignment="Right">
                   <StackPanel Spacing="6">
-                    <!-- Sent with Video editor open: which video, and what was picked in it. -->
+                    <!-- Sent with a tool open, in a chat saved before tools gave cards: which video, and what was picked in it. -->
                     <TextBlock Classes="muted" Text="{Binding Via}" IsVisible="{Binding HasVia}" FontSize="12" TextWrapping="Wrap" />
-                    <!-- The files that came with it: a picture as itself, anything else by its name; a click opens it. -->
-                    <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}" Margin="0,4,0,0">
+                    <!-- The files that came with it: a picture as itself, anything else by its name; a click opens it.
+                         A tool's pick shows as what it is there, and with nothing picked, the card of what
+                         the message was about in the tool follows, as they showed over the box. -->
+                    <WrapPanel IsVisible="{Binding HasAttachments}" HorizontalAlignment="Right" Margin="0,4,0,0">
+                    <ItemsControl ItemsSource="{Binding Attachments}">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                           <WrapPanel HorizontalAlignment="Right" />
@@ -496,7 +499,7 @@
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                   <PathIcon Data="{Binding Icon}" />
                                   <StackPanel Spacing="1">
-                                    <TextBlock Text="{Binding FileName}" MaxWidth="260" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Title}" MaxWidth="260" TextTrimming="CharacterEllipsis" />
                                     <TextBlock Classes="muted" Text="{Binding Details}" />
                                   </StackPanel>
                                 </StackPanel>
@@ -506,6 +509,22 @@
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding Wholes}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ToolCardItem">
+                          <Border Classes="attachment file" Margin="6,0,0,6" ToolTip.Tip="{Binding Tip}" AutomationProperties.Name="{Binding Title}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                              <PathIcon Data="{Binding Icon}" />
+                              <StackPanel Spacing="1">
+                                <TextBlock Text="{Binding Title}" MaxWidth="260" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Classes="muted" Text="{Binding Details}" />
+                              </StackPanel>
+                            </StackPanel>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    </WrapPanel>
                     <!-- The bubble's padding is the text's own, so a drag that starts in it selects too. -->
                     <SelectableTextBlock views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" Margin="-12,-8" Padding="12,8" />
                   </StackPanel>
@@ -840,7 +859,8 @@
                           </StackPanel>
                         </StackPanel>
                       </Border>
-                      <Button Classes="removeAttachment" Command="{Binding RemoveCommand}" ToolTip.Tip="Take it off the message"
+                      <!-- A tool's pick has none: it is unpicked in its panel (see AttachmentItem.CanRemove). -->
+                      <Button Classes="removeAttachment" Command="{Binding RemoveCommand}" IsVisible="{Binding CanRemove}" ToolTip.Tip="Take it off the message"
                               AutomationProperties.Name="{Binding FileName, StringFormat='Remove {0}'}">
                         <PathIcon Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
                       </Button>
@@ -848,19 +868,25 @@
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-              <!-- With nothing picked in the open tool, what a message is about there (the whole video, the document shown),
-                   as a pick shows and where it would come: after the user's own files. -->
-              <Panel Margin="0,8,12,0" IsVisible="{Binding ShowsWhole}" ToolTip.Tip="{Binding WholeTip}">
-                <Border Classes="attachment file" MinHeight="36" AutomationProperties.Name="{Binding WholeTitle}">
-                  <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,10,0">
-                    <PathIcon Data="{Binding WholeIcon}" />
-                    <StackPanel Spacing="1" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding WholeTitle}" MaxWidth="220" TextTrimming="CharacterEllipsis" />
-                      <TextBlock Classes="muted" Text="{Binding WholeDetails}" />
-                    </StackPanel>
-                  </StackPanel>
-                </Border>
-              </Panel>
+              <!-- With nothing picked in the open tool, what a message is about there (the whole video, the document shown;
+                   the tool itself while it shows nothing), as a pick shows and where it would come: after the user's own files. -->
+              <ContentControl Content="{Binding WholeCard}" IsVisible="{Binding ShowsWhole}">
+                <ContentControl.ContentTemplate>
+                  <DataTemplate x:DataType="vm:ToolCardItem">
+                    <Panel Margin="0,8,12,0" ToolTip.Tip="{Binding Tip}">
+                      <Border Classes="attachment file" MinHeight="36" AutomationProperties.Name="{Binding Title}">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,10,0">
+                          <PathIcon Data="{Binding Icon}" />
+                          <StackPanel Spacing="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}" MaxWidth="220" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Classes="muted" Text="{Binding Details}" />
+                          </StackPanel>
+                        </StackPanel>
+                      </Border>
+                    </Panel>
+                  </DataTemplate>
+                </ContentControl.ContentTemplate>
+              </ContentControl>
             </WrapPanel>
             <!-- Files go with a message from here too, besides dropping them on the window or pasting them. -->
             <Button x:Name="AttachButton" Grid.Row="1" Grid.Column="0" Classes="ghost" BorderThickness="0" Padding="6" Margin="0,0,4,0" VerticalAlignment="Bottom" MinHeight="32"

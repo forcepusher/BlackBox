@@ -177,7 +177,7 @@ public partial class FileChangesPanel : UserControl
 
     private void OnFilePicked(object? sender, SelectionChangedEventArgs e)
     {
-        if (FileList.SelectedItem is DiffFileItem file)
+        if (FileList.SelectedItem is DiffFileItem file && _vm is { Reselecting: false })
             _vm?.GoToCommand.Execute(file);
     }
 

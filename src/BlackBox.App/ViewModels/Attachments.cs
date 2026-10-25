@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using BlackBox.Core.Agent;
 using BlackBox.Core.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -74,7 +75,11 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(Icon))]
     private bool _isFolder;
 
-    public bool CanRemove => _remove is not null;
+    /// <summary>
+    /// Has a × to take it off the box: a file of the user's, never a pick of a tool's, which is
+    /// unpicked in its panel (a click away, Esc) and so stays in step with it (the user, 2026-10-25).
+    /// </summary>
+    public bool CanRemove => _remove is not null && !Picked;
 
     /// <summary>A file's name and size, or a folder's name; what a picture's thumbnail is for the rest.</summary>
     public bool ShowsName => !IsPicture || Thumbnail is null;
@@ -139,4 +144,18 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
         Thumbnail?.Dispose();
         Thumbnail = null;
     }
+}
+
+/// <summary>
+/// The card of what a message is about in the open tool with nothing picked there ("notes.md", "whole
+/// document"), over the box and then in the message's bubble, in the look of a file's card and, as
+/// a pick's, with no ×: it goes when something is picked.
+/// </summary>
+public sealed class ToolCardItem(ToolCard card, string tip = "")
+{
+    public string Title => card.Title;
+    public string Details => card.Details ?? "";
+    public string Tip { get; } = tip.Length > 0 ? tip : card.Details is { Length: > 0 } d ? $"{card.Title}\n{d}" : card.Title;
+
+    public Avalonia.Media.Geometry Icon { get; } = card.Icon is { } icon ? Avalonia.Media.StreamGeometry.Parse(icon) : AttachmentItem.FileShape;
 }

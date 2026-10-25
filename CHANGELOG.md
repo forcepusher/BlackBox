@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In File changes, a click away from the lines (or Esc) unpicks them and takes them off your message.
 - In File changes, right-click a file for **Show in folder**.
 - In File changes, drag over lines to pick them all; past the panel's edge the diff scrolls along.
+- With a toolkit panel open, what goes with your message from it always shows as a card over the
+  chat's box, and in the sent message as its attachments do. In File changes, with no lines picked,
+  that is the file selected in its list.
 - The agent's `diff` tool: it looks through what changed in a repository, or between two files or
   folders, instead of reading whole files again.
 - Code blocks in replies and Markdown previews show in a box of their own, with their language and a
@@ -96,6 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A × at the top right of Video editor, File changes and Inspect file closes the tool.
 
 ### Changed
+- What you pick in a toolkit panel has no × in the chat's box: unpick it in the panel (a click away, or Esc).
 - The **Toolkit** dropdown reads None, File changes, Inspect file, Video editor.
 - Asked for code, commands or facts that change (versions, prices, news), the agent looks them up
   on the web before it answers, rather than writing them from memory.

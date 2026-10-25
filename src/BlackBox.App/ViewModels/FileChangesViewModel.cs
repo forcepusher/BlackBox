@@ -116,6 +116,22 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
 
     public bool HasFiles => Files.Count > 0;
 
+    /// <summary>
+    /// The file selected in the list: with no lines picked, what a message is about (its whole change,
+    /// as the box's card says). The first file until another is clicked, kept across a refresh.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Whole))]
+    private DiffFileItem? _currentFile;
+
+    /// <summary>Set while a refresh selects the file again, which goes nowhere in the diff: only a click there does.</summary>
+    internal bool Reselecting { get; private set; }
+
+    /// <summary>Over the chat's box while no line is picked: the selected file, as a pick shows ("notes.md", "whole file · +10 -3").</summary>
+    public (string Title, string Details)? Whole => CurrentFile is { } file ? (Path.GetFileName(file.FullPath), $"whole file · {file.Status} · {file.Counts}") : null;
+
+    public string WholeTip => "What you type is about this file's changes. Click or drag lines to ask about those.";
+
     /// <summary>The rows picked; their lines go into the chat's box.</summary>
     public SelectionModel<DiffRow> Selection { get; }
 
@@ -160,6 +176,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     private void Show(DiffResult diff, bool keepPicks)
     {
         var picked = keepPicks ? Selection.SelectedItems.OfType<DiffRow>().Select(r => r.Key).ToHashSet() : [];
+        var current = keepPicks ? CurrentFile?.FullPath : null;
         _diff = diff;
         Status = Hint;
         var rows = new List<DiffRow>();
@@ -182,7 +199,16 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
         {
             Selection.Source = null;
             Rows = rows;
-            Files = files;
+            Reselecting = true;
+            try
+            {
+                Files = files;
+                CurrentFile = files.FirstOrDefault(f => string.Equals(f.FullPath, current, StringComparison.OrdinalIgnoreCase)) ?? files.FirstOrDefault();
+            }
+            finally
+            {
+                Reselecting = false;
+            }
             Selection.Source = rows;
             if (picked.Count > 0)
                 for (var i = 0; i < rows.Count; i++)
@@ -297,8 +323,20 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             .Append(diff.Files.Count > 30 ? $" and {diff.Files.Count - 30} more. " : ". ");
         if (picks.Count == 0)
         {
-            context.Append("What they say is about these changes unless they say otherwise.]");
-            return (via, context.ToString());
+            if (CurrentFile is not { } current)
+            {
+                context.Append("What they say is about these changes unless they say otherwise.]");
+                return (via, context.ToString());
+            }
+            // No lines picked: the file selected in the list, whole, as its card in the box said.
+            context.Append($"They have {current.FullPath} ({current.Status}, {current.Counts}) selected in it: what they say is about the change to that file unless they say otherwise. Its diff:\n");
+            var lines = current.File.Lines;
+            foreach (var line in lines.Take(MaxPickedLines))
+                AppendLine(context, line);
+            if (lines.Count > MaxPickedLines)
+                context.Append($"[... {lines.Count - MaxPickedLines} more lines of its diff]\n");
+            context.Append("(+ added, - removed, the rest unchanged; numbers are lines of the file as it is now.)]");
+            return ($"File changes · {Path.GetFileName(current.FullPath)}", context.ToString());
         }
         context.Append(picks.Count == 1 ? "They selected these lines in it" : "They selected lines in it").Append(", which is what they refer to:");
         var shown = 0;
@@ -312,16 +350,26 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
                     context.Append($"[... {picks.Sum(p => p.Rows.Count) - MaxPickedLines} more selected lines]\n");
                     break;
                 }
-                var line = row.Line!.Value;
-                var number = line.Kind == DiffLineKind.Removed ? $"(was {line.Old})" : $"{line.New}";
-                context.Append(line.Kind switch { DiffLineKind.Added => "+", DiffLineKind.Removed => "-", _ => " " })
-                    .Append(' ').Append(number).Append('\t').Append(line.Text).Append('\n');
+                AppendLine(context, row.Line!.Value);
             }
             if (shown > MaxPickedLines)
                 break;
         }
         context.Append("(+ added, - removed, the rest unchanged; numbers are lines of the file as it is now.)]");
         return (via, context.ToString());
+    }
+
+    /// <summary>A line of the diff for the model: "+ 12	text", "- (was 5)	text"; a hunk's @@ line as it is.</summary>
+    private static void AppendLine(StringBuilder context, DiffLine line)
+    {
+        if (line.Kind is DiffLineKind.Hunk or DiffLineKind.Note)
+        {
+            context.Append(line.Text).Append('\n');
+            return;
+        }
+        var number = line.Kind == DiffLineKind.Removed ? $"(was {line.Old})" : $"{line.New}";
+        context.Append(line.Kind switch { DiffLineKind.Added => "+", DiffLineKind.Removed => "-", _ => " " })
+            .Append(' ').Append(number).Append('\t').Append(line.Text).Append('\n');
     }
 
     private static string Capital(string text) => text.Length > 0 ? char.ToUpperInvariant(text[0]) + text[1..] : text;

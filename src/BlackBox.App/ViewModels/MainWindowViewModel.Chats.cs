@@ -268,7 +268,7 @@ public sealed partial class MainWindowViewModel
     {
         var entry = item switch
         {
-            UserMessageItem u => new ChatEntry { Kind = ChatEntryKind.User, Text = u.Text, Files = u.HasAttachments ? u.Files : null, Via = u.Via, Context = u.Context },
+            UserMessageItem u => new ChatEntry { Kind = ChatEntryKind.User, Text = u.Text, Files = u.Files.Count > 0 ? u.Files : null, Via = u.Via, Context = u.Context, Cards = u.Cards?.ToList() },
             AssistantMessageItem a => new ChatEntry
             {
                 Kind = ChatEntryKind.Assistant, Text = a.Text, Reasoning = a.Reasoning, Ended = a.Ended, Sent = a.SentAt, FirstWords = a.FirstWords,
@@ -289,7 +289,7 @@ public sealed partial class MainWindowViewModel
     {
         ChatItemViewModel item = e.Kind switch
         {
-            ChatEntryKind.User => new UserMessageItem(e.Text ?? "", e.Files) { Via = e.Via, Context = e.Context },
+            ChatEntryKind.User => new UserMessageItem(e.Text ?? "", e.Files, e.Cards) { Via = e.Via, Context = e.Context },
             ChatEntryKind.Assistant => new AssistantMessageItem
             {
                 Text = e.Text ?? "", Reasoning = e.Reasoning ?? "", IsStreaming = false, Ended = e.Ended, SentAt = e.Sent, FirstWords = e.FirstWords,

@@ -25,6 +25,13 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
     /// </summary>
     public string? Context { get; init; }
 
+    /// <summary>
+    /// What of the open tool went with it, as cards like its files' in its bubble: what was picked
+    /// there, or what it is about with nothing picked ("notes.md", "whole document"). Null for a
+    /// message sent with no tool open.
+    /// </summary>
+    public IReadOnlyList<ToolCard>? Cards { get; init; }
+
     /// <summary>The words as the model reads them: the context first, when there is one.</summary>
     private string ModelText => Context is null ? Text : Text.Trim().Length == 0 ? Context : $"{Context}\n{Text}";
 
@@ -130,3 +137,10 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
             all.SelectMany(i => i.Files).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
     }
 }
+
+/// <summary>
+/// A card of what a message carried from a tool's panel: a pick (its file, and what it is there:
+/// "Lines 12-18 · DiffTool.cs") or, with nothing picked, what the message is about there ("notes.md",
+/// "whole document", with the icon's path data; null for a file's).
+/// </summary>
+public sealed record ToolCard(string Title, string? Details = null, string? Path = null, string? Icon = null);

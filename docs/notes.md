@@ -729,7 +729,7 @@ one's width to the other's: the view model sets the new tool in one change (it w
 and the window shrank to the chat and grew back), the window sets the panel's content itself (a
 binding took it after the layout), and the dropdown's list is closed first (it lingered a frame over
 the resized window). Measured after: popup closed, then one frame with all of the switch, for every
-pick of None, Video editor and File changes either way. The window's place is saved without the panel. **The × at the right end of every tool's top bar** closes the tool, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`ToolkitClose`, 30 square as the Toolkit dropdown, 12 right of what is beside it), so it looks and sits the same in each. Video editor's frame fields are 30 high there: their own 32 made its bar 2 px taller (at 125%) than the other tools' and the chat's, and its × sat lower. **Made narrower, the panel gives way first** (`ToolkitColumns`,
+pick of None, Video editor and File changes either way. The window's place is saved without the panel. **What a tool gives a message is always a card** over the box (the user, 2026-10-25, after a message sent with File changes open showed only a grey "File changes" over its words): a pick (`MainWindowViewModel.Pick`, an `AttachmentItem` with a caption) or, with none, what the message is about there (`IToolkit.Whole`, a `ToolCardItem`; a tool showing nothing yet gets one naming it, "nothing in it yet", and the model is told the panel is open). Neither has the × the user's own files have (`AttachmentItem.CanRemove` is false for a pick; the user's call: a pick is unpicked in its panel, a click away or Esc, which brings the whole card back, so box and panel can't disagree). Every panel puts what it picks in the box through `Pick`, so a new one gets this as is; `ToolCardTests` fails if a × in the box is shown for anything but `CanRemove`. Sent, the cards go with the message (`UserInput.Cards`, kept in the chat as `ChatEntry.Cards`) and show in its bubble as its files do, a pick by its caption; a chat saved before shows its grey line as it was. **The × at the right end of every tool's top bar** closes the tool, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`ToolkitClose`, 30 square as the Toolkit dropdown, 12 right of what is beside it), so it looks and sits the same in each. Video editor's frame fields are 30 high there: their own 32 made its bar 2 px taller (at 125%) than the other tools' and the chat's, and its × sat lower. **Made narrower, the panel gives way first** (`ToolkitColumns`,
 `MainWindow.FitColumns` on the columns' SizeChanged): down to its least (`ToolkitOption.MinWidth`,
 splitter included: Video editor 770, where its top bar still fits in one row with the video's name cut
 short; File changes 560), then the window stops, at the panel's least plus the chat's 660 (no more than
@@ -813,7 +813,7 @@ goes into the chat's box** (the user's call, 2026-10-24: "in order to generate s
 select folder or image or video, it shows up in main chat window prompt, and then you write the
 prompt to describe what you wanna do with it"): a folder, a picture, a clip or a sound on the
 timeline, is a chip under the box ("The start of shot 1 · Moon start.png", "not made yet" for a
-piece planned), × takes it off, another pick takes its place, and sent, it goes with the message
+piece planned), a click away or Esc takes it off, another pick takes its place, and sent, it goes with the message
 (a piece not made yet as its place, with no file). With nothing picked, the same chip stands there for
 the video itself (`IToolkit.Whole`: its name, "whole video", "· not made yet" until it is joined,
 no ×), after the user's own files where a pick would come, so the row keeps its height when a pick
@@ -1970,7 +1970,7 @@ cut there). A message sent then carries, for the model, the files changed (up to
 picked line with its number and +/-, at most 300 lines; nothing while no file has changed. It
 says only that these are the lines the user refers to, not that they are to be changed: the user
 picks lines to ask about them as much as to have them changed (the user, 2026-10-24). Sent, they
-are no longer picked; one taken off the box (its ×) is unpicked in the panel too. A click in the
+are no longer picked. A click in the
 panel away from the lines (below the last, a header or @@ line, the bar at the top, the file list
 below its files) unpicks them all, as Esc does there, like the Video editor's click away (the user,
 2026-10-25). What keeps them: a click on a file in the list (it only goes there, so lines are picked
@@ -1992,6 +1992,12 @@ A right-click on a file in the list offers **Show in folder** (the user, 2026-10
 opens on its folder with it selected, through the file cards' `FilePreview.ShowInFolder`; greyed
 out for a deleted file. The menu is a plain `ContextMenu`, as the Video editor's are; checked
 with a real right-click on 2026-10-26.
+**With no lines picked, the file selected in the list** is what a message is about (the user,
+2026-10-25: "currently selected changed file should be visible in the chat context"): its card over the
+box ("notes.md", "whole file · added · +99"), and for the model the files list as above, which file is
+selected, and its diff (at most 300 lines). It is the first file until another is clicked, and stays
+selected across a refresh; that reselecting doesn't scroll the diff (`Reselecting`). Nothing changed
+yet, the card is the tool's own ("File changes", "nothing in it yet").
 
 **Checked on qwen3.8** (2026-10-24, blackbox-cli): asked to review the commit that added all this, it
 listed the commit with `diff summary=true`, then read the whole diff (about 110,000 characters) in 11

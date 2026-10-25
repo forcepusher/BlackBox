@@ -32,6 +32,9 @@ public sealed class ChatEntry
     /// <summary>For such a message: what the model was told with it (see <see cref="UserInput.Context"/>), for Continue to send it again whole.</summary>
     public string? Context { get; set; }
 
+    /// <summary>For a message sent with a tool open: its cards (see <see cref="UserInput.Cards"/>).</summary>
+    public List<ToolCard>? Cards { get; set; }
+
     /// <summary>For a notice: a run ended here before its task was done (stopped, or an error), so the chat offers to carry on.</summary>
     public bool Stopped { get; set; }
 
