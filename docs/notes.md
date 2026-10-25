@@ -1981,6 +1981,30 @@ by its extension, the formats BlackBox already reads and writes):
 - Any other file whose start reads as text (no NUL in its first 8 KB in its own encoding): its text
   in a fixed-width font. Anything else: "There is no preview for this kind of file".
 
+**Selected text into the message** (the user's request, 2026-10-25, as Video editor and Code changes
+do). With a file shown and nothing selected, the file is a card over the chat's box ("notes.md ·
+whole document", `IToolkit.Whole`, which now also gives the card's tooltip and icon). Text selected
+in what BlackBox draws (Markdown, a table, text) goes into the box as a pick (`MainWindowViewModel.Pick`)
+captioned with where it is: "Lines 8-9 · notes.md", "Cells B4:C4 · sales.csv", "Rows 6-8", "Row 4";
+for a Word or PowerPoint file shown as its text only, "Selected text" (those lines aren't the file's).
+The message then carries "Document preview · notes.md · lines 8-9" over its bubble and gives the
+model the path, the place and the selected text (up to 20,000 characters; for a table its header's
+names of the columns). Where it is comes from `DocumentPick` (Core): lines are counted in the text
+shown, and for Markdown `MarkdownLite.Blocks(…, out starts)` and `Render(…, out MdLine map)` say which
+source line each shown line is, and for a table's row where each cell starts in it; a CSV's table
+(`DocumentPreview.Table`) has its header as row 1, as a spreadsheet does. The panel reads the
+selection on each left release and on Shift/Ctrl key releases (`DocumentPanel`): a click that selects
+nothing, Esc, the card's ×, sending the message or another file unpicks it; scroll bars don't. The
+text is `KeptSelectionTextBlock`, which keeps its selection when it loses focus, so it stays marked
+while the user types in the box; a press in one block clears the others'. Windows' previewers (PDF,
+Office, web pages) draw in their own window, whose selection BlackBox can't read: a message is about
+the whole file there. A picture or a video is a whole file too ("whole file" on its card).
+Checked on the laptop with real mouse drags on the Debug app (stand-in model logging what it got):
+.md lines 8-9 into the box, kept marked while the box had focus, the model got the two lines and the
+bubble the reference line; .csv one cell (D5, "column Units"), two cells (B4:C4), three rows; .cs lines
+by drag, Shift+click and double-click; click away, Esc and × all went back to the whole-file card;
+the .docx in Word's previewer showed only the whole-document card.
+
 Checked on the laptop (2026-10-25, a stand-in model naming six files, Preview pressed on each by UI
 Automation): .md formatted, .docx by Word's previewer, .xlsx with Excel's grid and sheet tabs, .pptx
 slide by slide, .csv as a table, and .pdf by Edge's previewer. The PDF previewer registered there was

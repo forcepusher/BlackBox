@@ -23,14 +23,15 @@
       <TextBlock Classes="muted" Text="{Binding Message}" IsVisible="{Binding HasMessage}" HorizontalAlignment="Center" VerticalAlignment="Center"
                  TextWrapping="Wrap" MaxWidth="360" TextAlignment="Center" />
 
-      <!-- Markdown and tables, as a reply is drawn. The left margin is inside the scroller, so the
+      <!-- Markdown and tables, as a reply is drawn; text selected in it, or in the text below, goes
+           into the chat's box (see DocumentPanel.axaml.cs). The left margin is inside the scroller, so the
            text's selection margin isn't cut off. -->
       <ScrollViewer IsVisible="{Binding Markdown, Converter={x:Static ObjectConverters.IsNotNull}}" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Document">
-        <views:MarkdownView Source="{Binding Markdown}" Margin="20,16,20,20" />
+        <views:MarkdownView x:Name="Document" KeepsSelection="True" Source="{Binding Markdown}" Margin="20,16,20,20" />
       </ScrollViewer>
 
       <ScrollViewer IsVisible="{Binding Text, Converter={x:Static ObjectConverters.IsNotNull}}" HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="Document text">
-        <SelectableTextBlock Text="{Binding Text}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Margin="16,12,16,16" TextWrapping="NoWrap" />
+        <views:KeptSelectionTextBlock x:Name="PlainText" Text="{Binding Text}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Margin="16,12,16,16" TextWrapping="NoWrap" />
       </ScrollViewer>
 
       <Image Source="{Binding Picture}" IsVisible="{Binding Picture, Converter={x:Static ObjectConverters.IsNotNull}}" Margin="16" Stretch="Uniform" StretchDirection="DownOnly"

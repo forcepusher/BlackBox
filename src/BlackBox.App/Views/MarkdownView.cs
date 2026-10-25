@@ -36,6 +36,32 @@ public class MarkdownView : StackPanel
         set => SetValue(SourceProperty, value);
     }
 
+    /// <summary>Its text keeps a selection when it loses focus (<see cref="KeptSelectionTextBlock"/>): set before <see cref="Source"/>.</summary>
+    public bool KeepsSelection { get; set; }
+
+    /// <summary>Its blocks' text, each where it is among <see cref="MarkdownLite.Blocks(string)"/>.</summary>
+    private IEnumerable<(int Block, SelectableTextBlock Text)> Texts =>
+        Children.Select((c, i) => (i, c is CodeBox box ? box.Code : c as SelectableTextBlock))
+            .Where(t => t.Item2 is not null).Select(t => (t.i, t.Item2!));
+
+    /// <summary>
+    /// What is selected: the block it is in, among <see cref="MarkdownLite.Blocks(string)"/>, and its
+    /// characters in the block's lines as shown; the focused block's, else the first with a selection.
+    /// </summary>
+    public (int Block, int Start, int End)? Selection =>
+        Texts.Where(t => t.Text.SelectionStart != t.Text.SelectionEnd)
+            .OrderBy(t => t.Text.IsFocused ? 0 : 1)
+            .Select(t => ((int, int, int)?)(t.Block, Math.Min(t.Text.SelectionStart, t.Text.SelectionEnd), Math.Max(t.Text.SelectionStart, t.Text.SelectionEnd)))
+            .FirstOrDefault();
+
+    /// <summary>Clears the selection in every block but <paramref name="except"/>.</summary>
+    public void ClearSelection(SelectableTextBlock? except = null)
+    {
+        foreach (var (_, text) in Texts)
+            if (!ReferenceEquals(text, except) && text.SelectionStart != text.SelectionEnd)
+                text.ClearSelection();
+    }
+
     private void Update()
     {
         var source = Source ?? "";
@@ -59,25 +85,23 @@ public class MarkdownView : StackPanel
             {
                 if (i < Children.Count)
                     Children.RemoveAt(i);
-                Children.Insert(i, block.IsCode ? new CodeBox(block) : TextPart(block.Text));
+                Children.Insert(i, block.IsCode ? new CodeBox(block, KeepsSelection) : TextPart(block.Text, KeepsSelection));
             }
         }
         while (Children.Count > blocks.Count)
             Children.RemoveAt(Children.Count - 1);
     }
 
-    private static SelectableTextBlock TextPart(string markdown)
+    private static SelectableTextBlock TextPart(string markdown, bool keep)
     {
         // Its margin is its padding turned inside out: the text sits where it did, and a drag that
         // starts up to 12 pixels left or right of it, or 4 over or under it, selects from its first
         // or last letter, so the user needn't land on the letter itself.
-        var text = new SelectableTextBlock
-        {
-            TextWrapping = TextWrapping.Wrap,
-            LineHeight = 21,
-            Margin = new Thickness(-12, -4),
-            Padding = new Thickness(12, 4),
-        };
+        var text = keep ? new KeptSelectionTextBlock() : new SelectableTextBlock();
+        text.TextWrapping = TextWrapping.Wrap;
+        text.LineHeight = 21;
+        text.Margin = new Thickness(-12, -4);
+        text.Padding = new Thickness(12, 4);
         MarkdownText.SetSource(text, markdown);
         return text;
     }
@@ -86,15 +110,20 @@ public class MarkdownView : StackPanel
     private sealed class CodeBox : Border
     {
         private readonly TextBlock _language = new() { VerticalAlignment = VerticalAlignment.Center };
-        private readonly SelectableTextBlock _code = new() { FontFamily = Mono, TextWrapping = TextWrapping.Wrap };
+        private readonly SelectableTextBlock _code;
         private readonly Button _copy = new() { Content = "Copy" };
         private string _text = "";
 
         // Styled as the Border it is: a style's type matches only the exact type.
         protected override Type StyleKeyOverride => typeof(Border);
 
-        public CodeBox(MdBlock block)
+        public SelectableTextBlock Code => _code;
+
+        public CodeBox(MdBlock block, bool keep)
         {
+            _code = keep ? new KeptSelectionTextBlock() : new SelectableTextBlock();
+            _code.FontFamily = Mono;
+            _code.TextWrapping = TextWrapping.Wrap;
             Classes.Add("code");
             _language.Classes.Add("muted");
             _code.Classes.Add("code");

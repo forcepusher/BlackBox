@@ -26,13 +26,31 @@ public readonly record struct MdSpan(string Text, MdStyle Style, string? Url = n
 public readonly record struct MdBlock(string Text, bool IsCode, string Language = "");
 
 /// <summary>
+/// Where a line shown comes from: its line in the Markdown (from 0), and for a row of a table where
+/// each of its cells starts in the line shown, by character (<paramref name="Cells"/>).
+/// </summary>
+public readonly record struct MdLine(int Source, IReadOnlyList<int>? Cells = null);
+
+/// <summary>
 /// The Markdown models write in their answers (bold, headings, lists, code, tables, quotes),
 /// turned into lines of styled runs for a chat bubble, so "**Total:** $3,000" doesn't show its
 /// asterisks. Deliberately small: what it doesn't know stays as it was written.
 /// </summary>
 public static partial class MarkdownLite
 {
-    public static List<List<MdSpan>> Render(string markdown)
+    public static List<List<MdSpan>> Render(string markdown) => Render(markdown, null);
+
+    /// <summary>
+    /// <see cref="Render(string)"/>, with where each line shown comes from: its line in
+    /// <paramref name="markdown"/>, and for a table's row where each cell starts in it.
+    /// </summary>
+    public static List<List<MdSpan>> Render(string markdown, out List<MdLine> lines)
+    {
+        lines = [];
+        return Render(markdown, lines);
+    }
+
+    private static List<List<MdSpan>> Render(string markdown, List<MdLine>? map)
     {
         var lines = markdown.Replace("\r\n", "\n").Split('\n');
         var output = new List<List<MdSpan>>();
@@ -48,18 +66,25 @@ public static partial class MarkdownLite
             if (inCode)
             {
                 output.Add(Linked([new MdSpan(line, MdStyle.Code)]));
+                map?.Add(new MdLine(i));
                 continue;
             }
             if (IsTableRow(line))
             {
+                var first = i;
                 var table = new List<string>();
                 while (i < lines.Length && IsTableRow(lines[i]))
                     table.Add(lines[i++]);
                 i--;
-                output.AddRange(Table(table).Select(Linked));
+                foreach (var (row, from, cells) in Table(table))
+                {
+                    output.Add(Linked(row));
+                    map?.Add(new MdLine(first + from, cells));
+                }
                 continue;
             }
             output.Add(Linked(Line(line)));
+            map?.Add(new MdLine(i));
         }
         return output;
     }
@@ -70,17 +95,25 @@ public static partial class MarkdownLite
     /// A fence indented in a list takes its indent off the code's lines, and only a fence of at
     /// least as many backticks and no language closes it, so "```" lines in the code stay code.
     /// </summary>
-    public static List<MdBlock> Blocks(string markdown)
+    public static List<MdBlock> Blocks(string markdown) => Blocks(markdown, out _);
+
+    /// <summary><see cref="Blocks(string)"/>, with the line of <paramref name="markdown"/> (from 0) each block starts on.</summary>
+    public static List<MdBlock> Blocks(string markdown, out List<int> starts)
     {
         var lines = markdown.Replace("\r\n", "\n").Split('\n');
         var blocks = new List<MdBlock>();
+        var firsts = starts = [];
         var text = new List<string>();
+        var textStart = 0;
         void FlushText()
         {
             var first = text.FindIndex(l => l.Trim().Length > 0);
             var last = text.FindLastIndex(l => l.Trim().Length > 0);
             if (first >= 0)
+            {
                 blocks.Add(new MdBlock(string.Join("\n", text.Skip(first).Take(last - first + 1)), false));
+                firsts.Add(textStart + first);
+            }
             text.Clear();
         }
 
@@ -88,10 +121,13 @@ public static partial class MarkdownLite
         {
             if (Fence().Match(lines[i]) is not { Success: true } open)
             {
+                if (text.Count == 0)
+                    textStart = i;
                 text.Add(lines[i]);
                 continue;
             }
             FlushText();
+            firsts.Add(i + 1);
             var indent = open.Groups[1].Length;
             var ticks = open.Groups[2].Length;
             var code = new List<string>();
@@ -285,28 +321,35 @@ public static partial class MarkdownLite
 
     private static bool IsTableRow(string line) => line.TrimStart().StartsWith('|') && line.Trim().Length > 1;
 
-    /// <summary>Rows with their columns lined up in monospace; the header bold, the |---| line left out.</summary>
-    private static IEnumerable<List<MdSpan>> Table(List<string> rows)
+    /// <summary>
+    /// Rows with their columns lined up in monospace; the header bold, the |---| line left out. Each
+    /// with the row of <paramref name="rows"/> it is and where its cells start in it.
+    /// </summary>
+    private static IEnumerable<(List<MdSpan> Line, int Row, IReadOnlyList<int>? Cells)> Table(List<string> rows)
     {
         var cells = rows.Select(Cells).ToList();
         var separator = cells.FindIndex(r => r.Count > 0 && r.All(c => Separator().IsMatch(c)));
         var align = separator >= 0
             ? cells[separator].Select(c => c.EndsWith(':') ? (c.StartsWith(':') ? 0 : 1) : -1).ToList()
             : [];
-        var body = cells.Where((_, i) => i != separator).ToList();
+        var body = Enumerable.Range(0, cells.Count).Where(i => i != separator).ToList();
         if (body.Count == 0)
         {
             // Nothing but a |---| line: a scale drawn in text, or a table whose first line is still
             // streaming in. It shows as written; measuring a table of no rows threw.
-            foreach (var row in rows)
-                yield return Inline(row, MdStyle.Code);
+            for (var i = 0; i < rows.Count; i++)
+                yield return (Inline(rows[i], MdStyle.Code), i, null);
             yield break;
         }
         var header = separator > 0 ? 1 : 0;
-        var parsed = body.Select(r => r.Select(c => Inline(c, MdStyle.Code)).ToList()).ToList();
+        var parsed = body.Select(r => cells[r].Select(c => Inline(c, MdStyle.Code)).ToList()).ToList();
         var columns = parsed.Max(r => r.Count);
         var widths = Enumerable.Range(0, columns)
             .Select(col => parsed.Max(r => col < r.Count ? r[col].Sum(s => s.Text.Length) : 0)).ToList();
+        // Every row's cells start in the same places: each column as wide as its widest cell, 3 apart.
+        var starts = new int[columns];
+        for (var col = 1; col < columns; col++)
+            starts[col] = starts[col - 1] + widths[col - 1] + 3;
 
         for (var r = 0; r < parsed.Count; r++)
         {
@@ -322,7 +365,7 @@ public static partial class MarkdownLite
                 if (col < columns - 1)
                     line.Add(new MdSpan(new string(' ', after + 3), MdStyle.Code));
             }
-            yield return line;
+            yield return (line, body[r], starts);
         }
     }
 
