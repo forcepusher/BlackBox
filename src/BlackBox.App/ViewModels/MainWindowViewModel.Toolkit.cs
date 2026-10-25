@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Avalonia.Threading;
@@ -26,6 +27,13 @@ public interface IToolkit : IDisposable
 
     /// <summary>Files dropped on the tool's panel; false when the tool doesn't take them (they then go with the next message).</summary>
     bool Drop(IReadOnlyList<string> paths);
+
+    /// <summary>
+    /// What a message is about while nothing is picked in the tool, shown over the chat's box where a
+    /// pick would be ("Untitled video", "whole video"); null when the tool has none. A change is told
+    /// by the tool's PropertyChanged under this name.
+    /// </summary>
+    (string Title, string Details)? Whole => null;
 }
 
 /// <summary>
@@ -64,6 +72,42 @@ public sealed partial class MainWindowViewModel
     private IToolkit? _toolkit;
 
     public bool HasToolkit => Toolkit is not null;
+
+    partial void OnToolkitChanged(IToolkit? oldValue, IToolkit? newValue)
+    {
+        if (oldValue is INotifyPropertyChanged old)
+            old.PropertyChanged -= OnToolkitPropertyChanged;
+        if (newValue is INotifyPropertyChanged now)
+            now.PropertyChanged += OnToolkitPropertyChanged;
+        WholeChanged();
+    }
+
+    private void OnToolkitPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(IToolkit.Whole))
+            WholeChanged();
+    }
+
+    /// <summary>
+    /// What a message is about with nothing picked in the open tool (the whole video), shown over the
+    /// box where a pick would be; null with something picked, or with no tool that has one.
+    /// </summary>
+    private (string Title, string Details)? ShownWhole => Attachments.Any(a => a.Picked) ? null : Toolkit?.Whole;
+
+    public bool ShowsWhole => ShownWhole is not null;
+    public string WholeTitle => ShownWhole?.Title ?? "";
+    public string WholeDetails => ShownWhole?.Details ?? "";
+
+    /// <summary>The row over the box: the files going with the message, and what it is about in the open tool.</summary>
+    public bool ShowsBoxRow => HasAttachments || ShowsWhole;
+
+    private void WholeChanged()
+    {
+        OnPropertyChanged(nameof(ShowsWhole));
+        OnPropertyChanged(nameof(WholeTitle));
+        OnPropertyChanged(nameof(WholeDetails));
+        OnPropertyChanged(nameof(ShowsBoxRow));
+    }
 
     partial void OnSelectedToolkitChanged(ToolkitOption? value)
     {

@@ -29,6 +29,20 @@ public sealed partial class VideoViewModel
         return (via, context);
     }
 
+    /// <summary>
+    /// Over the chat's box while nothing is picked: the video, as a pick is shown, so the user sees what
+    /// a message is about then ("Untitled video", "whole video · not made yet" until it is joined).
+    /// </summary>
+    public (string Title, string Details)? Whole => (VideoName, HasJoinedVideo ? "whole video" : "whole video · not made yet");
+
+    // Whole follows the name and the joined video, wherever those are told.
+    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.PropertyName is nameof(VideoName) or nameof(HasJoinedVideo))
+            base.OnPropertyChanged(nameof(Whole));
+    }
+
     /// <summary>A pick: in a few words for the bubble, in full for the model, and the piece it is, if one.</summary>
     private sealed record Pick(string Short, string Long, VideoPiece? Piece);
 

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - "in development" beside the **Toolkit** dropdown: its tools are still being built.
+- With Video editor open and nothing picked in it, the video itself shows over the chat's box, as a
+  pick does: what you type is about the whole video.
 - **Code changes** in the **Toolkit** dropdown: every file the agent changes in the chat (writes, edits, and
   what its commands change) on the left of the chat, each beside its diff, updated as it works and kept
   with the chat. Lines you click go into your message, so you can ask about them or have them changed.
