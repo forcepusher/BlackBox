@@ -59,7 +59,7 @@ public sealed partial class VideoViewModel
     private void RefreshReferences()
     {
         var cards = _board.Frames.Where(f => f.Reference).Select(f => (Path: Path.GetFullPath(_board.FramePicture(f)), Frame: _frames.GetValueOrDefault(f.Id)))
-            .Concat(_board.ReferenceFiles().Where(p => string.Equals(Path.GetDirectoryName(p), Path.GetFullPath(_board.ReferencesFolder), StringComparison.OrdinalIgnoreCase))
+            .Concat(_board.ReferenceFiles().Concat(_board.ReferenceVideos()).Where(p => string.Equals(Path.GetDirectoryName(p), Path.GetFullPath(_board.ReferencesFolder), StringComparison.OrdinalIgnoreCase))
                 .Select(p => (Path: p, Frame: (FrameItem?)null)))
             .DistinctBy(c => c.Path, StringComparer.OrdinalIgnoreCase)
             .OrderBy(c => Path.GetFileName(c.Path), ByName).ToList();

@@ -89,6 +89,9 @@ public sealed partial class VideoViewModel
         if (Viewing is { Version: { } version, VersionOf: { } of } && Is(version.File))
             return new($"version {version.Number} of {Lower(of.Title)}", $"version {version.Number} of {Lower(of.Title)} ({full}), an earlier version kept when it was made again: " +
                                                                        "the panel puts a version back in the video (Use this version, under it), not the video tool", null);
+        if (full.StartsWith(Path.GetFullPath(_board.ReferencesFolder) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) && Storyboard.IsVideoFile(full))
+            return new(Path.GetFileName(full), $"a video file of theirs on the References row ({full}), a reference video: name it \"{_board.InReferences(full)}\" in a shot's motion " +
+                                               "for the shot to move as it does, in a frame's of for a frame where it ends (a shot then goes on from it), or in a frame's from for a picture from its middle", null);
         if (full.StartsWith(Path.GetFullPath(_board.ReferencesFolder) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             return new(Path.GetFileName(full), $"an image file of theirs on the References row ({full}): a frame names it in from by \"{_board.InReferences(full)}\" to be made from it", null);
         return new(Path.GetFileName(full), $"a file in the video's folder ({full})", null);

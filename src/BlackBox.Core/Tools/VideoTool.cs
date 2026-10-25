@@ -23,16 +23,16 @@ public sealed class VideoTool : Tool
     public override string Description =>
         "Make a video (a music video, a short story, an ad: anything longer than one shot) from a storyboard, with ComfyUI on this PC. " +
         "The video is its folder, which the user also sees in BlackBox's Video generator panel beside the chat, from where they pick its pictures, clips and folders into their messages to you: " +
-        "References, with the pictures frames are made from (image files of the user's and generated images BlackBox makes); Generated, with what BlackBox makes: each shot's frames and clip (s1.mp4) and the songs; and the joined video. The user calls the shots clips: clip 1 is the first. " +
+        "References, with the pictures frames are made from (image files of the user's and generated images BlackBox makes) and the user's video files; Generated, with what BlackBox makes: each shot's frames and clip (s1.mp4) and the songs; and the joined video. The user calls the shots clips: clip 1 is the first. " +
         "Each file has a .json of its name beside it (what it is and how it was made: video.json for video.mp4) and the ComfyUI workflow that made it (video.workflow.json). " +
         "The storyboard is all of it at once: shots in order, each going from a first frame to an optional last frame in so many seconds, the pictures they start and end on, and the sounds over them. " +
         "action=storyboard shows it (path: the video's folder), with BlackBox's guide to writing one the first time in a chat, or makes or changes it with storyboard={...}: title (the video's folder is named after it: a new one renames it), " +
         "width, height, fps, voice (who says the lines: age, voice, manner), soundLines (how many sound lines), soundLineVolumes (each sound line's volume, 1 as its sounds are: [1, 0.5]), frames:[{id, prompt (what it shows and its look), model, seed, from: [what it is made from, to keep people and places the same: frames' ids, " +
         "a picture in the References folder by its name (\"Mira\" or \"Mira.png\"), or a picture of the user's from elsewhere by its full path (one they attached: it is copied into References as it is)], " +
         "file (a picture of the user's, cut to the video's frame), name, reference: true for a character or place sheet, made at its own shape into References/<name>.png, " +
-        "of: a shot's id, for a frame taken from where that shot's clip ends, so the shot that starts on it goes on from that moment (after a shot without a last frame)}], " +
+        "of: a shot's id, for a frame taken from where that shot's clip ends, so the shot that starts on it goes on from that moment (after a shot without a last frame), or a video file in References (\"walk.mp4\") to go on from where the user's clip ends}], " +
         "shots:[{id, name (a few words naming it, \"intro\", \"the leap\"), first, last (frame ids), seconds, prompt (what happens, and its look), camera, model, transition: cut|dissolve|fade, " +
-        "line (what is said in it, lip-synced, in the video's voice; it starts 0.4 s in, so leave time for it), seed}], " +
+        "line (what is said in it, lip-synced, in the video's voice; it starts 0.4 s in, so leave time for it), seed, motion (a video file in References, \"dance.mp4\": the shot copies its movement, poses and timing from its first frame, with a template that follows a video: LTX's IC-LoRA control or Wan Animate; not with a line)}], " +
         "sounds:[{id, name, source: song (made by BlackBox: tags = its style, lyrics, model, seed), foley (made by BlackBox from what the clips under it show: tags = what is heard, which it can do without; model, seed) " +
         "or file (the user's: file = its full path, copied into Sounds), soundLine (from 0), start (seconds into the video), " +
         "trim (seconds cut off its start), seconds (how long it plays; 0 to its end), volume (1 as it is)}]: sounds overlap as they please, as on a video editor's sound lines. " +
@@ -48,6 +48,8 @@ public sealed class VideoTool : Tool
         "and what is heard (the shot's own sound is kept at half under a song; music comes from songs on the sound lines, not the video model). " +
         "The References folder also holds any picture the user puts there (action=storyboard lists them): name one in a frame's from to make the frame from it, " +
         "whatever its shape: a frame made from pictures is made the video's size with all of each in view. " +
+        "A video file of the user's in References (a reference video) is used three ways: a shot's motion to move as it does (say in the prompt what moves, the look comes from the first frame), " +
+        "a frame's of to start where it ends (continuity), or in a frame's from, where a picture from its middle shows a look, a person or a place to keep. " +
         "The user's pictures stay as they gave them: never crop, resize, retouch or redraw one, or put pictures of your own beside them (a cut-out, a padded copy); " +
         "name the whole picture in from and say in the prompt who or what in it to take (\"the rabbit on the left, in the grey t-shirt\"): the picture model picks one out of a lineup or a sheet. " +
         "action=frame id= makes a frame's picture (a reference's too) and has a fresh look at it; action=sound id= makes a song, a minute long at least (the video uses its start), the best of tries=3 by a judge " +
@@ -330,7 +332,7 @@ public sealed class VideoTool : Tool
             var made = File.Exists(board.FramePicture(f));
             var current = !stale.Contains(f.Id);
             var state = !made ? "not made" : current ? "made" : VideoMaker.IsCurrent(board, f) ? $"made, but to be made again after {string.Join(", ", f.From.Where(stale.Contains))}" : "made, but out of date (changed since)";
-            var source = f.File is { Length: > 0 } file ? $"the user's picture {file}" : $"\"{f.Prompt.Trim().ReplaceLineEndings(" ").Clip(300)}\" seed {f.Seed}" +
+            var source = f.File is { Length: > 0 } file ? $"the user's picture {file}" : f.Of is { } of && board.Shot(of) is null ? $"where the video {of} ends" : $"\"{f.Prompt.Trim().ReplaceLineEndings(" ").Clip(300)}\" seed {f.Seed}" +
                                                                                       (f.From.Count > 0 ? $", made from {string.Join(", ", f.From)}" : "") +
                                                                                       (f.Model is { } fm ? $", made with \"{fm}\"" : "");
             var used = board.Shots.Where(s => s.First == f.Id || s.Last == f.Id).Select(s => s.Id).ToList();
@@ -344,6 +346,8 @@ public sealed class VideoTool : Tool
         var own = board.ReferenceFiles().Where(f => !references.Contains(f)).Select(board.InReferences).ToList();
         sb.AppendLine($"References folder: {board.ReferencesFolder}" + (own.Count == 0 ? "." : $"; the user's pictures there to make frames from, by name in from: {string.Join(", ", own.Take(40))}" +
                                                                                        (own.Count > 40 ? $" and {own.Count - 40} more." : ".")));
+        if (board.ReferenceVideos().Select(board.InReferences).ToList() is { Count: > 0 } videos)
+            sb.AppendLine($"The user's videos there, by name in a shot's motion, a frame's of or from: {string.Join(", ", videos.Take(40))}" + (videos.Count > 40 ? $" and {videos.Count - 40} more." : "."));
         sb.AppendLine("Shots:");
         if (board.Shots.Count == 0) sb.AppendLine("  (none)");
         for (var i = 0; i < board.Shots.Count; i++)
@@ -358,6 +362,7 @@ public sealed class VideoTool : Tool
             sb.AppendLine($"  {s.Id}, clip {i + 1} ({N(starts[i])}–{N(starts[i] + s.Seconds)} s, {N(s.Seconds)} s{join}): {frames}. \"{s.Prompt.Trim().ReplaceLineEndings(" ").Clip(300)}\"" +
                           (s.Camera.Length > 0 ? $" Camera: {s.Camera}." : "") +
                           (s.Model is { } sm ? $" Made with \"{sm}\"." : "") +
+                          (s.Motion is { } motion && !s.LipSync ? $" Moves as the video {motion}" + (board.ReferenceVideo(motion) is null ? " (not in References!)." : ".") : "") +
                           (Storyboard.Speaks(s) ? $" Says: \"{s.Line.Trim().ReplaceLineEndings(" ")}\"" + (VideoMaker.LineIsCurrent(board, s) ? " (said)." : " (not said yet).") : "") +
                           $" Seed {s.Seed}. " +
                           (!made ? "Not made." : current ? $"Made: {board.ShotVideo(s)}" :

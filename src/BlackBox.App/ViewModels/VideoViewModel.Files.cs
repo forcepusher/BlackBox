@@ -155,7 +155,7 @@ public sealed partial class VideoViewModel
             }
             else
             {
-                card.State = "Image file";
+                card.State = card.Kind;
                 LoadCardThumbnail(card);
             }
         }
@@ -205,17 +205,20 @@ public sealed partial class VideoViewModel
         });
     }
 
-    /// <summary>An image file's picture, small, for its card.</summary>
+    /// <summary>An image file's picture, small, for its card; a video file's, a frame from its middle.</summary>
     private void LoadCardThumbnail(ReferenceCard card)
     {
         if (card.Thumbnail is not null)
             return;
         var path = card.Path;
+        var decoder = card.IsVideo ? _previews.Decoder : null;
+        if (card.IsVideo && decoder is null)
+            return;
         _ = Task.Run(() =>
         {
             try
             {
-                using var stream = File.OpenRead(path);
+                using Stream stream = decoder is null ? File.OpenRead(path) : new MemoryStream(VideoCheck.Poster(path, decoder, 256) ?? throw new InvalidOperationException("no frame"));
                 var bitmap = Bitmap.DecodeToHeight(stream, 128, BitmapInterpolationMode.MediumQuality);
                 Dispatcher.UIThread.Post(() =>
                 {
@@ -225,7 +228,7 @@ public sealed partial class VideoViewModel
                         card.Thumbnail = bitmap;
                 });
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or VideoException) { }
         });
     }
 

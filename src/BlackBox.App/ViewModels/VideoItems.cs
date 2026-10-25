@@ -55,7 +55,7 @@ public sealed partial class FrameItem(VideoFrame frame) : ObservableObject, IVid
 
 /// <summary>
 /// A card on the References row: a generated image (a reference BlackBox makes, <see cref="Frame"/>)
-/// or an image file of the user's copied into References. A new one not chosen yet offers File… or Generate.
+/// or an image or video file of the user's copied into References. A new one not chosen yet offers File… or Generate.
 /// </summary>
 public sealed partial class ReferenceCard(string path, FrameItem? frame) : ObservableObject
 {
@@ -67,8 +67,11 @@ public sealed partial class ReferenceCard(string path, FrameItem? frame) : Obser
 
     public string Name => Frame?.Title ?? System.IO.Path.GetFileNameWithoutExtension(Path);
 
-    /// <summary>"Generated image" or "Image file".</summary>
-    public string Kind => Frame is null ? "Image file" : "Generated image";
+    /// <summary>"Generated image", "Image file" or "Video file".</summary>
+    public string Kind => Frame is not null ? "Generated image" : IsVideo ? "Video file" : "Image file";
+
+    /// <summary>A video file of the user's: a shot moves as it does, starts where it ends, or keeps its look.</summary>
+    public bool IsVideo => Frame is null && Storyboard.IsVideoFile(Path);
 
     /// <summary>A generated image nothing is said of yet: File… or Generate decides what it is.</summary>
     public bool IsNew => Frame is { IsMade: false, Frame: { Prompt.Length: 0, File: null } };

@@ -78,7 +78,7 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
 
     /// <summary>The kind of job a shot is, by its frames and lip sync.</summary>
     public static VideoJob JobOf(VideoShot shot) =>
-        shot.LipSync ? VideoJob.LipSync : shot.First is null ? VideoJob.ShotFromText : shot.Last is null ? VideoJob.ShotFromFirst : VideoJob.Shot;
+        shot.LipSync ? VideoJob.LipSync : shot.Motion is not null ? VideoJob.Motion : shot.First is null ? VideoJob.ShotFromText : shot.Last is null ? VideoJob.ShotFromFirst : VideoJob.Shot;
 
     /// <summary>What a frame is made with, in its own words; none: the best installed (see <see cref="VideoFrame.Model"/>).</summary>
     public static string? ModelOf(Storyboard board, VideoFrame frame) => frame.Model;
@@ -91,15 +91,17 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
     {
         using var making = MakingIn(board);
         var target = board.FramePicture(frame);
-        if (frame.Of is { } of && board.Shot(of) is { } before)
+        if (frame.Of is { } of && (board.Shot(of) is not null || board.ReferenceVideo(of) is not null || Storyboard.IsVideoFile(of)))
         {
-            // Where the shot before's clip ends, as the clip has it.
+            // Where the shot before's clip ends, as the clip has it; or where a video of the user's ends.
             var started = DateTime.UtcNow;
-            var clip = board.ShotVideo(before);
+            var before = board.Shot(of);
+            var clip = before is not null ? board.ShotVideo(before) : board.ReferenceVideo(of)
+                       ?? throw new VideoException($"{frame.Label} is where the video {of} ends, and there is no such video in References ({board.ReferencesFolder}).");
             if (!File.Exists(clip))
-                throw new VideoException($"{frame.Label} is where shot {before.Id} ends, and shot {before.Id} isn't made yet: make it first.");
+                throw new VideoException($"{frame.Label} is where shot {of} ends, and shot {of} isn't made yet: make it first.");
             if (media is null)
-                throw new VideoException($"Nothing on this PC can read video to take {frame.Label} from shot {before.Id} (ffmpeg in BlackBox's Data\\tools would).");
+                throw new VideoException($"Nothing on this PC can read video to take {frame.Label} from {of} (ffmpeg in BlackBox's Data\\tools would).");
             await Task.Run(() =>
             {
                 using var reader = media.OpenVideo(clip, Math.Max(board.Width, board.Height)) ?? throw new VideoException($"{clip} has no picture this PC can read.");
@@ -136,7 +138,7 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
         {
             if (board.Frame(id) is not { } from)
             {
-                pictures.Add(board.ReferenceFile(id) ?? throw new VideoException(
+                pictures.Add(board.ReferenceFile(id) ?? board.ReferenceVideo(id) ?? throw new VideoException(
                     $"{frame.Label} is to be made from \"{id}\", which is neither a frame of this video nor a picture in its References folder ({board.ReferencesFolder})" +
                     (board.ReferenceFiles() is { Count: > 0 } there ? $", which has {string.Join(", ", there.Take(20).Select(board.InReferences))}." : ", which is empty.")));
                 continue;
@@ -148,22 +150,52 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
                 throw new VideoException($"{from.Label} isn't made yet, and {frame.Label} is made from it: make {from.Label} first.");
             pictures.Add(picture);
         }
-        var inputs = new VideoInputs
+        // A video named in from: a picture from its middle (a look, a character, a place), as the edit model takes pictures.
+        var stills = new List<string>();
+        for (var i = 0; i < pictures.Count; i++)
+            if (Storyboard.IsVideoFile(pictures[i]))
+            {
+                var video = pictures[i];
+                stills.Add(pictures[i] = await Task.Run(() => Still(video), ct).ConfigureAwait(false));
+            }
+        try
         {
-            Prompt = FramePrompt(board, frame),
-            Seed = frame.Seed,
-            Width = board.Width,
-            Height = board.Height,
-            Pictures = pictures,
-            Prefix = Prefix(board, frame.Id),
-        };
-        var job = pictures.Count > 0 ? VideoJob.Edit : VideoJob.Frame;
-        var stamp = FrameStamp(board, frame);
-        var run = await RunAsync(job, ModelOf(board, frame), inputs, frame.Set, board.FrameMeta(frame), stamp, "image", progress, userMessage, ct).ConfigureAwait(false);
-        await Task.Run(() => save(run.Output, target), ct).ConfigureAwait(false);
-        Restamp(board.FrameMeta(frame), stamp);
-        VideoVersions.Remember(board.FrameMeta(frame), VideoPiece.Of(frame).Settings(board));
-        return new VideoMade(target, board.FrameMeta(frame), run.Template, run.Took, run.Notes);
+            var inputs = new VideoInputs
+            {
+                Prompt = FramePrompt(board, frame),
+                Seed = frame.Seed,
+                Width = board.Width,
+                Height = board.Height,
+                Pictures = pictures,
+                Prefix = Prefix(board, frame.Id),
+            };
+            var job = pictures.Count > 0 ? VideoJob.Edit : VideoJob.Frame;
+            var stamp = FrameStamp(board, frame);
+            var run = await RunAsync(job, ModelOf(board, frame), inputs, frame.Set, board.FrameMeta(frame), stamp, "image", progress, userMessage, ct).ConfigureAwait(false);
+            await Task.Run(() => save(run.Output, target), ct).ConfigureAwait(false);
+            Restamp(board.FrameMeta(frame), stamp);
+            VideoVersions.Remember(board.FrameMeta(frame), VideoPiece.Of(frame).Settings(board));
+            return new VideoMade(target, board.FrameMeta(frame), run.Template, run.Took, run.Notes);
+        }
+        finally
+        {
+            foreach (var still in stills)
+                try { File.Delete(still); }
+                catch (IOException) { }
+        }
+    }
+
+    /// <summary>A picture from the middle of a video, as a PNG in the temp folder.</summary>
+    private string Still(string video)
+    {
+        if (media is null)
+            throw new VideoException($"Nothing on this PC can read video to take a picture from {Path.GetFileName(video)} (ffmpeg in BlackBox's Data\\tools would).");
+        using var reader = media.OpenVideo(video, 2048) ?? throw new VideoException($"{video} has no picture this PC can read.");
+        using var frame = VideoCheck.MiddleFrame(reader) ?? throw new VideoException($"No frame of {video} could be read.");
+        var still = Path.Combine(Path.GetTempPath(), $"blackbox-{Guid.NewGuid():N}.png");
+        using (var stream = File.Create(still))
+            frame.Encode(stream, SkiaSharp.SKEncodedImageFormat.Png, 100);
+        return still;
     }
 
     // ---- shots -------------------------------------------------------------------------------------
@@ -214,6 +246,15 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
                     : $"Shot {shot.Id} starts on {first.Label}, which isn't made yet: make it first.");
             job = lastPicture is null ? VideoJob.ShotFromFirst : VideoJob.Shot;
         }
+        // A shot that moves as a video of the user's does: made with a template that follows a video.
+        string? motion = null;
+        if (shot.Motion is { } named && !shot.LipSync)
+        {
+            motion = board.ReferenceVideo(named) ?? throw new VideoException(
+                $"Shot {shot.Id} moves as \"{named}\", which is no video in its References folder ({board.ReferencesFolder})" +
+                (board.ReferenceVideos() is { Count: > 0 } there ? $", which has {string.Join(", ", there.Take(20).Select(board.InReferences))}." : ", which has no videos."));
+            job = VideoJob.Motion;
+        }
         var inputs = new VideoInputs
         {
             Prompt = shot.LipSync ? ShotPrompt(board, shot) : WithoutMusic(ShotPrompt(board, shot)),
@@ -225,6 +266,7 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
             FirstImage = firstPicture,
             LastImage = lastPicture,
             Audio = audio,
+            Video = motion,
             TextToVideo = firstPicture is null,
             Prefix = Prefix(board, shot.Id),
         };
@@ -766,6 +808,8 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
         var sb = new StringBuilder();
         if (frame.Of is { } of && board.Shot(of) is { } before)
             sb.Append("of|").Append(of).Append('|').Append(FileStamp(board.ShotVideo(before)));
+        else if (frame.Of is { } video && (board.ReferenceVideo(video) is not null || Storyboard.IsVideoFile(video)))
+            sb.Append("of|").Append(video).Append('|').Append(board.ReferenceVideo(video) is { } file ? FileStamp(file) : "none");
         else if (frame.File is { Length: > 0 } file)
             sb.Append("file|").Append(file).Append('|').Append(FileStamp(file));
         else
@@ -774,7 +818,7 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
               .Append(ModelOf(board, frame)).Append('|').Append(frame.Set?.ToJsonString());
             // Not itself, which making it skips: its own picture changes with every make, and it was never up to date.
             foreach (var id in frame.From.Where(id => id != frame.Id))
-                sb.Append("|from ").Append(id).Append(' ').Append(board.Frame(id) is { } from ? FileStamp(board.FramePicture(from)) : board.ReferenceFile(id) is { } picture ? FileStamp(picture) : "");
+                sb.Append("|from ").Append(id).Append(' ').Append(board.Frame(id) is { } from ? FileStamp(board.FramePicture(from)) : (board.ReferenceFile(id) ?? board.ReferenceVideo(id)) is { } picture ? FileStamp(picture) : "");
         }
         sb.Append('|').Append(board.Width).Append('x').Append(board.Height);
         return Hash(sb.ToString());
@@ -789,6 +833,9 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
         foreach (var id in new[] { shot.First, shot.LipSync ? null : shot.Last })
             sb.Append('|').Append(board.Frame(id) is { } frame ? FileStamp(board.FramePicture(frame)) : "none");
         sb.Append('|').Append(ModelOf(board, shot));
+        // Only a shot that follows a video has it in its stamp: those made before stay up to date.
+        if (shot.Motion is { } motion && !shot.LipSync)
+            sb.Append("|motion ").Append(motion).Append(' ').Append(board.ReferenceVideo(motion) is { } file ? FileStamp(file) : "none");
         if (Storyboard.Speaks(shot))
             sb.Append("|line ").Append(LineStamp(board, shot)).Append(' ').Append(LineLead.ToString(CultureInfo.InvariantCulture));
         return Hash(sb.ToString());

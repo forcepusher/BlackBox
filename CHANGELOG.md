@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Video generator takes videos as references: File… on a reference card and dropping a video copy it
+  into References as a video card you can play. Ask in the chat for a clip that moves as it does, one
+  that goes on from where it ends, or frames in its look.
 - Every clip in Video generator shows its start and end frames at its ends: click one to pick it, or,
   not made yet, File… or Generate on it. They left the clip's right-click menu.
 - In File inspector, drag a box over a PDF page, a picture or a video frame to ask about that area:

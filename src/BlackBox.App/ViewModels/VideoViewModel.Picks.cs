@@ -55,7 +55,7 @@ public sealed partial class VideoViewModel
         if (card.Frame is { } frame)
             Show(frame);
         else
-            Choose(new VideoPick(card.Path, $"Image file · {Path.GetFileName(card.Path)}"));
+            Choose(new VideoPick(card.Path, $"{card.Kind} · {Path.GetFileName(card.Path)}"));
     }
 
     /// <summary>A clip's start or end frame clicked: picked (a clip with none there gets one).</summary>
@@ -99,7 +99,7 @@ public sealed partial class VideoViewModel
 
     /// <summary>
     /// Files dropped on the panel are copied in, as they are, under names of their own (see
-    /// <see cref="Storyboard.KeepPicture"/>): pictures into References as image files (one dropped on
+    /// <see cref="Storyboard.KeepPicture"/>): pictures and videos into References as image and video files (one dropped on
     /// a new card is what that card is), sounds into References too, laid on the sound line they were
     /// dropped on from where they were dropped (one dropped on a new clip is what that clip is), else
     /// on the first sound line from the playhead, one after another. Anything else goes with the next message.
@@ -108,7 +108,8 @@ public sealed partial class VideoViewModel
     {
         var place = _drop;
         DragOver(null);
-        var pictures = paths.Where(p => File.Exists(p) && Storyboard.PictureExtensions.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase)).ToList();
+        // Videos are references too: a shot moves as one does, or goes on from where it ends.
+        var pictures = paths.Where(p => File.Exists(p) && (Storyboard.PictureExtensions.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase) || Storyboard.IsVideoFile(p))).ToList();
         var sounds = paths.Where(p => File.Exists(p) && Storyboard.SoundExtensions.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase)).ToList();
         if (pictures.Count + sounds.Count == 0)
             return false;

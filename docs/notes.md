@@ -641,6 +641,34 @@ given a blank picture of the video's size to encode instead, where its sampler d
 taken from a picture of the user's (`file`) is still cut to the video's frame: to keep all of a
 picture of another shape, make the frame from it.
 
+**Reference videos** (the user, 2026-10-26: a reference can be a video too). A video file of the
+user's in References (`Storyboard.VideoExtensions`: mp4, mov, webm, mkv, avi, m4v) is a card on the
+References row like an image file: File… on a card (the Open dialog takes pictures and videos) or a
+drop copies it in as it is (`KeepPicture`), its card shows a frame from its middle
+(`VideoCheck.Poster`) with a small ▶, and picked, the viewer plays it with its scrubber and it goes
+into the chat's box as "Video file · walk.mp4", the model told what it can do with it. It is used three
+ways, each named by its file in References (`Storyboard.ReferenceVideo`; one from elsewhere by its full
+path is copied in by `TakeInPictures`, as pictures are):
+- **A shot's `motion`**: the shot copies its movement, poses and timing, from its first frame. It is
+  a job of its own (`VideoJob.Motion`), made with a template that loads a video, which no other job
+  takes (`VideoTemplates.Fits`): the user's own LTX-2.5 pose or motion workflow first, then ComfyUI's
+  LTX-2.3 union control IC-LoRA (`video_ltx2_3_ic_lora`), Wan Animate 2's motion transfer, LTX-2's
+  depth and canny controls and Wan VACE's video to video. The video goes into the template's
+  LoadVideo (`VideoInputs.Video`), which is uploaded as any input file is. The video is in the shot's
+  stamp, so a new one makes it out of date; shots without one keep their stamps. Not with a line: a
+  lip-synced shot is made as before. None of these templates was run on this PC (no GPU here, and
+  the laptop's ComfyUI has none of their models); what they take was read from the templates'
+  files in ComfyUI 0.41's templates package. LTX-2.5 has no IC-LoRA template of ComfyUI's yet, so
+  motion with LTX-2.5 needs the user's own pose workflow (the guide's `_pose`).
+- **A frame's `of`**: the frame is where the video ends ("walk.mp4"), so the shot that starts on it
+  goes on from the user's clip (continuity), as `of` does with a shot's clip. Kept by `Normalize`
+  while its name ends in a video's extension or names one in References.
+- **A frame's `from`**: a picture from its middle goes to the edit model like any other picture,
+  for a look, a person or a place to keep (a still in the temp folder, deleted after the job).
+**Generate** on a card still makes a picture only: a clip is a shot on the timeline, made from its
+frames and checked by the looks, and one that starts where a reference video ends is a shot with
+`of`; a reference of its own would be a second, unchecked way to make the same clip.
+
 What a frame, shot or the song is made with is its `model`: words ("furry nova xl", "my pony
 workflow", "juggernaut") matched against everything ComfyUI has installed for that kind of job, a
 template's name, or nothing for the first of a list known to do it well whose models and nodes are
@@ -779,7 +807,7 @@ should be done entirely in the timeline. Right click on timeline -> Create. And 
 a file reference to copy the file, or hit a generate button. Remove all that folder tab nonsense").
 The videos folder as a tree, which the panel had for a day (the user's earlier "I want it to work just
 like a file explorer"), went with it. Its rows: **References**, a card for each picture frames are made
-from, an image file of the user's or a generated image (a reference of the storyboard), by name, with
+from, an image file of the user's or a generated image (a reference of the storyboard), or a video file of the user's (see "Reference videos"), by name, with
 the dashed + after them; **Video clips** ("Video" until 2026-10-25), a block per clip (shot) from where it starts for as long as it
 lasts, its clip's frames inside once made (else its frames and what happens in it), its state under
 it, dragging its right edge making it longer or shorter in half seconds, the dashed + after the last;

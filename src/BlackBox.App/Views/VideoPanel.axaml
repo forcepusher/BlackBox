@@ -293,7 +293,7 @@
               <StackPanel>
                 <views:VideoRuler x:Name="Ruler" Height="26" Pps="{Binding Pps}" Length="{Binding Length}" Lead="{x:Static vm:VideoViewModel.Lead}" />
 
-                <!-- References: a card each, image files and generated images; the dashed card makes a new one. -->
+                <!-- References: a card each, image files, video files and generated images; the dashed card makes a new one. -->
                 <Panel Height="92" Tag="references" Background="Transparent">
                   <ItemsControl ItemsSource="{Binding References}">
                     <ItemsControl.ItemsPanel>
@@ -316,8 +316,12 @@
                               <TextBlock DockPanel.Dock="Bottom" Text="{Binding Name}" FontSize="11" Margin="6,1,6,0" TextTrimming="CharacterEllipsis" />
                               <Panel Background="#0B0C0E">
                                 <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                <!-- A video file: a play mark at its corner, as a clip has none. -->
+                                <Border IsVisible="{Binding IsVideo}" Background="#B0000000" CornerRadius="3" Padding="4,3" Margin="4" HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                                  <PathIcon Data="M8 5v14l11-7z" Width="9" Height="9" Foreground="White" />
+                                </Border>
                                 <StackPanel IsVisible="{Binding IsNew}" Spacing="3" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                  <Button Classes="choice" Content="File…" Click="OnCardFile" ToolTip.Tip="Copy a picture of yours in" />
+                                  <Button Classes="choice" Content="File…" Click="OnCardFile" ToolTip.Tip="Copy a picture or video of yours in" />
                                   <Button Classes="choice" Content="Generate" Click="OnCardGenerate" ToolTip.Tip="BlackBox makes it: say in the chat what it should be" />
                                 </StackPanel>
                               </Panel>
@@ -330,7 +334,7 @@
                   <Canvas>
                     <Button Classes="pick" Canvas.Left="{Binding AddReferenceX}" Canvas.Top="4" Width="56" Height="84" Click="OnCreateReference"
                             HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
-                            ToolTip.Tip="A new reference: a picture of yours, or one BlackBox generates" AutomationProperties.Name="New reference">
+                            ToolTip.Tip="A new reference: a picture or video of yours, or a picture BlackBox generates" AutomationProperties.Name="New reference">
                       <Panel>
                         <Rectangle Stroke="{StaticResource BbBorder}" StrokeThickness="1.5" StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
                         <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="16" Height="16" Foreground="{StaticResource BbMuted}" />

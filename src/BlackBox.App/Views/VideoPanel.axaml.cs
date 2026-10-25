@@ -94,16 +94,22 @@ public partial class VideoPanel : UserControl
             (DataContext as VideoViewModel)?.DragOver(null);
     }
 
-    /// <summary>The Open dialog for pictures or sounds of the user's, to copy in.</summary>
+    /// <summary>The Open dialog for pictures ("image"), pictures or videos ("reference") or sounds of the user's, to copy in.</summary>
     private async Task<IReadOnlyList<string>> PickFilesAsync(string kind)
     {
         if (TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage)
             return [];
-        var extensions = kind == "image" ? Core.Video.Storyboard.PictureExtensions : Core.Video.Storyboard.SoundExtensions;
+        static FilePickerFileType Type(string name, IEnumerable<string> extensions) => new(name) { Patterns = extensions.Select(x => "*" + x).ToList() };
+        var (pictures, videos) = (Core.Video.Storyboard.PictureExtensions, Core.Video.Storyboard.VideoExtensions);
         var picked = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = kind == "image" ? "A picture to copy in" : "A sound to copy in",
-            FileTypeFilter = [new FilePickerFileType(kind == "image" ? "Pictures" : "Sounds") { Patterns = extensions.Select(x => "*" + x).ToList() }],
+            Title = kind switch { "reference" => "A picture or video to copy in", "image" => "A picture to copy in", _ => "A sound to copy in" },
+            FileTypeFilter = kind switch
+            {
+                "reference" => [Type("Pictures and videos", pictures.Concat(videos)), Type("Pictures", pictures), Type("Videos", videos)],
+                "image" => [Type("Pictures", pictures)],
+                _ => [Type("Sounds", Core.Video.Storyboard.SoundExtensions)],
+            },
         });
         return picked.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
     }

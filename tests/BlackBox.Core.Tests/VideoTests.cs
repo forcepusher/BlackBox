@@ -414,6 +414,51 @@ public sealed class StoryboardTests : IDisposable
         }
     }
     [Fact]
+    public void A_video_in_References_is_a_shots_motion_a_frames_end_and_one_from_elsewhere_is_copied_in()
+    {
+        var board = Storyboard.Parse("""{"title": "Dance", "frames": [{"id": "f1", "prompt": "a fox"}], "shots": [{"id": "s1", "first": "f1", "prompt": "the fox dances"}]}""");
+        board.Folder = _dir;
+        board.Save();
+        File.WriteAllText(Path.Combine(_dir, "References", "walk.mp4"), "not really a video");
+        Assert.Equal(Path.Combine(_dir, "References", "walk.mp4"), board.ReferenceVideo("walk"));
+        Assert.Equal(Path.Combine(_dir, "References", "walk.mp4"), board.ReferenceVideo("References/walk.mp4"));
+        Assert.Null(board.ReferenceVideo("run"));
+        Assert.Equal([Path.Combine(_dir, "References", "walk.mp4")], board.ReferenceVideos());
+        // A video is no picture to make frames from by name: ReferenceFiles lists pictures alone.
+        Assert.Empty(board.ReferenceFiles());
+
+        var before = VideoMaker.ShotStamp(board, board.Shot("s1")!);
+        Assert.Equal(VideoJob.ShotFromFirst, VideoMaker.JobOf(board.Shot("s1")!));
+        var elsewhere = Path.Combine(Path.GetTempPath(), $"bb-dance-{Guid.NewGuid():N}.mp4");
+        File.WriteAllText(elsewhere, "moves");
+        try
+        {
+            var change = new JsonObject
+            {
+                ["shots"] = new JsonArray(new JsonObject { ["id"] = "s1", ["motion"] = elsewhere }),
+                ["frames"] = new JsonArray(new JsonObject { ["id"] = "f2", ["of"] = "walk.mp4" }),
+            };
+            var merged = Storyboard.Merge(board, change);
+            merged.Save();
+            var taken = merged.TakeInPictures();
+            merged.Save();
+            Assert.Single(taken);
+            var loaded = Storyboard.Load(_dir);
+            var shot = loaded.Shot("s1")!;
+            Assert.Equal(Path.GetFileName(elsewhere), shot.Motion);
+            Assert.Equal(VideoJob.Motion, VideoMaker.JobOf(shot));
+            Assert.NotEqual(before, VideoMaker.ShotStamp(loaded, shot));
+            // Where the user's walk ends: kept as the frame's "of", though no shot is called so.
+            Assert.Equal("walk.mp4", loaded.Frame("f2")!.Of);
+            Assert.Null(Storyboard.Parse("""{"frames": [{"id": "f2", "of": "nothing"}]}""").Frame("f2")!.Of);
+        }
+        finally
+        {
+            File.Delete(elsewhere);
+        }
+    }
+
+    [Fact]
     public void Dissolves_and_fades_overlap_the_shot_before()
     {
         var board = Storyboard.Parse("""
@@ -615,6 +660,11 @@ public sealed class VideoTemplatesTests : IDisposable
         Assert.False(VideoTemplates.Fits(flf, VideoJob.ShotFromFirst));
         Assert.True(VideoTemplates.Fits(Editor("LoadImage", "LoadAudio", "CLIPTextEncode", "SaveVideo"), VideoJob.LipSync));
         Assert.True(VideoTemplates.Fits(Editor("TextEncodeAceStepAudio1.5", "SaveAudioMP3"), VideoJob.Song));
+        // A workflow that loads a video follows it (LTX's IC-LoRA control, Wan Animate): for a shot's motion alone.
+        var control = Editor("LoadImage", "LoadVideo", "CLIPTextEncode", "LTXAddVideoICLoRAGuide", "SaveVideo");
+        Assert.True(VideoTemplates.Fits(control, VideoJob.Motion));
+        Assert.False(VideoTemplates.Fits(control, VideoJob.ShotFromFirst));
+        Assert.False(VideoTemplates.Fits(Editor("LoadImage", "CLIPTextEncode", "SaveVideo"), VideoJob.Motion));
         // No prompt (an upscaler), or a 3D model: no job of a video's.
         Assert.False(VideoTemplates.Fits(Editor("LoadImage", "ImageUpscaleWithModel", "SaveImage"), VideoJob.Edit));
         Assert.False(VideoTemplates.Fits(Editor("CLIPTextEncode", "SaveImage", "SaveGLB"), VideoJob.Frame));
@@ -693,6 +743,27 @@ public sealed class VideoRolesTests
           "251:201": {"class_type": "EmptyLTXVLatentVideo", "inputs": {"width": ["251:203", 0], "height": ["251:203", 1], "length": ["251:226", 1], "batch_size": 1}}
         }
         """;
+
+    [Fact]
+    public void A_motion_video_goes_into_the_templates_video_loader()
+    {
+        var wf = Load("""
+            {
+              "1": {"class_type": "LoadImage", "inputs": {"image": "start.png"}, "_meta": {"title": "Load Image"}},
+              "2": {"class_type": "LoadVideo", "inputs": {"file": "dance.mp4"}, "_meta": {"title": "Load Video"}},
+              "3": {"class_type": "SaveVideo", "inputs": {"filename_prefix": "video/ic", "video": ["9", 0]}}
+            }
+            """);
+        var missed = new List<string>();
+        VideoRoles.Apply(wf, Empty, new VideoInputs { FirstImage = @"C:\v\f1.png", Video = @"C:\v\References\walk.mp4" }, missed);
+        Assert.Equal(@"C:\v\f1.png", (string?)wf.Nodes["1"]!["inputs"]!["image"]);
+        Assert.Equal(@"C:\v\References\walk.mp4", (string?)wf.Nodes["2"]!["inputs"]!["file"]);
+        Assert.Empty(missed);
+
+        var none = Load("""{"1": {"class_type": "LoadImage", "inputs": {"image": "a.png"}}}""");
+        VideoRoles.Apply(none, Empty, new VideoInputs { Video = @"C:\v\walk.mp4" }, missed);
+        Assert.Contains(missed, m => m.Contains("the video", StringComparison.Ordinal));
+    }
 
     [Fact]
     public void A_ltx_template_gets_its_prompt_frames_size_length_and_seed_by_their_titles()
@@ -1086,6 +1157,21 @@ public sealed class VideoToolTests : IDisposable
         Assert.Contains("(lip-synced, first frame only)", text);
     }
 
+    [Fact]
+    public void The_storyboard_names_the_users_videos_and_what_a_shot_moves_as()
+    {
+        var board = Storyboard.Parse("""
+            {"title": "Dance", "frames": [{"id": "f1", "prompt": "a fox"}, {"id": "f2", "of": "walk.mp4"}],
+             "shots": [{"id": "s1", "first": "f1", "prompt": "the fox dances", "motion": "dance.mp4"}, {"id": "s2", "first": "f2", "prompt": "it walks on"}]}
+            """);
+        board.Folder = _dir;
+        Directory.CreateDirectory(board.ReferencesFolder);
+        File.WriteAllText(Path.Combine(board.ReferencesFolder, "dance.mp4"), "moves");
+        var text = VideoTool.Overview(board);
+        Assert.Contains("The user's videos there, by name in a shot's motion, a frame's of or from: dance.mp4.", text);
+        Assert.Contains("Moves as the video dance.mp4.", text);
+        Assert.Contains("where the video walk.mp4 ends", text);
+    }
     [Fact]
     public void A_changed_frame_puts_what_is_made_from_it_on_the_list_too()
     {

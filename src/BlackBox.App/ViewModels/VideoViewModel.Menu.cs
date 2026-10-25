@@ -181,15 +181,15 @@ public sealed partial class VideoViewModel
     }
 
     /// <summary>
-    /// Asks the panel for files of the user's to copy in (the Open dialog), of a kind: "image" or
-    /// "sound"; set by the panel.
+    /// Asks the panel for files of the user's to copy in (the Open dialog), of a kind: "image", "reference"
+    /// (a picture or a video) or "sound"; set by the panel.
     /// </summary>
     public Func<string, Task<IReadOnlyList<string>>>? PickFiles { get; set; }
 
-    /// <summary>File… on a card: the picture picked is copied into References and is that card from then on.</summary>
+    /// <summary>File… on a card: the picture or video picked is copied into References and is that card from then on.</summary>
     private async Task PickFileForAsync(ReferenceCard card)
     {
-        if (PickFiles is null || (await PickFiles("image")).FirstOrDefault() is not { } picture)
+        if (PickFiles is null || (await PickFiles("reference")).FirstOrDefault() is not { } picture)
             return;
         try
         {
@@ -197,6 +197,11 @@ public sealed partial class VideoViewModel
             string copy;
             if (card.Frame is { IsMade: false } frame)
                 copy = FillReference(frame, picture);
+            else if (!string.Equals(Path.GetExtension(picture), Path.GetExtension(card.Path), StringComparison.OrdinalIgnoreCase))
+            {
+                // Another kind of file (a video for a picture): a card of its own beside it, the one there kept.
+                copy = Storyboard.KeepPicture(picture, _board.ReferencesFolder);
+            }
             else
             {
                 // An image file of the user's replaced by another: the new one in its place, under its name.
@@ -209,7 +214,7 @@ public sealed partial class VideoViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            ShowError($"The picture couldn't be copied in: {ex.Message}", ex);
+            ShowError($"The file couldn't be copied in: {ex.Message}", ex);
         }
     }
 

@@ -29,7 +29,7 @@ public sealed class VideoInputs
     /// <summary>A sound the video is made with (lip sync).</summary>
     public string? Audio { get; init; }
 
-    /// <summary>A video a sound is made from (foley).</summary>
+    /// <summary>A video a job is made from: the clips a sound is heard from (foley), or the video a shot's movement follows (motion).</summary>
     public string? Video { get; init; }
 
     /// <summary>A song's style and words.</summary>

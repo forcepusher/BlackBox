@@ -83,6 +83,62 @@ public sealed partial class Storyboard
     /// <summary>The kinds of picture a reference can be.</summary>
     public static readonly string[] PictureExtensions = [".png", ".jpg", ".jpeg", ".webp", ".bmp"];
 
+    /// <summary>The kinds of video a reference can be: a clip of the user's whose movement, look or end a shot takes.</summary>
+    public static readonly string[] VideoExtensions = [".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"];
+
+    public static bool IsVideoFile(string path) => VideoExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The video in References a shot's "motion", a frame's "of" or "from" names: by its path there
+    /// ("dance.mp4", "Mira/walk"), with or without its extension, by its name alone, or a video
+    /// anywhere by its full path. Null when it names none that is there.
+    /// </summary>
+    public string? ReferenceVideo(string? name)
+    {
+        name = name?.Trim().Trim('"').Trim().TrimEnd('/', '\\');
+        if (string.IsNullOrEmpty(name))
+            return null;
+        try
+        {
+            if (Path.IsPathRooted(name))
+                return File.Exists(name) && IsVideoFile(name) ? Path.GetFullPath(name) : null;
+            if (Folder.Length == 0)
+                return null;
+            var relative = name.Replace('/', Path.DirectorySeparatorChar);
+            if (relative.StartsWith(ReferencesName + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                relative = relative[(ReferencesName.Length + 1)..];
+            var place = Path.Combine(ReferencesFolder, relative);
+            if (File.Exists(place) && IsVideoFile(place))
+                return Path.GetFullPath(place);
+            foreach (var extension in VideoExtensions)
+                if (File.Exists(place + extension))
+                    return Path.GetFullPath(place + extension);
+            if (!name.Contains('/') && !name.Contains('\\'))
+                return ReferenceVideos().FirstOrDefault(f => string.Equals(Path.GetFileName(f), name, StringComparison.OrdinalIgnoreCase) ||
+                                                             string.Equals(Path.GetFileNameWithoutExtension(f), name, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException) { }
+        return null;
+    }
+
+    /// <summary>The videos in the References folder (in folders of their own too), without the versions kept of pieces, by their full paths.</summary>
+    public IReadOnlyList<string> ReferenceVideos()
+    {
+        try
+        {
+            return Folder.Length > 0 && Directory.Exists(ReferencesFolder)
+                ? new DirectoryInfo(ReferencesFolder).EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 2, IgnoreInaccessible = true })
+                    .Where(f => VideoExtensions.Contains(f.Extension, StringComparer.OrdinalIgnoreCase) && !IsTake(f.Name) && !f.Name.StartsWith('.') &&
+                                !string.Equals(f.Directory?.Name, VersionsName, StringComparison.OrdinalIgnoreCase))
+                    .Select(f => f.FullName).Order(StringComparer.OrdinalIgnoreCase).ToList()
+                : [];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
     /// <summary>
     /// The picture an entry of a frame's "from" names: a frame of the video by its id, else in
     /// References a picture by its path ("Mira/side", with or without its extension) or a
@@ -183,7 +239,7 @@ public sealed partial class Storyboard
                         continue;
                     var full = Path.GetFullPath(name);
                     if (full.StartsWith(video, StringComparison.OrdinalIgnoreCase) || !File.Exists(full) ||
-                        !PictureExtensions.Contains(Path.GetExtension(full), StringComparer.OrdinalIgnoreCase))
+                        !PictureExtensions.Contains(Path.GetExtension(full), StringComparer.OrdinalIgnoreCase) && !IsVideoFile(full))
                         continue;
                     frame.From[i] = InReferences(KeepPicture(full, ReferencesFolder));
                     taken.Add((full, frame.From[i]));
@@ -191,6 +247,24 @@ public sealed partial class Storyboard
                 // Not copied: the frame is made from it where it is.
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { }
             }
+        // A video of the user's a shot moves as, or a frame is where it ends, given by its path: copied in the same way.
+        string? TakeVideo(string? name)
+        {
+            if (name?.Trim().Trim('"').Trim() is not { Length: > 0 } given || !Path.IsPathRooted(given))
+                return null;
+            var full = Path.GetFullPath(given);
+            if (full.StartsWith(video, StringComparison.OrdinalIgnoreCase) || !File.Exists(full) || !IsVideoFile(full))
+                return null;
+            var copy = InReferences(KeepPicture(full, ReferencesFolder));
+            taken.Add((full, copy));
+            return copy;
+        }
+        foreach (var shot in Shots)
+            try { shot.Motion = TakeVideo(shot.Motion) ?? shot.Motion; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { }
+        foreach (var frame in Frames)
+            try { frame.Of = TakeVideo(frame.Of) ?? frame.Of; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { }
         // A sound of the user's given by its path goes into Sounds the same way, and is that copy from then on.
         foreach (var sound in Sounds)
             try
@@ -542,6 +616,7 @@ public sealed partial class Storyboard
             s.Camera ??= "";
             s.Line ??= "";
             s.Model = Clean(s.Model);
+            s.Motion = Clean(s.Motion);
             // A line is said lip-synced: a shot is lip-synced when it has one, and only then.
             s.LipSync = s.Line.Trim().Length > 0;
             s.Transition = s.Transition?.Trim().ToLowerInvariant() switch
@@ -553,10 +628,14 @@ public sealed partial class Storyboard
             if (Frame(s.First) is null) s.First = null;
             if (Frame(s.Last) is null) s.Last = null;
         }
-        // A frame is where a shot's clip ends only for a shot there is, and not one of that shot's own frames.
+        // A frame is where a shot's clip ends only for a shot there is, and not one of that shot's own
+        // frames; or where a video of the user's ends, named by its file ("walk.mp4").
         foreach (var f in Frames)
-            if (f.Of is { } of && (Shot(of) is not { } shot || shot.First == f.Id || shot.Last == f.Id))
+        {
+            f.Of = Clean(f.Of);
+            if (f.Of is { } of && (Shot(of) is { } shot ? shot.First == f.Id || shot.Last == f.Id : !IsVideoFile(of) && ReferenceVideo(of) is null))
                 f.Of = null;
+        }
         foreach (var a in Sounds)
         {
             if (renamed.Contains(a))
@@ -771,6 +850,7 @@ public sealed class VideoFrame
     /// starts on it goes on from the moment that one ends. A picture model can't make that frame:
     /// asked to move a girl to a mailbox, an edit model left her where she stood.
     /// </summary>
+    /// <remarks>Or a video in References ("walk.mp4"): the frame is where that video ends, so a shot goes on from the user's clip.</remarks>
     public string? Of { get; set; }
 
     /// <summary>Changes to the workflow after the storyboard's own, as the comfyui tool's set takes them: {"node id.input": value}.</summary>
@@ -816,6 +896,12 @@ public sealed class VideoShot
 
     /// <summary>Lip-synced to its line: set by whether it has one.</summary>
     public bool LipSync { get; set; }
+
+    /// <summary>
+    /// A video in References ("dance.mp4") whose movement it copies: made with a template that takes
+    /// a video to follow (LTX's IC-LoRA control, Wan Animate), from its first frame.
+    /// </summary>
+    public string? Motion { get; set; }
 
     /// <summary>What is said in it, in the video's voice (<see cref="Storyboard.Voice"/>), lip-synced.</summary>
     public string Line { get; set; } = "";

@@ -7,7 +7,7 @@ using BlackBox.Core.Comfy;
 namespace BlackBox.Core.Video;
 
 /// <summary>The kinds of job a video needs ComfyUI for.</summary>
-public enum VideoJob { Frame, Edit, Shot, ShotFromFirst, ShotFromText, LipSync, Song, Foley }
+public enum VideoJob { Frame, Edit, Shot, ShotFromFirst, ShotFromText, LipSync, Song, Foley, Motion }
 
 /// <summary>
 /// A way to do a job that is installed: a workflow of the user's, one of ComfyUI's templates, or (for
@@ -55,6 +55,10 @@ public static partial class VideoTemplates
         [VideoJob.ShotFromFirst] = ["video_ltx2_5_i2v", "video_ltx2_3_i2v", "video_wan2_2_14b_i2v"],
         [VideoJob.ShotFromText] = ["video_ltx2_5_t2v", "video_ltx2_3_t2v", "video_wan2_2_14b_t2v"],
         [VideoJob.LipSync] = ["ltx2_5_ia2v", "ltx2_3_ia2v", "wan2_2_14b_s2v"],
+        // A shot that moves as a video of the user's does: the user's own LTX-2.5 pose workflow first,
+        // then ComfyUI's LTX-2.3 union control IC-LoRA (pose, depth or edges from the video), Wan
+        // Animate's motion transfer, LTX-2's depth and canny controls and Wan VACE's video to video.
+        [VideoJob.Motion] = ["ltx2_5_flf2v_pose", "ltx2_5_pose", "ltx2_5_motion", "video_ltx2_3_ic_lora", "video_wan_animate2", "video_ltx2_depth_to_video", "video_ltx2_canny_to_video", "video_wan_vace_14b_v2v"],
         [VideoJob.Song] = ["audio_ace_step1_5_xl_turbo", "audio_ace_step1_5_xl_sft", "audio_ace_step_1_5_checkpoint", "audio_ace_step1_5_xl_base", "audio_ace_step_1_t2a_song"],
         [VideoJob.Foley] = ["blackbox/video_to_audio", "mmaudio"],
     };
@@ -69,6 +73,7 @@ public static partial class VideoTemplates
         VideoJob.ShotFromText => "a video from words",
         VideoJob.LipSync => "a video from a picture and a sound, lip-synced (LTX's image and audio to video)",
         VideoJob.Foley => "foley, a sound from a video (MMAudio)",
+        VideoJob.Motion => "a video that moves as a reference video does (LTX's IC-LoRA control or Wan Animate, from a first frame and the video)",
         _ => "a song from a style and lyrics (ACE-Step)",
     };
 
@@ -200,7 +205,7 @@ public static partial class VideoTemplates
         VideoJob.Frame or VideoJob.Edit => [VideoJob.Frame, VideoJob.Edit],
         VideoJob.Song => [VideoJob.Song],
         VideoJob.Foley => [VideoJob.Foley],
-        _ => [VideoJob.Shot, VideoJob.ShotFromFirst, VideoJob.ShotFromText, VideoJob.LipSync],
+        _ => [VideoJob.Shot, VideoJob.ShotFromFirst, VideoJob.ShotFromText, VideoJob.LipSync, VideoJob.Motion],
     };
 
     // ---- what is installed ----------------------------------------------------------------------------
@@ -320,7 +325,8 @@ public static partial class VideoTemplates
         // Foley is heard from a video: its prompt (what is heard) is the sampler's own, if it has one.
         if (job == VideoJob.Foley)
             return video && savesAudio && !savesMesh;
-        if (!prompt || savesMesh || video)
+        // A workflow that loads a video is one that follows it: only a shot with a motion video is made with one.
+        if (!prompt || savesMesh || video != (job == VideoJob.Motion))
             return false;
         return job switch
         {
@@ -330,6 +336,7 @@ public static partial class VideoTemplates
             VideoJob.ShotFromFirst => savesVideo && pictures == 1 && !sound,
             VideoJob.ShotFromText => savesVideo && pictures == 0 && !sound,
             VideoJob.LipSync => savesVideo && pictures >= 1 && sound,
+            VideoJob.Motion => savesVideo && !sound,
             _ => savesAudio && !savesVideo && pictures == 0 && !sound,
         };
     }

@@ -799,6 +799,9 @@ public static partial class VideoCheck
         return last;
     }
 
+    /// <summary>The frame halfway through a video.</summary>
+    public static SKBitmap? MiddleFrame(IVideoReader reader) => FrameAt(reader, reader.Duration.TotalSeconds / 2)?.Frame;
+
     private static (TimeSpan Time, SKBitmap Frame)? FrameAt(IVideoReader reader, double seconds, bool first = false)
     {
         if (!first)
