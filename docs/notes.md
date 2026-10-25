@@ -275,15 +275,36 @@ Files the agent makes or shows appear in the chat: under the tool call that made
 a reply that names them by their full path (whatever made them: ComfyUI, a script, Blender, a
 download). Pictures are shown at the chat's width, animations play, a sound plays over its
 waveform, a 3D model turns with the mouse (the wheel comes closer, a double click resets it), and
-any other file gets a card. Each has Preview (the file in the Document preview panel, see
-[Document preview](#document-preview)) and Show in folder. A saved chat shows them again when it is
+any other file gets a card. Each has Inspect (the file in the Inspect file panel, see
+[Inspect file](#inspect-file); the button was Preview, and the panel Document preview, until the
+user renamed them on 2026-10-26) and Show in folder. A saved chat shows them again when it is
 opened, as long as the files are still there. Open (the file's own program) was on every card until
 2026-10-25: the user had it taken off for Preview, as the panel shows a file without leaving BlackBox;
 the full-screen viewer of pictures and videos lost its Open too.
 
+A document's card (every kind the panel shows that isn't a picture or media: Markdown, CSV/TSV, text
+and code, PDF, Office, web pages) has a peek over its name since 2026-10-26, the user's "one universal
+experience" for every file: at most 240 pixels tall, cut off below (`FileCardPreview`,
+`InspectFile.Peek`). A PDF shows its first page, drawn by PDFium at twice the card's width and kept to
+its top 2:1; an Office or OpenDocument file the picture it keeps of itself (`InspectFile.SavedThumbnail`:
+docProps/thumbnail.jpeg, Thumbnails/thumbnail.png, which PowerPoint saves by default, Word and Excel only
+with "Save thumbnail", OpenDocument always: what Explorer's thumbnail is); else the start of its text
+as the panel draws it, 14 lines from the first that isn't blank: a .md or a Word or PowerPoint file's
+text formatted, a CSV's first 8 rows and 8 columns as a table, an Excel file's first sheet as a table
+of its cells' values (`SheetTable`, from read_file's text), a web page's text as fetch_page reads it,
+code and a PDF's text (PDFium failing) in a fixed-width font. A file with nothing to show keeps the bare
+card. A click on the peek opens the full-screen viewer on the file, shown by the panel's own view
+(`InspectFileView`, also the panel's body) in a column at most 1100 wide, kept 96 from the sides and 56
+from the top so Windows' previewers (a window of their own, drawn over anything laid on them) don't
+cover the bar and the arrows; the arrow keys go on through the chat's pictures, videos and documents.
+Checked on the laptop (a stand-in model naming .md, .csv, .cs, .pdf, .docx, .xlsx, .pptx and .html, UIA
+invokes): every card had its peek; each opened full screen (Word's and Excel's previewers in the
+column), Right went from the .md to the .csv, Esc closed each. The sample .docx, .xlsx and .pptx keep
+no picture of themselves, so they peek as text.
+
 A Markdown file (.md, .markdown) gets a card like a .docx: from 2026-10-23 to 10-25 it was drawn
 formatted in the chat, in a box up to 420 pixels tall that scrolled, which the user found too big in
-the chat log; it is drawn so in the Document preview panel now. write_file reports a Markdown file
+the chat log; it is drawn so in the Inspect file panel now, with the card's peek its first lines. write_file reports a Markdown file
 it writes or appends to as a file of the call, so its card shows under the call; other text files it
 writes don't, and read_file shows none (the agent reads many READMEs while it works).
 
@@ -1968,15 +1989,16 @@ its pick out of the message, the row cap was checked only between files, and a m
 commit showed no hint. In the app, two lines picked in the panel and "What do the selected lines
 do?" got an answer about exactly those lines, with no tool call.
 
-### Document preview
-**Document preview** in the Toolkit dropdown (`DocumentViewModel`, `DocumentPanel`; 760 wide, least
-420) shows one file whole on the left of the chat. A card's **Preview** opens it on that file
-(`MainWindowViewModel.PreviewFile`: the dropdown switches to it through the same path as a pick, so
-the window lays the panel out before it grows); picked from the dropdown it waits for a Preview or a
+### Inspect file
+**Inspect file** in the Toolkit dropdown (`InspectFileViewModel`, `InspectFilePanel`; 760 wide, least
+420) shows one file whole on the left of the chat. A card's **Inspect** opens it on that file
+(`MainWindowViewModel.Inspect`: the dropdown switches to it through the same path as a pick, so
+the window lays the panel out before it grows); picked from the dropdown it waits for an Inspect or a
 file dropped on it. Its top bar has the file's name, what it is, and the × that closes it; Show in folder was there too until the user had it taken off (2026-10-25), as the file's card in the chat has it. A message sent
-while it shows a file carries "Document preview · name" over the bubble and tells the model which file
-is open, so "what does this say" is about it. Which way a file is shown (`DocumentPreview.KindOf`,
-by its extension, the formats BlackBox already reads and writes):
+while it shows a file carries "Inspect file · name" over the bubble and tells the model which file
+is open, so "what does this say" is about it. Which way a file is shown (`InspectFile.KindOf`,
+by its extension, the formats BlackBox already reads and writes; the file itself is `InspectFileView`,
+under the panel's bar here and in the full-screen viewer for a card's peek, see [Previews](#previews)):
 - Markdown (.md): formatted by the replies' renderer (`MarkdownView`), its first 200,000 characters.
 - .csv, .tsv: a table through the same renderer, the first 500 rows and 40 columns, fields in quotes
   kept whole, a .csv split at semicolons when its first line has more of them than commas.
@@ -2011,13 +2033,13 @@ whole document", `IToolkit.Whole`, which now also gives the card's tooltip and i
 in what BlackBox draws (Markdown, a table, text) goes into the box as a pick (`MainWindowViewModel.Pick`)
 captioned with where it is: "Lines 8-9 · notes.md", "Cells B4:C4 · sales.csv", "Rows 6-8", "Row 4";
 for a Word or PowerPoint file shown as its text only, "Selected text" (those lines aren't the file's).
-The message then carries "Document preview · notes.md · lines 8-9" over its bubble and gives the
+The message then carries "Inspect file · notes.md · lines 8-9" over its bubble and gives the
 model the path, the place and the selected text (up to 20,000 characters; for a table its header's
 names of the columns). Where it is comes from `DocumentPick` (Core): lines are counted in the text
 shown, and for Markdown `MarkdownLite.Blocks(…, out starts)` and `Render(…, out MdLine map)` say which
 source line each shown line is, and for a table's row where each cell starts in it; a CSV's table
-(`DocumentPreview.Table`) has its header as row 1, as a spreadsheet does. The panel reads the
-selection on each left release and on Shift/Ctrl key releases (`DocumentPanel`): a click that selects
+(`InspectFile.Table`) has its header as row 1, as a spreadsheet does. The panel reads the
+selection on each left release and on Shift/Ctrl key releases (`InspectFileView`): a click that selects
 nothing, Esc, the card's ×, sending the message or another file unpicks it; scroll bars don't. The
 text is `KeptSelectionTextBlock`, which keeps its selection when it loses focus, so it stays marked
 while the user types in the box; a press in one block clears the others'. Windows' previewers (PDF,

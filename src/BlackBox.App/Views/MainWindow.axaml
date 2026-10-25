@@ -245,17 +245,34 @@
     <DataTemplate DataType="vm:FileChangesViewModel">
       <views:FileChangesPanel />
     </DataTemplate>
-    <DataTemplate DataType="vm:DocumentViewModel">
-      <views:DocumentPanel />
+    <DataTemplate DataType="vm:InspectFileViewModel">
+      <views:InspectFilePanel />
     </DataTemplate>
 
+    <!-- A document: a peek at its start as the Inspect file panel draws it, which opens full screen,
+         over the card with its name. What doesn't fit the peek is cut off. -->
     <DataTemplate DataType="vm:FileCardPreview">
       <Border Classes="preview" Width="498">
-        <DockPanel>
-          <PathIcon DockPanel.Dock="Left" Width="22" Height="22" Margin="2,0,10,0" Foreground="{StaticResource BbAccent}" VerticalAlignment="Center"
-                    Data="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
-          <views:PreviewFooter />
-        </DockPanel>
+        <StackPanel Spacing="8">
+          <Button Classes="picture" Click="OnPictureClick" IsVisible="{Binding HasPeek}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                  ToolTip.Tip="See it full screen" AutomationProperties.Name="{Binding FileName}">
+            <Border MaxHeight="240" ClipToBounds="True" CornerRadius="6" Background="{StaticResource BbBackground}">
+              <Panel>
+                <Image Source="{Binding Thumbnail}" IsVisible="{Binding Thumbnail, Converter={x:Static ObjectConverters.IsNotNull}}" MaxWidth="480" MaxHeight="240"
+                       Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Top" RenderOptions.BitmapInterpolationMode="HighQuality" />
+                <views:MarkdownView Source="{Binding PeekMarkdown}" IsVisible="{Binding PeekMarkdown, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                    IsHitTestVisible="False" Margin="14,10" VerticalAlignment="Top" />
+                <TextBlock Text="{Binding PeekText}" IsVisible="{Binding PeekText, Converter={x:Static ObjectConverters.IsNotNull}}" IsHitTestVisible="False"
+                           FontFamily="Cascadia Mono,Consolas,monospace" FontSize="11" TextWrapping="NoWrap" Margin="12,10" VerticalAlignment="Top" />
+              </Panel>
+            </Border>
+          </Button>
+          <DockPanel>
+            <PathIcon DockPanel.Dock="Left" Width="22" Height="22" Margin="2,0,10,0" Foreground="{StaticResource BbAccent}" VerticalAlignment="Center"
+                      Data="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+            <views:PreviewFooter />
+          </DockPanel>
+        </StackPanel>
       </Border>
     </DataTemplate>
   </Window.DataTemplates>

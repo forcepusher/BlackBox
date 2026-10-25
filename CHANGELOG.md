@@ -18,15 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folders, instead of reading whole files again.
 - Code blocks in replies and Markdown previews show in a box of their own, with their language and a
   **Copy** button.
-- **Document preview** in the **Toolkit** dropdown: a file from the chat shown whole on the left of
+- **Inspect file** in the **Toolkit** dropdown: a file from the chat shown whole on the left of
   the chat. Markdown is formatted as replies are, .csv as a table, text and code as they are, and
   pictures, video and sound as in the chat, PDF pages drawn by BlackBox itself (with PDFium, Chrome's
   PDF engine); Word, Excel, PowerPoint and web pages show as in Explorer's preview pane.
-- With Document preview open, the file shows over the chat's box, and text you select in it goes into
+- With Inspect file open, the file shows over the chat's box, and text you select in it goes into
   your message as where it is (lines, or cells of a table), so you can ask about that part. A click
   elsewhere in the panel, or Esc, lets go of it.
-- **Preview** on every file in the chat opens it in Document preview, in place of **Open**, which the
+- **Inspect** on every file in the chat opens it in Inspect file, in place of **Open**, which the
   full-screen viewer no longer has either.
+- Documents in the chat (Markdown, tables, text and code, PDF, Word, Excel, PowerPoint, web pages)
+  show a small preview on their card: a PDF's first page, the picture an Office file keeps of
+  itself, or the start of the text. Click it to see the file full screen, as pictures and videos
+  open, with the arrow keys going on to the chat's other files.
 - Markdown files (.md) get a card like other documents, under the reply that names them and under
   write_file when the agent writes one.
 - `Data\errors.log`: every error BlackBox shows (in the chat, in the banner under the top bar, in
@@ -88,7 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Video editor's videos are in a menu on the video's name at the top: open another, start a new one, or
   rename or delete this one (to the Recycle Bin). On the timeline, right-click a card, clip or sound
   to rename or delete it, or to see an earlier version of it.
-- A × at the top right of Video editor, File changes and Document preview closes the tool.
+- A × at the top right of Video editor, File changes and Inspect file closes the tool.
 
 ### Changed
 - Asked for code, commands or facts that change (versions, prices, news), the agent looks them up
@@ -117,7 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Video editor's video dropdown, its Open… and Show folder buttons, the settings button with the video's
   title, and the soundtrack and shots' own sound sliders.
 - Video editor's **New video** button beside **Make the video**: New video is in the menu on the video's name.
-- Document preview's **Show in folder**: the file's card in the chat has it.
+- Inspect file's **Show in folder**: the file's card in the chat has it.
 
 ### Fixed
 - Picking a tool in the **Toolkit** dropdown, or None, changes the window in one go: no more frame
