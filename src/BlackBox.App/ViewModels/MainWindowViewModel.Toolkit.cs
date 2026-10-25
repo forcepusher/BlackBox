@@ -34,6 +34,12 @@ public interface IToolkit : IDisposable
     /// by the tool's PropertyChanged under this name.
     /// </summary>
     (string Title, string Details)? Whole => null;
+
+    /// <summary>The tooltip of <see cref="Whole"/>'s card: what it is, and how to pick something instead.</summary>
+    string WholeTip => "";
+
+    /// <summary>The icon on <see cref="Whole"/>'s card; a file's with none.</summary>
+    Avalonia.Media.Geometry? WholeIcon => null;
 }
 
 /// <summary>
@@ -62,7 +68,7 @@ public sealed partial class MainWindowViewModel
         new("Code changes", "See the files the agent changes in this chat as it works: click lines to ask about them", 880, 560, 0,
             vm => new DiffViewModel(vm)),
         new(DocumentPreviewName, "See a file from the chat beside it: documents, PDFs, spreadsheets, slides, pictures, text and code", 760, 420, 0,
-            vm => new DocumentViewModel(vm._previews)),
+            vm => new DocumentViewModel(vm._previews, vm)),
     ];
 
     private const string DocumentPreviewName = "Document preview";
@@ -109,6 +115,8 @@ public sealed partial class MainWindowViewModel
     public bool ShowsWhole => ShownWhole is not null;
     public string WholeTitle => ShownWhole?.Title ?? "";
     public string WholeDetails => ShownWhole?.Details ?? "";
+    public string WholeTip => Toolkit?.WholeTip ?? "";
+    public Avalonia.Media.Geometry WholeIcon => Toolkit?.WholeIcon ?? AttachmentItem.FileShape;
 
     /// <summary>The row over the box: the files going with the message, and what it is about in the open tool.</summary>
     public bool ShowsBoxRow => HasAttachments || ShowsWhole;
@@ -118,6 +126,8 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(ShowsWhole));
         OnPropertyChanged(nameof(WholeTitle));
         OnPropertyChanged(nameof(WholeDetails));
+        OnPropertyChanged(nameof(WholeTip));
+        OnPropertyChanged(nameof(WholeIcon));
         OnPropertyChanged(nameof(ShowsBoxRow));
     }
 

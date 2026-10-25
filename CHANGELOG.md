@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the chat. Markdown is formatted as replies are, .csv as a table, text and code as they are, and
   pictures, video and sound as in the chat; PDF, Word, Excel, PowerPoint and web pages show as in
   Explorer's preview pane.
+- With Document preview open, the file shows over the chat's box, and text you select in it goes into
+  your message as where it is (lines, or cells of a table), so you can ask about that part. A click
+  elsewhere in the panel, or Esc, lets go of it.
 - **Preview** on every file in the chat opens it in Document preview, in place of **Open**, which the
   full-screen viewer no longer has either.
 - Markdown files (.md) get a card like other documents, under the reply that names them and under

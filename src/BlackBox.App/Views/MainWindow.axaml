@@ -831,12 +831,12 @@
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-              <!-- With nothing picked in the open tool, what a message is about there (the whole video),
+              <!-- With nothing picked in the open tool, what a message is about there (the whole video, the document shown),
                    as a pick shows and where it would come: after the user's own files. -->
-              <Panel Margin="0,8,12,0" IsVisible="{Binding ShowsWhole}" ToolTip.Tip="What you type is about this video. Pick something in it to ask about that.">
+              <Panel Margin="0,8,12,0" IsVisible="{Binding ShowsWhole}" ToolTip.Tip="{Binding WholeTip}">
                 <Border Classes="attachment file" MinHeight="36" AutomationProperties.Name="{Binding WholeTitle}">
                   <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,10,0">
-                    <PathIcon Data="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z" />
+                    <PathIcon Data="{Binding WholeIcon}" />
                     <StackPanel Spacing="1" VerticalAlignment="Center">
                       <TextBlock Text="{Binding WholeTitle}" MaxWidth="220" TextTrimming="CharacterEllipsis" />
                       <TextBlock Classes="muted" Text="{Binding WholeDetails}" />
