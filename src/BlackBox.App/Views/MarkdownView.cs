@@ -68,7 +68,16 @@ public class MarkdownView : StackPanel
 
     private static SelectableTextBlock TextPart(string markdown)
     {
-        var text = new SelectableTextBlock { TextWrapping = TextWrapping.Wrap, LineHeight = 21 };
+        // Its margin is its padding turned inside out: the text sits where it did, and a drag that
+        // starts up to 12 pixels left or right of it, or 4 over or under it, selects from its first
+        // or last letter, so the user needn't land on the letter itself.
+        var text = new SelectableTextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            LineHeight = 21,
+            Margin = new Thickness(-12, -4),
+            Padding = new Thickness(12, 4),
+        };
         MarkdownText.SetSource(text, markdown);
         return text;
     }

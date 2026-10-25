@@ -45,10 +45,14 @@
     <Style Selector="DockPanel.codeHeader">
       <Setter Property="Margin" Value="12,4,4,0" />
     </Style>
+    <!-- The code sits 12,2,12,10 inside the box as before; its text block reaches 11 past the box's
+         sides and 3 under it (over the 1px border), so a drag from there selects. Whole multiples of 4
+         are whole pixels at every usual scale, so the box rounds to the same size as without them. -->
     <Style Selector="SelectableTextBlock.code">
       <Setter Property="FontSize" Value="13" />
       <Setter Property="LineHeight" Value="19" />
-      <Setter Property="Padding" Value="12,2,12,10" />
+      <Setter Property="Margin" Value="-12,0,-12,-4" />
+      <Setter Property="Padding" Value="24,2,24,14" />
     </Style>
     <Style Selector="Button.copyCode">
       <Setter Property="Background" Value="Transparent" />
