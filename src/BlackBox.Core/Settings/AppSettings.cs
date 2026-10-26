@@ -308,10 +308,21 @@ public sealed class WindowPlacement
     public bool Maximized { get; set; }
 }
 
+/// <summary>How the window's toolkit panels show what they show, as the user last left it.</summary>
+public sealed class PanelSettings
+{
+    /// <summary>File changes: long lines wrap inside the panel rather than run off its right edge.</summary>
+    public bool WrapDiff { get; set; } = true;
+
+    /// <summary>File changes: the diff follows the agent's edits, to the lines it just changed.</summary>
+    public bool WatchChanges { get; set; } = true;
+}
+
 public sealed class AppSettings
 {
     public ServerSettings Server { get; set; } = new();
     public AgentSettings Agent { get; set; } = new();
+    public PanelSettings Panels { get; set; } = new();
 
     /// <summary>The main window's last size and place; null until it was first closed.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -357,6 +368,7 @@ public sealed class SettingsStore(AppPaths paths)
             // A hand-edited "server": null left the window without a server to show, and it closed at start.
             settings.Server ??= new();
             settings.Agent ??= new();
+            settings.Panels ??= new();
             var loaded = JsonSerializer.Serialize(settings, SettingsJson.Default.AppSettings);
             _base = JsonNode.Parse(loaded) as JsonObject;
             // Rewrite the file if it still has keys from older versions, so it only ever holds

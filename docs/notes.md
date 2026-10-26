@@ -2185,6 +2185,21 @@ box ("notes.md", "whole file · added · +99"), and for the model the files list
 selected, and its diff (at most 300 lines). It is the first file until another is clicked, and stays
 selected across a refresh; that reselecting doesn't scroll the diff (`Reselecting`). Nothing changed
 yet, the card is the tool's own ("File changes", "nothing in it yet").
+**Wrap and Watch** (the user, 2026-10-26), toggles in the bar between the summary and the ×, shown
+once a file changed, both on by default and kept in settings.json under `panels` (`wrapDiff`,
+`watchChanges`; `PanelSettings`). **Wrap**: the diff's code column is `*` (under a sideways scroll it
+sizes to the line, as Auto did) and `ListBox.diff.wrap` turns the sideways scrollbar off and the code
+TextBlock to Wrap, so a long line wraps under its code with the numbers and marker on its first row.
+Rows stay logical lines: picks, drags (checked with a real drag across two wrapped lines) and the box's
+card are as before. **Watch**: each refresh compares the new diff with the one shown (`Fresh`: added and
+removed lines counted by file and text, as an edit moves every number below it) and marks what is new
+`IsFresh`, which lights its row (an amber layer, fading over 1 s after 1.5 s; not the pick's look).
+Watching, the first fresh row's file is selected (its card over the box follows) and the row is left
+where it is in the upper half of the diff, else brought a quarter of the way down. The first read and
+another chat's list light nothing. A wheel turn, a press on the scrollbar, PageUp/Down, Home/End or
+the arrows in the diff, a line picked or a file clicked stop watching for now (the toggle shows off)
+without saving it: the saved choice is the user's click. Turned on, Watch goes to the last change and
+lights it again. Checked in the app on 2026-10-26 with a stand-in model making four edits on cue.
 
 **Checked on qwen3.8** (2026-10-24, blackbox-cli): asked to review the commit that added all this, it
 listed the commit with `diff summary=true`, then read the whole diff (about 110,000 characters) in 11

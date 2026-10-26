@@ -23,9 +23,13 @@ public sealed record DiffFileItem(DiffFile File, int Row, string FullPath)
 }
 
 /// <summary>A row of the diff: a file's header, a hunk's @@ line, or a line of a file with its numbers on the old side and the new.</summary>
-public sealed class DiffRow(DiffFileItem file, DiffLine? line)
+public sealed partial class DiffRow(DiffFileItem file, DiffLine? line) : ObservableObject
 {
     public DiffFileItem File { get; } = file;
+
+    /// <summary>Changed by the agent just now: lit up a moment, then it fades.</summary>
+    [ObservableProperty]
+    private bool _isFresh;
 
     /// <summary>Where it is among the diff's rows.</summary>
     public int Index { get; init; }
@@ -89,6 +93,12 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
         {
             _refreshTimer!.Stop();
             _ = LoadAsync();
+        });
+        _fade = new DispatcherTimer(TimeSpan.FromMilliseconds(1500), DispatcherPriority.Background, (_, _) =>
+        {
+            _fade!.Stop();
+            foreach (var row in _latest)
+                row.IsFresh = false;
         });
         _chat.Attachments.CollectionChanged += OnBoxChanged;
         _chat.ChangesUpdated += OnChangesUpdated;
@@ -178,6 +188,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     {
         var picked = keepPicks ? Selection.SelectedItems.OfType<DiffRow>().Select(r => r.Key).ToHashSet() : [];
         var current = keepPicks ? CurrentFile?.FullPath : null;
+        var before = keepPicks ? _diff : null;
         _diff = diff;
         Status = Hint;
         var rows = new List<DiffRow>();
@@ -194,6 +205,18 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             rows.Add(new DiffRow(item, null) { Index = rows.Count });
             foreach (var line in file.Lines.Take(MaxRows - rows.Count))
                 rows.Add(new DiffRow(item, line) { Index = rows.Count });
+        }
+        // Another chat's list, or the first read, has no "just now": nothing lights up.
+        _fade.Stop();
+        _latest = before is null ? [] : Fresh(before, rows);
+        foreach (var row in _latest)
+            row.IsFresh = true;
+        if (_latest.Count > 0)
+        {
+            _fade.Start();
+            // Watching, the file changed is the one selected, as a click on it would.
+            if (Watch)
+                current = _latest[0].File.FullPath;
         }
         _picking = true;
         try
@@ -220,12 +243,116 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
         {
             _picking = false;
         }
-        OnPicked();
+        _refreshing = true;
+        try { OnPicked(); }
+        finally { _refreshing = false; }
         Folder = diff.Root.Length > 0 ? diff.Root : null;
         // "2 files · +14", as each file's counts leave out what is none.
         var counts = string.Join(" ", new[] { diff.Added > 0 ? $"+{diff.Added}" : null, diff.Removed > 0 ? $"-{diff.Removed}" : null }.OfType<string>());
         Summary = diff.Files.Count == 0 ? "" : $"{diff.Files.Count} {(diff.Files.Count == 1 ? "file" : "files")}" + (counts.Length > 0 ? " · " + counts : "");
+        if (Watch && _latest.Count > 0)
+            ShowRow?.Invoke(_latest[0].Index);
     }
+
+    /// <summary>
+    /// The added and removed lines in <paramref name="rows"/> that <paramref name="before"/> didn't
+    /// have, file by file: what the agent changed since the last read. Counted by their text, as the
+    /// numbers of every line below an edit move.
+    /// </summary>
+    public static List<DiffRow> Fresh(DiffResult before, IReadOnlyList<DiffRow> rows)
+    {
+        var had = new Dictionary<(string, DiffLineKind, string), int>();
+        foreach (var file in before.Files)
+        {
+            var path = before.FullPath(file).ToUpperInvariant();
+            foreach (var line in file.Lines.Where(l => l.Kind is DiffLineKind.Added or DiffLineKind.Removed))
+                had[(path, line.Kind, line.Text)] = had.GetValueOrDefault((path, line.Kind, line.Text)) + 1;
+        }
+        var fresh = new List<DiffRow>();
+        foreach (var row in rows.Where(r => r.IsAdded || r.IsRemoved))
+        {
+            var key = (row.File.FullPath.ToUpperInvariant(), row.Line!.Value.Kind, row.Line.Value.Text);
+            if (had.GetValueOrDefault(key) is > 0 and var n)
+                had[key] = n - 1;
+            else
+                fresh.Add(row);
+        }
+        return fresh;
+    }
+
+    // ---- how the diff shows: Wrap and Watch ------------------------------------------------------
+
+    /// <summary>Long lines wrap inside the panel, under the code, rather than run off its right edge; kept in settings.</summary>
+    public bool Wrap
+    {
+        get => _chat.Panels.WrapDiff;
+        set
+        {
+            if (value == Wrap)
+                return;
+            _chat.Panels.WrapDiff = value;
+            OnPropertyChanged();
+            _chat.SavePanels();
+        }
+    }
+
+    /// <summary>Set by a scroll or pick by hand: watching stops until Watch is clicked again, its saved choice kept.</summary>
+    private bool _watchStopped;
+
+    /// <summary>
+    /// The diff follows the agent: what it just changed is selected, scrolled to and lit up a
+    /// moment. Kept in settings; turned on, it goes to the last change.
+    /// </summary>
+    public bool Watch
+    {
+        get => _chat.Panels.WatchChanges && !_watchStopped;
+        set
+        {
+            if (value == Watch)
+                return;
+            _watchStopped = false;
+            _chat.Panels.WatchChanges = value;
+            OnPropertyChanged();
+            _chat.SavePanels();
+            if (value)
+                GoToLatest();
+        }
+    }
+
+    /// <summary>The user scrolled the diff or picked something: it stays where they took it.</summary>
+    internal void StopWatching()
+    {
+        if (!Watch)
+            return;
+        _watchStopped = true;
+        OnPropertyChanged(nameof(Watch));
+    }
+
+    /// <summary>The lines the agent changed last, lit up while they are fresh; empty before it changed one with the panel open.</summary>
+    private List<DiffRow> _latest = [];
+
+    private readonly DispatcherTimer _fade;
+
+    /// <summary>Set while a refresh picks the same lines again: no pick by hand, so watching goes on.</summary>
+    private bool _refreshing;
+
+    /// <summary>Watch turned on: its file selected, the last change in sight and lit up again.</summary>
+    private void GoToLatest()
+    {
+        if (_latest.Count == 0 || _latest[0].Index >= Rows.Count || !ReferenceEquals(Rows[_latest[0].Index], _latest[0]))
+            return;
+        Reselecting = true;
+        try { CurrentFile = _latest[0].File; }
+        finally { Reselecting = false; }
+        foreach (var row in _latest)
+            row.IsFresh = true;
+        _fade.Stop();
+        _fade.Start();
+        ShowRow?.Invoke(_latest[0].Index);
+    }
+
+    /// <summary>Watching: the panel brings this row, the agent's last change, into sight.</summary>
+    public event Action<int>? ShowRow;
 
     /// <summary>A file in the list was clicked: the panel shows its header at the top of the diff.</summary>
     public event Action<int>? GoToRow;
@@ -246,6 +373,9 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             // A file's header and a hunk's @@ line are no lines of it: a click there picks nothing.
             foreach (var row in Selection.SelectedItems.OfType<DiffRow>().Where(r => !r.IsLine).ToList())
                 Selection.Deselect(row.Index);
+            // Lines picked by hand stay in sight: the agent's next edit doesn't scroll them away.
+            if (!_refreshing && Selection.Count > 0)
+                StopWatching();
             _chat.Pick(Picks().Select(p => (p.File.FullPath, $"{Capital(Lines(p.Rows))} · {Path.GetFileName(p.File.FullPath)}")).ToList());
         }
         finally
@@ -420,6 +550,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
         _chat.Attachments.CollectionChanged -= OnBoxChanged;
         _chat.ChangesUpdated -= OnChangesUpdated;
         _refreshTimer.Stop();
+        _fade.Stop();
         _loading?.Cancel();
     }
 }

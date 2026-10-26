@@ -22,6 +22,26 @@ public class SeveralWindowsTests : IDisposable
     }
 
     [Fact]
+    public void File_changes_wrap_and_watch_are_on_until_turned_off_and_stay_off()
+    {
+        var paths = new AppPaths(_root);
+        paths.EnsureCreated();
+        File.WriteAllText(paths.SettingsFile, """{"server":{"model":"qwen"}}""");
+        var store = new SettingsStore(paths);
+        var settings = store.Load();
+        Assert.True(settings.Panels.WrapDiff);
+        Assert.True(settings.Panels.WatchChanges);
+
+        settings.Panels.WrapDiff = false;
+        store.Save(settings);
+
+        var again = new SettingsStore(paths).Load();
+        Assert.False(again.Panels.WrapDiff);
+        Assert.True(again.Panels.WatchChanges);
+        Assert.Equal("qwen", again.Server.Model);
+    }
+
+    [Fact]
     public void Each_window_saves_only_what_it_changed()
     {
         var paths = new AppPaths(_root);

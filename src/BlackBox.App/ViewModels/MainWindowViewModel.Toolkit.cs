@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Avalonia.Threading;
 using BlackBox.Core.Agent;
 using BlackBox.Core.Diffs;
+using BlackBox.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace BlackBox.App.ViewModels;
@@ -236,6 +237,11 @@ public sealed partial class MainWindowViewModel
 
     /// <summary>The files the agent changed in the chat on screen, each with what it held before.</summary>
     internal FileChanges Changes { get; private set; } = null!;
+
+    /// <summary>How the toolkit panels show things (File changes' Wrap and Watch), saved as the user leaves them.</summary>
+    internal PanelSettings Panels => _settings.Panels;
+
+    internal void SavePanels() => SaveSettings();
 
     /// <summary>On the window's thread: the list changed, or another chat's took its place.</summary>
     internal event Action? ChangesUpdated;

@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
@@ -23,6 +24,13 @@ public partial class FileChangesPanel : UserControl
         DiffList.AddHandler(PointerMovedEvent, OnDiffMoved, RoutingStrategies.Bubble, handledEventsToo: true);
         DiffList.AddHandler(PointerReleasedEvent, (_, _) => EndDrag(), RoutingStrategies.Bubble, handledEventsToo: true);
         DiffList.AddHandler(PointerCaptureLostEvent, (_, _) => EndDrag(), RoutingStrategies.Bubble, handledEventsToo: true);
+        // Scrolled by hand (the wheel, keys), the diff stays where the user took it: no more watching.
+        DiffList.AddHandler(PointerWheelChangedEvent, (_, _) => _vm?.StopWatching(), RoutingStrategies.Tunnel);
+        DiffList.AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (e.Key is Key.PageUp or Key.PageDown or Key.Home or Key.End or Key.Up or Key.Down)
+                _vm?.StopWatching();
+        }, RoutingStrategies.Tunnel);
         _dragScroll = new DispatcherTimer(TimeSpan.FromMilliseconds(30), DispatcherPriority.Input, (_, _) => DragScroll());
     }
 
@@ -52,6 +60,9 @@ public partial class FileChangesPanel : UserControl
     private void OnDiffPressed(object? sender, PointerPressedEventArgs e)
     {
         EndDrag();
+        // The scrollbar, taken by hand: no more watching.
+        if ((e.Source as Visual)?.FindAncestorOfType<ScrollBar>(includeSelf: true) is not null)
+            _vm?.StopWatching();
         var point = e.GetCurrentPoint(DiffList);
         if (!point.Properties.IsLeftButtonPressed || (e.KeyModifiers & KeyModifiers.Shift) != 0 ||
             (e.Source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is not { } item || _vm is null)
@@ -159,10 +170,43 @@ public partial class FileChangesPanel : UserControl
     {
         base.OnDataContextChanged(e);
         if (_vm is not null)
+        {
             _vm.GoToRow -= OnGoToRow;
+            _vm.ShowRow -= OnShowRow;
+        }
         _vm = DataContext as FileChangesViewModel;
         if (_vm is not null)
+        {
             _vm.GoToRow += OnGoToRow;
+            _vm.ShowRow += OnShowRow;
+        }
+    }
+
+    /// <summary>
+    /// Watching, the agent changed this row: left as it is in the upper half of the diff, else brought a
+    /// quarter of the way down, so a little before the change and more of what follows it show.
+    /// </summary>
+    private void OnShowRow(int row)
+    {
+        // After the rows are laid out: they were just replaced.
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_vm is null || row >= _vm.Rows.Count)
+                return;
+            if (Shown(row) is { } top && top >= 0 && top <= DiffList.Bounds.Height / 2)
+                return;
+            DiffList.ScrollIntoView(row);
+            // Once the rows it brought are laid out, and the list's height with them.
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (Shown(row) is { } at && DiffList.FindDescendantOfType<ScrollViewer>() is { } scroll)
+                    scroll.Offset = scroll.Offset.WithY(Math.Clamp(scroll.Offset.Y + at - DiffList.Bounds.Height / 4, 0, Math.Max(0, scroll.Extent.Height - scroll.Viewport.Height)));
+            }, DispatcherPriority.Background);
+        }, DispatcherPriority.Background);
+
+        // Where the row's top is over the diff; null when it isn't laid out.
+        double? Shown(int index) =>
+            DiffList.ContainerFromIndex(index) is { IsVisible: true } container && container.TranslatePoint(default, DiffList) is { } point ? point.Y : null;
     }
 
     /// <summary>A file in the list was clicked: its header at the top of the diff, as far as the list scrolls.</summary>
@@ -178,7 +222,11 @@ public partial class FileChangesPanel : UserControl
     private void OnFilePicked(object? sender, SelectionChangedEventArgs e)
     {
         if (FileList.SelectedItem is DiffFileItem file && _vm is { Reselecting: false })
-            _vm?.GoToCommand.Execute(file);
+        {
+            // Gone to by hand: watching would take it away again.
+            _vm.StopWatching();
+            _vm.GoToCommand.Execute(file);
+        }
     }
 
     /// <summary>
