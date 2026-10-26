@@ -69,6 +69,27 @@ internal static class LineDiff
         return hunks;
     }
 
+    /// <summary>Each run of changed lines that turns <paramref name="a"/> into <paramref name="b"/>, with no unchanged lines around it.</summary>
+    public static List<ChangeBlock> Blocks(string[] a, string[] b)
+    {
+        var ops = Script(a, b);
+        var blocks = new List<ChangeBlock>();
+        for (var i = 0; i < ops.Count;)
+        {
+            if (ops[i].Kind == ' ')
+            {
+                i++;
+                continue;
+            }
+            var (start, removed, added) = (i, 0, 0);
+            for (; i < ops.Count && ops[i].Kind != ' '; i++)
+                if (ops[i].Kind == '-') removed++;
+                else added++;
+            blocks.Add(new ChangeBlock(ops[start].A, removed, ops[start].B, added));
+        }
+        return blocks;
+    }
+
     /// <summary>As unified diffs write it: 1-based, the line before the hunk when it has none.</summary>
     private static string Range(int start, int count) => count == 1 ? $"{start + 1}" : $"{(count == 0 ? start : start + 1)},{count}";
 

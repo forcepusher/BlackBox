@@ -486,6 +486,143 @@ public sealed partial class FileChanges
         };
     }
 
+    /// <summary>
+    /// What the File changes panel shows: <see cref="Diff"/> with each file's place in git, for its
+    /// Stage buttons; or, of the files there, what isn't committed or isn't staged yet, each against
+    /// its last commit or what is staged. A file git doesn't see is left out of those two.
+    /// </summary>
+    public async Task<DiffResult> DiffAsync(ChangesShown shown, CancellationToken ct)
+    {
+        var all = Diff();
+        var paths = all.Files.Select(all.FullPath).ToList();
+        var git = paths.Count == 0 ? [] : await GitChanges.ReadAsync(paths, shown == ChangesShown.NotCommitted, ct).ConfigureAwait(false);
+        if (shown == ChangesShown.All)
+            return all with
+            {
+                Files = all.Files.Select(f => git.TryGetValue(all.FullPath(f), out var read) ? f with { Git = GitChanges.FileOf(all.FullPath(f), read) } : f).ToList(),
+                InGit = git.Count > 0,
+            };
+        var files = new List<(string Path, DiffFile File)>();
+        foreach (var path in paths)
+        {
+            ct.ThrowIfCancellationRequested();
+            // Committed, or staged, as it is: nothing of it to show.
+            if (!git.TryGetValue(path, out var read) || read.Y == ' ' && (shown == ChangesShown.NotStaged || read.X == ' '))
+                continue;
+            var bytes = shown == ChangesShown.NotCommitted ? read.Head : read.Index;
+            var now = Read(path);
+            var status = bytes is null ? "added" : !now.Exists ? "deleted" : "modified";
+            var gitFile = GitChanges.FileOf(path, read);
+            if (bytes is not null && (FolderDiff.IsBinary(bytes.AsSpan(0, Math.Min(bytes.Length, 8000))) || DocumentText.Handles(path)) || now.Exists && now.Text is null)
+            {
+                files.Add((path, new DiffFile(path, status, []) { Binary = true, Git = gitFile }));
+                continue;
+            }
+            var lines = LineDiff.Hunks(bytes is null ? [] : LineDiff.Lines(Decode(bytes)), now.Text is null ? [] : LineDiff.Lines(now.Text), 3);
+            if (lines.Count == 0)
+                continue; // only its line endings or mode differ
+            files.Add((path, new DiffFile(path, status, lines)
+            {
+                Added = lines.Count(l => l.Kind == DiffLineKind.Added),
+                Removed = lines.Count(l => l.Kind == DiffLineKind.Removed),
+                Git = gitFile,
+            }));
+        }
+        var root = CommonFolder(files.Select(s => s.Path).ToList());
+        return new DiffResult(root, shown == ChangesShown.NotCommitted ? "Not committed" : "Not staged",
+            files.Select(s => s.File with { Path = root.Length == 0 ? s.Path : Path.GetRelativePath(root, s.Path).Replace('\\', '/') }).ToList())
+        {
+            NewIsOnDisk = true,
+            InGit = git.Count > 0,
+            OutsideGit = paths.Count(p => !git.ContainsKey(p)),
+        };
+
+    }
+
+
+    /// <summary>
+    /// Puts a file's changes back as they were in the <paramref name="shown"/> view: before the agent
+    /// changed it, as last committed, or as staged. <paramref name="lines"/> are the diff's changed
+    /// lines to put back, an added one by its number in the file now (Old null), a removed one by its
+    /// number before (New null); null puts back the whole file, and one that wasn't there before goes
+    /// to <paramref name="delete"/>. Null when done, else why not.
+    /// </summary>
+    public async Task<string?> DiscardAsync(ChangesShown shown, string path, IReadOnlyCollection<(int? Old, int? New)>? lines, Action<string> delete, CancellationToken ct)
+    {
+        path = Path.GetFullPath(path);
+        bool existed;
+        string? before;
+        if (shown == ChangesShown.All)
+        {
+            Content? content;
+            lock (_gate)
+                _before.TryGetValue(path, out content);
+            if (content is null)
+                return "BlackBox has nothing of this file from before.";
+            (existed, before) = (content.Exists, content.Text);
+        }
+        else
+        {
+            if ((await GitChanges.ReadAsync([path], shown == ChangesShown.NotCommitted, ct).ConfigureAwait(false)).GetValueOrDefault(path) is not { } read)
+                return "This file isn't in a git repository.";
+            var bytes = shown == ChangesShown.NotCommitted ? read.Head : read.Index;
+            if (lines is null && bytes is not null)
+                return await GitChanges.RestoreAsync(read.Root, read.Path, shown == ChangesShown.NotCommitted, ct).ConfigureAwait(false);
+            (existed, before) = (bytes is not null, bytes is null || FolderDiff.IsBinary(bytes.AsSpan(0, Math.Min(bytes.Length, 8000))) ? null : Decode(bytes));
+        }
+        try
+        {
+            if (lines is null)
+            {
+                if (!existed)
+                {
+                    if (File.Exists(path))
+                        delete(path);
+                    return null;
+                }
+                if (before is null || DocumentText.Handles(path))
+                    return "BlackBox didn't keep what this file held before: it isn't text.";
+                await TextFiles.WriteAllAsync(path, before, File.Exists(path) ? TextFiles.Detect(path) : TextFiles.ForNewFile(path), ct).ConfigureAwait(false);
+                return null;
+            }
+            var now = Read(path);
+            if (DocumentText.Handles(path) || now.Exists && now.Text is null || existed && before is null)
+                return "Only the whole file can be put back: it isn't text.";
+            var old = GitChanges.Split(before ?? "");
+            var current = GitChanges.Split(now.Text ?? "");
+            var lineBreak = GitChanges.Break(current) ?? GitChanges.Break(old) ?? "\n";
+            var picked = lines.ToHashSet();
+            var kept = new List<string>();
+            var at = 0;
+            foreach (var block in LineDiff.Blocks(old.Select(GitChanges.Key).ToArray(), current.Select(GitChanges.Key).ToArray()))
+            {
+                kept.AddRange(current.Skip(at).Take(block.NewStart - at));
+                // Removed lines put back come first, as the diff shows them above the added ones.
+                for (var i = block.OldStart; i < block.OldStart + block.OldCount; i++)
+                    if (picked.Contains((i + 1, null)))
+                        kept.Add(GitChanges.Key(old[i]) + (GitChanges.Key(old[i]).Length < old[i].Length ? lineBreak : ""));
+                for (var i = block.NewStart; i < block.NewStart + block.NewCount; i++)
+                    if (!picked.Contains((null, i + 1)))
+                        kept.Add(current[i]);
+                at = block.NewStart + block.NewCount;
+            }
+            kept.AddRange(current.Skip(at));
+            await TextFiles.WriteAllAsync(path, GitChanges.Join(kept, lineBreak), now.Exists ? TextFiles.Detect(path) : TextFiles.ForNewFile(path), ct).ConfigureAwait(false);
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return ex.Message;
+        }
+    }
+
+    /// <summary>A file's bytes from git as read_file reads the file: in its own encoding.</summary>
+    private static string Decode(byte[] bytes)
+    {
+        using var reader = new StreamReader(new MemoryStream(bytes), TextFiles.Detect(bytes, whole: true), detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
+    }
+
     /// <summary>The note over a file a command changed before BlackBox read it.</summary>
     public const string NotKnown = "A command changed this file before BlackBox read it: changes show from then on.";
 

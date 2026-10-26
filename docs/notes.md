@@ -2261,6 +2261,38 @@ another chat's list light nothing. A wheel turn, a press on the scrollbar, PageU
 the arrows in the diff, a line picked or a file clicked stop watching for now (the toggle shows off)
 without saving it: the saved choice is the user's click. Turned on, Watch goes to the last change and
 lights it again. Checked in the app on 2026-10-26 with a stand-in model making four edits on cue.
+**Git: what shows, Stage** (the user, 2026-10-26). A dropdown over the file list, shown once a changed
+file is in a git repository (and while it filters), picks **All changes** (as above), **Not committed**
+or **Not staged**, kept as `panels.showChanges`. `FileChanges.DiffAsync` takes the files of the full
+view and asks git once per repository: `status --porcelain -z` for their letters and `cat-file
+--batch` for their bytes in the index (`:path`) and, for Not committed, HEAD (`HEAD:path`), read as
+bytes (`GitDiff.RunBytesAsync`) so a byte order mark and line endings stay as they are. Not committed
+shows a file with any letter, against HEAD; Not staged one whose work-tree letter is set, against the
+index; each is the file now (as read_file reads it) diffed by `LineDiff`, so its numbers are the
+file's. Files git doesn't see (outside a repository, or ignored) are left out of those two, which the
+top line says ("Not in git, so not shown: 2 files."). A Word or binary file shows as binary.
+Every file in a repository also gets a `GitFile` in every view: whether anything of it isn't staged,
+and, for UTF-8 text without a conflict, where (`Blocks`: index to disk, in lines on disk). Its header
+then has **Stage** (`git add -- path`, a deletion too), and each hunk with some of that in it
+(`GitFile.Touches`: its added lines, and the place of each removed run, which touches the lines on
+both sides) has **Stage** in its number gutter, so a view other than Not staged stages what isn't
+staged among that hunk's changes. Staging a hunk builds the new index content itself: the staged
+lines with the picked runs taken from disk (`GitChanges.Apply`; a last line without a break gets the
+file's break when lines follow it), stored by `hash-object -w --path=` (git's filters for the path,
+as git add would) and `update-index --cacheinfo` with the file's mode; all of it at once is plain
+`git add`. Not `git apply --cached`: the full view's hunks aren't against the index, and a patch's
+line endings had to match the index's. The buttons are 16 high, so the rows stay as tall; a press on
+one starts no line drag. This is the only place BlackBox writes a repository (its index only).
+**Discard** (the user, 2026-10-26), in the bar before Wrap, puts back the picked lines, else the
+selected file, as they were in the view shown: before the agent's change, as committed or as staged
+(`FileChanges.DiscardAsync`). Lines: the view's diff is made again from that earlier text and the file
+now, and in each changed run a picked removed line comes back (above the added ones, with the file's
+line break) and a picked added line goes; picked unchanged lines do nothing. The file is written in
+its own encoding (`TextFiles.WriteAllAsync`). A whole file: in the git views `git restore --worktree`
+(from HEAD for Not committed; the index is left alone), in the full view the text kept from before;
+one that wasn't there before goes to the Recycle Bin. A Word file, or one whose earlier content
+BlackBox didn't keep as text, can't be put back in the full view; lines of a non-text file never. The
+tooltip says what it will do ("Put notes.md back as staged"). No undo.
 
 **Checked on qwen3.8** (2026-10-24, blackbox-cli): asked to review the commit that added all this, it
 listed the commit with `diff summary=true`, then read the whole diff (about 110,000 characters) in 11
