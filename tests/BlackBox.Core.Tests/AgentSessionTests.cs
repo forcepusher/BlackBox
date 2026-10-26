@@ -1394,6 +1394,61 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_new_message_clicks_on_the_screen_the_last_screenshot_showed()
+    {
+        // Told "Continue" with screen 2 in its last screenshot, the model clicked and typed into
+        // Notepad on screen 1: each message starts a run, which looked at the primary screen.
+        var server = new ScriptedServer
+        {
+            Responder = req => LastText(req) == "Continue" ? Sse.ToolCall("c2", "mouse_click", """{"x":10,"y":10}""") : Sse.Text("Done."),
+        };
+        var platform = new FakePlatform { Screens = [new ScreenRect(0, 0, 200, 100), new ScreenRect(200, 0, 160, 100)] };
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), platform);
+        session.History.Add(new ChatMessage { Role = ChatRole.User, Content = "Test it in the app on screen 2", FromUser = true });
+        session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "", ToolCalls = [new ToolCall { Id = "c1", Name = "screenshot", Arguments = """{"screen":2}""" }] });
+        session.History.Add(ChatMessage.ToolResult("c1", "Screenshot of screen 2 of 2, 160x100. Mouse cursor is on screen 1. (The screenshot is attached in the next message.)"));
+        session.History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText(AgentSession.ScreenshotText), ContentPart.FromImage([7, 7, 7], "image/jpeg")] });
+        session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "It is set up." });
+
+        await session.RunAsync("Continue", observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal("move 210,10", platform.Actions.First(a => a.StartsWith("move ", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task A_reset_says_which_screen_it_keeps_so_a_later_message_looks_at_that_one()
+    {
+        var server = new ScriptedServer { Responder = _ => Sse.Text("NOTE: Claude is on screen 2.") };
+        var (session, observer) = LongSession(server, contextTokens: 40_000);
+        session.History.Insert(session.History.Count - 1, ChatMessage.ToolResult("c59", "Clicked.\nScreenshot of screen 2 of 2, 160x100. Mouse cursor at (5, 5)."));
+
+        await session.ResetContextAsync(observer, TestContext.Current.CancellationToken);
+
+        Assert.Equal("The screen right now: screen 2 of 2.", session.History[^1].Parts![0].Text);
+        Assert.Equal((1, 2), AgentSession.ScreenShown(session.History));
+        // A second reset still finds it, and keeps saying it.
+        await session.ResetContextAsync(observer, TestContext.Current.CancellationToken);
+        Assert.Equal("The screen right now: screen 2 of 2.", session.History[^1].Parts![0].Text);
+        Assert.Equal([7, 7, 7], session.History[^1].Parts![1].ImageBytes);
+    }
+
+    [Fact]
+    public void The_screen_shown_is_read_from_the_latest_screenshot_only()
+    {
+        List<ChatMessage> history =
+        [
+            ChatMessage.ToolResult("a", "Screenshot of screen 2 of 3, 160x100. Mouse cursor at (1, 1)."),
+            ChatMessage.ToolResult("b", "Exit code 0\nScreenshot of screen 3 of 3 is what the docs call it"),
+            new ChatMessage { Role = ChatRole.User, Content = "Screenshot of screen 1 of 3", FromUser = true },
+        ];
+        Assert.Equal((1, 3), AgentSession.ScreenShown(history));
+        history.Add(ChatMessage.ToolResult("c", "Waited 3s.\nScreenshot of screen 1 of 3, 200x100. Mouse cursor at (1, 1)."));
+        Assert.Equal((0, 3), AgentSession.ScreenShown(history));
+        Assert.Null(AgentSession.ScreenShown([ChatMessage.ToolResult("d", "Screenshot, 200x100. Mouse cursor at (1, 1).")]));
+    }
+
+    [Fact]
     public async Task Where_the_user_stopped_a_task_is_said_in_the_conversation_and_kept_through_a_reset()
     {
         // Stopped in Paint and given a story to write next, the model wrote it and then "returned

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using BlackBox.Core.Llm;
@@ -324,6 +325,28 @@ public sealed partial class AgentSession(
     [GeneratedRegex(@"^(continue|go on|carry on|keep going)[.!]?$", RegexOptions.IgnoreCase)]
     private static partial Regex GoOn();
 
+    /// <summary>
+    /// The monitor the conversation's latest screenshot showed (0 = primary) and how many there
+    /// were, from what the screenshot said ("Screenshot of screen 2 of 2") or, after a context
+    /// reset, the screen it carried; null when no screenshot names one (a single monitor).
+    /// </summary>
+    internal static (int Screen, int Count)? ScreenShown(IReadOnlyList<ChatMessage> history)
+    {
+        for (var i = history.Count - 1; i >= 0; i--)
+        {
+            var m = history[i];
+            if (m.FromUser)
+                continue;
+            var text = m.Role == ChatRole.Tool ? m.Content : m.Parts is [{ Text: { } said }, { IsImage: true }] ? said : null;
+            if (text is not null && ScreenOf().Match(text) is { Success: true } found)
+                return (int.Parse(found.Groups[1].Value, CultureInfo.InvariantCulture) - 1, int.Parse(found.Groups[2].Value, CultureInfo.InvariantCulture));
+        }
+        return null;
+    }
+
+    [GeneratedRegex(@"^(?:Screenshot of|The screen right now:) screen (\d+) of (\d+)[.,]", RegexOptions.Multiline)]
+    private static partial Regex ScreenOf();
+
     public Task RunAsync(string userText, IAgentObserver observer, CancellationToken ct) => RunAsync(new UserInput(userText), observer, ct);
 
     /// <summary>Runs the task the user sent: the model works on it, with its tools, until it is done or stopped.</summary>
@@ -332,6 +355,10 @@ public sealed partial class AgentSession(
         _request = RequestOf(input);
         _interrupted = false;
         _projects.Recall(History, toolContext);
+        // Each message starts a run, which looked at the primary screen: told "Continue" with
+        // screen 2 in its last screenshot, the model clicked and typed into Notepad on screen 1.
+        if (ScreenShown(History) is { } lastSeen)
+            toolContext.CurrentScreen = lastSeen.Screen;
         History.Add(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid));
         // A picture given earlier in the chat (a reference sheet) is still the one to follow.
         toolContext.UserPictures = UserInput.PicturesIn(History);

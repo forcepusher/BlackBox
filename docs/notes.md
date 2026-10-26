@@ -1829,9 +1829,23 @@ result does, not that its parts are set up as planned. Told that, it counted wha
 once worked out, found nothing, and put it down to Blender run in the background: still explained
 away, but measured.
 
+A check the agent can do itself is part of the task, the prompt says, not an optional extra to
+leave to the user; and a prompt to an AI assistant to test what it set up isn't a message sent on
+the user's behalf. Asked to connect Unreal's MCP server to the Claude app (26 October 2026), Opus
+5.5 saw the server running in Claude's settings and stopped there: asking Claude to use it "would
+use the user's account to send a message", and the user was told to try it. Its handoff note had
+called that test optional, so the note is now asked to carry a check still to do as part of the
+task. Replayed from the log with the reply after the handoff asked for again (no screenshots: the
+saved chat keeps none, so the screen was said in words), the old prompt went on to the test once in
+three tries and twice checked the log and wrapped up; the new one started the test all three times.
+
 With several monitors the agent sees one at a time: screenshots show the screen it looked at last
 (the primary at first) and `screen=N` switches. All coordinates refer to the screen in the latest
-screenshot.
+screenshot. Each message starts a run, which looks at the screen the conversation's latest
+screenshot names ("Screenshot of screen 2 of 2"); a context reset says it with the screen it keeps
+("The screen right now: screen 2 of 2."). A new run used to look at the primary: told "Continue"
+with Claude's window on screen 2 in its last screenshot, Opus 5.5 clicked screen 2's coordinates on
+screen 1 and typed its test prompt into Notepad there, and did the same after the next message.
 
 Coordinates follow what the model was trained on. Qwen3 and later point on a 0-1000 grid over the
 image, so for them x/y are on that grid; asked for pixels, qwen3.8 slipped back to the grid in about

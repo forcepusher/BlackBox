@@ -23,7 +23,8 @@ public sealed partial class AgentSession
         "[BlackBox] Your context is almost full and will be reset after this reply. Write a handoff note for yourself: " +
         "after the reset you will see only the user's messages, this note and the current screenshot. Cover what the user asked for, " +
         "what you have done so far and what worked or failed, the current state (open windows and apps, files you created or changed " +
-        "with their full paths, important values), decisions you made, and exactly what to do next. Be concrete and complete but " +
+        "with their full paths, important values), decisions you made, and exactly what to do next, a check of the result not done yet " +
+        "included: that is part of the task, not optional. Be concrete and complete but " +
         "keep it under about 600 words. Reply with the note as plain text and do not call any tools.";
 
     internal const string HandoffHeader =
@@ -93,7 +94,10 @@ public sealed partial class AgentSession
         // message anyway), one read_file opened or a ComfyUI job's result was put after the note
         // as "The screen right now:". The screen an earlier reset carried counts: a second reset
         // before the next screenshot kept none.
-        var screen = History.LastOrDefault(m => !m.FromUser && m.Parts is [{ Text: ScreenshotText or CurrentScreenText }, { IsImage: true }])?.Parts![1];
+        var screen = History.LastOrDefault(m => !m.FromUser && m.Parts is [{ Text: { } said }, { IsImage: true }] &&
+                                                (said == ScreenshotText || said.StartsWith(CurrentScreenText, StringComparison.Ordinal)))?.Parts![1];
+        // Which monitor it shows goes with it: a later run looks at that one (see ScreenShown).
+        var shown = ScreenShown(History);
         History.Clear();
         History.AddRange(userMessages);
         History.Add(ChatMessage.User(HandoffHeader + "\n\n" + note));
@@ -102,7 +106,7 @@ public sealed partial class AgentSession
         _projects.Forget();
         toolContext.ContextResets++;
         if (screen is not null)
-            History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText(CurrentScreenText), screen] });
+            History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText(shown is { } s ? $"{CurrentScreenText} screen {s.Screen + 1} of {s.Count}." : CurrentScreenText), screen] });
 
         // Very long user messages alone could still be too big; trimming is the last resort.
         if (EstimateTokens() > ResetThreshold)

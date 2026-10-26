@@ -139,6 +139,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The first-run hint for Ctrl+V is reworded.
 
 ### Fixed
+- With two monitors, a new message (Continue too) clicks on the screen the last screenshot showed:
+  it clicked on the main screen with the other one's positions.
+- The model tests what it set up for an AI app by asking that app, instead of leaving the test to you
+  and stopping, and a check it planned before a context reset isn't dropped as optional after it.
 - With the model server off, a message says it can't reach it after about 4 seconds instead of 16.
 - With a video of yours picked on Video generator's References row, "this video" in your message
   means that video: asked for a clip that goes on from where it ends, the model went on from the
