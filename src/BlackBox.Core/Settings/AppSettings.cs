@@ -303,6 +303,9 @@ public sealed class PanelSettings
 
     /// <summary>File changes: the diff follows the agent's edits, to the lines it just changed.</summary>
     public bool WatchChanges { get; set; } = true;
+
+    /// <summary>File changes opens by itself on the agent's first file change in a chat, unless another tool is open.</summary>
+    public bool OpenFileChanges { get; set; } = true;
 }
 
 public sealed class AppSettings

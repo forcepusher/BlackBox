@@ -2191,7 +2191,9 @@ still credited any program writing in the project folder at that moment; exact a
 command's processes hooked (Detours, as MSBuild's FileTracker does) or ETW as administrator, which
 the user didn't want. A list kept before drops its entries saved with `"known": false` (a file a
 command changed before BlackBox read it); a file a command added is kept. At most 500 files. Remote
-calls (`host`) change nothing here. Word, Excel, PowerPoint and PDF files compare by the text
+calls (`host`) change nothing here, and neither do files in BlackBox's own Data folder (the parent of
+the scratch and tools folders, as the index note's `InOwnData`): the agent's scratch notes there are
+no change of the user's (the user, 2026-10-27); a list kept before keeps such entries. Word, Excel, PowerPoint and PDF files compare by the text
 read_file shows. The diff is each file as it is now against what it held before the first change
 (Myers, `LineDiff`), in the order they were first changed, paths relative to the folder they all
 share; a file back as it was, or made and deleted again, drops out. The list is kept with the chat
@@ -2200,7 +2202,12 @@ again from History shows it again; a new chat starts empty.
 
 **The panel** (Toolkit, File changes; "Diff", then "Code diff", then "Code changes", until the user renamed it on
 2026-10-24 and 2026-10-25) opens on the left of the chat as Video generator does, with the changed files listed on the
-left and their diff beside them. It reads them again 250 ms after a call that may have changed files (a file written in
+left and their diff beside them. **It opens by itself** on the agent's first file change in a chat (the user,
+2026-10-27): once per chat, so closed it stays closed. A chat whose list already has files (one opened again from
+History) had its turn; a call that changed nothing to show (a failed write) doesn't count, as `Diff()` is read on the
+agent's thread while no change was shown yet. With another tool open (File inspector, Video generator) it doesn't take
+its place, and the chat's turn is spent. Settings, Toolkit, "Open File changes when the agent first changes a file in a
+chat" turns it off (`panels.openFileChanges`, on by default). It reads them again 250 ms after a call that may have changed files (a file written in
 parts is read once), keeping the picked lines picked. Lines are picked with a click,
 Shift+click and Ctrl+click (a @@ line picks its hunk, a file's name all of it; the rows themselves are never picked) and go into the chat's box as their
 file, captioned "Lines 48-49 · MainWindowViewModel.Toolkit.cs" (the lines first: a long name is

@@ -58,6 +58,9 @@
         <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="BlackBox starts these when you click Save and each time it opens."
                    ToolTip.Tip="{Binding Paths.McpConfigFile, StringFormat='Kept in {0}'}" />
 
+        <TextBlock Classes="h2" Text="Toolkit" />
+        <CheckBox IsChecked="{Binding Panels.OpenFileChanges}" Content="Open File changes when the agent first changes a file in a chat" />
+
         <TextBlock Classes="h2" Text="Advanced" />
         <Grid Classes="form" ColumnDefinitions="160,*">
           <TextBlock Classes="label" Text="Max screenshot size" />

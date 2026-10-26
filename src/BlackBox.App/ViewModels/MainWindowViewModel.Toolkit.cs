@@ -64,7 +64,7 @@ public sealed partial class MainWindowViewModel
     public IReadOnlyList<ToolkitOption> ToolkitOptions { get; } =
     [
         new("None", "The chat alone", 0, 0, 0, null),
-        new("File changes", "See the files the agent changes in this chat as it works: click lines to ask about them", 880, 560, 0,
+        new(FileChangesName, "See the files the agent changes in this chat as it works: click lines to ask about them", 880, 560, 0,
             vm => new FileChangesViewModel(vm)),
         new(FileInspectorName, "See a file from the chat beside it: documents, spreadsheets, pictures, video, sound, 3D, code", 760, 420, 0,
             vm => new FileInspectorViewModel(vm._previews, vm, vm._paths.PastedDir)),
@@ -72,7 +72,7 @@ public sealed partial class MainWindowViewModel
             vm => new VideoGeneratorViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
     ];
 
-    private const string FileInspectorName = "File inspector";
+    private const string FileInspectorName = "File inspector", FileChangesName = "File changes";
 
     /// <summary>A card's Inspect: the file in the File inspector panel, which opens in place of the tool open (if another).</summary>
     internal void Inspect(string path)
@@ -246,21 +246,44 @@ public sealed partial class MainWindowViewModel
     /// <summary>On the window's thread: the list changed, or another chat's took its place.</summary>
     internal event Action? ChangesUpdated;
 
+    /// <summary>
+    /// The chat on screen has had no file changed by the agent: its first change opens File changes,
+    /// once (the user, 2026-10-27). A chat whose list has files had its turn, closed or not.
+    /// </summary>
+    private bool _changesNotShown;
+
     private void UseChanges(FileChanges changes)
     {
         if (Changes is not null)
             Changes.Changed -= OnChanges;
         Changes = changes;
+        _changesNotShown = changes.IsEmpty;
         changes.Changed += OnChanges;
         ChangesUpdated?.Invoke();
     }
 
     // A run stopped by leaving the chat still writes into the chat's own list, never into this one.
-    private void OnChanges(FileChanges changes) => Dispatcher.UIThread.Post(() =>
+    private void OnChanges(FileChanges changes)
     {
-        if (ReferenceEquals(changes, Changes))
+        // Read on the agent's thread: a write_file that failed is in the list, but changed nothing to show.
+        var first = _changesNotShown && ReferenceEquals(changes, Changes) && changes.Diff().Files.Count > 0;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!ReferenceEquals(changes, Changes))
+                return;
+            if (first && _changesNotShown)
+                OpenOnFirstChange();
             ChangesUpdated?.Invoke();
-    });
+        });
+    }
+
+    /// <summary>The agent's first change in the chat: File changes opens, unless the user turned that off or has another tool open, which it doesn't take the place of.</summary>
+    private void OpenOnFirstChange()
+    {
+        _changesNotShown = false;
+        if (_settings.Panels.OpenFileChanges && Toolkit is null && !_closed)
+            SelectedToolkit = ToolkitOptions.First(o => o.Name == FileChangesName);
+    }
 
     /// <summary>Where a chat's list is kept: Data/chats/changes/id.json.</summary>
     private string ChangesFile(string chatId) => Path.Combine(_chats.Folder, "changes", Path.GetFileName(chatId) + ".json");
