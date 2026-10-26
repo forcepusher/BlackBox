@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using BlackBox.Core.Tools;
@@ -7,36 +6,21 @@ namespace BlackBox.Core.Diffs;
 
 /// <summary>
 /// The files the agent changed in a chat, each with what it held before the agent first changed it,
-/// for the File changes panel. write_file and edit_file read their file before they run; a run_shell
-/// command has its folder and the paths it names watched while it runs (<see cref="Scope"/>), and
-/// what it changed that BlackBox hadn't read before is taken as git has it when the file is in a
-/// repository. A file a command changed outside git is shown from that command on, as what it held
-/// before is not known.
+/// for the File changes panel: write_file and edit_file read their file before they run. What a
+/// run_shell command changes isn't listed: a folder watched while it ran can't tell its writes from
+/// other programs' (a Claude Code beside BlackBox rewrote .claude.json in the home folder during a
+/// command's sleep, and it was listed as the model's).
 /// </summary>
-public sealed partial class FileChanges
+public sealed class FileChanges
 {
     /// <summary>A file bigger than this is only said to have changed.</summary>
     private const long MaxBytes = 2_000_000;
 
-    /// <summary>Files kept at most: a command that unpacks an archive would list thousands.</summary>
+    /// <summary>Files kept at most.</summary>
     private const int MaxFiles = 500;
 
-    /// <summary>Paths a command changed that are looked at, at most: one run in the home folder sees every cache.</summary>
-    private const int MaxSeen = 2_000;
-
-    /// <summary>Folders whose files a command changes as a side effect: builds, packages, caches, git's own.</summary>
-    private static readonly HashSet<string> Noise = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".git", ".vs", ".idea", "bin", "obj", "node_modules", "__pycache__", ".venv", "venv", "packages", ".gradle",
-        ".pytest_cache", ".mypy_cache", ".cache", "AppData", "Library", "Temp", "Logs",
-    };
-
-    /// <summary>
-    /// A file as it was or is: Exists false when it isn't there; Text null for one that isn't text
-    /// or is too big. Known false when a command changed it before BlackBox read it: Text is then
-    /// what it held right after that command.
-    /// </summary>
-    private sealed record Content(bool Exists, string? Text, bool Known = true)
+    /// <summary>A file as it was or is: Exists false when it isn't there; Text null for one that isn't text or is too big.</summary>
+    private sealed record Content(bool Exists, string? Text)
     {
         public static readonly Content Absent = new(false, null);
     }
@@ -70,9 +54,10 @@ public sealed partial class FileChanges
             if (File.Exists(file) && JsonNode.Parse(File.ReadAllText(file))?["files"] is JsonArray files)
                 foreach (var f in files.OfType<JsonObject>())
                 {
-                    if (f["path"]?.GetValue<string>() is not { Length: > 0 } path || changes._before.ContainsKey(path))
+                    // "known": false was a file a command changed before BlackBox read it, which may have been another program's.
+                    if (f["path"]?.GetValue<string>() is not { Length: > 0 } path || changes._before.ContainsKey(path) || f["known"]?.GetValue<bool>() == false)
                         continue;
-                    changes._before[path] = new Content(f["exists"]?.GetValue<bool>() ?? false, f["text"]?.GetValue<string>(), f["known"]?.GetValue<bool>() ?? true);
+                    changes._before[path] = new Content(f["exists"]?.GetValue<bool>() ?? false, f["text"]?.GetValue<string>());
                     changes._order.Add(path);
                 }
         }
@@ -95,7 +80,6 @@ public sealed partial class FileChanges
                     ["path"] = p,
                     ["exists"] = _before[p].Exists,
                     ["text"] = _before[p].Text,
-                    ["known"] = _before[p].Known,
                 }).ToArray()),
             }.ToJsonString();
         }
@@ -109,55 +93,39 @@ public sealed partial class FileChanges
 
     // ---- around a tool call -------------------------------------------------------------------------
 
-    /// <summary>
-    /// A call about to run: the file it writes is read first, or the folder a command runs in is
-    /// watched; null for a call that changes no file on this PC.
-    /// </summary>
+    /// <summary>A write_file or edit_file call about to run: the file it writes is read first; null for any other call, or one on another host.</summary>
     public Call? Starting(Tool tool, JsonObject args, ToolContext ctx)
     {
-        if (RemoteHost.Of(args) is not null)
+        if (RemoteHost.Of(args) is not null || tool is not (WriteFileTool or EditFileTool))
             return null;
         try
         {
-            if (tool is WriteFileTool or EditFileTool && args["path"] is JsonValue v && v.TryGetValue<string>(out var path) && path.Trim().Length > 0)
+            if (args["path"] is JsonValue v && v.TryGetValue<string>(out var path) && path.Trim().Length > 0)
             {
                 Remember(ctx.ResolvePath(path.Trim()));
-                return new Call(this, null);
-            }
-            if (tool is ShellTool)
-            {
-                var cwd = args["working_directory"] is JsonValue w && w.TryGetValue<string>(out var dir) && dir.Trim().Length > 0 ? ctx.ResolvePath(dir.Trim()) : ctx.WorkingDirectory;
-                var command = args["command"] is JsonValue c && c.TryGetValue<string>(out var text) ? text : "";
-                return Directory.Exists(cwd) ? new Call(this, new Watch(Scope.Of(command, cwd, Home))) : null;
+                return new Call(this);
             }
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException or UnauthorizedAccessException) { }
         return null;
     }
 
-    /// <summary>A call that may change files, until it has ended.</summary>
-    public sealed class Call(FileChanges changes, Watch? watch)
+    /// <summary>A call that may change a file, until it has ended.</summary>
+    public sealed class Call(FileChanges changes)
     {
-        /// <summary>What a command changed joins the list; then the panel reads it again.</summary>
-        public async Task EndAsync()
+        /// <summary>The list is kept; then the panel reads it again.</summary>
+        public Task EndAsync()
         {
             try
             {
-                if (watch is not null)
-                {
-                    // The last events arrive a moment after the command is done.
-                    await Task.Delay(150).ConfigureAwait(false);
-                    watch.Dispose();
-                    await changes.TakeAsync(watch).ConfigureAwait(false);
-                }
                 changes.Save();
                 changes.Changed?.Invoke(changes);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 // What the panel shows is never worth failing the call over.
-                watch?.Dispose();
             }
+            return Task.CompletedTask;
         }
     }
 
@@ -174,250 +142,6 @@ public sealed partial class FileChanges
             if (_before.TryAdd(path, now))
                 _order.Add(path);
         }
-    }
-
-    /// <summary>The home folder, where a command runs unless it is told otherwise; a test's own folder in tests.</summary>
-    internal string Home { get; init; } = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-    /// <summary>
-    /// What of the changes made while a command runs is the command's own. Other programs write files
-    /// at any moment, and a watched folder doesn't say who wrote: a Claude Code beside BlackBox rewrote
-    /// .claude.json in the home folder during a command's sleep, and the panel listed it as the model's.
-    /// So a change counts below the folder the command runs in or a folder it names, unless that folder
-    /// is one every program writes in (the home folder or one above it, a drive, Windows, Program Files,
-    /// ProgramData, Temp); there only the files the command names count.
-    /// </summary>
-    internal sealed class Scope
-    {
-        /// <summary>Folders below which every change counts.</summary>
-        public List<string> Folders { get; } = [];
-
-        /// <summary>Files the command names, which count wherever they are.</summary>
-        public HashSet<string> Files { get; } = new(StringComparer.OrdinalIgnoreCase);
-
-        /// <summary>The folders watched, and whether their subfolders are.</summary>
-        public List<(string Folder, bool Deep)> Watched { get; } = [];
-
-        /// <summary>A path below a folder it may change files in, but not in a build's or cache's folder there (<see cref="Noise"/>); elsewhere a file it names.</summary>
-        public bool Allows(string path) =>
-            Folders.Where(f => IsInside(path, f)).MaxBy(f => f.Length) is { } folder ? !IsNoise(folder, path) : Files.Contains(path);
-
-        public static Scope Of(string command, string cwd, string home)
-        {
-            var scope = new Scope();
-            cwd = Path.GetFullPath(cwd);
-            if (!IsShared(cwd, home))
-                scope.Folders.Add(cwd);
-            foreach (var word in Words(command, home).Take(300))
-            {
-                string full;
-                try
-                {
-                    full = Path.GetFullPath(Path.Combine(cwd, word));
-                    // A wildcard names the folder it is in.
-                    if (full.IndexOfAny(['*', '?']) is var star and >= 0)
-                        full = Path.GetDirectoryName(full[..star]) ?? "";
-                }
-                catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { continue; }
-                if (full.Length == 0)
-                    continue;
-                if (Directory.Exists(full))
-                {
-                    if (!IsShared(full, home) && !scope.Folders.Any(f => Same(f, full) || IsInside(full, f)))
-                        scope.Folders.Add(full);
-                }
-                else
-                    scope.Files.Add(full);
-            }
-            // The folder it runs in is watched whole, as a file it names may be anywhere below; then
-            // each folder it names, and the folder of each file it names elsewhere.
-            scope.Watched.Add((cwd, true));
-            foreach (var folder in scope.Folders.Where(f => !Covered(f)).ToList())
-                scope.Watched.Add((folder, true));
-            foreach (var parent in scope.Files.Select(Path.GetDirectoryName).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList())
-                if (scope.Watched.Count < 16 && !Covered(parent) && Directory.Exists(parent))
-                    scope.Watched.Add((parent, false));
-            return scope;
-
-            bool Covered(string folder) => scope.Watched.Any(w => Same(w.Folder, folder) || w.Deep && IsInside(folder, w.Folder));
-        }
-
-        /// <summary>The words of a command that may be paths: quoted ones whole, the rest split at spaces and shell punctuation, with ~ and environment variables filled in.</summary>
-        internal static IEnumerable<string> Words(string command, string home)
-        {
-            var words = Quoted().Matches(command).Select(m => m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value)
-                .Concat(Quoted().Replace(command, " ").Split([' ', '\t', '\r', '\n', ';', '|', '&', '(', ')', '{', '}', '<', '>', ',', '='], StringSplitOptions.RemoveEmptyEntries));
-            foreach (var raw in words)
-            {
-                var word = raw.Trim().Trim('`');
-                // -Path:C:\x names C:\x; other switches name nothing.
-                if (word.StartsWith('-'))
-                    word = word.IndexOf(':') is var colon and > 0 ? word[(colon + 1)..] : "";
-                word = EnvVariable().Replace(Environment.ExpandEnvironmentVariables(word), m =>
-                    m.Groups[1].Success ? Environment.GetEnvironmentVariable(m.Groups[2].Value) ?? m.Value
-                    : m.Groups[2].Value.Equals("HOME", StringComparison.OrdinalIgnoreCase) ? home : m.Value);
-                if (word == "~" || word.StartsWith("~/", StringComparison.Ordinal) || word.StartsWith("~\\", StringComparison.Ordinal))
-                    word = home + word[1..];
-                if (word.Length > 0 && !word.Contains("://", StringComparison.Ordinal) && word.IndexOfAny(Path.GetInvalidPathChars()) < 0)
-                    yield return word;
-            }
-        }
-
-        /// <summary>A folder every program writes in: the home folder or one it is in, a drive, or the system's own.</summary>
-        internal static bool IsShared(string folder, string home)
-        {
-            folder = Path.GetFullPath(folder);
-            if (Same(folder, Path.GetPathRoot(folder) ?? "") || Same(folder, home) || IsInside(home, folder))
-                return true;
-            return new[]
-            {
-                Environment.GetFolderPath(Environment.SpecialFolder.Windows),
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                Path.GetTempPath(),
-            }.Any(s => s.Length > 0 && Same(folder, s));
-        }
-
-        private static bool Same(string a, string b) =>
-            string.Equals(Path.TrimEndingDirectorySeparator(a), Path.TrimEndingDirectorySeparator(b), StringComparison.OrdinalIgnoreCase);
-
-        /// <summary>A path below the folder (not the folder itself).</summary>
-        private static bool IsInside(string path, string folder) =>
-            path.StartsWith(Path.EndsInDirectorySeparator(folder) ? folder : folder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [System.Text.RegularExpressions.GeneratedRegex(@"""([^""]*)""|'([^']*)'")]
-    private static partial System.Text.RegularExpressions.Regex Quoted();
-
-    // $env:NAME, ${env:NAME}, $HOME
-    [System.Text.RegularExpressions.GeneratedRegex(@"\$\{?(env:)?(\w+)\}?", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
-    private static partial System.Text.RegularExpressions.Regex EnvVariable();
-
-    /// <summary>The folders a command may change files in, watched while it runs: the paths it created, and those it changed or deleted, that are its own (<see cref="Scope"/>).</summary>
-    public sealed class Watch : IDisposable
-    {
-        private readonly List<FileSystemWatcher> _watchers = [];
-        private readonly Scope _scope;
-
-        /// <summary>Each path, and whether it was there before the command (its first event says).</summary>
-        internal ConcurrentDictionary<string, bool> Seen { get; } = new(StringComparer.OrdinalIgnoreCase);
-
-        internal Watch(Scope scope)
-        {
-            _scope = scope;
-            foreach (var (folder, deep) in scope.Watched)
-                try
-                {
-                    var watcher = new FileSystemWatcher(folder)
-                    {
-                        IncludeSubdirectories = deep,
-                        InternalBufferSize = 64 * 1024,
-                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
-                    };
-                    watcher.Created += (_, e) => Add(e.FullPath, existed: false);
-                    watcher.Changed += (_, e) => Add(e.FullPath, existed: true);
-                    watcher.Deleted += (_, e) => Add(e.FullPath, existed: true);
-                    watcher.Renamed += (_, e) =>
-                    {
-                        Add(e.OldFullPath, existed: true);
-                        Add(e.FullPath, existed: false);
-                    };
-                    watcher.EnableRaisingEvents = true;
-                    _watchers.Add(watcher);
-                }
-                catch (Exception ex) when (ex is ArgumentException or IOException or PlatformNotSupportedException or UnauthorizedAccessException) { }
-        }
-
-        private void Add(string path, bool existed)
-        {
-            if (Seen.Count < MaxSeen && _scope.Allows(path))
-                Seen.TryAdd(path, existed);
-        }
-
-        public void Dispose()
-        {
-            foreach (var watcher in _watchers)
-                watcher.Dispose();
-        }
-    }
-
-    /// <summary>A path in a folder of <see cref="Noise"/>, below where the command ran.</summary>
-    internal static bool IsNoise(string folder, string path)
-    {
-        var relative = Path.GetRelativePath(folder, path);
-        var parts = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return parts.Length > 1 && parts[..^1].Any(Noise.Contains) || path.EndsWith(".lock", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>What a command changed, into the list: text files only, and not those git ignores.</summary>
-    private async Task TakeAsync(Watch watch)
-    {
-        List<(string Path, bool Existed)> seen;
-        lock (_gate)
-            seen = watch.Seen.Where(s => !_before.ContainsKey(s.Key) && !Directory.Exists(s.Key)).Select(s => (Path.GetFullPath(s.Key), s.Value)).ToList();
-        if (seen.Count == 0)
-            return;
-        var fromGit = await FromGitAsync(seen.Select(s => s.Path).ToList()).ConfigureAwait(false);
-        foreach (var (path, existed) in seen)
-        {
-            if (fromGit.Ignored.Contains(path))
-                continue;
-            var now = Read(path);
-            Content before;
-            if (!existed)
-                before = Content.Absent;
-            else if (fromGit.Tracked.TryGetValue(path, out var text))
-                before = new Content(true, text);
-            else
-                // Changed, but BlackBox never read it: shown from here on. One gone is shown not at all.
-                before = now with { Known = false };
-            // A command's binary files (a build's, a download) aren't code to look at.
-            if (!now.Exists && !before.Exists || now.Exists && now.Text is null || before.Exists && before.Text is null || !now.Exists && !before.Known)
-                continue;
-            lock (_gate)
-            {
-                if (_order.Count >= MaxFiles)
-                    break;
-                if (_before.TryAdd(path, before))
-                    _order.Add(path);
-            }
-        }
-    }
-
-    /// <summary>Of the paths: those git ignores, and what git has of those it tracks (as staged, else committed).</summary>
-    private static async Task<(HashSet<string> Ignored, Dictionary<string, string> Tracked)> FromGitAsync(List<string> paths)
-    {
-        var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var tracked = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var roots = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        try
-        {
-            foreach (var group in paths.GroupBy(p => Path.GetDirectoryName(p) ?? "", StringComparer.OrdinalIgnoreCase).Take(20))
-            {
-                if (!roots.TryGetValue(group.Key, out var root))
-                    roots[group.Key] = root = await GitDiff.RootOfAsync(group.Key, CancellationToken.None).ConfigureAwait(false);
-                if (root is null)
-                    continue;
-                var relative = group.Select(p => Path.GetRelativePath(root, p).Replace('\\', '/')).Where(r => !r.StartsWith("../", StringComparison.Ordinal)).Take(200).ToList();
-                if (relative.Count == 0)
-                    continue;
-                // Not check-ignore: it refuses the literal paths every git call here is made with.
-                var ignore = await GitDiff.RunAsync(root, ["ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", .. relative], CancellationToken.None, 200_000).ConfigureAwait(false);
-                foreach (var r in ignore.Out.Split('\0', StringSplitOptions.RemoveEmptyEntries))
-                    ignored.Add(Path.GetFullPath(Path.Combine(root, r)));
-                var listed = await GitDiff.RunAsync(root, ["ls-files", "-z", "--", .. relative], CancellationToken.None, 200_000).ConfigureAwait(false);
-                foreach (var r in listed.Out.Split('\0', StringSplitOptions.RemoveEmptyEntries))
-                {
-                    var shown = await GitDiff.RunAsync(root, ["show", ":" + r], CancellationToken.None, (int)MaxBytes).ConfigureAwait(false);
-                    if (shown.Exit == 0 && !shown.Cut && !shown.Out.Contains('\0'))
-                        tracked[Path.GetFullPath(Path.Combine(root, r))] = shown.Out;
-                }
-            }
-        }
-        catch (DiffException) { } // no git on this PC, or it failed: what isn't known shows from the command on
-        return (ignored, tracked);
     }
 
     /// <summary>A file's text as the diff compares it: Word, Excel, PowerPoint and PDF files by the text read_file shows.</summary>
@@ -470,9 +194,9 @@ public sealed partial class FileChanges
                 continue;
             }
             var lines = LineDiff.Hunks(before.Text is null ? [] : LineDiff.Lines(before.Text), now.Text is null ? [] : LineDiff.Lines(now.Text), 3);
-            if (lines.Count == 0 && before.Known)
+            if (lines.Count == 0)
                 continue;
-            var file = new DiffFile(path, status, before.Known ? lines : [new DiffLine(DiffLineKind.Note, null, null, NotKnown), .. lines])
+            var file = new DiffFile(path, status, lines)
             {
                 Added = lines.Count(l => l.Kind == DiffLineKind.Added),
                 Removed = lines.Count(l => l.Kind == DiffLineKind.Removed),
@@ -519,7 +243,7 @@ public sealed partial class FileChanges
             var utf8 = (Index: read.Index is null || GitChanges.Lines(read.Index) is not null, Head: read.Head is null || GitChanges.Lines(read.Head) is not null,
                 Disk: disk is not null && GitChanges.Lines(disk) is not null);
             var splittable = !read.Conflict && !DocumentText.Handles(path);
-            if (before is { Known: true })
+            if (before is not null)
                 Add(GitSection.Committed, before, head, false);
             if (read.X != ' ')
                 Add(GitSection.Staged, head, index, splittable && utf8.Head && utf8.Index);
@@ -632,9 +356,6 @@ public sealed partial class FileChanges
         using var reader = new StreamReader(new MemoryStream(bytes), TextFiles.Detect(bytes, whole: true), detectEncodingFromByteOrderMarks: true);
         return reader.ReadToEnd();
     }
-
-    /// <summary>The note over a file a command changed before BlackBox read it.</summary>
-    public const string NotKnown = "A command changed this file before BlackBox read it: changes show from then on.";
 
     /// <summary>The deepest folder all the paths are in; "" when they are on different drives.</summary>
     internal static string CommonFolder(IReadOnlyList<string> paths)

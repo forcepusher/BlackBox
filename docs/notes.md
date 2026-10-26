@@ -2178,29 +2178,17 @@ characters are cut.
 **What the agent changed** (`FileChanges`, one per chat). The user asked on 2026-10-24 for the panel
 to fill itself with the model's changes, with no folder to choose and no git modes. Around each tool
 call (`AgentSession.RunToolAsync`, after the user's OK): write_file and edit_file read their file
-first, unless the chat already holds what it was; run_shell has the folder it runs in watched
-(a FileSystemWatcher, stopped 150 ms after the command, the last events arriving late).
-**Only the command's own changes** (`FileChanges.Scope`, 2026-10-26): a watcher doesn't say which
-process wrote (Windows tells that only to ETW kernel tracing, as administrator), and commands run in
-the home folder unless told otherwise, so the panel listed the user's `.claude.json` and a Claude
-Code backup as the model's, written by a Claude Code beside BlackBox during a command's `Start-Sleep`.
-Now a change counts below the folder the command runs in and below each folder the command names
-(`cd E:\Repos\x`, quoted or not, `~`, `%VAR%`, `$env:VAR` and `$HOME` filled in, a wildcard naming its
-folder), except folders every program writes in: the home folder and those it is in, a drive's
-root, Windows, Program Files, ProgramData and Temp. There only the files the command names count
-(`'x' | Set-Content notes.txt` in the home folder); a script's unnamed files there are missed. Each
-named folder and each named file's folder is watched too, so a command that `cd`s elsewhere is seen
-now. Noise folders are judged from the folder that lets a path in, so `cd` into a project under
-AppData still counts. Another program writing in the command's own project folder at the same
-moment is still credited: nothing tells them apart. Checked in the real app on 2026-10-26 with an
-outside PowerShell writing two files in %USERPROFILE% during an 8 s sleep: the develop build listed
-both, the fixed one only the named file and the project's. A path whose
-first event was its creation was not there before. One that existed is taken as git has it (`git
-show :path`, the staged or committed version) when git tracks it; otherwise BlackBox never saw it
-before the command, and it shows from that command on, under a note saying so. A command's files
-in git-ignored paths (`ls-files --others --ignored`: `check-ignore` refuses the literal pathspecs
-every git call is made with), under bin, obj, node_modules, .git, AppData and the like, binary
-files, and files over 2 MB are left out: a build would list hundreds. At most 500 files. Remote
+first, unless the chat already holds what it was. **What run_shell changes isn't listed** (the user,
+2026-10-26: "just hook into file tool calls and be done with it"). Until then the folder a command
+ran in was watched (a FileSystemWatcher), and what changed there was credited to the model, taken as
+git had it or shown from that command on under a note. A watcher doesn't say which process wrote, and
+commands run in the home folder unless told otherwise: the panel listed the user's `.claude.json`
+and a Claude Code backup, written by a Claude Code beside BlackBox during a command's `Start-Sleep`.
+Limiting it to the folders and files a command names (`FileChanges.Scope`, merged the same day)
+still credited any program writing in the project folder at that moment; exact answers need the
+command's processes hooked (Detours, as MSBuild's FileTracker does) or ETW as administrator, which
+the user didn't want. A list kept before drops its entries saved with `"known": false` (a file a
+command changed before BlackBox read it); a file a command added is kept. At most 500 files. Remote
 calls (`host`) change nothing here. Word, Excel, PowerPoint and PDF files compare by the text
 read_file shows. The diff is each file as it is now against what it held before the first change
 (Myers, `LineDiff`), in the order they were first changed, paths relative to the folder they all

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json.Nodes;
 using BlackBox.Core.Agent;
 using BlackBox.Core.Diffs;
@@ -35,22 +34,6 @@ public class FileChangesTests : IDisposable
         finally { if (call is not null) await call.EndAsync(); }
     }
 
-    private static void Git(string dir, params string[] args)
-    {
-        var psi = new ProcessStartInfo(GitDiff.Git!) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
-        psi.ArgumentList.Add("-C");
-        psi.ArgumentList.Add(dir);
-        foreach (var a in args)
-            psi.ArgumentList.Add(a);
-        foreach (var (k, v) in new[] { ("GIT_AUTHOR_NAME", "Tester"), ("GIT_AUTHOR_EMAIL", "t@example.com"), ("GIT_COMMITTER_NAME", "Tester"), ("GIT_COMMITTER_EMAIL", "t@example.com") })
-            psi.Environment[k] = v;
-        using var p = Process.Start(psi)!;
-        var err = p.StandardError.ReadToEnd();
-        p.StandardOutput.ReadToEnd();
-        p.WaitForExit();
-        Assert.True(p.ExitCode == 0, $"git {string.Join(' ', args)}: {err}");
-    }
-
     [Fact]
     public async Task Written_and_edited_files_show_against_what_they_held_before_the_first_change()
     {
@@ -84,138 +67,46 @@ public class FileChangesTests : IDisposable
     }
 
     [Fact]
-    public async Task What_a_command_changes_shows_and_its_builds_and_ignored_files_do_not()
+    public async Task What_a_command_changes_is_not_listed()
     {
-        var repo = Path.Combine(_root, "repo");
-        Directory.CreateDirectory(repo);
-        Git(repo, "init", "-q", "-b", "main");
-        Git(repo, "config", "core.autocrlf", "false");
-        File.WriteAllText(Path.Combine(repo, "kept.txt"), "one\ntwo\n");
-        File.WriteAllText(Path.Combine(repo, ".gitignore"), "*.log\n");
-        Git(repo, "add", "-A");
-        Git(repo, "commit", "-q", "-m", "First");
-        var changes = new FileChanges();
-        var ctx = Ctx(changes);
-
-        var result = await Run(new ShellTool(), new JsonObject
-        {
-            ["command"] = "echo three>> kept.txt & echo new> new.txt & echo noise> run.log & mkdir bin & echo built> bin\\out.txt",
-            ["working_directory"] = repo,
-        }, ctx);
-
-        Assert.False(result.IsError, result.Text);
-        var diff = changes.Diff();
-        Assert.Equal(["kept.txt", "new.txt"], diff.Files.Select(f => f.Path).Order());
-        var kept = diff.Files.Single(f => f.Path == "kept.txt");
-        // What git had of it, not a note that it isn't known.
-        Assert.Equal(("modified", 1, 0), (kept.Status, kept.Added, kept.Removed));
-        Assert.DoesNotContain(kept.Lines, l => l.Kind == DiffLineKind.Note);
-        Assert.Equal("added", diff.Files.Single(f => f.Path == "new.txt").Status);
-    }
-
-    [Fact]
-    public async Task A_file_a_command_changed_outside_git_shows_from_that_command_on()
-    {
-        var file = Path.Combine(_root, "notes.txt");
-        File.WriteAllText(file, "one\r\n");
-        var changes = new FileChanges();
-        var ctx = Ctx(changes);
-
-        await Run(new ShellTool(), new JsonObject { ["command"] = "echo two>> notes.txt" }, ctx);
-        var first = Assert.Single(changes.Diff().Files);
-        Assert.Equal([new DiffLine(DiffLineKind.Note, null, null, FileChanges.NotKnown)], first.Lines);
-
-        await Run(new EditFileTool(), new JsonObject { ["path"] = file, ["old_text"] = "two", ["new_text"] = "TWO" }, ctx);
-        var then = Assert.Single(changes.Diff().Files);
-        Assert.Equal((1, 1), (then.Added, then.Removed));
-    }
-
-    [Fact]
-    public async Task What_another_program_writes_in_the_home_folder_during_a_command_is_not_the_commands()
-    {
-        // A command with no folder runs in the home folder, where other programs write all the time:
-        // a Claude Code beside BlackBox rewrote .claude.json there during a command's sleep.
-        var home = Path.Combine(_root, "home");
-        var project = Path.Combine(_root, "project");
-        Directory.CreateDirectory(Path.Combine(home, ".claude", "backups"));
-        Directory.CreateDirectory(project);
-        var settings = Path.Combine(home, ".claude.json");
+        // A watched folder can't tell a command's writes from other programs': a Claude Code beside
+        // BlackBox rewrote .claude.json in the home folder during a command's sleep, and it was listed.
+        var settings = Path.Combine(_root, ".claude.json");
         File.WriteAllText(settings, "{\"at\": 1}\n");
-        var changes = new FileChanges { Home = home };
-        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = home, Changes = changes };
-
+        var changes = new FileChanges();
+        var ctx = Ctx(changes);
         var outside = Task.Run(async () =>
         {
-            await Task.Delay(400);
+            await Task.Delay(300);
             File.WriteAllText(settings, "{\"at\": 2}\n");
-            File.WriteAllText(Path.Combine(home, ".claude", "backups", ".claude.json.backup.1"), "{}\n");
-            File.WriteAllText(Path.Combine(home, "other.txt"), "not the command's\n");
         });
-        var result = await Run(new ShellTool(), new JsonObject
-        {
-            ["command"] = $"echo named> notes.txt & cd /d {project} & echo built> out.txt & ping -n 3 127.0.0.1 >nul",
-        }, ctx);
+
+        var shell = new ShellTool();
+        var args = new JsonObject { ["command"] = "echo named> notes.txt & ping -n 2 127.0.0.1 >nul" };
+        Assert.Null(changes.Starting(shell, args, ctx));
+        var result = await Run(shell, args, ctx);
         await outside;
 
         Assert.False(result.IsError, result.Text);
-        var diff = changes.Diff();
-        Assert.Equal([Path.Combine(home, "notes.txt"), Path.Combine(project, "out.txt")], diff.Files.Select(diff.FullPath).Order());
+        Assert.True(File.Exists(Path.Combine(_root, "notes.txt")));
+        Assert.Empty(changes.Diff().Files);
     }
 
     [Fact]
-    public async Task Another_programs_write_in_the_commands_own_folder_still_counts()
+    public void A_list_kept_before_drops_the_files_commands_added()
     {
-        // The same outside write, but the command runs in a folder of its own: there it counts, as
-        // nothing can tell who wrote. This is why the home folder is no longer watched whole.
-        var work = Path.Combine(_root, "work");
-        Directory.CreateDirectory(work);
-        var changes = new FileChanges { Home = Path.Combine(_root, "home") };
-        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = work, Changes = changes };
-        var outside = Task.Run(async () =>
+        var store = Path.Combine(_root, "old.json");
+        var written = Path.Combine(_root, "written.txt");
+        File.WriteAllText(written, "after\n");
+        File.WriteAllText(store, new JsonObject
         {
-            await Task.Delay(400);
-            File.WriteAllText(Path.Combine(work, "other.txt"), "x\n");
-        });
-        await Run(new ShellTool(), new JsonObject { ["command"] = "ping -n 3 127.0.0.1 >nul" }, ctx);
-        await outside;
-        Assert.Equal("other.txt", Assert.Single(changes.Diff().Files).Path);
+            ["files"] = new JsonArray(
+                new JsonObject { ["path"] = Path.Combine(_root, ".claude.json"), ["exists"] = true, ["text"] = "{}", ["known"] = false },
+                new JsonObject { ["path"] = written, ["exists"] = true, ["text"] = "before\n", ["known"] = true }),
+        }.ToJsonString());
+
+        Assert.Equal(["written.txt"], FileChanges.Load(store).Diff().Files.Select(f => f.Path));
     }
-
-    [Fact]
-    public void Shared_folders_and_the_paths_a_command_names()
-    {
-        var home = Path.Combine(_root, "home");
-        Assert.True(FileChanges.Scope.IsShared(home, home));
-        Assert.True(FileChanges.Scope.IsShared(_root, home)); // the folder the home folder is in
-        Assert.True(FileChanges.Scope.IsShared(Path.GetPathRoot(_root)!, home));
-        Assert.True(FileChanges.Scope.IsShared(Path.GetTempPath(), home));
-        Assert.False(FileChanges.Scope.IsShared(Path.Combine(home, "Documents"), home));
-        Assert.False(FileChanges.Scope.IsShared(Path.Combine(_root, "project"), home));
-
-        Assert.Equal(["a b.txt", "x.txt", "C:\\y.cs", Path.Combine(home, "z.md"), home + "\\q"],
-            FileChanges.Scope.Words("Set-Content \"a b.txt\" 1; Get-Item -Path:x.txt | Copy-Item C:\\y.cs; type ~\\z.md > $HOME\\q", home)
-                .Where(w => w.Contains('.') || w.Contains('\\')));
-        Assert.Contains(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\c.txt", FileChanges.Scope.Words("echo 1 > $env:USERPROFILE\\c.txt", home));
-
-        Directory.CreateDirectory(home);
-        Directory.CreateDirectory(Path.Combine(_root, "project"));
-        Directory.CreateDirectory(Path.Combine(_root, "src"));
-        var scope = FileChanges.Scope.Of($"cd {_root}\\project; echo 1 > notes.txt; dir {_root}\\src\\*.cs", home, home);
-        Assert.True(scope.Allows(Path.Combine(home, "notes.txt")));
-        Assert.True(scope.Allows(Path.Combine(_root, "project", "a", "b.cs")));
-        Assert.True(scope.Allows(Path.Combine(_root, "src", "c.cs")));
-        Assert.False(scope.Allows(Path.Combine(home, ".claude.json")));
-        Assert.False(scope.Allows(Path.Combine(_root, "other.txt")));
-
-        // A folder it names in the home folder's AppData counts, though AppData is noise seen from the home folder.
-        var deep = Path.Combine(home, "AppData", "Local", "proj");
-        Directory.CreateDirectory(deep);
-        var inHome = FileChanges.Scope.Of($"Set-Location '{deep}'; 'x' | Set-Content out.txt", home, home);
-        Assert.True(inHome.Allows(Path.Combine(deep, "out.txt")));
-        Assert.False(inHome.Allows(Path.Combine(deep, "bin", "out.dll")));
-        Assert.False(inHome.Allows(Path.Combine(home, "AppData", "Local", "other.txt")));
-    }
-
     [Fact]
     public async Task The_list_is_kept_for_the_chat_and_read_back()
     {
@@ -260,8 +151,5 @@ public class FileChangesTests : IDisposable
         Assert.Equal(@"C:\a\b", FileChanges.CommonFolder([@"C:\a\b\x.cs"]));
         Assert.Equal(@"C:\", FileChanges.CommonFolder([@"C:\a\x.cs", @"C:\ab\y.cs"]));
         Assert.Equal("", FileChanges.CommonFolder([@"C:\a\x.cs", @"D:\a\y.cs"]));
-        Assert.True(FileChanges.IsNoise(@"C:\p", @"C:\p\src\bin\Debug\a.dll"));
-        Assert.False(FileChanges.IsNoise(@"C:\p", @"C:\p\src\a.cs"));
-        Assert.False(FileChanges.IsNoise(@"C:\p", @"C:\p\bin")); // the folder itself: a file named bin is no build
     }
 }

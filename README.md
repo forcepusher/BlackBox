@@ -21,7 +21,7 @@ whatever it downloads stay in a `Data` folder next to the exe.
   prompts, picks the models, makes it and looks at it, in the chat, where you can watch it and stop
   it; right-click a piece to get an earlier version back. Or just ask for a video in the chat.
 - **See what changed.** Pick **File changes** in the **Toolkit** dropdown: it opens on the left of the chat
-  with every file the agent changes in the chat, beside its diff, as it works. Click lines
+  with every file the agent writes or edits in the chat (not what its commands change), beside its diff, as it works. Click lines
   (Shift+click for a range, Ctrl+click for more) to put them in your message, then ask about them or
   have them changed. **Watch** follows the agent's edits as they happen; **Wrap** wraps long lines.
   In a git repository the files are split into **Committed**, **Staged** and **Unstaged**. **Stage**, **Unstage**
