@@ -56,6 +56,22 @@ public sealed class FileChangesWatchTests
     }
 
     [Fact]
+    public void A_hunks_Stage_button_stages_its_added_lines_and_the_places_of_its_removed_ones()
+    {
+        DiffLine Kept(int old, int now) => new(DiffLineKind.Context, old, now, "k");
+        DiffLine Removed(int old) => new(DiffLineKind.Removed, old, null, "r");
+        List<DiffLine> lines =
+        [
+            new(DiffLineKind.Hunk, null, null, "@@ -1,6 +1,6 @@"), Kept(1, 1), Removed(2), Removed(3), Added(2, "a"), Kept(4, 3), Removed(5),
+            new(DiffLineKind.Hunk, null, null, "@@ -20,2 +20,1 @@"), Kept(20, 20), Removed(21),
+        ];
+
+        Assert.Equal([(2, 1), (2, 2), (4, 3)], FileChangesViewModel.Spans(lines, 1));
+        // A removal at the end of a hunk is after its last line.
+        Assert.Equal([(21, 20)], FileChangesViewModel.Spans(lines, 8));
+    }
+
+    [Fact]
     public void A_line_repeated_once_more_is_fresh_once()
     {
         var before = Diff(new DiffFile("a.ps1", "added", [Added(1, "}")]));

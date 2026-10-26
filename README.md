@@ -24,6 +24,8 @@ whatever it downloads stay in a `Data` folder next to the exe.
   with every file the agent changes in the chat, beside its diff, as it works. Click lines
   (Shift+click for a range, Ctrl+click for more) to put them in your message, then ask about them or
   have them changed. **Watch** follows the agent's edits as they happen; **Wrap** wraps long lines.
+  **Discard** puts the picked lines, or the file, back as they were. In a git repository, show only what isn't
+  committed or staged yet, and **Stage** a file or a hunk.
 - **See a file.** Click a file's preview in the chat to see it full screen, or press **Inspect** to
   open it in **File inspector** on the left of the chat (its folder button opens any file). Markdown, PDF, Word, Excel, PowerPoint, tables,
   text, pictures, video, animations, sound, 3D models (an FBX plays its animations), and any other

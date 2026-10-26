@@ -15,7 +15,8 @@ public sealed record DiffRequest(string Path, string? Against = null, string? Co
 /// <summary>
 /// Changes in a git repository, read from the git on this PC (on the PATH, or where Git for
 /// Windows, GitHub Desktop or Sourcetree put theirs) and parsed into <see cref="DiffResult"/>:
-/// for the diff tool and the File changes panel. Only reads: no command here changes the repository.
+/// for the diff tool and the File changes panel. Only reads: no command here changes the repository
+/// (the panel's Stage runs its own through <see cref="RunAsync"/>, in <see cref="GitChanges"/>).
 /// </summary>
 public static partial class GitDiff
 {
@@ -228,36 +229,9 @@ public static partial class GitDiff
     /// <summary>Runs git in <paramref name="dir"/>, reading at most <paramref name="max"/> characters of what it prints.</summary>
     internal static async Task<Output> RunAsync(string dir, IEnumerable<string> args, CancellationToken ct, int max = MaxChars)
     {
-        var git = Git ?? throw new DiffException(NoGit);
-        var psi = new ProcessStartInfo(git)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            StandardOutputEncoding = new UTF8Encoding(false),
-            StandardErrorEncoding = new UTF8Encoding(false),
-        };
-        // Paths as they are (not "\303\251"), no colours, and paths taken literally (a [ or * in one).
-        foreach (var a in (string[])["-C", dir, "-c", "core.quotepath=off", "-c", "color.ui=never", "--no-pager", "--literal-pathspecs"])
-            psi.ArgumentList.Add(a);
-        foreach (var a in args)
-            psi.ArgumentList.Add(a);
-        // Only reading: no lock on the index for git to refresh it, and never a password prompt.
-        psi.Environment["GIT_OPTIONAL_LOCKS"] = "0";
-        psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
-
-        Process process;
-        try
-        {
-            process = Process.Start(psi) ?? throw new DiffException(NoGit);
-        }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            throw new DiffException(NoGit);
-        }
-        using (process)
+        var psi = StartInfo(dir, args);
+        psi.StandardOutputEncoding = new UTF8Encoding(false);
+        using (var process = Start(psi))
         {
             process.StandardInput.Close();
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -290,6 +264,92 @@ public static partial class GitDiff
                 ct.ThrowIfCancellationRequested();
                 throw new DiffException($"git took over {GitTime.TotalSeconds:0} seconds in {dir}.");
             }
+        }
+    }
+
+    /// <summary>
+    /// Runs git in <paramref name="dir"/> with <paramref name="input"/> on its standard input, reading
+    /// what it prints as bytes, as they are: a file's content from the index keeps its byte order mark
+    /// and line endings. Null when it printed more than <paramref name="max"/> bytes.
+    /// </summary>
+    internal static async Task<(int Exit, byte[]? Out, string Err)> RunBytesAsync(string dir, IEnumerable<string> args, byte[]? input, CancellationToken ct, int max = MaxChars)
+    {
+        using var process = Start(StartInfo(dir, args));
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(GitTime);
+        try
+        {
+            // Written while its output is read: either could fill a pipe and wait for the other.
+            var write = Task.Run(async () =>
+            {
+                try
+                {
+                    if (input is not null)
+                        await process.StandardInput.BaseStream.WriteAsync(input, timeout.Token).ConfigureAwait(false);
+                }
+                catch (IOException) { } // git stopped reading: what it says tells why
+                finally
+                {
+                    process.StandardInput.Close();
+                }
+            }, timeout.Token);
+            var err = process.StandardError.ReadToEndAsync(timeout.Token);
+            using var output = new MemoryStream();
+            var buffer = new byte[64 * 1024];
+            int n;
+            while ((n = await process.StandardOutput.BaseStream.ReadAsync(buffer, timeout.Token).ConfigureAwait(false)) > 0)
+            {
+                if (output.Length + n > max)
+                {
+                    Kill(process);
+                    return (0, null, "");
+                }
+                output.Write(buffer, 0, n);
+            }
+            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            await write.ConfigureAwait(false);
+            return (process.ExitCode, output.ToArray(), await err.ConfigureAwait(false));
+        }
+        catch (OperationCanceledException)
+        {
+            Kill(process);
+            ct.ThrowIfCancellationRequested();
+            throw new DiffException($"git took over {GitTime.TotalSeconds:0} seconds in {dir}.");
+        }
+    }
+
+    private static ProcessStartInfo StartInfo(string dir, IEnumerable<string> args)
+    {
+        var git = Git ?? throw new DiffException(NoGit);
+        var psi = new ProcessStartInfo(git)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            StandardErrorEncoding = new UTF8Encoding(false),
+        };
+        // Paths as they are (not "\303\251"), no colours, and paths taken literally (a [ or * in one).
+        foreach (var a in (string[])["-C", dir, "-c", "core.quotepath=off", "-c", "color.ui=never", "--no-pager", "--literal-pathspecs"])
+            psi.ArgumentList.Add(a);
+        foreach (var a in args)
+            psi.ArgumentList.Add(a);
+        // No lock on the index for git to refresh it while reading, and never a password prompt.
+        psi.Environment["GIT_OPTIONAL_LOCKS"] = "0";
+        psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        return psi;
+    }
+
+    private static Process Start(ProcessStartInfo psi)
+    {
+        try
+        {
+            return Process.Start(psi) ?? throw new DiffException(NoGit);
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            throw new DiffException(NoGit);
         }
     }
 

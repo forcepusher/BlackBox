@@ -54,6 +54,15 @@ public sealed partial class DiffRow(DiffFileItem file, DiffLine? line) : Observa
     /// <summary>What the header says after the name: "modified · +10 -3".</summary>
     public string HeaderDetails => $"{File.Status} · {File.Counts}";
 
+    /// <summary>
+    /// A file's header or a hunk's @@ line with something on it that isn't staged yet in git: it shows
+    /// a Stage button.
+    /// </summary>
+    public bool CanStage { get; init; }
+
+    /// <summary>A hunk's changes, as lines of the file on disk (see <see cref="GitFile.Touches"/>): what its Stage button stages.</summary>
+    internal IReadOnlyList<(int From, int To)> Spans { get; init; } = [];
+
     /// <summary>What screen readers and UI Automation call it: "48 + text", the file's name for a header.</summary>
     public override string ToString() => IsHeader ? $"{File.Name}, {HeaderDetails}" : $"{(NewNumber.Length > 0 ? NewNumber : OldNumber)} {Marker} {Text}".Replace("  ", " ");
 
@@ -132,7 +141,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     /// as the box's card says). The first file until another is clicked, kept across a refresh.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Whole))]
+    [NotifyPropertyChangedFor(nameof(Whole), nameof(DiscardTip))]
     private DiffFileItem? _currentFile;
 
     /// <summary>Set while a refresh selects the file again, which goes nowhere in the diff: only a click there does.</summary>
@@ -166,10 +175,11 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
         _loading?.Cancel();
         var loading = _loading = new CancellationTokenSource();
         var changes = _chat.Changes;
+        var shown = Shown;
         DiffResult diff;
         try
         {
-            diff = await Task.Run(changes.Diff, loading.Token);
+            diff = await Task.Run(() => changes.DiffAsync(shown, loading.Token), loading.Token);
         }
         catch (OperationCanceledException)
         {
@@ -177,20 +187,26 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
         }
         if (!ReferenceEquals(loading, _loading))
             return;
-        Show(diff, keepPicks: ReferenceEquals(changes, _shownChanges));
+        Show(diff, keepPicks: ReferenceEquals(changes, _shownChanges), fresh: ReferenceEquals(changes, _shownChanges) && shown == _shownView);
         _shownChanges = changes;
+        _shownView = shown;
     }
+
+    /// <summary>Which view the diff shown is of: another view's rows are no changes "just now".</summary>
+    private ChangesShown _shownView;
 
     /// <summary>Whose list is shown: picks are kept across a refresh of the same chat's, not into another chat's.</summary>
     private FileChanges? _shownChanges;
 
-    private void Show(DiffResult diff, bool keepPicks)
+    private void Show(DiffResult diff, bool keepPicks, bool fresh)
     {
         var picked = keepPicks ? Selection.SelectedItems.OfType<DiffRow>().Select(r => r.Key).ToHashSet() : [];
         var current = keepPicks ? CurrentFile?.FullPath : null;
-        var before = keepPicks ? _diff : null;
+        var before = fresh ? _diff : null;
         _diff = diff;
-        Status = Hint;
+        InGit = diff.InGit;
+        OnPropertyChanged(nameof(EmptyText));
+        Status = diff.OutsideGit > 0 ? $"Not in git, so not shown: {diff.OutsideGit} {(diff.OutsideGit == 1 ? "file" : "files")}." : Hint;
         var rows = new List<DiffRow>();
         var files = new List<DiffFileItem>();
         foreach (var file in diff.Files)
@@ -202,9 +218,18 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             }
             var item = new DiffFileItem(file, rows.Count, diff.FullPath(file));
             files.Add(item);
-            rows.Add(new DiffRow(item, null) { Index = rows.Count });
-            foreach (var line in file.Lines.Take(MaxRows - rows.Count))
-                rows.Add(new DiffRow(item, line) { Index = rows.Count });
+            rows.Add(new DiffRow(item, null) { Index = rows.Count, CanStage = file.Git?.Unstaged == true });
+            var lines = file.Lines.Take(MaxRows - rows.Count).ToList();
+            for (var i = 0; i < lines.Count; i++)
+            {
+                if (lines[i].Kind == DiffLineKind.Hunk && file.Git is { } git)
+                {
+                    var spans = Spans(lines, i + 1);
+                    rows.Add(new DiffRow(item, lines[i]) { Index = rows.Count, Spans = spans, CanStage = git.Touches(spans) });
+                }
+                else
+                    rows.Add(new DiffRow(item, lines[i]) { Index = rows.Count });
+            }
         }
         // Another chat's list, or the first read, has no "just now": nothing lights up.
         _fade.Stop();
@@ -360,6 +385,133 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     [RelayCommand]
     private void GoTo(DiffFileItem file) => GoToRow?.Invoke(file.Row);
 
+    // ---- git: what is shown, staging, discarding -------------------------------------------------------
+
+    /// <summary>All the agent's changes, or only what of them isn't committed or staged yet; kept in settings.</summary>
+    public ChangesShown Shown => _chat.Panels.ShowChanges;
+
+    /// <summary>The filter's pick: 0 all changes, 1 not committed, 2 not staged.</summary>
+    public int ShownIndex
+    {
+        get => (int)Shown;
+        set
+        {
+            if (value < 0 || value == ShownIndex)
+                return;
+            _chat.Panels.ShowChanges = (ChangesShown)value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(Shown));
+            OnPropertyChanged(nameof(EmptyText));
+            OnPropertyChanged(nameof(ShowFilter));
+            OnPropertyChanged(nameof(DiscardTip));
+            _chat.SavePanels();
+            _ = LoadAsync();
+        }
+    }
+
+    /// <summary>Some file the agent changed is in a git repository.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowFilter), nameof(EmptyText))]
+    private bool _inGit;
+
+    /// <summary>The filter shows where git has something to filter, and while it filters, to be turned back.</summary>
+    public bool ShowFilter => InGit || Shown != ChangesShown.All;
+
+    /// <summary>Where the diff would be, with nothing to show.</summary>
+    public string EmptyText => Shown switch
+    {
+        _ when Shown == ChangesShown.All || !InGit && _diff?.OutsideGit is null or 0 => "Files the agent changes in this chat show here as it works.",
+        _ when !InGit => "No file the agent changed is in a git repository.",
+        ChangesShown.NotCommitted => "All the agent's changes here are committed.",
+        _ => "All the agent's changes here are staged.",
+    };
+
+    /// <summary>
+    /// The changes of the hunk whose lines start at <paramref name="from"/>, as lines of the file on
+    /// disk: each added line, and the place of each run of removed ones.
+    /// </summary>
+    public static List<(int From, int To)> Spans(IReadOnlyList<DiffLine> lines, int from)
+    {
+        var spans = new List<(int, int)>();
+        var next = 1; // the line on disk the hunk is at
+        for (var i = from; i < lines.Count && lines[i].Kind != DiffLineKind.Hunk; i++)
+        {
+            var line = lines[i];
+            if (line.New is { } n)
+                next = n + 1;
+            if (line.Kind == DiffLineKind.Added)
+                spans.Add((line.New!.Value, line.New.Value));
+            else if (line.Kind == DiffLineKind.Removed && (i == from || lines[i - 1].Kind != DiffLineKind.Removed))
+                spans.Add((PlaceOf(i), PlaceOf(i) - 1));
+        }
+        return spans;
+
+        // A removed run is before the next line still on disk.
+        int PlaceOf(int i)
+        {
+            for (var j = i; j < lines.Count && lines[j].Kind != DiffLineKind.Hunk; j++)
+                if (lines[j].New is { } n)
+                    return n;
+            return next;
+        }
+    }
+
+    /// <summary>Stage clicked on a file's header (the whole file, as git add) or a hunk's @@ line (what isn't staged there).</summary>
+    [RelayCommand]
+    private async Task Stage(DiffRow row)
+    {
+        var error = await Task.Run(() => GitChanges.StageAsync(row.File.FullPath, row.IsHeader ? null : row.Spans, CancellationToken.None));
+        await LoadAsync();
+        if (error is not null)
+            Status = $"Not staged: {error}";
+    }
+
+    /// <summary>What Discard puts back: the picked lines, else the selected file.</summary>
+    public string DiscardTip
+    {
+        get
+        {
+            if (Selection.Count == 0 && CurrentFile is { IsNew: true } made)
+                return $"Move {Path.GetFileName(made.FullPath)} to the Recycle Bin";
+            var what = Selection.Count > 0 ? "the picked lines" : CurrentFile is { } file ? Path.GetFileName(file.FullPath) : "the file";
+            return Shown switch
+            {
+                ChangesShown.NotCommitted => $"Put {what} back as last committed",
+                ChangesShown.NotStaged => $"Put {what} back as staged",
+                _ => $"Put {what} back as before the agent's changes",
+            };
+        }
+    }
+
+    /// <summary>
+    /// Discard: the picked lines put back as they were in this view (a picked line unchanged does
+    /// nothing), else the selected file whole; a file that wasn't there goes to the Recycle Bin.
+    /// </summary>
+    [RelayCommand]
+    private async Task Discard()
+    {
+        var changes = _chat.Changes;
+        var shown = Shown;
+        var picks = Picks().Select(p => (p.File.FullPath, Lines: (IReadOnlyCollection<(int?, int?)>?)p.Rows
+            .Where(r => r.IsAdded || r.IsRemoved).Select(r => r.IsAdded ? ((int?)null, r.Line!.Value.New) : (r.Line!.Value.Old, (int?)null)).ToList()))
+            .Where(p => p.Lines!.Count > 0).ToList();
+        if (picks.Count == 0 && Selection.Count == 0 && CurrentFile is { } current)
+            picks.Add((current.FullPath, null));
+        if (picks.Count == 0)
+            return;
+        var errors = new List<string>();
+        foreach (var (path, lines) in picks)
+            if (await Task.Run(() => changes.DiscardAsync(shown, path, lines, ToRecycleBin, CancellationToken.None)) is { } error)
+                errors.Add($"{Path.GetFileName(path)}: {error}");
+        Unpick();
+        await LoadAsync();
+        if (errors.Count > 0)
+            Status = "Not discarded: " + string.Join(" ", errors);
+    }
+
+    private static void ToRecycleBin(string path) =>
+        Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+
     // ---- what is picked, into the chat's box -----------------------------------------------------------
 
     /// <summary>The picked lines into the box, as the files they are in ("Lines 12-18 · DiffTool.cs": the lines first, as a long name is cut short there).</summary>
@@ -377,6 +529,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             if (!_refreshing && Selection.Count > 0)
                 StopWatching();
             _chat.Pick(Picks().Select(p => (p.File.FullPath, $"{Capital(Lines(p.Rows))} · {Path.GetFileName(p.File.FullPath)}")).ToList());
+            OnPropertyChanged(nameof(DiscardTip));
         }
         finally
         {
@@ -449,7 +602,12 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             return null;
         var picks = Picks().Where(p => files.Contains(p.File.FullPath, StringComparer.OrdinalIgnoreCase)).ToList();
         var via = "File changes" + (picks.Count == 0 ? "" : " · " + string.Join(", ", picks.Select(p => $"{Path.GetFileName(p.File.FullPath)} {Lines(p.Rows)}")));
-        var context = new StringBuilder("[The File changes panel is open beside the chat, showing the files you changed in this chat, each against what it held before your first change to it: ")
+        var context = new StringBuilder(Shown switch
+            {
+                ChangesShown.NotCommitted => "[The File changes panel is open beside the chat, showing what of the files you changed in this chat isn't committed in git yet, each against its last commit: ",
+                ChangesShown.NotStaged => "[The File changes panel is open beside the chat, showing what of the files you changed in this chat isn't staged in git yet, each against what is staged: ",
+                _ => "[The File changes panel is open beside the chat, showing the files you changed in this chat, each against what it held before your first change to it: ",
+            })
             .Append(string.Join(", ", diff.Files.Take(30).Select(f => $"{diff.FullPath(f)} ({f.Status}, {f.Counts})")))
             .Append(diff.Files.Count > 30 ? $" and {diff.Files.Count - 30} more. " : ". ");
         if (picks.Count == 0)

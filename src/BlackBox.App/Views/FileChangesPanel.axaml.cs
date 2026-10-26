@@ -64,7 +64,8 @@ public partial class FileChangesPanel : UserControl
         if ((e.Source as Visual)?.FindAncestorOfType<ScrollBar>(includeSelf: true) is not null)
             _vm?.StopWatching();
         var point = e.GetCurrentPoint(DiffList);
-        if (!point.Properties.IsLeftButtonPressed || (e.KeyModifiers & KeyModifiers.Shift) != 0 ||
+        // A row's Stage button is pressed, not the row.
+        if (!point.Properties.IsLeftButtonPressed || (e.KeyModifiers & KeyModifiers.Shift) != 0 || (e.Source as Visual)?.FindAncestorOfType<Button>(includeSelf: true) is not null ||
             (e.Source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is not { } item || _vm is null)
             return;
         _dragFrom = DiffList.IndexFromContainer(item);
