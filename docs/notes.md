@@ -2721,12 +2721,14 @@ Leaving the chat, the messages still waiting go back in the box.
 
 Such a message reaches the model marked as sent while it worked on the request, which it names
 ("Try using pony diffusion"): a question or a side request is answered or done and the request goes
-on, unless the message changes or cancels it. When the model answers one without going back to
-work, it is asked once, before the run ends, whether that request is done: asked mid-task why
-something had failed, the model used to answer the question and stop, the request forgotten. A
-model that did go back to work isn't asked, and a message that comes while the model writes its
-final answer isn't marked (the task is done by then, so it is the next request, as if sent after
-the run): asked anyway, the model wrote the same answer a second time.
+on, unless the message changes or cancels it. Its answer, a reply without tools, ends the run as any
+other does. Until 26 October 2026 a model that answered such a message without going back to work
+was then asked whether the request was done (asked mid-task why something had failed, it had
+answered the question and stopped, the request forgotten). The question went out after normal
+answers too, and the model's answer to it ("Both questions are answered...") showed as a second
+reply at the end of the run that nobody had asked for. A message that comes while the model writes
+its final answer isn't marked: the task is done by then, so it is the next request, as if sent after
+the run.
 
 ## Build
 Requires the .NET 10 SDK.

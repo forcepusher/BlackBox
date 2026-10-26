@@ -582,18 +582,20 @@ public class AgentSessionTests
         await session.RunAsync("Write hello into the file", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal(3, server.Requests.Count);
         Assert.Equal(SentDuring("Write hello into the file") + "Actually make it say hello world", LastText(server.Requests[1]));
         Assert.Contains(session.History, m => m.FromUser && m.Content!.EndsWith("\nActually make it say hello world"));
         Assert.Empty(session.TakeUndelivered());
+        // The answer to it ends the run. As in a chat of the user's: asked then whether the request
+        // was done, the model said again what it had just said, a reply nobody had asked for.
+        Assert.Equal(2, server.Requests.Count);
+        Assert.Equal(["reply ", "reply Made it say hello world."], observer.Events.Where(e => e.StartsWith("reply")));
     }
 
     [Fact]
     public async Task A_message_sent_while_the_model_writes_its_answer_keeps_the_run_going_as_the_next_request()
     {
-        // As in a chat of the user's: the message came as the model wrote its final answer, was
-        // answered, and then the model was asked whether the finished task was done and answered
-        // the same thing again.
+        // As in a chat of the user's: the message came as the model wrote its final answer, and
+        // marked as one on top of the task, the model was told to carry on with a finished task.
         AgentSession? session = null;
         var replies = new Queue<string>([Sse.Text("Done: the file says hello."), Sse.Text("Changed it to hello world."), Sse.Text("That was all.")]);
         var server = new ScriptedServer
@@ -616,10 +618,10 @@ public class AgentSessionTests
     }
 
     [Fact]
-    public async Task A_message_the_model_goes_back_to_work_after_needs_no_reminder_at_the_end()
+    public async Task A_message_the_model_goes_back_to_work_after_ends_the_run_with_its_answer()
     {
-        // As in the same chat: "The style is off" came in while a picture was being made; the model
-        // made another with that in mind and finished, and was then asked whether the task was done.
+        // "The style is off" came in while a picture was being made; the model made another with
+        // that in mind and finished.
         AgentSession? session = null;
         var replies = new Queue<string>([Sse.ToolCall("w1", "wait", """{"seconds":0}"""), Sse.ToolCall("w2", "wait", """{"seconds":0}"""), Sse.Text("Made it in the new style."), Sse.Text("That was all.")]);
         var server = new ScriptedServer
@@ -642,22 +644,22 @@ public class AgentSessionTests
     }
 
     [Fact]
-    public async Task A_question_sent_during_a_task_is_answered_and_the_task_goes_on()
+    public async Task A_question_sent_during_a_task_comes_with_a_note_to_carry_on_with_the_task()
     {
         // As in a run of the user's: asked mid-task why something had failed, while it was trying
         // Pony Diffusion for a picture, the model answered the question and ended the run there.
+        // The note with the question names the task and says to carry on with it.
         AgentSession? session = null;
         var replies = new Queue<string>([
             Sse.ToolCall("m1", "wait", """{"seconds":0}"""),
             Sse.Text("Edge quit because another Edge held its profile."),
-            Sse.ToolCall("m2", "wait", """{"seconds":0}"""),
             Sse.Text("Made the picture with Pony Diffusion."),
         ]);
         var server = new ScriptedServer
         {
             Responder = _ =>
             {
-                if (replies.Count == 4) session!.Steer("Can you analyze what caused the problem starting up Edge?");
+                if (replies.Count == 3) session!.Steer("Can you analyze what caused the problem starting up Edge?");
                 return replies.Dequeue();
             },
         };
@@ -667,14 +669,9 @@ public class AgentSessionTests
         await session.RunAsync("Try using pony diffusion", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal(4, server.Requests.Count);
-        // The question names the task it came in on...
         Assert.Equal(SentDuring("Try using pony diffusion") + "Can you analyze what caused the problem starting up Edge?", LastText(server.Requests[1]));
-        // ...and with it answered, the model is asked about the task before the run can end.
-        var reminder = LastText(server.Requests[2]);
-        Assert.StartsWith("[BlackBox] Before you finish: the user's message came in while you were working on \"Try using pony diffusion\".", reminder);
-        // Once: the run then ends with the picture.
-        Assert.Equal("Made the picture with Pony Diffusion.", session.History[^1].Content);
+        // Nothing of BlackBox's own goes after the answer: it ends the run.
+        Assert.Equal(2, server.Requests.Count);
     }
 
     [Fact]
@@ -736,7 +733,7 @@ public class AgentSessionTests
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
         Assert.Contains(AgentSession.InterruptedNotice, observer.Notices);
-        Assert.Equal(3, server.Requests.Count);
+        Assert.Equal(2, server.Requests.Count);
         Assert.Equal(SentDuring("Make a red poster") + "Make it green", LastText(server.Requests[1]));
         // The thinking that was cut off is not part of the conversation.
         Assert.DoesNotContain(session.History, m => m.Reasoning?.Contains("shades of red") == true);
