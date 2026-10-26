@@ -8,11 +8,12 @@ namespace BlackBox.Core.Diffs;
 /// <summary>
 /// The files the agent changed in a chat, each with what it held before the agent first changed it,
 /// for the File changes panel. write_file and edit_file read their file before they run; a run_shell
-/// command has its folder watched while it runs, and what it changed that BlackBox hadn't read
-/// before is taken as git has it when the file is in a repository. A file a command changed outside
-/// git is shown from that command on, as what it held before is not known.
+/// command has its folder and the paths it names watched while it runs (<see cref="Scope"/>), and
+/// what it changed that BlackBox hadn't read before is taken as git has it when the file is in a
+/// repository. A file a command changed outside git is shown from that command on, as what it held
+/// before is not known.
 /// </summary>
-public sealed class FileChanges
+public sealed partial class FileChanges
 {
     /// <summary>A file bigger than this is only said to have changed.</summary>
     private const long MaxBytes = 2_000_000;
@@ -126,7 +127,8 @@ public sealed class FileChanges
             if (tool is ShellTool)
             {
                 var cwd = args["working_directory"] is JsonValue w && w.TryGetValue<string>(out var dir) && dir.Trim().Length > 0 ? ctx.ResolvePath(dir.Trim()) : ctx.WorkingDirectory;
-                return Directory.Exists(cwd) ? new Call(this, new Watch(cwd)) : null;
+                var command = args["command"] is JsonValue c && c.TryGetValue<string>(out var text) ? text : "";
+                return Directory.Exists(cwd) ? new Call(this, new Watch(Scope.Of(command, cwd, Home))) : null;
             }
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException or UnauthorizedAccessException) { }
@@ -174,50 +176,171 @@ public sealed class FileChanges
         }
     }
 
-    /// <summary>The folder a command runs in, watched while it runs: the paths it created, and those it changed or deleted.</summary>
+    /// <summary>The home folder, where a command runs unless it is told otherwise; a test's own folder in tests.</summary>
+    internal string Home { get; init; } = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+    /// <summary>
+    /// What of the changes made while a command runs is the command's own. Other programs write files
+    /// at any moment, and a watched folder doesn't say who wrote: a Claude Code beside BlackBox rewrote
+    /// .claude.json in the home folder during a command's sleep, and the panel listed it as the model's.
+    /// So a change counts below the folder the command runs in or a folder it names, unless that folder
+    /// is one every program writes in (the home folder or one above it, a drive, Windows, Program Files,
+    /// ProgramData, Temp); there only the files the command names count.
+    /// </summary>
+    internal sealed class Scope
+    {
+        /// <summary>Folders below which every change counts.</summary>
+        public List<string> Folders { get; } = [];
+
+        /// <summary>Files the command names, which count wherever they are.</summary>
+        public HashSet<string> Files { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>The folders watched, and whether their subfolders are.</summary>
+        public List<(string Folder, bool Deep)> Watched { get; } = [];
+
+        /// <summary>A path below a folder it may change files in, but not in a build's or cache's folder there (<see cref="Noise"/>); elsewhere a file it names.</summary>
+        public bool Allows(string path) =>
+            Folders.Where(f => IsInside(path, f)).MaxBy(f => f.Length) is { } folder ? !IsNoise(folder, path) : Files.Contains(path);
+
+        public static Scope Of(string command, string cwd, string home)
+        {
+            var scope = new Scope();
+            cwd = Path.GetFullPath(cwd);
+            if (!IsShared(cwd, home))
+                scope.Folders.Add(cwd);
+            foreach (var word in Words(command, home).Take(300))
+            {
+                string full;
+                try
+                {
+                    full = Path.GetFullPath(Path.Combine(cwd, word));
+                    // A wildcard names the folder it is in.
+                    if (full.IndexOfAny(['*', '?']) is var star and >= 0)
+                        full = Path.GetDirectoryName(full[..star]) ?? "";
+                }
+                catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { continue; }
+                if (full.Length == 0)
+                    continue;
+                if (Directory.Exists(full))
+                {
+                    if (!IsShared(full, home) && !scope.Folders.Any(f => Same(f, full) || IsInside(full, f)))
+                        scope.Folders.Add(full);
+                }
+                else
+                    scope.Files.Add(full);
+            }
+            // The folder it runs in is watched whole, as a file it names may be anywhere below; then
+            // each folder it names, and the folder of each file it names elsewhere.
+            scope.Watched.Add((cwd, true));
+            foreach (var folder in scope.Folders.Where(f => !Covered(f)).ToList())
+                scope.Watched.Add((folder, true));
+            foreach (var parent in scope.Files.Select(Path.GetDirectoryName).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList())
+                if (scope.Watched.Count < 16 && !Covered(parent) && Directory.Exists(parent))
+                    scope.Watched.Add((parent, false));
+            return scope;
+
+            bool Covered(string folder) => scope.Watched.Any(w => Same(w.Folder, folder) || w.Deep && IsInside(folder, w.Folder));
+        }
+
+        /// <summary>The words of a command that may be paths: quoted ones whole, the rest split at spaces and shell punctuation, with ~ and environment variables filled in.</summary>
+        internal static IEnumerable<string> Words(string command, string home)
+        {
+            var words = Quoted().Matches(command).Select(m => m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value)
+                .Concat(Quoted().Replace(command, " ").Split([' ', '\t', '\r', '\n', ';', '|', '&', '(', ')', '{', '}', '<', '>', ',', '='], StringSplitOptions.RemoveEmptyEntries));
+            foreach (var raw in words)
+            {
+                var word = raw.Trim().Trim('`');
+                // -Path:C:\x names C:\x; other switches name nothing.
+                if (word.StartsWith('-'))
+                    word = word.IndexOf(':') is var colon and > 0 ? word[(colon + 1)..] : "";
+                word = EnvVariable().Replace(Environment.ExpandEnvironmentVariables(word), m =>
+                    m.Groups[1].Success ? Environment.GetEnvironmentVariable(m.Groups[2].Value) ?? m.Value
+                    : m.Groups[2].Value.Equals("HOME", StringComparison.OrdinalIgnoreCase) ? home : m.Value);
+                if (word == "~" || word.StartsWith("~/", StringComparison.Ordinal) || word.StartsWith("~\\", StringComparison.Ordinal))
+                    word = home + word[1..];
+                if (word.Length > 0 && !word.Contains("://", StringComparison.Ordinal) && word.IndexOfAny(Path.GetInvalidPathChars()) < 0)
+                    yield return word;
+            }
+        }
+
+        /// <summary>A folder every program writes in: the home folder or one it is in, a drive, or the system's own.</summary>
+        internal static bool IsShared(string folder, string home)
+        {
+            folder = Path.GetFullPath(folder);
+            if (Same(folder, Path.GetPathRoot(folder) ?? "") || Same(folder, home) || IsInside(home, folder))
+                return true;
+            return new[]
+            {
+                Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                Path.GetTempPath(),
+            }.Any(s => s.Length > 0 && Same(folder, s));
+        }
+
+        private static bool Same(string a, string b) =>
+            string.Equals(Path.TrimEndingDirectorySeparator(a), Path.TrimEndingDirectorySeparator(b), StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>A path below the folder (not the folder itself).</summary>
+        private static bool IsInside(string path, string folder) =>
+            path.StartsWith(Path.EndsInDirectorySeparator(folder) ? folder : folder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"""([^""]*)""|'([^']*)'")]
+    private static partial System.Text.RegularExpressions.Regex Quoted();
+
+    // $env:NAME, ${env:NAME}, $HOME
+    [System.Text.RegularExpressions.GeneratedRegex(@"\$\{?(env:)?(\w+)\}?", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex EnvVariable();
+
+    /// <summary>The folders a command may change files in, watched while it runs: the paths it created, and those it changed or deleted, that are its own (<see cref="Scope"/>).</summary>
     public sealed class Watch : IDisposable
     {
-        private readonly FileSystemWatcher? _watcher;
+        private readonly List<FileSystemWatcher> _watchers = [];
+        private readonly Scope _scope;
 
         /// <summary>Each path, and whether it was there before the command (its first event says).</summary>
         internal ConcurrentDictionary<string, bool> Seen { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-        internal string Folder { get; }
-
-        internal Watch(string folder)
+        internal Watch(Scope scope)
         {
-            Folder = Path.GetFullPath(folder);
-            try
-            {
-                _watcher = new FileSystemWatcher(Folder)
+            _scope = scope;
+            foreach (var (folder, deep) in scope.Watched)
+                try
                 {
-                    IncludeSubdirectories = true,
-                    InternalBufferSize = 64 * 1024,
-                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
-                };
-                _watcher.Created += (_, e) => Add(e.FullPath, existed: false);
-                _watcher.Changed += (_, e) => Add(e.FullPath, existed: true);
-                _watcher.Deleted += (_, e) => Add(e.FullPath, existed: true);
-                _watcher.Renamed += (_, e) =>
-                {
-                    Add(e.OldFullPath, existed: true);
-                    Add(e.FullPath, existed: false);
-                };
-                _watcher.EnableRaisingEvents = true;
-            }
-            catch (Exception ex) when (ex is ArgumentException or IOException or PlatformNotSupportedException or UnauthorizedAccessException)
-            {
-                _watcher = null;
-            }
+                    var watcher = new FileSystemWatcher(folder)
+                    {
+                        IncludeSubdirectories = deep,
+                        InternalBufferSize = 64 * 1024,
+                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
+                    };
+                    watcher.Created += (_, e) => Add(e.FullPath, existed: false);
+                    watcher.Changed += (_, e) => Add(e.FullPath, existed: true);
+                    watcher.Deleted += (_, e) => Add(e.FullPath, existed: true);
+                    watcher.Renamed += (_, e) =>
+                    {
+                        Add(e.OldFullPath, existed: true);
+                        Add(e.FullPath, existed: false);
+                    };
+                    watcher.EnableRaisingEvents = true;
+                    _watchers.Add(watcher);
+                }
+                catch (Exception ex) when (ex is ArgumentException or IOException or PlatformNotSupportedException or UnauthorizedAccessException) { }
         }
 
         private void Add(string path, bool existed)
         {
-            if (Seen.Count < MaxSeen && !IsNoise(Folder, path))
+            if (Seen.Count < MaxSeen && _scope.Allows(path))
                 Seen.TryAdd(path, existed);
         }
 
-        public void Dispose() => _watcher?.Dispose();
+        public void Dispose()
+        {
+            foreach (var watcher in _watchers)
+                watcher.Dispose();
+        }
     }
 
     /// <summary>A path in a folder of <see cref="Noise"/>, below where the command ran.</summary>

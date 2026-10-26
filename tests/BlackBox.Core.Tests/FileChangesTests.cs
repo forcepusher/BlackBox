@@ -131,6 +131,92 @@ public class FileChangesTests : IDisposable
     }
 
     [Fact]
+    public async Task What_another_program_writes_in_the_home_folder_during_a_command_is_not_the_commands()
+    {
+        // A command with no folder runs in the home folder, where other programs write all the time:
+        // a Claude Code beside BlackBox rewrote .claude.json there during a command's sleep.
+        var home = Path.Combine(_root, "home");
+        var project = Path.Combine(_root, "project");
+        Directory.CreateDirectory(Path.Combine(home, ".claude", "backups"));
+        Directory.CreateDirectory(project);
+        var settings = Path.Combine(home, ".claude.json");
+        File.WriteAllText(settings, "{\"at\": 1}\n");
+        var changes = new FileChanges { Home = home };
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = home, Changes = changes };
+
+        var outside = Task.Run(async () =>
+        {
+            await Task.Delay(400);
+            File.WriteAllText(settings, "{\"at\": 2}\n");
+            File.WriteAllText(Path.Combine(home, ".claude", "backups", ".claude.json.backup.1"), "{}\n");
+            File.WriteAllText(Path.Combine(home, "other.txt"), "not the command's\n");
+        });
+        var result = await Run(new ShellTool(), new JsonObject
+        {
+            ["command"] = $"echo named> notes.txt & cd /d {project} & echo built> out.txt & ping -n 3 127.0.0.1 >nul",
+        }, ctx);
+        await outside;
+
+        Assert.False(result.IsError, result.Text);
+        var diff = changes.Diff();
+        Assert.Equal([Path.Combine(home, "notes.txt"), Path.Combine(project, "out.txt")], diff.Files.Select(diff.FullPath).Order());
+    }
+
+    [Fact]
+    public async Task Another_programs_write_in_the_commands_own_folder_still_counts()
+    {
+        // The same outside write, but the command runs in a folder of its own: there it counts, as
+        // nothing can tell who wrote. This is why the home folder is no longer watched whole.
+        var work = Path.Combine(_root, "work");
+        Directory.CreateDirectory(work);
+        var changes = new FileChanges { Home = Path.Combine(_root, "home") };
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = work, Changes = changes };
+        var outside = Task.Run(async () =>
+        {
+            await Task.Delay(400);
+            File.WriteAllText(Path.Combine(work, "other.txt"), "x\n");
+        });
+        await Run(new ShellTool(), new JsonObject { ["command"] = "ping -n 3 127.0.0.1 >nul" }, ctx);
+        await outside;
+        Assert.Equal("other.txt", Assert.Single(changes.Diff().Files).Path);
+    }
+
+    [Fact]
+    public void Shared_folders_and_the_paths_a_command_names()
+    {
+        var home = Path.Combine(_root, "home");
+        Assert.True(FileChanges.Scope.IsShared(home, home));
+        Assert.True(FileChanges.Scope.IsShared(_root, home)); // the folder the home folder is in
+        Assert.True(FileChanges.Scope.IsShared(Path.GetPathRoot(_root)!, home));
+        Assert.True(FileChanges.Scope.IsShared(Path.GetTempPath(), home));
+        Assert.False(FileChanges.Scope.IsShared(Path.Combine(home, "Documents"), home));
+        Assert.False(FileChanges.Scope.IsShared(Path.Combine(_root, "project"), home));
+
+        Assert.Equal(["a b.txt", "x.txt", "C:\\y.cs", Path.Combine(home, "z.md"), home + "\\q"],
+            FileChanges.Scope.Words("Set-Content \"a b.txt\" 1; Get-Item -Path:x.txt | Copy-Item C:\\y.cs; type ~\\z.md > $HOME\\q", home)
+                .Where(w => w.Contains('.') || w.Contains('\\')));
+        Assert.Contains(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\c.txt", FileChanges.Scope.Words("echo 1 > $env:USERPROFILE\\c.txt", home));
+
+        Directory.CreateDirectory(home);
+        Directory.CreateDirectory(Path.Combine(_root, "project"));
+        Directory.CreateDirectory(Path.Combine(_root, "src"));
+        var scope = FileChanges.Scope.Of($"cd {_root}\\project; echo 1 > notes.txt; dir {_root}\\src\\*.cs", home, home);
+        Assert.True(scope.Allows(Path.Combine(home, "notes.txt")));
+        Assert.True(scope.Allows(Path.Combine(_root, "project", "a", "b.cs")));
+        Assert.True(scope.Allows(Path.Combine(_root, "src", "c.cs")));
+        Assert.False(scope.Allows(Path.Combine(home, ".claude.json")));
+        Assert.False(scope.Allows(Path.Combine(_root, "other.txt")));
+
+        // A folder it names in the home folder's AppData counts, though AppData is noise seen from the home folder.
+        var deep = Path.Combine(home, "AppData", "Local", "proj");
+        Directory.CreateDirectory(deep);
+        var inHome = FileChanges.Scope.Of($"Set-Location '{deep}'; 'x' | Set-Content out.txt", home, home);
+        Assert.True(inHome.Allows(Path.Combine(deep, "out.txt")));
+        Assert.False(inHome.Allows(Path.Combine(deep, "bin", "out.dll")));
+        Assert.False(inHome.Allows(Path.Combine(home, "AppData", "Local", "other.txt")));
+    }
+
+    [Fact]
     public async Task The_list_is_kept_for_the_chat_and_read_back()
     {
         var store = Path.Combine(_root, "chats", "changes", "chat1.json");

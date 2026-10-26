@@ -2133,7 +2133,22 @@ characters are cut.
 to fill itself with the model's changes, with no folder to choose and no git modes. Around each tool
 call (`AgentSession.RunToolAsync`, after the user's OK): write_file and edit_file read their file
 first, unless the chat already holds what it was; run_shell has the folder it runs in watched
-(a FileSystemWatcher, stopped 150 ms after the command, the last events arriving late). A path whose
+(a FileSystemWatcher, stopped 150 ms after the command, the last events arriving late).
+**Only the command's own changes** (`FileChanges.Scope`, 2026-10-26): a watcher doesn't say which
+process wrote (Windows tells that only to ETW kernel tracing, as administrator), and commands run in
+the home folder unless told otherwise, so the panel listed the user's `.claude.json` and a Claude
+Code backup as the model's, written by a Claude Code beside BlackBox during a command's `Start-Sleep`.
+Now a change counts below the folder the command runs in and below each folder the command names
+(`cd E:\Repos\x`, quoted or not, `~`, `%VAR%`, `$env:VAR` and `$HOME` filled in, a wildcard naming its
+folder), except folders every program writes in: the home folder and those it is in, a drive's
+root, Windows, Program Files, ProgramData and Temp. There only the files the command names count
+(`'x' | Set-Content notes.txt` in the home folder); a script's unnamed files there are missed. Each
+named folder and each named file's folder is watched too, so a command that `cd`s elsewhere is seen
+now. Noise folders are judged from the folder that lets a path in, so `cd` into a project under
+AppData still counts. Another program writing in the command's own project folder at the same
+moment is still credited: nothing tells them apart. Checked in the real app on 2026-10-26 with an
+outside PowerShell writing two files in %USERPROFILE% during an 8 s sleep: the develop build listed
+both, the fixed one only the named file and the project's. A path whose
 first event was its creation was not there before. One that existed is taken as git has it (`git
 show :path`, the staged or committed version) when git tracks it; otherwise BlackBox never saw it
 before the command, and it shows from that command on, under a note saying so. A command's files

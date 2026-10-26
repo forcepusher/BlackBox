@@ -141,6 +141,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The first-run hint for Ctrl+V is reworded.
 
 ### Fixed
+- File changes no longer lists files other programs write while a command runs, such as your
+  `.claude.json`: only files in the command's folder, in folders it names, or that it names count.
 - Text with a link in it shows the text cursor, as all other chat text does; it showed the arrow.
 - A table whose alignment line has single dashes (`|:-:|`) is read as a table, in the chat and in
   documents written from Markdown.
