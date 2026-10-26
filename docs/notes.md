@@ -1522,8 +1522,9 @@ Claude unchanged. A gateway in front of Anthropic whose address has an `anthropi
   (`max_input_tokens`, 1M for the current ones), reply limit, image support and effort levels. With none picked
   BlackBox uses Claude Opus 5.5, Anthropic's recommended default (without it the newest Opus, then
   Sonnet, then Haiku); Fable and Mythos only when picked, at more than twice the price. On Auto it
-  uses 100k of the 1M, as of OpenRouter's and Kilo's 1M (the user's call, 26 October 2026; from 22
-  October it had used the whole 1M, what a long context costs being the user's to weigh). Checked then against Anthropic's documents:
+  uses the whole 1M (the user's call, 22 October 2026: what a long context costs is the user's to
+  weigh; on 26 October it went to 100k for a day and back to 1M at the user's word), where
+  OpenRouter's and Kilo's 1M gets 100k. Checked then against Anthropic's documents:
   reading earlier steps from the cache doesn't count toward the input tokens a minute (Opus 5.5
   takes 2M a minute even on the lowest paid tier, Fable 500k), so the limits hold while the cache
 does; after it expires a request of a context bigger than the minute's input tokens would wait for

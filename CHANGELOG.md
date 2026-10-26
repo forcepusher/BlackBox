@@ -107,8 +107,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   you call wrong, and an error it was told to look up and went past each get a note to search the
   web; ten minutes or eight tries with nothing looked up make it time to look.
 - Claude through Anthropic's own API: type `api.anthropic.com` (or just `claude`) and an API key.
-  Prompt caching, thinking kept between steps, Claude Opus 5.5 unless another is picked, and
-  100k of its 1M context on Auto (more set by hand).
+  Prompt caching, thinking kept between steps, Claude Opus 5.5 unless another is picked, with its
+  whole 1M context on Auto.
 - An effort dropdown next to the model, medium unless picked, for models whose server says they
   take one.
 - Messages sent while BlackBox works wait above the box until the model reads them: × takes one

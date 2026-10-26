@@ -406,11 +406,13 @@ public static partial class ServerProbe
             return default;
         var sees = FromListEntry(new ModelInfo(model), entry).Vision;
         // vLLM's max_model_len is what it serves the model with; context_length is the most a
-        // hosted service takes for it, Anthropic's included: of Claude's 1M, Auto uses 100k too (the
-        // user, 26 October 2026), as of OpenRouter's and Kilo's; a bigger one is set by hand.
+        // hosted service takes for it. Claude's is used whole on Auto (the user, 22 October 2026,
+        // and again 26 October after a day on 100k): each step reads what came before from its
+        // cache, which doesn't count toward the input tokens a minute, where OpenRouter and Kilo
+        // pass the whole request on at full price.
         if (Int(entry["max_model_len"]) is { } served)
             return new ModelFacts(served, null, sees);
-        return Int(entry["context_length"]) is { } most ? new ModelFacts(most, null, sees, Hosted: true) : new ModelFacts(null, null, sees);
+        return Int(entry["context_length"]) is { } most ? new ModelFacts(most, null, sees, Hosted: !OpenAiChatClient.IsAnthropic(v1)) : new ModelFacts(null, null, sees);
     }
 
     /// <summary>The context an Ollama model runs with, and whether it takes images ("vision" among its capabilities).</summary>

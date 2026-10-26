@@ -81,8 +81,8 @@ model the server has, or you pick one from the list.
   projector). Most testing was done with Qwen3.8 27B.
 - For Claude, type `api.anthropic.com` and your Anthropic API key. BlackBox speaks Anthropic's own
   API, so Claude keeps its thinking and most of each step comes from its cheaper cache. It uses
-  Claude Opus 5.5 unless you pick another, with 100k of its 1M context on Auto; untick Auto to
-  give it more, which costs more on a long job.
+  Claude Opus 5.5 unless you pick another, with its whole 1M context; a long job costs more with
+  a bigger context, so set a smaller one by hand if you prefer.
 - The effort dropdown next to the model says how hard the model thinks (medium unless you pick
   another). It is greyed out for models whose server doesn't say they take one.
 - Give the model at least 32k of context.
