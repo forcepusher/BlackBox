@@ -176,9 +176,10 @@ the window through UI Automation, on a fresh `BLACKBOX_HOME`: 25 of 25 checks pa
 - New chat empties the chat, History brings it back; Settings opens and Cancel closes it; New
   window opens a second window; Data\errors.log stays empty; closing the window ends the app.
 - No server at the address: the banner says so with Use Kilo's free models and Check again; a
-  message sent then waits for the server, and the first "Could not reach … Trying again in 10 s"
-  line shows about 16 s after sending (the first short retries show nothing), then every wait;
-  Stop ends it. The offline status goes into errors.log.
+  message sent then waits for the server with a "Could not reach … Trying again" line for every
+  wait; Stop ends it, and a server that comes back mid-wait answers the task. The first line took
+  16 s to show: before the first request each context lookup waited out a refused connection (2 s
+  each on Windows). Fixed after the report: it shows after about 4 s. The offline status goes into errors.log.
 
 ## Changes in this pass
 

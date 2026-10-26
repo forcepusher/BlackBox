@@ -564,8 +564,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                     throw new InvalidOperationException("Enter your model server's address and pick a model at the top first, then press Continue.");
                 // LM Studio loads models on first use; do that now so we know the real context size.
                 // What the check just said of the model isn't asked again. Not into a chat opened
-                // since: the run is then one ending for the chat left.
-                var facts = await ServerProbe.EnsureLoadedAsync(probeHttp, server,
+                // since: the run is then one ending for the chat left. Not of a server the check
+                // couldn't reach: each of its lookups waited out a refused connection (2 s on
+                // Windows) and the chat said nothing for 16 s; the first request now says it.
+                var facts = probe is { Reachable: false, KeyRefused: false } ? default : await ServerProbe.EnsureLoadedAsync(probeHttp, server,
                     () => Dispatcher.UIThread.Post(() => { if (!_runDetached) AddNotice("Loading the model on the server…", isError: false); }), ct,
                     note => Dispatcher.UIThread.Post(() => { if (!_runDetached) AddNotice(note, isError: false); }),
                     known: probe is not null && probe.Model == server.ModelInUse ? probe.Facts : null);

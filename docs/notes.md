@@ -1764,6 +1764,9 @@ the second try on it waits at least those growing waits (up to a minute) whateve
 and the chat shows one line for the wait rather than one per try. A
 server that can't be reached at all (its PC restarting, LM Studio closed, the VPN down) is waited
 for the same way, so a long task carries on once it is back instead of ending on a short outage.
+When the check before a task finds the server unreachable, the model's context isn't looked up:
+each lookup (LM Studio, llama.cpp, Ollama) waited out a refused connection, 2 s on Windows, and the
+chat said nothing for 16 s; the first request's "Could not reach" line now shows after about 4 s.
 The lines about the tries go above the step's reply, which waits at the end of the chat for its
 first words, and the reply is timed from the last try. They went under it: on 23 October 2026
 Kilo's Nvidia backend failed the request for a finished task's summary three times (an error inside
