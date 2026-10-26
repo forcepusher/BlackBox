@@ -140,6 +140,18 @@ public class MarkdownLiteTests
         Assert.Equal("thanks **no markdown here**", Text(plain[1]));
     }
 
+    [Theory]
+    [InlineData("one\r\ntwo\r\n\r\nthree")]
+    [InlineData("one\r\ntwo\r\n\nthree")]
+    [InlineData("one\ntwo\n\nthree")]
+    [InlineData("one\rtwo\r\rthree")]
+    public void Every_line_and_empty_line_of_a_message_is_a_line_shown(string text)
+    {
+        // A user's message keeps its empty lines, whichever line breaks it was typed or pasted with.
+        Assert.Equal(["one", "two", "", "three"], MarkdownLite.Plain(text).Select(Text));
+        Assert.Equal(["one", "two", "", "three"], MarkdownLite.Render(text).Select(Text));
+    }
+
     [Fact]
     public void A_line_of_nothing_but_table_dashes_stays_as_written()
     {

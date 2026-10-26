@@ -139,6 +139,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The first-run hint for Ctrl+V is reworded.
 
 ### Fixed
+- A long message you send shows all its lines in the chat: the last one, often after an empty line,
+  could be cut off under the bubble's edge (the model always got the whole text). Long notices too.
+- A message keeps the indentation of its first line (pasted code, a list) when sent.
 - With two monitors, a new message (Continue too) clicks on the screen the last screenshot showed:
   it clicked on the main screen with the other one's positions.
 - The model tests what it set up for an AI app by asking that app, instead of leaving the test to you

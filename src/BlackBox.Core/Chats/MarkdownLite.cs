@@ -53,7 +53,7 @@ public static partial class MarkdownLite
 
     private static List<List<MdSpan>> Render(string markdown, List<MdLine>? map)
     {
-        var lines = markdown.Replace("\r\n", "\n").Split('\n');
+        var lines = markdown.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
         var output = new List<List<MdSpan>>();
         var inCode = false;
         for (var i = 0; i < lines.Length; i++)
@@ -101,7 +101,7 @@ public static partial class MarkdownLite
     /// <summary><see cref="Blocks(string)"/>, with the line of <paramref name="markdown"/> (from 0) each block starts on.</summary>
     public static List<MdBlock> Blocks(string markdown, out List<int> starts)
     {
-        var lines = markdown.Replace("\r\n", "\n").Split('\n');
+        var lines = markdown.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
         var blocks = new List<MdBlock>();
         var firsts = starts = [];
         var text = new List<string>();
@@ -152,7 +152,7 @@ public static partial class MarkdownLite
     /// its web addresses made links.
     /// </summary>
     public static List<List<MdSpan>> Plain(string text, MdStyle style = MdStyle.None) =>
-        text.Replace("\r\n", "\n").Split('\n').Select(l => Linked([new MdSpan(l, style)])).ToList();
+        text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n').Select(l => Linked([new MdSpan(l, style)])).ToList();
 
     /// <summary>
     /// The web addresses written out in a line's spans (https://..., www....) split off as links of
