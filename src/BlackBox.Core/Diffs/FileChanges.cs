@@ -487,72 +487,97 @@ public sealed partial class FileChanges
     }
 
     /// <summary>
-    /// What the File changes panel shows: <see cref="Diff"/> with each file's place in git, for its
-    /// Stage buttons; or, of the files there, what isn't committed or isn't staged yet, each against
-    /// its last commit or what is staged. A file git doesn't see is left out of those two.
+    /// What the File changes panel shows: <see cref="Diff"/>, with each file in a git repository
+    /// split by where its changes are: what of the agent's change is committed (against what the
+    /// file held before it), what is staged (against the last commit) and what is only on disk
+    /// (against what is staged), a file of its own in each with <see cref="DiffFile.Git"/> saying
+    /// which; in that order, then the files outside git as they are.
     /// </summary>
-    public async Task<DiffResult> DiffAsync(ChangesShown shown, CancellationToken ct)
+    public async Task<DiffResult> DiffAsync(CancellationToken ct)
     {
         var all = Diff();
         var paths = all.Files.Select(all.FullPath).ToList();
-        var git = paths.Count == 0 ? [] : await GitChanges.ReadAsync(paths, shown == ChangesShown.NotCommitted, ct).ConfigureAwait(false);
-        if (shown == ChangesShown.All)
-            return all with
-            {
-                Files = all.Files.Select(f => git.TryGetValue(all.FullPath(f), out var read) ? f with { Git = GitChanges.FileOf(all.FullPath(f), read) } : f).ToList(),
-                InGit = git.Count > 0,
-            };
-        var files = new List<(string Path, DiffFile File)>();
-        foreach (var path in paths)
+        var git = paths.Count == 0 ? [] : await GitChanges.ReadAsync(paths, ct).ConfigureAwait(false);
+        if (git.Count == 0)
+            return all;
+        List<(string Path, DiffFile File)>[] sections = [[], [], []];
+        var outside = new List<(string Path, DiffFile File)>();
+        for (var i = 0; i < paths.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
-            // Committed, or staged, as it is: nothing of it to show.
-            if (!git.TryGetValue(path, out var read) || read.Y == ' ' && (shown == ChangesShown.NotStaged || read.X == ' '))
-                continue;
-            var bytes = shown == ChangesShown.NotCommitted ? read.Head : read.Index;
-            var now = Read(path);
-            var status = bytes is null ? "added" : !now.Exists ? "deleted" : "modified";
-            var gitFile = GitChanges.FileOf(path, read);
-            if (bytes is not null && (FolderDiff.IsBinary(bytes.AsSpan(0, Math.Min(bytes.Length, 8000))) || DocumentText.Handles(path)) || now.Exists && now.Text is null)
+            var path = paths[i];
+            if (!git.TryGetValue(path, out var read))
             {
-                files.Add((path, new DiffFile(path, status, []) { Binary = true, Git = gitFile }));
+                outside.Add((path, all.Files[i]));
                 continue;
             }
-            var lines = LineDiff.Hunks(bytes is null ? [] : LineDiff.Lines(Decode(bytes)), now.Text is null ? [] : LineDiff.Lines(now.Text), 3);
-            if (lines.Count == 0)
-                continue; // only its line endings or mode differ
-            files.Add((path, new DiffFile(path, status, lines)
+            Content? before;
+            lock (_gate)
+                _before.TryGetValue(path, out before);
+            var (index, head, now) = (FromGit(read.Index, path), FromGit(read.Head, path), Read(path));
+            var disk = GitChanges.OnDisk(path);
+            var utf8 = (Index: read.Index is null || GitChanges.Lines(read.Index) is not null, Head: read.Head is null || GitChanges.Lines(read.Head) is not null,
+                Disk: disk is not null && GitChanges.Lines(disk) is not null);
+            var splittable = !read.Conflict && !DocumentText.Handles(path);
+            if (before is { Known: true })
+                Add(GitSection.Committed, before, head, false);
+            if (read.X != ' ')
+                Add(GitSection.Staged, head, index, splittable && utf8.Head && utf8.Index);
+            if (read.Y != ' ')
+                Add(GitSection.Unstaged, index, now, splittable && utf8.Index && utf8.Disk);
+
+            void Add(GitSection section, Content from, Content to, bool split)
             {
-                Added = lines.Count(l => l.Kind == DiffLineKind.Added),
-                Removed = lines.Count(l => l.Kind == DiffLineKind.Removed),
-                Git = gitFile,
-            }));
+                if (!from.Exists && !to.Exists)
+                    return;
+                var status = !from.Exists ? "added" : !to.Exists ? "deleted" : "modified";
+                var gitFile = new GitFile(read.Root, read.Path, section, split);
+                if (from.Exists && from.Text is null || to.Exists && to.Text is null)
+                {
+                    // Not text: git's letters say it changed, but what was committed since can't be told.
+                    if (section != GitSection.Committed || status != "modified")
+                        sections[(int)section].Add((path, new DiffFile(path, status, []) { Binary = true, Git = gitFile }));
+                    return;
+                }
+                var lines = LineDiff.Hunks(from.Text is null ? [] : LineDiff.Lines(from.Text), to.Text is null ? [] : LineDiff.Lines(to.Text), 3);
+                if (lines.Count == 0)
+                    return; // only its line endings or mode differ
+                sections[(int)section].Add((path, new DiffFile(path, status, lines)
+                {
+                    Added = lines.Count(l => l.Kind == DiffLineKind.Added),
+                    Removed = lines.Count(l => l.Kind == DiffLineKind.Removed),
+                    Git = gitFile,
+                }));
+            }
         }
-        var root = CommonFolder(files.Select(s => s.Path).ToList());
-        return new DiffResult(root, shown == ChangesShown.NotCommitted ? "Not committed" : "Not staged",
-            files.Select(s => s.File with { Path = root.Length == 0 ? s.Path : Path.GetRelativePath(root, s.Path).Replace('\\', '/') }).ToList())
+        var files = sections.SelectMany(s => s).Concat(outside).ToList();
+        var root = CommonFolder(files.Select(s => s.Path).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+        return new DiffResult(root, Title, files.Select(s => s.File with { Path = root.Length == 0 ? s.Path : Path.GetRelativePath(root, s.Path).Replace('\\', '/') }).ToList())
         {
             NewIsOnDisk = true,
-            InGit = git.Count > 0,
-            OutsideGit = paths.Count(p => !git.ContainsKey(p)),
+            InGit = true,
         };
 
+        // What git has of the file, as read_file would read it: absent, not text, or its text.
+        static Content FromGit(byte[]? bytes, string path) =>
+            bytes is null ? Content.Absent
+            : FolderDiff.IsBinary(bytes.AsSpan(0, Math.Min(bytes.Length, 8000))) || DocumentText.Handles(path) ? new Content(true, null)
+            : new Content(true, Decode(bytes));
     }
 
-
     /// <summary>
-    /// Puts a file's changes back as they were in the <paramref name="shown"/> view: before the agent
-    /// changed it, as last committed, or as staged. <paramref name="lines"/> are the diff's changed
-    /// lines to put back, an added one by its number in the file now (Old null), a removed one by its
-    /// number before (New null); null puts back the whole file, and one that wasn't there before goes
-    /// to <paramref name="delete"/>. Null when done, else why not.
+    /// Puts a file's changes back: in the Unstaged section as they are staged, outside git (null) as
+    /// they were before the agent changed them. <paramref name="lines"/> are the diff's changed lines
+    /// to put back, an added one by its number in the file now (Old null), a removed one by its number
+    /// before (New null); null puts back the whole file, and one that wasn't there before goes to
+    /// <paramref name="delete"/>. Staged and committed changes aren't put back. Null when done, else why not.
     /// </summary>
-    public async Task<string?> DiscardAsync(ChangesShown shown, string path, IReadOnlyCollection<(int? Old, int? New)>? lines, Action<string> delete, CancellationToken ct)
+    public async Task<string?> DiscardAsync(GitSection? section, string path, IReadOnlyCollection<(int? Old, int? New)>? lines, Action<string> delete, CancellationToken ct)
     {
         path = Path.GetFullPath(path);
         bool existed;
         string? before;
-        if (shown == ChangesShown.All)
+        if (section is null)
         {
             Content? content;
             lock (_gate)
@@ -561,16 +586,16 @@ public sealed partial class FileChanges
                 return "BlackBox has nothing of this file from before.";
             (existed, before) = (content.Exists, content.Text);
         }
+        else if (section != GitSection.Unstaged)
+            return "Only changes not staged yet can be discarded: unstage these first.";
         else
         {
-            if ((await GitChanges.ReadAsync([path], shown == ChangesShown.NotCommitted, ct).ConfigureAwait(false)).GetValueOrDefault(path) is not { } read)
+            if ((await GitChanges.ReadAsync([path], ct).ConfigureAwait(false)).GetValueOrDefault(path) is not { } read)
                 return "This file isn't in a git repository.";
-            var bytes = shown == ChangesShown.NotCommitted ? read.Head : read.Index;
-            if (lines is null && bytes is not null)
-                return await GitChanges.RestoreAsync(read.Root, read.Path, shown == ChangesShown.NotCommitted, ct).ConfigureAwait(false);
-            (existed, before) = (bytes is not null, bytes is null || FolderDiff.IsBinary(bytes.AsSpan(0, Math.Min(bytes.Length, 8000))) ? null : Decode(bytes));
-        }
-        try
+            if (lines is null && read.Index is not null)
+                return await GitChanges.RestoreAsync(read.Root, read.Path, ct).ConfigureAwait(false);
+            (existed, before) = (read.Index is not null, read.Index is null || FolderDiff.IsBinary(read.Index.AsSpan(0, Math.Min(read.Index.Length, 8000))) ? null : Decode(read.Index));
+        }        try
         {
             if (lines is null)
             {

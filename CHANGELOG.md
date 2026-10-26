@@ -6,12 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- File changes in a git repository: show **All changes**, only what is **Not committed** or only what
-  is **Not staged**, from the dropdown over the files. **Stage** on a file stages it in git, and on a
-  hunk only that hunk's changes.
-- **Discard** in the File changes bar puts the picked lines back as they were in the view shown (before
-  the agent's changes, as committed or as staged), or the selected file when no line is picked. A file
-  the agent made goes to the Recycle Bin.
+- File changes in a git repository lists the files in **Committed**, **Staged** and **Unstaged**
+  foldouts. **Stage** on an unstaged file or hunk stages it in git, **Unstage** on a staged one takes
+  it back out.
+- **Discard** in the File changes bar puts the picked lines back, or the selected file when no line is
+  picked: unstaged changes as staged, files outside git as before the agent's changes. A file the agent
+  made goes to the Recycle Bin.
 - **Max screenshot size** under Settings → Advanced: screenshots are scaled down to fit it, so a 4K
   screen uses a quarter of the context. 2560 × 1080 by default; clicks still land on the real screen.
 - **Wrap** in the File changes bar wraps long lines inside the panel instead of running them off
