@@ -788,6 +788,23 @@ public sealed class VideoRolesTests
         Assert.Contains(set, s => s.StartsWith("251:252.value", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void A_length_from_the_prompt_switch_is_turned_off_not_given_the_seconds()
+    {
+        // The user's LTX-2.5 pose workflow: its duration predictor's switch and the seconds used when it is off.
+        var wf = Load("""
+            {
+              "7": {"class_type": "PrimitiveBoolean", "inputs": {"value": true}, "_meta": {"title": "Length from the prompt (LTX duration head)"}},
+              "8": {"class_type": "PrimitiveFloat", "inputs": {"value": 4}, "_meta": {"title": "Duration in seconds (when the above is off)"}}
+            }
+            """);
+        var missed = new List<string>();
+        VideoRoles.Apply(wf, Empty, new VideoInputs { Seconds = 6.5, Fps = 24 }, missed);
+        Assert.Equal(false, (bool?)wf.ValueOf("7.value"));
+        Assert.Equal(6.5, (double?)wf.ValueOf("8.value"));
+        Assert.Empty(missed);
+    }
+
     /// <summary>Z-Image's text to image: the prompt only in the text encoder the sampler's positive comes from.</summary>
     private const string ZImage = """
         {

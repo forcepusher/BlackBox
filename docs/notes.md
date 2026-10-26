@@ -664,7 +664,13 @@ path is copied in by `TakeInPictures`, as pictures are):
   lip-synced shot is made as before. None of these templates was run on this PC (no GPU here, and
   the laptop's ComfyUI has none of their models); what they take was read from the templates'
   files in ComfyUI 0.41's templates package. LTX-2.5 has no IC-LoRA template of ComfyUI's yet, so
-  motion with LTX-2.5 needs the user's own pose workflow (the guide's `_pose`).
+  motion with LTX-2.5 needs the user's own pose workflow (the guide's `_pose`). First run on the
+  workstation (release QA, 2026-10-26, qwen3.8: a fox moving as a 4 s clip of a cat walking): that
+  workflow (`video_furry_ltx2_5_pose`) was picked, but its "Length from the prompt (LTX duration
+  head)" switch, a PrimitiveBoolean whose title says duration, was given the shot's 4 as a length, so
+  it stayed on and the duration predictor made 2.0 and 2.7 s clips that used only the start of the
+  walk. A boolean is no length now, and a length-from-the-prompt switch is turned off whenever the
+  shot's length is set (`VideoRoles.LengthFromPromptTitle`).
 - **A frame's `of`**: the frame is where the video ends ("walk.mp4"), so the shot that starts on it
   goes on from the user's clip (continuity), as `of` does with a shot's clip. Kept by `Normalize`
   while its name ends in a video's extension or names one in References.

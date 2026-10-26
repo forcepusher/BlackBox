@@ -139,6 +139,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The first-run hint for Ctrl+V is reworded.
 
 ### Fixed
+- A clip made with a workflow that can take its length from the prompt (an LTX duration head
+  switch) is as long as the clip says: the switch is turned off. It had been left on, and a 4 s clip
+  came out 2 s.
 - A clip made with New clip (or Create) in Video generator is saved at once: on a video just opened
   it stayed only in the panel and was gone the next time, and its frames could show a picture a
   deleted clip left behind.

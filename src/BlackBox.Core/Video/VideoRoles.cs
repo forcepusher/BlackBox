@@ -179,6 +179,9 @@ public static partial class VideoRoles
                 Put(id, "value", inputs.PromptEnhance);
             else if (inputs.TextToVideo is { } t2v && TextToVideoTitle().IsMatch(title))
                 Put(id, "value", t2v);
+            // The shot's length is set: a length the template would work out from the prompt instead is off.
+            else if (inputs.Seconds is not null && LengthFromPromptTitle().IsMatch(title))
+                Put(id, "value", false);
         }
 
         if (inputs.Prefix is { } prefix)
@@ -415,7 +418,9 @@ public static partial class VideoRoles
             if (node["inputs"] is not JsonObject inputs)
                 continue;
             var cls = ComfyWorkflow.ClassOf(node);
-            if (cls.StartsWith("Primitive", StringComparison.Ordinal) && Single(inputs) is { } only && DurationTitle().IsMatch(ComfyWorkflow.TitleOf(node) ?? ""))
+            // Not a switch: "Length from the prompt (LTX duration head)" was given the shot's 4 s, which
+            // read as on, and LTX's duration predictor made the clip 2 s.
+            if (cls.StartsWith("Primitive", StringComparison.Ordinal) && cls != "PrimitiveBoolean" && Single(inputs) is { } only && DurationTitle().IsMatch(ComfyWorkflow.TitleOf(node) ?? ""))
             {
                 found.Add((id, only, cls.Contains("Int", StringComparison.Ordinal) ? LengthKind.WholeSeconds : LengthKind.Seconds));
                 continue;
@@ -539,6 +544,9 @@ public static partial class VideoRoles
 
     [GeneratedRegex(@"\b(last|end|final)", RegexOptions.IgnoreCase)]
     private static partial Regex LastTitle();
+
+    [GeneratedRegex(@"(length|duration).*(from the prompt|predict|head)|(from the prompt|predict).*(length|duration)", RegexOptions.IgnoreCase)]
+    private static partial Regex LengthFromPromptTitle();
 
     [GeneratedRegex(@"prompt\s*enhance|enhance\s*prompt", RegexOptions.IgnoreCase)]
     private static partial Regex EnhanceTitle();
