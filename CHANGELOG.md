@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- File changes opens by itself the first time the agent changes a file in a chat, unless another tool
+  is open. Closed, it stays closed in that chat. Turn it off under Settings → Toolkit.
 - File changes in a git repository lists the files in **Committed**, **Staged** and **Unstaged**
   foldouts.
 - **Stage**, **Unstage** and **Discard** over the File changes diff act on the picked lines, or the
@@ -164,6 +166,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - File changes no longer lists files other programs write while a command runs, such as your
   `.claude.json`: it lists only the files the model writes or edits with its file tools, not what
   its commands change.
+- File changes no longer lists the agent's own notes in BlackBox's scratch folder, or other files in
+  BlackBox's Data folder.
 - Text with a link in it shows the text cursor, as all other chat text does; it showed the arrow.
 - A table whose alignment line has single dashes (`|:-:|`) is read as a table, in the chat and in
   documents written from Markdown.

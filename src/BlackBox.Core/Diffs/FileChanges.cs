@@ -33,6 +33,16 @@ public sealed class FileChanges
     /// <summary>Raised on the agent's thread after a call that may have changed files.</summary>
     public event Action<FileChanges>? Changed;
 
+    /// <summary>No file in the list yet: the agent changed none in the chat.</summary>
+    public bool IsEmpty
+    {
+        get
+        {
+            lock (_gate)
+                return _order.Count == 0;
+        }
+    }
+
     /// <summary>Keeps the list in <paramref name="file"/> from now on (the chat's, once it has one), and writes it there now.</summary>
     public void KeepIn(string file)
     {
@@ -102,13 +112,25 @@ public sealed class FileChanges
         {
             if (args["path"] is JsonValue v && v.TryGetValue<string>(out var path) && path.Trim().Length > 0)
             {
-                Remember(ctx.ResolvePath(path.Trim()));
+                var full = Path.GetFullPath(ctx.ResolvePath(path.Trim()));
+                if (InOwnData(full, ctx))
+                    return null;
+                Remember(full);
                 return new Call(this);
             }
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException or UnauthorizedAccessException) { }
         return null;
     }
+
+    /// <summary>
+    /// Whether a path is in BlackBox's own Data folder (the one holding its scratch and tools): the
+    /// agent's notes and downloads there are no change of the user's (the user, 2026-10-27).
+    /// </summary>
+    private static bool InOwnData(string path, ToolContext ctx) =>
+        new[] { ctx.ScratchDirectory, ctx.ToolsDirectory }
+            .OfType<string>().Select(d => Path.GetDirectoryName(Path.GetFullPath(d).TrimEnd(Path.DirectorySeparatorChar))).OfType<string>()
+            .Any(data => path.StartsWith(data + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>A call that may change a file, until it has ended.</summary>
     public sealed class Call(FileChanges changes)

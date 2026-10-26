@@ -67,6 +67,29 @@ public class FileChangesTests : IDisposable
     }
 
     [Fact]
+    public async Task Files_in_BlackBoxs_own_Data_folder_are_not_listed()
+    {
+        // The agent's scratch notes are no change of the user's (the user, 2026-10-27).
+        var data = Path.Combine(_root, "Data");
+        var changes = new FileChanges();
+        var ctx = new ToolContext
+        {
+            Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = _root, Changes = changes,
+            ScratchDirectory = Path.Combine(data, "scratch"), ToolsDirectory = Path.Combine(data, "tools"),
+        };
+        Directory.CreateDirectory(ctx.ScratchDirectory!);
+        var made = Path.Combine(_root, "made.txt");
+
+        await Run(new WriteFileTool(), new JsonObject { ["path"] = Path.Combine(data, "scratch", "notes.md"), ["content"] = "plan\n" }, ctx);
+        await Run(new WriteFileTool(), new JsonObject { ["path"] = Path.Combine(data, "mcp.json"), ["content"] = "{}\n" }, ctx);
+        Assert.True(changes.IsEmpty);
+        await Run(new WriteFileTool(), new JsonObject { ["path"] = made, ["content"] = "a\n" }, ctx);
+
+        Assert.False(changes.IsEmpty);
+        Assert.Equal([made], changes.Diff().Files.Select(f => changes.Diff().FullPath(f)));
+    }
+
+    [Fact]
     public async Task What_a_command_changes_is_not_listed()
     {
         // A watched folder can't tell a command's writes from other programs': a Claude Code beside

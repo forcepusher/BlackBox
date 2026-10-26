@@ -16,6 +16,8 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
 
     public AgentSettings Agent => Settings.Agent;
 
+    public PanelSettings Panels => Settings.Panels;
+
     public string[] ApprovalModes { get; } =
     [
         "Ask before every action",
