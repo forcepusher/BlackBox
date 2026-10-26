@@ -139,6 +139,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The first-run hint for Ctrl+V is reworded.
 
 ### Fixed
+- With a video of yours picked on Video generator's References row, "this video" in your message
+  means that video: asked for a clip that goes on from where it ends, the model went on from the
+  last clip instead.
 - In the joined video, a sound whose start you cut (its left edge dragged) starts where it sits on
   its sound line. It played from the video's start.
 - A song made with Music on a new sound shows in Video generator's viewer once it is made, instead

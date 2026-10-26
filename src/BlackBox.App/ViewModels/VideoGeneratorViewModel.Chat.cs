@@ -22,9 +22,16 @@ public sealed partial class VideoGeneratorViewModel
         SaveNow(force: true);
         var title = _board.Title.Trim().Length > 0 ? _board.Title.Trim() : Path.GetFileName(_board.Folder);
         var picks = files.Select(Describe).ToList();
+        // A video file of theirs picked is "this video" they speak of: told only that a video meant the
+        // one being made, Qwen and Haiku both went on from its last clip when asked for "a clip that goes
+        // on from exactly where this video ends" with walk.mp4 picked.
+        var references = Path.GetFullPath(_board.ReferencesFolder) + Path.DirectorySeparatorChar;
+        var aboutVideo = files.Any(f => Storyboard.IsVideoFile(f) && Path.GetFullPath(f).StartsWith(references, StringComparison.OrdinalIgnoreCase))
+            ? "With the video file of theirs they picked, \"this video\" and \"it\" mean that file; otherwise what they say about a video is about this one. "
+            : "What they say about a video is about this one unless they say otherwise. ";
         var via = $"Video generator · {title}" + (picks.Count == 0 ? "" : " · " + string.Join(", ", picks.Select(p => p.Short)));
         var context = $"[Video generator is open beside the chat on the video \"{title}\" (its folder: {_board.Folder}; video action=storyboard path=\"{_board.Folder}\" shows it all). " +
-                      "What they say about a video is about this one unless they say otherwise. " +
+                      aboutVideo +
                       (picks.Count == 0 ? WholeVideoNote() : $"They picked in it: {string.Join("; ", picks.Select(p => p.Long))}. {PieceNote(picks.Any(p => p.Piece is not null))}") + "]";
         return (via, context);
     }

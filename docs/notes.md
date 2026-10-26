@@ -672,7 +672,11 @@ path is copied in by `TakeInPictures`, as pictures are):
   walk. A boolean is no length now, and a length-from-the-prompt switch is turned off whenever the
   shot's length is set (`VideoRoles.LengthFromPromptTitle`).
 - **A frame's `of`**: the frame is where the video ends ("walk.mp4"), so the shot that starts on it
-  goes on from the user's clip (continuity), as `of` does with a shot's clip. Kept by `Normalize`
+  goes on from the user's clip (continuity), as `of` does with a shot's clip. With a video file picked, the
+  context says "this video" and "it" mean that file: told only that what they say about a video
+  is about the one being made, Qwen 3.8 and Haiku 5.5 both went on from the last clip when asked,
+  with walk.mp4 picked, for "a clip that goes on from exactly where this video ends" (release QA,
+  2026-10-26); told so, Haiku made the frame `of` walk.mp4. Kept by `Normalize`
   while its name ends in a video's extension or names one in References.
 - **A frame's `from`**: a picture from its middle goes to the edit model like any other picture,
   for a look, a person or a place to keep (a still in the temp folder, deleted after the job).
