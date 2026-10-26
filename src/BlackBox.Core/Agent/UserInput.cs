@@ -32,6 +32,21 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
     /// </summary>
     public IReadOnlyList<ToolCard>? Cards { get; init; }
 
+    /// <summary>
+    /// Typed text as it is sent: without the empty lines and spaces around it, and nothing else
+    /// changed. The empty lines inside stay, and so does the first line's indentation (code pasted
+    /// in, a list), which a plain Trim took off.
+    /// </summary>
+    public static string Tidy(string text)
+    {
+        text = text.TrimEnd();
+        var start = 0;
+        for (var i = 0; i < text.Length && char.IsWhiteSpace(text[i]); i++)
+            if (text[i] == '\n')
+                start = i + 1;
+        return text[start..];
+    }
+
     /// <summary>The words as the model reads them: the context first, when there is one.</summary>
     private string ModelText => Context is null ? Text : Text.Trim().Length == 0 ? Context : $"{Context}\n{Text}";
 
@@ -49,7 +64,7 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
     {
         if (Files.Count == 0)
             return new ChatMessage { Role = ChatRole.User, Content = ModelText, FromUser = true };
-        var list = new StringBuilder(ModelText.Trim());
+        var list = new StringBuilder(Tidy(ModelText));
         if (list.Length > 0)
             list.Append("\n\n");
         list.Append(Files.Count == 1 ? "[The user attached this file:]" : "[The user attached these files:]");

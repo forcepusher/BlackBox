@@ -481,14 +481,14 @@
             <DataTemplate DataType="vm:UserMessageItem">
               <StackPanel HorizontalAlignment="Right" MaxWidth="640" Margin="60,0,0,0" Spacing="3">
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Right" />
-                <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="12,8" HorizontalAlignment="Right">
+                <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="0,8" HorizontalAlignment="Right">
                   <StackPanel Spacing="6">
                     <!-- Sent with a tool open, in a chat saved before tools gave cards: which video, and what was picked in it. -->
-                    <TextBlock Classes="muted" Text="{Binding Via}" IsVisible="{Binding HasVia}" FontSize="12" TextWrapping="Wrap" />
+                    <TextBlock Classes="muted" Text="{Binding Via}" IsVisible="{Binding HasVia}" FontSize="12" TextWrapping="Wrap" Margin="12,0" />
                     <!-- The files that came with it: a picture as itself, anything else by its name; a click opens it.
                          A tool's pick shows as what it is there, and with nothing picked, the card of what
                          the message was about in the tool; either comes first, as they showed over the box. -->
-                    <WrapPanel IsVisible="{Binding HasAttachments}" HorizontalAlignment="Right" Margin="0,4,0,0">
+                    <WrapPanel IsVisible="{Binding HasAttachments}" HorizontalAlignment="Right" Margin="12,4,12,0">
                     <ItemsControl ItemsSource="{Binding Wholes}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:ToolCardItem">
@@ -540,8 +540,12 @@
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     </WrapPanel>
-                    <!-- The bubble's padding is the text's own, so a drag that starts in it selects too. -->
-                    <SelectableTextBlock views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" Margin="-12,-8" Padding="12,8" />
+                    <!-- The bubble's padding is the text's own, so a drag that starts in it selects too. Its sides
+                         are the text's padding rather than a margin turned inside out: the bubble is as wide as its
+                         text, and Avalonia cuts a measured width to what the parent offers before taking a negative
+                         margin off, so a long line came back narrower than measured, wrapped once more and
+                         lost the last line of the message under the bubble's edge. -->
+                    <SelectableTextBlock views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" Margin="0,-8" Padding="12,8" />
                   </StackPanel>
                 </Border>
               </StackPanel>
@@ -617,16 +621,17 @@
             </DataTemplate>
 
             <DataTemplate DataType="vm:NoticeItem">
-              <Border Padding="10,6" CornerRadius="6" Background="{StaticResource BbSurface}" HorizontalAlignment="Center">
+              <!-- As wide as its words, so their sides are the text's padding (see the user's bubble). -->
+              <Border Padding="2,6" CornerRadius="6" Background="{StaticResource BbSurface}" HorizontalAlignment="Center">
                 <!-- After a stop (Pause/Break, Stop, an error), Continue carries on with the task where it stopped. -->
                 <DockPanel>
-                  <Button DockPanel.Dock="Right" Classes="primary" Content="Continue" Padding="12,3" Margin="12,-2,0,-2" VerticalAlignment="Center"
+                  <Button DockPanel.Dock="Right" Classes="primary" Content="Continue" Padding="12,3" Margin="4,-2,8,-2" VerticalAlignment="Center"
                           IsVisible="{Binding CanContinue}" Command="{Binding ContinueCommand}"
                           ToolTip.Tip="Carry on with the task where I stopped" />
                   <TextBlock DockPanel.Dock="Left" Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}"
-                             VerticalAlignment="Center" Margin="0,0,8,0" />
+                             VerticalAlignment="Center" Margin="8,0,0,0" />
                   <SelectableTextBlock Classes="muted" Classes.error="{Binding IsError}" views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center"
-                                       Margin="-8,-4" Padding="8,4" />
+                                       Margin="0,-4" Padding="8,4" />
                 </DockPanel>
               </Border>
             </DataTemplate>

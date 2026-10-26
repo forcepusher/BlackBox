@@ -53,7 +53,7 @@ public static class MarkdownText
             // Markdown the renderer trips on shows as written: this runs at every streamed piece of
             // a reply, on the window's thread.
             CrashLog.Write("showing a reply's Markdown", ex);
-            lines = text.Replace("\r\n", "\n").Split('\n').Select(l => new List<MdSpan> { new(l, MdStyle.None) }).ToList();
+            lines = text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n').Select(l => new List<MdSpan> { new(l, MdStyle.None) }).ToList();
         }
         // Lines end in a "\n" of their own rather than a LineBreak, so that a character's place in
         // the block's text, which a click is hit-tested to, is the sum of the runs before it.

@@ -932,6 +932,20 @@ public class AgentSessionTests
         Assert.Equal("and quicker\n\n[From the Video generator window, about shot s2.]\nmake him smile", joined.Text);
     }
 
+    [Theory]
+    [InlineData("See those.\r\nTest both.\r\n\r\nAnalyze it.", "See those.\r\nTest both.\r\n\r\nAnalyze it.")]
+    [InlineData("\r\n\r\n  indented first line\r\n\r\nnext\r\n\r\n  ", "  indented first line\r\n\r\nnext")]
+    [InlineData("\n\n    code()\n", "    code()")]
+    [InlineData("  plain words  ", "  plain words")]
+    [InlineData(" \r\n\t\r\n ", "")]
+    public void A_typed_message_loses_only_the_blank_lines_and_spaces_around_it(string typed, string sent)
+    {
+        Assert.Equal(sent, UserInput.Tidy(typed));
+        // What the model reads with the files after it is the same text.
+        var message = new UserInput(UserInput.Tidy(typed), [@"E:\Repos\HoC-Web-Server"]).ToMessage(seesImages: false);
+        Assert.StartsWith(sent.Length > 0 ? sent + "\n\n[The user attached this file:]" : "[The user attached this file:]", message.Content);
+    }
+
     [Fact]
     public void A_saved_chat_keeps_the_paths_of_attached_pictures_but_not_the_pictures()
     {

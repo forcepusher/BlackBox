@@ -1717,8 +1717,20 @@ Every `SelectableTextBlock` has a transparent background (App.axaml). Without on
 text block only on its glyphs, so a drag that started beside a short line, between two lines or
 between letters selected nothing, and the user had to land on a letter exactly; checked in the app
 with drags sent by mouse_event, which copied nothing from those places before and the text after.
-The user's bubble gives its padding to its text block (negative margin, same padding), so a drag
-from the bubble's edge selects too.
+The user's bubble gives its padding to its text block, so a drag from the bubble's edge selects too:
+across, the bubble has no padding of its own (the text block has it, the cards over it a margin of
+12), and only over and under does a negative margin turn it inside out. A negative margin across
+lost the last line of long messages (2026-10-26): the bubble is as wide as its text, and Avalonia
+cuts a block's measured size to what its parent offers before it takes the margin off, so the
+block asked for 24 pixels less than it measured, was given that, laid its text out again narrower,
+one more line wrapped, and the height stayed the measured one: the last line (often after an empty
+line, so it looked like empty lines cut the text) went under the bubble's edge. The saved chat and
+the model had the whole text. Notices (centred, as wide as their words) had the same and are built
+the same way now. Blocks in a stretched column (a reply, the thinking, a call's output) keep their
+margins: they are given back the width they measured with. `BlackBox.App.Tests` lays the chat's own
+templates out headless (Avalonia.Headless with Skia and the real fonts) and checks every line of a
+message, a message with files and a notice is laid out within its block at three window widths; on
+the old markup 45 of the cases failed.
 Every other text block in the chat does the same with a margin of its own: a reply's text reaches
 12 pixels past its sides and 4 over and under it (`MarkdownView`), a code block's text 11 past the
 box's sides and 3 under it (App.axaml), the thinking, a call's output and a note 8 and 4. A drag
@@ -2622,7 +2634,7 @@ Requires the .NET 10 SDK.
 
 ```powershell
 dotnet build                      # debug build; keeps its Data/ in .dev/
-dotnet test                       # unit tests
+dotnet test                       # unit tests, and the chat's layout laid out headless (BlackBox.App.Tests)
 ./scripts/publish.ps1             # single-file publish/BlackBox.exe, trimmed and compressed (about 26 MB)
 ./scripts/publish.ps1 -Folder     # classic self-contained folder in publish/BlackBox-win-x64
 dotnet run --project src/BlackBox.Cli -- --yes "open notepad and type hello"   # headless run

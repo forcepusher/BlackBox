@@ -341,7 +341,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     {
         // A piece picked in the toolkit's panel that isn't made yet has no file: the tool says what it is.
         var files = Attachments.Where(a => !a.Picked || File.Exists(a.Path) || Directory.Exists(a.Path)).Select(a => a.Path).ToList();
-        var input = WithToolkit(new UserInput(Input.Trim(), files), Picked);
+        var input = WithToolkit(new UserInput(UserInput.Tidy(Input), files), Picked);
         Input = "";
         ClearAttachments();
         await SendAsync(input);
