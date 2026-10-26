@@ -17,7 +17,13 @@ internal static class MarkdownSyntax
     {
         for (var j = from + 1; j < s.Length; j++)
         {
-            if (s[j] != marker || (j + 1 < s.Length && s[j + 1] == marker)) continue;
+            if (s[j] != marker) continue;
+            // A double marker is bold inside the italic ("*a **b** c*"): neither of its two closes it.
+            if (j + 1 < s.Length && s[j + 1] == marker)
+            {
+                j++;
+                continue;
+            }
             if (!char.IsWhiteSpace(s[j - 1]) && (j + 1 == s.Length || !char.IsLetterOrDigit(s[j + 1])))
                 return j;
         }

@@ -102,6 +102,8 @@ public static class MarkdownText
             run.FontFamily = Mono;
             run.FontSize = block.FontSize - 1;
         }
+        if (span.Style.HasFlag(MdStyle.Strike))
+            run.TextDecorations = TextDecorations.Strikethrough;
         if (span.Style.HasFlag(MdStyle.Heading))
             run.FontSize = block.FontSize + 2;
         if (span.Style.HasFlag(MdStyle.Muted) && Application.Current?.TryFindResource("BbMuted", out var muted) == true && muted is IBrush brush)

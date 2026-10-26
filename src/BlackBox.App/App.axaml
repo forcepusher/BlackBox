@@ -49,6 +49,25 @@
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="6" />
     </Style>
+    <!-- A reply's quotes (MarkdownParts): a bar beside each level, the text muted; and a rule across. -->
+    <Style Selector="Border.mdQuote">
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="4,0,0,0" />
+      <Setter Property="Padding" Value="12,0,0,0" />
+    </Style>
+    <Style Selector="Border.mdRule">
+      <Setter Property="Background" Value="{StaticResource BbBorder}" />
+    </Style>
+    <Style Selector="Border.mdBox">
+      <Setter Property="BorderBrush" Value="{StaticResource BbMuted}" />
+    </Style>
+    <Style Selector="Border.mdTicked">
+      <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
+      <Setter Property="Background" Value="{StaticResource BbAccent}" />
+    </Style>
+    <Style Selector="TextBlock.mdMuted, SelectableTextBlock.mdMuted">
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+    </Style>
     <Style Selector="DockPanel.codeHeader">
       <Setter Property="Margin" Value="12,4,4,0" />
     </Style>

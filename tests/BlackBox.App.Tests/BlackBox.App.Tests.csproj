@@ -21,4 +21,9 @@
     <ProjectReference Include="..\..\src\BlackBox.App\BlackBox.App.csproj" />
   </ItemGroup>
 
+  <!-- Replies as models write them, laid out by MarkdownLayoutTests. -->
+  <ItemGroup>
+    <None Include="Replies\*.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

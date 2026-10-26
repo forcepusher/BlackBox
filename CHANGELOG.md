@@ -135,6 +135,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Tables in replies are real tables: a grid with a header row, in the chat's font, each cell
   wrapping inside its own column. One too wide for the chat scrolls sideways.
+- Replies read as they would on GitHub: headings by their size, list items whose lines wrap under
+  their own text, task boxes, quotes with a bar (nested ones and lists in them too), rules across,
+  code blocks indented in their list item, `~~struck~~`, `__bold__`, `_italic_`, bold inside italics,
+  `<https://…>` links, `<br>` and `<b>`-style HTML, pictures as links, footnotes and `> [!NOTE]` boxes.
+- A drag over a reply selects across its paragraphs, list items, tables and code, and Ctrl+C copies all of it.
 - Asked for code, commands or facts that change (versions, prices, news), the agent looks them up
   on the web before it answers, rather than writing them from memory.
 - Every dropdown's arrow (Toolkit, History, Model, Effort) is the same solid triangle, and so is the

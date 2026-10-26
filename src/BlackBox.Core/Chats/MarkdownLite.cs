@@ -15,6 +15,8 @@ public enum MdStyle
     Heading = 8,
     /// <summary>Quotes and the bullet in front of them.</summary>
     Muted = 16,
+    /// <summary>~~Struck through~~.</summary>
+    Strike = 32,
 }
 
 /// <summary>A run of text in one style; <paramref name="Url"/> when a click on it opens a web page.</summary>
@@ -22,9 +24,9 @@ public readonly record struct MdSpan(string Text, MdStyle Style, string? Url = n
 
 /// <summary>
 /// A part of an answer: Markdown text, or a fenced code block's code (<paramref name="Language"/>
-/// from its fence, "" when it names none).
+/// from its fence, "" when it names none; <paramref name="Indent"/> the spaces before its fence, in a list item).
 /// </summary>
-public readonly record struct MdBlock(string Text, bool IsCode, string Language = "");
+public readonly record struct MdBlock(string Text, bool IsCode, string Language = "", int Indent = 0);
 
 /// <summary>
 /// Where a line shown comes from: its line in the Markdown (from 0), and for a row of a table where
@@ -42,8 +44,31 @@ public sealed record MdTable(IReadOnlyList<IReadOnlyList<List<MdSpan>>> Rows, in
     public int Columns => Rows.Count == 0 ? 0 : Rows[0].Count;
 }
 
-/// <summary>A part of a block of Markdown text: text, or a <paramref name="Table"/> (its lines as written in <paramref name="Text"/>).</summary>
-public readonly record struct MdPart(string Text, MdTable? Table = null);
+public enum MdKind
+{
+    /// <summary>A paragraph: its lines, Markdown inside them.</summary>
+    Text,
+    /// <summary>A heading, its level 1 to 6 the part's level.</summary>
+    Heading,
+    /// <summary>A list's item: its marker ("•", "3.", "☐", "☑"), its text, and how deep the list is nested (from 0).</summary>
+    Item,
+    /// <summary>A quote's line, how many quotes deep (from 1); a list item in it has its marker.</summary>
+    Quote,
+    /// <summary>A --- line across.</summary>
+    Rule,
+    /// <summary>A table, nested as deep as a list item when it is in one.</summary>
+    Table,
+    /// <summary>A footnote's text at the end ("[^1]: …"), shown as "[1] …".</summary>
+    Note,
+}
+
+/// <summary>
+/// A part of a block of Markdown text, as a page shows it: a paragraph, a heading, a list item, a
+/// quote's line, a rule or a <paramref name="Table"/> (its lines as written in <paramref name="Text"/>).
+/// <paramref name="Text"/> is the Markdown in it, without its marker (#, -, 1., &gt;). <paramref name="Spaced"/>: a blank line
+/// was over it, which sets a loose list's items or two quotes apart.
+/// </summary>
+public readonly record struct MdPart(string Text, MdTable? Table = null, MdKind Kind = MdKind.Text, int Level = 0, string Marker = "", bool Spaced = false);
 
 /// <summary>
 /// The Markdown models write in their answers (bold, headings, lists, code, tables, quotes),
@@ -154,7 +179,7 @@ public static partial class MarkdownLite
                 while (strip < indent && strip < line.Length && line[strip] == ' ') strip++;
                 code.Add(line[strip..]);
             }
-            blocks.Add(new MdBlock(string.Join("\n", code), true, open.Groups[3].Value));
+            blocks.Add(new MdBlock(string.Join("\n", code), true, open.Groups[3].Value, indent));
         }
         FlushText();
         return blocks;
@@ -168,48 +193,161 @@ public static partial class MarkdownLite
         text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n').Select(l => Linked([new MdSpan(l, style)])).ToList();
 
     /// <summary>
-    /// Markdown text (a block of <see cref="Blocks(string)"/> that isn't code) cut at its tables, so
-    /// that each shows as a grid of its own. The blank lines around a table go; pipe lines that make
-    /// no table (nothing but a |---| line) stay text.
+    /// Markdown text (a block of <see cref="Blocks(string)"/> that isn't code) cut into the parts a
+    /// page shows one under another: paragraphs (blank lines between them go), headings, list items,
+    /// quotes' lines, rules and tables. A line indented under a list item goes on with the item, so
+    /// its text wraps under the item's text rather than under its bullet. Pipe lines that make no
+    /// table (nothing but a |---| line) stay text.
     /// </summary>
     public static List<MdPart> Parts(string markdown)
     {
         var lines = markdown.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
         var parts = new List<MdPart>();
         var text = new List<string>();
+        var blank = false;
+        var textSpaced = false;
         void FlushText()
         {
-            var first = text.FindIndex(l => l.Trim().Length > 0);
-            var last = text.FindLastIndex(l => l.Trim().Length > 0);
-            if (first >= 0)
-                parts.Add(new MdPart(string.Join("\n", text.Skip(first).Take(last - first + 1))));
+            if (text.Count > 0)
+            {
+                // A paragraph indented under a list item (after a code block in it) goes in with the item's text.
+                var lead = text.Where(l => l.Trim().Length > 0).Select(Leading).DefaultIfEmpty(0).Min();
+                var level = lead >= 2 ? Math.Max(1, lead / 3) : 0;
+                parts.Add(new MdPart(string.Join("\n", text.Select(l => l.Length >= lead ? l[lead..] : l.TrimStart())), Level: level, Spaced: textSpaced));
+            }
             text.Clear();
+        }
+        void Add(MdPart part)
+        {
+            FlushText();
+            parts.Add(part with { Spaced = blank });
+            blank = false;
+        }
+        void AddText(string line)
+        {
+            if (text.Count == 0)
+                (textSpaced, blank) = (blank, false);
+            text.Add(line);
+        }
+
+        // The columns of the markers of the list items a line is in: an item indented past one is nested in it.
+        var open = new List<int>();
+        int Nest(int leading)
+        {
+            while (open.Count > 0 && leading <= open[^1])
+                open.RemoveAt(open.Count - 1);
+            return open.Count;
         }
 
         var inCode = false;
         for (var i = 0; i < lines.Length; i++)
         {
-            if (lines[i].TrimStart().StartsWith("```", StringComparison.Ordinal))
+            var line = lines[i];
+            if (line.TrimStart().StartsWith("```", StringComparison.Ordinal))
                 inCode = !inCode;
-            if (inCode || !IsTableRow(lines[i]))
+            if (inCode)
             {
-                text.Add(lines[i]);
+                AddText(line);
                 continue;
             }
-            var rows = new List<string>();
-            while (i < lines.Length && IsTableRow(lines[i]))
-                rows.Add(lines[i++]);
-            i--;
-            if (ParseTable(rows) is { } table)
+            if (line.Trim().Length == 0)
             {
                 FlushText();
-                parts.Add(new MdPart(string.Join("\n", rows), table));
+                blank = true;
+                continue;
             }
+            if (Leading(line) == 0 && Item(line) is null)
+                open.Clear();
+            if (IsTableRow(line))
+            {
+                var rows = new List<string>();
+                while (i < lines.Length && IsTableRow(lines[i]))
+                    rows.Add(lines[i++]);
+                i--;
+                if (ParseTable(rows) is { } table)
+                    Add(new MdPart(string.Join("\n", rows), table, MdKind.Table, Nest(Leading(line))));
+                else
+                    rows.ForEach(AddText);
+                continue;
+            }
+            if (HeadingLevel().Match(line) is { Success: true } h)
+                Add(new MdPart(h.Groups[2].Value, Kind: MdKind.Heading, Level: h.Groups[1].Length));
+            else if (Rule().IsMatch(line))
+                Add(new MdPart("", Kind: MdKind.Rule));
+            else if (Quote().IsMatch(line))
+            {
+                var depth = 0;
+                var inner = line;
+                while (Quote().Match(inner) is { Success: true } q)
+                {
+                    depth++;
+                    inner = q.Groups[1].Value;
+                }
+                var (marker, rest) = Item(inner) is { } item ? (item.Marker, item.Text) : ("", inner);
+                // GitHub's alerts: "> [!WARNING]" over the quote's text is its title.
+                if (Alert().Match(rest) is { Success: true } alert)
+                    rest = "**" + char.ToUpperInvariant(alert.Groups[1].Value[0]) + alert.Groups[1].Value[1..].ToLowerInvariant() + "**";
+                // A quote's lines run on in one part, as a paragraph's do; a list item in it is a part of its own.
+                if (marker.Length == 0 && text.Count == 0 && parts.Count > 0 && parts[^1] is { Kind: MdKind.Quote, Marker: "" } last
+                    && last.Level == depth && lines[i - 1].Trim().Length > 0)
+                    parts[^1] = last with { Text = last.Text + "\n" + rest };
+                else
+                    Add(new MdPart(rest, Kind: MdKind.Quote, Level: depth, Marker: marker));
+            }
+            else if (Item(line) is { } item)
+            {
+                var itemText = new List<string> { item.Text };
+                // Lines indented under it are its own: a wrapped line, or a paragraph of it after a blank one.
+                while (i + 1 < lines.Length && Continues(lines, i + 1, item.Indent))
+                    itemText.Add(lines[++i].Trim());
+                Add(new MdPart(string.Join("\n", itemText), Kind: MdKind.Item, Level: Nest(item.Leading), Marker: item.Marker));
+                open.Add(item.Leading);
+            }
+            else if (FootnoteText().Match(line) is { Success: true } note)
+                Add(new MdPart(note.Groups[2].Value, Kind: MdKind.Note, Marker: $"[{note.Groups[1].Value}]"));
             else
-                text.AddRange(rows);
+                AddText(line);
         }
         FlushText();
         return parts;
+    }
+
+    private static int Leading(string line) => line.Length - line.TrimStart().Length;
+
+    /// <summary>A list item's line: its marker as shown, its text, the column of its marker and of its text.</summary>
+    private static (string Marker, string Text, int Leading, int Indent)? Item(string line)
+    {
+        string marker, rest;
+        if (Bullet().Match(line) is { Success: true } b)
+            (marker, rest) = ("•", b.Groups[2].Value);
+        else if (Numbered().Match(line) is { Success: true } n)
+            (marker, rest) = (n.Groups[2].Value + ".", n.Groups[3].Value);
+        else
+            return null;
+        var indent = line.Length - rest.Length;
+        if (TaskBox().Match(rest) is { Success: true } task)
+            (marker, rest) = (task.Groups[1].Value == " " ? "☐" : "☑", task.Groups[2].Value);
+        return (marker, rest, Leading(line), indent);
+    }
+
+    /// <summary>
+    /// Whether line <paramref name="at"/> goes on with the list item above it, whose text starts at
+    /// column <paramref name="indent"/>: an indented line right under it, or after blank lines one
+    /// indented as far as its text; never an item, a heading, a quote, a table or a fence of its own.
+    /// </summary>
+    private static bool Continues(string[] lines, int at, int indent)
+    {
+        var j = at;
+        while (j < lines.Length && lines[j].Trim().Length == 0)
+            j++;
+        if (j >= lines.Length)
+            return false;
+        var line = lines[j];
+        var leading = line.Length - line.TrimStart().Length;
+        if (Item(line) is not null || IsTableRow(line) || Quote().IsMatch(line) || HeadingLevel().IsMatch(line)
+            || line.TrimStart().StartsWith("```", StringComparison.Ordinal))
+            return false;
+        return j == at ? leading > 0 : leading >= indent;
     }
 
     /// <summary>
@@ -274,10 +412,8 @@ public static partial class MarkdownLite
             return [];
         if (Quote().Match(line) is { Success: true } q)
             return [new MdSpan("▍ ", MdStyle.Muted), .. Inline(q.Groups[1].Value, MdStyle.Muted)];
-        if (Bullet().Match(line) is { Success: true } b)
-            return [new MdSpan(Indent(b.Groups[1].Value) + "• ", MdStyle.None), .. Inline(b.Groups[2].Value, MdStyle.None)];
-        if (Numbered().Match(line) is { Success: true } n)
-            return [new MdSpan(Indent(n.Groups[1].Value) + n.Groups[2].Value + ". ", MdStyle.None), .. Inline(n.Groups[3].Value, MdStyle.None)];
+        if (Item(line) is { } item)
+            return [new MdSpan(Indent(line[..item.Leading]) + item.Marker + " ", MdStyle.None), .. Inline(item.Text, MdStyle.None)];
         return Inline(line, MdStyle.None);
     }
 
@@ -316,6 +452,76 @@ public static partial class MarkdownLite
                     continue;
                 }
             }
+            if (c == '*' && text.AsSpan(i).StartsWith("***") && !char.IsWhiteSpace(At(text, i + 3)) && At(text, i + 3) != '*')
+            {
+                var end = text.IndexOf("***", i + 3, StringComparison.Ordinal);
+                if (end > i + 3 && !char.IsWhiteSpace(text[end - 1]))
+                {
+                    Flush(style);
+                    spans.AddRange(Inline(text[(i + 3)..end], style | MdStyle.Bold | MdStyle.Italic));
+                    i = end + 2;
+                    continue;
+                }
+            }
+            if (c == '~' && At(text, i + 1) == '~' && !char.IsWhiteSpace(At(text, i + 2)))
+            {
+                var end = text.IndexOf("~~", i + 2, StringComparison.Ordinal);
+                if (end > i + 2 && !char.IsWhiteSpace(text[end - 1]))
+                {
+                    Flush(style);
+                    spans.AddRange(Inline(text[(i + 2)..end], style | MdStyle.Strike));
+                    i = end + 1;
+                    continue;
+                }
+            }
+            // __bold__ and _italic_ only around whole words: snake_case and file_names stay as written.
+            if (c == '_' && At(text, i + 1) == '_' && (i == 0 || char.IsWhiteSpace(text[i - 1]) || "([\"'".Contains(text[i - 1])) && char.IsLetterOrDigit(At(text, i + 2)))
+            {
+                var end = text.IndexOf("__", i + 2, StringComparison.Ordinal);
+                if (end > i + 2 && !char.IsWhiteSpace(text[end - 1]) && !char.IsLetterOrDigit(At(text, end + 2)))
+                {
+                    Flush(style);
+                    spans.AddRange(Inline(text[(i + 2)..end], style | MdStyle.Bold));
+                    i = end + 1;
+                    continue;
+                }
+            }
+            if (c == '_' && OpensItalic(text, i) && FindItalicEnd(text, i + 1, '_') is var underEnd and > 0)
+            {
+                Flush(style);
+                spans.AddRange(Inline(text[(i + 1)..underEnd], style | MdStyle.Italic));
+                i = underEnd;
+                continue;
+            }
+            if (c == '<' && Autolink().Match(text, i) is { Success: true } auto && auto.Index == i)
+            {
+                Flush(style);
+                spans.Add(new MdSpan(auto.Groups[1].Value, style, auto.Groups[1].Value));
+                i += auto.Length - 1;
+                continue;
+            }
+            if (c == '<' && Html().Match(text, i) is { Success: true } tag && tag.Index == i && HtmlTag(text, tag, style, spans, Flush) is var after and > 0)
+            {
+                i = after - 1;
+                continue;
+            }
+            if (c == '[' && Footnote().Match(text, i) is { Success: true } note && note.Index == i)
+            {
+                Flush(style);
+                spans.Add(new MdSpan($"[{note.Groups[1].Value}]", style | MdStyle.Muted));
+                i += note.Length - 1;
+                continue;
+            }
+            if (c == '!' && At(text, i + 1) == '[' && Link().Match(text, i + 1) is { Success: true } image && image.Index == i + 1)
+            {
+                // A picture shows as a link to it, by its description ("alt text"), or "picture".
+                var target = image.Groups[2].Value;
+                var alt = image.Groups[1].Value.Trim();
+                Flush(style);
+                spans.Add(new MdSpan(alt.Length > 0 ? alt : "picture", style, IsWebLink(target) ? target : null));
+                i += image.Length;
+                continue;
+            }
             if (c == '*' && i + 1 < text.Length && text[i + 1] == '*' && !char.IsWhiteSpace(At(text, i + 2)))
             {
                 var end = text.IndexOf("**", i + 2, StringComparison.Ordinal);
@@ -353,10 +559,56 @@ public static partial class MarkdownLite
                 i += link.Length - 1;
                 continue;
             }
+            if (c == '&' && Entity().Match(text, i) is { Success: true } entity && entity.Index == i)
+            {
+                plain.Append(System.Net.WebUtility.HtmlDecode(entity.Value));
+                i += entity.Length - 1;
+                continue;
+            }
             plain.Append(c);
         }
         Flush(style);
         return spans;
+    }
+
+    /// <summary>
+    /// The HTML models put in Markdown: &lt;br&gt; a line break, &lt;b&gt;, &lt;i&gt;, &lt;code&gt; and the
+    /// like their style around their text, &lt;details&gt; and other wrappers left out. Where the text
+    /// goes on after it, or -1 when it stays as written (a &lt;b&gt; never closed).
+    /// </summary>
+    private static int HtmlTag(string text, Match tag, MdStyle style, List<MdSpan> spans, Action<MdStyle> flush)
+    {
+        var name = tag.Groups[2].Value.ToLowerInvariant();
+        var end = tag.Index + tag.Length;
+        if (name == "br")
+        {
+            flush(style);
+            spans.Add(new MdSpan("\n", style));
+            return end;
+        }
+        if (name is "details" or "p" or "div" or "span")
+            return end;
+        if (tag.Groups[1].Length > 0)
+            return -1;
+        var close = text.IndexOf($"</{name}>", end, StringComparison.OrdinalIgnoreCase);
+        if (close < 0)
+            return -1;
+        var inner = text[end..close];
+        flush(style);
+        if (name is "code" or "kbd")
+            spans.Add(new MdSpan(System.Net.WebUtility.HtmlDecode(inner), style | MdStyle.Code));
+        else
+            spans.AddRange(Inline(inner, style | name switch
+            {
+                "b" or "strong" or "summary" => MdStyle.Bold,
+                "i" or "em" => MdStyle.Italic,
+                "s" or "del" or "strike" => MdStyle.Strike,
+                _ => MdStyle.None,
+            }));
+        // A <details> block's <summary> is its title: bold, on a line of its own.
+        if (name == "summary")
+            spans.Add(new MdSpan("\n", style));
+        return close + name.Length + 3;
     }
 
     // ---- tables ------------------------------------------------------------------------------
@@ -474,6 +726,31 @@ public static partial class MarkdownLite
     // A |---| line's cell: dashes, a colon at either end for the alignment (":-:" is one too); a lone "-" is a cell.
     [GeneratedRegex(@"^(:-+:?|-+:|-{2,})$")]
     private static partial Regex Separator();
+
+    [GeneratedRegex(@"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")]
+    private static partial Regex HeadingLevel();
+
+    // "[ ] to do" and "[x] done" at a list item's start.
+    [GeneratedRegex(@"^\[([ xX])\]\s+(.*)$")]
+    private static partial Regex TaskBox();
+
+    [GeneratedRegex(@"^\s{0,3}\[\^([^\]\s]+)\]:\s*(.*)$")]
+    private static partial Regex FootnoteText();
+
+    [GeneratedRegex(@"^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex Alert();
+
+    [GeneratedRegex(@"<(https?://[^\s<>]+)>", RegexOptions.IgnoreCase)]
+    private static partial Regex Autolink();
+
+    [GeneratedRegex(@"<(/?)(br|b|strong|i|em|code|kbd|s|del|strike|u|sup|sub|mark|summary|details|p|div|span)\b[^<>]*?/?>", RegexOptions.IgnoreCase)]
+    private static partial Regex Html();
+
+    [GeneratedRegex(@"&(?:amp|lt|gt|quot|apos|nbsp|#\d{1,6}|#x[0-9a-fA-F]{1,6});")]
+    private static partial Regex Entity();
+
+    [GeneratedRegex(@"\[\^([^\]\s]+)\]")]
+    private static partial Regex Footnote();
 
     // A target may hold parentheses in pairs: https://en.wikipedia.org/wiki/Python_(programming_language).
     [GeneratedRegex(@"\[([^\]\n]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)")]
