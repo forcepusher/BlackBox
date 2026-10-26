@@ -157,8 +157,8 @@ public class MarkdownLiteTests
     {
         var parts = MarkdownLite.Parts("## Other options\n| Option | Verdict |\n|---|---|\n| **WSL2** | Fastest, on `localhost`. |\n\nAfter.\n|---|");
 
-        Assert.Equal(["## Other options", "| Option | Verdict |\n|---|---|\n| **WSL2** | Fastest, on `localhost`. |", "After.\n|---|"], parts.Select(p => p.Text));
-        Assert.Null(parts[0].Table);
+        Assert.Equal(["Other options", "| Option | Verdict |\n|---|---|\n| **WSL2** | Fastest, on `localhost`. |", "After.\n|---|"], parts.Select(p => p.Text));
+        Assert.Equal(MdKind.Heading, parts[0].Kind);
         Assert.Null(parts[2].Table);
         var table = parts[1].Table!;
         Assert.Equal(1, table.HeaderRows);
@@ -182,6 +182,79 @@ public class MarkdownLiteTests
         var plain = MarkdownLite.Parts("| a | - |\n| - | d |").Single().Table!;
         Assert.Equal(0, plain.HeaderRows);
         Assert.Equal(["-", "d"], plain.Rows[1].Select(Text));
+    }
+
+    [Fact]
+    public void A_reply_is_cut_into_the_parts_a_page_shows()
+    {
+        var parts = MarkdownLite.Parts("""
+            # Title
+            Some text
+            on two lines.
+
+            3. third, a long item
+               that wraps on.
+            4. fourth
+               - nested
+               - [ ] to do
+               - [x] done
+
+            > A quote
+            > going on.
+            > > nested
+            > - a list in it
+
+            > [!WARNING]
+            > Careful.
+
+            ---
+            Footnote[^1].
+
+            [^1]: The note.
+            """);
+
+        Assert.Equal([
+            new MdPart("Title", Kind: MdKind.Heading, Level: 1),
+            new MdPart("Some text\non two lines."),
+            new MdPart("third, a long item\nthat wraps on.", Kind: MdKind.Item, Marker: "3.", Spaced: true),
+            new MdPart("fourth", Kind: MdKind.Item, Marker: "4."),
+            new MdPart("nested", Kind: MdKind.Item, Level: 1, Marker: "•"),
+            new MdPart("to do", Kind: MdKind.Item, Level: 1, Marker: "☐"),
+            new MdPart("done", Kind: MdKind.Item, Level: 1, Marker: "☑"),
+            new MdPart("A quote\ngoing on.", Kind: MdKind.Quote, Level: 1, Spaced: true),
+            new MdPart("nested", Kind: MdKind.Quote, Level: 2),
+            new MdPart("a list in it", Kind: MdKind.Quote, Level: 1, Marker: "•"),
+            new MdPart("**Warning**\nCareful.", Kind: MdKind.Quote, Level: 1, Spaced: true),
+            new MdPart("", Kind: MdKind.Rule, Spaced: true),
+            new MdPart("Footnote[^1]."),
+            new MdPart("The note.", Kind: MdKind.Note, Marker: "[1]", Spaced: true),
+        ], parts);
+    }
+
+    [Fact]
+    public void A_paragraph_indented_under_a_list_item_goes_in_with_its_text()
+    {
+        // The text after a code block in a list item comes as a block of its own, still indented.
+        Assert.Equal([new MdPart("Windows asks to restart.", Level: 1)], MarkdownLite.Parts("   Windows asks to restart."));
+        Assert.Equal(3, MarkdownLite.Blocks("1. Run:\n\n   ```powershell\n   Enable-Feature\n   ```\n\n   Then restart.")[1].Indent);
+    }
+
+    [Fact]
+    public void Inline_markup_models_write_reads_as_on_GitHub()
+    {
+        Assert.Equal([new MdSpan("italic ", MdStyle.Italic), new MdSpan("bold", MdStyle.Italic | MdStyle.Bold), new MdSpan(" italic", MdStyle.Italic)],
+            MarkdownLite.Inline("*italic **bold** italic*", MdStyle.None));
+        Assert.Equal([new MdSpan("both", MdStyle.Bold | MdStyle.Italic)], MarkdownLite.Inline("***both***", MdStyle.None));
+        Assert.Equal([new MdSpan("old", MdStyle.Strike), new MdSpan(" new", MdStyle.None)], MarkdownLite.Inline("~~old~~ new", MdStyle.None));
+        Assert.Equal([new MdSpan("bold", MdStyle.Bold), new MdSpan(" and ", MdStyle.None), new MdSpan("italic", MdStyle.Italic)],
+            MarkdownLite.Inline("__bold__ and _italic_", MdStyle.None));
+        // Underscores inside words and paths stay.
+        Assert.Equal("snake_case_name and my_file_v2.txt", Text(MarkdownLite.Inline("snake_case_name and my_file_v2.txt", MdStyle.None)));
+        Assert.Equal([new MdSpan("see ", MdStyle.None), new MdSpan("https://x.dev/a", MdStyle.None, "https://x.dev/a")],
+            MarkdownLite.Inline("see <https://x.dev/a>", MdStyle.None));
+        Assert.Equal("one\ntwo, bold, a <b and List<int> & AT&T", Text(MarkdownLite.Inline("one<br>two, <b>bold</b>, a <b and List<int> &amp; AT&T", MdStyle.None)));
+        Assert.Contains(new MdSpan("pic", MdStyle.None, "https://x.dev/p.png"), MarkdownLite.Inline("![pic](https://x.dev/p.png)", MdStyle.None));
+        Assert.Equal("Footnote[1].", Text(MarkdownLite.Inline("Footnote[^1].", MdStyle.None)));
     }
 
     [Fact]
@@ -225,7 +298,7 @@ public class MarkdownLiteTests
         var blocks = MarkdownLite.Blocks("1. Write:\n   ```markdown\n   # Title\n   ```js\n     indented\n   ```\n2. Save it.");
 
         Assert.Equal(
-            [new MdBlock("1. Write:", false), new MdBlock("# Title\n```js\n  indented", true, "markdown"), new MdBlock("2. Save it.", false)],
+            [new MdBlock("1. Write:", false), new MdBlock("# Title\n```js\n  indented", true, "markdown", 3), new MdBlock("2. Save it.", false)],
             blocks);
     }
 }

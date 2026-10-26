@@ -1706,12 +1706,48 @@ minutes which looked like the model thinking.
 Replies are shown with their Markdown formatted: bold, headings, lists, code and tables, as
 models write them; the thinking above them stays as written.
 `MarkdownView` cuts a reply at its fenced code blocks (`MarkdownLite.Blocks`): the text between
-them goes to `MarkdownText` as before, and each block is a box of its own in monospace, wrapped,
+them goes to `MarkdownParts`, and each block is a box of its own in monospace, wrapped,
 with the language from its fence and a Copy button that copies the code as written. A block still
 streaming in runs to the end of the reply; at each streamed piece the parts already shown keep
 their controls and only get their new text. A fence indented in a list takes that indent off its
-lines, and only a bare fence (no language) closes a block, so a ```` ```js ```` line inside one
-stays code. Selecting can't run from the text into a code block, being two text blocks.
+lines (and the box goes in 24 a level, with the item's text), and only a bare fence (no language)
+closes a block, so a ```` ```js ```` line inside one stays code.
+
+The text between code blocks is cut into the parts a page shows (`MarkdownLite.Parts`, since
+2026-10-26), each a control of its own in `MarkdownParts`: a paragraph (blank lines between
+paragraphs are a 12 gap, not an empty line), a heading (22, 19, 16 and 14 for h1 to h6, h6 muted,
+20 or 16 over it), a list item (its marker in a 16 column, its text beside it, so a long item wraps
+under its text and not under its bullet; 24 a level of nesting, an item indented past the one
+above's marker being nested in it, as models indent by 2 to 4), task boxes drawn as boxes (the
+font's ☑ is a coloured emoji), a quote's lines with a 4 bar for each level and lists in it, a rule,
+a table, a footnote. A loose list (blank lines between items) and two quotes apart keep a 12 gap,
+a tight one 4. Before, all of it was lines in one text block: a wrapped item ran back to the left
+edge, every heading was one size, a rule was an empty line, nested quotes and lists in quotes
+showed their `>` and `-` (the user's sweep of "obvious" cases, 2026-10-26: "it wasn't even an edge
+case"). Inline, besides bold, italics, code and links: `***both***`, bold inside italics (a `**`
+pair no longer closes an italic, in documents too), `~~strike~~`, `__bold__` and `_italic_` around
+whole words only (snake_case and file_names stay), `<https://…>`, the HTML models write
+(`<br>` a line break, `<b>`/`<strong>`/`<i>`/`<em>`/`<code>`/`<kbd>`/`<s>`/`<del>` their style,
+`<details>` and the like left out, `<summary>` a bold line), `&amp;`-style entities, `![alt](url)`
+as a link to the picture by its alt text, `[^1]` as a muted [1] and its text at the end, and
+GitHub's `> [!WARNING]` as a bold title. Left as written on purpose: backslash escapes (Windows
+paths need every backslash), single line breaks (a chat reply's lines stay lines, where GitHub
+would join them), `$…$` maths and the picture itself. File inspector's Markdown keeps the one text
+block per part of `MarkdownLite.Render` (its picks are by line).
+
+A drag selects across the text blocks of one reply (`MarkdownView`): the press marks the block and
+place it started at, and each move selects from there to the block under the pointer (or the
+nearest, by rows then across), every block between whole; Ctrl+C (or Ctrl+Insert) copies the
+selected text of each, a block a line. The block a drag started in captures the pointer and
+selects within itself; the view's handlers see the moves after it. Leaving it (a click in the
+box) clears the rest. Checked in the app with a mouse_event drag over a nested list into a
+numbered one and Ctrl+C.
+
+Checked in the app with a stand-in model sending replies with every construct and realistic
+answers (a setup guide with code inside its steps, a bug answer with nested lists, emoji lines,
+a rule and an italic footer); `MarkdownLayoutTests` lays the same replies out headless
+(`tests/BlackBox.App.Tests/Replies`) at three widths: every line shown, every item's text right
+of its marker, no markup left in the setup guide.
 
 Tables in a reply are grids (`MarkdownTable`, since 2026-10-26): `MarkdownLite.Parts` cuts a block of
 text at its runs of `|` lines, and each that makes a table (any row but a |---| line) is a box like
