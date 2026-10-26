@@ -616,22 +616,7 @@ public sealed partial class FileChanges
             var old = GitChanges.Split(before ?? "");
             var current = GitChanges.Split(now.Text ?? "");
             var lineBreak = GitChanges.Break(current) ?? GitChanges.Break(old) ?? "\n";
-            var picked = lines.ToHashSet();
-            var kept = new List<string>();
-            var at = 0;
-            foreach (var block in LineDiff.Blocks(old.Select(GitChanges.Key).ToArray(), current.Select(GitChanges.Key).ToArray()))
-            {
-                kept.AddRange(current.Skip(at).Take(block.NewStart - at));
-                // Removed lines put back come first, as the diff shows them above the added ones.
-                for (var i = block.OldStart; i < block.OldStart + block.OldCount; i++)
-                    if (picked.Contains((i + 1, null)))
-                        kept.Add(GitChanges.Key(old[i]) + (GitChanges.Key(old[i]).Length < old[i].Length ? lineBreak : ""));
-                for (var i = block.NewStart; i < block.NewStart + block.NewCount; i++)
-                    if (!picked.Contains((null, i + 1)))
-                        kept.Add(current[i]);
-                at = block.NewStart + block.NewCount;
-            }
-            kept.AddRange(current.Skip(at));
+            var kept = GitChanges.Mix(old, current, lines.ToHashSet(), apply: false, lineBreak);
             await TextFiles.WriteAllAsync(path, GitChanges.Join(kept, lineBreak), now.Exists ? TextFiles.Detect(path) : TextFiles.ForNewFile(path), ct).ConfigureAwait(false);
             return null;
         }

@@ -93,19 +93,20 @@
       <Setter Property="Padding" Value="10,5" />
       <Setter Property="MinHeight" Value="0" />
     </Style>
-    <!-- Stage on a file's header and a hunk's @@ line: small enough to leave the rows as tall as they were. -->
-    <Style Selector="Button.stage">
+<!-- Stage, Unstage and Discard over the diff. -->
+    <Style Selector="Button.act">
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <!-- One that has nothing to act on is only greyed, not filled: it shouldn't look the more pressable. -->
+    <Style Selector="Button.act:disabled /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
-      <Setter Property="BorderThickness" Value="1" />
       <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="FontFamily" Value="{StaticResource ContentControlThemeFontFamily}" />
-      <Setter Property="Height" Value="16" />
-      <Setter Property="MinHeight" Value="0" />
-      <Setter Property="Padding" Value="8,0" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.act:disabled">
+      <Setter Property="Opacity" Value="0.6" />
     </Style>
     <!-- A foldout's header in the file list: flat, its arrow pointing down while open. -->
     <Style Selector="Button.fold">
@@ -134,7 +135,7 @@
   </UserControl.Styles>
 
   <DockPanel>
-    <!-- How the panel is used, or what went wrong; how much changed on the right, Wrap and Watch, then
+    <!-- How the panel is used, or what went wrong; how many files changed on the right, Wrap and Watch, then
          × to close the panel. As tall as the chat's top bar beside it, whose Toolkit dropdown is 30 high. -->
     <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="12,8">
       <DockPanel MinHeight="30">
@@ -148,22 +149,13 @@
           </StackPanel>
         </ToggleButton>
         <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding Wrap}" IsVisible="{Binding HasFiles}" Height="30" Padding="8,0"
-                      VerticalAlignment="Center" VerticalContentAlignment="Center" Margin="4,0,0,0"
+                      VerticalAlignment="Center" VerticalContentAlignment="Center" Margin="12,0,0,0"
                       ToolTip.Tip="Wrap long lines" AutomationProperties.Name="Wrap">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <PathIcon Width="14" Height="14" Data="M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3 3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z" />
             <TextBlock Text="Wrap" VerticalAlignment="Center" />
           </StackPanel>
         </ToggleButton>
-        <!-- The picked lines, else the selected file, put back: unstaged changes as staged, outside git as before the agent's changes. -->
-        <Button DockPanel.Dock="Right" Classes="ghost" Command="{Binding DiscardCommand}" IsVisible="{Binding HasFiles}" IsEnabled="{Binding CanDiscard}" ToolTip.ShowOnDisabled="True" Height="30" Padding="8,0"
-                VerticalAlignment="Center" VerticalContentAlignment="Center" Margin="12,0,0,0"
-                ToolTip.Tip="{Binding DiscardTip}" AutomationProperties.Name="Discard">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <PathIcon Width="14" Height="14" Data="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z" />
-            <TextBlock Text="Discard" VerticalAlignment="Center" />
-          </StackPanel>
-        </Button>
         <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding Summary}" Margin="12,0,0,0" VerticalAlignment="Center" ToolTip.Tip="{Binding Folder}" />
         <TextBlock Classes="muted" Text="{Binding Status}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Status}" />
       </DockPanel>
@@ -204,41 +196,71 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
-      </ScrollViewer>      <GridSplitter Grid.Column="1" Background="{StaticResource BbBorder}" ResizeDirection="Columns" />
+      </ScrollViewer>
+      <GridSplitter Grid.Column="1" Background="{StaticResource BbBorder}" ResizeDirection="Columns" />
 
       <Panel Grid.Column="2">
         <TextBlock Classes="muted" IsVisible="{Binding !HasFiles}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="360" TextAlignment="Center"
                    Text="{Binding EmptyText}" />
-        <!-- Every row of the diff; clicked lines are picked into the chat's box. -->
-        <ListBox x:Name="DiffList" Classes="diff" Classes.wrap="{Binding Wrap}" ItemsSource="{Binding Rows}" Selection="{Binding Selection}" SelectionMode="Multiple"
-                 IsVisible="{Binding HasFiles}" AutomationProperties.Name="Diff">
-          <ListBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:DiffRow">
-              <Border Classes="row" Classes.added="{Binding IsAdded}" Classes.removed="{Binding IsRemoved}" Classes.hunk="{Binding IsHunk}" Classes.header="{Binding IsHeader}">
-                <Panel>
-                  <Border Classes="fresh" Classes.on="{Binding IsFresh}" />
-                  <StackPanel Orientation="Horizontal" Spacing="10" Margin="8,5" IsVisible="{Binding IsHeader}">
-                    <TextBlock Text="{Binding Text}" FontWeight="SemiBold" FontSize="13" />
-                    <TextBlock Text="{Binding HeaderDetails}" Classes="muted" VerticalAlignment="Center" />
-                    <Button Classes="stage" Content="{Binding GitAction}" IsVisible="{Binding HasGitAction}" Command="{Binding #DiffList.((vm:FileChangesViewModel)DataContext).StageCommand}" CommandParameter="{Binding}"
-                            ToolTip.Tip="{Binding GitActionTip}" AutomationProperties.Name="{Binding GitActionName}" />
+        <DockPanel IsVisible="{Binding HasFiles}">
+          <!-- Stage, Unstage and Discard act on the picked lines, else the selected file; what that is
+               shows beside them. Stage and Unstage only where a file is in git. -->
+          <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="8">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4">
+                <Button Classes="ghost act" Command="{Binding StageCommand}" IsVisible="{Binding ShowGit}" IsEnabled="{Binding CanStage}"
+                        ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding StageTip}" AutomationProperties.Name="Stage">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Width="12" Height="12" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                    <TextBlock Text="Stage" VerticalAlignment="Center" />
                   </StackPanel>
-                  <!-- The code's column takes what is left (wrapping); scrolled sideways, as wide as the line. The numbers
-                       and marker stay on a wrapped line's first row. -->
-                  <Grid ColumnDefinitions="46,46,16,*" IsVisible="{Binding !IsHeader}" Margin="0,1" TextElement.FontFamily="Cascadia Mono,Consolas,monospace">
-                    <TextBlock Grid.Column="0" Classes="number" Text="{Binding OldNumber}" VerticalAlignment="Top" />
-                    <TextBlock Grid.Column="1" Classes="number" Text="{Binding NewNumber}" VerticalAlignment="Top" />
-                    <TextBlock Grid.Column="2" Classes="marker" Classes.added="{Binding IsAdded}" Classes.removed="{Binding IsRemoved}" Text="{Binding Marker}" VerticalAlignment="Top" />
-                    <Button Grid.Column="0" Grid.ColumnSpan="2" Classes="stage" Content="{Binding GitAction}" IsVisible="{Binding HasGitAction}" HorizontalAlignment="Right" Margin="0,-2,8,-2"
-                            Command="{Binding #DiffList.((vm:FileChangesViewModel)DataContext).StageCommand}" CommandParameter="{Binding}"
-                            ToolTip.Tip="{Binding GitActionTip}" AutomationProperties.Name="{Binding GitActionName}" />
-                    <TextBlock Grid.Column="3" Classes="code" Classes.hunkText="{Binding IsHunk}" Text="{Binding Text}" Margin="0,0,16,0" />
-                  </Grid>
-                </Panel>
-              </Border>
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
+                </Button>
+                <Button Classes="ghost act" Command="{Binding UnstageCommand}" IsVisible="{Binding ShowGit}" IsEnabled="{Binding CanUnstage}"
+                        ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding UnstageTip}" AutomationProperties.Name="Unstage">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Width="12" Height="12" Data="M19 13H5v-2h14v2z" />
+                    <TextBlock Text="Unstage" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+                <Button Classes="ghost act" Command="{Binding DiscardCommand}" IsEnabled="{Binding CanDiscard}"
+                        ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding DiscardTip}" AutomationProperties.Name="Discard">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Width="12" Height="12" Data="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z" />
+                    <TextBlock Text="Discard" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </StackPanel>
+              <TextBlock Classes="muted" Text="{Binding Target}" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding Target}" />
+            </DockPanel>
+          </Border>
+          <!-- Every row of the diff; clicked lines are picked into the chat's box. -->
+          <ListBox x:Name="DiffList" Classes="diff" Classes.wrap="{Binding Wrap}" ItemsSource="{Binding Rows}" Selection="{Binding Selection}" SelectionMode="Multiple"
+                   AutomationProperties.Name="Diff">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:DiffRow">
+                <Border Classes="row" Classes.added="{Binding IsAdded}" Classes.removed="{Binding IsRemoved}" Classes.hunk="{Binding IsHunk}" Classes.header="{Binding IsHeader}">
+                  <Panel>
+                    <Border Classes="fresh" Classes.on="{Binding IsFresh}" />
+                    <!-- A long path is cut short at its start, the details kept right after it. A click here picks the whole file. -->
+                    <DockPanel Margin="8,5" IsVisible="{Binding IsHeader}" HorizontalAlignment="Left">
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding HeaderDetails}" Classes="muted" VerticalAlignment="Center" Margin="12,0,0,0" />
+                      <TextBlock Text="{Binding Text}" FontWeight="SemiBold" FontSize="13" TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding File.FullPath}" />
+                    </DockPanel>
+                    <!-- The code's column takes what is left (wrapping); scrolled sideways, as wide as the line. The numbers
+                         and marker stay on a wrapped line's first row. -->
+                    <Grid ColumnDefinitions="46,46,16,*" IsVisible="{Binding !IsHeader}" Margin="0,1" TextElement.FontFamily="Cascadia Mono,Consolas,monospace">
+                      <TextBlock Grid.Column="0" Classes="number" Text="{Binding OldNumber}" VerticalAlignment="Top" />
+                      <TextBlock Grid.Column="1" Classes="number" Text="{Binding NewNumber}" VerticalAlignment="Top" />
+                      <TextBlock Grid.Column="2" Classes="marker" Classes.added="{Binding IsAdded}" Classes.removed="{Binding IsRemoved}" Text="{Binding Marker}" VerticalAlignment="Top" />
+  
+                      <TextBlock Grid.Column="3" Classes="code" Classes.hunkText="{Binding IsHunk}" Text="{Binding Text}" Margin="0,0,16,0" />
+                    </Grid>
+                  </Panel>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
       </Panel>
     </Grid>
   </DockPanel>

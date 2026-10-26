@@ -2212,7 +2212,7 @@ again from History shows it again; a new chat starts empty.
 2026-10-24 and 2026-10-25) opens on the left of the chat as Video generator does, with the changed files listed on the
 left and their diff beside them. It reads them again 250 ms after a call that may have changed files (a file written in
 parts is read once), keeping the picked lines picked. Lines are picked with a click,
-Shift+click and Ctrl+click (a header or @@ line picks nothing) and go into the chat's box as their
+Shift+click and Ctrl+click (a @@ line picks its hunk, a file's name all of it; the rows themselves are never picked) and go into the chat's box as their
 file, captioned "Lines 48-49 · MainWindowViewModel.Toolkit.cs" (the lines first: a long name is
 cut there). A message sent then carries, for the model, the files changed (up to 30 named) and each
 picked line with its number and +/-, at most 300 lines; nothing while no file has changed. It
@@ -2279,30 +2279,36 @@ disk as read_file reads it. All diffed by `LineDiff`, so a hunk's new-side numbe
 file's or the file's on disk. Not text, or a Word file: a binary entry where git's letters say it
 changed (not in Committed, which can't tell). The diff's headers say the section ("staged · modified
 · +2"), and so does what a message tells the model, with which side the numbers count.
-**Stage and Unstage.** An Unstaged file's header has **Stage** (`git add -- path`, a deletion too), a
-Staged one's **Unstage** (`git restore --staged`, or `git rm --cached` for a file new to git; the file
-on disk stays), and each hunk of a UTF-8 text file without a conflict has its own in the number
-gutter. A hunk's button takes its changes (its added lines and the place of each removed run, which
-touches the lines on both sides, `GitChanges.Touch`) and the index is built by BlackBox: for Stage the
-staged lines with those runs taken from disk, for Unstage the staged lines with those runs put back as
-committed (`GitChanges.Apply`; a last line without a break gets the file's break when lines follow
-it), stored by `hash-object -w` (`--path=` to apply git's filters to what came from disk, as git add
-would; `--no-filters` for what is already as git keeps it) and `update-index --cacheinfo` with the
-file's mode; a hunk that is all of a new file is plain `git add`. Not `git apply --cached`: a patch's
-line endings had to match the index's. After a Stage, Unstage or Discard the panel reads again without
-lighting anything as the agent's change. The buttons are 16 high with -2 margins in the code rows, so
-the rows stay as tall (a 16 one made them 21 px instead of 22 at 125%); a press on one starts no line
-drag. This is the only place BlackBox writes a repository (its index only).
-**Discard** (the user, 2026-10-26), in the bar before Wrap, puts back the picked lines, else the
-selected file: unstaged changes as staged, a file outside git as before the agent's change
-(`FileChanges.DiscardAsync`); staged and committed ones aren't put back (the button is greyed and its
-tooltip says to unstage them first). Lines: the diff is made again from the earlier text and the file
-now, and in each changed run a picked removed line comes back (above the added ones, with the file's
-line break) and a picked added line goes; picked unchanged lines do nothing. The file is written in
-its own encoding (`TextFiles.WriteAllAsync`). A whole file: unstaged, `git restore --worktree`;
-outside git, the text kept from before; one that wasn't there before goes to the Recycle Bin. Outside
-git a Word file, or one whose earlier content BlackBox didn't keep as text, can't be put back; lines of
-a non-text file never. The tooltip says what it will do ("Put notes.md back as staged"). No undo.
+**Stage, Unstage and Discard** (the user, 2026-10-26: buttons in the rows were "all the way over there
+to the right side clipped" behind long paths; then "I should be able to stage/unstage a selected set of
+lines", "and discard selected lines as well. Redesign the UI"). One action bar over the diff has
+**Stage** and **Unstage** (only where a file is in git) and **Discard**, and beside them what they act
+on: the picked lines ("Line 31 · notes.txt · staged", "12 lines in 3 files"), else the selected file
+("notes.txt · unstaged"), not one in a folded section. A click on a hunk's @@ line picks its lines and
+on a file's name all of the file's (Ctrl adds them; the header or @@ row itself is never picked), so
+lines, hunks and files go through the same three buttons, with no button in the rows. Each takes what
+is in its sections and is greyed (not filled: Fluent's disabled look read as the pressable one) with a
+tooltip saying what to pick when nothing is: Stage the Unstaged, Unstage the Staged, Discard the
+Unstaged and Outside git. A file header has no button now; its path is cut at its start, the details
+kept right after it (a DockPanel aligned left, so they follow a short name and a long one is trimmed).
+A whole file: Stage is `git add -- path` (a deletion too), Unstage `git restore --staged` (`git rm
+--cached` for a file new to git; the file on disk stays). Lines: `GitChanges.Mix` makes the diff again
+(index to disk for Stage, HEAD to index for Unstage) and takes only the picked changes, an added line
+by its new number and a removed one by its old: Stage builds the index from the staged lines with
+those changes made, Unstage from the staged lines with them undone (a removed line put back before the
+added ones of its run; a last line without a break gets the file's break when lines follow it). Stored
+by `hash-object -w` (`--path=` to apply git's filters to what came from disk, as git add would;
+`--no-filters` for what is already as git keeps it) and `update-index --cacheinfo` with the file's
+mode; picking all of a new file is plain `git add`. Not `git apply --cached`: a patch's line endings
+had to match the index's. Discard puts unstaged changes back as staged and a file outside git as before
+the agent's change (`FileChanges.DiscardAsync`, the same `Mix` undoing the picked changes on disk, with
+the file's line break, written in its own encoding by `TextFiles.WriteAllAsync`); a whole file: unstaged,
+`git restore --worktree`; outside git, the text kept from before; one that wasn't there before goes to
+the Recycle Bin. Outside git a Word file, or one whose earlier content BlackBox didn't keep as text,
+can't be put back; lines of a non-text file never. After any of them the panel reads again without
+lighting anything as the agent's change. This is the only place BlackBox writes a repository (its index
+only). No undo. Checked in the app at an 856-wide panel on 2026-10-26: a hunk picked by its @@ line and
+staged, one staged line unstaged, one unstaged removed line discarded, a 75-character path trimmed.
 **Checked on qwen3.8** (2026-10-24, blackbox-cli): asked to review the commit that added all this, it
 listed the commit with `diff summary=true`, then read the whole diff (about 110,000 characters) in 11
 parts by `start`, and named three faults, all fixed since: a file already in the box by the user kept

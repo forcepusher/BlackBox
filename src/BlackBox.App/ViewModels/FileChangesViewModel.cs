@@ -90,24 +90,6 @@ public sealed partial class DiffRow(DiffFileItem file, DiffLine? line) : Observa
     /// <summary>What the header says after the name: "modified · +10 -3", "staged · modified · +2" in git.</summary>
     public string HeaderDetails => (File.Section is null ? "" : File.SectionWord + " · ") + $"{File.Status} · {File.Counts}";
 
-    /// <summary>
-    /// "Stage" on an unstaged file's header or hunk, "Unstage" on a staged one's; null where there is
-    /// nothing to do (committed, outside git, a hunk of a file that is staged only whole).
-    /// </summary>
-    public string? GitAction { get; init; }
-
-    public bool HasGitAction => GitAction is not null;
-
-    /// <summary>"Stage file", "Unstage hunk": the button's name for UI Automation.</summary>
-    public string GitActionName => $"{GitAction} {(IsHeader ? "file" : "hunk")}";
-
-    public string GitActionTip => GitAction == "Stage"
-        ? IsHeader ? "Stage the file in git" : "Stage these changes in git"
-        : IsHeader ? "Unstage the file: its changes stay on disk" : "Unstage these changes: they stay on disk";
-
-    /// <summary>A hunk's changes, as lines of its diff's new side: what its Stage or Unstage button takes.</summary>
-    internal IReadOnlyList<(int From, int To)> Spans { get; init; } = [];
-
     /// <summary>What screen readers and UI Automation call it: "48 + text", the file's name for a header.</summary>
     public override string ToString() => IsHeader ? $"{File.Name}, {HeaderDetails}" : $"{(NewNumber.Length > 0 ? NewNumber : OldNumber)} {Marker} {Text}".Replace("  ", " ");
 
@@ -141,7 +123,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     {
         _chat = chat;
         Selection = new SelectionModel<DiffRow> { SingleSelect = false };
-        Selection.SelectionChanged += (_, _) => OnPicked();
+        Selection.SelectionChanged += (_, e) => OnPicked(e.SelectedItems.OfType<DiffRow>().ToList());
         // Calls that come one after another (a file written in parts) are read once.
         _refreshTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) =>
         {
@@ -213,6 +195,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
 
     partial void OnCurrentFileChanged(DiffFileItem? value)
     {
+        ActionsChanged();
         _syncing = true;
         try
         {
@@ -230,7 +213,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     /// as the box's card says). The first file until another is clicked, kept across a refresh.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Whole), nameof(DiscardTip), nameof(CanDiscard))]
+    [NotifyPropertyChangedFor(nameof(Whole))]
     private DiffFileItem? _currentFile;
 
     /// <summary>Set while a refresh selects the file again, which goes nowhere in the diff: only a click there does.</summary>
@@ -256,7 +239,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     [ObservableProperty]
     private string _status = Hint;
 
-    private const string Hint = "Click or drag lines to put them in your message; Shift+click picks a range, Ctrl+click adds more.";
+    private const string Hint = "Pick lines to ask about them, stage or discard them; a @@ line picks its hunk, a file's name all of it.";
 
     /// <summary>Reads the files again, keeping what was picked where the same lines are still there.</summary>
     /// <param name="byUser">Read after the user staged, unstaged or discarded: what moved isn't the agent's change "just now".</param>
@@ -309,14 +292,9 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             bySection[name].Add(item);
             if (!shown)
                 continue;
-            var section = file.Git?.Section;
-            var action = section switch { GitSection.Unstaged => "Stage", GitSection.Staged => "Unstage", _ => null };
-            rows.Add(new DiffRow(item, null) { Index = rows.Count, GitAction = action });
-            var lines = file.Lines.Take(MaxRows - rows.Count).ToList();
-            for (var i = 0; i < lines.Count; i++)
-                rows.Add(lines[i].Kind == DiffLineKind.Hunk && action is not null && file.Git!.Splittable
-                    ? new DiffRow(item, lines[i]) { Index = rows.Count, Spans = Spans(lines, i + 1), GitAction = action }
-                    : new DiffRow(item, lines[i]) { Index = rows.Count });
+            rows.Add(new DiffRow(item, null) { Index = rows.Count });
+            foreach (var line in file.Lines.Take(MaxRows - rows.Count))
+                rows.Add(new DiffRow(item, line) { Index = rows.Count });
         }
         // Another chat's list, or the first read, has no "just now": nothing lights up.
         _fade.Stop();
@@ -377,6 +355,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
         var counts = diff.InGit ? "" : string.Join(" ", new[] { diff.Added > 0 ? $"+{diff.Added}" : null, diff.Removed > 0 ? $"-{diff.Removed}" : null }.OfType<string>());
         var count = files.Select(f => f.FullPath.ToUpperInvariant()).Distinct().Count();
         Summary = count == 0 ? "" : $"{count} {(count == 1 ? "file" : "files")}" + (counts.Length > 0 ? " · " + counts : "");
+        ActionsChanged();
         if (Watch && _latest.Count > 0)
             ShowRow?.Invoke(_latest[0].Index);
     }
@@ -495,119 +474,150 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
 
     /// <summary>Where the diff would be, with nothing to show.</summary>
     public string EmptyText => "Files the agent changes in this chat show here as it works.";
-    /// <summary>
-    /// The changes of the hunk whose lines start at <paramref name="from"/>, as lines of the file on
-    /// disk: each added line, and the place of each run of removed ones.
-    /// </summary>
-    public static List<(int From, int To)> Spans(IReadOnlyList<DiffLine> lines, int from)
-    {
-        var spans = new List<(int, int)>();
-        var next = 1; // the line on disk the hunk is at
-        for (var i = from; i < lines.Count && lines[i].Kind != DiffLineKind.Hunk; i++)
-        {
-            var line = lines[i];
-            if (line.New is { } n)
-                next = n + 1;
-            if (line.Kind == DiffLineKind.Added)
-                spans.Add((line.New!.Value, line.New.Value));
-            else if (line.Kind == DiffLineKind.Removed && (i == from || lines[i - 1].Kind != DiffLineKind.Removed))
-                spans.Add((PlaceOf(i), PlaceOf(i) - 1));
-        }
-        return spans;
-
-        // A removed run is before the next line still on disk.
-        int PlaceOf(int i)
-        {
-            for (var j = i; j < lines.Count && lines[j].Kind != DiffLineKind.Hunk; j++)
-                if (lines[j].New is { } n)
-                    return n;
-            return next;
-        }
-    }
 
     /// <summary>
-    /// Stage clicked on an unstaged file's header (the whole file, as git add) or hunk (its changes),
-    /// Unstage on a staged one's (the file on disk stays as it is).
+    /// What the action bar's Stage, Unstage and Discard act on: the picked lines, file by file (their
+    /// added and removed lines: a picked unchanged line changes nothing), else the selected file
+    /// whole (Lines null), unless its section is folded.
     /// </summary>
-    [RelayCommand]
-    private async Task Stage(DiffRow row)
+    private List<(DiffFileItem File, IReadOnlyCollection<(int? Old, int? New)>? Lines)> Targets()
     {
-        var stage = row.GitAction == "Stage";
-        var spans = row.IsHeader ? null : row.Spans;
-        var error = await Task.Run(() => stage ? GitChanges.StageAsync(row.File.FullPath, spans, CancellationToken.None) : GitChanges.UnstageAsync(row.File.FullPath, spans, CancellationToken.None));
-        await LoadAsync(byUser: true);
-        if (error is not null)
-            Status = $"Not {(stage ? "staged" : "unstaged")}: {error}";
-    }
-
-    /// <summary>What Discard would put back: the picked lines that can be, else the selected file if it can be (unstaged or outside git, not staged or committed).</summary>
-    private List<(DiffFileItem File, IReadOnlyCollection<(int? Old, int? New)>? Lines)> Discards()
-    {
-        // Not one in a folded section: what is put back is in sight.
-        static bool Can(DiffFileItem file) => file.Section is null or GitSection.Unstaged && file.Row >= 0;
         if (Selection.Count > 0)
-            return Picks().Where(p => Can(p.File))
-                .Select(p => (p.File, (IReadOnlyCollection<(int?, int?)>?)p.Rows.Where(r => r.IsAdded || r.IsRemoved)
+            return Picks()
+                .Select(p => (p.File, (IReadOnlyCollection<(int? Old, int? New)>?)p.Rows.Where(r => r.IsAdded || r.IsRemoved)
                     .Select(r => r.IsAdded ? ((int?)null, r.Line!.Value.New) : (r.Line!.Value.Old, (int?)null)).ToList()))
                 .Where(p => p.Item2!.Count > 0).ToList();
-        return CurrentFile is { } current && Can(current) ? [(current, null)] : [];
+        return CurrentFile is { Row: >= 0 } current ? [(current, null)] : [];
     }
 
-    public bool CanDiscard => Discards().Count > 0;
+    /// <summary>The action bar's actions.</summary>
+    private enum GitAct { Stage, Unstage, Discard }
+
+    /// <summary>Which files each action takes: Stage the unstaged, Unstage the staged, Discard the unstaged and those outside git.</summary>
+    private static bool Takes(GitAct act, DiffFileItem file) => act switch
+    {
+        GitAct.Stage => file.Section == GitSection.Unstaged,
+        GitAct.Unstage => file.Section == GitSection.Staged,
+        _ => file.Section is null or GitSection.Unstaged,
+    };
+
+    private List<(DiffFileItem File, IReadOnlyCollection<(int? Old, int? New)>? Lines)> Targets(GitAct act) => Targets().Where(t => Takes(act, t.File)).ToList();
+
+    /// <summary>Stage and Unstage show only where a file is in git.</summary>
+    public bool ShowGit => _diff?.InGit == true;
+
+    public bool CanStage => Targets(GitAct.Stage).Count > 0;
+    public bool CanUnstage => Targets(GitAct.Unstage).Count > 0;
+    public bool CanDiscard => Targets(GitAct.Discard).Count > 0;
+
+    /// <summary>What the actions act on, beside them: "Lines 3-4 · notes.txt · unstaged", "12 lines in 3 files", "notes.txt · staged".</summary>
+    public string Target
+    {
+        get
+        {
+            var targets = Targets();
+            if (targets.Count == 0)
+                return Selection.Count > 0 ? "No changed line picked" : "";
+            if (targets.Count > 1)
+                return $"{targets.Sum(t => t.Lines?.Count ?? 0)} lines in {targets.Select(t => t.File.FullPath.ToUpperInvariant()).Distinct().Count()} files";
+            var (file, lines) = targets[0];
+            var where = file.Section is null ? "" : " · " + file.SectionWord;
+            if (lines is null)
+                return Path.GetFileName(file.FullPath) + where;
+            var rows = Picks().First(p => p.File == file).Rows.Where(r => r.IsAdded || r.IsRemoved).ToList();
+            return $"{Capital(Lines(rows))} · {Path.GetFileName(file.FullPath)}{where}";
+        }
+    }
+
+    /// <summary>"the picked lines", else the selected file's name, for the tooltips.</summary>
+    private string What => Selection.Count > 0 ? "the picked lines" : CurrentFile is { } file ? Path.GetFileName(file.FullPath) : "the file";
+
+    public string StageTip => CanStage ? $"Stage {What} in git" : "Pick unstaged lines, or select an unstaged file, to stage them";
+
+    public string UnstageTip => CanUnstage ? $"Unstage {What}: the file on disk stays as it is" : "Pick staged lines, or select a staged file, to unstage them";
 
     /// <summary>What Discard puts back, or why it can't.</summary>
     public string DiscardTip
     {
         get
         {
-            var discards = Discards();
-            if (discards.Count == 0)
-                return (Selection.Count > 0 ? Picks().Select(p => p.File).FirstOrDefault() : CurrentFile) switch
-                {
-                    { Section: GitSection.Staged } => "Only changes not staged yet can be discarded: unstage these first",
-                    { Section: GitSection.Committed } => "Committed changes can't be discarded here",
-                    _ => "Nothing to discard",
-                };
-            var how = discards.All(d => d.File.Section == GitSection.Unstaged) ? " as staged" : discards.All(d => d.File.Section is null) ? " as before the agent's changes" : "";
-            if (discards[0].Lines is not null)
-                return $"Put the picked lines back{how}";
-            var file = discards[0].File;
-            return file.IsNew ? $"Move {Path.GetFileName(file.FullPath)} to the Recycle Bin" : $"Put {Path.GetFileName(file.FullPath)} back{how}";
+            var targets = Targets(GitAct.Discard);
+            if (targets.Count == 0)
+                return Targets().Any(t => t.File.Section == GitSection.Committed) ? "Committed changes can't be discarded here"
+                    : Targets().Count > 0 ? "Only changes not staged yet can be discarded: unstage these first"
+                    : "Pick unstaged lines, or select an unstaged file, to discard them";
+            if (targets[0].Lines is null && targets[0].File.IsNew)
+                return $"Move {Path.GetFileName(targets[0].File.FullPath)} to the Recycle Bin";
+            var how = targets.All(t => t.File.Section == GitSection.Unstaged) ? " as staged" : targets.All(t => t.File.Section is null) ? " as before the agent's changes" : "";
+            return $"Put {What} back{how}";
         }
     }
 
+    /// <summary>The action bar says again what it acts on and what each button does.</summary>
+    private void ActionsChanged()
+    {
+        foreach (var name in (string[])[nameof(ShowGit), nameof(CanStage), nameof(CanUnstage), nameof(CanDiscard), nameof(Target), nameof(StageTip), nameof(UnstageTip), nameof(DiscardTip)])
+            OnPropertyChanged(name);
+    }
+
+    [RelayCommand]
+    private Task Stage() => Act(GitAct.Stage);
+
+    [RelayCommand]
+    private Task Unstage() => Act(GitAct.Unstage);
+
     /// <summary>
-    /// Discard: the picked lines put back (a picked line unchanged does nothing), else the selected
-    /// file whole; unstaged changes as staged, a file outside git as before the agent changed it. A
-    /// file that wasn't there goes to the Recycle Bin.
+    /// Discard: unstaged changes put back as staged, a file outside git as before the agent changed
+    /// it; a file that wasn't there goes to the Recycle Bin.
     /// </summary>
     [RelayCommand]
-    private async Task Discard()
+    private Task Discard() => Act(GitAct.Discard);
+
+    /// <summary>Stages, unstages or discards what is picked, else the selected file; then reads the files again, the picks let go.</summary>
+    private async Task Act(GitAct act)
     {
         var changes = _chat.Changes;
         var errors = new List<string>();
-        foreach (var (file, lines) in Discards())
-            if (await Task.Run(() => changes.DiscardAsync(file.Section, file.FullPath, lines, ToRecycleBin, CancellationToken.None)) is { } error)
+        foreach (var (file, lines) in Targets(act))
+        {
+            var error = await Task.Run(() => act switch
+            {
+                GitAct.Stage => GitChanges.StageAsync(file.FullPath, lines, CancellationToken.None),
+                GitAct.Unstage => GitChanges.UnstageAsync(file.FullPath, lines, CancellationToken.None),
+                _ => changes.DiscardAsync(file.Section, file.FullPath, lines, ToRecycleBin, CancellationToken.None),
+            });
+            if (error is not null)
                 errors.Add($"{Path.GetFileName(file.FullPath)}: {error}");
+        }
         Unpick();
         await LoadAsync(byUser: true);
         if (errors.Count > 0)
-            Status = "Not discarded: " + string.Join(" ", errors);
+            Status = act switch { GitAct.Stage => "Not staged: ", GitAct.Unstage => "Not unstaged: ", _ => "Not discarded: " } + string.Join(" ", errors);
     }
+
     private static void ToRecycleBin(string path) =>
         Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
 
     // ---- what is picked, into the chat's box -----------------------------------------------------------
 
     /// <summary>The picked lines into the box, as the files they are in ("Lines 12-18 · DiffTool.cs": the lines first, as a long name is cut short there).</summary>
-    private void OnPicked()
+    private void OnPicked(IReadOnlyList<DiffRow>? added = null)
     {
         if (_picking)
             return;
         _picking = true;
         try
         {
-            // A file's header and a hunk's @@ line are no lines of it: a click there picks nothing.
+            // A click on a hunk's @@ line picks its lines, on a file's name all the file's (Ctrl held: as
+            // well as what was picked). A header or @@ line is no line itself: it doesn't stay picked.
+            if (!_refreshing && added is [{ } clicked] && (clicked.IsHeader || clicked.Line?.Kind == DiffLineKind.Hunk))
+            {
+                var end = clicked.Index + 1;
+                while (end < Rows.Count && !Rows[end].IsHeader && (clicked.IsHeader || Rows[end].Line?.Kind != DiffLineKind.Hunk))
+                    end++;
+                if (end > clicked.Index + 1)
+                    Selection.SelectRange(clicked.Index + 1, end - 1);
+            }
             foreach (var row in Selection.SelectedItems.OfType<DiffRow>().Where(r => !r.IsLine).ToList())
                 Selection.Deselect(row.Index);
             // Lines picked by hand stay in sight: the agent's next edit doesn't scroll them away.
@@ -616,8 +626,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             // A file picked in two sections (staged and unstaged) is one card in the box.
             _chat.Pick(Picks().GroupBy(p => p.File.FullPath, StringComparer.OrdinalIgnoreCase)
                 .Select(g => (g.Key, $"{Capital(Lines(g.SelectMany(p => p.Rows).ToList()))} · {Path.GetFileName(g.Key)}")).ToList());
-            OnPropertyChanged(nameof(DiscardTip));
-            OnPropertyChanged(nameof(CanDiscard));
+            ActionsChanged();
         }
         finally
         {
