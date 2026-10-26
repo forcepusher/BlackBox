@@ -139,6 +139,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The first-run hint for Ctrl+V is reworded.
 
 ### Fixed
+- In the joined video, a sound whose start you cut (its left edge dragged) starts where it sits on
+  its sound line. It played from the video's start.
+- A song made with Music on a new sound shows in Video generator's viewer once it is made, instead
+  of the empty new sound still asking for its style.
 - A clip made with a workflow that can take its length from the prompt (an LTX duration head
   switch) is as long as the clip says: the switch is turned off. It had been left on, and a 4 s clip
   came out 2 s.

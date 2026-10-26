@@ -886,7 +886,11 @@ Sounds may overlap, on one sound line or several. A sound is a file of the user'
 copied into References; one put there in Explorer without a .json comes onto the first sound line from
 the start, `AdoptSounds`) or a song BlackBox makes (`"source": "song"`, into Generated). Joining lays
 each over the shots' own sound with ffmpeg (`atrim`, `adelay`, `amix`), quieter under the lines;
-under a song the shots' own sound is kept at half. The single soundtrack of before (none, a file or
+under a song the shots' own sound is kept at half. After `adelay` each is stamped again by its
+samples (`asetpts=N/SR/TB`): with ffmpeg 8.1 a sound trimmed at its start lost its delay in the
+`apad`/`atrim` after it and played from 0 s (release QA, 2026-10-26: a song dragged to 2.6 s and
+trimmed by 1 s was heard from the video's start, so the sound lines' volumes measured backwards
+too; after the fix the foley alone measured -23.7, -20.2 and -17.7 dB at 1, 1.5 and 2). The single soundtrack of before (none, a file or
 a song, in a Sound folder, with lip sync to its part under a shot) went with it.
 
 **A new sound** (2026-10-26, as a clip is made: the user's screenshot showed empty sound lines with no

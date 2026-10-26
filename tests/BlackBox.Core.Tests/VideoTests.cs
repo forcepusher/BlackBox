@@ -968,6 +968,8 @@ public sealed class VideoMontageTests : IDisposable
         // Each sound from where it starts, its start cut off, as long as it plays, at its volume.
         Assert.Contains("[3:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,atrim=start=0,asetpts=PTS-STARTPTS,volume=1,adelay=0|0,", graph);
         Assert.Contains("[4:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,atrim=start=1.5,asetpts=PTS-STARTPTS,atrim=duration=3,volume=0.8,adelay=2000|2000,", graph);
+        // Stamped by its samples after the delay: trimmed at its start, it played from 0 s (ffmpeg 8.1).
+        Assert.Contains("adelay=2000|2000,asetpts=N/SR/TB,apad=", graph);
         Assert.Contains("[aj2][s0][s1]amix=inputs=3:duration=first:normalize=0[mixed]", graph);
         Assert.Equal("out.mp4", args[^1]);
         Assert.Equal("11.5", args[^2]);

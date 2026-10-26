@@ -108,7 +108,9 @@ public static class VideoMontage
                 var cut = sound.Seconds > 0 ? $",atrim=duration={N(sound.Seconds)}" : "";
                 var delay = (long)Math.Round(sound.Start * 1000);
                 f.Append($"[{board.Shots.Count + k}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,atrim=start={N(sound.Trim)},asetpts=PTS-STARTPTS{cut},volume={N(sound.Volume * board.LineVolume(sound.SoundLine))},")
-                 .Append($"adelay={delay}|{delay},apad=whole_dur={N(length)},atrim=duration={N(length)},asetpts=PTS-STARTPTS{duck}[s{k}];");
+                 // Stamped again by their samples after the delay: a sound trimmed at its start (atrim
+                 // start > 0) lost its delay in apad and atrim (ffmpeg 8.1), and played from 0 s.
+                 .Append($"adelay={delay}|{delay},asetpts=N/SR/TB,apad=whole_dur={N(length)},atrim=duration={N(length)},asetpts=PTS-STARTPTS{duck}[s{k}];");
                 mix.Append($"[s{k}]");
             }
             f.Append(mix).Append($"amix=inputs={sounds.Count + 1}:duration=first:normalize=0[mixed];");
