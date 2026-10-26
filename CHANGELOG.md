@@ -139,6 +139,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The first-run hint for Ctrl+V is reworded.
 
 ### Fixed
+- With a video of yours picked on Video generator's References row, "this video" in your message
+  means that video: asked for a clip that goes on from where it ends, the model went on from the
+  last clip instead.
+- In the joined video, a sound whose start you cut (its left edge dragged) starts where it sits on
+  its sound line. It played from the video's start.
+- A song made with Music on a new sound shows in Video generator's viewer once it is made, instead
+  of the empty new sound still asking for its style.
+- A clip made with a workflow that can take its length from the prompt (an LTX duration head
+  switch) is as long as the clip says: the switch is turned off. It had been left on, and a 4 s clip
+  came out 2 s.
+- A clip made with New clip (or Create) in Video generator is saved at once: on a video just opened
+  it stayed only in the panel and was gone the next time, and its frames could show a picture a
+  deleted clip left behind.
+- Video generator says when the joined video is older than a clip or sound in it (one made again, or
+  a version put back): "all made, not joined since", until you join it again.
 - The scrollbar under Video generator's timeline drags again: its thumb follows the mouse instead
   of the timeline sliding on its own.
 - With a tool open and little room for the chat, the server's status dot no longer draws over **History**.

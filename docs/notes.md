@@ -664,9 +664,19 @@ path is copied in by `TakeInPictures`, as pictures are):
   lip-synced shot is made as before. None of these templates was run on this PC (no GPU here, and
   the laptop's ComfyUI has none of their models); what they take was read from the templates'
   files in ComfyUI 0.41's templates package. LTX-2.5 has no IC-LoRA template of ComfyUI's yet, so
-  motion with LTX-2.5 needs the user's own pose workflow (the guide's `_pose`).
+  motion with LTX-2.5 needs the user's own pose workflow (the guide's `_pose`). First run on the
+  workstation (release QA, 2026-10-26, qwen3.8: a fox moving as a 4 s clip of a cat walking): that
+  workflow (`video_furry_ltx2_5_pose`) was picked, but its "Length from the prompt (LTX duration
+  head)" switch, a PrimitiveBoolean whose title says duration, was given the shot's 4 as a length, so
+  it stayed on and the duration predictor made 2.0 and 2.7 s clips that used only the start of the
+  walk. A boolean is no length now, and a length-from-the-prompt switch is turned off whenever the
+  shot's length is set (`VideoRoles.LengthFromPromptTitle`).
 - **A frame's `of`**: the frame is where the video ends ("walk.mp4"), so the shot that starts on it
-  goes on from the user's clip (continuity), as `of` does with a shot's clip. Kept by `Normalize`
+  goes on from the user's clip (continuity), as `of` does with a shot's clip. With a video file picked, the
+  context says "this video" and "it" mean that file: told only that what they say about a video
+  is about the one being made, Qwen 3.8 and Haiku 5.5 both went on from the last clip when asked,
+  with walk.mp4 picked, for "a clip that goes on from exactly where this video ends" (release QA,
+  2026-10-26); told so, Haiku made the frame `of` walk.mp4. Kept by `Normalize`
   while its name ends in a video's extension or names one in References.
 - **A frame's `from`**: a picture from its middle goes to the edit model like any other picture,
   for a look, a person or a place to keep (a still in the temp folder, deleted after the job).
@@ -880,7 +890,11 @@ Sounds may overlap, on one sound line or several. A sound is a file of the user'
 copied into References; one put there in Explorer without a .json comes onto the first sound line from
 the start, `AdoptSounds`) or a song BlackBox makes (`"source": "song"`, into Generated). Joining lays
 each over the shots' own sound with ffmpeg (`atrim`, `adelay`, `amix`), quieter under the lines;
-under a song the shots' own sound is kept at half. The single soundtrack of before (none, a file or
+under a song the shots' own sound is kept at half. After `adelay` each is stamped again by its
+samples (`asetpts=N/SR/TB`): with ffmpeg 8.1 a sound trimmed at its start lost its delay in the
+`apad`/`atrim` after it and played from 0 s (release QA, 2026-10-26: a song dragged to 2.6 s and
+trimmed by 1 s was heard from the video's start, so the sound lines' volumes measured backwards
+too; after the fix the foley alone measured -23.7, -20.2 and -17.7 dB at 1, 1.5 and 2). The single soundtrack of before (none, a file or
 a song, in a Sound folder, with lip sync to its part under a shot) went with it.
 
 **A new sound** (2026-10-26, as a clip is made: the user's screenshot showed empty sound lines with no
@@ -1153,7 +1167,11 @@ stopped before one replaced its clip (the versions made so far stay). A speaking
 its line with it (`s1.v1.wav` and `s1.line.v1.flac`): put back without it, the newer line
 played over the older lips, and the shot read as up to date. A version is picked from its piece's
 right-click menu (Versions), and **Use this version** under the viewer puts it back; a sound's goes
-back where the sound is now on its sound line. A frame or shot call's changes go in only for a piece
+back where the sound is now on its sound line. The joined video then holds the old clip: a joined
+video older than a clip or sound file in it (`Storyboard.JoinedIsStale`, by file times) reads "all
+made, not joined since" in the panel and "not joined since the latest changes" on the whole video's
+card, and the video tool says to join again (release QA, 2026-10-26: until then both said all made
+after Use this version). A frame or shot call's changes go in only for a piece
 of that kind, or a new one it gives a prompt: a frame call with a shot's id added a stray frame.
 A song's tries made before one that fails or is stopped are versions of the song, not stray files.
 Checked with Claude in the window (2026-10-23): "Use a picture of mine…" on the frame shot 1 starts

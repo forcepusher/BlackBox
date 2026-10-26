@@ -163,7 +163,16 @@ public sealed partial class VideoGeneratorViewModel
         OnPropertyChanged(nameof(HasJoinedVideo));
         OnPropertyChanged(nameof(LengthText));
         Relayout();
-        RefreshViewer();
+        // A piece picked before it was made, made now (Music on a new sound, then the song): picked
+        // again, so the viewer plays it and the box says what it is. The pick kept "not made yet", and
+        // the viewer went on showing the new sound's card and asking for its style.
+        if (Viewing is { IsPlanned: true, Piece: { } planned } && planned.Piece.File(_board) is { } file && File.Exists(file))
+        {
+            Status = "";
+            Show(_frames.Values.Concat<IVideoPiece>(Shots).Concat(Sounds).FirstOrDefault(p => p.Piece == planned.Piece) ?? planned);
+        }
+        else
+            RefreshViewer();
     }
 
 
