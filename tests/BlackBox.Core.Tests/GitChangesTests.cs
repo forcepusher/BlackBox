@@ -64,25 +64,19 @@ public class GitChangesTests : IDisposable
     /// <summary>The files of one section of the panel (null: outside git).</summary>
     private async Task<List<DiffFile>> In(GitSection? section) =>
         (await _changes.DiffAsync(CancellationToken.None)).Files.Where(f => f.Git?.Section == section).ToList();
-    /// <summary>The changes of each hunk, as the panel's Stage button gives them.</summary>
-    private static List<List<(int, int)>> HunkSpans(DiffFile file)
+    /// <summary>The changed lines of each hunk, as picking its @@ line picks them: an added line by its new number, a removed one by its old.</summary>
+    private static List<List<(int?, int?)>> HunkSpans(DiffFile file)
     {
-        var spans = new List<List<(int, int)>>();
-        for (var i = 0; i < file.Lines.Count; i++)
-        {
-            if (file.Lines[i].Kind != DiffLineKind.Hunk)
-                continue;
-            var hunk = new List<(int, int)>();
-            for (var j = i + 1; j < file.Lines.Count && file.Lines[j].Kind != DiffLineKind.Hunk; j++)
-                if (file.Lines[j].Kind == DiffLineKind.Added)
-                    hunk.Add((file.Lines[j].New!.Value, file.Lines[j].New!.Value));
-                else if (file.Lines[j].Kind == DiffLineKind.Removed && file.Lines[j - 1].Kind != DiffLineKind.Removed)
-                    hunk.Add(file.Lines.Skip(j).FirstOrDefault(l => l.New is not null) is { New: { } n } ? (n, n - 1) : (1, 0));
-            spans.Add(hunk);
-        }
-        return spans;
+        var hunks = new List<List<(int?, int?)>>();
+        foreach (var line in file.Lines)
+            if (line.Kind == DiffLineKind.Hunk)
+                hunks.Add([]);
+            else if (line.Kind == DiffLineKind.Added)
+                hunks[^1].Add((null, line.New));
+            else if (line.Kind == DiffLineKind.Removed)
+                hunks[^1].Add((line.Old, null));
+        return hunks;
     }
-
     [Fact]
     public async Task A_hunk_is_staged_and_unstaged_alone_and_the_sections_follow()
     {
@@ -136,8 +130,8 @@ public class GitChangesTests : IDisposable
 
         await Write(path, "ONE\r\ntwo\r\nthree\r\nfour\r\n");
         var file = Assert.Single(await In(GitSection.Unstaged));
-        // One hunk; stage only the change at the end, by its lines.
-        Assert.Null(await GitChanges.StageAsync(path, [(3, 4)], CancellationToken.None));
+        // One hunk; stage only the line added at the end.
+        Assert.Null(await GitChanges.StageAsync(path, [(null, 4)], CancellationToken.None));
 
         Assert.Equal("one\r\ntwo\r\nthree\r\nfour\r\n", Git("show", ":crlf.txt"));
         Assert.Single(file.Lines, l => l.Kind == DiffLineKind.Hunk);
@@ -199,17 +193,32 @@ public class GitChangesTests : IDisposable
         Assert.Equal([made], deleted);
     }
     [Fact]
+    public async Task Single_picked_lines_are_staged_and_unstaged_and_the_rest_stays()
+    {
+        var path = Path.Combine(_repo, "p.txt");
+        File.WriteAllText(path, "a\nb\nc\n");
+        Git("add", "-A");
+        Git("commit", "-q", "-m", "First");
+        await Write(path, "a\nB\nc\nd\n");
+
+        // Of "-b +B" and "+d": only the removal of b and the d.
+        Assert.Null(await GitChanges.StageAsync(path, [(2, null), (null, 4)], CancellationToken.None));
+        Assert.Equal("a\nc\nd\n", Git("show", ":p.txt"));
+        // Then the d unstaged again: by its number as staged.
+        Assert.Null(await GitChanges.UnstageAsync(path, [(null, 3)], CancellationToken.None));
+        Assert.Equal("a\nc\n", Git("show", ":p.txt"));
+        Assert.Equal("a\nB\nc\nd\n", File.ReadAllText(path));
+    }
+
+    [Fact]
     public void Lines_keep_their_breaks_and_a_last_line_without_one_gets_one_when_it_is_no_longer_last()
     {
         Assert.Equal(["a\r\n", "b\n", "c"], GitChanges.Split("a\r\nb\nc"));
         Assert.Equal("a\nb\n", GitChanges.Join(["a", "b\n"], "\n"));
+        // A line added after a last line without a break: the file's break comes between them.
         var index = GitChanges.Split("x");
         var now = GitChanges.Split("x\r\ny\r\n");
-        Assert.Equal("x\r\ny\r\n", GitChanges.Apply(index, now, [new ChangeBlock(1, 0, 1, 1)]));
-        // A place between lines touches the lines on both sides of it, and nothing further.
-        Assert.True(GitChanges.Touch((5, 4), new ChangeBlock(3, 1, 3, 1)));
-        Assert.True(GitChanges.Touch((5, 4), new ChangeBlock(4, 1, 4, 1)));
-        Assert.False(GitChanges.Touch((5, 4), new ChangeBlock(5, 1, 5, 1)));
-        Assert.False(GitChanges.Touch((2, 2), new ChangeBlock(2, 0, 3, 1)));
-    }
+        Assert.Equal("x\r\ny\r\n", GitChanges.Join(GitChanges.Mix(index, now, new HashSet<(int?, int?)> { (null, 2) }, apply: true), "\r\n"));
+        // Undone, a picked removed line comes back before the added ones of its run, with the given break.
+        Assert.Equal(["1\n", "old\n", "new\n"], GitChanges.Mix(GitChanges.Split("1\nold\r\n"), GitChanges.Split("1\nnew\n"), new HashSet<(int?, int?)> { (2, null) }, apply: false, "\n"));    }
 }

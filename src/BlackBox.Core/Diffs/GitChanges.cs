@@ -189,43 +189,28 @@ public static class GitChanges
     /// <summary>A line without its line break, as the diff compares it.</summary>
     internal static string Key(string line) => line.TrimEnd('\r', '\n', '\f', '\u0085', '\u2028', '\u2029');
 
-    /// <summary>
-    /// Whether a run of changes is at the span's lines of its new side, or right beside a place between
-    /// lines: a span is (from, to), 1-based, both included; (n, n - 1) is the place between lines
-    /// n - 1 and n, where lines were removed.
-    /// </summary>
-    internal static bool Touch((int From, int To) span, ChangeBlock block)
-    {
-        // Lines n at 2n, the place between lines n - 1 and n at 2n - 1: touching is being at most one apart.
-        var (lo, hi) = span.To >= span.From ? (2 * span.From, 2 * span.To) : (2 * span.From - 1, 2 * span.From - 1);
-        var first = block.NewStart + 1;
-        var (blo, bhi) = block.NewCount > 0 ? (2 * first, 2 * (block.NewStart + block.NewCount)) : (2 * first - 1, 2 * first - 1);
-        return lo <= bhi + 1 && blo <= hi + 1;
-    }
-
     // ---- staging and unstaging ------------------------------------------------------------------------
 
     /// <summary>
-    /// Stages the file (<paramref name="spans"/> null), as git add does, or only the changes at those
-    /// lines of the file on disk (<see cref="Touch"/>), as an Unstaged hunk's Stage button asks.
-    /// Null when done, else why not.
+    /// Stages the file (<paramref name="lines"/> null), as git add does, or only these lines of its
+    /// Unstaged diff: an added one by its number on disk (Old null), a removed one by its number as
+    /// staged (New null); its other changes stay unstaged. Null when done, else why not.
     /// </summary>
-    public static async Task<string?> StageAsync(string fullPath, IReadOnlyList<(int From, int To)>? spans, CancellationToken ct)
+    public static async Task<string?> StageAsync(string fullPath, IReadOnlyCollection<(int? Old, int? New)>? lines, CancellationToken ct)
     {
         try
         {
             if (await PlaceAsync(fullPath, ct).ConfigureAwait(false) is not ({ } root, { } relative))
                 return "This file isn't in a git repository.";
-            if (spans is null || !File.Exists(fullPath))
+            if (lines is null)
                 return await AddAsync(root, relative, ct).ConfigureAwait(false);
 
             var indexBytes = (await BlobsAsync(root, [":" + relative], ct).ConfigureAwait(false)).GetValueOrDefault(":" + relative);
             if (Lines(indexBytes ?? []) is not { } index || OnDisk(fullPath) is not { } bytes || Lines(bytes) is not { } now)
                 return "Only the whole file can be staged: it isn't UTF-8 text.";
-            var picked = LineDiff.Blocks(index.Select(Key).ToArray(), now.Select(Key).ToArray()).Where(b => spans.Any(s => Touch(s, b))).ToList();
-            if (picked.Count == 0)
-                return "Nothing here is left to stage.";
-            var staged = Apply(index, now, picked);
+            var staged = Join(Mix(index, now, lines.ToHashSet(), apply: true), Break(now) ?? Break(index) ?? "\n");
+            if (staged == string.Concat(index) && indexBytes is not null)
+                return "Nothing picked here is left to stage.";
             // All of it, the same as git add: which also keeps a new file's mode as git sees it.
             if (staged == string.Concat(now))
                 return await AddAsync(root, relative, ct).ConfigureAwait(false);
@@ -239,11 +224,11 @@ public static class GitChanges
     }
 
     /// <summary>
-    /// Unstages the file (<paramref name="spans"/> null), as git restore --staged does, or only the
-    /// staged changes at those lines of the staged file, as a Staged hunk's Unstage button asks. The
-    /// file on disk stays as it is. Null when done, else why not.
+    /// Unstages the file (<paramref name="lines"/> null), as git restore --staged does, or only these
+    /// lines of its Staged diff: an added one by its number as staged, a removed one by its number as
+    /// committed. The file on disk stays as it is. Null when done, else why not.
     /// </summary>
-    public static async Task<string?> UnstageAsync(string fullPath, IReadOnlyList<(int From, int To)>? spans, CancellationToken ct)
+    public static async Task<string?> UnstageAsync(string fullPath, IReadOnlyCollection<(int? Old, int? New)>? lines, CancellationToken ct)
     {
         try
         {
@@ -251,17 +236,16 @@ public static class GitChanges
                 return "This file isn't in a git repository.";
             var blobs = await BlobsAsync(root, [":" + relative, "HEAD:" + relative], ct).ConfigureAwait(false);
             var (indexBytes, headBytes) = (blobs.GetValueOrDefault(":" + relative), blobs.GetValueOrDefault("HEAD:" + relative));
-            if (spans is not null && indexBytes is not null)
+            if (lines is not null && indexBytes is not null)
             {
                 if (Lines(indexBytes) is not { } index || Lines(headBytes ?? []) is not { } head)
                     return "Only the whole file can be unstaged: it isn't UTF-8 text.";
-                var blocks = LineDiff.Blocks(head.Select(Key).ToArray(), index.Select(Key).ToArray());
-                var kept = blocks.Where(b => !spans.Any(s => Touch(s, b))).ToList();
-                if (kept.Count == blocks.Count)
-                    return "Nothing here is staged.";
-                if (kept.Count > 0 || headBytes is not null)
+                var unstaged = Join(Mix(head, index, lines.ToHashSet(), apply: false), Break(index) ?? Break(head) ?? "\n");
+                if (unstaged == string.Concat(index))
+                    return "Nothing picked here is staged.";
+                if (headBytes is not null || unstaged.Length > 0)
                     // Already as git stores it: no filters again.
-                    return await WriteIndexAsync(root, relative, Apply(head, index, kept), filters: false, hadIndex: true, ct).ConfigureAwait(false);
+                    return await WriteIndexAsync(root, relative, unstaged, filters: false, hadIndex: true, ct).ConfigureAwait(false);
             }
             // The whole file: as last committed in the index, or out of it when it is new.
             var restore = headBytes is not null
@@ -302,21 +286,32 @@ public static class GitChanges
         return add.Exit == 0 ? null : FirstLine(add.Err, "git add failed.");
     }
 
-    /// <summary>The old side's lines with the picked runs taken from the new side, the rest as they were.</summary>
-    internal static string Apply(List<string> old, List<string> now, IReadOnlyList<ChangeBlock> picked)
+    /// <summary>
+    /// The lines of a diff from <paramref name="old"/> to <paramref name="now"/> with only the picked
+    /// changes taken: an added line by its number in <paramref name="now"/> (Old null), a removed one
+    /// by its number in <paramref name="old"/> (New null). <paramref name="apply"/>: the old lines with
+    /// the picked changes made (staging); else the new lines with them undone (unstaging, discarding).
+    /// A removed line put back comes before the added ones of its run, as the diff shows it, ending in
+    /// <paramref name="lineBreak"/> (the file's own) when given.
+    /// </summary>
+    internal static List<string> Mix(List<string> old, List<string> now, ISet<(int? Old, int? New)> picked, bool apply, string? lineBreak = null)
     {
         var lines = new List<string>();
-        var at = 0;
-        foreach (var block in picked.OrderBy(b => b.OldStart))
+        var (at, atNew) = (0, 0);
+        foreach (var block in LineDiff.Blocks(old.Select(Key).ToArray(), now.Select(Key).ToArray()))
         {
-            lines.AddRange(old.Skip(at).Take(block.OldStart - at));
-            lines.AddRange(now.Skip(block.NewStart).Take(block.NewCount));
-            at = block.OldStart + block.OldCount;
+            lines.AddRange(apply ? old.Skip(at).Take(block.OldStart - at) : now.Skip(atNew).Take(block.NewStart - atNew));
+            for (var i = block.OldStart; i < block.OldStart + block.OldCount; i++)
+                if (picked.Contains((i + 1, null)) != apply)
+                    lines.Add(apply || lineBreak is null || Key(old[i]).Length == old[i].Length ? old[i] : Key(old[i]) + lineBreak);
+            for (var i = block.NewStart; i < block.NewStart + block.NewCount; i++)
+                if (picked.Contains((null, i + 1)) == apply)
+                    lines.Add(now[i]);
+            (at, atNew) = (block.OldStart + block.OldCount, block.NewStart + block.NewCount);
         }
-        lines.AddRange(old.Skip(at));
-        return Join(lines, Break(now) ?? Break(old) ?? "\n");
+        lines.AddRange(apply ? old.Skip(at) : now.Skip(atNew));
+        return lines;
     }
-
     /// <summary>The lines one after another, a line without a break that is no longer last given <paramref name="lineBreak"/>.</summary>
     internal static string Join(IReadOnlyList<string> lines, string lineBreak)
     {
