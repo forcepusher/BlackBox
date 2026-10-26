@@ -111,7 +111,7 @@ internal sealed partial class ProjectNudge
             string full;
             try { full = FolderIndex.Normalize(ctx.ResolvePath(path)); }
             catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { continue; }
-            if (_indexed.Any(i => Under(full, i)))
+            if (_indexed.Any(i => Under(full, i)) || InOwnData(full, ctx))
                 continue;
             var dir = Directory.Exists(full) ? full : Path.GetDirectoryName(full) ?? full;
             if (!_projects.TryGetValue(dir, out var project))
@@ -125,6 +125,16 @@ internal sealed partial class ProjectNudge
         }
         return null;
     }
+
+    /// <summary>
+    /// Whether a path is in BlackBox's own Data folder (the one holding its scratch and tools), which is
+    /// no project of the user's. Run from a checkout, BlackBox keeps it inside its own repository: a
+    /// download into Data\scratch had the model told to index E:\Repos\BlackBox.
+    /// </summary>
+    private static bool InOwnData(string path, ToolContext ctx) =>
+        new[] { ctx.ScratchDirectory, ctx.ToolsDirectory }
+            .OfType<string>().Select(d => Path.GetDirectoryName(FolderIndex.Normalize(d))).OfType<string>()
+            .Any(data => Under(path, data));
 
     private static bool Under(string path, string folder) =>
         path.Equals(folder, StringComparison.OrdinalIgnoreCase) ||
