@@ -23,7 +23,7 @@ whatever it downloads stay in a `Data` folder next to the exe.
 - **See what changed.** Pick **File changes** in the **Toolkit** dropdown: it opens on the left of the chat
   with every file the agent changes in the chat, beside its diff, as it works. Click lines
   (Shift+click for a range, Ctrl+click for more) to put them in your message, then ask about them or
-  have them changed.
+  have them changed. **Watch** follows the agent's edits as they happen; **Wrap** wraps long lines.
 - **See a file.** Click a file's preview in the chat to see it full screen, or press **Inspect** to
   open it in **File inspector** on the left of the chat (its folder button opens any file). Markdown, PDF, Word, Excel, PowerPoint, tables,
   text, pictures, video, animations, sound, 3D models (an FBX plays its animations), and any other

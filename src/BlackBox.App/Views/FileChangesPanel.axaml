@@ -11,6 +11,28 @@
     <Style Selector="ListBox.diff">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="FontSize" Value="12" />
+      <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+    </Style>
+    <!-- Wrap: no scrolling sideways, so a line is as wide as the panel and wraps under its code. -->
+    <Style Selector="ListBox.diff.wrap">
+      <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+    </Style>
+    <Style Selector="ListBox.diff.wrap TextBlock.code">
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <!-- What the agent just changed, while watching: lit up, then it fades. -->
+    <Style Selector="Border.fresh">
+      <Setter Property="Background" Value="#40E0A64B" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="IsHitTestVisible" Value="False" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:1" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Border.fresh.on">
+      <Setter Property="Opacity" Value="1" />
     </Style>
     <Style Selector="ListBox.diff ListBoxItem">
       <Setter Property="Padding" Value="0" />
@@ -80,11 +102,27 @@
   </UserControl.Styles>
 
   <DockPanel>
-    <!-- How the panel is used, or what went wrong; how much changed on the right, then × to close the
-         panel. As tall as the chat's top bar beside it, whose Toolkit dropdown is 30 high. -->
+    <!-- How the panel is used, or what went wrong; how much changed on the right, Wrap and Watch, then
+         × to close the panel. As tall as the chat's top bar beside it, whose Toolkit dropdown is 30 high. -->
     <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="12,8">
       <DockPanel MinHeight="30">
         <views:ToolkitClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,0,0,0" />
+        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding Watch}" IsVisible="{Binding HasFiles}" Height="30" Padding="8,0"
+                      VerticalAlignment="Center" VerticalContentAlignment="Center" Margin="4,0,0,0"
+                      ToolTip.Tip="Follow the agent's changes as they happen" AutomationProperties.Name="Watch">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Width="14" Height="14" Data="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
+            <TextBlock Text="Watch" VerticalAlignment="Center" />
+          </StackPanel>
+        </ToggleButton>
+        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding Wrap}" IsVisible="{Binding HasFiles}" Height="30" Padding="8,0"
+                      VerticalAlignment="Center" VerticalContentAlignment="Center" Margin="12,0,0,0"
+                      ToolTip.Tip="Wrap long lines" AutomationProperties.Name="Wrap">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Width="14" Height="14" Data="M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3 3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z" />
+            <TextBlock Text="Wrap" VerticalAlignment="Center" />
+          </StackPanel>
+        </ToggleButton>
         <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding Summary}" Margin="12,0,0,0" VerticalAlignment="Center" ToolTip.Tip="{Binding Folder}" />
         <TextBlock Classes="muted" Text="{Binding Status}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Status}" />
       </DockPanel>
@@ -111,21 +149,24 @@
         <TextBlock Classes="muted" IsVisible="{Binding !HasFiles}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="360" TextAlignment="Center"
                    Text="Files the agent changes in this chat show here as it works." />
         <!-- Every row of the diff; clicked lines are picked into the chat's box. -->
-        <ListBox x:Name="DiffList" Classes="diff" ItemsSource="{Binding Rows}" Selection="{Binding Selection}" SelectionMode="Multiple"
-                 IsVisible="{Binding HasFiles}" ScrollViewer.HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="Diff">
+        <ListBox x:Name="DiffList" Classes="diff" Classes.wrap="{Binding Wrap}" ItemsSource="{Binding Rows}" Selection="{Binding Selection}" SelectionMode="Multiple"
+                 IsVisible="{Binding HasFiles}" AutomationProperties.Name="Diff">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:DiffRow">
               <Border Classes="row" Classes.added="{Binding IsAdded}" Classes.removed="{Binding IsRemoved}" Classes.hunk="{Binding IsHunk}" Classes.header="{Binding IsHeader}">
                 <Panel>
+                  <Border Classes="fresh" Classes.on="{Binding IsFresh}" />
                   <StackPanel Orientation="Horizontal" Spacing="10" Margin="8,5" IsVisible="{Binding IsHeader}">
                     <TextBlock Text="{Binding Text}" FontWeight="SemiBold" FontSize="13" />
                     <TextBlock Text="{Binding HeaderDetails}" Classes="muted" VerticalAlignment="Center" />
                   </StackPanel>
-                  <Grid ColumnDefinitions="46,46,16,Auto" IsVisible="{Binding !IsHeader}" Margin="0,1" TextElement.FontFamily="Cascadia Mono,Consolas,monospace">
-                    <TextBlock Grid.Column="0" Classes="number" Text="{Binding OldNumber}" />
-                    <TextBlock Grid.Column="1" Classes="number" Text="{Binding NewNumber}" />
-                    <TextBlock Grid.Column="2" Classes="marker" Classes.added="{Binding IsAdded}" Classes.removed="{Binding IsRemoved}" Text="{Binding Marker}" />
-                    <TextBlock Grid.Column="3" Text="{Binding Text}" Classes.hunkText="{Binding IsHunk}" TextWrapping="NoWrap" Margin="0,0,16,0" />
+                  <!-- The code's column takes what is left (wrapping); scrolled sideways, as wide as the line. The numbers
+                       and marker stay on a wrapped line's first row. -->
+                  <Grid ColumnDefinitions="46,46,16,*" IsVisible="{Binding !IsHeader}" Margin="0,1" TextElement.FontFamily="Cascadia Mono,Consolas,monospace">
+                    <TextBlock Grid.Column="0" Classes="number" Text="{Binding OldNumber}" VerticalAlignment="Top" />
+                    <TextBlock Grid.Column="1" Classes="number" Text="{Binding NewNumber}" VerticalAlignment="Top" />
+                    <TextBlock Grid.Column="2" Classes="marker" Classes.added="{Binding IsAdded}" Classes.removed="{Binding IsRemoved}" Text="{Binding Marker}" VerticalAlignment="Top" />
+                    <TextBlock Grid.Column="3" Classes="code" Classes.hunkText="{Binding IsHunk}" Text="{Binding Text}" Margin="0,0,16,0" />
                   </Grid>
                 </Panel>
               </Border>
