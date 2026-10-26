@@ -33,6 +33,19 @@ public readonly record struct MdBlock(string Text, bool IsCode, string Language 
 public readonly record struct MdLine(int Source, IReadOnlyList<int>? Cells = null);
 
 /// <summary>
+/// A table for a grid of cells: each row's cells as styled runs, every row as long as the longest
+/// (a short row gets empty cells), the first <paramref name="HeaderRows"/> its header (bold), and each
+/// column's alignment from the |:--:| line: -1 left, 0 centre, 1 right.
+/// </summary>
+public sealed record MdTable(IReadOnlyList<IReadOnlyList<List<MdSpan>>> Rows, int HeaderRows, IReadOnlyList<int> Align)
+{
+    public int Columns => Rows.Count == 0 ? 0 : Rows[0].Count;
+}
+
+/// <summary>A part of a block of Markdown text: text, or a <paramref name="Table"/> (its lines as written in <paramref name="Text"/>).</summary>
+public readonly record struct MdPart(string Text, MdTable? Table = null);
+
+/// <summary>
 /// The Markdown models write in their answers (bold, headings, lists, code, tables, quotes),
 /// turned into lines of styled runs for a chat bubble, so "**Total:** $3,000" doesn't show its
 /// asterisks. Deliberately small: what it doesn't know stays as it was written.
@@ -153,6 +166,51 @@ public static partial class MarkdownLite
     /// </summary>
     public static List<List<MdSpan>> Plain(string text, MdStyle style = MdStyle.None) =>
         text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n').Select(l => Linked([new MdSpan(l, style)])).ToList();
+
+    /// <summary>
+    /// Markdown text (a block of <see cref="Blocks(string)"/> that isn't code) cut at its tables, so
+    /// that each shows as a grid of its own. The blank lines around a table go; pipe lines that make
+    /// no table (nothing but a |---| line) stay text.
+    /// </summary>
+    public static List<MdPart> Parts(string markdown)
+    {
+        var lines = markdown.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        var parts = new List<MdPart>();
+        var text = new List<string>();
+        void FlushText()
+        {
+            var first = text.FindIndex(l => l.Trim().Length > 0);
+            var last = text.FindLastIndex(l => l.Trim().Length > 0);
+            if (first >= 0)
+                parts.Add(new MdPart(string.Join("\n", text.Skip(first).Take(last - first + 1))));
+            text.Clear();
+        }
+
+        var inCode = false;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (lines[i].TrimStart().StartsWith("```", StringComparison.Ordinal))
+                inCode = !inCode;
+            if (inCode || !IsTableRow(lines[i]))
+            {
+                text.Add(lines[i]);
+                continue;
+            }
+            var rows = new List<string>();
+            while (i < lines.Length && IsTableRow(lines[i]))
+                rows.Add(lines[i++]);
+            i--;
+            if (ParseTable(rows) is { } table)
+            {
+                FlushText();
+                parts.Add(new MdPart(string.Join("\n", rows), table));
+            }
+            else
+                text.AddRange(rows);
+        }
+        FlushText();
+        return parts;
+    }
 
     /// <summary>
     /// The web addresses written out in a line's spans (https://..., www....) split off as links of
@@ -304,8 +362,31 @@ public static partial class MarkdownLite
     // ---- tables ------------------------------------------------------------------------------
 
     /// <summary>
+    /// A table's rows as a grid: the |---| line gives the alignment and makes the row over it the
+    /// header. Null when there are no rows but |---| lines.
+    /// </summary>
+    private static MdTable? ParseTable(List<string> rows)
+    {
+        var cells = rows.Select(Cells).ToList();
+        var separator = cells.FindIndex(r => r.Count > 0 && r.All(c => Separator().IsMatch(c)));
+        var align = separator >= 0
+            ? cells[separator].Select(c => c.EndsWith(':') ? (c.StartsWith(':') ? 0 : 1) : -1).ToList()
+            : [];
+        var body = Enumerable.Range(0, cells.Count).Where(i => i != separator).ToList();
+        if (body.Count == 0)
+            return null;
+        var header = separator > 0 ? 1 : 0;
+        var columns = body.Max(r => cells[r].Count);
+        var parsed = body.Select((r, at) => (IReadOnlyList<List<MdSpan>>)Enumerable.Range(0, columns)
+            .Select(col => col < cells[r].Count ? Linked(Inline(cells[r][col], at < header ? MdStyle.Bold : MdStyle.None)) : [])
+            .ToList()).ToList();
+        return new MdTable(parsed, header, Enumerable.Range(0, columns).Select(col => col < align.Count ? align[col] : -1).ToList());
+    }
+
+    /// <summary>
     /// Rows with their columns lined up in monospace; the header bold, the |---| line left out. Each
-    /// with the row of <paramref name="rows"/> it is and where its cells start in it.
+    /// with the row of <paramref name="rows"/> it is and where its cells start in it. The chat shows
+    /// tables as grids (<see cref="Parts"/>); File inspector picks cells by these lines.
     /// </summary>
     private static IEnumerable<(List<MdSpan> Line, int Row, IReadOnlyList<int>? Cells)> Table(List<string> rows)
     {
@@ -390,7 +471,8 @@ public static partial class MarkdownLite
     [GeneratedRegex(@"^(\s*)(\d{1,3})[.)]\s+(.*)$")]
     private static partial Regex Numbered();
 
-    [GeneratedRegex(@"^:?-{2,}:?$")]
+    // A |---| line's cell: dashes, a colon at either end for the alignment (":-:" is one too); a lone "-" is a cell.
+    [GeneratedRegex(@"^(:-+:?|-+:|-{2,})$")]
     private static partial Regex Separator();
 
     // A target may hold parentheses in pairs: https://en.wikipedia.org/wiki/Python_(programming_language).

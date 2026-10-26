@@ -42,6 +42,13 @@
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="6" />
     </Style>
+    <!-- A table in a reply (MarkdownTable): a grid on the code blocks' surface, its header row raised. -->
+    <Style Selector="Border.mdTable">
+      <Setter Property="Background" Value="{StaticResource BbSurface}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
     <Style Selector="DockPanel.codeHeader">
       <Setter Property="Margin" Value="12,4,4,0" />
     </Style>

@@ -1703,8 +1703,8 @@ still on its way, it shows how much of it has gone out ("Sending to the serverâ€
 each step sends every screenshot still in the context, and over a VPN at 15 to 30 KB/s that took
 minutes which looked like the model thinking.
 
-Replies are shown with their Markdown formatted: bold, headings, lists, code and tables (lined
-up in a monospace font), as models write them; the thinking above them stays as written.
+Replies are shown with their Markdown formatted: bold, headings, lists, code and tables, as
+models write them; the thinking above them stays as written.
 `MarkdownView` cuts a reply at its fenced code blocks (`MarkdownLite.Blocks`): the text between
 them goes to `MarkdownText` as before, and each block is a box of its own in monospace, wrapped,
 with the language from its fence and a Copy button that copies the code as written. A block still
@@ -1712,6 +1712,29 @@ streaming in runs to the end of the reply; at each streamed piece the parts alre
 their controls and only get their new text. A fence indented in a list takes that indent off its
 lines, and only a bare fence (no language) closes a block, so a ```` ```js ```` line inside one
 stays code. Selecting can't run from the text into a code block, being two text blocks.
+
+Tables in a reply are grids (`MarkdownTable`, since 2026-10-26): `MarkdownLite.Parts` cuts a block of
+text at its runs of `|` lines, and each that makes a table (any row but a |---| line) is a box like
+a code block's, its header row on the raised surface, lines one device pixel thick between the
+cells, each cell a selectable text block in the chat's font (inline code in monospace, bold,
+italics, links as in the text). They were rows lined up in monospace inside the text, and a long
+cell wrapped back to the left edge under the first column (the user's screenshot). Columns are
+laid out as a browser does: as wide as their text when the table fits; otherwise each gets its
+longest word (at most 160, so a long path breaks) and the rest of the room by how much more text it
+has; widths are whole multiples of 4, so a cell isn't laid out a fraction narrower than measured.
+When even the longest words don't fit, the box scrolls sideways with the full scrollbar in a 16 px
+strip under the last row (Fluent lays it over the content); the scroller measures with all the
+width wanted, so the box hands the grid the reply's width itself. The wheel over a table scrolls
+the chat. Rows short of cells get empty ones, a row longer than the header widens the table, and a
+|---| cell may be a single dash with a colon (`:-:`), as GitHub's; a lone `-` is a cell. File
+inspector keeps tables as lined-up text: it picks a table's cells by where they are in its lines.
+Checked in the app with a stand-in model sending the user's two tables and edge cases, and in
+`TableLayoutTests` (headless): every cell's text within its own column, at three window widths.
+
+A text block with a link in it set its Cursor to null when the pointer left the link, which is the
+arrow, so text with a link showed the arrow and other text the text cursor (the user, 2026-10-26).
+It now goes back to the block's own cursor, read at the first move (before that the block isn't
+styled yet); checked with GetCursorInfo over a reply's text, a table cell and the link in it.
 
 Every `SelectableTextBlock` has a transparent background (App.axaml). Without one Avalonia hits a
 text block only on its glyphs, so a drag that started beside a short line, between two lines or

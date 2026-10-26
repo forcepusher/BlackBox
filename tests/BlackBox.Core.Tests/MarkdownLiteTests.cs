@@ -153,6 +153,38 @@ public class MarkdownLiteTests
     }
 
     [Fact]
+    public void Text_is_cut_at_its_tables_for_grids()
+    {
+        var parts = MarkdownLite.Parts("## Other options\n| Option | Verdict |\n|---|---|\n| **WSL2** | Fastest, on `localhost`. |\n\nAfter.\n|---|");
+
+        Assert.Equal(["## Other options", "| Option | Verdict |\n|---|---|\n| **WSL2** | Fastest, on `localhost`. |", "After.\n|---|"], parts.Select(p => p.Text));
+        Assert.Null(parts[0].Table);
+        Assert.Null(parts[2].Table);
+        var table = parts[1].Table!;
+        Assert.Equal(1, table.HeaderRows);
+        Assert.Equal(["Option", "Verdict"], table.Rows[0].Select(Text));
+        Assert.All(table.Rows[0].SelectMany(c => c), s => Assert.Equal(MdStyle.Bold, s.Style));
+        // The chat's font: only inline code is monospace.
+        Assert.Equal([new MdSpan("WSL2", MdStyle.Bold)], table.Rows[1][0]);
+        Assert.Equal([new MdSpan("Fastest, on ", MdStyle.None), new MdSpan("localhost", MdStyle.Code), new MdSpan(".", MdStyle.None)], table.Rows[1][1]);
+    }
+
+    [Fact]
+    public void A_table_grid_fills_out_ragged_rows_and_takes_one_dash_alignments()
+    {
+        var table = MarkdownLite.Parts("| Shop | August | Note |\n|:--|--:|:-:|\n| Riverside | 15,700 |\n| Online | 144,600 | best | extra |").Single().Table!;
+
+        Assert.Equal([-1, 1, 0, -1], table.Align);
+        Assert.Equal(3, table.Rows.Count);
+        Assert.All(table.Rows, r => Assert.Equal(4, r.Count));
+        Assert.Equal(["Riverside", "15,700", "", ""], table.Rows[1].Select(Text));
+        // No |---| line: no header; "| - |" placeholders are cells.
+        var plain = MarkdownLite.Parts("| a | - |\n| - | d |").Single().Table!;
+        Assert.Equal(0, plain.HeaderRows);
+        Assert.Equal(["-", "d"], plain.Rows[1].Select(Text));
+    }
+
+    [Fact]
     public void A_line_of_nothing_but_table_dashes_stays_as_written()
     {
         // A scale drawn in text, or a table that opens with its |---| line, as it streams in:

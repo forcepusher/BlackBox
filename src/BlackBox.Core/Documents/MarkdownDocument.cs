@@ -328,7 +328,8 @@ internal static partial class MarkdownDocument
     [GeneratedRegex(@"^!\[([^\]]*)\]\(\s*(<[^>]+>|[^)""]+?)\s*(?:""[^""]*"")?\s*\)$")]
     private static partial Regex Image();
 
-    [GeneratedRegex(@"^:?-{2,}:?$")]
+    // A |---| line's cell: dashes, a colon at either end for the alignment (":-:" is one too); a lone "-" is a cell.
+    [GeneratedRegex(@"^(:-+:?|-+:|-{2,})$")]
     private static partial Regex Separator();
 
     [GeneratedRegex(@"\[([^\]\n]+)\]\(([^)\s]+)\)")]
