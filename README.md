@@ -88,6 +88,8 @@ model the server has, or you pick one from the list.
 - Give the model at least 32k of context.
 - In LM Studio, turn off the model's "Image Input: Never exceed 2048 px" option. Otherwise
   screenshots get shrunk and clicks miss more often.
+- Screenshots are scaled down to fit 2560 × 1080, so a big screen doesn't fill the context. Change
+  it in Settings, under Advanced: larger is sharper, smaller is cheaper.
 
 ## Building
 You need Windows and the .NET 10 SDK.

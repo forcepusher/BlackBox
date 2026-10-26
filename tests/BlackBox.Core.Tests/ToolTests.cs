@@ -93,7 +93,7 @@ public class ToolTests
     public async Task A_click_goes_where_a_fresh_look_finds_the_target()
     {
         var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1440) };
-        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotResolution = ScreenshotResolution.R1280x720, ScreenshotAfterActions = false });
+        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotMaxWidth = 1280, ScreenshotMaxHeight = 720, ScreenshotAfterActions = false });
         string? looked = null;
         (double X, double Y)? found = (300, 120);
         ctx.Locate = (_, _, target, _) => { looked = target; return Task.FromResult(found); };
@@ -324,7 +324,7 @@ public class ToolTests
     {
         var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1440) };
         // 2560x1440 screen sent at 1280x720 (704 after snapping to the 32px grid)
-        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotResolution = ScreenshotResolution.R1280x720, ScreenshotAfterActions = false });
+        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotMaxWidth = 1280, ScreenshotMaxHeight = 720, ScreenshotAfterActions = false });
 
         await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 10, ["y"] = "20", ["clicks"] = 2 }, ctx, CancellationToken.None);
 
@@ -352,6 +352,49 @@ public class ToolTests
         Assert.Contains("move 210,21", platform.Actions);
 
         await Assert.ThrowsAsync<ToolArgumentException>(() => new ScreenshotTool().ExecuteAsync(new JsonObject { ["screen"] = 3 }, ctx, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Screenshots_fit_the_max_size_and_clicks_land_on_the_real_screen_of_every_monitor()
+    {
+        // Screens come in physical pixels whatever each one's scaling: a 4K primary at 150%, a Full HD
+        // one at 100% to its left, lower down, and an ultrawide on its right.
+        var platform = new FakePlatform { Screens = [new ScreenRect(0, 0, 3840, 2160), new ScreenRect(-1920, 400, 1920, 1080), new ScreenRect(3840, 0, 2560, 1080)] };
+        var ctx = Ctx(platform);
+        Assert.Equal((2560, 1080), ctx.Settings.ScreenshotBox);
+
+        async Task<string> Look(int screen) => (await new ScreenshotTool().ExecuteAsync(new JsonObject { ["screen"] = screen }, ctx, CancellationToken.None)).Text;
+        async Task<string> Click(double x, double y)
+        {
+            await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = x, ["y"] = y }, ctx, CancellationToken.None);
+            return platform.Actions.Last(a => a.StartsWith("move ", StringComparison.Ordinal));
+        }
+
+        // 4K is halved to 1920x1080 (1088 on the 32px grid); its middle and far corner map back.
+        Assert.Contains("1920x1088", await Look(1));
+        Assert.Equal("move 1920,1080", await Click(960, 544));
+        Assert.Equal("move 3839,2159", await Click(1920, 1088));
+        // The other two already fit: not scaled, and offset to where they are.
+        Assert.Contains("1920x1088", await Look(2));
+        Assert.Equal("move -960,940", await Click(960, 544));
+        Assert.Equal("move -1920,400", await Click(0, 0));
+        Assert.Contains("2560x1088", await Look(3));
+        Assert.Equal("move 4940,496", await Click(1100, 500));
+
+        // A smaller box: 4K fits 1280x720, and a click still lands where it was aimed.
+        ctx.Settings.ScreenshotMaxWidth = 1280;
+        ctx.Settings.ScreenshotMaxHeight = 720;
+        Assert.Contains("1280x704", await Look(1));
+        Assert.Equal("move 1920,1080", await Click(640, 352));
+        Assert.Equal((1280, 544), (ctx.ScreenSpaces()[2].ImageWidth, ctx.ScreenSpaces()[2].ImageHeight));
+
+        // A box larger than the screen never scales it up, and a hand-edited tiny or huge box is kept in range.
+        ctx.Settings.ScreenshotMaxWidth = 99_999;
+        ctx.Settings.ScreenshotMaxHeight = 99_999;
+        Assert.Equal((3840, 2176), (ctx.ScreenSpaces()[0].ImageWidth, ctx.ScreenSpaces()[0].ImageHeight));
+        ctx.Settings.ScreenshotMaxWidth = 0;
+        ctx.Settings.ScreenshotMaxHeight = -5;
+        Assert.Equal((640, 360), ctx.Settings.ScreenshotBox);
     }
 
     [Fact]
@@ -770,8 +813,9 @@ public class ToolTests
         Assert.Equal("http://host:1234/v1", settings.Server.BaseUrl);
         Assert.Equal("qwen", settings.Server.Model);
         Assert.Equal("be brief", settings.Agent.CustomInstructions);
-        // Screenshot size, web access and the click log are no longer settings: always native, on, and shown.
-        Assert.Equal(ScreenshotResolution.Native, settings.Agent.ScreenshotResolution);
+        // Web access and the click log are no longer settings: always on and shown. The old screenshot
+        // presets are gone too, and the size box starts from its default.
+        Assert.Equal((2560, 1080), settings.Agent.ScreenshotBox);
         var saved = File.ReadAllText(paths.SettingsFile);
         foreach (var gone in new[] { "backend", "local", "remote", "gpuLayers", "sendExtras", "enableThinking", "temperature", "keepScreenshots", "contextSize", "workingDirectory", "screenshotMaxPixels", "maxSteps", "maxPromptTokens",
                                      "screenshotResolution", "showInputs", "inputLogSeconds", "webSearch" })
@@ -791,7 +835,7 @@ public class ToolTests
         Assert.True(screen.Width >= 640 && screen.Height >= 480);
 
         var result = await new ScreenshotTool().ExecuteAsync([], Ctx(platform), CancellationToken.None);
-        var space = new ScreenSpace(screen, new AgentSettings().ScreenshotResolution.Box());
+        var space = new ScreenSpace(screen, new AgentSettings().ScreenshotBox);
         Assert.Contains($"{space.ImageWidth}x{space.ImageHeight}", result.Text);
         Assert.True(result.Image!.Length > 5_000);
     }

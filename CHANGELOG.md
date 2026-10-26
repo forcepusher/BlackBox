@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Max screenshot size** under Settings → Advanced: screenshots are scaled down to fit it, so a 4K
+  screen uses a quarter of the context. 2560 × 1080 by default; clicks still land on the real screen.
 - **Wrap** in the File changes bar wraps long lines inside the panel instead of running them off
   its edge. On by default, and remembered.
 - **Watch** in the File changes bar follows the agent: as it changes a file, the panel goes to the

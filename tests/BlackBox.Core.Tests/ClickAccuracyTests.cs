@@ -17,8 +17,8 @@ namespace BlackBox.Core.Tests;
 /// the click is checked against the target's bounds.
 /// Opt-in like <see cref="ServerIntegrationTests"/>: set BB_SERVER_URL and BB_SERVER_MODEL. Optional:
 /// BB_CLICK_SCENES (comma-separated, default all), BB_CLICK_TRIALS (per scene, default 5),
-/// BB_CLICK_COORDS=pixels|grid (default: what BlackBox picks for the model), BB_CLICK_RES (a
-/// <see cref="ScreenshotResolution"/> name), BB_CLICK_SEED (first layout, default 1000), BB_CLICK_TAG (report name),
+/// BB_CLICK_COORDS=pixels|grid (default: what BlackBox picks for the model), BB_CLICK_RES (the box screenshots
+/// fit, as 1920x1080; default the setting's), BB_CLICK_SEED (first layout, default 1000), BB_CLICK_TAG (report name),
 /// BB_CLICK_RETRY (extra clicks allowed after a miss, default 0: the target reacts when hit, so a
 /// miss gets BlackBox's miss note), BB_CLICK_CHECK=0 (no miss note), BB_CLICK_LOOK=0 (clicks go to the model's own x/y instead of where a fresh look finds the target),
 /// BB_CLICK_CROP=0 (the look sees the whole screen, not the quarter around the model's aim), BB_CLICK_THINK=1 (the look may think), BB_CLICK_RULE
@@ -129,7 +129,7 @@ public class ClickAccuracyTests
         int? context = facts.Context is null ? null : server.ContextSize;
         var trials = int.TryParse(Env("BB_CLICK_TRIALS"), out var n) ? n : 5;
         var only = Env("BB_CLICK_SCENES")?.Split(',', StringSplitOptions.TrimEntries);
-        var resolution = Env("BB_CLICK_RES") is { } res ? Enum.Parse<ScreenshotResolution>(res) : new AgentSettings().ScreenshotResolution;
+        var resolution = Env("BB_CLICK_RES") is { } res && res.Split('x') is [var w, var h] ? (int.Parse(w), int.Parse(h)) : new AgentSettings().ScreenshotBox;
         var tag = Env("BB_CLICK_TAG") ?? "accuracy";
         var seed = int.TryParse(Env("BB_CLICK_SEED"), out var s0) ? s0 : 1000;
         var grid = Coords switch { "pixels" => null, "grid" => 1000, _ => ModelCoordinates.GridFor(Model) };
@@ -156,7 +156,7 @@ public class ClickAccuracyTests
                 var (desktop, origin, targets) = Render(scene, rng);
                 var target = scene.EveryTarget ? targets[trial] : targets[rng.Next(targets.Count)];
                 var platform = new FakePlatform { Screens = scene.Screens.ToList(), ScreenBounds = scene.Screens[0], Desktop = desktop, DesktopOrigin = origin };
-                var settings = new AgentSettings { ScreenshotResolution = resolution };
+                var settings = new AgentSettings { ScreenshotMaxWidth = resolution.Item1, ScreenshotMaxHeight = resolution.Item2 };
                 var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = Path.GetTempPath(), CoordinateGrid = grid };
                 if (trial == 0)
                     File.WriteAllBytes(Path.Combine(Path.GetTempPath(), $"bb-click-{tag}-{scene.Name}.jpg"), ScreenshotTool.Take(new ToolContext
@@ -221,7 +221,7 @@ public class ClickAccuracyTests
         }
         foreach (var line in summary)
             Log(line);
-        Log($"TOTAL {allHits}/{allTrials} with {Model}, coordinates: {grid?.ToString() ?? "pixels"}, screenshots: {resolution}, " +
+        Log($"TOTAL {allHits}/{allTrials} with {Model}, coordinates: {grid?.ToString() ?? "pixels"}, screenshots: {resolution.Item1}x{resolution.Item2}, " +
             (FreshLook.Enabled ? $"fresh look at {(FreshLook.Cropped ? "the quarter around the aim" : "the whole screen")}, thinking {(FreshLook.Thinking || !FreshLook.ThinksInQwenTags(Model) ? "on" : "skipped")}" : "no fresh look"));
         if (retries > 0)
             Log($"RETRY {fixedLater}/{retried} first-click misses hit within {retries} more tries (miss check {(ClickCheck.Enabled ? "on" : "off")}, fresh look {(FreshLook.Enabled ? "on" : "off")})");

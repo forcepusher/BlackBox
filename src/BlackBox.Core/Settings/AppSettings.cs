@@ -4,30 +4,6 @@ using System.Text.Json.Serialization;
 
 namespace BlackBox.Core.Settings;
 
-/// <summary>Largest size screenshots are sent to the model at.</summary>
-public enum ScreenshotResolution
-{
-    R1280x720,
-    R1600x900,
-    R1920x1080,
-    R2560x1440,
-    /// <summary>The screen's own resolution, no scaling.</summary>
-    Native,
-}
-
-public static class ScreenshotResolutionExtensions
-{
-    /// <summary>The box screenshots must fit in, or null for native size.</summary>
-    public static (int Width, int Height)? Box(this ScreenshotResolution r) => r switch
-    {
-        ScreenshotResolution.R1280x720 => (1280, 720),
-        ScreenshotResolution.R1600x900 => (1600, 900),
-        ScreenshotResolution.R1920x1080 => (1920, 1080),
-        ScreenshotResolution.R2560x1440 => (2560, 1440),
-        _ => null,
-    };
-}
-
 public enum ApprovalMode
 {
     /// <summary>Ask before every tool call.</summary>
@@ -276,14 +252,25 @@ public sealed class AgentSettings
     public ApprovalMode Approval { get; set; } = ApprovalMode.Never;
 
     /// <summary>
-    /// Largest size a screenshot is sent at; the screen is scaled down to fit, keeping its shape.
-    /// Always the full resolution, not a setting any more (the user: nobody switches it from
-    /// native): with qwen3.8 on LM Studio (its "never exceed 2048 px" image option off) it hit text
-    /// links 15/16 against 8/16 at 1920x1080, and buttons on a 5120x1440 screen 7/16 against 4/16
-    /// (ClickAccuracyTests, two rounds). Tests and the click benchmark try the others.
+    /// The box a screenshot is scaled down to fit, keeping its shape and never scaled up: a 4K
+    /// screen at full resolution costs four times the context of one at 1920x1080. 2560x1080
+    /// by default (the user: "wide full HD"), so Full HD and 21:9 screens go as they are. At full
+    /// resolution qwen3.8 hit text links 15/16 against 8/16 at 1920x1080, and buttons on a
+    /// 5120x1440 screen 7/16 against 4/16 (ClickAccuracyTests, two rounds).
     /// </summary>
+    public int ScreenshotMaxWidth { get; set; } = DefaultScreenshotWidth;
+
+    public int ScreenshotMaxHeight { get; set; } = DefaultScreenshotHeight;
+
+    public const int DefaultScreenshotWidth = 2560, DefaultScreenshotHeight = 1080;
+
+    /// <summary>The smallest box (a smaller one is too blurry to read a button by) and the largest side.</summary>
+    public const int MinScreenshotWidth = 640, MinScreenshotHeight = 360, MaxScreenshotSide = 16384;
+
+    /// <summary>The box screenshots fit, with a hand-edited settings.json's sides kept in range.</summary>
     [JsonIgnore]
-    public ScreenshotResolution ScreenshotResolution { get; set; } = ScreenshotResolution.Native;
+    public (int Width, int Height) ScreenshotBox =>
+        (Math.Clamp(ScreenshotMaxWidth, MinScreenshotWidth, MaxScreenshotSide), Math.Clamp(ScreenshotMaxHeight, MinScreenshotHeight, MaxScreenshotSide));
 
     /// <summary>Attach a fresh screenshot after mouse/keyboard actions. Internal (tests turn it off).</summary>
     [JsonIgnore]

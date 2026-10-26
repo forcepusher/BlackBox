@@ -16,6 +16,10 @@
     <Style Selector="Grid.form > ComboBox">
       <Setter Property="Margin" Value="0,4" />
     </Style>
+    <!-- NumericUpDown isn't in the UI Automation tree, only its text box: give that the field's name. -->
+    <Style Selector="NumericUpDown /template/ TextBox#PART_TextBox">
+      <Setter Property="AutomationProperties.Name" Value="{Binding $parent[NumericUpDown].(AutomationProperties.Name)}" />
+    </Style>
   </Window.Styles>
 
   <DockPanel>
@@ -34,7 +38,7 @@
     <ScrollViewer Margin="16,8">
       <StackPanel Spacing="4" Margin="0,0,12,16">
         <TextBlock Classes="h2" Text="Safety" />
-        <Grid Classes="form" ColumnDefinitions="140,*">
+        <Grid Classes="form" ColumnDefinitions="160,*">
           <TextBlock Classes="label" Text="Ask me first" />
           <ComboBox Grid.Column="1" ItemsSource="{Binding ApprovalModes}" SelectedIndex="{Binding ApprovalIndex}" HorizontalAlignment="Stretch" />
         </Grid>
@@ -53,6 +57,21 @@
         <SelectableTextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
         <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="BlackBox starts these when you click Save and each time it opens."
                    ToolTip.Tip="{Binding Paths.McpConfigFile, StringFormat='Kept in {0}'}" />
+
+        <TextBlock Classes="h2" Text="Advanced" />
+        <Grid Classes="form" ColumnDefinitions="160,*">
+          <TextBlock Classes="label" Text="Max screenshot size" />
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="0,4">
+            <NumericUpDown x:Name="ScreenshotWidthBox" Value="{Binding ScreenshotWidth}" LostFocus="OnSizeLostFocus" Minimum="{x:Static vm:SettingsViewModel.MinWidth}" Maximum="{x:Static vm:SettingsViewModel.MaxSide}"
+                           Increment="64" FormatString="0" ClipValueToMinMax="True" Width="96" ShowButtonSpinner="False" AutomationProperties.Name="Max screenshot width" />
+            <TextBlock Text="×" VerticalAlignment="Center" />
+            <NumericUpDown x:Name="ScreenshotHeightBox" Value="{Binding ScreenshotHeight}" LostFocus="OnSizeLostFocus" Minimum="{x:Static vm:SettingsViewModel.MinHeight}" Maximum="{x:Static vm:SettingsViewModel.MaxSide}"
+                           Increment="64" FormatString="0" ClipValueToMinMax="True" Width="96" ShowButtonSpinner="False" AutomationProperties.Name="Max screenshot height" />
+            <TextBlock Classes="muted" Text="pixels" VerticalAlignment="Center" />
+          </StackPanel>
+        </Grid>
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Larger screens are scaled down to fit and use less context. 2560 × 1080 by default." />
       </StackPanel>
     </ScrollViewer>
   </DockPanel>
