@@ -11,7 +11,9 @@ namespace BlackBox.App.Views;
 /// <summary>
 /// A reply's Markdown as the chat shows it: <c>&lt;views:MarkdownView Source="{Binding ShownText}" /&gt;</c>.
 /// Its text is in selectable blocks formatted by <see cref="MarkdownText"/>; each fenced code block
-/// is a box of its own, in monospace, with its language and a Copy button over it.
+/// is a box of its own, in monospace, with its language and a Copy button over it, and each table a
+/// grid of its own (<see cref="MarkdownTable"/>). Text that keeps its selection (File inspector,
+/// which picks a table's cells by where they are in its lines) shows tables as lined-up text.
 /// </summary>
 public class MarkdownView : StackPanel
 {
@@ -77,19 +79,69 @@ public class MarkdownView : StackPanel
         for (var i = 0; i < blocks.Count; i++)
         {
             var block = blocks[i];
-            if (i < Children.Count && Children[i] is SelectableTextBlock text && !block.IsCode)
+            var parts = block.IsCode || KeepsSelection ? null : TableParts(block.Text);
+            if (i < Children.Count && Children[i] is SelectableTextBlock text && !block.IsCode && parts is null)
                 MarkdownText.SetSource(text, block.Text);
+            else if (i < Children.Count && Children[i] is PartsPanel panel && parts is not null)
+                panel.Show(parts);
             else if (i < Children.Count && Children[i] is CodeBox box && block.IsCode)
                 box.Show(block);
             else
             {
                 if (i < Children.Count)
                     Children.RemoveAt(i);
-                Children.Insert(i, block.IsCode ? new CodeBox(block, KeepsSelection) : TextPart(block.Text, KeepsSelection));
+                Children.Insert(i, block.IsCode ? new CodeBox(block, KeepsSelection) : parts is not null ? new PartsPanel(parts) : TextPart(block.Text, KeepsSelection));
             }
         }
         while (Children.Count > blocks.Count)
             Children.RemoveAt(Children.Count - 1);
+    }
+
+    /// <summary>A block of text cut at its tables; null when it has none (it stays one text block).</summary>
+    private static List<MdPart>? TableParts(string markdown)
+    {
+        if (!markdown.Contains('|'))
+            return null;
+        try
+        {
+            var parts = MarkdownLite.Parts(markdown);
+            return parts.Any(p => p.Table is not null) ? parts : null;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            CrashLog.Write("cutting a reply at its tables", ex);
+            return null;
+        }
+    }
+
+    /// <summary>A block of text with tables in it: its text and a <see cref="MarkdownTable"/> for each table, 10 apart as the blocks are.</summary>
+    private sealed class PartsPanel : StackPanel
+    {
+        public PartsPanel(List<MdPart> parts)
+        {
+            Spacing = 10;
+            Show(parts);
+        }
+
+        public void Show(List<MdPart> parts)
+        {
+            for (var i = 0; i < parts.Count; i++)
+            {
+                var part = parts[i];
+                if (i < Children.Count && Children[i] is SelectableTextBlock text && part.Table is null)
+                    MarkdownText.SetSource(text, part.Text);
+                else if (i < Children.Count && Children[i] is MarkdownTable table && part.Table is { } shown)
+                    table.Show(shown);
+                else
+                {
+                    if (i < Children.Count)
+                        Children.RemoveAt(i);
+                    Children.Insert(i, part.Table is { } t ? new MarkdownTable(t) : TextPart(part.Text, keep: false));
+                }
+            }
+            while (Children.Count > parts.Count)
+                Children.RemoveAt(Children.Count - 1);
+        }
     }
 
     private static SelectableTextBlock TextPart(string markdown, bool keep)

@@ -45,7 +45,6 @@ public static class MarkdownText
 
     private static void Render(TextBlock block, string text, bool markdown)
     {
-        var inlines = new InlineCollection();
         List<List<MdSpan>> lines;
         try { lines = markdown ? MarkdownLite.Render(text) : MarkdownLite.Plain(text); }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -55,6 +54,15 @@ public static class MarkdownText
             CrashLog.Write("showing a reply's Markdown", ex);
             lines = text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n').Select(l => new List<MdSpan> { new(l, MdStyle.None) }).ToList();
         }
+        Show(block, lines);
+    }
+
+    /// <summary>Shows runs already styled (a table's cell) in <paramref name="block"/>, its links working as in a reply's text.</summary>
+    public static void SetSpans(TextBlock block, List<MdSpan> spans) => Show(block, [spans]);
+
+    private static void Show(TextBlock block, List<List<MdSpan>> lines)
+    {
+        var inlines = new InlineCollection();
         // Lines end in a "\n" of their own rather than a LineBreak, so that a character's place in
         // the block's text, which a click is hit-tested to, is the sum of the runs before it.
         var links = new List<(int, int, string)>();
@@ -116,14 +124,24 @@ public static class MarkdownText
         if (Watched.TryGetValue(block, out _)) return;
         Watched.Add(block, new object());
         Point? pressedAt = null;
+        // Off a link the block's own cursor comes back: a selectable block's text cursor. Setting
+        // null there gave the arrow, so text with a link in it showed the arrow, text without one
+        // the text cursor (the user, 2026-10-26). Its own is known once it is in the window, styled.
+        Cursor? own = null;
+        var known = false;
+        var hand = new Cursor(StandardCursorType.Hand);
         block.PointerMoved += (_, e) =>
         {
+            if (!known)
+                (own, known) = (block.Cursor, true);
             var url = LinkAt(block, e.GetPosition(block));
-            block.Cursor = url != null ? new Cursor(StandardCursorType.Hand) : null;
+            var cursor = url != null ? hand : own;
+            if (!ReferenceEquals(block.Cursor, cursor))
+                block.Cursor = cursor;
             if (!Equals(ToolTip.GetTip(block), url))
                 ToolTip.SetTip(block, url);
         };
-        block.PointerExited += (_, _) => block.Cursor = null;
+        block.PointerExited += (_, _) => block.Cursor = own;
         // A selectable block takes the press for selecting, so these see handled events too. Only a
         // click opens a link: a drag over it selects its text, as anywhere else.
         block.AddHandler(InputElement.PointerPressedEvent, (_, e) =>

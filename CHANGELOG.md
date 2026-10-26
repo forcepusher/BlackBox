@@ -128,6 +128,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A × at the top right of Video generator, File changes and File inspector closes the tool.
 
 ### Changed
+- Tables in replies are real tables: a grid with a header row, in the chat's font, each cell
+  wrapping inside its own column. One too wide for the chat scrolls sideways.
 - Asked for code, commands or facts that change (versions, prices, news), the agent looks them up
   on the web before it answers, rather than writing them from memory.
 - Every dropdown's arrow (Toolkit, History, Model, Effort) is the same solid triangle, and so is the
@@ -139,6 +141,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The first-run hint for Ctrl+V is reworded.
 
 ### Fixed
+- Text with a link in it shows the text cursor, as all other chat text does; it showed the arrow.
+- A table whose alignment line has single dashes (`|:-:|`) is read as a table, in the chat and in
+  documents written from Markdown.
 - A long message you send shows all its lines in the chat: the last one, often after an empty line,
   could be cut off under the bubble's edge (the model always got the whole text). Long notices too.
 - A message keeps the indentation of its first line (pasted code, a list) when sent.
