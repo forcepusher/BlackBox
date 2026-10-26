@@ -29,6 +29,27 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         set => Agent.Approval = (ApprovalMode)Math.Clamp(value, 0, ApprovalModes.Length - 1);
     }
 
+    // ---- Screenshot size ---------------------------------------------------------------
+
+    /// <summary>The fields' limits, as decimals: what NumericUpDown takes.</summary>
+    public static readonly decimal MinWidth = AgentSettings.MinScreenshotWidth, MinHeight = AgentSettings.MinScreenshotHeight, MaxSide = AgentSettings.MaxScreenshotSide;
+
+    /// <summary>The box's width as the field shows it; a cleared field goes back to the default.</summary>
+    public decimal? ScreenshotWidth
+    {
+        get => Agent.ScreenshotMaxWidth;
+        set => Agent.ScreenshotMaxWidth = Side(value, MinWidth, AgentSettings.DefaultScreenshotWidth);
+    }
+
+    public decimal? ScreenshotHeight
+    {
+        get => Agent.ScreenshotMaxHeight;
+        set => Agent.ScreenshotMaxHeight = Side(value, MinHeight, AgentSettings.DefaultScreenshotHeight);
+    }
+
+    private static int Side(decimal? value, decimal min, int fallback) =>
+        value is { } v ? (int)Math.Clamp(Math.Round(v), min, MaxSide) : fallback;
+
     // ---- MCP servers -------------------------------------------------------------------
 
     /// <summary>The text of Data/mcp.json as the user edits it; saved as typed.</summary>

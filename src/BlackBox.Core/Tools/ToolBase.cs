@@ -196,11 +196,10 @@ public sealed class ToolContext
         Screens.Select(s => new ScreenSpace(s, ScreenshotBox(), CoordinateGrid)).ToList();
 
     /// <summary>The box screenshots are made to fit: the setting's, within <see cref="MaxScreenshotSide"/>.</summary>
-    private (int Width, int Height)? ScreenshotBox()
+    private (int Width, int Height) ScreenshotBox()
     {
-        var box = Settings.ScreenshotResolution.Box();
-        return MaxScreenshotSide is not { } most ? box
-            : box is { } b ? (Math.Min(b.Width, most), Math.Min(b.Height, most)) : (most, most);
+        var box = Settings.ScreenshotBox;
+        return MaxScreenshotSide is { } most ? (Math.Min(box.Width, most), Math.Min(box.Height, most)) : box;
     }
 
     /// <summary>The monitor a physical point lies on; the current one if none contains it.</summary>

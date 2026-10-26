@@ -1861,7 +1861,7 @@ prints the traceback and exits with 0.
 ## Tools the agent has
 | Tool | What it does |
 | --- | --- |
-| `screenshot` | Captures a screen at full resolution, on the 32px vision grid; `screen=N` looks at another monitor |
+| `screenshot` | Captures a screen scaled down to fit the max screenshot size, on the 32px vision grid; `screen=N` looks at another monitor |
 | `mouse_click` | Clicks a named target where a fresh look at the screen finds it (see below); `modifiers` holds keys through the click, as in Ctrl+click to add to a selection or Shift+click to select a range |
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
@@ -1930,7 +1930,17 @@ qwen3.8 dragged as many x as y steps and got 346×217 and 385×241 px ovals befo
 out. So the system prompt gives both step sizes, and `mouse_drag` says how far it went in screen
 pixels.
 
-Screenshots go out at the screen's full resolution, always. In LM Studio, turn off the model's
+Screenshots are scaled down to fit Settings → Advanced → Max screenshot size, keeping their shape
+and never scaled up (`AgentSettings.ScreenshotMaxWidth`/`ScreenshotMaxHeight`, kept within
+640×360..16384 when read). It was dropped on 2026-10-16 for always-native, and came back because a
+4K screen at full resolution takes four times the context of Full HD. 2560×1080 by default (the
+user: "wide full HD"): 1920×1080 and 21:9 screens go as they are, 4K goes at 1920×1080. Clicks map
+back through `ScreenSpace` per monitor, in physical pixels, so each screen's own scaling and its
+place in the desktop don't matter (`ToolTests.Screenshots_fit_the_max_size_and_clicks_land_on_the_real_screen_of_every_monitor`).
+Claude's own limit (`ToolContext.MaxScreenshotSide`) still applies over the setting.
+The click benchmark takes another box with `BB_CLICK_RES=1920x1080`.
+
+The measurements that made native the default: in LM Studio, turn off the model's
 "Image Input: Never exceed 2048 px" option, or it shrinks them back to about 2048×864 (qwen3.8 hit
 text links 15/16 at full resolution, 8/16 at 1920×1080); a server that resizes the image moves
 every click of a model that points in pixels.

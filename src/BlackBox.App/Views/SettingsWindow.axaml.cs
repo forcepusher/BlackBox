@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using BlackBox.App.ViewModels;
+using BlackBox.Core.Settings;
 
 namespace BlackBox.App.Views;
 
@@ -21,4 +22,11 @@ public partial class SettingsWindow : Window
     }
 
     private void OnCancel(object? sender, RoutedEventArgs e) => Close(false);
+
+    /// <summary>A screenshot size field left empty shows the default again, which is what it saves.</summary>
+    private void OnSizeLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (sender is NumericUpDown { Value: null } box)
+            box.Value = box == ScreenshotWidthBox ? AgentSettings.DefaultScreenshotWidth : AgentSettings.DefaultScreenshotHeight;
+    }
 }
