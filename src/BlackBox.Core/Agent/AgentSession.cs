@@ -229,8 +229,7 @@ public sealed partial class AgentSession(
     /// <param name="turnEnded">
     /// The model's last reply ended its turn: the messages are what it works on next, as if sent
     /// after the run, not something on top of a task in progress. Marked as that, a message sent as
-    /// the model wrote its final answer was answered, and then the model was asked whether the task
-    /// it had already finished was done, and answered the same thing again.
+    /// the model wrote its final answer told it to carry on with a task it had already finished.
     /// </param>
     private void DeliverIncoming(bool turnEnded, IAgentObserver observer)
     {
@@ -252,7 +251,7 @@ public sealed partial class AgentSession(
                 {
                     if (first)
                     {
-                        (_request, _interrupted) = (RequestOf(input), false);
+                        _request = RequestOf(input);
                         _guesswork?.StartRun(input.Text);
                     }
                     first = false;
@@ -261,7 +260,6 @@ public sealed partial class AgentSession(
                 }
                 _guesswork?.Heard(input.Text);
                 History.Add(Interjection(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid)));
-                _interrupted = true;
             }
             toolContext.UserPictures = UserInput.PicturesIn(History);
         }
@@ -271,12 +269,6 @@ public sealed partial class AgentSession(
 
     /// <summary>What the user asked for in this run, quoted to the model when a message of theirs comes in on top of it.</summary>
     private string? _request;
-
-    /// <summary>
-    /// A message came in on top of the request, and the model hasn't gone back to work since (no
-    /// tool call): it may have answered it and stopped there.
-    /// </summary>
-    private bool _interrupted;
 
     /// <summary>
     /// A message that came in while the model works, marked as one: answered or acted on, and then
@@ -294,11 +286,6 @@ public sealed partial class AgentSession(
             message.Content = note + message.Content;
         return message;
     }
-
-    /// <summary>What the model is told when it would end a run a message of the user's came in on.</summary>
-    private string ResumeText() =>
-        $"[BlackBox] Before you finish: the user's message came in while you were working on {(_request is { } r ? $"\"{r}\"" : "the task before it")}. " +
-        "If that isn't done and the user didn't change or cancel it, carry on with it now. If it is done or no longer wanted, reply without tools.";
 
     /// <summary>
     /// The request a run works on, in the user's words (its first lines): the message that started
@@ -353,7 +340,6 @@ public sealed partial class AgentSession(
     public async Task RunAsync(UserInput input, IAgentObserver observer, CancellationToken ct)
     {
         _request = RequestOf(input);
-        _interrupted = false;
         _projects.Recall(History, toolContext);
         // Each message starts a run, which looked at the primary screen: told "Continue" with
         // screen 2 in its last screenshot, the model clicked and typed into Notepad on screen 1.
@@ -473,22 +459,14 @@ public sealed partial class AgentSession(
                         History.Add(ChatMessage.User(NudgeText));
                         continue;
                     }
-                    // A message came in on top of the request and the model answered it without
-                    // going back to work: the request may still be waiting. Once per such message,
-                    // the model is asked.
-                    if (_interrupted)
-                    {
-                        _interrupted = false;
-                        History.Add(ChatMessage.User(ResumeText()));
-                        continue;
-                    }
+                    // A reply without tools ends the run, also one to a message that came in on top
+                    // of the request: that message's note says to carry on with the request. Asked
+                    // afterwards whether the request was done, the model answered a second time
+                    // what it had just said, a reply nobody had asked for.
                     observer.OnFinished(AgentStopReason.Completed, null);
                     return;
                 }
                 nudges = 0; // it is moving again; a later stall gets its own nudges
-                // Working again after the user's message, it is back on the request. Asked at the
-                // end whether that was done anyway, the model wrote its answer a second time.
-                _interrupted = false;
                 if (!cutCall)
                     cutCalls = 0;
 

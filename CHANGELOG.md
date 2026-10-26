@@ -153,6 +153,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The first-run hint for Ctrl+V is reworded.
 
 ### Fixed
+- A message sent during a run no longer brings a second, unasked-for answer at the end of the run,
+  after the model has already answered it.
 - File changes no longer lists files other programs write while a command runs, such as your
   `.claude.json`: only files in the command's folder, in folders it names, or that it names count.
 - Text with a link in it shows the text cursor, as all other chat text does; it showed the arrow.
