@@ -544,6 +544,17 @@ public class FolderIndexTests : IDisposable
         // An argument under another name ("file_path") is read as the tool reads it.
         Assert.NotNull(new ProjectNudge().Check(read, new JsonObject { ["file_path"] = file }.ToJsonString(), ok, ctx));
 
+        // BlackBox's own Data folder is no project of the user's, even inside a checkout of BlackBox.
+        var own = Path.Combine(_dir, "bbrepo");
+        Directory.CreateDirectory(Path.Combine(own, ".git"));
+        for (var i = 0; i < ProjectNudge.MinFiles; i++)
+            Write($"bbrepo/src/File{i}.cs", "class C {}");
+        var scratch = Path.Combine(own, "publish", "Data", "scratch");
+        var download = Write("bbrepo/publish/Data/scratch/pgtest/pg.jar", "x");
+        var bbCtx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = _dir, IndexDirectory = _store, ScratchDirectory = scratch };
+        Assert.Null(new ProjectNudge().Check(new ShellTool(), new JsonObject { ["command"] = $"cd \"{Path.GetDirectoryName(download)}\"; Expand-Archive pg.zip" }.ToJsonString(), ok, bbCtx));
+        Assert.NotNull(new ProjectNudge().Check(read, Args(Path.Combine(own, "src", "File1.cs")), ok, bbCtx));
+
         // A small project is read faster than indexed; a file in no project is no matter.
         Directory.CreateDirectory(Path.Combine(_dir, "small", ".git"));
         Write("small/main.py", "print(1)");
