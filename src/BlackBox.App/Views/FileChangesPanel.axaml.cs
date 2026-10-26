@@ -32,7 +32,16 @@ public partial class FileChangesPanel : UserControl
                 _vm?.StopWatching();
         }, RoutingStrategies.Tunnel);
         _dragScroll = new DispatcherTimer(TimeSpan.FromMilliseconds(30), DispatcherPriority.Input, (_, _) => DragScroll());
+        // A file picked by hand, with the mouse or the keys: a section's list made again after a refresh
+        // selects its file too, which must not go there nor stop watching.
+        FileLists.AddHandler(PointerPressedEvent, (_, _) => _byHand = true, RoutingStrategies.Tunnel, handledEventsToo: true);
+        FileLists.AddHandler(KeyDownEvent, (_, _) => _byHand = true, RoutingStrategies.Tunnel, handledEventsToo: true);
+        FileLists.AddHandler(PointerReleasedEvent, (_, _) => Dispatcher.UIThread.Post(() => _byHand = false, DispatcherPriority.Background), RoutingStrategies.Bubble, handledEventsToo: true);
+        FileLists.AddHandler(KeyUpEvent, (_, _) => Dispatcher.UIThread.Post(() => _byHand = false, DispatcherPriority.Background), RoutingStrategies.Bubble, handledEventsToo: true);
     }
+
+    /// <summary>Set from a press or key in the file lists until it is let go.</summary>
+    private bool _byHand;
 
     // ---- picking lines by a drag -----------------------------------------------------------------
 
@@ -222,7 +231,7 @@ public partial class FileChangesPanel : UserControl
 
     private void OnFilePicked(object? sender, SelectionChangedEventArgs e)
     {
-        if (FileList.SelectedItem is DiffFileItem file && _vm is { Reselecting: false })
+        if (_byHand && (sender as ListBox)?.SelectedItem is DiffFileItem file && _vm is { Reselecting: false })
         {
             // Gone to by hand: watching would take it away again.
             _vm.StopWatching();

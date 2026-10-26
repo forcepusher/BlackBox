@@ -303,9 +303,6 @@ public sealed class PanelSettings
 
     /// <summary>File changes: the diff follows the agent's edits, to the lines it just changed.</summary>
     public bool WatchChanges { get; set; } = true;
-
-    /// <summary>File changes: all the agent's changes, or only those not yet committed or staged in git.</summary>
-    public Diffs.ChangesShown ShowChanges { get; set; } = Diffs.ChangesShown.All;
 }
 
 public sealed class AppSettings

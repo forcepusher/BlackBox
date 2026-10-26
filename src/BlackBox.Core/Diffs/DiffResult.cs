@@ -46,7 +46,7 @@ public sealed record DiffFile(string Path, string Status, IReadOnlyList<DiffLine
     /// <summary>A file that isn't text: whether it changed is all that is known.</summary>
     public bool Binary { get; init; }
 
-    /// <summary>In the File changes panel, the file in its git repository (for staging it); null outside one.</summary>
+    /// <summary>In the File changes panel, the file's section in its git repository (and how to stage it); null outside one.</summary>
     public GitFile? Git { get; init; }
 
     /// <summary>"src/a.cs", or "old.cs -> new.cs" for a rename.</summary>
@@ -81,11 +81,8 @@ public sealed record DiffResult(string Root, string Title, IReadOnlyList<DiffFil
     /// </summary>
     public bool NewIsOnDisk { get; init; }
 
-    /// <summary>In the File changes panel, whether any file the agent changed is in a git repository.</summary>
+    /// <summary>In the File changes panel, whether any file the agent changed is in a git repository: its files are then split into sections (<see cref="DiffFile.Git"/>).</summary>
     public bool InGit { get; init; }
-
-    /// <summary>In the File changes panel's git views, the agent's changed files left out as git doesn't see them.</summary>
-    public int OutsideGit { get; init; }
 
     public int Added => Files.Sum(f => f.Added);
     public int Removed => Files.Sum(f => f.Removed);

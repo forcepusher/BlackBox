@@ -107,6 +107,24 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
+    <!-- A foldout's header in the file list: flat, its arrow pointing down while open. -->
+    <Style Selector="Button.fold">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Padding" Value="8,8" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+    <Style Selector="Button.fold:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource BbSurfaceRaised}" />
+    </Style>
+    <Style Selector="Button.fold PathIcon.arrow">
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+      <Setter Property="RenderTransform" Value="rotate(-90deg)" />
+    </Style>
+    <Style Selector="Button.fold.open PathIcon.arrow">
+      <Setter Property="RenderTransform" Value="none" />
+    </Style>
     <Style Selector="TextBlock.added">
       <Setter Property="Foreground" Value="{StaticResource BbOk}" />
     </Style>
@@ -137,8 +155,8 @@
             <TextBlock Text="Wrap" VerticalAlignment="Center" />
           </StackPanel>
         </ToggleButton>
-        <!-- The picked lines, else the selected file, put back as they were in the view shown. -->
-        <Button DockPanel.Dock="Right" Classes="ghost" Command="{Binding DiscardCommand}" IsVisible="{Binding HasFiles}" Height="30" Padding="8,0"
+        <!-- The picked lines, else the selected file, put back: unstaged changes as staged, outside git as before the agent's changes. -->
+        <Button DockPanel.Dock="Right" Classes="ghost" Command="{Binding DiscardCommand}" IsVisible="{Binding HasFiles}" IsEnabled="{Binding CanDiscard}" ToolTip.ShowOnDisabled="True" Height="30" Padding="8,0"
                 VerticalAlignment="Center" VerticalContentAlignment="Center" Margin="12,0,0,0"
                 ToolTip.Tip="{Binding DiscardTip}" AutomationProperties.Name="Discard">
           <StackPanel Orientation="Horizontal" Spacing="6">
@@ -154,28 +172,39 @@
     <Grid ColumnDefinitions="230,4,*">
       <!-- The changed files: a click goes to one in the diff, and makes it what a message is about
            with no lines picked; a right-click offers its folder. -->
-      <DockPanel Grid.Column="0">
-        <!-- Which changes show: all the agent's, or what of them git hasn't committed or staged yet. -->
-        <ComboBox DockPanel.Dock="Top" Classes="toolkit" SelectedIndex="{Binding ShownIndex}" IsVisible="{Binding ShowFilter}" HorizontalAlignment="Stretch" Margin="8,8,8,4"
-                  ToolTip.Tip="Which changes show" AutomationProperties.Name="Show">
-          <ComboBoxItem Content="All changes" />
-          <ComboBoxItem Content="Not committed" />
-          <ComboBoxItem Content="Not staged" />
-        </ComboBox>
-        <ListBox x:Name="FileList" Classes="files" ItemsSource="{Binding Files}" SelectedItem="{Binding CurrentFile, Mode=TwoWay}" SelectionChanged="OnFilePicked" ContextRequested="OnFileMenu" AutomationProperties.Name="Changed files">
-          <ListBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:DiffFileItem">
-              <StackPanel Spacing="1" ToolTip.Tip="{Binding FullPath}">
-                <TextBlock Text="{Binding Name}" TextTrimming="LeadingCharacterEllipsis" Classes.added="{Binding IsNew}" Classes.deleted="{Binding IsDeleted}" />
-                <TextBlock Classes="muted" FontSize="11">
-                  <Run Text="{Binding Status}" /><Run Text=" · " /><Run Text="{Binding Counts}" />
-                </TextBlock>
+      <ScrollViewer x:Name="FileLists" Grid.Column="0" HorizontalScrollBarVisibility="Disabled">
+        <ItemsControl ItemsSource="{Binding Sections}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:FileSection">
+              <StackPanel>
+                <!-- A foldout's header: Committed, Staged, Unstaged or Outside git, and how many files. -->
+                <Button Classes="fold" Classes.open="{Binding IsExpanded}" Command="{Binding ToggleCommand}" IsVisible="{Binding HasHeader}"
+                        AutomationProperties.Name="{Binding Name}" ToolTip.Tip="Fold or unfold">
+                  <StackPanel Orientation="Horizontal" Spacing="4">
+                    <PathIcon Classes="arrow" Width="10" Height="10" Data="M7 10l5 5 5-5z" />
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Count}" Classes="muted" Margin="4,0,0,0" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+                <ListBox Classes="files" ItemsSource="{Binding Files}" SelectedItem="{Binding Selected, Mode=TwoWay}" IsVisible="{Binding IsExpanded}"
+                         SelectionChanged="OnFilePicked" ContextRequested="OnFileMenu" AutomationProperties.Name="{Binding ListName}"
+                         ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DiffFileItem">
+                      <StackPanel Spacing="1" ToolTip.Tip="{Binding FullPath}">
+                        <TextBlock Text="{Binding Name}" TextTrimming="LeadingCharacterEllipsis" Classes.added="{Binding IsNew}" Classes.deleted="{Binding IsDeleted}" />
+                        <TextBlock Classes="muted" FontSize="11">
+                          <Run Text="{Binding Status}" /><Run Text=" · " /><Run Text="{Binding Counts}" />
+                        </TextBlock>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
               </StackPanel>
             </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
-      </DockPanel>
-      <GridSplitter Grid.Column="1" Background="{StaticResource BbBorder}" ResizeDirection="Columns" />
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>      <GridSplitter Grid.Column="1" Background="{StaticResource BbBorder}" ResizeDirection="Columns" />
 
       <Panel Grid.Column="2">
         <TextBlock Classes="muted" IsVisible="{Binding !HasFiles}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="360" TextAlignment="Center"
@@ -191,8 +220,8 @@
                   <StackPanel Orientation="Horizontal" Spacing="10" Margin="8,5" IsVisible="{Binding IsHeader}">
                     <TextBlock Text="{Binding Text}" FontWeight="SemiBold" FontSize="13" />
                     <TextBlock Text="{Binding HeaderDetails}" Classes="muted" VerticalAlignment="Center" />
-                    <Button Classes="stage" Content="Stage" IsVisible="{Binding CanStage}" Command="{Binding #DiffList.((vm:FileChangesViewModel)DataContext).StageCommand}" CommandParameter="{Binding}"
-                            ToolTip.Tip="Stage the file in git" AutomationProperties.Name="Stage file" />
+                    <Button Classes="stage" Content="{Binding GitAction}" IsVisible="{Binding HasGitAction}" Command="{Binding #DiffList.((vm:FileChangesViewModel)DataContext).StageCommand}" CommandParameter="{Binding}"
+                            ToolTip.Tip="{Binding GitActionTip}" AutomationProperties.Name="{Binding GitActionName}" />
                   </StackPanel>
                   <!-- The code's column takes what is left (wrapping); scrolled sideways, as wide as the line. The numbers
                        and marker stay on a wrapped line's first row. -->
@@ -200,9 +229,9 @@
                     <TextBlock Grid.Column="0" Classes="number" Text="{Binding OldNumber}" VerticalAlignment="Top" />
                     <TextBlock Grid.Column="1" Classes="number" Text="{Binding NewNumber}" VerticalAlignment="Top" />
                     <TextBlock Grid.Column="2" Classes="marker" Classes.added="{Binding IsAdded}" Classes.removed="{Binding IsRemoved}" Text="{Binding Marker}" VerticalAlignment="Top" />
-                    <Button Grid.Column="0" Grid.ColumnSpan="2" Classes="stage" Content="Stage" IsVisible="{Binding CanStage}" HorizontalAlignment="Right" Margin="0,-2,8,-2"
+                    <Button Grid.Column="0" Grid.ColumnSpan="2" Classes="stage" Content="{Binding GitAction}" IsVisible="{Binding HasGitAction}" HorizontalAlignment="Right" Margin="0,-2,8,-2"
                             Command="{Binding #DiffList.((vm:FileChangesViewModel)DataContext).StageCommand}" CommandParameter="{Binding}"
-                            ToolTip.Tip="Stage these changes in git" AutomationProperties.Name="Stage hunk" />
+                            ToolTip.Tip="{Binding GitActionTip}" AutomationProperties.Name="{Binding GitActionName}" />
                     <TextBlock Grid.Column="3" Classes="code" Classes.hunkText="{Binding IsHunk}" Text="{Binding Text}" Margin="0,0,16,0" />
                   </Grid>
                 </Panel>

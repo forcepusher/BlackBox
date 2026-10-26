@@ -61,8 +61,9 @@ public class GitChangesTests : IDisposable
         await call!.EndAsync();
     }
 
-    private async Task<DiffResult> View(ChangesShown shown) => await _changes.DiffAsync(shown, CancellationToken.None);
-
+    /// <summary>The files of one section of the panel (null: outside git).</summary>
+    private async Task<List<DiffFile>> In(GitSection? section) =>
+        (await _changes.DiffAsync(CancellationToken.None)).Files.Where(f => f.Git?.Section == section).ToList();
     /// <summary>The changes of each hunk, as the panel's Stage button gives them.</summary>
     private static List<List<(int, int)>> HunkSpans(DiffFile file)
     {
@@ -83,7 +84,7 @@ public class GitChangesTests : IDisposable
     }
 
     [Fact]
-    public async Task A_hunk_is_staged_alone_and_the_views_follow()
+    public async Task A_hunk_is_staged_and_unstaged_alone_and_the_sections_follow()
     {
         var path = Path.Combine(_repo, "a.txt");
         File.WriteAllText(path, Numbered(30));
@@ -92,31 +93,37 @@ public class GitChangesTests : IDisposable
 
         await Write(path, Numbered(30).Replace("line 2\n", "line two\n").Replace("line 25\n", "line 25\nline 25b\n"));
 
-        var all = Assert.Single((await View(ChangesShown.All)).Files);
-        Assert.True(all.Git!.Unstaged);
-        var hunks = HunkSpans(all);
+        var unstaged = Assert.Single(await In(GitSection.Unstaged));
+        Assert.Empty(await In(GitSection.Staged));
+        Assert.Empty(await In(GitSection.Committed));
+        Assert.True(unstaged.Git!.Splittable);
+        var hunks = HunkSpans(unstaged);
         Assert.Equal(2, hunks.Count);
-        Assert.True(all.Git.Touches(hunks[0]) && all.Git.Touches(hunks[1]));
 
         Assert.Null(await GitChanges.StageAsync(path, hunks[0], CancellationToken.None));
 
         Assert.Equal(Numbered(30).Replace("line 2\n", "line two\n"), Git("show", ":a.txt"));
-        var notStaged = Assert.Single((await View(ChangesShown.NotStaged)).Files);
-        Assert.Equal((1, 0), (notStaged.Added, notStaged.Removed));
-        Assert.Contains(new DiffLine(DiffLineKind.Added, null, 26, "line 25b"), notStaged.Lines);
-        var notCommitted = Assert.Single((await View(ChangesShown.NotCommitted)).Files);
-        Assert.Equal((2, 1), (notCommitted.Added, notCommitted.Removed));
-        // In the full view the staged hunk has nothing left to stage; the other has.
-        all = Assert.Single((await View(ChangesShown.All)).Files);
-        Assert.False(all.Git!.Touches(HunkSpans(all)[0]));
-        Assert.True(all.Git.Touches(HunkSpans(all)[1]));
+        var staged = Assert.Single(await In(GitSection.Staged));
+        Assert.Equal((1, 1), (staged.Added, staged.Removed));
+        unstaged = Assert.Single(await In(GitSection.Unstaged));
+        Assert.Equal((1, 0), (unstaged.Added, unstaged.Removed));
+        Assert.Contains(new DiffLine(DiffLineKind.Added, null, 26, "line 25b"), unstaged.Lines);
 
+        // Both staged, then the first unstaged again: the second stays staged, the file on disk as it is.
         Assert.Null(await GitChanges.StageAsync(path, null, CancellationToken.None));
-        Assert.Empty((await View(ChangesShown.NotStaged)).Files);
-        Assert.Single((await View(ChangesShown.NotCommitted)).Files);
+        Assert.Empty(await In(GitSection.Unstaged));
+        Assert.Null(await GitChanges.UnstageAsync(path, HunkSpans(Assert.Single(await In(GitSection.Staged)))[0], CancellationToken.None));
+        Assert.Equal(Numbered(30).Replace("line 25\n", "line 25\nline 25b\n"), Git("show", ":a.txt"));
+        Assert.Equal(Numbered(30).Replace("line 2\n", "line two\n").Replace("line 25\n", "line 25\nline 25b\n"), File.ReadAllText(path));
+        Assert.Contains(new DiffLine(DiffLineKind.Added, null, 2, "line two"), Assert.Single(await In(GitSection.Unstaged)).Lines);
+
+        // Committed, the agent's change shows there, against what the file held before it.
+        Assert.Null(await GitChanges.StageAsync(path, null, CancellationToken.None));
         Git("commit", "-q", "-m", "Second");
-        Assert.Empty((await View(ChangesShown.NotCommitted)).Files);
-        Assert.Single((await View(ChangesShown.All)).Files); // still the agent's change in this chat
+        var committed = Assert.Single(await In(GitSection.Committed));
+        Assert.Equal((2, 1), (committed.Added, committed.Removed));
+        Assert.Empty(await In(GitSection.Staged));
+        Assert.Empty(await In(GitSection.Unstaged));
     }
 
     [Fact]
@@ -128,7 +135,7 @@ public class GitChangesTests : IDisposable
         Git("commit", "-q", "-m", "First");
 
         await Write(path, "ONE\r\ntwo\r\nthree\r\nfour\r\n");
-        var file = Assert.Single((await View(ChangesShown.NotStaged)).Files);
+        var file = Assert.Single(await In(GitSection.Unstaged));
         // One hunk; stage only the change at the end, by its lines.
         Assert.Null(await GitChanges.StageAsync(path, [(3, 4)], CancellationToken.None));
 
@@ -137,7 +144,7 @@ public class GitChangesTests : IDisposable
     }
 
     [Fact]
-    public async Task A_new_file_is_not_committed_and_not_staged_until_staged_and_one_outside_git_is_left_out()
+    public async Task A_new_file_moves_between_unstaged_and_staged_and_one_outside_git_has_no_section()
     {
         Git("commit", "-q", "--allow-empty", "-m", "First");
         var made = Path.Combine(_repo, "new.txt");
@@ -145,20 +152,24 @@ public class GitChangesTests : IDisposable
         await Write(made, "a\nb\n");
         await Write(outside, "x\n");
 
-        var all = await View(ChangesShown.All);
-        Assert.True(all.InGit);
-        Assert.Null(all.Files.Single(f => f.Path.EndsWith("outside.txt", StringComparison.Ordinal)).Git);
-        var notStaged = await View(ChangesShown.NotStaged);
-        Assert.Equal(("added", 2), (Assert.Single(notStaged.Files).Status, notStaged.Files[0].Added));
-        Assert.Equal(1, notStaged.OutsideGit);
+        var diff = await _changes.DiffAsync(CancellationToken.None);
+        Assert.True(diff.InGit);
+        Assert.Equal([GitSection.Unstaged, null], diff.Files.Select(f => f.Git?.Section));
+        var unstaged = Assert.Single(await In(GitSection.Unstaged));
+        Assert.Equal(("added", 2), (unstaged.Status, unstaged.Added));
 
-        Assert.Null(await GitChanges.StageAsync(made, HunkSpans(notStaged.Files[0])[0], CancellationToken.None));
-        Assert.Empty((await View(ChangesShown.NotStaged)).Files);
-        Assert.Equal("added", Assert.Single((await View(ChangesShown.NotCommitted)).Files).Status);
+        Assert.Null(await GitChanges.StageAsync(made, HunkSpans(unstaged)[0], CancellationToken.None));
+        Assert.Empty(await In(GitSection.Unstaged));
+        Assert.Equal("added", Assert.Single(await In(GitSection.Staged)).Status);
+
+        Assert.Null(await GitChanges.UnstageAsync(made, null, CancellationToken.None));
+        Assert.Empty(await In(GitSection.Staged));
+        Assert.Single(await In(GitSection.Unstaged));
+        Assert.True(File.Exists(made));
     }
 
     [Fact]
-    public async Task Discard_puts_picked_lines_or_the_whole_file_back()
+    public async Task Discard_puts_back_unstaged_changes_as_staged_and_files_outside_git_as_before()
     {
         var path = Path.Combine(_repo, "d.txt");
         File.WriteAllText(path, "one\ntwo\nthree\n");
@@ -167,23 +178,26 @@ public class GitChangesTests : IDisposable
         await Write(path, "one\nTWO\nthree\nfour\n");
         var deleted = new List<string>();
 
-        // The removed "two" back, the added "four" gone; the added "TWO" stays.
-        Assert.Null(await _changes.DiscardAsync(ChangesShown.All, path, [(2, null), (null, 4)], deleted.Add, CancellationToken.None));
+        // Unstaged lines: the removed "two" back, the added "four" gone; the added "TWO" stays.
+        Assert.Null(await _changes.DiscardAsync(GitSection.Unstaged, path, [(2, null), (null, 4)], deleted.Add, CancellationToken.None));
         Assert.Equal("one\ntwo\nTWO\nthree\n", File.ReadAllText(path));
-
-        // Not staged: back as staged, whole.
-        File.WriteAllText(Path.Combine(_repo, "d.txt"), "changed\n");
-        Assert.Null(await _changes.DiscardAsync(ChangesShown.NotStaged, path, null, deleted.Add, CancellationToken.None));
+        // Staged changes aren't discarded.
+        Assert.NotNull(await _changes.DiscardAsync(GitSection.Staged, path, null, deleted.Add, CancellationToken.None));
+        // The whole file: back as staged.
+        Assert.Null(await _changes.DiscardAsync(GitSection.Unstaged, path, null, deleted.Add, CancellationToken.None));
         Assert.Equal("one\ntwo\nthree\n", File.ReadAllText(path));
 
-        // A file the agent made goes, whole, to the delete it is given (the Recycle Bin in the app).
+        // Outside git, as before the agent's change; a file the agent made goes to the delete it is given.
+        var outside = Path.Combine(_root, "o.txt");
+        File.WriteAllText(outside, "a\n");
+        await Write(outside, "a\nb\n");
+        Assert.Null(await _changes.DiscardAsync(null, outside, [(null, 2)], deleted.Add, CancellationToken.None));
+        Assert.Equal("a\n", File.ReadAllText(outside));
         var made = Path.Combine(_repo, "made.txt");
         await Write(made, "new\n");
-        Assert.Null(await _changes.DiscardAsync(ChangesShown.All, made, null, deleted.Add, CancellationToken.None));
+        Assert.Null(await _changes.DiscardAsync(GitSection.Unstaged, made, null, deleted.Add, CancellationToken.None));
         Assert.Equal([made], deleted);
-        Assert.DoesNotContain((await View(ChangesShown.All)).Files, f => f.Path.Contains("d.txt", StringComparison.Ordinal));
     }
-
     [Fact]
     public void Lines_keep_their_breaks_and_a_last_line_without_one_gets_one_when_it_is_no_longer_last()
     {
