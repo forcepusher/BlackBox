@@ -239,6 +239,71 @@ public class AgentSessionTests
         Assert.Equal("Short answer.", session.History[^1].Content);
     }
 
+    /// <summary>munito's gateway, measured 28 October 2026: 8 pictures a request, a 9th refused.</summary>
+    private const string TooManyImages = """{"error":{"message":"too many image inputs","type":"invalid_request_error","param":"messages","code":null}}""";
+
+    private static void AddScreenshotSteps(AgentSession session, int count)
+    {
+        session.History.Add(new ChatMessage { Role = ChatRole.User, Content = "go", FromUser = true });
+        for (var i = 0; i < count; i++)
+        {
+            session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "", ToolCalls = [new ToolCall { Id = $"c{i}", Name = "screenshot", Arguments = "{}" }] });
+            session.History.Add(ChatMessage.ToolResult($"c{i}", "ok"));
+            session.History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText(AgentSession.ScreenshotText), ContentPart.FromImage([(byte)i], "image/png")] });
+        }
+    }
+
+    private static List<string> ImagesSent(JsonObject request) =>
+        [.. request["messages"]!.AsArray().SelectMany(m => m!["content"] as JsonArray ?? [])
+            .Where(p => (string?)p!["type"] == "image_url").Select(p => (string)p!["image_url"]!["url"]!)];
+
+    [Fact]
+    public async Task Too_many_pictures_for_the_server_leaves_out_the_oldest_and_remembers_the_cap()
+    {
+        var server = new ScriptedServer(Sse.Text("Done."), Sse.Text("Done again."));
+        server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 1_000_000);
+        AddScreenshotSteps(session, 9);
+
+        await session.RunAsync("what now?", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(2, server.Requests.Count); // refused, then sent again: no handoff note
+        Assert.Equal(9, ImagesSent(server.Requests[0]).Count);
+        Assert.Equal(8, session.MaxImages);
+        // Half the cap is kept, the newest; the rest are said in words.
+        var kept = ImagesSent(server.Requests[1]);
+        Assert.Equal(4, kept.Count);
+        Assert.Equal("data:image/png;base64," + Convert.ToBase64String([8]), kept[^1]);
+        Assert.Contains("left out: the server takes 8", server.Requests[1].ToJsonString());
+        Assert.Contains(observer.Notices, n => n.Contains("takes 8 pictures in one request"));
+        Assert.Equal("Done.", session.History[^1].Content);
+
+        // The next run stays under the cap from its first request, without a refusal.
+        AddScreenshotSteps(session, 5);
+        await session.RunAsync("and now?", observer, CancellationToken.None);
+        Assert.Equal(3, server.Requests.Count);
+        Assert.Equal(4, ImagesSent(server.Requests[2]).Count);
+    }
+
+    [Fact]
+    public async Task Refused_again_under_the_cap_learned_lowers_it_and_one_picture_refused_drops_them()
+    {
+        var server = new ScriptedServer(Sse.Text("Done."));
+        server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages)); // 9 sent: 8, 4 kept
+        server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages)); // 4 sent: 3, 2 kept
+        server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages)); // 2 sent: 1
+        server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages)); // 1 sent: none
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 1_000_000);
+        AddScreenshotSteps(session, 9);
+
+        await session.RunAsync("what now?", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal([9, 4, 2, 1, 0], server.Requests.Select(r => ImagesSent(r).Count));
+        Assert.False(session.SeesImages);
+    }
+
     [Fact]
     public async Task A_request_too_large_for_the_server_resets_the_context_and_lowers_it()
     {

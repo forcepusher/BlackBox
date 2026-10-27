@@ -1699,6 +1699,37 @@ long before 1M tokens: such a run is refused once with 413, resets, and goes on 
 than it had (`KiloOverflowTests`: 23.9 MB of screenshots, 61k tokens, went on at 46k). Both cases
 pass against Kilo (`KiloOverflowTests`, 27 October 2026).
 
+### Pictures a request
+Some servers take fewer pictures in one request than a run keeps. munito's gateway
+(`https://api.munito.ai/inference/v1`, measured 28 October 2026) takes 8, counted over all the
+messages and whatever their size (8 pictures of 64x64 or 1280x544 go through, a 9th small one in a
+message of its own is refused), on DeepSeek V4.1 Flash and Qwen 3.8 alike; Gemma 4 there takes none.
+A 9th is answered 400 "too many image inputs". A run keeps a screenshot of every step until a context
+reset, so a Unity run there failed at its 9th screenshot, with 2560x1088 ones a few thousand tokens
+into a 1M context.
+
+Such an error (`TooManyImagesException`, told apart from "takes no pictures") doesn't reset the
+context: the oldest pictures are put in words ("An earlier picture, left out: the server takes 8 in
+one request.") and the step is sent again. The cap is the one the error names, or one under the
+pictures refused, since a run grows by one a step; the session keeps it (`MaxImages`), and before
+every request it leaves pictures out, oldest first, screenshots and tools' pictures before the
+user's own, never the latest, down to half the cap. A chat that already held more is refused again
+under the first guess (12 sent: 11 learned, 6 kept, refused at 9: 8), and refused with one picture,
+the server is taken to take none.
+
+Half the cap rather than one under, for the prompt cache: a picture left out changes the request from
+there on, and everything after it is read again. Dropping down to half at once breaks the cache once
+every few steps, at a point a few steps back, while a window that moves every step breaks it every
+step. A run of 16 screenshot steps simulated on munito (2560x1088, a 1.6k-token result each; munito
+reports cached tokens): left out in halves at 8, 60.8k tokens read anew; a window of the latest 4
+moved every step, 77.5k, though it sends fewer in all (104k against 126k); the latest 8 moved every
+step, 103.5k. A 2560x1088 screenshot is about 960 tokens on DeepSeek V4.1 Flash (8 were 7.7k; it
+scales them down), and 2.7k by Qwen's count of one per 32x32 pixels.
+
+`MunitoImageCapTests` (BB_MUNITO_KEY) runs it against munito: nine screenshots, as in the run that
+failed, are refused once, the cap learned is 8 and the model still names the latest screen's colour;
+five more are left out before the request, which isn't refused.
+
 LM Studio loads a model on first use with the context its settings give it, and out of the box
 that is 4k: less than Sloperator's instructions and tools alone (about 9k tokens), so every request
 of a new LM Studio user failed as too long. When Sloperator's first request has LM Studio load the
@@ -3070,6 +3101,7 @@ SSH tests against a lab VM started with `. ./scripts/sysadmin/lab.ps1; Reset-Lab
 $env:BB_SERVER_URL = "http://localhost:1234/v1"; $env:BB_SERVER_MODEL = "qwen3.8-27b@iq2_s"
 dotnet test --filter ServerIntegrationTests
 $env:BB_KILO = "1"; dotnet test --filter KiloOverflowTests   # a run past Kilo's count and its 20 MB at the 1M assumed recovers; 6 requests
+$env:BB_MUNITO_KEY = "<munito key>"; dotnet test --filter MunitoImageCapTests   # more screenshots than munito's 8 a request are left out; 3 requests
 dotnet test --filter ClickAccuracyTests   # click hit rate in 16 hard scenes; BB_CLICK_SCENES, BB_CLICK_TRIALS, BB_CLICK_COORDS=pixels|grid
 $env:BB_SSH_TEST_HOST = "admin@127.0.0.2"; $env:BB_SSH_TEST_KEY = "$PWD\.dev\sysadmin-lab\key\admin_ed25519"
 dotnet test --filter SshIntegrationTests  # ssh, file tools and copy; BB_SSH_TEST_BIG_GB=3 adds a 3 GB copy each way (BB_SSH_TEST_HOST2: a second server)

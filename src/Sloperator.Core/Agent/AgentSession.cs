@@ -76,6 +76,9 @@ public sealed partial class AgentSession(
     /// <summary>The model's context size as this session knows it: as reported at the start, or corrected by a server error.</summary>
     public int ContextTokens => contextTokens;
 
+    /// <summary>The most pictures the server takes in one request, as a refusal showed (0: none known).</summary>
+    public int MaxImages { get; private set; }
+
     /// <summary>Conversation so far (without the system prompt). Can be shared across sessions so settings changes keep the chat.</summary>
     public List<ChatMessage> History { get; } = history ?? [];
 
@@ -388,6 +391,7 @@ public sealed partial class AgentSession(
                 if (contextTokens > 0 && TokensInUse() > ResetThreshold)
                     await ResetContextAsync(observer, ct).ConfigureAwait(false);
                 observer.OnStepStarted(step);
+                LeaveOutOldImages();
 
                 var request = new List<ChatMessage>(History.Count + 1) { ChatMessage.System(systemPrompt) };
                 request.AddRange(History);
@@ -711,6 +715,23 @@ public sealed partial class AgentSession(
         }
     }
 
+    /// <summary>
+    /// Over <see cref="MaxImages"/>, the oldest pictures are put in words until half of it is left,
+    /// screenshots and tools' pictures before the user's own, and never the latest, which is the
+    /// screen. Half, not one under: the requests after keep the same start, which the server has
+    /// cached, for that many steps.
+    /// </summary>
+    private void LeaveOutOldImages()
+    {
+        var images = History.Where(m => m.Parts is not null).SelectMany(m => m.Parts!.Select((p, i) => (m, i, p))).Where(x => x.p.IsImage).ToList();
+        if (MaxImages == 0 || images.Count <= MaxImages)
+            return;
+        var keep = (MaxImages + 1) / 2;
+        var leftOut = ContentPart.FromText($"(An earlier picture, left out: the server takes {MaxImages} in one request.)");
+        foreach (var (m, i, _) in images.SkipLast(1).OrderBy(x => x.m.FromUser).Take(images.Count - keep))
+            m.Parts = [.. m.Parts!.Select((p, j) => j == i ? leftOut : p)];
+    }
+
     private bool NeedsApproval(Tool tool) => toolContext.Settings.Approval switch
     {
         ApprovalMode.AskAll => tool.Risk != ToolRisk.ReadOnly,
@@ -741,6 +762,34 @@ public sealed partial class AgentSession(
                 observer.OnNotice("The model's thinking started repeating itself; cut it off and asked again.");
                 observer.OnAssistantMessage(new ChatMessage { Role = ChatRole.Assistant, Content = "" });
                 observer.OnStepStarted(0);
+                attempt--;
+            }
+            catch (TooManyImagesException ex) when (OpenAiChatClient.ImageCount(request) is var sent and > 1)
+            {
+                // A cap, not a model that can't see: the oldest pictures leave the conversation and
+                // the step is sent again. Unless the error names the cap, it is one under what was
+                // refused: a run grows by a screenshot a step, so it is refused at one over the cap.
+                // A chat that already held more (12 on munito, which takes 8) learns 11 and keeps 6,
+                // and is refused again at 9, when it learns 8. Each refusal lowers it, and halves
+                // the pictures sent, so a step is sent a few times at most.
+                var cap = ex.Limit is { } said && said < sent ? said : sent - 1;
+                MaxImages = cap;
+                observer.OnNotice($"The server takes {cap} pictures in one request at most; the oldest screenshots are left out from now on.", ex);
+                LeaveOutOldImages();
+                request.Clear();
+                request.Add(ChatMessage.System(systemPrompt));
+                request.AddRange(History);
+                attempt--;
+            }
+            catch (TooManyImagesException ex) when (HasImages())
+            {
+                // Refused with one picture: it takes none after all.
+                toolContext.SeesImages = false;
+                observer.OnNotice(ex.Message.TrimEnd().TrimEnd('.') + ". Going on without pictures.", ex);
+                DropImages();
+                request.Clear();
+                request.Add(ChatMessage.System(systemPrompt));
+                request.AddRange(History);
                 attempt--;
             }
             catch (ImagesRefusedException ex) when (HasImages())
