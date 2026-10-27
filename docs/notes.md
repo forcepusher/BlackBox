@@ -1302,16 +1302,15 @@ metadata there. Fluent lays the bars over the content, so a bar covers the strip
 ## Party blob
 Left of Send and Stop, 32 px like the buttons and 8 px from Send, `PartyBlob` (Views/PartyBlob.cs)
 shows the logo (Assets/sloperator.png) still, and the blobs.gg party blob (Assets/partyblob.gif: 128 px,
-10 frames, 9 KB) dancing while `IsBusy`, the whole run, so it dances until Stop or the reply ends.
-It dances twice as fast as the blobs.gg original (the user, 2026-10-27): that one has 20 frames of
-30 and 20 ms (0.5 s a loop), and halving the delays would give 15 and 10 ms, which GIF players
-clamp (browsers to 100 ms, `PartyBlob` to 20). Every frame is the whole 128 px picture with
-disposal "restore to background", so none builds on the one before, and the file keeps the even
-frames with their 30/20 ms as they were (0.25 s a loop): their bytes copied, delays unchanged.
-A timer per frame's delay ran late on Windows' 15.6 ms timer ticks (every frame about 33 ms), so a
-10 ms timer picks the frame for the time since the dance began. Measured in the app by sampling the
-blob on screen every 8 ms for 3 s: the original GIF looped in 692 ms with the old timer, the new
-one in 250 ms with the clock (2026-10-27).
+20 frames, 16 KB) dancing while `IsBusy`, the whole run, so it dances until Stop or the reply ends.
+Its pace is 1.5 times what the user first saw (2026-10-27): the blobs.gg original has 20 frames of
+30 and 20 ms (0.5 s a loop), which the first `PartyBlob` played in 692 ms, its timer per frame's
+delay running late on Windows' 15.6 ms ticks (every frame about 33 ms). A 0.25 s loop (every other
+frame) was too fast. The file keeps all 20 frames with delays of 30 and 20 ms, more of them 20, for
+a 0.46 s loop; GIF players clamp delays under 20 ms (browsers to 100), so none is shorter. Only the
+delay bytes differ from the original. `PartyBlob` now picks the frame for the time since the dance
+began on a 10 ms timer, so it keeps the file's pace. Measured in the app by sampling the blob on
+screen every 8 ms for 3 s.
 The window shows one blob at most (the user, 2026-10-27): while the intro is up (`ShowIntro`, an empty
 chat or one of notices only) its logo is the blob and this one is hidden; it appears with the first
 prompt and goes again with New chat. The title bar's icon is the window's, not counted. The GIF is "apartyblob" from github.com/Raymo111/emoji, Apache
