@@ -364,8 +364,7 @@ public sealed partial class AgentSession(
         }
         toolContext.InConversation ??= text => History.Any(m => m.Content?.Contains(text, StringComparison.Ordinal) == true ||
                                                                 m.Parts?.Any(p => p.Text?.Contains(text, StringComparison.Ordinal) == true) == true);
-        var nudges = 0;
-        var cutCalls = 0;
+        var cutOffs = 0;
         var loops = new LoopDetector();
         // Pointing at web_search only makes sense when the model has it. Kept for the chat: "still
         // wrong" in the next message is a failed try, and the time since the last look-up goes on.
@@ -438,37 +437,32 @@ public sealed partial class AgentSession(
 
                 if (!reply.HasToolCalls)
                 {
-                    // Its only call was cut short: it is told why nothing ran, a few times in a row at most.
-                    if (cutCall && ++cutCalls <= MaxCutCalls)
+                    // The server's reply-length limit cut it off, in its thinking or in its only
+                    // call: it is told so and goes on, a few times in a row at most. Ended there, a
+                    // run capped at 2,000 tokens stopped with nothing written. Its only call cut
+                    // short comes before a message of the user's, which then follows the note.
+                    if (cutOff && (cutCall || !HasIncoming) && ++cutOffs <= MaxCutOffs)
                     {
-                        History.Add(ChatMessage.User(CutToolCallNote));
+                        History.Add(ChatMessage.User(CutOffNote));
                         continue;
                     }
                     // The user wrote while the model answered: it goes on with that, as its next
                     // request when this answer finished the task.
                     if (HasIncoming)
                     {
-                        turnEnded = !cutOff && !LooksUnfinished(reply);
+                        turnEnded = !cutOff;
                         continue;
                     }
-                    // Small models sometimes announce an action ("Let me click Save.") and stop,
-                    // or return nothing at all. Push them on a couple of times before giving up.
-                    if (nudges < MaxNudges && (cutOff || LooksUnfinished(reply)))
-                    {
-                        nudges++;
-                        History.Add(ChatMessage.User(NudgeText));
-                        continue;
-                    }
-                    // A reply without tools ends the run, also one to a message that came in on top
-                    // of the request: that message's note says to carry on with the request. Asked
-                    // afterwards whether the request was done, the model answered a second time
-                    // what it had just said, a reply nobody had asked for.
+                    // A reply without tools ends the run: whether it looks finished isn't guessed.
+                    // The Continue nudge that pushed on a reply ending in "Let me click Save." or
+                    // ":" never fired in about 40 tasks on Qwen 3.8, Nemotron and Haiku (2026-10-27),
+                    // and a nudge after an answer to a message that came in on top of the request
+                    // made the model answer a second time what it had just said.
                     observer.OnFinished(AgentStopReason.Completed, null);
                     return;
                 }
-                nudges = 0; // it is moving again; a later stall gets its own nudges
                 if (!cutCall)
-                    cutCalls = 0;
+                    cutOffs = 0; // it is moving again; a later cut gets its own notes
 
                 // Only the last screenshot goes to the model: the tools' results come before it.
                 ChatMessage? shown = null;
@@ -542,18 +536,11 @@ public sealed partial class AgentSession(
         }
     }
 
-    private const int MaxNudges = 2;
-
     /// <summary>How many dropped connections one step survives.</summary>
     internal const int MaxReconnects = 12;
 
     /// <summary>How many looping replies one step survives before the run ends with an error.</summary>
     private const int MaxRepetitionRetries = 3;
-
-    internal const string RepetitionNote =
-        "[Sloperator] Your last reply was cut off because your thinking kept repeating the same lines. " +
-        "Don't re-check earlier screens from memory: you may have misread one. Trust what the current screen shows " +
-        "(take a new screenshot if needed), decide, and call the next tool.";
 
     internal const string LongToolCallNote =
         "[Sloperator] Your last reply was lost: the connection drops when a single tool call takes more than about a minute to write. " +
@@ -566,13 +553,23 @@ public sealed partial class AgentSession(
 
     // Marked as Sloperator's: taken for the user's words, "continue" read as a go-ahead, and the
     // model asked again for a command the user had just declined twice.
-    /// <summary>A reply's tool call the server's length limit cut short, its arguments half written (see <see cref="DropCutCalls"/>).</summary>
+    /// <summary>
+    /// Said with the last result of a reply whose other calls ran when the server's length limit
+    /// cut one short, its arguments half written (see <see cref="DropCutCalls"/>).
+    /// </summary>
     internal const string CutToolCallNote =
         "[Sloperator] Your last tool call was cut off by the server's limit on how long a reply may be, before its arguments were complete, " +
         "so it was not run. Write long content in parts of at most about 100 lines: create the file with write_file, then add each next part " +
         "with write_file and append set to true. Continue with the task.";
 
-    private const int MaxCutCalls = 3;
+    /// <summary>A reply the server's length limit cut off before it made a call, in its thinking or its only call.</summary>
+    internal const string CutOffNote =
+        "[Sloperator] Your last reply was cut off by the server's limit on how long a reply may be, so nothing in it was run. " +
+        "Write long content in parts of at most about 100 lines: create the file with write_file, then add each next part " +
+        "with write_file and append set to true. Continue with the task.";
+
+    /// <summary>How many replies in a row the length limit may cut off before the run ends.</summary>
+    private const int MaxCutOffs = 3;
 
     /// <summary>
     /// Takes the tool calls whose arguments aren't whole JSON out of a reply the length limit
@@ -589,9 +586,6 @@ public sealed partial class AgentSession(
         reply.ToolCalls = whole.Count > 0 ? whole : null;
         return true;
     }
-
-    internal const string NudgeText =
-        "[Sloperator] Continue with the task. If there is another step, call the tool for it now. If the task is finished, reply with a short summary of what you did.";
 
     /// <summary>Where the user stopped a run (Stop, Pause/Break), so what they write next is read in that light (see <see cref="SystemPrompt"/>).</summary>
     internal const string StoppedNote = "[Sloperator] The user stopped you here.";
@@ -613,30 +607,8 @@ public sealed partial class AgentSession(
 
     internal static bool LooksFinished(string? content) => content is { Length: > 0 } && CompletionClaim().IsMatch(content);
 
-    internal static bool LooksUnfinished(ChatMessage reply)
-    {
-        var text = (reply.Content ?? "").Trim();
-        if (text.Length == 0)
-            return true;
-        var tail = text.Length > 240 ? text[^240..] : text;
-        // A question to the user ends the turn, whatever follows it: "What do you want shot s1 to
-        // show? I'll set its frames, then make the clip." was nudged, and the model asked again.
-        if (AsksTheUser().IsMatch(tail))
-            return false;
-        // "Let me know how you'd like to proceed." asks the user; it announces no step.
-        return tail.EndsWith(':') || AnnouncedAction().IsMatch(tail);
-    }
-
-    // A question put to the user, not one the model asks itself ("Did it save? Let me check."), and
-    // ended by its question mark, not one inside quotes ("the 'Save changes?' dialog").
-    [GeneratedRegex(@"\b(you|your|me|shall i|should i)\b[^.!?\n]*[?？][*_)\]]*(\s|$)", RegexOptions.IgnoreCase)]
-    private static partial Regex AsksTheUser();
-
     [GeneratedRegex(@"\b((?<!\b(whether|if|once|when)\s+(the\s+)?)task (is|has been) (now )?(complete|completed|done|finished)|i('ve| have) (successfully )?(completed|finished) (the|your|this) task|everything is done|all done)\b", RegexOptions.IgnoreCase)]
     private static partial Regex CompletionClaim();
-
-    [GeneratedRegex(@"(^|[.!?\n]\s*)(let me(?! know)|let's|i'll|i will|i'm going to|i am going to|next,? i|now i|i need to)\b[^.!?\n]*[.!]?\s*$", RegexOptions.IgnoreCase)]
-    private static partial Regex AnnouncedAction();
 
     /// <summary>Guesswork seen in this chat (see <see cref="Guesswork"/>); null without web_search.</summary>
     private Guesswork? _guesswork;
@@ -764,17 +736,11 @@ public sealed partial class AgentSession(
             catch (RepetitionException) when (++repeats <= MaxRepetitionRetries)
             {
                 // Dropping the stream stops the server too. The looping reply is thrown away and
-                // the model is told to trust the screen instead of its memory; appending the note
-                // keeps the server's cache.
-                observer.OnNotice("The model's thinking started repeating itself; cut it off and asked it to look again.");
+                // the same request sent again, with nothing added to it: the note that told the
+                // model it had looped never fired in about 40 tasks on three models (2026-10-27).
+                observer.OnNotice("The model's thinking started repeating itself; cut it off and asked again.");
                 observer.OnAssistantMessage(new ChatMessage { Role = ChatRole.Assistant, Content = "" });
                 observer.OnStepStarted(0);
-                if (History[^1].Content != RepetitionNote)
-                {
-                    var note = ChatMessage.User(RepetitionNote);
-                    History.Add(note);
-                    request.Add(note);
-                }
                 attempt--;
             }
             catch (ImagesRefusedException ex) when (HasImages())

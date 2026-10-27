@@ -287,12 +287,10 @@ public static partial class AnthropicMessages
         if (turns.Count > 0 && turns[^1].Role == ChatRole.Assistant && turns[^1].Blocks.Any(b => Type(b) == "tool_use"))
             turns.Add((ChatRole.User, turns[^1].Blocks.Where(b => Type(b) == "tool_use")
                 .Select(b => new JsonObject { ["type"] = "tool_result", ["tool_use_id"] = (string)b["id"]!, ["content"] = "Not run." }).ToList()));
-        // The conversation starts with the user and ends with them: a last assistant turn would be
-        // a reply begun for the model, which Claude 4.6 and later refuse.
+        // The conversation starts with the user. It ends with them too, as every step's request
+        // does (a user message or tool results): no "Continue." is made up in their name.
         if (turns.Count == 0 || turns[0].Role != ChatRole.User)
             turns.Insert(0, (ChatRole.User, TextBlocks("[Sloperator] (Earlier messages left out.)")));
-        if (turns[^1].Role != ChatRole.User)
-            turns.Add((ChatRole.User, TextBlocks("Continue.")));
 
         // The end of this request is where the next one reads up to; where the previous request
         // ended (the user turn before the last reply), this one reads.
