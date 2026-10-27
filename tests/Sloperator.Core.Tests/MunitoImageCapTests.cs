@@ -9,7 +9,7 @@ namespace Sloperator.Core.Tests;
 
 /// <summary>
 /// Opt-in: a run on munito with more screenshots than its gateway takes in one request (8) must
-/// leave out the oldest, remember the cap and finish, still seeing the latest screen. Set
+/// leave out all but the latest, remember the cap and finish, still seeing the latest screen. Set
 /// BB_MUNITO_KEY to a munito API key to run it (BB_MUNITO_MODEL picks the model). Three small
 /// requests.
 /// </summary>
@@ -18,7 +18,7 @@ public class MunitoImageCapTests
     private const string Address = "https://api.munito.ai/inference/v1";
 
     [Fact]
-    public async Task More_screenshots_than_munito_takes_are_left_out_oldest_first()
+    public async Task More_screenshots_than_munito_takes_leave_only_the_latest()
     {
         var key = Environment.GetEnvironmentVariable("BB_MUNITO_KEY");
         Assert.SkipWhen(string.IsNullOrEmpty(key), "Set BB_MUNITO_KEY to a munito API key to run against munito.");
@@ -29,7 +29,7 @@ public class MunitoImageCapTests
             Model = Environment.GetEnvironmentVariable("BB_MUNITO_MODEL") is { Length: > 0 } model ? model : "deepseek-ai/deepseek-v4.1-flash-1017",
         };
         var connection = BackendConnection.Create(LlmHttp.Create(TimeSpan.FromMinutes(5)), server);
-        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings { Screenshots = ScreenshotHistory.All }, WorkingDirectory = Path.GetTempPath() };
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
         var session = new AgentSession(connection.Client, connection.Options, ToolRegistry.CreateDefault(false), ctx,
             "You are a test assistant.", contextTokens: ServerSettings.FallbackContextSize);
         session.History.Add(new ChatMessage { Role = ChatRole.User, Content = "Take screenshots until the screen turns a colour other than blue.", FromUser = true });
@@ -41,8 +41,8 @@ public class MunitoImageCapTests
         Assert.Contains(observer.Notices, n => n.Contains("takes 8 pictures in one request"));
         Assert.Contains("red", session.History[^1].Content, StringComparison.OrdinalIgnoreCase);
 
-        // Five more, past the cap again: left out before the request, which isn't refused.
-        AddScreens(session, 9, 5, SKColors.Green);
+        // Eight more, past the cap again: left out before the request, which isn't refused.
+        AddScreens(session, 9, 8, SKColors.Green);
         observer = await AskColourAsync(session);
         Assert.DoesNotContain(observer.Notices, n => n.Contains("pictures in one request"));
         Assert.Contains("green", session.History[^1].Content, StringComparison.OrdinalIgnoreCase);

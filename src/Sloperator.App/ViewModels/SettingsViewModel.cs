@@ -31,19 +31,6 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         set => Agent.Approval = (ApprovalMode)Math.Clamp(value, 0, ApprovalModes.Length - 1);
     }
 
-    public string[] ScreenshotModes { get; } =
-    [
-        "Only the latest",
-        $"All until {AgentSettings.BatchScreenshots}, then only the latest",
-        "All of them",
-    ];
-
-    public int ScreenshotModeIndex
-    {
-        get => (int)Agent.Screenshots;
-        set => Agent.Screenshots = (ScreenshotHistory)Math.Clamp(value, 0, ScreenshotModes.Length - 1);
-    }
-
     // ---- Screenshot size ---------------------------------------------------------------
 
     /// <summary>The fields' limits, as decimals: what NumericUpDown takes.</summary>

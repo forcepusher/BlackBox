@@ -12,9 +12,8 @@
 .EXAMPLE
   ./scripts/game2048-test.ps1                         # server and model from Data/settings.json
   ./scripts/game2048-test.ps1 -Url http://host:1234/v1 -Model qwen3.8-27b@q4_k_s -Hours 6
-  ./scripts/game2048-test.ps1 -Screenshots all            # latest (the default), batch or all: which screenshots stay
 #>
-param([string]$Root = "", [string]$Url = "", [string]$Model = "", [double]$Hours = 4, [string]$Screenshots = "")
+param([string]$Root = "", [string]$Url = "", [string]$Model = "", [double]$Hours = 4)
 $repo = Split-Path $PSScriptRoot
 # The portable SDK in .dev\dotnet when none is installed.
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path "$repo\.dev\dotnet\dotnet.exe")) {
@@ -30,7 +29,6 @@ $cliArgs = @()
 if ($Root) { $cliArgs += @("--root", $Root) }
 if ($Url) { $cliArgs += @("--url", $Url) }
 if ($Model) { $cliArgs += @("--model", $Model) }
-if ($Screenshots) { $cliArgs += @("--screenshots", $Screenshots) }
 
 $task = "Write your own 2048 game and make sure it really works. Put it in the folder $game as a single file 2048.html " +
   "(plain HTML, CSS and JavaScript, no libraries, nothing to install). Draw the 4x4 board with HTML elements, not a canvas, and show the score. " +
@@ -75,7 +73,7 @@ $c = Get-Content $log
 $done = ($c | Select-String '^\[done\]' | ForEach-Object Line) -join " | "
 node (Join-Path $PSScriptRoot "game2048-check.mjs") (Join-Path $game "2048.html") (Join-Path $out "check") *> (Join-Path $out "check.txt")
 $summary = @(
-  "2048 run $(Split-Path $out -Leaf)$(if ($Screenshots) { ", screenshots: $Screenshots" })"
+  "2048 run $(Split-Path $out -Leaf)"
   "wall time    {0:hh\:mm\:ss}" -f $sw.Elapsed
   "outcome      $done"
   "model calls  $(($c | Select-String '^\S+ step [1-9]').Count)"

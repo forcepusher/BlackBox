@@ -13,9 +13,6 @@ public sealed partial class OpenAiChatClient
 {
     private readonly bool _anthropic;
 
-    /// <summary>Anthropic's API, which binds each reply's thinking to the conversation before it: changing an earlier message drops it.</summary>
-    internal bool BindsThinking => _anthropic;
-
     /// <summary>
     /// Whether the address is Anthropic's API (<c>api.anthropic.com</c>), which Sloperator speaks in
     /// its Messages format, or a gateway's way to it: one whose path has an <c>anthropic</c> part,

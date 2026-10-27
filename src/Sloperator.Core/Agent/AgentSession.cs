@@ -715,40 +715,32 @@ public sealed partial class AgentSession(
         }
     }
 
-    internal const string OldScreenshotText = "(An earlier screenshot, left out: only the latest is kept.)";
+    internal const string OldScreenshotText = "(An earlier screenshot, left out: the server takes only so many pictures in one request.)";
 
     /// <summary>A screenshot Sloperator took after a step, or the screen a context reset carried; not a picture the user or a tool gave.</summary>
     private static bool IsScreenshot(ChatMessage m) =>
         !m.FromUser && m.Parts is [{ Text: { } said }, { IsImage: true }] && (said == ScreenshotText || said.StartsWith(CurrentScreenText, StringComparison.Ordinal));
 
     /// <summary>
-    /// Unless the settings keep them, every screenshot but the latest is put in words: the user saw
-    /// no reply read an older one, and leaving out the one before each step breaks the prompt
-    /// cache only that one step back, while the context no longer fills with pictures.
-    /// Over <see cref="MaxImages"/>, the oldest pictures are put in words until half of it is left,
-    /// screenshots and tools' pictures before the user's own, and never the latest, which is the
-    /// screen. Half, not one under: the requests after keep the same start, which the server has
-    /// cached, for that many steps.
+    /// Over <see cref="MaxImages"/>, every screenshot but the latest is put in words at once; the
+    /// pictures tools and the user gave stay (a ComfyUI result, a reference). Only if they alone are
+    /// still too many, the oldest of them go too, the user's last. All at once, not one a step: the
+    /// requests after keep the same start, which the server has cached, until the cap is reached
+    /// again, and Claude's thinking, bound to what came before it, is dropped that rarely too.
     /// </summary>
     private void LeaveOutOldImages()
     {
-        // Not with Claude: its thinking is bound to what came before it, and a screenshot left out
-        // under the last reply would drop that reply's thinking at every step. Its API takes 100.
-        var screens = History.Where(IsScreenshot).ToList();
-        if (!client.BindsThinking && toolContext.Settings.Screenshots switch
-            {
-                ScreenshotHistory.Latest => true,
-                ScreenshotHistory.Batch => screens.Count > AgentSettings.BatchScreenshots,
-                _ => false,
-            })
-            foreach (var m in screens.SkipLast(1))
-                m.Parts = [m.Parts![0], ContentPart.FromText(OldScreenshotText)];
-        var images = History.Where(m => m.Parts is not null).SelectMany(m => m.Parts!.Select((p, i) => (m, i, p))).Where(x => x.p.IsImage).ToList();
-        if (MaxImages == 0 || images.Count <= MaxImages)
+        List<(ChatMessage m, int i)> Images() =>
+            [.. History.Where(m => m.Parts is not null).SelectMany(m => m.Parts!.Select((p, i) => (m, i, p))).Where(x => x.p.IsImage).Select(x => (x.m, x.i))];
+        if (MaxImages == 0 || Images().Count <= MaxImages)
             return;
-        var keep = (MaxImages + 1) / 2;
+        foreach (var m in History.Where(IsScreenshot).SkipLast(1))
+            m.Parts = [m.Parts![0], ContentPart.FromText(OldScreenshotText)];
+        var images = Images();
+        if (images.Count <= MaxImages)
+            return;
         var leftOut = ContentPart.FromText($"(An earlier picture, left out: the server takes {MaxImages} in one request.)");
-        foreach (var (m, i, _) in images.SkipLast(1).OrderBy(x => x.m.FromUser).Take(images.Count - keep))
+        foreach (var (m, i) in images.SkipLast(1).OrderBy(x => x.m.FromUser).Take(images.Count - MaxImages))
             m.Parts = [.. m.Parts!.Select((p, j) => j == i ? leftOut : p)];
     }
 
@@ -786,15 +778,16 @@ public sealed partial class AgentSession(
             }
             catch (TooManyImagesException ex) when (OpenAiChatClient.ImageCount(request) is var sent and > 1)
             {
-                // A cap, not a model that can't see: the oldest pictures leave the conversation and
-                // the step is sent again. Unless the error names the cap, it is one under what was
-                // refused: a run grows by a screenshot a step, so it is refused at one over the cap.
-                // A chat that already held more (12 on munito, which takes 8) learns 11 and keeps 6,
-                // and is refused again at 9, when it learns 8. Each refusal lowers it, and halves
-                // the pictures sent, so a step is sent a few times at most.
+                // A cap, not a model that can't see: the screenshots but the latest leave the
+                // conversation and the step is sent again. Unless the error names the cap, it is one
+                // under what was refused: a run grows by a screenshot a step, so it is refused at one
+                // over the cap. It is kept, so the next time the run gets there its screenshots go
+                // before the request rather than after a refusal. A chat that already held more (12
+                // on munito, which takes 8) learns 11, and is refused again at 9, when it learns 8;
+                // each refusal lowers it, so a step is sent a few times at most.
                 var cap = ex.Limit is { } said && said < sent ? said : sent - 1;
                 MaxImages = cap;
-                observer.OnNotice($"The server takes {cap} pictures in one request at most; the oldest screenshots are left out from now on.", ex);
+                observer.OnNotice($"The server takes {cap} pictures in one request at most; the screenshots before the latest are left out.", ex);
                 LeaveOutOldImages();
                 request.Clear();
                 request.Add(ChatMessage.System(systemPrompt));
@@ -807,6 +800,19 @@ public sealed partial class AgentSession(
                 toolContext.SeesImages = false;
                 observer.OnNotice(ex.Message.TrimEnd().TrimEnd('.') + ". Going on without pictures.", ex);
                 DropImages();
+                request.Clear();
+                request.Add(ChatMessage.System(systemPrompt));
+                request.AddRange(History);
+                attempt--;
+            }
+            catch (RequestTooLargeException ex) when (History.Count(IsScreenshot) > 1)
+            {
+                // Too many bytes, which is the screenshots: the ones before the latest go, as for
+                // too many pictures, and the step is sent again. Only if that is still too large is
+                // the context reset (below).
+                observer.OnNotice($"The request, {ex.Bytes / 1e6:0.#} MB with its screenshots, was more than the server takes; the screenshots before the latest are left out.", ex);
+                foreach (var m in History.Where(IsScreenshot).SkipLast(1))
+                    m.Parts = [m.Parts![0], ContentPart.FromText(OldScreenshotText)];
                 request.Clear();
                 request.Add(ChatMessage.System(systemPrompt));
                 request.AddRange(History);

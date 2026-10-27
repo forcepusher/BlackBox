@@ -88,8 +88,8 @@ public sealed class TooManyImagesException(string serverMessage, int sent)
 
     internal static int? ParseLimit(string message)
     {
-        var m = Regex.Match(message, @"(?:at most|maximum(?: number)? of|max(?:imum)?(?: is|:)?|up to|limit(?: is|:| of)?) (\d+) (?:images?|pictures?)|(\d+) (?:images?|pictures?) (?:at most|maximum|per (?:request|prompt|message))", RegexOptions.IgnoreCase);
-        return m.Success && int.TryParse(m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value, out var n) ? n : null;
+        var m = Regex.Match(message, @"too many images[^:]*:[^>]*> (\d+)|(?:at most|maximum(?: number)? of|max(?:imum)?(?: is|:)?|up to|limit(?: is|:| of)?) (\d+) (?:images?|pictures?)|(\d+) (?:images?|pictures?) (?:at most|maximum|per (?:request|prompt|message))", RegexOptions.IgnoreCase);
+        return m.Success && int.TryParse(m.Groups.Values.Skip(1).First(g => g.Success).Value, out var n) ? n : null;
     }
 }
 
@@ -753,12 +753,15 @@ public sealed partial class OpenAiChatClient
     internal static int ImageCount(IReadOnlyList<ChatMessage> messages) => messages.Sum(m => m.Parts?.Count(p => p.IsImage) ?? 0);
 
     /// <summary>
-    /// An error saying the request carried more pictures than the server takes: "too many image
-    /// inputs" (munito), "too many images", "at most 8 images", "maximum number of images".
+    /// An error saying the request carried more pictures than the server takes. The wording isn't
+    /// the same anywhere: "too many image inputs" (munito), "At most 1 image(s) may be provided in
+    /// one request." (vLLM's --limit-mm-per-prompt, and Azure), "too many images and documents:
+    /// 104 + 1 > 100" (Anthropic); gateways (OpenRouter, Kilo) pass the model server's on. OpenAI,
+    /// llama-server and LM Studio name no such cap.
     /// </summary>
     internal static bool LooksLikeTooManyImages(string err) => TooManyImagesWords().IsMatch(err);
 
-    [GeneratedRegex(@"too many (image|picture)|(at most|maximum( number)? of|max(imum)?|up to|limit( of)?) \d* ?(images|pictures|image inputs)|(images?|pictures?) (limit|count) (exceeded|reached)|exceeds? the (maximum|max|limit)[^.]{0,30}(images|pictures)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"too many (image|picture)|(at most|maximum( number)? of|max(imum)?|up to|limit( of)?) \d* ?(image\(s\)|images|pictures|image inputs)|(images?|pictures?) (limit|count) (exceeded|reached)|exceeds? the (maximum|max|limit)[^.]{0,30}(images|pictures)", RegexOptions.IgnoreCase)]
     private static partial Regex TooManyImagesWords();
 
     [GeneratedRegex(@"(?<![-/])\b(images?|vision|multi-?modal|image_url|mmproj)\b(?![-:/])", RegexOptions.IgnoreCase)]

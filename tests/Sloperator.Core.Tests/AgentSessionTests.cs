@@ -54,10 +54,8 @@ public class AgentSessionTests
         Assert.Contains("not valid JSON", session.History[2].Content);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Screenshots_are_sent_as_user_images_and_the_history_only_grows(bool keep)
+    [Fact]
+    public async Task Screenshots_are_sent_as_user_images_and_the_history_only_grows()
     {
         var server = new ScriptedServer(
             Sse.ToolCall("s1", "screenshot", "{}"),
@@ -67,25 +65,19 @@ public class AgentSessionTests
             Sse.ToolCall("s5", "screenshot", "{}"),
             Sse.ToolCall("s6", "screenshot", "{}"),
             Sse.Text("Done."));
-        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), screenshots: keep ? ScreenshotHistory.All : ScreenshotHistory.Latest);
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
 
         await session.RunAsync("look", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        // By default only the latest screenshot goes; the earlier ones are said in words.
-        Assert.Equal(keep ? 6 : 1, Images(server.Requests[^1]));
-        Assert.Equal(keep ? 0 : 5, Regex.Count(server.Requests[^1].ToJsonString(), Regex.Escape(AgentSession.OldScreenshotText)));
-        // Every request starts with the previous one unchanged, so the server's cache holds; but
-        // for the screenshot left out, the last one before it, when only the latest is kept.
+        Assert.Equal(6, Images(server.Requests[^1]));
+        // Every request starts with the previous one unchanged, so the server's cache always holds.
         for (var i = 1; i < server.Requests.Count; i++)
         {
             var before = server.Requests[i - 1]["messages"]!.AsArray();
             var after = server.Requests[i]["messages"]!.AsArray();
-            var changed = Enumerable.Range(0, before.Count).Where(m => before[m]!.ToJsonString() != after[m]!.ToJsonString()).ToList();
-            if (keep || Images(server.Requests[i - 1]) == 0)
-                Assert.Empty(changed);
-            else
-                Assert.Equal([before.Count - 1], changed); // the screenshot, last in the request before
+            for (var m = 0; m < before.Count; m++)
+                Assert.Equal(before[m]!.ToJsonString(), after[m]!.ToJsonString());
         }
     }
 
@@ -248,21 +240,6 @@ public class AgentSessionTests
         Assert.Equal("Short answer.", session.History[^1].Content);
     }
 
-    [Fact]
-    public async Task Batch_keeps_screenshots_until_eight_then_only_the_latest()
-    {
-        var server = new ScriptedServer(Sse.Text("Done."), Sse.Text("Done again."));
-        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), screenshots: ScreenshotHistory.Batch);
-        AddScreenshotSteps(session, 8);
-
-        await session.RunAsync("what now?", observer, CancellationToken.None);
-        AddScreenshotSteps(session, 1);
-        await session.RunAsync("and now?", observer, CancellationToken.None);
-
-        Assert.Equal([8, 1], server.Requests.Select(r => ImagesSent(r).Count));
-        Assert.Equal("data:image/png;base64," + Convert.ToBase64String([0]), ImagesSent(server.Requests[1])[0]); // the 9th, the latest
-    }
-
     /// <summary>munito's gateway, measured 28 October 2026: 8 pictures a request, a 9th refused.</summary>
     private const string TooManyImages = """{"error":{"message":"too many image inputs","type":"invalid_request_error","param":"messages","code":null}}""";
 
@@ -282,50 +259,69 @@ public class AgentSessionTests
             .Where(p => (string?)p!["type"] == "image_url").Select(p => (string)p!["image_url"]!["url"]!)];
 
     [Fact]
-    public async Task Too_many_pictures_for_the_server_leaves_out_the_oldest_and_remembers_the_cap()
+    public async Task Too_many_pictures_for_the_server_leaves_out_all_screenshots_but_the_latest_and_remembers_the_cap()
     {
-        var server = new ScriptedServer(Sse.Text("Done."), Sse.Text("Done again."));
+        var server = new ScriptedServer(Sse.Text("Done."), Sse.Text("Done again."), Sse.Text("Done once more."));
         server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages));
-        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 1_000_000, screenshots: ScreenshotHistory.All);
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 1_000_000);
         AddScreenshotSteps(session, 9);
+        // A picture a tool gave (a ComfyUI result) stays.
+        session.History.Insert(1, new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText("The picture fox.png:"), ContentPart.FromImage([99], "image/png")] });
 
         await session.RunAsync("what now?", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
         Assert.Equal(2, server.Requests.Count); // refused, then sent again: no handoff note
-        Assert.Equal(9, ImagesSent(server.Requests[0]).Count);
-        Assert.Equal(8, session.MaxImages);
-        // Half the cap is kept, the newest; the rest are said in words.
-        var kept = ImagesSent(server.Requests[1]);
-        Assert.Equal(4, kept.Count);
-        Assert.Equal("data:image/png;base64," + Convert.ToBase64String([8]), kept[^1]);
-        Assert.Contains("left out: the server takes 8", server.Requests[1].ToJsonString());
-        Assert.Contains(observer.Notices, n => n.Contains("takes 8 pictures in one request"));
+        Assert.Equal(10, ImagesSent(server.Requests[0]).Count);
+        Assert.Equal(9, session.MaxImages); // one under what was refused: the error names none
+        Assert.Equal(["data:image/png;base64," + Convert.ToBase64String([99]), "data:image/png;base64," + Convert.ToBase64String([8])], ImagesSent(server.Requests[1]));
+        Assert.Equal(8, Regex.Count(server.Requests[1].ToJsonString(), Regex.Escape(AgentSession.OldScreenshotText)));
+        Assert.Contains(observer.Notices, n => n.Contains("takes 9 pictures in one request"));
         Assert.Equal("Done.", session.History[^1].Content);
 
-        // The next run stays under the cap from its first request, without a refusal.
-        AddScreenshotSteps(session, 5);
+        // Screenshots are kept again until the cap: the run after it sends them all, without a refusal...
+        AddScreenshotSteps(session, 7);
         await session.RunAsync("and now?", observer, CancellationToken.None);
-        Assert.Equal(3, server.Requests.Count);
-        Assert.Equal(4, ImagesSent(server.Requests[2]).Count);
+        Assert.Equal(9, ImagesSent(server.Requests[2]).Count);
+        // ...and past it, leaves them out before the request.
+        AddScreenshotSteps(session, 1);
+        await session.RunAsync("and now?", observer, CancellationToken.None);
+        Assert.Equal(4, server.Requests.Count);
+        Assert.Equal(2, ImagesSent(server.Requests[3]).Count);
     }
 
     [Fact]
-    public async Task Refused_again_under_the_cap_learned_lowers_it_and_one_picture_refused_drops_them()
+    public async Task One_screenshot_refused_as_too_many_drops_the_pictures()
     {
         var server = new ScriptedServer(Sse.Text("Done."));
-        server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages)); // 9 sent: 8, 4 kept
-        server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages)); // 4 sent: 3, 2 kept
-        server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages)); // 2 sent: 1
+        server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages)); // 9 sent: 8, the latest kept
         server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages)); // 1 sent: none
-        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 1_000_000, screenshots: ScreenshotHistory.All);
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 1_000_000);
         AddScreenshotSteps(session, 9);
 
         await session.RunAsync("what now?", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal([9, 4, 2, 1, 0], server.Requests.Select(r => ImagesSent(r).Count));
+        Assert.Equal([9, 1, 0], server.Requests.Select(r => ImagesSent(r).Count));
         Assert.False(session.SeesImages);
+    }
+
+    [Fact]
+    public async Task A_request_too_large_with_screenshots_leaves_out_all_but_the_latest_without_a_reset()
+    {
+        // Kilo's gateway takes 20 MB: the screenshots before the latest go, and the context stays.
+        var server = new ScriptedServer(Sse.Text("Short answer."));
+        server.Failures.Enqueue((HttpStatusCode.RequestEntityTooLarge, "Request Entity Too Large\n\nFUNCTION_PAYLOAD_TOO_LARGE"));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 1_000_000);
+        AddScreenshotSteps(session, 5);
+
+        await session.RunAsync("new question", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal([5, 1], server.Requests.Select(r => ImagesSent(r).Count));
+        Assert.Equal(1_000_000, session.ContextTokens);
+        Assert.DoesNotContain(observer.Notices, n => n.Contains("Context reset"));
+        Assert.Contains(observer.Notices, n => n.Contains("more than the server takes"));
     }
 
     [Fact]
@@ -1696,9 +1692,9 @@ public class AgentSessionTests
         Assert.NotNull(session.History[^1].Reasoning);
     }
 
-    private static (AgentSession, RecordingObserver) CreateSession(ScriptedServer server, string dir, IPlatformServices platform, int contextTokens = 0, string baseUrl = "http://test", ScreenshotHistory screenshots = ScreenshotHistory.Latest)
+    private static (AgentSession, RecordingObserver) CreateSession(ScriptedServer server, string dir, IPlatformServices platform, int contextTokens = 0, string baseUrl = "http://test")
     {
-        var settings = new AgentSettings { ScreenshotAfterActions = false, Approval = ApprovalMode.AskRisky, Screenshots = screenshots };
+        var settings = new AgentSettings { ScreenshotAfterActions = false, Approval = ApprovalMode.AskRisky };
         var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = dir };
         var client = new OpenAiChatClient(new HttpClient(server), baseUrl, null);
         var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(includeScreenTools: true), ctx, "system prompt", contextTokens: contextTokens);

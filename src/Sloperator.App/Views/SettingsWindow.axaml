@@ -75,13 +75,6 @@
         </Grid>
         <TextBlock Classes="muted" TextWrapping="Wrap"
                    Text="Larger screens are scaled down to fit and use less context. 2560 × 1080 by default." />
-        <Grid Classes="form" ColumnDefinitions="160,*">
-          <TextBlock Classes="label" Text="Screenshots kept" />
-          <ComboBox Grid.Column="1" ItemsSource="{Binding ScreenshotModes}" SelectedIndex="{Binding ScreenshotModeIndex}" HorizontalAlignment="Stretch"
-                    AutomationProperties.Name="Screenshots kept" />
-        </Grid>
-        <TextBlock Classes="muted" TextWrapping="Wrap"
-                   Text="Older screenshots are left out of the conversation, which keeps it short and the server's cache whole. Claude keeps them all." />
       </StackPanel>
     </ScrollViewer>
   </DockPanel>
