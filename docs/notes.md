@@ -1726,6 +1726,26 @@ moved every step, 77.5k, though it sends fewer in all (104k against 126k); the l
 step, 103.5k. A 2560x1088 screenshot is about 960 tokens on DeepSeek V4.1 Flash (8 were 7.7k; it
 scales them down), and 2.7k by Qwen's count of one per 32x32 pixels.
 
+### Screenshots kept
+Since 28 October 2026 only the latest screenshot stays in the conversation as a picture; the
+ones before it are put in words ("An earlier screenshot, left out: only the latest is kept.").
+The user had seen no reply read an older one, and a desktop run takes a screenshot nearly every
+step. Leaving out the one before each step changes the request only one step back, so the cache
+is read again from there, about a step; dropping in batches changes it further back each time. The
+same 16 simulated steps on munito, in tokens read anew (two passes, munito's cache is noisy):
+only the latest 20.0k and 24.9k, sending 63.7k in all; all until 8, then only the latest, 41.3k
+and 25.4k, sending 117.1k; down to 4 at 8, 34.5k and 60.8k, sending 125.7k; a window of the latest 4
+moved every step 77.5k. Settings → Advanced → Screenshots kept picks the other two (`batch`, `all`;
+the CLI's `--screenshots`, `game2048-test.ps1 -Screenshots`).
+
+Claude keeps them all whatever the setting: Sloperator sends its thinking back signed, each
+signature bound to the conversation before it, with `drop_block`, so a screenshot changed under
+the latest reply would drop that reply's thinking at every step (the fake API counted 3 dropped
+in a four-step run). Its API takes 100 pictures, the oldest left out fifty at a time.
+
+Not measured yet: whether a model does worse on a desktop task without the earlier screens
+(2048 is the likely case: telling a move that changed nothing), nor the cache on LM Studio.
+
 `MunitoImageCapTests` (BB_MUNITO_KEY) runs it against munito: nine screenshots, as in the run that
 failed, are refused once, the cap learned is 8 and the model still names the latest screen's colour;
 five more are left out before the request, which isn't refused.

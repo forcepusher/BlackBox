@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Screenshots kept** under Settings → Advanced: only the latest screenshot stays in the
+  conversation by default, so a long desktop run fills the context and breaks the server's cache
+  less. All until 8 then only the latest, or all of them, can be picked. Claude keeps them all.
 - The blob beside **Send** dances while a prompt runs, and goes back to the still logo when it ends.
   It shows once a chat has started; the start screen keeps its own logo.
 - File changes opens by itself the first time the agent changes a file in a chat, unless another tool
