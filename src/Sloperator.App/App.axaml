@@ -19,6 +19,31 @@
     <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundChecked" Color="#111214" />
     <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" Color="#111214" />
     <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" Color="#111214" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#111214" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#111214" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#111214" />
+    <SolidColorBrush x:Key="RadioButtonCheckGlyphFill" Color="#111214" />
+    <SolidColorBrush x:Key="RadioButtonCheckGlyphFillPointerOver" Color="#111214" />
+    <SolidColorBrush x:Key="RadioButtonCheckGlyphFillPressed" Color="#111214" />
+    <SolidColorBrush x:Key="AccentButtonForeground" Color="#111214" />
+    <SolidColorBrush x:Key="AccentButtonForegroundPointerOver" Color="#111214" />
+    <SolidColorBrush x:Key="AccentButtonForegroundPressed" Color="#111214" />
+    <SolidColorBrush x:Key="ToggleButtonForegroundChecked" Color="#111214" />
+    <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPointerOver" Color="#111214" />
+    <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPressed" Color="#111214" />
+    <!-- A picked row in a list or dropdown: Fluent lays the yellow at 60% under white text (and the
+         file list's green and red names), which reads at under 4:1. A dark tint of it instead, under
+         the row's own text, as the diff's picked lines have. -->
+    <SolidColorBrush x:Key="BbAccentTint" Color="#5A765B0D" />
+    <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush" Color="#5A765B0D" />
+    <SolidColorBrush x:Key="SystemControlHighlightListAccentMediumBrush" Color="#78765B0D" />
+    <SolidColorBrush x:Key="SystemControlHighlightListAccentHighBrush" Color="#96765B0D" />
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="#5A765B0D" />
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="#78765B0D" />
+    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPressed" Color="#96765B0D" />
+    <SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="#5A765B0D" />
+    <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="#78765B0D" />
+    <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPressed" Color="#96765B0D" />
     <SolidColorBrush x:Key="BbUserBubble" Color="#2A2F36" />
     <SolidColorBrush x:Key="BbOk" Color="#5FB878" />
     <SolidColorBrush x:Key="BbError" Color="#E06C6C" />
@@ -47,6 +72,14 @@
          on a letter; transparent, its whole box (line gaps, the space after a short line) starts one. -->
     <Style Selector="SelectableTextBlock">
       <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <!-- Selected text sits on the yellow, so it turns dark there, as on a button; Fluent leaves it
+         light (about 1.6:1). -->
+    <Style Selector="SelectableTextBlock">
+      <Setter Property="SelectionForegroundBrush" Value="#111214" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="SelectionForegroundBrush" Value="#111214" />
     </Style>
 
     <!-- A fenced code block in a reply (MarkdownView): its language and Copy over the code. -->
@@ -143,10 +176,12 @@
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
       <Setter Property="BorderThickness" Value="1" />
     </Style>
-    <Style Selector="ToggleButton:checked /template/ ContentPresenter#PART_ContentPresenter">
+    <!-- Only the app's own toggles (Wrap, Watch, Area, Show), which go yellow pressed in: an Expander's
+         header is a ToggleButton too, checked while open, on the dark surface. -->
+    <Style Selector="ToggleButton.ghost:checked /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Foreground" Value="#111214" />
     </Style>
-    <Style Selector="ToggleButton:checked PathIcon">
+    <Style Selector="ToggleButton.ghost:checked PathIcon">
       <Setter Property="Foreground" Value="#111214" />
     </Style>
 

@@ -130,7 +130,8 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             _refreshTimer!.Stop();
             _ = LoadAsync();
         });
-        _fade = new DispatcherTimer(TimeSpan.FromMilliseconds(1500), DispatcherPriority.Background, (_, _) =>
+        _lightFirstRead = chat.OpeningOnFirstChange;
+        _fade = new DispatcherTimer(LitFor, DispatcherPriority.Background, (_, _) =>
         {
             _fade!.Stop();
             foreach (var row in _latest)
@@ -259,9 +260,16 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
         }
         if (!ReferenceEquals(loading, _loading))
             return;
-        Show(diff, keepPicks: ReferenceEquals(changes, _shownChanges), fresh: ReferenceEquals(changes, _shownChanges) && !byUser);
+        var same = ReferenceEquals(changes, _shownChanges);
+        // Opened by the agent's first change, the first read is that change: all of it is new.
+        var first = _lightFirstRead && _shownChanges is null;
+        _lightFirstRead = false;
+        Show(diff, keepPicks: same, fresh: (same && !byUser) || first);
         _shownChanges = changes;
     }
+
+    /// <summary>The panel opened on its own at the agent's first change in the chat: its first read lights what it shows.</summary>
+    private bool _lightFirstRead;
 
     /// <summary>Whose list is shown: picks are kept across a refresh of the same chat's, not into another chat's.</summary>
     private FileChanges? _shownChanges;
@@ -296,17 +304,36 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             foreach (var line in file.Lines.Take(MaxRows - rows.Count))
                 rows.Add(new DiffRow(item, line) { Index = rows.Count });
         }
-        // Another chat's list, or the first read, has no "just now": nothing lights up.
-        _fade.Stop();
-        _latest = before is null ? [] : Fresh(before, rows);
-        foreach (var row in _latest)
-            row.IsFresh = true;
-        if (_latest.Count > 0)
+        // Another chat's list, or the first read (unless the panel opened on the agent's first change),
+        // has no "just now": nothing lights up.
+        var now = fresh ? Fresh(before, rows) : [];
+        if (now.Count > 0)
         {
+            _fade.Stop();
+            _latest = now;
+            foreach (var row in _latest)
+                row.IsFresh = true;
             _fade.Start();
             // Watching, the file changed is the one selected, as a click on it would.
             if (Watch)
                 current = _latest[0].File;
+        }
+        else if (keepPicks)
+        {
+            // A read that found nothing new (the second of two calls in a row) leaves the last change as
+            // it was, still lit if it was, its fade going on: before, the new rows went out unlit at once.
+            var lit = _latest.Where(r => r.IsFresh).Select(r => r.Key).ToHashSet();
+            var last = _latest.Select(r => r.Key).ToHashSet();
+            _latest = rows.Where(r => last.Contains(r.Key)).ToList();
+            foreach (var row in _latest)
+                row.IsFresh = lit.Contains(row.Key);
+            if (lit.Count == 0)
+                _fade.Stop();
+        }
+        else
+        {
+            _fade.Stop();
+            _latest = [];
         }
         _picking = true;
         try
@@ -356,7 +383,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
         var count = files.Select(f => f.FullPath.ToUpperInvariant()).Distinct().Count();
         Summary = count == 0 ? "" : $"{count} {(count == 1 ? "file" : "files")}" + (counts.Length > 0 ? " · " + counts : "");
         ActionsChanged();
-        if (Watch && _latest.Count > 0)
+        if (Watch && now.Count > 0)
             ShowRow?.Invoke(_latest[0].Index);
     }
 
@@ -365,12 +392,12 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     /// have, file by file: what the agent changed since the last read. Counted by their text, as the
     /// numbers of every line below an edit move.
     /// </summary>
-    public static List<DiffRow> Fresh(DiffResult before, IReadOnlyList<DiffRow> rows)
+    public static List<DiffRow> Fresh(DiffResult? before, IReadOnlyList<DiffRow> rows)
     {
         var had = new Dictionary<(string, GitSection?, DiffLineKind, string), int>();
-        foreach (var file in before.Files)
+        foreach (var file in before?.Files ?? [])
         {
-            var path = before.FullPath(file).ToUpperInvariant();
+            var path = before!.FullPath(file).ToUpperInvariant();
             foreach (var line in file.Lines.Where(l => l.Kind is DiffLineKind.Added or DiffLineKind.Removed))
                 had[(path, file.Git?.Section, line.Kind, line.Text)] = had.GetValueOrDefault((path, file.Git?.Section, line.Kind, line.Text)) + 1;
         }
@@ -438,6 +465,9 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     private List<DiffRow> _latest = [];
 
     private readonly DispatcherTimer _fade;
+
+    /// <summary>How long a change stays lit before it fades (over 2 s, Border.fresh in the panel): 1.5 s and 1 s were gone before the eye got there (the user, 2026-10-27).</summary>
+    private static readonly TimeSpan LitFor = TimeSpan.FromSeconds(4);
 
     /// <summary>Set while a refresh picks the same lines again: no pick by hand, so watching goes on.</summary>
     private bool _refreshing;

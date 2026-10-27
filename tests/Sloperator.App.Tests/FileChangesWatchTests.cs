@@ -63,4 +63,15 @@ public sealed class FileChangesWatchTests
 
         Assert.Single(FileChangesViewModel.Fresh(before, Rows(after)));
     }
+
+    /// <summary>The panel opened by the agent's first change has read nothing before it: all it shows is new.</summary>
+    [Fact]
+    public void With_no_read_before_every_changed_line_is_fresh()
+    {
+        var after = Diff(new DiffFile("hello.js", "added", [Added(1, "console.log('hi');"), Added(2, "")]));
+
+        var fresh = FileChangesViewModel.Fresh(null, Rows(after));
+
+        Assert.Equal([1, 2], fresh.Select(r => r.Index));
+    }
 }
