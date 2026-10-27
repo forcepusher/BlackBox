@@ -21,7 +21,7 @@ namespace Sloperator.Core.Tests;
 /// fit, as 1920x1080; default the setting's), BB_CLICK_SEED (first layout, default 1000), BB_CLICK_TAG (report name),
 /// BB_CLICK_RETRY (extra clicks allowed after a miss, default 0: the target reacts when hit, so a
 /// miss gets Sloperator's miss note), BB_CLICK_CHECK=0 (no miss note), BB_CLICK_LOOK=0 (clicks go to the model's own x/y instead of where a fresh look finds the target),
-/// BB_CLICK_CROP=0 (the look sees the whole screen, not the quarter around the model's aim), BB_CLICK_THINK=1 (the look may think), BB_CLICK_RULE
+/// BB_CLICK_CROP=0 (the look sees the whole screen, not the quarter around the model's aim), BB_CLICK_THINK=1 (the look may think), BB_CLICK_ROW (the height of the screen-wide row a target with look-alikes is looked for in, as a share of the screen's; default 1: the whole screen; 0: the quarter), BB_CLICK_RULE
 /// (extra instructions for the system prompt, to measure a prompt rule), BB_CLICK_TEMP (a temperature
 /// sent with the benchmark's own requests instead of the server's), BB_CLICK_SHIFT (the first screenshot
 /// shows everything this many pixels higher, so the model misjudges where things are, as one deep in a
@@ -96,6 +96,8 @@ public class ClickAccuracyTests
         // Look-alikes: the same buttons in every row of a file list, the same button on every card.
         new("rows", [Primary], 0, FileRows),
         new("cards", [Primary], 0, ProductCards),
+        new("dialogs", [Primary], 0, Dialogs),
+        new("toggles", [Primary], 0, Toggles),
         // A real screenshot of the Unity editor (2560x1080): menu bar, tabs, toolbar buttons. Each target once.
         new("unity", [Primary], 0, Screenshot("unity-editor.png", UnityTargets), EveryTarget: true),
     ];
@@ -140,13 +142,17 @@ public class ClickAccuracyTests
 
         var report = new List<string>();
         var summary = new List<string>();
-        void Log(string line) { report.Add(line); TestContext.Current.SendDiagnosticMessage(line); }
+        var reportFile = Path.Combine(Path.GetTempPath(), $"bb-click-{tag}.txt");
+        File.Delete(reportFile);
+        // Written as it goes: a long run stopped halfway keeps what it measured.
+        void Log(string line) { report.Add(line); File.AppendAllLines(reportFile, [line]); TestContext.Current.SendDiagnosticMessage(line); }
         var (allHits, allTrials) = (0, 0);
         var retries = int.TryParse(Env("BB_CLICK_RETRY"), out var rt) ? rt : 0;
         ClickCheck.Enabled = Env("BB_CLICK_CHECK") != "0";
         FreshLook.Enabled = Env("BB_CLICK_LOOK") != "0";
         FreshLook.Cropped = Env("BB_CLICK_CROP") != "0";
         FreshLook.Thinking = Env("BB_CLICK_THINK") == "1";
+        MouseClickTool.RowShare = double.TryParse(Env("BB_CLICK_ROW"), System.Globalization.CultureInfo.InvariantCulture, out var rs) ? rs : 1;
         var (retried, fixedLater) = (0, 0);
         var shift = int.TryParse(Env("BB_CLICK_SHIFT"), out var sh) ? sh : 0;
         foreach (var scene in Scenes.Where(s => only is null || only.Contains(s.Name)))
@@ -190,6 +196,7 @@ public class ClickAccuracyTests
                 };
                 var observer = new FirstClickObserver(cts, retries + 1, () => landed.Count > 0 && target.Bounds.Contains(landed[^1].X, landed[^1].Y));
                 var where = scene.On > 0 ? $" It is on screen {scene.On + 1}." : "";
+                var clock = System.Diagnostics.Stopwatch.StartNew();
                 await session.RunAsync((target.Ask ?? $"Click the \"{target.Label}\" {target.Noun ?? scene.Noun}.") + where, observer, cts.Token);
                 var later = landed.Skip(1).Select((l, i) => (l, i)).FirstOrDefault(x => target.Bounds.Contains(x.l.X, x.l.Y));
                 if (retries > 0 && landed.Count > 0 && !target.Bounds.Contains(landed[0].X, landed[0].Y))
@@ -216,7 +223,7 @@ public class ClickAccuracyTests
                 var dy = Math.Max(Math.Max(b.Y - p[1], p[1] - (b.Y + b.Height - 1)), 0);
                 if (!hit) misses.Add(Math.Sqrt(dx * dx + dy * dy));
                 Log($"{label} {(hit ? "HIT " : "miss")} model said {observer.Args} -> ({p[0]}, {p[1]}); target {b.X},{b.Y} {b.Width}x{b.Height}" +
-                    (hit ? "" : $", {dx},{dy} px outside") + retryNote + $" [{observer.Calls}]");
+                    (hit ? "" : $", {dx},{dy} px outside") + retryNote + $" [{observer.Calls}] {clock.Elapsed.TotalSeconds:0}s");
             }
             allHits += hits;
             allTrials += count;
@@ -226,10 +233,10 @@ public class ClickAccuracyTests
         foreach (var line in summary)
             Log(line);
         Log($"TOTAL {allHits}/{allTrials} with {Model}, coordinates: {grid?.ToString() ?? "pixels"}, screenshots: {resolution.Item1}x{resolution.Item2}, " +
-            (FreshLook.Enabled ? $"fresh look at {(FreshLook.Cropped ? "the quarter around the aim (its row for look-alikes)" : "the whole screen")}, thinking {(FreshLook.Thinking || !FreshLook.ThinksInQwenTags(Model) ? "on" : "skipped")}" : "no fresh look"));
+            (FreshLook.Enabled ? $"fresh look at {(!FreshLook.Cropped ? "the whole screen" : MouseClickTool.RowShare >= 1 ? "the quarter around the aim (the whole screen for look-alikes)" :
+                MouseClickTool.RowShare > 0 ? $"the quarter around the aim (a row {MouseClickTool.RowShare:0.##} high for look-alikes)" : "the quarter around the aim")}, thinking {(FreshLook.Thinking || !FreshLook.ThinksInQwenTags(Model) ? "on" : "skipped")}" : "no fresh look"));
         if (retries > 0)
             Log($"RETRY {fixedLater}/{retried} first-click misses hit within {retries} more tries (miss check {(ClickCheck.Enabled ? "on" : "off")}, fresh look {(FreshLook.Enabled ? "on" : "off")})");
-        File.WriteAllLines(Path.Combine(Path.GetTempPath(), $"bb-click-{tag}.txt"), report);
     }
 
     /// <summary>The whole desktop with the scene on its screen and plain buttons on the others; targets in desktop coordinates.</summary>
@@ -545,6 +552,80 @@ public class ClickAccuracyTests
             var r = new ScreenRect(cx + 20, cy + 222, 130, 34);
             DrawButton(c, r, "Add to cart", theme, font);
             targets.Add(new Target("Add to cart", r, Ask: $"Click \"Add to cart\" for the {names[i]}."));
+        }
+        return targets;
+    }
+
+    private static readonly string[] DialogTitles = ["Export settings", "Export options", "Import settings", "Print settings"];
+
+    /// <summary>
+    /// Four dialogs of the same size side by side, each with the same OK and Cancel buttons at the
+    /// bottom; only the title, 400 px above them, tells them apart.
+    /// </summary>
+    private static List<Target> Dialogs(Random rng, SKCanvas c, int width, int height, Theme theme, List<string> labels)
+    {
+        const int w = 520, h = 520, gap = 70, x0 = 180, y0 = 180;
+        using var font = Font(14, theme.Ink);
+        using var title = Font(15, SKColors.White);
+        using var body = new SKPaint { Color = SKColors.White };
+        using var bar = new SKPaint { Color = new SKColor(52, 92, 160) };
+        using var edge = new SKPaint { Color = new SKColor(120, 126, 138), IsStroke = true, StrokeWidth = 1 };
+        using var box = new SKPaint { Color = new SKColor(150, 156, 168), IsStroke = true, StrokeWidth = 1 };
+        string[] fields = ["Format", "Quality", "Folder", "Name"];
+        var targets = new List<Target>();
+        var titles = DialogTitles.OrderBy(_ => rng.Next()).ToList();
+        for (var i = 0; i < titles.Count; i++)
+        {
+            var x = x0 + i * (w + gap);
+            c.DrawRect(x, y0, w, h, body);
+            c.DrawRect(x, y0, w, 36, bar);
+            c.DrawRect(x, y0, w, h, edge);
+            c.DrawText(titles[i], x + 14, y0 + 24, title);
+            for (var f = 0; f < fields.Length; f++)
+            {
+                c.DrawText(fields[f], x + 24, y0 + 90 + f * 80, font);
+                c.DrawRect(x + 140, y0 + 70 + f * 80, w - 170, 30, box);
+            }
+            foreach (var (label, bx) in new[] { ("OK", x + w - 230), ("Cancel", x + w - 120) })
+            {
+                var r = new ScreenRect(bx, y0 + h - 56, 96, 32);
+                DrawButton(c, r, label, theme, font);
+                targets.Add(new Target(label, r, Ask: $"Click \"{label}\" in the {titles[i]} dialog."));
+            }
+        }
+        return targets;
+    }
+
+    private static readonly string[] Settings =
+    [
+        "Show notifications", "Show notifications on lock screen", "Show notification badges", "Play notification sounds",
+        "Show previews", "Show previews on lock screen", "Sync settings", "Sync settings over metered connections",
+        "Start at sign-in", "Start minimized", "Check for updates", "Check for updates automatically",
+        "Send usage data", "Send crash reports", "Use dark mode", "Use dark mode for apps",
+        "Show hidden files", "Show file extensions", "Show recent files", "Show frequent folders",
+    ];
+
+    /// <summary>A settings page: 20 near-identical labels on the left, the same switch for each 1,500 px right, rows 36 px apart.</summary>
+    private static List<Target> Toggles(Random rng, SKCanvas c, int width, int height, Theme theme, List<string> labels)
+    {
+        const int x0 = 80, y0 = 70, rowH = 36, sx = 1640;
+        using var font = Font(14, theme.Ink);
+        using var line = new SKPaint { Color = new SKColor(222, 225, 230), StrokeWidth = 1 };
+        using var on = new SKPaint { Color = new SKColor(52, 92, 160), IsAntialias = true };
+        using var off = new SKPaint { Color = new SKColor(150, 156, 168), IsAntialias = true };
+        using var knob = new SKPaint { Color = SKColors.White, IsAntialias = true };
+        var targets = new List<Target>();
+        var y = y0;
+        foreach (var name in Settings.OrderBy(_ => rng.Next()))
+        {
+            c.DrawText(name, x0, y + 23, font);
+            var isOn = rng.Next(2) == 0;
+            var r = new ScreenRect(sx, y + 8, 40, 20);
+            c.DrawRoundRect(new SKRect(r.X, r.Y, r.X + r.Width, r.Y + r.Height), 10, 10, isOn ? on : off);
+            c.DrawCircle(isOn ? r.X + 30 : r.X + 10, r.Y + 10, 7, knob);
+            c.DrawLine(x0, y + rowH, sx + 120, y + rowH, line);
+            targets.Add(new Target(name, r, Ask: $"Click the switch of the \"{name}\" setting."));
+            y += rowH;
         }
         return targets;
     }

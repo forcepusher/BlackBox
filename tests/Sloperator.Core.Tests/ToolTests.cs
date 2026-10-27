@@ -254,10 +254,11 @@ public class ToolTests
     }
 
     [Fact]
-    public async Task A_target_with_look_alikes_is_looked_for_in_its_whole_row()
+    public async Task A_target_with_look_alikes_is_looked_for_on_the_whole_screen()
     {
         // A file list: the name at the left, the same Delete button at the right end of every row.
         // The quarter around the button held only other rows' buttons, and the look clicked one.
+        // A screen-wide row fixed that, but not look-alike dialogs, whose titles were far above their OK buttons.
         var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1080) };
         var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false }, WorkingDirectory = Path.GetTempPath(), CoordinateGrid = 1000 };
         var shown = new List<(ScreenSpace Space, byte[] Image)>();
@@ -270,9 +271,19 @@ public class ToolTests
         var result = await click.ExecuteAsync(row, ctx, CancellationToken.None);
         Assert.Equal("Delete button, in the row of report-q1 (1).xlsx", asked);
         var (part, _) = Assert.Single(shown);
-        Assert.Equal(new ScreenRect(0, 315, 2560, 270), part.Screen); // as wide as the screen, centred on the aim's height (450 px)
+        Assert.Equal(new ScreenRect(0, 0, 2560, 1080), part.Screen);
         Assert.Equal("move 1900,455", platform.Actions[0]);
         Assert.Equal("Clicked.", result.Text);
+
+        // Measured with a screen-wide row instead: as wide as the screen, centred on the aim's height (450 px).
+        MouseClickTool.RowShare = 0.25;
+        try
+        {
+            shown.Clear();
+            await click.ExecuteAsync(row, ctx, CancellationToken.None);
+            Assert.Equal(new ScreenRect(0, 315, 2560, 270), Assert.Single(shown).Space.Screen);
+        }
+        finally { MouseClickTool.RowShare = 1; }
 
         // A move to the next row (40 px) is told, as it may be a look-alike; for a single target it is a correction within it.
         finds = LookFinds(() => (1900, 490), shown);
