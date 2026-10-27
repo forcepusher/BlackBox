@@ -357,7 +357,10 @@ public class ModelChoiceTests
         Assert.Contains("nvidia/nemotron-3-ultra-550b-a55b:free", probe.Models);
         Assert.True(probe.Vision);
         Assert.Equal(1_000_000, probe.LoadedContext);
-        Assert.True(probe.ContextHosted); // the most Kilo takes for it, not a size to work at
+        Assert.True(probe.ContextHosted); // the most Kilo takes for it, not a size the user loads it with
+        var server = new ServerSettings();
+        server.SetDetectedContext(probe.LoadedContext);
+        Assert.Equal(1_000_000, server.ContextSize); // used whole on Auto
 
         // Sloperator starts there, and with nothing picked uses the free model it was tested with: not
         // Nano Omni, though its name is the only one that tells a size (it clicked 1 of 4 targets).

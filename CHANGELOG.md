@@ -146,6 +146,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - The agent says what tells a click's target apart from look-alikes (the row, card or dialog it is
   in), so it much less often clicks the same button in the wrong row of a list.
+- On Auto, Sloperator takes a server that doesn't say how large its context is to have 1M tokens (it
+  was 100k), and uses all of a hosted service's 1M, Kilo's and OpenRouter's too (it used 100k of it).
+- When a server refuses a conversation as too long without naming a smaller size (Kilo names 1M,
+  and counts more than the model does), the context is made a quarter smaller than where it broke, so
+  the run doesn't run into the same refusal again.
 - The ring where the agent clicks is bigger, in the accent yellow with a dark outline, and widens
   out over 3 seconds instead of just over one.
 - A reply without tool calls ends the task: Sloperator no longer sends "Continue with the task" after

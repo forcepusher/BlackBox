@@ -786,6 +786,15 @@ public sealed partial class AgentSession(
                     observer.OnNotice($"The server's context is {limit / 1000}k tokens, not {contextTokens / 1000}k; working with that from now on.", ex);
                     contextTokens = limit;
                 }
+                // It names none, or one no smaller than this size: the server counts more than the
+                // usage it reported (Kilo's gateway counts a fourth of the request's characters, half
+                // again Nemotron's count of plain text, and refuses past 1M), and kept at the size, the run
+                // would grow into the same refusal after the reset. A quarter below where it broke.
+                else if (Math.Max(16_384, TokensInUse() * 3 / 4) is var below && (contextTokens == 0 || below < contextTokens))
+                {
+                    observer.OnNotice($"The server refused {TokensInUse() / 1000}k tokens of conversation as too long; working with {below / 1000}k tokens of context from now on.", ex);
+                    contextTokens = below;
+                }
                 await ResetContextAsync(observer, ct, overflowed: true).ConfigureAwait(false);
                 request.Clear();
                 request.Add(ChatMessage.System(systemPrompt));

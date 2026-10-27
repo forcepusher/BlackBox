@@ -25,7 +25,8 @@ public sealed record ProbeResult(bool Reachable, IReadOnlyList<string> Models, i
 /// <summary>What the server says about the model in use; nulls where it doesn't say.</summary>
 /// <param name="Hosted">
 /// The context is the most a hosted service takes for the model, from an OpenRouter-style list
-/// (context_length: 1M for Kilo's free Nemotron), not the size a server of one's own runs it with.
+/// (context_length: 1M for Kilo's free Nemotron), not the size a server of one's own runs it with:
+/// nothing the user could load the model with more of.
 /// </param>
 public readonly record struct ModelFacts(int? Context, bool? Loaded, bool? Vision, bool Hosted = false);
 
@@ -42,7 +43,7 @@ public readonly record struct ModelFacts(int? Context, bool? Loaded, bool? Visio
 /// <c>num_ctx</c> in <c>parameters</c>, else <c>model_info.*.context_length</c></item>
 /// <item>vLLM: <c>GET /v1/models</c> → <c>max_model_len</c></item>
 /// <item>OpenRouter, Kilo and similar: <c>GET /v1/models</c> → <c>context_length</c>, the model's
-/// maximum there, of which Sloperator uses <see cref="ServerSettings.HostedContextSize"/> on Auto</item>
+/// maximum there, all of which Sloperator uses on Auto</item>
 /// </list>
 /// The first that answers wins. Anything else gets <see cref="ServerSettings.FallbackContextSize"/>;
 /// if that is too big, the server's "too long" error names the real size and the agent adjusts.
@@ -406,13 +407,10 @@ public static partial class ServerProbe
             return default;
         var sees = FromListEntry(new ModelInfo(model), entry).Vision;
         // vLLM's max_model_len is what it serves the model with; context_length is the most a
-        // hosted service takes for it. Claude's is used whole on Auto (the user, 22 October 2026,
-        // and again 26 October after a day on 100k): each step reads what came before from its
-        // cache, which doesn't count toward the input tokens a minute, where OpenRouter and Kilo
-        // pass the whole request on at full price.
+        // hosted service takes for it, used whole on Auto (1M is the default, the user, 27 October 2026).
         if (Int(entry["max_model_len"]) is { } served)
             return new ModelFacts(served, null, sees);
-        return Int(entry["context_length"]) is { } most ? new ModelFacts(most, null, sees, Hosted: !OpenAiChatClient.IsAnthropic(v1)) : new ModelFacts(null, null, sees);
+        return Int(entry["context_length"]) is { } most ? new ModelFacts(most, null, sees, Hosted: true) : new ModelFacts(null, null, sees);
     }
 
     /// <summary>The context an Ollama model runs with, and whether it takes images ("vision" among its capabilities).</summary>

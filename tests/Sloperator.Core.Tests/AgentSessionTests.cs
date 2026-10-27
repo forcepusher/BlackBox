@@ -216,6 +216,30 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task A_too_long_error_at_the_size_assumed_lowers_the_context_below_where_it_broke()
+    {
+        // Kilo's gateway, measured 27 October 2026: it counts a fourth of the characters, more than
+        // the model does, so it refuses before the usage Nemotron reports reaches its 1M.
+        const string kilo = """{"error":{"message":"This endpoint's maximum context length is 1000000 tokens. However, you requested about 1163647 tokens (1163631 of text input, 16 in the output). Please reduce the length of either one, or use the context-compression plugin to compress your prompt automatically.","code":400,"metadata":{"provider_name":null}},"error_type":"context_length_exceeded"}""";
+        var server = new ScriptedServer(Sse.Text("NOTE: answered four old questions."), Sse.Text("Short answer."));
+        server.Failures.Enqueue((HttpStatusCode.BadRequest, kilo));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 1_000_000);
+        for (var i = 0; i < 4; i++)
+        {
+            session.History.Add(ChatMessage.User("old question " + i));
+            session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "old answer", PromptTokens = 700_000 + i });
+        }
+
+        await session.RunAsync("new question", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(3, server.Requests.Count); // refused, handoff note, retry
+        Assert.InRange(session.ContextTokens, 500_000, 560_000); // three quarters of the 700k it broke at
+        Assert.Contains(observer.Notices, n => n.Contains("refused 700k tokens"));
+        Assert.Equal("Short answer.", session.History[^1].Content);
+    }
+
+    [Fact]
     public async Task A_request_too_large_for_the_server_resets_the_context_and_lowers_it()
     {
         // Kilo's gateway takes 20 MB: a request carrying many screenshots is refused for its size.

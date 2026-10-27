@@ -1549,8 +1549,8 @@ Claude unchanged. A gateway in front of Anthropic whose address has an `anthropi
   Sloperator uses Claude Opus 5.5, Anthropic's recommended default (without it the newest Opus, then
   Sonnet, then Haiku); Fable and Mythos only when picked, at more than twice the price. On Auto it
   uses the whole 1M (the user's call, 22 October 2026: what a long context costs is the user's to
-  weigh; on 26 October it went to 100k for a day and back to 1M at the user's word), where
-  OpenRouter's and Kilo's 1M gets 100k. Checked then against Anthropic's documents:
+  weigh; on 26 October it went to 100k for a day and back to 1M at the user's word), as any server's
+  1M is since 27 October. Checked then against Anthropic's documents:
   reading earlier steps from the cache doesn't count toward the input tokens a minute (Opus 5.5
   takes 2M a minute even on the lowest paid tier, Fable 500k), so the limits hold while the cache
 does; after it expires a request of a context bigger than the minute's input tokens would wait for
@@ -1667,14 +1667,35 @@ The OpenAI API has no field for the context length, so Sloperator asks each serv
 LM Studio (`/api/v0/models/{id}`, `loaded_context_length`, after loading the model if needed),
 llama-server (`/props`, `n_ctx`), Ollama (`/api/ps`, or `num_ctx` from `/api/show`), vLLM
 (`max_model_len`) and OpenRouter (`context_length`); the first that answers wins. Servers that
-don't say are assumed to have 100k. If that is too much, the server's "too long" error usually
-names the real size, and Sloperator switches to it. Sloperator uses the whole context, except of a
-hosted service's `context_length`, which is the most it takes for the model: Kilo and OpenRouter list
-1M for some, and since every step sends the whole conversation again, screenshots and all, a
-request would grow toward 800k tokens and tens of megabytes. On Auto Sloperator uses 100k of it (the
-tooltip says so); untick Auto for more. Claude's 1M is used whole (see Claude through Anthropic's API). A server that refuses a request for its size in bytes
-(HTTP 413: Kilo takes 20 MB) gets the same reset as a "too long" error, and the run goes on with a
-quarter less context.
+don't say are assumed to have 1M (100k until 27 October 2026, when the user made 1M the default).
+Sloperator uses the whole context on Auto, a hosted service's `context_length` too (the most it takes
+for the model: Kilo and OpenRouter list 1M for some), as it does Claude's; until then that got 100k,
+and Anthropic was let off that cap. A server that refuses a request for its size in bytes (HTTP 413:
+Kilo takes 20 MB) gets the same reset as a "too long" error, and the run goes on with a quarter less
+context.
+
+When the size assumed (or listed) is more than the server takes, a request is refused as too long,
+and the run recovers in place: the context is reset with a handoff note written from the latest part
+of the conversation (all of it no longer fits), the request goes again, and the run works with a
+smaller size from then on. That size is the one the error names when it is below the size in use
+(OpenAI, vLLM, llama.cpp, OpenRouter, Anthropic say it); otherwise, an error that names none or one
+no smaller, a quarter below the tokens in use when it broke. The app keeps it for the next runs on
+Auto until the model or server is checked again (it isn't saved). Unticking Auto sets any size by hand.
+
+Measured on Kilo's free `nvidia/nemotron-3.5-super-vl:free` (27 October 2026, no key): the list says
+1M, and the model reads all of it: a 604k-token prompt was answered in 54 s with a code from its first
+line. Kilo's gateway refuses before the model does, with a 400 that names 1M ("This endpoint's
+maximum context length is 1000000 tokens. However, you requested about 1163647 tokens…",
+`error_type` `context_length_exceeded`): it counts a fourth of the request's characters, about half
+again what Nemotron counts of plain text (4.65 MB of words it put at 1.16M, Nemotron's count about
+770k). Pictures aren't counted: five 0.94 MB PNGs (6.3 MB of request) went through as 4.7k tokens.
+So a run heavy with text is refused around 650k of Nemotron's count, below the 800k at which it
+would reset by itself, and the error names 1M, no less than the size in use: the quarter-below rule
+is what keeps it from running into the same refusal after the reset. No rate-limit headers come
+back; nothing is silently cut (the usage counts every token sent). Screenshots reach Kilo's 20 MB
+long before 1M tokens: such a run is refused once with 413, resets, and goes on with a quarter less
+than it had (`KiloOverflowTests`: 23.9 MB of screenshots, 61k tokens, went on at 46k). Both cases
+pass against Kilo (`KiloOverflowTests`, 27 October 2026).
 
 LM Studio loads a model on first use with the context its settings give it, and out of the box
 that is 4k: less than Sloperator's instructions and tools alone (about 9k tokens), so every request
@@ -1690,7 +1711,7 @@ with less than 24k (Ollama and llama-server start models with 4k unless told oth
 line in the chat at each task saying how to give it more.
 
 The **Context** slider in the top bar shows that size while **Auto** is ticked ("not loaded" until LM Studio has loaded
-the model, which your first message does; a `?` means the server doesn't say and it is the 100k guess). Untick Auto
+the model, which your first message does; a `?` means the server doesn't say and it is the 1M guess). Untick Auto
 to set the size yourself: the slider stops at 4k to 1M in coarser steps as it grows (4k, 8k, 12k,
 16k, 24k, 32k, 40k, 48k, 64k, 80k, 96k, 128k, 160k, 192k, 256k, 320k, 384k, 512k, 640k, 768k,
 1M) and goes up to 1M whatever the server reports (further for a server that reports more), the
@@ -3029,6 +3050,7 @@ SSH tests against a lab VM started with `. ./scripts/sysadmin/lab.ps1; Reset-Lab
 ```powershell
 $env:BB_SERVER_URL = "http://localhost:1234/v1"; $env:BB_SERVER_MODEL = "qwen3.8-27b@iq2_s"
 dotnet test --filter ServerIntegrationTests
+$env:BB_KILO = "1"; dotnet test --filter KiloOverflowTests   # a run past Kilo's count and its 20 MB at the 1M assumed recovers; 6 requests
 dotnet test --filter ClickAccuracyTests   # click hit rate in 16 hard scenes; BB_CLICK_SCENES, BB_CLICK_TRIALS, BB_CLICK_COORDS=pixels|grid
 $env:BB_SSH_TEST_HOST = "admin@127.0.0.2"; $env:BB_SSH_TEST_KEY = "$PWD\.dev\sysadmin-lab\key\admin_ed25519"
 dotnet test --filter SshIntegrationTests  # ssh, file tools and copy; BB_SSH_TEST_BIG_GB=3 adds a 3 GB copy each way (BB_SSH_TEST_HOST2: a second server)

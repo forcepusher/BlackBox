@@ -37,26 +37,17 @@ public class ContextSizeTests
     }
 
     [Fact]
-    public void Of_a_hosted_services_maximum_auto_uses_100k_and_a_manual_size_can_go_beyond()
+    public void A_server_that_says_nothing_is_taken_to_have_1M()
     {
-        // Kilo lists 1M for its free Nemotron: at that size a request would grow far past the 20 MB it takes.
+        Assert.Equal(1_000_000, ServerSettings.FallbackContextSize);
         var server = new ServerSettings();
-        server.SetDetectedContext(1_000_000, hosted: true);
-        Assert.Equal(ServerSettings.HostedContextSize, server.ContextSize);
-        Assert.True(server.ContextReported);
-        Assert.Equal(1_000_000, server.DetectedContextSize); // where the slider ends
-
-        server.SetDetectedContext(65536, hosted: true); // a smaller maximum is used whole
-        Assert.Equal(65536, server.ContextSize);
-
-        server.SetDetectedContext(1_000_000, hosted: true);
-        server.AutoContext = false;
-        server.ManualContextSize = 512 * 1024;
-        Assert.Equal(512 * 1024, server.ContextSize);
-
-        server.AutoContext = true;
-        server.SetDetectedContext(1_000_000); // a server of one's own that runs the model with 1M
+        server.SetDetectedContext(null);
         Assert.Equal(1_000_000, server.ContextSize);
+        Assert.False(server.ContextReported);
+
+        server.AutoContext = false;
+        server.ManualContextSize = 128 * 1024; // less by hand
+        Assert.Equal(128 * 1024, server.ContextSize);
     }
 
     [Fact]
@@ -71,7 +62,7 @@ public class ContextSizeTests
     public void A_too_long_error_lowers_the_auto_size_for_the_next_run_but_leaves_a_manual_one()
     {
         var server = new ServerSettings();
-        server.LearnContextLimit(200_000); // no news: the session kept the size it was given
+        server.LearnContextLimit(ServerSettings.FallbackContextSize); // no news: the session kept the size it was given
         Assert.Equal(ServerSettings.FallbackContextSize, server.ContextSize);
         server.LearnContextLimit(65536);
         Assert.Equal(65536, server.ContextSize);

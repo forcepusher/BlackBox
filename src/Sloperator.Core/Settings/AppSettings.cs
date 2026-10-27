@@ -60,8 +60,12 @@ public sealed class ServerSettings
     [JsonIgnore]
     public string? EffortInUse => Efforts.Nearest(Effort, EffortLevels);
 
-    /// <summary>Assumed context window when the server doesn't report one. If the real one is smaller, the server's "too long" error says so and Sloperator adjusts.</summary>
-    public const int FallbackContextSize = 100_000;
+    /// <summary>
+    /// Assumed context window when the server doesn't report one. If the real one is smaller, the
+    /// server's "too long" error says so (or, naming no size, the run goes on a quarter below where
+    /// it was refused) and Sloperator adjusts.
+    /// </summary>
+    public const int FallbackContextSize = 1_000_000;
 
     /// <summary>Use the context size the server reports (the default), rather than <see cref="ManualContextSize"/>.</summary>
     public bool AutoContext { get; set; } = true;
@@ -81,39 +85,19 @@ public sealed class ServerSettings
     public bool ContextReported { get; set; }
 
     /// <summary>
-    /// Whether <see cref="DetectedContextSize"/> is the most a hosted service takes for the model
-    /// (Kilo and OpenRouter list 1M for some), not a size a server of one's own runs it with.
+    /// The context size Sloperator budgets with and resets by: on Auto all the server reports, a
+    /// hosted service's 1M included. A manual size is used as chosen, even above what the server
+    /// reports; if the server then refuses a request as too long, the run drops to the size its
+    /// error names.
     /// </summary>
     [JsonIgnore]
-    public bool ContextHosted { get; set; }
+    public int ContextSize => AutoContext || ManualContextSize <= 0 ? DetectedContextSize : ManualContextSize;
 
-    /// <summary>
-    /// What Sloperator uses on Auto of a hosted service's maximum: every step sends the whole
-    /// conversation again, every screenshot in it, so at 1M a request would grow toward 800k tokens,
-    /// tens of megabytes, more than Kilo's gateway takes (20 MB). The same size it assumes for a
-    /// server that doesn't say.
-    /// </summary>
-    public const int HostedContextSize = FallbackContextSize;
-
-    /// <summary>
-    /// The context size Sloperator budgets with and resets by. A manual size is used as chosen, even
-    /// above what the server reports; if the server then refuses a request as too long, the run
-    /// drops to the size its error names.
-    /// </summary>
-    [JsonIgnore]
-    public int ContextSize => AutoContext || ManualContextSize <= 0
-        ? ContextHosted ? Math.Min(DetectedContextSize, HostedContextSize) : DetectedContextSize
-        : ManualContextSize;
-
-    /// <summary>
-    /// Takes in what the server says the context is; a "too long" error only ever lowers it.
-    /// <paramref name="hosted"/>: the size is a hosted service's maximum (see <see cref="ContextHosted"/>).
-    /// </summary>
-    public void SetDetectedContext(int? reported, bool hosted = false)
+    /// <summary>Takes in what the server says the context is; a "too long" error only ever lowers it.</summary>
+    public void SetDetectedContext(int? reported)
     {
         DetectedContextSize = reported ?? FallbackContextSize;
         ContextReported = reported is not null;
-        ContextHosted = hosted && reported is not null;
     }
 
     /// <summary>A run found the server's real limit (from its "too long" error); keep it for the next run on Auto.</summary>
@@ -123,7 +107,6 @@ public sealed class ServerSettings
             return;
         DetectedContextSize = tokens;
         ContextReported = true;
-        ContextHosted = false;
     }
 }
 

@@ -120,7 +120,7 @@ try
     var facts = await ServerProbe.EnsureLoadedAsync(probeHttp, settings.Server, () => Console.WriteLine("[server] loading the model…"), cts.Token,
         note => Console.WriteLine("[server] " + note), known: probe.Model == settings.Server.ModelInUse ? probe.Facts : null);
     if (facts.Context is { } c)
-        settings.Server.SetDetectedContext(c, facts.Hosted);
+        settings.Server.SetDetectedContext(c);
     Console.WriteLine($"[server] {settings.Server.BaseUrl} · {settings.Server.ModelInUse} · {ContextSizes.Format(settings.Server.ContextSize)} context"
         + (settings.Server.AutoContext ? "" : " (set by hand)")
         + (settings.Server.EffortInUse is { } effort ? $" · {effort} effort" : " · no effort setting"));

@@ -575,7 +575,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                     known: probe is not null && probe.Model == server.ModelInUse ? probe.Facts : null);
                 if (facts.Context is { } context)
                 {
-                    server.SetDetectedContext(context, facts.Hosted);
+                    server.SetDetectedContext(context);
                     _modelNotLoaded = false;
                     OnContextChanged();
                     // Ollama and llama-server start models with 4k unless told otherwise; the run
