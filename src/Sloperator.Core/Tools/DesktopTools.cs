@@ -221,8 +221,11 @@ public sealed class MouseClickTool : DesktopActionTool
         return Named(args) is { } t ? $"{kind}{button} {t}" : $"{kind}{button} at {Fmt(args)}";
     }
 
-    /// <summary>The height of the row a target with look-alikes is looked for in, as a share of the screen's; 1 or more: the whole screen. Changed only to measure (ClickAccuracyTests).</summary>
-    internal static double RowShare { get; set; } = 0.25;
+    /// <summary>
+    /// The height of the screen-wide row a target with look-alikes is looked for in first, as a share of the
+    /// screen's: 1 or more, the whole screen (the default); 0, the quarter around the aim. Changed only to measure (ClickAccuracyTests).
+    /// </summary>
+    internal static double RowShare { get; set; } = 1;
 
     /// <summary>What which says when nothing else on the screen looks like the target.</summary>
     internal const string OnlyOne = "only one";
@@ -297,10 +300,11 @@ public sealed class MouseClickTool : DesktopActionTool
     /// The look is shown the quarter of the screen around the model's aim, and the whole screen only
     /// when the target isn't there: reading a whole 2560x1080 screenshot took a 27B model 9 s, a
     /// quarter of it 3 s, and the model's own aim is mostly off by tens of pixels, not hundreds.
-    /// A target with look-alikes (which says what tells it apart) is looked for in the screen-wide
-    /// row around the aim instead, as many pixels: in a file list the quarter around an Open button
-    /// held only other rows' Open buttons, not the file names, and the look moved a click the model
-    /// had aimed at the right row to another one.
+    /// A target with look-alikes (which says what tells it apart) is looked for on the whole screen:
+    /// what tells it apart can be anywhere. In a file list the quarter around an Open button held only
+    /// other rows' Open buttons, not the file names, and the look moved a click the model had aimed at
+    /// the right row to another one; a screen-wide row a quarter as high fixed that, but not the OK
+    /// button of four look-alike dialogs, whose titles were 480 px higher.
     /// </remarks>
     private static async Task<((int X, int Y)? Point, string Note, string? Moved)> AimAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {

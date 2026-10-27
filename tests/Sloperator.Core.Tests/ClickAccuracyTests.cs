@@ -21,7 +21,7 @@ namespace Sloperator.Core.Tests;
 /// fit, as 1920x1080; default the setting's), BB_CLICK_SEED (first layout, default 1000), BB_CLICK_TAG (report name),
 /// BB_CLICK_RETRY (extra clicks allowed after a miss, default 0: the target reacts when hit, so a
 /// miss gets Sloperator's miss note), BB_CLICK_CHECK=0 (no miss note), BB_CLICK_LOOK=0 (clicks go to the model's own x/y instead of where a fresh look finds the target),
-/// BB_CLICK_CROP=0 (the look sees the whole screen, not the quarter around the model's aim), BB_CLICK_THINK=1 (the look may think), BB_CLICK_ROW (the height of the row a target with look-alikes is looked for in, as a share of the screen's; 1: the whole screen), BB_CLICK_RULE
+/// BB_CLICK_CROP=0 (the look sees the whole screen, not the quarter around the model's aim), BB_CLICK_THINK=1 (the look may think), BB_CLICK_ROW (the height of the screen-wide row a target with look-alikes is looked for in, as a share of the screen's; default 1: the whole screen; 0: the quarter), BB_CLICK_RULE
 /// (extra instructions for the system prompt, to measure a prompt rule), BB_CLICK_TEMP (a temperature
 /// sent with the benchmark's own requests instead of the server's), BB_CLICK_SHIFT (the first screenshot
 /// shows everything this many pixels higher, so the model misjudges where things are, as one deep in a
@@ -152,7 +152,7 @@ public class ClickAccuracyTests
         FreshLook.Enabled = Env("BB_CLICK_LOOK") != "0";
         FreshLook.Cropped = Env("BB_CLICK_CROP") != "0";
         FreshLook.Thinking = Env("BB_CLICK_THINK") == "1";
-        MouseClickTool.RowShare = double.TryParse(Env("BB_CLICK_ROW"), System.Globalization.CultureInfo.InvariantCulture, out var rs) ? rs : 0.25;
+        MouseClickTool.RowShare = double.TryParse(Env("BB_CLICK_ROW"), System.Globalization.CultureInfo.InvariantCulture, out var rs) ? rs : 1;
         var (retried, fixedLater) = (0, 0);
         var shift = int.TryParse(Env("BB_CLICK_SHIFT"), out var sh) ? sh : 0;
         foreach (var scene in Scenes.Where(s => only is null || only.Contains(s.Name)))
@@ -233,7 +233,8 @@ public class ClickAccuracyTests
         foreach (var line in summary)
             Log(line);
         Log($"TOTAL {allHits}/{allTrials} with {Model}, coordinates: {grid?.ToString() ?? "pixels"}, screenshots: {resolution.Item1}x{resolution.Item2}, " +
-            (FreshLook.Enabled ? $"fresh look at {(FreshLook.Cropped ? "the quarter around the aim (its row for look-alikes)" : "the whole screen")}, thinking {(FreshLook.Thinking || !FreshLook.ThinksInQwenTags(Model) ? "on" : "skipped")}" : "no fresh look"));
+            (FreshLook.Enabled ? $"fresh look at {(!FreshLook.Cropped ? "the whole screen" : MouseClickTool.RowShare >= 1 ? "the quarter around the aim (the whole screen for look-alikes)" :
+                MouseClickTool.RowShare > 0 ? $"the quarter around the aim (a row {MouseClickTool.RowShare:0.##} high for look-alikes)" : "the quarter around the aim")}, thinking {(FreshLook.Thinking || !FreshLook.ThinksInQwenTags(Model) ? "on" : "skipped")}" : "no fresh look"));
         if (retries > 0)
             Log($"RETRY {fixedLater}/{retried} first-click misses hit within {retries} more tries (miss check {(ClickCheck.Enabled ? "on" : "off")}, fresh look {(FreshLook.Enabled ? "on" : "off")})");
     }

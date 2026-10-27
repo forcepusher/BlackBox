@@ -2030,15 +2030,32 @@ file list, an Add to cart button on every card. So `mouse_click` has a second re
 card, dialog or label it belongs to), or "only one". A click with a `target` and no `which` is an
 argument error and clicks nothing; a click with neither (an unnamed spot) needs none. The look is asked
 for both ("Delete button, in the row of report.xlsx"), and for a target with look-alikes it is shown
-the screen-wide row around the aim (a quarter of the screen's height, as many pixels as the quarter)
-instead of the quarter: in a 2560-wide file list the quarter around an Open button held only other
-rows' Open buttons, not the file names, and the look moved clicks the model had aimed at the right row
-to another one. A move of half the usual 2% is told for such a target, as rows can be that close.
-`ClickAccuracyTests` has two scenes for it, `rows` (a file list of 14 near-identical names, the
-buttons 1,700 px right of them) and `cards` (12 near-identical product names). With qwen3.8, 8 trials
-each on the same layouts (27 October 2026): `rows` 1/8 before (the model's own aim was on the right
-row 6 times) and 6/8 after, `cards` 8/8 both times; the model gave a `which` in all 16 clicks. The two
-misses left are the look moving a well-aimed click one or two rows up, which the result now says.
+the whole screen instead of the quarter around the aim, as what tells it apart can be anywhere: in a
+2560-wide file list the quarter around an Open button held only other rows' Open buttons, not the
+file names, and the look moved clicks the model had aimed at the right row to another one. A move of
+half the usual 2% is told for such a target, as rows can be that close.
+
+`ClickAccuracyTests` has four scenes for it: `rows` (a file list of 14 near-identical names, the
+buttons 1,700 px right of them), `cards` (12 near-identical product names), `dialogs` (four dialogs
+alike but for their titles, 480 px above their OK and Cancel) and `toggles` (20 near-identical
+settings, rows 36 px apart, switches 1,500 px right of them). With qwen3.8 (27 October 2026), on the
+same layouts each time (`BB_CLICK_ROW` picks the look's part):
+
+| Look for look-alikes | rows | cards | dialogs | toggles |
+| --- | --- | --- | --- | --- |
+| Before `which` (quarter around the aim) | 1/8 | 8/8 | | |
+| Quarter around the aim, with `which` | 4/5 | | | |
+| Screen-wide row a quarter as high | 6/8 | 8/8 | 5/7 | 7/7 |
+| Whole screen | 5/5 | | 7/7 | 7/7 |
+
+and the whole screen 16/16 on four fresh layouts of each. In `rows` before, the model's own aim was
+on the right row 6 times of 8. The row missed dialogs because their titles were outside it. The whole
+screen costs about 5 s a click (trials of 27-29 s against 21-24 s), and the model gives a `which`
+other than "only one" for most clicks, unique targets included ("the button labeled Save near the
+top"), so most clicks pay it. It gave a `which` in every click measured. Elsewhere nothing measurably
+changed: `similar` 5/5 before and with the whole screen; `hidden` (half-covered buttons) 3/13 before
+and 0/13 after, both missing the same way, about 55 px right, at the covered middle of the button.
+
 
 ### Folder index
 `index_folder` gives the model what Cursor's codebase indexing gives its own: a project's layout
