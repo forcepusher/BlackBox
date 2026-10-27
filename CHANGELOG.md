@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - File changes in a git repository lists the files in **Committed**, **Staged** and **Unstaged**
   foldouts.
 - **Stage**, **Unstage** and **Discard** over the File changes diff act on the picked lines, or the
-  selected file when none is picked; click a @@ line to pick its hunk, a file's name to pick all of it.
+  selected file when none is picked; click a "Lines" divider to pick its block, a file's name to pick all of it.
   Discard puts unstaged changes back as staged, and files outside git as before the agent's changes; a
   file the agent made goes to the Recycle Bin.
 - **Max screenshot size** under Settings → Advanced: screenshots are scaled down to fit it, so a 4K
@@ -148,6 +148,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The File changes diff shows one line number instead of two, the old one greyed out on removed lines,
   with + or - right after it. The numbers take only as much room as the file's longest one, so the code
   starts much further left.
+- Each block of changes in the File changes diff starts with a slim "Lines 96-104" divider instead of
+  git's `@@ -96,8 +96,9 @@` line. Clicking it still picks the block.
+- The +3 and -2 counts in File changes (the file list, each file's header and the summary at the top)
+  show added lines in green and removed lines in red.
 - The agent says what tells a click's target apart from look-alikes (the row, card or dialog it is
   in), so it much less often clicks the same button in the wrong row of a list.
 - On Auto, Sloperator takes a server that doesn't say how large its context is to have 1M tokens (it
