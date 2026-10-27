@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Headless runner: same agent, same tools, output in the console. Handy for trying tasks
+       and models without the UI, and for scripted runs. -->
+  <PropertyGroup>
+    <!-- Windows builds include the Windows desktop backend; other OSes build the portable core only. -->
+    <TargetFramework Condition="$([MSBuild]::IsOSPlatform('Windows'))">net10.0-windows</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>sloperator-cli</AssemblyName>
+    <RootNamespace>Sloperator.Cli</RootNamespace>
+    <ApplicationManifest>..\Sloperator.App\app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <!-- Builds carry their own .NET, so sloperator-cli.exe also runs on a PC without .NET installed
+       (see Sloperator.App.csproj). -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <RuntimeIdentifier>$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sloperator.Core\Sloperator.Core.csproj" />
+    <ProjectReference Include="..\Sloperator.Platform.Windows\Sloperator.Platform.Windows.csproj" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+  </ItemGroup>
+
+</Project>

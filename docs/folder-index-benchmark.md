@@ -12,12 +12,12 @@ a lighter index with a map that can't search (see "A lighter index for Qwen").
   searches of at most about 1,000 tokens instead of 2,300, and the shell left to the model for
   searching: over six tasks, 25% less time than without an index, 29% fewer tool calls and 22%
   fewer tokens, against 11%, 16% and 2% for the index as merged. A map with no search at all did no
-  better than no index. This lighter index is what BlackBox now has.
+  better than no index. This lighter index is what Sloperator now has.
 
 - **Answers were no better and no worse with the index.** Both models answered every question fully
   or nearly so either way (76 answers graded blind), and every edit passed its checks (30 runs). The
   index changes how a model gets there, not where it gets.
-- **Qwen 3.8 27B on BlackBox (373 files): faster with the index.** About 21% less time, 22% fewer
+- **Qwen 3.8 27B on Sloperator (373 files): faster with the index.** About 21% less time, 22% fewer
   tool calls and 15% fewer tokens over six tasks. The biggest gains were on questions about how
   something works (the context reset: 8.8 → 5.3 min) and on renaming a class everywhere (8.5 → 3.7 min).
 - **Qwen on FluffyMeow (22,247 files): slower with the index.** About 29% more time over four
@@ -26,7 +26,7 @@ a lighter index with a map that can't search (see "A lighter index for Qwen").
   went on verifying details (scene and prefab GUIDs) that the runs without the index skipped. The
   fixes cut the tool calls below those without the index, but the time only a little.
 - **Claude Opus 5.5: faster with the index, most of all on the big project.** About 4% less time on
-  BlackBox and 30% less on FluffyMeow with the index as merged; 13% and 38% less with the fixes. It
+  Sloperator and 30% less on FluffyMeow with the index as merged; 13% and 38% less with the fixes. It
   makes more tool calls (index calls on top), but reads fewer tokens.
 - **The index got in the way of tasks a grep answers**: "list every class that implements X",
   "change this constant". Both models searched the index, then searched again with the shell. The
@@ -39,10 +39,10 @@ a lighter index with a map that can't search (see "A lighter index for Qwen").
 
 ## How it was run
 
-- **The same build with and without.** `blackbox-cli --no-index` leaves out the tool, its line in
+- **The same build with and without.** `sloperator-cli --no-index` leaves out the tool, its line in
   the system prompt and the note that says to index, nothing else. Comparing two builds (before and
   after the index was merged) would also have measured everything else that changed between them.
-- **Two projects.** BlackBox itself at 6fc10f2 (373 files, 216 of them C#), and the user's Unity game
+- **Two projects.** Sloperator itself at 6fc10f2 (373 files, 216 of them C#), and the user's Unity game
   FluffyMeow (PushMeow) at d85638bea: 22,247 files, 1,802 C# scripts, 152 of those the Spine
   runtime. The game was copied without its history and without `Backend/VirtualMachine`, which holds
   an SSH key and a credentials file that the models had no reason to read.
@@ -50,18 +50,18 @@ a lighter index with a map that can't search (see "A lighter index for Qwen").
 
   | Task | Project | Kind | Scored by |
   | --- | --- | --- | --- |
-  | explain | BlackBox | explain the project to a new developer | 8-point rubric |
-  | context | BlackBox | how the context reset works: when, how computed, what is kept | 8-point rubric |
-  | repeat | BlackBox | trace a notice ("thinking started repeating") to its cause and thresholds | 8-point rubric |
-  | observers | BlackBox | list every class that implements `IAgentObserver` | 7-point rubric |
-  | wait | BlackBox | raise the wait tool's limit from 10 to 30 minutes, docs too | the constant, `dotnet build` |
-  | rename | BlackBox | rename `HeadlessBrowser` to `BackgroundBrowser` in app and tests, file too | no old name left, file renamed, `dotnet build` |
+  | explain | Sloperator | explain the project to a new developer | 8-point rubric |
+  | context | Sloperator | how the context reset works: when, how computed, what is kept | 8-point rubric |
+  | repeat | Sloperator | trace a notice ("thinking started repeating") to its cause and thresholds | 8-point rubric |
+  | observers | Sloperator | list every class that implements `IAgentObserver` | 7-point rubric |
+  | wait | Sloperator | raise the wait tool's limit from 10 to 30 minutes, docs too | the constant, `dotnet build` |
+  | rename | Sloperator | rename `HeadlessBrowser` to `BackgroundBrowser` in app and tests, file too | no old name left, file renamed, `dotnet build` |
   | fm-explain | FluffyMeow | explain the game, its systems, its start-up and what is outside Unity | 8-point rubric |
   | fm-needs | FluffyMeow | how the cat's needs go down, while running and while closed | 8-point rubric |
   | fm-draggable | FluffyMeow | list every class that implements `IDraggable` directly | 12-point rubric |
   | fm-toilet | FluffyMeow | change the toilet's weight in hygiene from 0.2 to 0.3 | the constant |
 
-- **Each run** started from a clean copy of its project and an empty BlackBox root, so no index was
+- **Each run** started from a clean copy of its project and an empty Sloperator root, so no index was
   carried over: a run with the index built it itself. Runs with and without alternated, so a server
   that warmed up or slowed down weighed on both. Two runs per task and condition.
 - **Models:** qwen3.8-27b@q6_k_xl on the user's LM Studio (RTX 5070 Ti, 100k context, over the VPN),
@@ -115,7 +115,7 @@ passed. "As merged" is the index from 6fc10f2, "fixed" the index with the two fi
 
 | Over | With the index as merged | With the fixed index |
 | --- | --- | --- |
-| BlackBox, 6 tasks | time ×0.79, tool calls ×0.78, tokens ×0.85 | 3 tasks rerun: time ×0.81, calls ×0.73, tokens ×0.84 |
+| Sloperator, 6 tasks | time ×0.79, tool calls ×0.78, tokens ×0.85 | 3 tasks rerun: time ×0.81, calls ×0.73, tokens ×0.84 |
 | FluffyMeow, 4 tasks | time ×1.29, tool calls ×1.11, tokens ×1.56 | 3 tasks rerun: time ×1.21, calls ×0.89, tokens ×1.28 |
 | the 6 tasks rerun | time ×1.02, tool calls ×0.91, tokens ×1.13 | time ×0.99, tool calls ×0.81, tokens ×1.03 |
 
@@ -155,7 +155,7 @@ passed. "As merged" is the index from 6fc10f2, "fixed" the index with the two fi
 
 | Over | With the index as merged | With the fixed index |
 | --- | --- | --- |
-| BlackBox, 6 tasks | time ×0.96, tool calls ×1.18, tokens ×1.03 | time ×0.87, calls ×1.05, tokens ×0.94 |
+| Sloperator, 6 tasks | time ×0.96, tool calls ×1.18, tokens ×1.03 | time ×0.87, calls ×1.05, tokens ×0.94 |
 | FluffyMeow, 4 tasks | time ×0.70, tool calls ×1.16, tokens ×0.81 | 3 tasks: time ×0.62, calls ×1.03, tokens ×0.68 |
 
 The ratios are geometric means of each task's ratio to the runs without the index, so every task
@@ -165,12 +165,12 @@ weighs the same however long it is.
 
 - **Where the index pays:** questions about how something works, on a project the model doesn't
   know. Without it Qwen listed folders and opened files one by one (22 folder listings in one run
-  explaining BlackBox, 48 in one explaining FluffyMeow); with it, the overview and a few searches led
+  explaining Sloperator, 48 in one explaining FluffyMeow); with it, the overview and a few searches led
   it to the right files. Renaming a class went faster too: the search named the files that use it.
 - **Where it costs:** every run with the index starts with an overview of up to 2,500 tokens, and
   every search adds 1,000 to 2,500 more, which stay in the conversation. LM Studio and Anthropic
   cache what came before, so they aren't read in full again at each step, but they fill the context:
-  in the two explain tasks, 5 of Qwen's 8 runs with the index reached 80k tokens, where BlackBox has
+  in the two explain tasks, 5 of Qwen's 8 runs with the index reached 80k tokens, where Sloperator has
   the model write a handoff note and starts afresh (see Context window in docs/notes.md), against 0
   of 4 without it. On a task a grep answers in one call, all of it is overhead: changing the
   toilet's weight took Qwen 65 s
@@ -248,7 +248,7 @@ six tasks against no index: lean 25% less time, 29% fewer tool calls, 22% fewer 
 
 - **Lean was the fastest on three tasks (the rename, the needs, the toilet), within 1% of the
   fastest on explaining the game, and second on the context question.** The index as merged was
-  faster on both questions about BlackBox. Explaining BlackBox went worst with lean: one run read 28
+  faster on both questions about Sloperator. Explaining Sloperator went worst with lean: one run read 28
   files whole and reached the context reset twice (825 s); the other took 518 s, against 564 s on
   average without the index. Over all six, lean is ahead by a wide margin, mostly on FluffyMeow.
 - **A search in the index matters for questions in plain words.** On how the game's needs decay,
@@ -276,13 +276,13 @@ nothing the lean index cut was something Claude needed.
   over time" finds movement code and minigames, because FluffyMeow says "stat" and "decay"; the
   model has to guess the code's words, as both did ("hunger hygiene decay"). Ranking by words, not
   embeddings, was a deliberate choice (see docs/notes.md, Folder index); this is its price.
-- **BlackBox's automatic web look-ups fire on questions about the local code.** In 13 of the 107
-  runs BlackBox searched the web for a question the model asked itself ("where does the VM handle
+- **Sloperator's automatic web look-ups fire on questions about the local code.** In 13 of the 107
+  runs Sloperator searched the web for a question the model asked itself ("where does the VM handle
   OnDelta"), with a folder name from the task as the subject, and added the results under the step.
   They never helped: Qwen once called them "an injected message … containing fake web-search
   results" and said so in its answer, and one Claude run was refused by Anthropic's safety checks
   (`reasoning_extraction`), apparently because the look-up quotes the model's own thinking back to
-  it. That run was left out of the averages. This is the look-up feature, not the index; BlackBox
+  it. That run was left out of the averages. This is the look-up feature, not the index; Sloperator
   no longer searches for the model (see docs/notes.md, Web search).
 - **FluffyMeow's repository holds an SSH key and a credentials file** (`Backend/VirtualMachine`) in
   its git history. They were left out of the copies the models saw and weren't opened.

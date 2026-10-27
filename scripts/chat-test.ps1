@@ -1,30 +1,30 @@
 <#
 .SYNOPSIS
-  Chat stand-in benchmark: BlackBox answers people for the user in chat apps, through the
-  screen, mouse and keyboard, the way a person would. The chat lab (tests\BlackBox.ChatLab)
+  Chat stand-in benchmark: Sloperator answers people for the user in chat apps, through the
+  screen, mouse and keyboard, the way a person would. The chat lab (tests\Sloperator.ChatLab)
   serves local look-alikes of a Telegram-style messenger (Pigeon), a social network
   (Friendspace), a shop's support chat (GadgetHub) and a marketplace (SwapIt), with scripted
   people on the other side who answer, haggle, ask for a login code or a card number. Nobody
   real is ever messaged: the sites run on this PC and open in a browser profile of their own.
 
-  Per scenario: the lab starts, Edge opens the site maximized, BlackBox gets the request in the
+  Per scenario: the lab starts, Edge opens the site maximized, Sloperator gets the request in the
   user's words, and when it is done (or the time is up) its final reply goes to the lab, which
   checks the log of everything that was written: the facts each person was told, what must
   never be sent (codes, card numbers, the home address), chats that needed no answer, threads,
   timing, duplicates, junk such as escaped line breaks, and the report back to the user.
 
-  It drives your mouse and keyboard while BlackBox runs: don't touch the PC. It refuses to run
+  It drives your mouse and keyboard while Sloperator runs: don't touch the PC. It refuses to run
   while a real messenger or mail app is open, so that a confused run can't write to real people.
 
   Runs land in .dev\chat\<time>\: summary.txt, and per scenario run.txt (the live log),
-  task.txt, report.txt (BlackBox's final reply), check.txt, transcript.txt (every chat as the
+  task.txt, report.txt (Sloperator's final reply), check.txt, transcript.txt (every chat as the
   people saw it), events.jsonl (the lab's log) and shots\.
 
 .EXAMPLE
   ./scripts/chat-test.ps1                                     # every scenario, server and model from Data/settings.json
   ./scripts/chat-test.ps1 -Scenarios inbox,haggle -Url http://host:1234/v1 -Model qwen3.8-27b@q6_k_xl
-  ./scripts/chat-test.ps1 -SelfTest                           # the reference stand-in instead of BlackBox: checks the checks, no model or browser
-  ./scripts/chat-test.ps1 -Cli D:\old\blackbox-cli.exe        # another build, e.g. to compare with a baseline
+  ./scripts/chat-test.ps1 -SelfTest                           # the reference stand-in instead of Sloperator: checks the checks, no model or browser
+  ./scripts/chat-test.ps1 -Cli D:\old\sloperator-cli.exe        # another build, e.g. to compare with a baseline
 #>
 # Minutes: the most a scenario may run. The evening watch lasts 45 minutes on its own, and with 40
 # it was always cut off before its end.
@@ -47,7 +47,7 @@ if (-not $SelfTest) {
   $open += @(Get-Process -Name msedge, chrome, firefox, opera, brave, vivaldi, browser -ErrorAction SilentlyContinue |
     Where-Object { $_.MainWindowTitle -match $sites } | ForEach-Object { "$($_.ProcessName): $($_.MainWindowTitle)" })
   if ($open.Count -gt 0) {
-    throw "A real messenger or mail app is open, and BlackBox could write to real people there by mistake. Close it first: $($open -join '; ')"
+    throw "A real messenger or mail app is open, and Sloperator could write to real people there by mistake. Close it first: $($open -join '; ')"
   }
 }
 
@@ -56,16 +56,16 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path "$re
   $env:DOTNET_ROOT = "$repo\.dev\dotnet"
   $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
 }
-$lab = Join-Path $repo "tests\BlackBox.ChatLab\bin\Debug\net10.0\BlackBox.ChatLab.exe"
-dotnet build (Join-Path $repo "tests\BlackBox.ChatLab") -v q | Out-Null
+$lab = Join-Path $repo "tests\Sloperator.ChatLab\bin\Debug\net10.0\Sloperator.ChatLab.exe"
+dotnet build (Join-Path $repo "tests\Sloperator.ChatLab") -v q | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "The chat lab didn't build" }
 if (-not $SelfTest) {
   if ($Cli) { $cliExe = $Cli } else {
-    $cliExe = Join-Path $repo "src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe"
-    dotnet build (Join-Path $repo "src\BlackBox.Cli") -v q | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "BlackBox didn't build" }
+    $cliExe = Join-Path $repo "src\Sloperator.Cli\bin\Debug\net10.0-windows\sloperator-cli.exe"
+    dotnet build (Join-Path $repo "src\Sloperator.Cli") -v q | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Sloperator didn't build" }
   }
-  Write-Host "BlackBox: $cliExe"
+  Write-Host "Sloperator: $cliExe"
 }
 
 $known = @(& $lab --list | ForEach-Object { ($_ -split '\s+')[0] })
@@ -101,7 +101,7 @@ if (-not ("ChatTest.Win" -as [type])) {
 [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
 '@
 }
-# Other windows are minimized while BlackBox works, so that it sees only the site (and can't type
+# Other windows are minimized while Sloperator works, so that it sees only the site (and can't type
 # into another app by mistake); they come back when the run is over.
 $shell = New-Object -ComObject Shell.Application
 
@@ -173,7 +173,7 @@ function Get-FinalReply([string]$log) {
   ""
 }
 
-# One scenario with BlackBox: the lab, the browser, the run, and the checks. Returns the check lines.
+# One scenario with Sloperator: the lab, the browser, the run, and the checks. Returns the check lines.
 function Invoke-Scenario([string]$name, [string]$sdir, [Diagnostics.Stopwatch]$sw) {
   Log "${name}: starting the lab"
   $labProc = Start-Process $lab -ArgumentList @("--scenario", $name, "--out", "`"$sdir`"", "--port", $Port) -PassThru -WindowStyle Hidden `
@@ -198,7 +198,7 @@ function Invoke-Scenario([string]$name, [string]$sdir, [Diagnostics.Stopwatch]$s
     Start-Sleep -Seconds 2
     $task = (Invoke-Lab POST "/api/start" | ConvertFrom-Json).task
     $log = Join-Path $sdir "run.txt"
-    Log "${name}: BlackBox runs; log: $log"
+    Log "${name}: Sloperator runs; log: $log"
     Write-Host $task
     $sw.Restart()
     $a = $cliArgs + @("--yes", "--save-shots", (Join-Path $sdir "shots"), $task)
@@ -226,7 +226,7 @@ function Invoke-Scenario([string]$name, [string]$sdir, [Diagnostics.Stopwatch]$s
     $sw.Stop()
     @((Invoke-Lab POST "/api/finish" (Get-FinalReply $log)) -split "`n" | Where-Object { $_.Trim() })
   } finally {
-    # Whatever happened (Ctrl+C included), no BlackBox is left running, and the browser and the lab go away.
+    # Whatever happened (Ctrl+C included), no Sloperator is left running, and the browser and the lab go away.
     if ($p -and -not $p.HasExited) { Stop-Process $p -Force -ErrorAction SilentlyContinue }
     Stop-LabEdge
     try { Invoke-Lab POST "/api/quit" | Out-Null } catch { }

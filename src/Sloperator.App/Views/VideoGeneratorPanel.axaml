@@ -1,0 +1,506 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sloperator.App.ViewModels"
+             xmlns:views="using:Sloperator.App.Views"
+             x:Class="Sloperator.App.Views.VideoGeneratorPanel"
+             x:DataType="vm:VideoGeneratorViewModel"
+             Background="{StaticResource BbBackground}">
+
+  <UserControl.Styles>
+    <!-- The top bar's fields as tall as the Toolkit dropdown (30, not their own 32), so the bar is as
+         tall as the other tools' and the chat's, and its × sits where theirs does. -->
+    <Style Selector="DockPanel.bar NumericUpDown">
+      <Setter Property="Height" Value="30" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="10,4,6,4" />
+    </Style>
+    <Style Selector="DockPanel.bar NumericUpDown /template/ TextBox">
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="Padding" Value="10,4,6,4" />
+    </Style>
+    <Style Selector="TextBlock.label">
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="TextBlock.error">
+      <Setter Property="Foreground" Value="{StaticResource BbError}" />
+    </Style>
+    <!-- A clip, a card or a sound on the timeline; the one shown has the accent around it. -->
+    <Style Selector="Border.block">
+      <Setter Property="Background" Value="{StaticResource BbSurfaceRaised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Border.block.selected">
+      <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <!-- Files dragged over it would go into it. -->
+    <Style Selector="Border.block.drop">
+      <Setter Property="Background" Value="#40E0A64B" />
+    </Style>
+    <Style Selector="Border.block.planned">
+      <Setter Property="Opacity" Value="0.7" />
+    </Style>
+    <Style Selector="Border.clip">
+      <Setter Property="Background" Value="#2A3A4A" />
+    </Style>
+    <Style Selector="Border.handle">
+      <Setter Property="Background" Value="#33E0A64B" />
+    </Style>
+    <Style Selector="Border.handle:pointerover">
+      <Setter Property="Background" Value="{StaticResource BbAccent}" />
+    </Style>
+    <Style Selector="Border.block.selected Border.handle">
+      <Setter Property="Background" Value="{StaticResource BbAccent}" />
+    </Style>
+    <!-- What is picked on the timeline by a click: no look of a button's own. -->
+    <Style Selector="Button.pick">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="Button.pick /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <!-- File… and Generate on a new card or sound. -->
+    <Style Selector="Button.choice">
+      <Setter Property="Padding" Value="6,1" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <!-- A clip's start or end frame: its picture, else a dashed place; the one picked has the accent around it. -->
+    <Style Selector="Border.slot">
+      <Setter Property="Background" Value="#0B0C0E" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Rectangle.slot">
+      <Setter Property="Stroke" Value="{StaticResource BbBorder}" />
+      <Setter Property="StrokeThickness" Value="1.5" />
+      <Setter Property="StrokeDashArray" Value="4,3" />
+      <Setter Property="RadiusX" Value="4" />
+      <Setter Property="RadiusY" Value="4" />
+    </Style>
+    <Style Selector="Button.slot:pointerover Border.slot">
+      <Setter Property="BorderBrush" Value="{StaticResource BbMuted}" />
+    </Style>
+    <Style Selector="Button.slot:pointerover Rectangle.slot">
+      <Setter Property="Stroke" Value="{StaticResource BbMuted}" />
+    </Style>
+    <Style Selector="Border.slot.selected">
+      <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="Rectangle.slot.selected">
+      <Setter Property="Stroke" Value="{StaticResource BbAccent}" />
+      <Setter Property="StrokeThickness" Value="2" />
+    </Style>
+    <!-- A sound line's volume: a short slider under its name. -->
+    <Style Selector="Slider.volume">
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <Style Selector="Button.thumb">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.thumb /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.thumb">
+      <Setter Property="Background" Value="#0B0C0E" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+  </UserControl.Styles>
+
+  <UserControl.DataTemplates>
+    <!-- A clip's start or end frame at its block's end: clicked, the frame is picked; not made, File… or Generate when it has room. -->
+    <DataTemplate DataType="vm:FrameSlot">
+      <Button Classes="pick slot" Width="{Binding Shot.SlotWidth}" VerticalAlignment="Stretch" Click="OnSlotClick" ContextRequested="OnSlotMenu"
+              HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
+              ToolTip.Tip="{Binding Tip}" AutomationProperties.Name="{Binding Name}">
+        <Panel>
+          <Border Classes="slot" Classes.selected="{Binding Frame.IsSelected, FallbackValue=False}"
+                  IsVisible="{Binding Frame.Thumbnail, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}">
+            <Image Source="{Binding Frame.Thumbnail, FallbackValue={x:Null}}" Stretch="UniformToFill" />
+          </Border>
+          <Panel IsVisible="{Binding Frame.Thumbnail, Converter={x:Static ObjectConverters.IsNull}, FallbackValue=True}">
+            <Rectangle Classes="slot" Classes.selected="{Binding Frame.IsSelected, FallbackValue=False}" />
+            <StackPanel IsVisible="{Binding Shot.SlotsRoomy}" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center">
+              <Button Classes="choice" Content="File…" Click="OnSlotFile" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" ToolTip.Tip="Use a picture of yours" />
+              <Button Classes="choice" Content="Generate" Click="OnSlotGenerate" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" ToolTip.Tip="Sloperator makes it: say in the chat what it should be" />
+            </StackPanel>
+          </Panel>
+        </Panel>
+      </Button>
+    </DataTemplate>
+    <!-- What the viewer shows: a clip or the video playing, a sound, a picture, a card for what has none. -->
+    <DataTemplate DataType="vm:VideoPreview">
+      <DockPanel>
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+          <Button DockPanel.Dock="Left" Classes="ghost" Padding="8,4" Command="{Binding PlayCommand}" VerticalAlignment="Center" AutomationProperties.Name="Play or pause">
+            <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" />
+          </Button>
+          <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
+          <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" Margin="8,-8,0,-8" VerticalAlignment="Center" />
+        </DockPanel>
+        <Button Classes="thumb" Click="OnMediaClick" ToolTip.Tip="Full screen" AutomationProperties.Name="Video full screen" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+          <Panel Background="#000000">
+            <Image Source="{Binding Frame}" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+            <Border Width="56" Height="56" CornerRadius="28" Background="#B0000000" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !IsPlaying}">
+              <PathIcon Data="M4 4h6v2H6v4H4zM14 4h6v6h-2V6h-4zM4 14h2v4h4v2H4zM18 14h2v6h-6v-2h4z" Width="22" Height="22" Foreground="White" />
+            </Border>
+          </Panel>
+        </Button>
+      </DockPanel>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:AnimationPreview">
+      <Button Classes="thumb" Click="OnMediaClick" ToolTip.Tip="Full screen" AutomationProperties.Name="Animation full screen" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <Image Source="{Binding Image}" Stretch="Uniform" />
+      </Button>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:AudioPreview">
+      <DockPanel VerticalAlignment="Center" MaxWidth="640">
+        <Button DockPanel.Dock="Left" Width="40" Height="40" CornerRadius="20" Padding="0" Background="{StaticResource BbAccent}"
+                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                Command="{Binding PlayCommand}" VerticalAlignment="Center" AutomationProperties.Name="Play or pause sound">
+          <PathIcon Data="{Binding PlayIcon}" Width="16" Height="16" Foreground="#111214" />
+        </Button>
+        <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
+        <Panel Height="64" Margin="12,0,0,0">
+          <Image Source="{Binding Waveform}" Stretch="Fill" />
+          <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" VerticalAlignment="Center" Opacity="0.85" />
+        </Panel>
+      </DockPanel>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:PictureView">
+      <Border Classes="thumb" Background="#15171A">
+        <Panel>
+          <Button Classes="thumb" Click="OnMediaClick" IsVisible="{Binding Picture, Converter={x:Static ObjectConverters.IsNotNull}}" ToolTip.Tip="Full screen"
+                  AutomationProperties.Name="Picture full screen" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+            <Image Source="{Binding Picture}" Stretch="Uniform" />
+          </Button>
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="520" Margin="24" IsVisible="{Binding Missing, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Text="{Binding Caption}" FontSize="16" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
+            <TextBlock Classes="muted" Text="{Binding Missing}" TextWrapping="Wrap" TextAlignment="Center" />
+          </StackPanel>
+        </Panel>
+      </Border>
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
+  <DockPanel>
+    <!-- The video (its name opens the videos' menu), its size and frame rate, changed here and saved at once, and what to do with all of it; × closes the panel. -->
+    <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="12,8">
+      <DockPanel Classes="bar" MinHeight="30">
+        <views:ToolkitClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,0,0,0" />
+        <Button DockPanel.Dock="Right" Classes="primary" Content="Make the video" Command="{Binding MakeVideoCommand}"
+                ToolTip.Tip="Sloperator makes in the chat what isn't made yet or has changed, looks at each piece and fixes what it finds, then joins the video and looks at it" />
+        <!-- Short of room (the window made narrower), the video's name is cut short rather than the
+             fields going over the buttons: its column is the one that gives way. -->
+        <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left" Margin="0,0,12,0">
+          <Button x:Name="VideoButton" Classes="ghost" Padding="8,4" Margin="0,0,16,0" Click="OnVideoMenu"
+                  ToolTip.Tip="Your videos: open another, or rename or delete this one" AutomationProperties.Name="Videos">
+            <!-- Not a StackPanel: across, that gives the name all the room it wants and it is never cut short. -->
+            <DockPanel>
+              <PathIcon DockPanel.Dock="Right" Data="M7 10l5 5 5-5z" Width="10" Height="10" Margin="8,0,0,0" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding VideoName}" FontWeight="SemiBold" MaxWidth="260" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            </DockPanel>
+          </Button>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <TextBlock Classes="label" Text="Frame size" VerticalAlignment="Center" />
+            <NumericUpDown Value="{Binding FrameWidth}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="76" ShowButtonSpinner="False" AutomationProperties.Name="Frame width" />
+            <TextBlock Text="×" VerticalAlignment="Center" />
+            <NumericUpDown Value="{Binding FrameHeight}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="76" ShowButtonSpinner="False" AutomationProperties.Name="Frame height" />
+            <TextBlock Classes="label" Text="Frame rate" VerticalAlignment="Center" Margin="12,0,0,0" />
+            <NumericUpDown Value="{Binding Fps}" Minimum="1" Maximum="120" Increment="1" FormatString="0" Width="52" ShowButtonSpinner="False" AutomationProperties.Name="Frame rate" />
+            <TextBlock Classes="muted" Text="fps" VerticalAlignment="Center" />
+          </StackPanel>
+        </Grid>
+      </DockPanel>
+    </Border>
+
+    <!-- The timeline, where the video is worked on: References, the clips and the sound lines, under one scroll.
+         Right-click a row to create there; drop files on it to copy them in. -->
+    <Border DockPanel.Dock="Bottom" Background="#15171A" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0">
+      <DockPanel>
+        <Grid DockPanel.Dock="Top" Height="40" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="10,0">
+          <Button Width="30" Height="30" CornerRadius="15" Padding="0" Background="{StaticResource BbAccent}" VerticalAlignment="Center"
+                  HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                  Command="{Binding PlayStripCommand}" ToolTip.Tip="Play the sound lines with each clip's frames from the playhead" AutomationProperties.Name="Play the storyboard">
+            <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" Foreground="#111214" />
+          </Button>
+          <TextBlock Grid.Column="1" Text="{Binding PlayTime}" FontFamily="Consolas, monospace" Foreground="{StaticResource BbAccent}" VerticalAlignment="Center" Margin="10,0,12,0" />
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <Button Classes="ghost" Content="−" Padding="10,2" Command="{Binding ZoomOutCommand}" ToolTip.Tip="See more of the video (Ctrl + wheel)" AutomationProperties.Name="Zoom out" />
+            <Button Classes="ghost" Content="+" Padding="10,2" Command="{Binding ZoomInCommand}" ToolTip.Tip="See it closer (Ctrl + wheel)" AutomationProperties.Name="Zoom in" />
+          </StackPanel>
+          <!-- What the panel did or what went wrong; else how the timeline is used (nothing showed the right-click menu was there). -->
+          <TextBlock Grid.Column="3" Classes="muted" Text="{Binding StatusOrHint}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="12,0" FontSize="12"
+                     ToolTip.Tip="{Binding StatusOrHint}" />
+          <TextBlock Grid.Column="4" Classes="muted" Text="{Binding LengthText}" VerticalAlignment="Center" FontSize="12" />
+        </Grid>
+        <Grid ColumnDefinitions="112,*" Margin="0,0,0,4">
+          <!-- The rows' names stay put; what is right of them scrolls as one. -->
+          <Border BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,1,0">
+            <StackPanel>
+              <Border Height="26" />
+              <Border Height="92">
+                <TextBlock Text="References" Margin="10,10,6,0" />
+              </Border>
+              <StackPanel Height="112" Spacing="4">
+                <TextBlock Text="Video clips" Margin="10,10,6,0" />
+                <TextBlock Classes="label" TextWrapping="Wrap" FontSize="11" Margin="10,0,6,0" Text="Drag a clip's right edge to change its length" />
+              </StackPanel>
+              <ItemsControl ItemsSource="{Binding SoundLines}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:SoundLineItem">
+                    <!-- Its name, and its volume under it. -->
+                    <Border Height="{x:Static vm:VideoGeneratorViewModel.SoundLineHeight}" Background="Transparent" ContextRequested="OnSoundLineMenu">
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}" Margin="10,0,0,0" />
+                        <Slider Classes="volume" Minimum="0" Maximum="2" Value="{Binding Volume}" SmallChange="0.05" LargeChange="0.25" Margin="8,-8,8,-12"
+                                ToolTip.Tip="{Binding VolumeTip}" AutomationProperties.Name="{Binding VolumeTip}" />
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Button Classes="ghost" Content="+ Sound line" Padding="8,2" Margin="6,2,0,0" Height="26" Click="OnAddSoundLine"
+                      ToolTip.Tip="Another sound line" AutomationProperties.Name="New sound line" />
+            </StackPanel>
+          </Border>
+
+          <!-- Dragged sideways anywhere but the ruler, a clip's edge and a sound, it scrolls (VideoGeneratorPanel.Pan);
+               the wheel does too, Ctrl+wheel zooms. -->
+          <ScrollViewer x:Name="Timeline" Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                        PointerWheelChanged="OnTimelineWheel" Background="Transparent" BringIntoViewOnFocusChange="False" ContextRequested="OnRowMenu">
+            <Panel Width="{Binding TimelineWidth}" HorizontalAlignment="Left" ClipToBounds="True">
+              <StackPanel>
+                <views:VideoRuler x:Name="Ruler" Height="26" Pps="{Binding Pps}" Length="{Binding Length}" Lead="{x:Static vm:VideoGeneratorViewModel.Lead}" />
+
+                <!-- References: a card each, image files, video files and generated images; the dashed card makes a new one. -->
+                <Panel Height="92" Tag="references" Background="Transparent">
+                  <ItemsControl ItemsSource="{Binding References}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <Canvas />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.Styles>
+                      <Style Selector="ContentPresenter" x:DataType="vm:ReferenceCard">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="4" />
+                      </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ReferenceCard">
+                        <Button Classes="pick" Click="OnCardClick" ContextRequested="OnCardMenu" ToolTip.Tip="{Binding Kind}" AutomationProperties.Name="{Binding Name}">
+                          <Border Classes="block" Classes.selected="{Binding IsSelected}" Classes.drop="{Binding IsDropTarget}" Width="{x:Static vm:VideoGeneratorViewModel.CardWidth}" Height="84" Cursor="Hand">
+                            <DockPanel>
+                              <TextBlock DockPanel.Dock="Bottom" Text="{Binding State}" FontSize="10" Classes="muted" Margin="6,0,6,3" TextTrimming="CharacterEllipsis" />
+                              <TextBlock DockPanel.Dock="Bottom" Text="{Binding Name}" FontSize="11" Margin="6,1,6,0" TextTrimming="CharacterEllipsis" />
+                              <Panel Background="#0B0C0E">
+                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                <!-- A video file: a play mark at its corner, as a clip has none. -->
+                                <Border IsVisible="{Binding IsVideo}" Background="#B0000000" CornerRadius="3" Padding="4,3" Margin="4" HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                                  <PathIcon Data="M8 5v14l11-7z" Width="9" Height="9" Foreground="White" />
+                                </Border>
+                                <StackPanel IsVisible="{Binding IsNew}" Spacing="3" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                  <Button Classes="choice" Content="File…" Click="OnCardFile" ToolTip.Tip="Copy a picture or video of yours in" />
+                                  <Button Classes="choice" Content="Generate" Click="OnCardGenerate" ToolTip.Tip="Sloperator makes it: say in the chat what it should be" />
+                                </StackPanel>
+                              </Panel>
+                            </DockPanel>
+                          </Border>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Canvas>
+                    <Button Classes="pick" Canvas.Left="{Binding AddReferenceX}" Canvas.Top="4" Width="56" Height="84" Click="OnCreateReference"
+                            HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
+                            ToolTip.Tip="A new reference: a picture or video of yours, or a picture Sloperator generates" AutomationProperties.Name="New reference">
+                      <Panel>
+                        <Rectangle Stroke="{StaticResource BbBorder}" StrokeThickness="1.5" StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
+                        <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="16" Height="16" Foreground="{StaticResource BbMuted}" />
+                      </Panel>
+                    </Button>
+                  </Canvas>
+                </Panel>
+
+                <!-- Video clips: a block per clip from where it starts for as long as it lasts. -->
+                <Panel Height="112" Tag="video" Background="Transparent">
+                  <ItemsControl ItemsSource="{Binding Shots}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <Canvas />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.Styles>
+                      <Style Selector="ContentPresenter" x:DataType="vm:ShotItem">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="4" />
+                      </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ShotItem">
+                        <Button Classes="pick" Click="OnShotClick" ContextRequested="OnShotMenu" ToolTip.Tip="{Binding Summary}" AutomationProperties.Name="{Binding Title}">
+                          <Border Classes="block" Classes.selected="{Binding IsSelected}" Width="{Binding BlockWidth}" Height="104" Cursor="Hand">
+                            <Panel>
+                              <DockPanel>
+                                <Grid DockPanel.Dock="Top" Height="20" ColumnDefinitions="Auto,*,Auto" Margin="8,0,12,0">
+                                  <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+                                  <TextBlock Grid.Column="1" Text="{Binding Name}" Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" Margin="4,0" VerticalAlignment="Center" />
+                                  <TextBlock Grid.Column="2" Text="{Binding LengthText}" Classes="muted" FontSize="12" VerticalAlignment="Center" />
+                                </Grid>
+                                <TextBlock DockPanel.Dock="Bottom" Height="20" Text="{Binding State}" FontSize="11" Margin="8,0,12,0" Classes="muted" Classes.error="{Binding IsError}" TextTrimming="CharacterEllipsis" />
+                                <!-- The start frame, the clip (its frames once made, else what happens in it), the end frame;
+                                     the end's margin clears the edge's handle. -->
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                  <ContentControl Content="{Binding StartSlot}" IsVisible="{Binding HasSlots}" Margin="4,4,0,4" VerticalContentAlignment="Stretch" />
+                                  <Panel Grid.Column="1" Margin="4" ClipToBounds="True">
+                                    <Image Source="{Binding Strip}" Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Top" IsVisible="{Binding HasStrip}" />
+                                    <TextBlock Text="{Binding Summary}" IsVisible="{Binding ShowsSummary}" Classes="muted" FontSize="11" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" />
+                                  </Panel>
+                                  <ContentControl Grid.Column="2" Content="{Binding EndSlot}" IsVisible="{Binding HasSlots}" Margin="0,4,8,4" VerticalContentAlignment="Stretch" />
+                                </Grid>
+                              </DockPanel>
+                              <Border Classes="handle" Width="7" HorizontalAlignment="Right" Cursor="SizeWestEast" ToolTip.Tip="Drag to make it longer or shorter"
+                                      PointerPressed="OnHandlePressed" PointerMoved="OnHandleMoved" PointerReleased="OnHandleReleased" PointerCaptureLost="OnHandleCaptureLost" />
+                            </Panel>
+                          </Border>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <!-- The next clip's place, after the last: a click adds it there. -->
+                  <Canvas>
+                    <Button Classes="pick" Canvas.Left="{Binding AddShotX}" Canvas.Top="4" Width="56" Height="104" Command="{Binding AddShotCommand}"
+                            HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
+                            ToolTip.Tip="A clip after the last one; then say in the chat what happens in it" AutomationProperties.Name="New clip">
+                      <Panel>
+                        <Rectangle Stroke="{StaticResource BbBorder}" StrokeThickness="1.5" StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
+                        <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="16" Height="16" Foreground="{StaticResource BbMuted}" />
+                      </Panel>
+                    </Button>
+                  </Canvas>
+                </Panel>
+
+                <!-- The sound lines: each sound a clip from where it starts for as long as it plays, dragged along
+                     and between sound lines, trimmed at either edge, overlapping as they please. -->
+                <Panel x:Name="SoundRows" Height="{Binding SoundLinesHeight}" Tag="sounds" Background="Transparent">
+                  <ItemsControl ItemsSource="{Binding SoundLines}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:SoundLineItem">
+                        <!-- The line, and its dashed + after its last sound: a click makes a new sound there. -->
+                        <Border Height="{x:Static vm:VideoGeneratorViewModel.SoundLineHeight}" BorderBrush="#1E2024" BorderThickness="0,0,0,1">
+                          <Canvas>
+                            <Button Classes="pick" Canvas.Left="{Binding AddX}" Canvas.Top="4" Width="56" Height="40" Click="OnCreateSound"
+                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
+                                    ToolTip.Tip="A new sound: a file of yours, foley for the clips under it, or music" AutomationProperties.Name="New sound">
+                              <Panel>
+                                <Rectangle Stroke="{StaticResource BbBorder}" StrokeThickness="1.5" StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
+                                <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="16" Height="16" Foreground="{StaticResource BbMuted}" />
+                              </Panel>
+                            </Button>
+                          </Canvas>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <ItemsControl ItemsSource="{Binding Sounds}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <Canvas />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.Styles>
+                      <Style Selector="ContentPresenter" x:DataType="vm:SoundItem">
+                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                      </Style>
+                    </ItemsControl.Styles>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:SoundItem">
+                        <Border Classes="block clip" Classes.selected="{Binding IsSelected}" Classes.drop="{Binding IsDropTarget}" Classes.planned="{Binding !IsMade}"
+                                Width="{Binding BlockWidth}" Height="40" Cursor="Hand" ToolTip.Tip="{Binding Summary}" AutomationProperties.Name="{Binding Title}"
+                                PointerPressed="OnSoundPressed" PointerMoved="OnSoundMoved" PointerReleased="OnSoundReleased" PointerCaptureLost="OnSoundCaptureLost"
+                                ContextRequested="OnSoundMenu">
+                          <Panel>
+                            <views:VideoWave Peaks="{Binding Peaks}" Margin="0,4" />
+                            <StackPanel Margin="8,2,8,0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                              <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="SemiBold" />
+                              <TextBlock Text="{Binding State}" FontSize="10" Classes="muted" Classes.error="{Binding IsError}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <StackPanel IsVisible="{Binding IsNew}" Orientation="Horizontal" Spacing="4" Margin="8,0,8,3" VerticalAlignment="Bottom">
+                              <Button Classes="choice" Content="File…" Click="OnSoundFile" ToolTip.Tip="Copy a sound of yours in" />
+                              <Button Classes="choice" Content="Foley" Click="OnSoundFoley" ToolTip.Tip="Sloperator makes the sounds of what the clips under it show" />
+                              <Button Classes="choice" Content="Music" Click="OnSoundMusic" ToolTip.Tip="Sloperator makes a song: say in the chat what it should be" />
+                            </StackPanel>
+                            <Border Classes="handle" Tag="left" Width="6" HorizontalAlignment="Left" Cursor="SizeWestEast" ToolTip.Tip="Drag to cut its start" />
+                            <Border Classes="handle" Tag="right" Width="6" HorizontalAlignment="Right" Cursor="SizeWestEast" ToolTip.Tip="Drag to cut its end" />
+                          </Panel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Panel>
+                <Border Height="28" />
+              </StackPanel>
+              <!-- The playhead, through every row. -->
+              <Canvas IsHitTestVisible="False">
+                <Rectangle Canvas.Left="{Binding PlayheadX}" Width="2" Height="2000" Fill="{StaticResource BbAccent}" />
+              </Canvas>
+            </Panel>
+          </ScrollViewer>
+        </Grid>
+      </DockPanel>
+    </Border>
+
+    <!-- The viewer: what is picked on the timeline (it goes into the chat's box), or the whole video; how it was made under it. -->
+    <DockPanel>
+      <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0" MaxHeight="190"
+              IsVisible="{Binding Details, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="6" Margin="14,8">
+            <Button Classes="primary" Content="Use this version" Command="{Binding UseVersionCommand}" IsVisible="{Binding IsVersionShown}" HorizontalAlignment="Left"
+                    ToolTip.Tip="Put this version back in the video; the one in it now is kept as a version" />
+            <SelectableTextBlock Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" FontSize="12" />
+            <TextBlock Classes="muted" Text="{Binding MadeWith}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding MadeWith, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <SelectableTextBlock Text="{Binding Look}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding HasLook}"
+                                 Classes="muted" Classes.error="{Binding LookFoundFault}" />
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+      <!-- Its margin takes clicks too: away from the picture, they show the whole video. -->
+      <Panel Background="Transparent" PointerPressed="OnAwayPressed">
+        <Panel x:Name="ViewerBox" Margin="14,12">
+          <ContentControl Content="{Binding Viewer}" IsVisible="{Binding !IsPlaying}" />
+          <Border Classes="thumb" Background="#000000" IsVisible="{Binding IsPlaying}">
+            <Panel>
+              <Image Source="{Binding PlayFrame}" Stretch="Uniform" />
+              <Border Background="#B0000000" VerticalAlignment="Bottom" HorizontalAlignment="Left" Padding="8,3" Margin="10" CornerRadius="4">
+                <TextBlock Text="{Binding PlayLabel}" FontSize="12" />
+              </Border>
+            </Panel>
+          </Border>
+        </Panel>
+      </Panel>
+    </DockPanel>
+  </DockPanel>
+</UserControl>

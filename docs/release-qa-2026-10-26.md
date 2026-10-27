@@ -37,7 +37,7 @@ agent said. errors.log stayed empty throughout.
 | 3a | A square fox picture by File… on a new reference, then "a 4 second clip where this fox trots across the kitchen" | Qwen | pass | 29 min | References/Red Fox.png byte for byte the user's; the frame shows the whole fox in the same kitchen |
 | 3b | walk.mp4 (a 4 s cat walk) as a reference video, "moves exactly as the cat does" | Qwen | pass after a fix | 86 min, then 12 min | Card with a poster and ▶, plays in the viewer. The user's LTX-2.5 pose workflow was picked, but its clips came out 2.0 and 2.7 s (fix 3); Qwen then edited the workflow and wrote its own stabilizer for an hour (stopped). Remade after the fix: 4.0 s, the fox walks as the cat (the camera pans with it, which the look failed) |
 | 3c | walk.mp4 picked, "a clip that goes on from exactly where this video ends: the cat stops and sits down" | Qwen, Haiku | pass after a fix | 45, 7, 12 min | Both models went on from the last clip, not from walk.mp4 (fix 6). Haiku then made the frame of walk.mp4; its sit clip failed its looks (the camera tilts), and it said so |
-| 4 | Sound line 1: + then Foley; + Sound line; Music "a playful jazzy piano tune…"; drag, trim, move to the other line, the two volume sliders, join | Qwen | pass after a fix | 2.6 + 4.4 min | Foley: blackbox/video_to_audio over all 5 clips, 18 s. Music: ACE-Step 1.5 XL Turbo, 60 s, best of 3 (SongEval 3.1, an instrumental). Drag 1.6 s along, left edge 1 s in, to the other line: all saved. Joins at line volumes 1/1, 1.5/0.5, 2/0, 0/0: the foley alone measured -23.7, -20.2 and -17.7 dB and silence, after fix 4 |
+| 4 | Sound line 1: + then Foley; + Sound line; Music "a playful jazzy piano tune…"; drag, trim, move to the other line, the two volume sliders, join | Qwen | pass after a fix | 2.6 + 4.4 min | Foley: sloperator/video_to_audio over all 5 clips, 18 s. Music: ACE-Step 1.5 XL Turbo, 60 s, best of 3 (SongEval 3.1, an instrumental). Drag 1.6 s along, left edge 1 s in, to the other line: all saved. Joins at line volumes 1/1, 1.5/0.5, 2/0, 0/0: the foley alone measured -23.7, -20.2 and -17.7 dB and silence, after fix 4 |
 
 **Fixed** (on `qa/comfyui`, each in the changelog and docs/notes.md):
 1. New clip on a video just opened was never saved: it stayed only in the panel, was gone at the
@@ -68,7 +68,7 @@ agent said. errors.log stayed empty throughout.
 
 ## Agent runs
 
-Each task ran in `blackbox-cli` with `--yes` from a scratch root of its own (its settings only),
+Each task ran in `sloperator-cli` with `--yes` from a scratch root of its own (its settings only),
 one after another on the laptop's one screen (1920x1080 at 125%), and was checked by a script
 afterwards, not by what the agent said. The toolkit task ran in the app's window, driven through
 UI Automation.
@@ -101,7 +101,7 @@ Times are the whole task, from start to the agent's last word; steps are model c
   step, then F12, the file name and Enter typed at once) and it still checked the file with
   `Test-Path` before closing Paint.
 - Excel: one `write_file` of a Markdown table to budget.xlsx, `=SUM(B2:B5)` and `**Item**` turned
-  into a formula and bold by BlackBox's writer, then a `read_file` to check. It never opened Excel.
+  into a formula and bold by Sloperator's writer, then a `read_file` to check. It never opened Excel.
 - In File inspector it answered from what it had read after its own edit ("no need to check the
   file again"), which was right.
 
@@ -125,7 +125,7 @@ Times are the whole task, from start to the agent's last word; steps are model c
 - paint: it drew the rectangle's outline but couldn't fill it: the bucket used Color 2 (white),
   then it set Color 2 to red, redrew, selected all, clicked inside the shape for minutes. After 37
   steps (about 80 requests in the hour with the tasks before) Kilo answered 429 for every request:
-  200 requests an hour per IP, and other threads' runs share the laptop's IP. BlackBox waited and
+  200 requests an hour per IP, and other threads' runs share the laptop's IP. Sloperator waited and
   retried as it should ("Trying again in 5 min (Stop ends the wait)"), so the task ran out its
   25 minutes waiting; Excel, next, got 429 from its first step. A second Paint run (a third, broken
   off when my own script closed Paint under it, isn't counted) set the bucket's Fill to Solid
@@ -148,7 +148,7 @@ Times are the whole task, from start to the agent's last word; steps are model c
   and 8-10 s of reading.
 - code: the slowest and the most thorough. Its first fix kept `[int]($n / 2)` for the odd case,
   which PowerShell rounds to even (3/2 gives 2), so the test still failed; it wrote four little
-  debug scripts into BlackBox's scratch folder, searched the web for how `[int]` rounds, and fixed
+  debug scripts into Sloperator's scratch folder, searched the web for how `[int]` rounds, and fixed
   it with `($n - 1) / 2`.
 - paint: the same wall as Nemotron, filling the rectangle: it drew it, undid it six times, drew
   it again, went to the bucket, then to Color 1. Two steps took long: one reply of 3.5k tokens
@@ -162,7 +162,7 @@ Times are the whole task, from start to the agent's last word; steps are model c
 ## The app, driven
 
 A stand-in model server (scripted replies, tool calls and a 30 s slow step) and a script driving
-the window through UI Automation, on a fresh `BLACKBOX_HOME`: 25 of 25 checks passed.
+the window through UI Automation, on a fresh `SLOPERATOR_HOME`: 25 of 25 checks passed.
 
 - Starts, connects, a reply shows, the title names the chat.
 - A slow step shows Stop; a message sent meanwhile waits above the box; Pause/Break stops the run
@@ -196,5 +196,5 @@ the window through UI Automation, on a fresh `BLACKBOX_HOME`: 25 of 25 checks pa
 
 - In File inspector and in cards, a Markdown table is drawn in a monospace font noticeably smaller
   than the text around it.
-- A free Kilo model shares 200 requests an hour with every BlackBox on the same IP; a long desktop
+- A free Kilo model shares 200 requests an hour with every Sloperator on the same IP; a long desktop
   task can use most of it.

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Sloperator.Core</RootNamespace>
+    <!-- The published exe is trimmed: flag code that needs reflection while it is written. -->
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- HTML parsing for the web tools; fully managed. -->
+    <PackageReference Include="AngleSharp" Version="1.8.3" />
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
+    <!-- PDF text for read_file; fully managed, no dependencies (Apache-2.0). -->
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <!-- PDF pages drawn for the File inspector panel: Chrome's PDF engine, prebuilt (BSD-3 and Apache-2.0); native, 7.5 MB (win-x64). -->
+    <PackageReference Include="bblanchon.PDFium.Win32" Version="157.0.8100" />
+    <!-- Same SkiaSharp line as Avalonia 11 so the app ships a single native Skia. -->
+    <PackageReference Include="SkiaSharp" Version="2.88.9" />
+    <!-- The ssh tool's SSH client; fully managed, so no ssh.exe or PuTTY is needed. -->
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Sloperator.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- How to write what ComfyUI's models are given (ComfyGuides): the comfyui tool and the video director read them. -->
+    <EmbeddedResource Include="Comfy\Guides\*.md" LogicalName="guide:%(Filename)" />
+  </ItemGroup>
+
+</Project>

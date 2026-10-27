@@ -1,27 +1,27 @@
 <#
 .SYNOPSIS
-  Sysadmin benchmark: BlackBox gets a fresh Debian server (the lab VM from sysadmin-vm.ps1) and
+  Sysadmin benchmark: Sloperator gets a fresh Debian server (the lab VM from sysadmin-vm.ps1) and
   a real ticket per task, with only the IP, the user name and a key, like a hired admin. After
   each run the VM is rebooted and scripts check the end state over SSH and from this PC: the
   game server answers over WebSocket, the site has HTTPS, password logins are really off, the
   firewall blocks what it should, and so on.
 
   Each task is a folder in scripts\sysadmin\tasks\: task.txt (the ticket; {ip}, {user}, {key}
-  are filled in), setup.sh (run as root before BlackBox starts, with the task's files\ next to
+  are filled in), setup.sh (run as root before Sloperator starts, with the task's files\ next to
   it), check.sh (root, on the VM, after the reboot) and check-host.ps1 (on this PC), both
   printing PASS/FAIL lines, and solution.sh, a reference fix that -SelfTest uses to prove the
   checks pass. Optional: vars.txt (KEY=value lines for the scripts, such as LAB_SUDO_PASSWORD
   when a task makes sudo ask for one; {KEY} in the ticket is filled in too), preamble.txt (in
   place of the standard opening, which says to log in as admin with the key), old\ (setup.sh and
-  files for an "old server": a second VM at {ip2}, set up before BlackBox starts and switched off
+  files for an "old server": a second VM at {ip2}, set up before Sloperator starts and switched off
   before the checks, for tasks that move things from one server to another), solution-host.ps1
   (the reference solution's part on this PC), setup-host.ps1 (makes per-run files in $tdir\upload,
   which go to the VM with setup.sh) and traffic-host.ps1 (a server's live users: started on this PC
-  in the background after setup with -Ip, -Dir $tdir, -Token and -ParentPid, it runs while BlackBox
+  in the background after setup with -Ip, -Dir $tdir, -Token and -ParentPid, it runs while Sloperator
   or the reference solution works and stops when $tdir\traffic.stop appears, before the reboot and
   the checks). The scripts see LAB_IP, LAB_USER and a random TOKEN; the
   PowerShell ones also $token, $tdir and the lab helpers. Nothing of this is left on the VM while
-  BlackBox works.
+  Sloperator works.
 
   Runs land in .dev\sysadmin\<time>\: summary.txt, and per task run.txt (the live log),
   setup.txt, check.txt and shots\. The VM is reset from its snapshot before every task.
@@ -30,7 +30,7 @@
   ./scripts/sysadmin-test.ps1                              # every task, server and model from Data/settings.json
   ./scripts/sysadmin-test.ps1 -Tasks game-server,fix-website -Model qwen3.8-27b@q6_k_xl
   ./scripts/sysadmin-test.ps1 -SelfTest                    # reference solutions only: checks the checks, no model
-  ./scripts/sysadmin-test.ps1 -Cli D:\old\blackbox-cli.exe # another build, e.g. to compare with a baseline
+  ./scripts/sysadmin-test.ps1 -Cli D:\old\sloperator-cli.exe # another build, e.g. to compare with a baseline
   ./scripts/sysadmin-test.ps1 -Recheck 20261014-041653 -Tasks game-server   # reboot and check a finished run's VM again
 #>
 param([string[]]$Tasks = @(), [string]$Url = "", [string]$Model = "", [string]$Root = "",
@@ -77,18 +77,18 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path "$La
 if ($Cli) {
   $cli = $Cli
 } else {
-  $cli = Join-Path $LabRepo "src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe"
+  $cli = Join-Path $LabRepo "src\Sloperator.Cli\bin\Debug\net10.0-windows\sloperator-cli.exe"
   if (-not $SelfTest) {
-    dotnet build (Join-Path $LabRepo "src\BlackBox.Cli") -v q | Out-Null
+    dotnet build (Join-Path $LabRepo "src\Sloperator.Cli") -v q | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Build failed" }
   }
 }
-Write-Host "BlackBox: $cli"
+Write-Host "Sloperator: $cli"
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $out = if ($Recheck) { Join-Path $LabRepo ".dev\sysadmin\$Recheck" } else { Join-Path $LabRepo (".dev\sysadmin\" + $stamp + $(if ($SelfTest) { "-selftest" } else { "" })) }
 New-Item -ItemType Directory -Force $out | Out-Null
 
-# BlackBox's copy of the admin key.
+# Sloperator's copy of the admin key.
 $key = Join-Path $out "key\admin_ed25519"
 if (-not $Recheck) {
   New-Item -ItemType Directory -Force (Split-Path $key) | Out-Null
@@ -97,14 +97,14 @@ if (-not $Recheck) {
   Protect-LabKey $key
 }
 
-# If BlackBox calls ssh.exe itself, it adds the VM to the user's known_hosts; that entry is taken
+# If Sloperator calls ssh.exe itself, it adds the VM to the user's known_hosts; that entry is taken
 # out again at the end (and known_hosts.old, which ssh-keygen -R overwrites, put back).
 $userKnown = Join-Path $env:USERPROFILE ".ssh\known_hosts"
 $userKnownOld = "$userKnown.old"
 $savedOld = Join-Path $out "known_hosts.old.bak"
 if (Test-Path $userKnownOld) { Copy-Item $userKnownOld $savedOld }
 
-# BlackBox's own known_hosts: a rebuilt lab has new host keys, which BlackBox would rightly refuse.
+# Sloperator's own known_hosts: a rebuilt lab has new host keys, which Sloperator would rightly refuse.
 $bbKnown = Join-Path $(if ($Root) { $Root } else { Join-Path $LabRepo ".dev" }) "Data\known_hosts"
 if (Test-Path $bbKnown) {
   @(Get-Content $bbKnown | Where-Object { $_ -notlike "$LabIp *" -and $_ -notlike "$LabIp2 *" }) | Set-Content -Encoding ascii $bbKnown
@@ -217,7 +217,7 @@ try {
       ($r.Out + $r.Err) | Set-Content -Encoding utf8 $log
       Add-Content $log "`n[done] solution.sh exit code $($r.Code)"
     } else {
-      Log "$($task.Name): BlackBox runs; log: $log"
+      Log "$($task.Name): Sloperator runs; log: $log"
       Write-Host $text
       $a = $cliArgs + @("--yes", "--save-shots", (Join-Path $tdir "shots"), $text)
       $p = Start-Process $cli -ArgumentList ($a | ForEach-Object { Format-LabArg $_ }) -NoNewWindow -PassThru `

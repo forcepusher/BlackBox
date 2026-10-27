@@ -1,11 +1,11 @@
-# BlackBox
-BlackBox does work on your Windows PC for you. Tell it what you want in plain words, and an AI model
+# Sloperator
+Sloperator does work on your Windows PC for you. Tell it what you want in plain words, and an AI model
 does it the way a person would: it looks at the screen, clicks, types, edits files and runs commands
 until the job is done.
 
-![BlackBox's start screen](docs/screenshot.png)
+![Sloperator's start screen](docs/screenshot.png)
 
-It is a single portable `BlackBox.exe`. Nothing gets installed: its settings, chats, videos and
+It is a single portable `Sloperator.exe`. Nothing gets installed: its settings, chats, videos and
 whatever it downloads stay in a `Data` folder next to the exe.
 
 ## What it can do
@@ -14,10 +14,10 @@ whatever it downloads stay in a `Data` folder next to the exe.
 - **Videos.** Pick **Video generator** in the **Toolkit** dropdown at the top left: it opens on the left
   of the chat with the video on a timeline: References (pictures and videos), video clips and sound lines.
   Right-click a row to create something there, then pick **File…** to copy in a file of yours or
-  **Generate** to have BlackBox make it; you can also drop files on the timeline. A sound line's **+**
+  **Generate** to have Sloperator make it; you can also drop files on the timeline. A sound line's **+**
   makes a sound: a file of yours, **Foley** for what the clips under it show, or **Music**. The video's name at
   the top opens your other videos. Click anything on the timeline to put it in your message, and say
-  what you want in plain words (with nothing picked, it is about the whole video). BlackBox writes the
+  what you want in plain words (with nothing picked, it is about the whole video). Sloperator writes the
   prompts, picks the models, makes it and looks at it, in the chat, where you can watch it and stop
   it; right-click a piece to get an earlier version back. Or just ask for a video in the chat.
 - **See what changed.** Pick **File changes** in the **Toolkit** dropdown: it opens on the left of the chat
@@ -45,7 +45,7 @@ whatever it downloads stay in a `Data` folder next to the exe.
 - **Long jobs.** It keeps going for hours when a job needs it.
 
 ## Getting started
-1. Put `BlackBox.exe` in a folder of your own (Documents, the Desktop, a USB stick), not in
+1. Put `Sloperator.exe` in a folder of your own (Documents, the Desktop, a USB stick), not in
    Program Files. To make the exe yourself, see [Building](#building).
 2. Double-click it. If Windows says "Windows protected your PC", click **More info**, then
    **Run anyway**.
@@ -64,7 +64,7 @@ private or long work, use your own model.
   (or AUTOMATIC1111) shows the prompts and settings it was made with.
 - Paste a screenshot or files with Ctrl+V, or drop them on the window, to send them with a message.
 - **History** keeps every chat, so you can come back to one and carry on.
-- **Several tasks at once:** **New window** at the top (or starting BlackBox again) opens another
+- **Several tasks at once:** **New window** at the top (or starting Sloperator again) opens another
   window with a chat of its own. The windows take turns with the
   mouse and keyboard, and Pause/Break stops them all.
 - It doesn't ask before it acts. To approve each step, use "Ask me first" in Settings.
@@ -74,14 +74,14 @@ private or long work, use your own model.
 ## Using your own model
 Type your server's address in the bar at the top of the window, such as `http://localhost:1234/v1`
 for LM Studio, and an API key next to it if the server needs one. Any OpenAI-compatible server works:
-LM Studio, llama.cpp, Ollama, vLLM, OpenRouter and other online APIs. BlackBox picks the strongest
+LM Studio, llama.cpp, Ollama, vLLM, OpenRouter and other online APIs. Sloperator picks the strongest
 model the server has, or you pick one from the list.
 
 - In LM Studio, switch its server on in the Developer tab, and turn on "Serve on Local Network"
-  if BlackBox runs on another PC.
+  if Sloperator runs on another PC.
 - To use the screen, the model has to see images (Qwen3.5 VL or later, Gemma 4 with its vision
   projector). Most testing was done with Qwen3.8 27B.
-- For Claude, type `api.anthropic.com` and your Anthropic API key. BlackBox speaks Anthropic's own
+- For Claude, type `api.anthropic.com` and your Anthropic API key. Sloperator speaks Anthropic's own
   API, so Claude keeps its thinking and most of each step comes from its cheaper cache. It uses
   Claude Opus 5.5 unless you pick another, with its whole 1M context; a long job costs more with
   a bigger context, so set a smaller one by hand if you prefer.
@@ -99,7 +99,7 @@ You need Windows and the .NET 10 SDK.
 ```powershell
 dotnet build             # debug build, keeps its Data in .dev/
 dotnet test              # unit tests
-./scripts/publish.ps1    # makes publish/BlackBox.exe
+./scripts/publish.ps1    # makes publish/Sloperator.exe
 ```
 
 How each part works and why, the test scripts and the benchmark results are in

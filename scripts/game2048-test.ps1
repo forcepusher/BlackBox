@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Long-running test: BlackBox writes its own 2048, play-tests it through the desktop and fixes it
+  Long-running test: Sloperator writes its own 2048, play-tests it through the desktop and fixes it
   until it works. 2048 is turn-based, so the model's seconds per step don't matter. Afterwards
   game2048-check.mjs plays the game in headless Edge and checks every move against the rules
   and that the tiles sit inside the board.
@@ -20,8 +20,8 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path "$re
   $env:DOTNET_ROOT = "$repo\.dev\dotnet"
   $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
 }
-$cli = Join-Path $repo "src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe"
-dotnet build (Join-Path $repo "src\BlackBox.Cli") -v q | Out-Null
+$cli = Join-Path $repo "src\Sloperator.Cli\bin\Debug\net10.0-windows\sloperator-cli.exe"
+dotnet build (Join-Path $repo "src\Sloperator.Cli") -v q | Out-Null
 $out = Join-Path $repo (".dev\game2048\" + (Get-Date -Format "yyyyMMdd-HHmmss"))
 $game = Join-Path $out "game"
 New-Item -ItemType Directory -Force $game | Out-Null

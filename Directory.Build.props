@@ -8,6 +8,6 @@
     <Version>1.0.0</Version>
     <!-- English only: keeps the portable folder free of a dozen satellite-resource folders. -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Authors>BlackBox contributors</Authors>
+    <Authors>Sloperator contributors</Authors>
   </PropertyGroup>
 </Project>

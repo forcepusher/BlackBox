@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-  Builds the portable BlackBox: no installer, nothing written outside its own folder.
+  Builds the portable Sloperator: no installer, nothing written outside its own folder.
 
 .DESCRIPTION
-  Default: one BlackBox.exe, trimmed to the parts of .NET and the libraries BlackBox uses and
+  Default: one Sloperator.exe, trimmed to the parts of .NET and the libraries Sloperator uses and
   compressed (about 26 MB instead of 102). The native libraries (Skia, HarfBuzz, ANGLE, PDFium) are
   embedded and unpacked into Data/runtime next to the exe on first run. Copy just the exe anywhere
   and run it.
@@ -11,8 +11,8 @@
   -Folder: the classic self-contained folder (exe + DLLs), handy for debugging.
 
 .EXAMPLE
-  ./scripts/publish.ps1           # publish/BlackBox.exe
-  ./scripts/publish.ps1 -Folder   # publish/BlackBox-win-x64/
+  ./scripts/publish.ps1           # publish/Sloperator.exe
+  ./scripts/publish.ps1 -Folder   # publish/Sloperator-win-x64/
 #>
 param(
     [string]$Runtime = "win-x64",
@@ -35,7 +35,7 @@ trap {
 }
 
 $root = Split-Path $PSScriptRoot
-$project = Join-Path $root "src/BlackBox.App/BlackBox.App.csproj"
+$project = Join-Path $root "src/Sloperator.App/Sloperator.App.csproj"
 $publishRoot = Join-Path $root "publish"
 
 # The portable SDK in .dev\dotnet when none is installed.
@@ -50,7 +50,7 @@ function Publish([string]$out, [string[]]$extra) {
 }
 
 if ($Folder) {
-    $out = Join-Path $publishRoot "BlackBox-$Runtime"
+    $out = Join-Path $publishRoot "Sloperator-$Runtime"
     Publish $out @()
     New-Item -ItemType Directory -Force (Join-Path $out "Data") | Out-Null
     Write-Host "Portable folder ready: $out"
@@ -63,7 +63,7 @@ $singleFile = @("-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfEx
     "-p:PublishTrimmed=true", "-p:TrimMode=full", "-p:EnableCompressionInSingleFile=true")
 
 # 1) Single-file publish to a staging folder to collect the native libraries it leaves beside the exe.
-$stage = Join-Path ([IO.Path]::GetTempPath()) "blackbox-publish-$([guid]::NewGuid().ToString('N'))"
+$stage = Join-Path ([IO.Path]::GetTempPath()) "sloperator-publish-$([guid]::NewGuid().ToString('N'))"
 try {
     Publish (Join-Path $stage "first") $singleFile
     $payloadDir = Join-Path $stage "payload"
@@ -78,8 +78,8 @@ try {
     $second = Join-Path $stage "second"
     Publish $second ($singleFile + "-p:RuntimePayload=$zip")
     New-Item -ItemType Directory -Force $publishRoot | Out-Null
-    $exe = Join-Path $publishRoot "BlackBox.exe"
-    Copy-Item (Join-Path $second "BlackBox.exe") $exe -Force
+    $exe = Join-Path $publishRoot "Sloperator.exe"
+    Copy-Item (Join-Path $second "Sloperator.exe") $exe -Force
     Write-Host ("Single-file build ready: {0} ({1:N0} MB)" -f $exe, ((Get-Item $exe).Length / 1MB))
 }
 finally {

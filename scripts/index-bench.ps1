@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
   Measures what the folder index changes: each task of scripts\index-bench\tasks.json is run through
-  blackbox-cli on a fresh copy of its project, with index_folder and with --no-index (the same build,
+  sloperator-cli on a fresh copy of its project, with index_folder and with --no-index (the same build,
   without the tool, its prompt line and its note), and scored.
 
   Every run gets a clean copy of the project (a local git clone, reset between runs) and a portable
@@ -24,7 +24,7 @@ param(
   [int]$Runs = 2,
   [int]$Parallel = 1,                               # runs at once; 1 for a local server, so times compare
   [int]$TimeoutMinutes = 25,
-  [string]$Cli = "",                                # a blackbox-cli.exe built before, to compare builds; else the repository's, built now
+  [string]$Cli = "",                                # a sloperator-cli.exe built before, to compare builds; else the repository's, built now
   [switch]$Rescore,                                 # only score the runs of this label whose scoring failed
   [string]$Work = (Join-Path $env:USERPROFILE "IndexBench")  # outside the repository: the model shouldn't find the real checkout
 )
@@ -41,11 +41,11 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"; $env:DOTNET_NOLOGO = "1"; $env:DOTNET_SK
 if ($Cli) {
   $cli = (Resolve-Path $Cli).Path
 } else {
-  $cli = Join-Path $repo "src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe"
-  dotnet build (Join-Path $repo "src\BlackBox.Cli") -v q -nologo | Out-Null
+  $cli = Join-Path $repo "src\Sloperator.Cli\bin\Debug\net10.0-windows\sloperator-cli.exe"
+  dotnet build (Join-Path $repo "src\Sloperator.Cli") -v q -nologo | Out-Null
   if ($LASTEXITCODE -ne 0) {
-    if (-not (Test-Path $cli)) { throw "blackbox-cli didn't build" }
-    Write-Host "blackbox-cli didn't build (another benchmark's runs hold it?): using the one there"
+    if (-not (Test-Path $cli)) { throw "sloperator-cli didn't build" }
+    Write-Host "sloperator-cli didn't build (another benchmark's runs hold it?): using the one there"
   }
 }
 $Settings = (Resolve-Path $Settings).Path
