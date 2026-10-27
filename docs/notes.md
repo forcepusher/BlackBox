@@ -2304,14 +2304,14 @@ agent's thread while no change was shown yet. With another tool open (File inspe
 its place, and the chat's turn is spent. Settings, Toolkit, "Open File changes when the agent first changes a file in a
 chat" turns it off (`panels.openFileChanges`, on by default). It reads them again 250 ms after a call that may have changed files (a file written in
 parts is read once), keeping the picked lines picked. Lines are picked with a click,
-Shift+click and Ctrl+click (a @@ line picks its hunk, a file's name all of it; the rows themselves are never picked) and go into the chat's box as their
+Shift+click and Ctrl+click (a hunk's divider picks its lines, a file's name all of it; the rows themselves are never picked) and go into the chat's box as their
 file, captioned "Lines 48-49 · MainWindowViewModel.Toolkit.cs" (the lines first: a long name is
 cut there). A message sent then carries, for the model, the files changed (up to 30 named) and each
 picked line with its number and +/-, at most 300 lines; nothing while no file has changed. It
 says only that these are the lines the user refers to, not that they are to be changed: the user
 picks lines to ask about them as much as to have them changed (the user, 2026-10-24). Sent, they
 are no longer picked. A click in the
-panel away from the lines (below the last, a header or @@ line, the bar at the top, the file list
+panel away from the lines (below the last, a header or divider, the bar at the top, the file list
 below its files) unpicks them all, as Esc does there, like the Video generator's click away (the user,
 2026-10-25). What keeps them: a click on a file in the list (it only goes there, so lines are picked
 in two files), Shift or Ctrl held (they add), and any click in the chat, as the box is clicked to
@@ -2343,6 +2343,8 @@ once a file changed, both on by default and kept in settings.json under `panels`
 `watchChanges`; `PanelSettings`). **Wrap**: the diff's code column is `*` (under a sideways scroll it
 sizes to the line, as Auto did) and `ListBox.diff.wrap` turns the sideways scrollbar off and the code
 TextBlock to Wrap, so a long line wraps under its code with the number and marker on its first row.
+Rows stay logical lines: picks, drags (checked with a real drag across two wrapped lines) and the box's
+card are as before.
 **The number gutter** (the user, 2026-10-28, from a screenshot where it took about 110 px: two 46 px
 columns, old and new, and a 16 px one for the marker) is one number, the new line's, or a removed line's
 old one at half opacity (`DiffRow.Number`), with the + or - right after it and no gap. Its column is as
@@ -2351,8 +2353,17 @@ number and an unseen "+" under the marker, so every row of a file comes out the 
 measuring the font. 4 px before the number and 4 between the marker and the code, so at 125% with 3-digit
 numbers the gutter is about 39 px (with its 2 px pick border) instead of 110. Two columns were weighed
 and dropped on the user's call ("keep a single column"); what a message tells the model still has both.
-Rows stay logical lines: picks, drags (checked with a real drag across two wrapped lines) and the box's
-card are as before. **Watch**: each refresh compares the new diff with the one shown (`Fresh`: added and
+**A hunk's divider** (the user, 2026-10-28: git's @@ line "serves no purpose here, only duplicates
+stuff") stands where its @@ line was: "Lines 96-104" for `@@ -96,8 +96,9 @@`, the new side's lines
+(`DiffRow.Divider`), "Removed lines 1-140" when nothing is left on the new side, and git's function
+context after a "·" when it has one. 11 px muted text on the hunk's band, 4 px in like the numbers.
+It still picks its hunk on a click. What it gives up is the old side's start, the one place the
+single-number gutter showed where kept lines sat before. The model still gets the @@ line as git writes it.
+**The counts** ("+3 -2") in the file list, a file's header and the summary are green and red as the markers
+(the user, 2026-10-28): each is split into its added, removed and other ("binary", "no lines") parts
+(`DiffFileItem.AddedCount`, `RemovedCount`, `OtherCount`; `SummaryFiles`, `SummaryAdded`, `SummaryRemoved`), shown as
+Runs with `Run.addedCount` and `Run.removedCount`.
+**Watch**: each refresh compares the new diff with the one shown (`Fresh`: added and
 removed lines counted by file and text, as an edit moves every number below it) and marks what is new
 `IsFresh`, which lights its row (a yellow layer, fading over 2 s after 4 s, `LitFor`; 1.5 s and 1 s
 were too short for the user, 2026-10-27; not the pick's look).
@@ -2391,7 +2402,7 @@ to the right side clipped" behind long paths; then "I should be able to stage/un
 lines", "and discard selected lines as well. Redesign the UI"). One action bar over the diff has
 **Stage** and **Unstage** (only where a file is in git) and **Discard**, and beside them what they act
 on: the picked lines ("Line 31 · notes.txt · staged", "12 lines in 3 files"), else the selected file
-("notes.txt · unstaged"), not one in a folded section. A click on a hunk's @@ line picks its lines and
+("notes.txt · unstaged"), not one in a folded section. A click on a hunk's divider picks its lines and
 on a file's name all of the file's (Ctrl adds them; the header or @@ row itself is never picked), so
 lines, hunks and files go through the same three buttons, with no button in the rows. Each takes what
 is in its sections and is greyed (not filled: Fluent's disabled look read as the pressable one) with a

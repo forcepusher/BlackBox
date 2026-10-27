@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using Avalonia.Controls.Selection;
 using Avalonia.Threading;
 using Sloperator.Core.Diffs;
@@ -16,6 +17,12 @@ public sealed record DiffFileItem(DiffFile File, int Row, string FullPath)
     public string Name => File.Display;
     public string Status => File.Status;
     public string Counts => File.Counts;
+
+    /// <summary>The counts in three parts, so "+10" shows green and "-3" red: "+10", " -3" (with its space after an
+    /// added count), and "binary" or "no lines" when there is neither.</summary>
+    public string AddedCount => File.Binary || File.Added == 0 ? "" : $"+{File.Added}";
+    public string RemovedCount => File.Binary || File.Removed == 0 ? "" : (AddedCount.Length > 0 ? " -" : "-") + File.Removed;
+    public string OtherCount => AddedCount.Length + RemovedCount.Length == 0 ? File.Counts : "";
     public bool IsNew => File.Status == "added";
     public bool IsDeleted => File.Status == "deleted";
 
@@ -93,11 +100,37 @@ public sealed partial class DiffRow(DiffFileItem file, DiffLine? line) : Observa
 
     public string Text => Line is { } l ? l.Text : File.Name;
 
+    /// <summary>A line with a number and a marker: not a file's header nor a hunk's divider.</summary>
+    public bool IsCode => !IsHeader && !IsHunk;
+
+    /// <summary>What a hunk's divider says: "Lines 96-104" of the new side for "@@ -96,8 +96,9 @@", the old side's
+    /// when nothing is left of it ("Removed lines 1-140"), and git's function context after it. A note as it is.</summary>
+    public string Divider
+    {
+        get
+        {
+            if (Line is not { Kind: DiffLineKind.Hunk } l || HunkRange().Match(l.Text) is not { Success: true } m)
+                return Text;
+            static int Num(Group g, int none) => g.Success ? int.Parse(g.Value, CultureInfo.InvariantCulture) : none;
+            var (oldStart, oldCount, newStart, newCount) = (Num(m.Groups[1], 0), Num(m.Groups[2], 1), Num(m.Groups[3], 0), Num(m.Groups[4], 1));
+            var (start, count, lines) = newCount > 0 ? (newStart, newCount, "Line") : (oldStart, oldCount, "Removed line");
+            lines += count == 1 ? $" {start}" : $"s {start}-{start + count - 1}";
+            var context = m.Groups[5].Value.Trim();
+            return context.Length == 0 ? lines : $"{lines} · {context}";
+        }
+    }
+
+    [GeneratedRegex(@"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$")]
+    private static partial Regex HunkRange();
+
     /// <summary>What the header says after the name: "modified · +10 -3", "staged · modified · +2" in git.</summary>
-    public string HeaderDetails => (File.Section is null ? "" : File.SectionWord + " · ") + $"{File.Status} · {File.Counts}";
+    public string HeaderDetails => HeaderStatus + File.Counts;
+
+    /// <summary>The header's details before the counts, which are shown in their colours: "staged · modified · ".</summary>
+    public string HeaderStatus => (File.Section is null ? "" : File.SectionWord + " · ") + $"{File.Status} · ";
 
     /// <summary>What screen readers and UI Automation call it: "48 + text", the file's name for a header.</summary>
-    public override string ToString() => IsHeader ? $"{File.Name}, {HeaderDetails}" : $"{Number} {Marker} {Text}".Replace("  ", " ");
+    public override string ToString() => IsHeader ? $"{File.Name}, {HeaderDetails}" : IsHunk ? Divider : $"{Number} {Marker} {Text}".Replace("  ", " ");
 
     /// <summary>Says which row this is again after a refresh, to keep it picked.</summary>
     internal (string Path, GitSection? Section, DiffLineKind Kind, int? Old, int? New, string Text) Key => (File.FullPath.ToUpperInvariant(), File.Section, Line?.Kind ?? DiffLineKind.Hunk, Line?.Old, Line?.New, Line?.Text ?? "");
@@ -234,9 +267,19 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     /// <summary>The rows picked; their lines go into the chat's box.</summary>
     public SelectionModel<DiffRow> Selection { get; }
 
-    /// <summary>How much changed ("3 files · +40 -12"); empty with nothing changed.</summary>
+    /// <summary>How much changed ("3 files · +40 -12"); empty with nothing changed. Shown as its files
+    /// ("3 files · ") and its counts, "+40" green and " -12" red.</summary>
     [ObservableProperty]
     private string _summary = "";
+
+    [ObservableProperty]
+    private string _summaryFiles = "";
+
+    [ObservableProperty]
+    private string _summaryAdded = "";
+
+    [ObservableProperty]
+    private string _summaryRemoved = "";
 
     /// <summary>The folder the files are in, as the summary's tooltip.</summary>
     [ObservableProperty]
@@ -246,7 +289,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     [ObservableProperty]
     private string _status = Hint;
 
-    private const string Hint = "Pick lines to ask about them, stage or discard them; a @@ line picks its hunk, a file's name all of it.";
+    private const string Hint = "Pick lines to ask about them, stage or discard them; a divider picks the lines under it, a file's name all of it.";
 
     /// <summary>Reads the files again, keeping what was picked where the same lines are still there.</summary>
     /// <param name="byUser">Read after the user staged, unstaged or discarded: what moved isn't the agent's change "just now".</param>
@@ -385,9 +428,12 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
         Folder = diff.Root.Length > 0 ? diff.Root : null;
         // "2 files · +14", as each file's counts leave out what is none.
         // In git a file may be in two sections, so their counts add up to nothing: only the files are counted.
-        var counts = diff.InGit ? "" : string.Join(" ", new[] { diff.Added > 0 ? $"+{diff.Added}" : null, diff.Removed > 0 ? $"-{diff.Removed}" : null }.OfType<string>());
         var count = files.Select(f => f.FullPath.ToUpperInvariant()).Distinct().Count();
-        Summary = count == 0 ? "" : $"{count} {(count == 1 ? "file" : "files")}" + (counts.Length > 0 ? " · " + counts : "");
+        SummaryAdded = count == 0 || diff.InGit || diff.Added == 0 ? "" : $"+{diff.Added}";
+        SummaryRemoved = count == 0 || diff.InGit || diff.Removed == 0 ? "" : (SummaryAdded.Length > 0 ? " -" : "-") + diff.Removed;
+        var counts = SummaryAdded + SummaryRemoved;
+        SummaryFiles = count == 0 ? "" : $"{count} {(count == 1 ? "file" : "files")}" + (counts.Length > 0 ? " · " : "");
+        Summary = SummaryFiles + counts;
         ActionsChanged();
         if (Watch && now.Count > 0)
             ShowRow?.Invoke(_latest[0].Index);
@@ -632,8 +678,8 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
         _picking = true;
         try
         {
-            // A click on a hunk's @@ line picks its lines, on a file's name all the file's (Ctrl held: as
-            // well as what was picked). A header or @@ line is no line itself: it doesn't stay picked.
+            // A click on a hunk's divider picks its lines, on a file's name all the file's (Ctrl held: as
+            // well as what was picked). A header or divider is no line itself: it doesn't stay picked.
             if (!_refreshing && added is [{ } clicked] && (clicked.IsHeader || clicked.Line?.Kind == DiffLineKind.Hunk))
             {
                 var end = clicked.Index + 1;

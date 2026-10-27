@@ -86,8 +86,19 @@
     <Style Selector="TextBlock.marker.removed">
       <Setter Property="Foreground" Value="{StaticResource BbError}" />
     </Style>
-    <Style Selector="TextBlock.hunkText">
+    <!-- "+10 -3" after a file and in the summary: added lines green, removed red, as the markers. -->
+    <Style Selector="Run.addedCount">
+      <Setter Property="Foreground" Value="{StaticResource BbOk}" />
+    </Style>
+    <Style Selector="Run.removedCount">
+      <Setter Property="Foreground" Value="{StaticResource BbError}" />
+    </Style>
+    <!-- A hunk's divider: small, muted, starting where the numbers do. -->
+    <Style Selector="TextBlock.divider">
       <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Margin" Value="4,0" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
     <Style Selector="ListBox.files">
       <Setter Property="Background" Value="Transparent" />
@@ -159,7 +170,9 @@
             <TextBlock Text="Wrap" VerticalAlignment="Center" />
           </StackPanel>
         </ToggleButton>
-        <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding Summary}" Margin="12,0,0,0" VerticalAlignment="Center" ToolTip.Tip="{Binding Folder}" />
+        <TextBlock DockPanel.Dock="Right" Classes="muted" Margin="12,0,0,0" VerticalAlignment="Center" ToolTip.Tip="{Binding Folder}" AutomationProperties.Name="{Binding Summary}">
+          <Run Text="{Binding SummaryFiles}" /><Run Classes="addedCount" Text="{Binding SummaryAdded}" /><Run Classes="removedCount" Text="{Binding SummaryRemoved}" />
+        </TextBlock>
         <TextBlock Classes="muted" Text="{Binding Status}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Status}" />
       </DockPanel>
     </Border>
@@ -189,7 +202,7 @@
                       <StackPanel Spacing="1" ToolTip.Tip="{Binding FullPath}">
                         <TextBlock Text="{Binding Name}" TextTrimming="LeadingCharacterEllipsis" Classes.added="{Binding IsNew}" Classes.deleted="{Binding IsDeleted}" />
                         <TextBlock Classes="muted" FontSize="11">
-                          <Run Text="{Binding Status}" /><Run Text=" · " /><Run Text="{Binding Counts}" />
+                          <Run Text="{Binding Status}" /><Run Text=" · " /><Run Classes="addedCount" Text="{Binding AddedCount}" /><Run Classes="removedCount" Text="{Binding RemovedCount}" /><Run Text="{Binding OtherCount}" />
                         </TextBlock>
                       </StackPanel>
                     </DataTemplate>
@@ -246,14 +259,19 @@
                     <Border Classes="fresh" Classes.on="{Binding IsFresh}" />
                     <!-- A long path is cut short at its start, the details kept right after it. A click here picks the whole file. -->
                     <DockPanel Margin="8,5" IsVisible="{Binding IsHeader}" HorizontalAlignment="Left">
-                      <TextBlock DockPanel.Dock="Right" Text="{Binding HeaderDetails}" Classes="muted" VerticalAlignment="Center" Margin="12,0,0,0" />
+                      <TextBlock DockPanel.Dock="Right" Classes="muted" VerticalAlignment="Center" Margin="12,0,0,0">
+                        <Run Text="{Binding HeaderStatus}" /><Run Classes="addedCount" Text="{Binding File.AddedCount}" /><Run Classes="removedCount" Text="{Binding File.RemovedCount}" /><Run Text="{Binding File.OtherCount}" />
+                      </TextBlock>
                       <TextBlock Text="{Binding Text}" FontWeight="SemiBold" FontSize="13" TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding File.FullPath}" />
                     </DockPanel>
                     <!-- One number (the new line's, a removed line's old one greyed out) in a column as wide as the file's
                          widest, the marker right after it; unseen copies of "000" and "+" size both the same on every row.
                          The code's column takes what is left (wrapping); scrolled sideways, as wide as the line. The number
                          and marker stay on a wrapped line's first row. -->
-                    <Grid ColumnDefinitions="Auto,Auto,*" IsVisible="{Binding !IsHeader}" Margin="0,1" TextElement.FontFamily="Cascadia Mono,Consolas,monospace">
+                    <!-- A hunk: a slim divider saying which lines follow ("Lines 96-104"), not git's @@ line, whose numbers
+                         the gutter already shows. A click here picks the hunk. -->
+                    <TextBlock Classes="divider" IsVisible="{Binding IsHunk}" Text="{Binding Divider}" />
+                    <Grid ColumnDefinitions="Auto,Auto,*" IsVisible="{Binding IsCode}" Margin="0,1" TextElement.FontFamily="Cascadia Mono,Consolas,monospace">
                       <Panel Grid.Column="0" Margin="4,0,0,0" VerticalAlignment="Top">
                         <TextBlock Text="{Binding File.NumberSizer}" Opacity="0" />
                         <TextBlock Classes="number" Classes.removed="{Binding IsRemoved}" Text="{Binding Number}" />
@@ -262,7 +280,7 @@
                         <TextBlock Text="+" Opacity="0" />
                         <TextBlock Classes="marker" Classes.added="{Binding IsAdded}" Classes.removed="{Binding IsRemoved}" Text="{Binding Marker}" />
                       </Panel>
-                      <TextBlock Grid.Column="2" Classes="code" Classes.hunkText="{Binding IsHunk}" Text="{Binding Text}" Margin="0,0,16,0" />
+                      <TextBlock Grid.Column="2" Classes="code" Text="{Binding Text}" Margin="0,0,16,0" />
                     </Grid>
                   </Panel>
                 </Border>
