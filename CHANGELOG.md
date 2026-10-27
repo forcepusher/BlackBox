@@ -143,6 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A × at the top right of Video generator, File changes and File inspector closes the tool.
 
 ### Changed
+- A new icon: a yellow blob in place of the grey box, in the taskbar, the windows and the exe.
 - Tables in replies are real tables: a grid with a header row, in the chat's font, each cell
   wrapping inside its own column. One too wide for the chat scrolls sideways.
 - Replies read as they would on GitHub: headings by their size, list items whose lines wrap under
