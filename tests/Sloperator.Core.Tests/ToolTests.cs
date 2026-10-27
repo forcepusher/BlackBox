@@ -100,7 +100,7 @@ public class ToolTests
         var click = new MouseClickTool();
 
         // Found: the model's own x/y are ignored, and it is told where the click went instead.
-        var result = await click.ExecuteAsync(new JsonObject { ["target"] = "Save button", ["x"] = 10, ["y"] = 20 }, ctx, CancellationToken.None);
+        var result = await click.ExecuteAsync(new JsonObject { ["target"] = "Save button", ["which"] = "only one", ["x"] = 10, ["y"] = 20 }, ctx, CancellationToken.None);
         Assert.Equal("Save button", looked);
         Assert.Equal("move 600,245", platform.Actions[0]);
         Assert.StartsWith("Clicked.\nA fresh look found the Save button at (300, 120), not where you aimed (10, 20), and the click went there.", result.Text);
@@ -108,14 +108,14 @@ public class ToolTests
 
         // Not found (or off the screen): the model's x/y, and it is told.
         found = null;
-        result = await click.ExecuteAsync(new JsonObject { ["target"] = "Save button", ["x"] = 10, ["y"] = 20 }, ctx, CancellationToken.None);
+        result = await click.ExecuteAsync(new JsonObject { ["target"] = "Save button", ["which"] = "only one", ["x"] = 10, ["y"] = 20 }, ctx, CancellationToken.None);
         Assert.Equal("move 20,41", platform.Actions[2]);
         Assert.StartsWith("Sloperator could not find the Save button on the screen by name, so it clicked at your x, y.", result.Text);
         found = (5000, 20);
-        await click.ExecuteAsync(new JsonObject { ["target"] = "Save button", ["x"] = 10, ["y"] = 20 }, ctx, CancellationToken.None);
+        await click.ExecuteAsync(new JsonObject { ["target"] = "Save button", ["which"] = "only one", ["x"] = 10, ["y"] = 20 }, ctx, CancellationToken.None);
         Assert.Equal("move 20,41", platform.Actions[4]);
         // Not found and no x/y: an error for the model, not an argument problem (no parameter list).
-        await Assert.ThrowsAsync<InvalidOperationException>(() => click.ExecuteAsync(new JsonObject { ["target"] = "Save button" }, ctx, CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => click.ExecuteAsync(new JsonObject { ["target"] = "Save button", ["which"] = "only one" }, ctx, CancellationToken.None));
 
         // No target: exactly x/y, without a look.
         looked = null;
@@ -151,7 +151,7 @@ public class ToolTests
         (int X, int Y)? found = (2084, 254);
         ctx.Locate = LookFinds(() => found);
         var click = new MouseClickTool();
-        var args = new JsonObject { ["target"] = "MCP for Blender tab in sidebar", ["x"] = 811, ["y"] = 305 };
+        var args = new JsonObject { ["target"] = "MCP for Blender tab in sidebar", ["which"] = "only one", ["x"] = 811, ["y"] = 305 };
 
         var result = await click.ExecuteAsync(args, ctx, CancellationToken.None);
         Assert.Equal("move 2084,254", platform.Actions[0]);
@@ -184,7 +184,7 @@ public class ToolTests
         ctx.Locate = LookFinds(() => target, shown);
         var click = new MouseClickTool();
 
-        await click.ExecuteAsync(new JsonObject { ["target"] = "MCP for Blender tab", ["x"] = 811, ["y"] = 305 }, ctx, CancellationToken.None);
+        await click.ExecuteAsync(new JsonObject { ["target"] = "MCP for Blender tab", ["which"] = "only one", ["x"] = 811, ["y"] = 305 }, ctx, CancellationToken.None);
         var (part, image) = Assert.Single(shown);
         Assert.Equal(new ScreenRect(1280, 59, 1280, 540), part.Screen); // centred on the aim, (2076, 329), kept inside the screen
         using (var codec = SkiaSharp.SKCodec.Create(new MemoryStream(image)))
@@ -195,7 +195,7 @@ public class ToolTests
         shown.Clear();
         platform.Actions.Clear();
         target = (100, 30);
-        await click.ExecuteAsync(new JsonObject { ["target"] = "File menu", ["x"] = 811, ["y"] = 305 }, ctx, CancellationToken.None);
+        await click.ExecuteAsync(new JsonObject { ["target"] = "File menu", ["which"] = "only one", ["x"] = 811, ["y"] = 305 }, ctx, CancellationToken.None);
         Assert.Equal([new ScreenRect(1280, 59, 1280, 540), new ScreenRect(0, 0, 2560, 1080)], shown.Select(s => s.Space.Screen));
         Assert.Equal("move 100,30", platform.Actions[0]);
 
@@ -209,6 +209,78 @@ public class ToolTests
         // The part's pixels are cut out of the screen's capture.
         var frame = new RawImage(4, 3, Enumerable.Range(0, 48).Select(i => (byte)i).ToArray());
         Assert.Equal([20, 21, 22, 23, 24, 25, 26, 27, 36, 37, 38, 39, 40, 41, 42, 43], frame.Crop(1, 1, 2, 2).Bgra);
+    }
+
+    [Fact]
+    public void A_click_must_say_what_tells_its_target_apart_from_look_alikes()
+    {
+        var click = new MouseClickTool();
+        var properties = click.Parameters["properties"]!.AsObject();
+        Assert.Contains("which", properties.Select(p => p.Key));
+        Assert.Contains("which", click.Parameters["required"]!.AsArray().Select(n => (string?)n));
+        Assert.Contains("only one", (string?)properties["which"]!["description"]);
+
+        Assert.Equal("Delete button, in the row of report-q1 (1).xlsx",
+            MouseClickTool.Named(new JsonObject { ["target"] = " Delete button ", ["which"] = "in the row of report-q1 (1).xlsx." }));
+        Assert.Equal("File menu", MouseClickTool.Named(new JsonObject { ["target"] = "File menu", ["which"] = "Only one." }));
+        Assert.Null(MouseClickTool.Named(new JsonObject { ["x"] = 1, ["y"] = 2 }));
+        Assert.True(MouseClickTool.LookAlikes(new JsonObject { ["which"] = "the second of three" }));
+        Assert.False(MouseClickTool.LookAlikes(new JsonObject { ["which"] = "ONLY ONE" }));
+        Assert.Equal("Click Delete button, in the row of a.txt", click.Describe(new JsonObject { ["target"] = "Delete button", ["which"] = "in the row of a.txt", ["x"] = 1, ["y"] = 2 }));
+    }
+
+    [Fact]
+    public async Task A_named_click_without_which_clicks_nothing()
+    {
+        var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1080) };
+        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false }, WorkingDirectory = Path.GetTempPath() };
+        var looked = false;
+        ctx.Locate = (_, _, _, _) => { looked = true; return Task.FromResult<(double X, double Y)?>((10, 10)); };
+        var click = new MouseClickTool();
+
+        foreach (var which in new JsonNode?[] { null, "", "  " })
+        {
+            var args = new JsonObject { ["target"] = "Delete button", ["x"] = 100, ["y"] = 50 };
+            if (which is not null) args["which"] = which;
+            var error = await Assert.ThrowsAsync<ToolArgumentException>(() => click.ExecuteAsync(args, ctx, CancellationToken.None));
+            Assert.Contains("Say in which what tells the Delete button apart", error.Message);
+        }
+        Assert.False(looked);
+        Assert.Empty(platform.Actions);
+
+        // An unnamed spot needs no which: exactly x/y.
+        await click.ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None);
+        Assert.Single(platform.Actions, a => a.StartsWith("move "));
+    }
+
+    [Fact]
+    public async Task A_target_with_look_alikes_is_looked_for_in_its_whole_row()
+    {
+        // A file list: the name at the left, the same Delete button at the right end of every row.
+        // The quarter around the button held only other rows' buttons, and the look clicked one.
+        var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1080) };
+        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false }, WorkingDirectory = Path.GetTempPath(), CoordinateGrid = 1000 };
+        var shown = new List<(ScreenSpace Space, byte[] Image)>();
+        string? asked = null;
+        var finds = LookFinds(() => (1900, 455), shown);
+        ctx.Locate = (image, space, target, ct) => { asked = target; return finds(image, space, target, ct); };
+        var click = new MouseClickTool();
+        var row = new JsonObject { ["target"] = "Delete button", ["which"] = "in the row of report-q1 (1).xlsx", ["x"] = 742, ["y"] = 417 };
+
+        var result = await click.ExecuteAsync(row, ctx, CancellationToken.None);
+        Assert.Equal("Delete button, in the row of report-q1 (1).xlsx", asked);
+        var (part, _) = Assert.Single(shown);
+        Assert.Equal(new ScreenRect(0, 315, 2560, 270), part.Screen); // as wide as the screen, centred on the aim's height (450 px)
+        Assert.Equal("move 1900,455", platform.Actions[0]);
+        Assert.Equal("Clicked.", result.Text);
+
+        // A move to the next row (40 px) is told, as it may be a look-alike; for a single target it is a correction within it.
+        finds = LookFinds(() => (1900, 490), shown);
+        result = await click.ExecuteAsync(row, ctx, CancellationToken.None);
+        Assert.StartsWith("Clicked.\nA fresh look found the Delete button, in the row of report-q1 (1).xlsx at", result.Text);
+        result = await click.ExecuteAsync(new JsonObject { ["target"] = "OK button", ["which"] = "only one", ["x"] = 742, ["y"] = 417 }, ctx, CancellationToken.None);
+        Assert.Equal("Clicked.", result.Text);
+        Assert.Equal(new ScreenRect(1260, 180, 1280, 540), shown[^1].Space.Screen); // the quarter around the aim
     }
 
     [Fact]
@@ -251,7 +323,7 @@ public class ToolTests
         (double X, double Y)? found = (370, 10);
         ctx.Locate = (_, _, _, _) => Task.FromResult(found);
         var click = new MouseClickTool();
-        var args = new JsonObject { ["target"] = "Close button of the notification", ["x"] = 370, ["y"] = 140 };
+        var args = new JsonObject { ["target"] = "Close button of the notification", ["which"] = "only one", ["x"] = 370, ["y"] = 140 };
 
         ctx.Seen = (screen, seen);
         var held = await click.ExecuteAsync(args, ctx, CancellationToken.None);
@@ -274,7 +346,7 @@ public class ToolTests
         platform.Actions.Clear();
         found = (370, 10);
         ctx.Seen = (screen, platform.Desktop!);
-        await click.ExecuteAsync(new JsonObject { ["target"] = "Close button", ["x"] = 100, ["y"] = 140 }, ctx, CancellationToken.None);
+        await click.ExecuteAsync(new JsonObject { ["target"] = "Close button", ["which"] = "only one", ["x"] = 100, ["y"] = 140 }, ctx, CancellationToken.None);
         Assert.Equal("move 370,10", platform.Actions[0]);
 
         // The model's earlier screen is out of date once an action has run: a second click in the same reply isn't held back.
@@ -309,7 +381,7 @@ public class ToolTests
             for (var y = 120; y < 160; y++) for (var x = 300; x < 340; x++) platform.Desktop!.Bgra[(y * 384 + x) * 4] ^= 255;
             return Task.FromResult<(double X, double Y)?>((100, 50));
         };
-        Assert.Contains("Nothing on screen changed", (await new MouseClickTool().ExecuteAsync(new JsonObject { ["target"] = "OK button", ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None)).Text);
+        Assert.Contains("Nothing on screen changed", (await new MouseClickTool().ExecuteAsync(new JsonObject { ["target"] = "OK button", ["which"] = "only one", ["x"] = 100, ["y"] = 50 }, ctx, CancellationToken.None)).Text);
     }
 
     [Fact]

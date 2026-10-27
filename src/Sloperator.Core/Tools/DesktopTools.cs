@@ -195,12 +195,16 @@ public sealed class MouseClickTool : DesktopActionTool
 {
     public override string Name => "mouse_click";
     public override string Description =>
-        "Click something on the screen. Name it in target; Sloperator finds it on the current screen and clicks its centre. " +
+        "Click something on the screen. Name it in target, and say in which what tells it apart from anything else on the screen that looks like it; " +
+        "Sloperator finds it on the current screen and clicks its centre. " +
         "Also give x, y where you see it, in screenshot coordinates: they are used when it can't be found by name.";
     public override JsonObject Parameters => Schema(
-        ("target", Str("What to click, named so someone who hasn't seen your earlier steps can find it: its text or icon, " +
-                       "and where it is if there are several, e.g. \"File menu\", \"Save button in the Export dialog\". " +
+        ("target", Str("What to click, named so someone who hasn't seen your earlier steps can find it: its text or icon and what kind of thing it is, " +
+                       "e.g. \"File menu\", \"Delete button\", \"Bold icon\". " +
                        "Leave it out only to click an exact spot that has no name (an empty area, a point in a drawing)."), true),
+        ("which", Str("What tells it apart from everything else on the screen that looks like it or has the same text: the row, item, card, dialog or panel " +
+                      "it belongs to and the label or text next to it, e.g. \"in the row of report-q1 (1).xlsx\", \"on the card of Wireless Mouse M330\", " +
+                      $"\"in the Export dialog\". Write \"{OnlyOne}\" when nothing else on the screen looks like it."), true),
         ("x", Num("X in screenshot coordinates"), true),
         ("y", Num("Y in screenshot coordinates"), true),
         ("button", Str("Mouse button, default left", "left", "right", "middle"), false),
@@ -214,8 +218,26 @@ public sealed class MouseClickTool : DesktopActionTool
         if (Modifiers(args) is { Count: > 0 } held)
             kind = Held(held) + "+" + kind.ToLowerInvariant();
         var button = GetString(args, "button") is { } b && b != "left" ? $" ({b})" : "";
-        return GetString(args, "target") is { Length: > 0 } t ? $"{kind}{button} {t}" : $"{kind}{button} at {Fmt(args)}";
+        return Named(args) is { } t ? $"{kind}{button} {t}" : $"{kind}{button} at {Fmt(args)}";
     }
+
+    /// <summary>What which says when nothing else on the screen looks like the target.</summary>
+    internal const string OnlyOne = "only one";
+
+    /// <summary>
+    /// The target with what tells it apart from its look-alikes ("Delete button, in the row of
+    /// report.xlsx"), as the look is asked for it; just the target when it has none; null without a target.
+    /// </summary>
+    internal static string? Named(JsonObject args)
+    {
+        if (GetString(args, "target")?.Trim() is not { Length: > 0 } target)
+            return null;
+        return LookAlikes(args) && GetString(args, "which")?.Trim().TrimEnd('.') is { Length: > 0 } which ? $"{target}, {which}" : target;
+    }
+
+    /// <summary>Whether which says something else on the screen looks like the target: anything but "only one".</summary>
+    internal static bool LookAlikes(JsonObject args) =>
+        GetString(args, "which")?.Trim().TrimEnd('.') is { Length: > 0 } which && !which.Equals(OnlyOne, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>How far, as a share of the screen's longer side, the look may find the target from where the model aimed before the click can be held back.</summary>
     private const double FarShare = 0.08;
@@ -223,7 +245,10 @@ public sealed class MouseClickTool : DesktopActionTool
     /// <summary>The half-width of the square around the model's aim compared with what it saw, as a share of the screen's longer side.</summary>
     private const double AroundShare = 0.05;
 
-    /// <summary>How far, as a share of the screen's longer side, the look may move the click from the model's aim before the result says so: about a row of a menu or a tab.</summary>
+    /// <summary>
+    /// How far, as a share of the screen's longer side, the look may move the click from the model's aim before the result says so: about a row of a menu or a tab.
+    /// Half that for a target with look-alikes, whose rows can be closer together.
+    /// </summary>
     private const double MovedShare = 0.02;
 
     private protected override async Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
@@ -269,13 +294,21 @@ public sealed class MouseClickTool : DesktopActionTool
     /// The look is shown the quarter of the screen around the model's aim, and the whole screen only
     /// when the target isn't there: reading a whole 2560x1080 screenshot took a 27B model 9 s, a
     /// quarter of it 3 s, and the model's own aim is mostly off by tens of pixels, not hundreds.
+    /// A target with look-alikes (which says what tells it apart) is looked for in the screen-wide
+    /// row around the aim instead, as many pixels: in a file list the quarter around an Open button
+    /// held only other rows' Open buttons, not the file names, and the look moved a click the model
+    /// had aimed at the right row to another one.
     /// </remarks>
     private static async Task<((int X, int Y)? Point, string Note, string? Moved)> AimAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var space = ctx.GetScreenSpace();
         (int X, int Y)? given = GetNumber(args, "x") is { } x && GetNumber(args, "y") is { } y ? space.ToScreen(x, y) : null;
-        if (GetString(args, "target")?.Trim() is not { Length: > 0 } target || ctx.Locate is not { } locate)
+        if (Named(args) is { } named && string.IsNullOrWhiteSpace(GetString(args, "which")))
+            throw new ToolArgumentException($"Say in which what tells the {named} apart from anything else on the screen that looks like it " +
+                                            $"(the row, card, dialog or label it belongs to), or \"{OnlyOne}\" if nothing does.");
+        if (Named(args) is not { } target || ctx.Locate is not { } locate)
             return (given ?? throw new ToolArgumentException("Give target, or x and y."), "", null);
+        var lookAlikes = LookAlikes(args);
         var now = ctx.Platform.Screen.Capture(space.Screen, includeCursor: false);
         async Task<(int X, int Y)?> LookAsync(ScreenSpace part, RawImage frame) =>
             await locate(part.Encode(frame), part, target, ct).ConfigureAwait(false) is { } p && p.X >= 0 && p.Y >= 0 && p.X <= part.ModelWidth && p.Y <= part.ModelHeight
@@ -284,7 +317,7 @@ public sealed class MouseClickTool : DesktopActionTool
         (int X, int Y)? near = null;
         if (given is { } aimed && Agent.FreshLook.Cropped)
         {
-            var part = space.Part(space.Around(aimed.X, aimed.Y));
+            var part = space.Part(lookAlikes ? space.Row(aimed.Y) : space.Around(aimed.X, aimed.Y));
             near = await LookAsync(part, now.Crop(part.Screen.X - space.Screen.X, part.Screen.Y - space.Screen.Y, part.Screen.Width, part.Screen.Height)).ConfigureAwait(false);
         }
         if ((near ?? await LookAsync(space, now).ConfigureAwait(false)) is { } found)
@@ -297,7 +330,7 @@ public sealed class MouseClickTool : DesktopActionTool
             }
             ctx.HeldBack = null;
             string? moved = null;
-            if (given is { } from && Distance(from, found) >= Math.Max(space.Screen.Width, space.Screen.Height) * MovedShare)
+            if (given is { } from && Distance(from, found) >= Math.Max(space.Screen.Width, space.Screen.Height) * (lookAlikes ? MovedShare / 2 : MovedShare))
             {
                 var (mx, my) = space.ToModel(found.X, found.Y);
                 moved = $"A fresh look found the {target} at ({mx}, {my}), not where you aimed {Fmt(args)}, and the click went there. " +

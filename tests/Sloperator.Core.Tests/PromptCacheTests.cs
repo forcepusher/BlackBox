@@ -25,7 +25,7 @@ public class PromptCacheTests
         var replies = new Queue<string>([
             // A look, a click (whose fresh look is a request of its own) and an answer.
             Sse.Thought("I should look at the screen first.", Sse.ToolCall("c1", "screenshot", "{}")),
-            Sse.Thought("The OK button is in the middle.", Sse.ToolCall("c2", "mouse_click", """{"target":"OK button","x":100,"y":50}""")),
+            Sse.Thought("The OK button is in the middle.", Sse.ToolCall("c2", "mouse_click", """{"target":"OK button","which":"only one","x":100,"y":50}""")),
             Sse.Thought("It closed.", Sse.Text("Clicked OK.")),
             // The next message, and one the user sends while the model works on it.
             Sse.Thought("Typing it.", Sse.ToolCall("c3", "type_text", """{"text":"hello"}""")),

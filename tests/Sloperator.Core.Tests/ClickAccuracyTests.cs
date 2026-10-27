@@ -15,7 +15,7 @@ namespace Sloperator.Core.Tests;
 /// neighbours, text links, partly covered, a second monitor on either side, ultrawide and portrait
 /// screens); the model gets the normal system prompt and tools, is asked to click one target, and
 /// the click is checked against the target's bounds.
-/// Opt-in like <see cref="ServerIntegrationTests"/>: set BB_SERVER_URL and BB_SERVER_MODEL. Optional:
+/// Opt-in like <see cref="ServerIntegrationTests"/>: set BB_SERVER_URL and BB_SERVER_MODEL. Optional: BB_SERVER_KEY (a server that wants one),
 /// BB_CLICK_SCENES (comma-separated, default all), BB_CLICK_TRIALS (per scene, default 5),
 /// BB_CLICK_COORDS=pixels|grid (default: what Sloperator picks for the model), BB_CLICK_RES (the box screenshots
 /// fit, as 1920x1080; default the setting's), BB_CLICK_SEED (first layout, default 1000), BB_CLICK_TAG (report name),
@@ -55,7 +55,8 @@ public class ClickAccuracyTests
         ["Item 12", "Item 21", "Item 112", "Item 121"], ["Page 1", "Page 11", "Page 7", "Page 17"],
     ];
 
-    private sealed record Target(string Label, ScreenRect Bounds, string? Noun = null);
+    /// <param name="Ask">What the model is asked, when the label alone doesn't say which one (a Delete button in every row).</param>
+    private sealed record Target(string Label, ScreenRect Bounds, string? Noun = null, string? Ask = null);
 
     private sealed record Theme(SKColor Background, SKColor Face, SKColor Border, SKColor Ink)
     {
@@ -92,6 +93,9 @@ public class ClickAccuracyTests
         new("left", [Primary, new(-1920, 0, 1920, 1080)], 1, Buttons(12, 20, 30, 20)),
         new("ultrawide", [new(0, 0, 5120, 1440)], 0, Buttons(12, 20, 50, 20)),
         new("portrait", [new(0, 0, 1080, 1920)], 0, Buttons(12, 20, 30, 20)),
+        // Look-alikes: the same buttons in every row of a file list, the same button on every card.
+        new("rows", [Primary], 0, FileRows),
+        new("cards", [Primary], 0, ProductCards),
         // A real screenshot of the Unity editor (2560x1080): menu bar, tabs, toolbar buttons. Each target once.
         new("unity", [Primary], 0, Screenshot("unity-editor.png", UnityTargets), EveryTarget: true),
     ];
@@ -122,7 +126,7 @@ public class ClickAccuracyTests
     public async Task Model_clicks_the_named_target()
     {
         Assert.SkipWhen(Url is null || Model is null, "Set BB_SERVER_URL and BB_SERVER_MODEL to run.");
-        var server = new ServerSettings { BaseUrl = Url!, Model = Model! };
+        var server = new ServerSettings { BaseUrl = Url!, Model = Model!, ApiKey = Env("BB_SERVER_KEY") ?? "" };
         using var http = LlmHttp.Create(TimeSpan.FromMinutes(10));
         var facts = await ServerProbe.EnsureLoadedAsync(http, server, null, CancellationToken.None);
         server.SetDetectedContext(facts.Context, facts.Hosted);
@@ -186,7 +190,7 @@ public class ClickAccuracyTests
                 };
                 var observer = new FirstClickObserver(cts, retries + 1, () => landed.Count > 0 && target.Bounds.Contains(landed[^1].X, landed[^1].Y));
                 var where = scene.On > 0 ? $" It is on screen {scene.On + 1}." : "";
-                await session.RunAsync($"Click the \"{target.Label}\" {target.Noun ?? scene.Noun}.{where}", observer, cts.Token);
+                await session.RunAsync((target.Ask ?? $"Click the \"{target.Label}\" {target.Noun ?? scene.Noun}.") + where, observer, cts.Token);
                 var later = landed.Skip(1).Select((l, i) => (l, i)).FirstOrDefault(x => target.Bounds.Contains(x.l.X, x.l.Y));
                 if (retries > 0 && landed.Count > 0 && !target.Bounds.Contains(landed[0].X, landed[0].Y))
                 {
@@ -222,7 +226,7 @@ public class ClickAccuracyTests
         foreach (var line in summary)
             Log(line);
         Log($"TOTAL {allHits}/{allTrials} with {Model}, coordinates: {grid?.ToString() ?? "pixels"}, screenshots: {resolution.Item1}x{resolution.Item2}, " +
-            (FreshLook.Enabled ? $"fresh look at {(FreshLook.Cropped ? "the quarter around the aim" : "the whole screen")}, thinking {(FreshLook.Thinking || !FreshLook.ThinksInQwenTags(Model) ? "on" : "skipped")}" : "no fresh look"));
+            (FreshLook.Enabled ? $"fresh look at {(FreshLook.Cropped ? "the quarter around the aim (its row for look-alikes)" : "the whole screen")}, thinking {(FreshLook.Thinking || !FreshLook.ThinksInQwenTags(Model) ? "on" : "skipped")}" : "no fresh look"));
         if (retries > 0)
             Log($"RETRY {fixedLater}/{retried} first-click misses hit within {retries} more tries (miss check {(ClickCheck.Enabled ? "on" : "off")}, fresh look {(FreshLook.Enabled ? "on" : "off")})");
         File.WriteAllLines(Path.Combine(Path.GetTempPath(), $"bb-click-{tag}.txt"), report);
@@ -464,6 +468,85 @@ public class ClickAccuracyTests
             visible.Add(t with { Bounds = t.Bounds with { Width = t.Bounds.Width - cover } });
         }
         return visible;
+    }
+
+    private static readonly string[] FileNames =
+    [
+        "report-2026-q1.xlsx", "report-2026-q1 (1).xlsx", "report-2026-q1 (2).xlsx", "report-2026-q1-final.xlsx",
+        "report-2026-q1-draft.xlsx", "report-2026-q1-old.xlsx", "report-2026-q2.xlsx", "report-2026-q3.xlsx",
+        "report-2025-q1.xlsx", "report_2026_q1.xlsx", "report-2026-q1.xlsx.bak", "budget-2026-q1.xlsx",
+        "report-2026-q1.csv", "report-2026-q4.xlsx",
+    ];
+
+    /// <summary>
+    /// A file list as wide as a maximized file manager: a name on the left, then size and date, and
+    /// the same Open, Rename and Delete buttons at the right end of every row, far from the name.
+    /// </summary>
+    private static List<Target> FileRows(Random rng, SKCanvas c, int width, int height, Theme theme, List<string> labels)
+    {
+        const int x0 = 40, y0 = 110, rowH = 40, right = 2040;
+        using var font = Font(14, theme.Ink);
+        using var head = Font(13, new SKColor(90, 96, 108));
+        using var stripe = new SKPaint { Color = new SKColor(246, 247, 250) };
+        using var icon = new SKPaint { Color = new SKColor(33, 115, 70) };
+        c.DrawText("Name", x0 + 36, y0 - 14, head);
+        c.DrawText("Size", 900, y0 - 14, head);
+        c.DrawText("Modified", 1100, y0 - 14, head);
+        var targets = new List<Target>();
+        var y = y0;
+        foreach (var name in FileNames.OrderBy(_ => rng.Next()))
+        {
+            if (targets.Count / 3 % 2 == 1)
+                c.DrawRect(x0, y, right - x0, rowH, stripe);
+            c.DrawRect(x0 + 8, y + 11, 18, 18, icon);
+            c.DrawText(name, x0 + 36, y + 26, font);
+            c.DrawText($"{rng.Next(12, 900)} KB", 900, y + 26, font);
+            c.DrawText($"2026-{rng.Next(1, 11):00}-{rng.Next(1, 29):00} {rng.Next(8, 19)}:{rng.Next(0, 60):00}", 1100, y + 26, font);
+            var x = 1720;
+            foreach (var button in new[] { "Open", "Rename", "Delete" })
+            {
+                var r = new ScreenRect(x, y + 7, (int)font.MeasureText(button) + 24, 26);
+                DrawButton(c, r, button, theme, font);
+                targets.Add(new Target(button, r, Ask: $"Click the \"{button}\" button of the file {name}."));
+                x += r.Width + 10;
+            }
+            y += rowH;
+        }
+        return targets;
+    }
+
+    private static readonly string[] Products =
+    [
+        "Wireless Mouse M310", "Wireless Mouse M330", "Wireless Mouse M310 Silent", "Wired Mouse M310",
+        "Wireless Mouse M320", "Wireless Mouse M330 Silent", "Wireless Mouse M510", "Wireless Mouse M310 Blue",
+        "Wireless Keyboard K310", "Wireless Mouse M301", "Wireless Mouse M130", "Wired Mouse M330",
+    ];
+
+    /// <summary>A shop's grid of product cards with near-identical names, each with the same Add to cart button.</summary>
+    private static List<Target> ProductCards(Random rng, SKCanvas c, int width, int height, Theme theme, List<string> labels)
+    {
+        const int cardW = 360, cardH = 280, gap = 40, x0 = 120, y0 = 90;
+        using var font = Font(15, theme.Ink);
+        using var price = Font(18, new SKColor(176, 32, 32));
+        using var card = new SKPaint { Color = SKColors.White };
+        using var edge = new SKPaint { Color = new SKColor(200, 204, 212), IsStroke = true, StrokeWidth = 1 };
+        using var photo = new SKPaint { Color = new SKColor(222, 226, 233) };
+        var targets = new List<Target>();
+        var names = Products.OrderBy(_ => rng.Next()).ToList();
+        for (var i = 0; i < names.Count; i++)
+        {
+            var (cx, cy) = (x0 + i % 6 * (cardW + gap), y0 + i / 6 * (cardH + gap + 60));
+            if (cx + cardW > width || cy + cardH > height) break;
+            c.DrawRect(cx, cy, cardW, cardH, card);
+            c.DrawRect(cx, cy, cardW, cardH, edge);
+            c.DrawRect(cx + 20, cy + 16, cardW - 40, 120, photo);
+            c.DrawText(names[i], cx + 20, cy + 166, font);
+            c.DrawText($"${rng.Next(12, 60)}.99", cx + 20, cy + 196, price);
+            var r = new ScreenRect(cx + 20, cy + 222, 130, 34);
+            DrawButton(c, r, "Add to cart", theme, font);
+            targets.Add(new Target("Add to cart", r, Ask: $"Click \"Add to cart\" for the {names[i]}."));
+        }
+        return targets;
     }
 
     /// <summary>Stops the run at the first click, or with retries, at a hit or after <paramref name="maxClicks"/> clicks.</summary>
