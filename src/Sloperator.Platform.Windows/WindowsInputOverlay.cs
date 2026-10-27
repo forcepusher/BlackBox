@@ -21,7 +21,7 @@ namespace Sloperator.Platform.Windows;
 internal sealed class WindowsInputOverlay : IInputOverlay
 {
     private const double FadeSeconds = 1.5, MarkerSeconds = 3, MarkerFadeSeconds = 1;
-    private const int MaxLines = 8, PanelWidth = 460, LineHeight = 34, MarkerSize = 120;
+    private const int MaxLines = 8, PanelWidth = 460, LineHeight = 34, MarkerSize = 200;
     private const uint WM_APP_REFRESH = WM_APP + 1;
     private const uint ColorKey = 0x00FF00FF; // magenta, as COLORREF (0x00BBGGRR)
 
@@ -205,7 +205,7 @@ internal sealed class WindowsInputOverlay : IInputOverlay
         // The ring widens out from the click for its whole life, and the whole window fades at the
         // end, so the ring can be drawn fully opaque. The accent goes on a dark outline, which keeps
         // a light accent visible on a white page.
-        var radius = 10 + 34 * (float)Math.Clamp(age / MarkerSeconds, 0, 1);
+        var radius = 10 + 78 * (float)Math.Clamp(age / MarkerSeconds, 0, 1);
         var opacity = Math.Clamp((MarkerSeconds - age) / MarkerFadeSeconds, 0, 1);
         Paint(_markerWindow, cx - MarkerSize / 2, cy - MarkerSize / 2, MarkerSize, MarkerSize, (byte)(255 * opacity), canvas =>
         {
