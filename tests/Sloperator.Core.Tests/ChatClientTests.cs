@@ -522,13 +522,14 @@ public class ContextDetectionTests
         Assert.False((await Probe(new() { ["/props"] = """{"default_generation_settings":{"n_ctx":4096},"modalities":{"vision":false,"audio":false}}""" })).Vision);
         Assert.True((await Probe(new() { ["/props"] = """{"default_generation_settings":{"n_ctx":4096},"modalities":{"vision":true,"audio":false}}""" })).Vision);
         Assert.Equal(32768, (await Probe(new() { ["/v1/models"] = """{"data":[{"id":"m","max_model_len":32768}]}""" })).Context);
-        Assert.Null((await Probe([])).Context); // nothing answers: the caller assumes 100k
+        Assert.Null((await Probe([])).Context); // nothing answers: the caller assumes 1M
     }
 
     [Fact]
     public void The_real_context_size_is_read_from_too_long_errors()
     {
         Assert.Equal(8192, ContextOverflowException.ParseLimit("This model's maximum context length is 8192 tokens. However, your messages resulted in 9100 tokens."));
+        Assert.Equal(1_000_000, ContextOverflowException.ParseLimit("This endpoint's maximum context length is 1000000 tokens. However, you requested about 1163647 tokens (1163631 of text input, 16 in the output).")); // Kilo
         Assert.Equal(4096, ContextOverflowException.ParseLimit("""{"error":{"code":400,"message":"the request exceeds the available context size, try increasing it","type":"exceed_context_size_error","n_prompt_tokens":5000,"n_ctx":4096}}"""));
         Assert.Null(ContextOverflowException.ParseLimit("The number of tokens to keep from the initial prompt is greater than the context length."));
     }

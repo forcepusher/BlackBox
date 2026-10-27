@@ -160,9 +160,6 @@ public sealed partial class MainWindowViewModel
         {
             var server = _settings.Server;
             var reported = server.ContextReported ? $"The server runs this model with {server.DetectedContextSize:N0} tokens." : null;
-            if (server.AutoContext && server.ContextHosted && server.ContextSize < server.DetectedContextSize)
-                return $"The service takes up to {server.DetectedContextSize:N0} tokens for this model. Sloperator uses {server.ContextSize:N0} of them, "
-                       + "because every step sends the whole conversation, screenshots and all, again. Untick Auto to use more.";
             if (server.AutoContext)
                 return reported is not null ? $"{reported} Sloperator uses all of it. Untick Auto to use less."
                     : _modelNotLoaded ? "The model isn't loaded on the server yet, so its context size isn't known. Your first message loads it, and the size shows here."
@@ -366,7 +363,7 @@ public sealed partial class MainWindowViewModel
         if (!quiet || server.ModelInUse != before)
         {
             // Trust what the server reports; neither the context size (it shows by the slider) nor image support is saved.
-            server.SetDetectedContext(probe.LoadedContext, probe.ContextHosted);
+            server.SetDetectedContext(probe.LoadedContext);
             _modelNotLoaded = probe.Loaded == false;
             OnContextChanged();
         }
@@ -454,7 +451,7 @@ public sealed partial class MainWindowViewModel
     /// Switches back to Kilo's free models (see <see cref="KiloGateway"/>), where Sloperator starts: its
     /// address and no key, since a key meant for another server is none of Kilo's business. No model
     /// is picked, so Kilo's tested one is used there and another server's strongest one after it. The
-    /// context goes back to Auto, which on Kilo is 100k of the model's million.
+    /// context goes back to Auto, which on Kilo is the model's whole million.
     /// </summary>
     [RelayCommand]
     private void UseKilo()

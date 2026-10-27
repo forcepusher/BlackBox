@@ -125,7 +125,7 @@ public class ClickAccuracyTests
         var server = new ServerSettings { BaseUrl = Url!, Model = Model! };
         using var http = LlmHttp.Create(TimeSpan.FromMinutes(10));
         var facts = await ServerProbe.EnsureLoadedAsync(http, server, null, CancellationToken.None);
-        server.SetDetectedContext(facts.Context, facts.Hosted);
+        server.SetDetectedContext(facts.Context);
         int? context = facts.Context is null ? null : server.ContextSize;
         var trials = int.TryParse(Env("BB_CLICK_TRIALS"), out var n) ? n : 5;
         var only = Env("BB_CLICK_SCENES")?.Split(',', StringSplitOptions.TrimEntries);

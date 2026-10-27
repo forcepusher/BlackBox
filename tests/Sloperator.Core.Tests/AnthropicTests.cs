@@ -391,9 +391,7 @@ public class AnthropicTests
         Assert.Equal("claude-opus-5-5", probe.Model);
         Assert.True(probe.AutoPicked);
         Assert.Equal(1_000_000, probe.LoadedContext);
-        // All of it on Auto, unlike a hosted list's 1M (OpenRouter, Kilo), of which 100k is used.
-        Assert.False(probe.ContextHosted);
-        server.SetDetectedContext(probe.LoadedContext, probe.ContextHosted);
+        server.SetDetectedContext(probe.LoadedContext);
         Assert.Equal(1_000_000, server.ContextSize);
         Assert.True(probe.Vision);
         Assert.Equal(["low", "medium", "high", "xhigh", "max"], probe.Efforts);

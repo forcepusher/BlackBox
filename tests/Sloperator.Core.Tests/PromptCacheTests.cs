@@ -156,7 +156,7 @@ public class PromptCacheTests
         var settings = new ServerSettings { BaseUrl = Url!, Model = Model! };
         using var http = LlmHttp.Create(TimeSpan.FromMinutes(20));
         var facts = await ServerProbe.EnsureLoadedAsync(http, settings, null, TestContext.Current.CancellationToken);
-        settings.SetDetectedContext(facts.Context, facts.Hosted);
+        settings.SetDetectedContext(facts.Context);
         var paths = new AppPaths(Directory.CreateTempSubdirectory("bb-cache-").FullName);
         using var scene = SkiaSharp.SKBitmap.Decode(Path.Combine(AppContext.BaseDirectory, "ClickScenes", "unity-editor.png"));
         using var bgra = scene.Copy(SkiaSharp.SKColorType.Bgra8888);
