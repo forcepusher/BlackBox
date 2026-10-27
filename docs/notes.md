@@ -1302,8 +1302,10 @@ metadata there. Fluent lays the bars over the content, so a bar covers the strip
 ## Party blob
 Left of Send and Stop, 32 px like the buttons and 8 px from Send, `PartyBlob` (Views/PartyBlob.cs)
 shows the logo (Assets/sloperator.png) still, and the blobs.gg party blob (Assets/partyblob.gif: 128 px,
-20 frames, 16 KB) dancing while `IsBusy`, the whole run, so it dances until Stop or the reply ends and
-is still before the first prompt. The GIF is "apartyblob" from github.com/Raymo111/emoji, Apache
+20 frames, 16 KB) dancing while `IsBusy`, the whole run, so it dances until Stop or the reply ends.
+The window shows one blob at most (the user, 2026-10-27): while the intro is up (`ShowIntro`, an empty
+chat or one of notices only) its logo is the blob and this one is hidden; it appears with the first
+prompt and goes again with New chat. The title bar's icon is the window's, not counted. The GIF is "apartyblob" from github.com/Raymo111/emoji, Apache
 License 2.0, the set the logo was traced from (docs/logo/LICENSE-blobs.txt). Its frames are decoded once
 with SkiaSharp's `SKCodec`, as chat previews of animations are (no GIF package), and its timer runs only
 while it dances and is in a window.
