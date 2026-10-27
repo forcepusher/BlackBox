@@ -2777,7 +2777,7 @@ it from them for good). Every click and key press the agent makes shows up in a
 log in the bottom-right corner that fades after 15 seconds, with a ring where it clicked. The agent
 can't see it and it never takes focus. The ring is in the accent colour (`BbAccent`, handed to the
 overlay when the main window opens, as the overlay draws with Skia outside Avalonia) on a dark
-outline, so the yellow still shows on a white page. It widens steadily from 20 to about 90 px
+outline, so the yellow still shows on a white page. It widens steadily from 20 to about 180 px
 across over its 3 seconds and fades over the last one (until 28 October 2026 it was a thin pink
 ring 64 px at most, gone in 1.2 seconds, easy to miss; for a day it sprang out in 0.4 seconds and
 held, which lost the widening the user liked). Its edges are drawn without antialiasing,
