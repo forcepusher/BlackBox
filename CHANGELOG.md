@@ -145,6 +145,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A × at the top right of Video generator, File changes and File inspector closes the tool.
 
 ### Changed
+- The File changes diff shows one line number instead of two, the old one greyed out on removed lines,
+  with + or - right after it. The numbers take only as much room as the file's longest one, so the code
+  starts much further left.
 - The agent says what tells a click's target apart from look-alikes (the row, card or dialog it is
   in), so it much less often clicks the same button in the wrong row of a list.
 - On Auto, Sloperator takes a server that doesn't say how large its context is to have 1M tokens (it

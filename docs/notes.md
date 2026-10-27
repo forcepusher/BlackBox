@@ -2342,7 +2342,15 @@ yet, the card is the tool's own ("File changes", "nothing in it yet").
 once a file changed, both on by default and kept in settings.json under `panels` (`wrapDiff`,
 `watchChanges`; `PanelSettings`). **Wrap**: the diff's code column is `*` (under a sideways scroll it
 sizes to the line, as Auto did) and `ListBox.diff.wrap` turns the sideways scrollbar off and the code
-TextBlock to Wrap, so a long line wraps under its code with the numbers and marker on its first row.
+TextBlock to Wrap, so a long line wraps under its code with the number and marker on its first row.
+**The number gutter** (the user, 2026-10-28, from a screenshot where it took about 110 px: two 46 px
+columns, old and new, and a 16 px one for the marker) is one number, the new line's, or a removed line's
+old one at half opacity (`DiffRow.Number`), with the + or - right after it and no gap. Its column is as
+wide as the file's widest number: each row lays an unseen `DiffFileItem.NumberSizer` ("000") under the
+number and an unseen "+" under the marker, so every row of a file comes out the same width without
+measuring the font. 4 px before the number and 4 between the marker and the code, so at 125% with 3-digit
+numbers the gutter is about 39 px (with its 2 px pick border) instead of 110. Two columns were weighed
+and dropped on the user's call ("keep a single column"); what a message tells the model still has both.
 Rows stay logical lines: picks, drags (checked with a real drag across two wrapped lines) and the box's
 card are as before. **Watch**: each refresh compares the new diff with the one shown (`Fresh`: added and
 removed lines counted by file and text, as an edit moves every number below it) and marks what is new

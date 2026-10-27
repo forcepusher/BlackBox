@@ -25,6 +25,9 @@ public sealed record DiffFileItem(DiffFile File, int Row, string FullPath)
     /// <summary>"unstaged", "staged", "committed"; "" outside git.</summary>
     public string SectionWord => Section?.ToString().ToLowerInvariant() ?? "";
 
+    /// <summary>A zero for each digit of the widest line number in its diff: an unseen copy sizes the number column to it.</summary>
+    public string NumberSizer { get; } = new('0', File.Lines.Select(l => l.New ?? l.Old ?? 0).DefaultIfEmpty().Max().ToString(CultureInfo.InvariantCulture).Length);
+
     /// <summary>The same file in the same section (the diff in it may have changed).</summary>
     internal bool IsSame(DiffFileItem? other) => other is not null && Section == other.Section && string.Equals(FullPath, other.FullPath, StringComparison.OrdinalIgnoreCase);
 
@@ -83,6 +86,9 @@ public sealed partial class DiffRow(DiffFileItem file, DiffLine? line) : Observa
 
     public string OldNumber => Line?.Old?.ToString(CultureInfo.InvariantCulture) ?? "";
     public string NewNumber => Line?.New?.ToString(CultureInfo.InvariantCulture) ?? "";
+
+    /// <summary>The one number shown: the line's in the new file, a removed line's in the old (greyed out).</summary>
+    public string Number => NewNumber.Length > 0 ? NewNumber : OldNumber;
     public string Marker => Line?.Kind switch { DiffLineKind.Added => "+", DiffLineKind.Removed => "-", _ => "" };
 
     public string Text => Line is { } l ? l.Text : File.Name;
@@ -91,7 +97,7 @@ public sealed partial class DiffRow(DiffFileItem file, DiffLine? line) : Observa
     public string HeaderDetails => (File.Section is null ? "" : File.SectionWord + " · ") + $"{File.Status} · {File.Counts}";
 
     /// <summary>What screen readers and UI Automation call it: "48 + text", the file's name for a header.</summary>
-    public override string ToString() => IsHeader ? $"{File.Name}, {HeaderDetails}" : $"{(NewNumber.Length > 0 ? NewNumber : OldNumber)} {Marker} {Text}".Replace("  ", " ");
+    public override string ToString() => IsHeader ? $"{File.Name}, {HeaderDetails}" : $"{Number} {Marker} {Text}".Replace("  ", " ");
 
     /// <summary>Says which row this is again after a refresh, to keep it picked.</summary>
     internal (string Path, GitSection? Section, DiffLineKind Kind, int? Old, int? New, string Text) Key => (File.FullPath.ToUpperInvariant(), File.Section, Line?.Kind ?? DiffLineKind.Hunk, Line?.Old, Line?.New, Line?.Text ?? "");
