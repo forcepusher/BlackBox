@@ -646,7 +646,7 @@
              tooltip. -->
         <StackPanel IsVisible="{Binding ShowIntro}" MaxWidth="640" Spacing="14">
           <StackPanel Spacing="6">
-            <Image Source="/Assets/blackbox.png" Width="40" Height="40" Opacity="0.8" RenderOptions.BitmapInterpolationMode="HighQuality" />
+            <Image Source="/Assets/blackbox.png" Width="40" Height="40" RenderOptions.BitmapInterpolationMode="HighQuality" />
             <TextBlock Text="What should I do on your computer?" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
             <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460"
                        Text="Describe a task in your own words, and I'll work on it until it's done." />
