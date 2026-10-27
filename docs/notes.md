@@ -1,4 +1,7 @@
 # Sloperator notes
+> **These notes are meant to be read by LLMs (AI agents working on Sloperator), not by people.**
+> People should read the [README](../README.md).
+
 How each part of Sloperator works, why it works that way, and what was measured along the way. The
 short version for people is the [README](../README.md); this is the long one, kept for development.
 
