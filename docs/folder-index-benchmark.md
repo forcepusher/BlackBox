@@ -44,8 +44,8 @@ a lighter index with a map that can't search (see "A lighter index for Qwen").
   after the index was merged) would also have measured everything else that changed between them.
 - **Two projects.** Sloperator itself at 6fc10f2 (373 files, 216 of them C#), and the user's Unity game
   FluffyMeow (PushMeow) at d85638bea: 22,247 files, 1,802 C# scripts, 152 of those the Spine
-  runtime. The game was copied without its history and without `Backend/VirtualMachine`, which holds
-  an SSH key and a credentials file that the models had no reason to read.
+  runtime. The game was copied without its history and without a folder of private files that the
+  models had no reason to read.
 - **Ten tasks** of six kinds (`scripts/index-bench/tasks.json`, which also holds each rubric):
 
   | Task | Project | Kind | Scored by |
@@ -284,8 +284,6 @@ nothing the lean index cut was something Claude needed.
   (`reasoning_extraction`), apparently because the look-up quotes the model's own thinking back to
   it. That run was left out of the averages. This is the look-up feature, not the index; Sloperator
   no longer searches for the model (see docs/notes.md, Web search).
-- **FluffyMeow's repository holds an SSH key and a credentials file** (`Backend/VirtualMachine`) in
-  its git history. They were left out of the copies the models saw and weren't opened.
 
 ## Limits
 
