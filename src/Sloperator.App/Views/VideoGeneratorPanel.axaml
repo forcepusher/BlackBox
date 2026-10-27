@@ -40,7 +40,7 @@
     </Style>
     <!-- Files dragged over it would go into it. -->
     <Style Selector="Border.block.drop">
-      <Setter Property="Background" Value="#40E0A64B" />
+      <Setter Property="Background" Value="#40FCC21B" />
     </Style>
     <Style Selector="Border.block.planned">
       <Setter Property="Opacity" Value="0.7" />
@@ -49,7 +49,7 @@
       <Setter Property="Background" Value="#2A3A4A" />
     </Style>
     <Style Selector="Border.handle">
-      <Setter Property="Background" Value="#33E0A64B" />
+      <Setter Property="Background" Value="#33FCC21B" />
     </Style>
     <Style Selector="Border.handle:pointerover">
       <Setter Property="Background" Value="{StaticResource BbAccent}" />
@@ -174,7 +174,7 @@
 
     <DataTemplate DataType="vm:AudioPreview">
       <DockPanel VerticalAlignment="Center" MaxWidth="640">
-        <Button DockPanel.Dock="Left" Width="40" Height="40" CornerRadius="20" Padding="0" Background="{StaticResource BbAccent}"
+        <Button DockPanel.Dock="Left" Classes="accent" Width="40" Height="40" CornerRadius="20" Padding="0" Background="{StaticResource BbAccent}"
                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                 Command="{Binding PlayCommand}" VerticalAlignment="Center" AutomationProperties.Name="Play or pause sound">
           <PathIcon Data="{Binding PlayIcon}" Width="16" Height="16" Foreground="#111214" />
@@ -239,7 +239,7 @@
     <Border DockPanel.Dock="Bottom" Background="#15171A" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0">
       <DockPanel>
         <Grid DockPanel.Dock="Top" Height="40" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="10,0">
-          <Button Width="30" Height="30" CornerRadius="15" Padding="0" Background="{StaticResource BbAccent}" VerticalAlignment="Center"
+          <Button Classes="accent" Width="30" Height="30" CornerRadius="15" Padding="0" Background="{StaticResource BbAccent}" VerticalAlignment="Center"
                   HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                   Command="{Binding PlayStripCommand}" ToolTip.Tip="Play the sound lines with each clip's frames from the playhead" AutomationProperties.Name="Play the storyboard">
             <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" Foreground="#111214" />

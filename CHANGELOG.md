@@ -146,6 +146,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The app has a new name, Sloperator: the exe is `Sloperator.exe`, and `SLOPERATOR_HOME` sets the
   portable root.
 - A new icon: a yellow blob in place of the grey box, in the taskbar, the windows and the exe.
+- The accent colour is the blob's yellow in place of amber: buttons, icons, links, the message box's
+  border, sliders, check boxes and toggles, with dark ticks and icons on it.
 - Tables in replies are real tables: a grid with a header row, in the chat's font, each cell
   wrapping inside its own column. One too wide for the chat scrolls sideways.
 - Replies read as they would on GitHub: headings by their size, list items whose lines wrap under

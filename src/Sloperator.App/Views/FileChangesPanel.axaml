@@ -22,7 +22,7 @@
     </Style>
     <!-- What the agent just changed, while watching: lit up, then it fades. -->
     <Style Selector="Border.fresh">
-      <Setter Property="Background" Value="#40E0A64B" />
+      <Setter Property="Background" Value="#40FCC21B" />
       <Setter Property="Opacity" Value="0" />
       <Setter Property="IsHitTestVisible" Value="False" />
       <Setter Property="Transitions">
@@ -65,11 +65,11 @@
       <Setter Property="Margin" Value="0,10,0,0" />
     </Style>
     <Style Selector="ListBox.diff ListBoxItem:pointerover Border.row">
-      <Setter Property="BorderBrush" Value="#80E0A64B" />
+      <Setter Property="BorderBrush" Value="#80FCC21B" />
     </Style>
     <!-- Picked: goes with the next message. -->
     <Style Selector="ListBox.diff ListBoxItem:selected Border.row">
-      <Setter Property="Background" Value="#5A6A4A1E" />
+      <Setter Property="Background" Value="#5A765B0D" />
       <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
     </Style>
     <Style Selector="TextBlock.number">

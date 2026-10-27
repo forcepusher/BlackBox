@@ -70,8 +70,8 @@ public sealed class WaveformView : Control
     private static readonly IPen Tick = new Pen(new SolidColorBrush(Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF)), 1);
     private static readonly IPen Grid = new Pen(new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF)), 1);
     private static readonly IBrush Label = new SolidColorBrush(Color.FromRgb(0x8B, 0x91, 0x99));
-    private static readonly IBrush RangeFill = new SolidColorBrush(Color.FromArgb(0x30, 0xE0, 0xA6, 0x4B));
-    private static readonly IPen RangeEdge = new Pen(new SolidColorBrush(Color.FromRgb(0xE0, 0xA6, 0x4B)), 1.5);
+    private static readonly IBrush RangeFill = new SolidColorBrush(Color.FromArgb(0x30, 0xFC, 0xC2, 0x1B));
+    private static readonly IPen RangeEdge = new Pen(new SolidColorBrush(Color.FromRgb(0xFC, 0xC2, 0x1B)), 1.5);
     private static readonly IPen Playhead = new Pen(Brushes.White, 1.5);
 
     public override void Render(DrawingContext context)
@@ -146,7 +146,7 @@ public sealed class WaveformView : Control
             _wave = new WriteableBitmap(new PixelSize(w, h), new Vector(96 * scaling, 96 * scaling), PixelFormat.Bgra8888, AlphaFormat.Premul);
         }
         var pixels = new uint[w * h];
-        const uint color = 0xFFE0A64B;
+        const uint color = 0xFFFCC21B;
         var samples = sound.Samples;
         var blocks = sound.Blocks;
         var rate = (double)sound.Rate;

@@ -119,8 +119,8 @@ public sealed class ZoomBox : Control
                 (mark.Right - mark.Left) * rect.Width, (mark.Bottom - mark.Top) * rect.Height));
     }
 
-    private static readonly IBrush MarkFill = new SolidColorBrush(Color.FromArgb(0x33, 0xE0, 0xA6, 0x4B));
-    private static readonly IPen MarkPen = new Pen(new SolidColorBrush(Color.FromRgb(0xE0, 0xA6, 0x4B)), 2);
+    private static readonly IBrush MarkFill = new SolidColorBrush(Color.FromArgb(0x33, 0xFC, 0xC2, 0x1B));
+    private static readonly IPen MarkPen = new Pen(new SolidColorBrush(Color.FromRgb(0xFC, 0xC2, 0x1B)), 2);
 
     /// <summary>A marked area as every view draws it: the accent's outline over a faint fill of it.</summary>
     internal static void DrawMark(DrawingContext context, Rect rect)

@@ -224,7 +224,7 @@
       <Border Classes="preview" Width="498">
         <StackPanel Spacing="6">
           <DockPanel>
-            <Button DockPanel.Dock="Left" Classes="roundPlay" Command="{Binding PlayCommand}" VerticalAlignment="Center" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause sound">
+            <Button DockPanel.Dock="Left" Classes="roundPlay accent" Command="{Binding PlayCommand}" VerticalAlignment="Center" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause sound">
               <PathIcon Data="{Binding PlayIcon}" Width="14" Height="14" Foreground="#111214" />
             </Button>
             <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />

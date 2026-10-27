@@ -868,7 +868,7 @@ public static partial class VideoCheck
             if (top is not null)
             {
                 canvas.DrawBitmap(top, 0, 0);
-                using var line = new SKPaint { Color = new SKColor(224, 166, 75) };
+                using var line = new SKPaint { Color = new SKColor(252, 194, 27) };
                 canvas.DrawRect(0, top.Height + 4, SheetWidth, 4, line);
             }
             canvas.DrawBitmap(bottom, 0, (top?.Height ?? 0) + gap);
