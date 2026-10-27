@@ -21,8 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Wrap** in the File changes bar wraps long lines inside the panel instead of running them off
   its edge. On by default, and remembered.
 - **Watch** in the File changes bar follows the agent: as it changes a file, the panel goes to the
-  lines it changed and lights them up a moment. Scrolling or picking lines yourself stops it; click
-  Watch to follow again. On by default, and remembered.
+  lines it changed and lights them up a moment. It stays on while you scroll or pick lines, and the
+  agent's next change brings you back to it. On by default, and remembered.
 - Video generator takes videos as references: File… on a reference card and dropping a video copy it
   into References as a video card you can play. Ask in the chat for a clip that moves as it does, one
   that goes on from where it ends, or frames in its look.
