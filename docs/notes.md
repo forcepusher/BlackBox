@@ -2251,7 +2251,7 @@ TextBlock to Wrap, so a long line wraps under its code with the numbers and mark
 Rows stay logical lines: picks, drags (checked with a real drag across two wrapped lines) and the box's
 card are as before. **Watch**: each refresh compares the new diff with the one shown (`Fresh`: added and
 removed lines counted by file and text, as an edit moves every number below it) and marks what is new
-`IsFresh`, which lights its row (an amber layer, fading over 1 s after 1.5 s; not the pick's look).
+`IsFresh`, which lights its row (a yellow layer, fading over 1 s after 1.5 s; not the pick's look).
 Watching, the first fresh row's file is selected (its card over the box follows) and the row is left
 where it is in the upper half of the diff, else brought a quarter of the way down. The first read and
 another chat's list light nothing. A wheel turn, a press on the scrollbar, PageUp/Down, Home/End or

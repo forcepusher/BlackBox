@@ -790,7 +790,7 @@ public sealed partial class AudioPreview(string path, PreviewServices services) 
         var bitmap = new SKBitmap(Width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.Transparent);
-        using var paint = new SKPaint { Color = new SKColor(0xE0, 0xA6, 0x4B), StrokeWidth = 1, IsAntialias = false };
+        using var paint = new SKPaint { Color = new SKColor(0xFC, 0xC2, 0x1B), StrokeWidth = 1, IsAntialias = false };
         var per = Math.Max(1, mono.Length / (double)Width);
         // As tall as the strip allows (up to ten times louder), so a quiet sound still shows its shape.
         var loudest = 0f;

@@ -9,14 +9,28 @@
     <SolidColorBrush x:Key="BbSurfaceRaised" Color="#23262A" />
     <SolidColorBrush x:Key="BbBorder" Color="#2F3338" />
     <SolidColorBrush x:Key="BbMuted" Color="#8B9199" />
-    <SolidColorBrush x:Key="BbAccent" Color="#E0A64B" />
+    <!-- The yellow of the blob logo (docs/logo/blob.svg); lighter under the pointer, darker pressed.
+         Dark text (#111214) on it reads at about 12:1. -->
+    <SolidColorBrush x:Key="BbAccent" Color="#FCC21B" />
+    <SolidColorBrush x:Key="BbAccentHover" Color="#FDD45F" />
+    <SolidColorBrush x:Key="BbAccentPressed" Color="#DEAB18" />
+    <!-- Fluent puts white on its accent, which is lost on the yellow: a ticked box's tick is dark
+         instead (a pressed-in toggle's too, in the styles below). -->
+    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundChecked" Color="#111214" />
+    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" Color="#111214" />
+    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" Color="#111214" />
     <SolidColorBrush x:Key="BbUserBubble" Color="#2A2F36" />
     <SolidColorBrush x:Key="BbOk" Color="#5FB878" />
     <SolidColorBrush x:Key="BbError" Color="#E06C6C" />
   </Application.Resources>
 
   <Application.Styles>
-    <FluentTheme />
+    <!-- Fluent's own accent (sliders, check boxes, toggles) is the same yellow, not the Windows one. -->
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <ColorPaletteResources x:Key="Dark" Accent="#FCC21B" />
+      </FluentTheme.Palettes>
+    </FluentTheme>
 
     <Style Selector="Window">
       <Setter Property="Background" Value="{StaticResource BbBackground}" />
@@ -88,7 +102,7 @@
       <Setter Property="MinHeight" Value="0" />
     </Style>
 
-    <!-- The server dot in the top bar: grey until checked, then amber, green or red. -->
+    <!-- The server dot in the top bar: grey until checked, then yellow, green or red. -->
     <Style Selector="Ellipse.status">
       <Setter Property="Fill" Value="{StaticResource BbMuted}" />
     </Style>
@@ -113,8 +127,14 @@
       <Setter Property="Foreground" Value="#111214" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
-    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="#EDB866" />
+    <!-- A button on the accent (primary, or accent for a round play button) stays on it under the
+         pointer and pressed instead of going to Fluent's grey. -->
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter, Button.accent:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource BbAccentHover}" />
+      <Setter Property="Foreground" Value="#111214" />
+    </Style>
+    <Style Selector="Button.primary:pressed /template/ ContentPresenter, Button.accent:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource BbAccentPressed}" />
       <Setter Property="Foreground" Value="#111214" />
     </Style>
 
@@ -122,6 +142,12 @@
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
       <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="ToggleButton:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Foreground" Value="#111214" />
+    </Style>
+    <Style Selector="ToggleButton:checked PathIcon">
+      <Setter Property="Foreground" Value="#111214" />
     </Style>
 
     <!-- Every dropdown's arrow is the solid triangle History has (the user, 2026-10-24: "Arrows

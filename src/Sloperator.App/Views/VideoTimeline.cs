@@ -14,8 +14,8 @@ internal static class VideoColors
     public static readonly IPen WavePen = new Pen(new SolidColorBrush(Color.Parse("#6B8299")), 1);
     public static readonly IPen Tick = new Pen(new SolidColorBrush(Color.Parse("#4A4F56")), 1);
     public static readonly IPen Border = new Pen(new SolidColorBrush(Color.Parse("#2F3338")), 1);
-    public static readonly IPen Picked = new Pen(new SolidColorBrush(Color.Parse("#E0A64B")), 2);
-    public static readonly IPen End = new Pen(new SolidColorBrush(Color.Parse("#E0A64B")), 1);
+    public static readonly IPen Picked = new Pen(new SolidColorBrush(Color.Parse("#FCC21B")), 2);
+    public static readonly IPen End = new Pen(new SolidColorBrush(Color.Parse("#FCC21B")), 1);
 
     public static void Draw(DrawingContext context, string text, double x, double y, double size, IBrush brush, double maxWidth, IBrush? behind = null)
     {
