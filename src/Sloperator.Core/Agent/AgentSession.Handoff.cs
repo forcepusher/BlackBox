@@ -94,8 +94,7 @@ public sealed partial class AgentSession
         // message anyway), one read_file opened or a ComfyUI job's result was put after the note
         // as "The screen right now:". The screen an earlier reset carried counts: a second reset
         // before the next screenshot kept none.
-        var screen = History.LastOrDefault(m => !m.FromUser && m.Parts is [{ Text: { } said }, { IsImage: true }] &&
-                                                (said == ScreenshotText || said.StartsWith(CurrentScreenText, StringComparison.Ordinal)))?.Parts![1];
+        var screen = History.LastOrDefault(IsScreenshot)?.Parts![1];
         // Which monitor it shows goes with it: a later run looks at that one (see ScreenShown).
         var shown = ScreenShown(History);
         History.Clear();

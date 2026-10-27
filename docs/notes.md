@@ -1562,8 +1562,8 @@ of the limit from then on, after a handoff note; the cost grows
   with the context, as every step reads all of it again: on Opus 5.5 $0.02 a step at 100k, $0.16
   at 800k, about $7 against $28 of input over a 300-step job, and a step after more than 5 minutes
   without one writes the whole context to the cache again ($4 at 800k). A request over 32 MB,
-  which a long run's screenshots reach before 800k, is refused with 413 and resets the context as
-  any server's does. A five-hour run on Opus 5.5 at 1M (the FluffyMeow server move, 21 October)
+  which a long run's screenshots reach before 800k, is refused with 413 and has its screenshots before the latest
+  left out, as any server's does (see "Pictures a request"). A five-hour run on Opus 5.5 at 1M (the FluffyMeow server move, 21 October)
   never reset and met no limit.
 - Prompt caching: breakpoints on the system prompt (which caches the tools with it), at the end of
   the request and where the previous request ended, so each step reads everything before it from
@@ -1673,8 +1673,9 @@ don't say are assumed to have 1M (100k until 27 October 2026, when the user made
 Sloperator uses the whole context on Auto, a hosted service's `context_length` too (the most it takes
 for the model: Kilo and OpenRouter list 1M for some), as it does Claude's; until then that got 100k,
 and Anthropic was let off that cap. A server that refuses a request for its size in bytes (HTTP 413:
-Kilo takes 20 MB) gets the same reset as a "too long" error, and the run goes on with a quarter less
-context.
+Kilo takes 20 MB) has the screenshots before the latest left out (see "Pictures a request"); with
+none to leave out, it gets the same reset as a "too long" error, and the run goes on with a quarter
+less context.
 
 When the size assumed (or listed) is more than the server takes, a request is refused as too long,
 and the run recovers in place: the context is reset with a handoff note written from the latest part
@@ -1695,9 +1696,56 @@ So a run heavy with text is refused around 650k of Nemotron's count, below the 8
 would reset by itself, and the error names 1M, no less than the size in use: the quarter-below rule
 is what keeps it from running into the same refusal after the reset. No rate-limit headers come
 back; nothing is silently cut (the usage counts every token sent). Screenshots reach Kilo's 20 MB
-long before 1M tokens: such a run is refused once with 413, resets, and goes on with a quarter less
-than it had (`KiloOverflowTests`: 23.9 MB of screenshots, 61k tokens, went on at 46k). Both cases
-pass against Kilo (`KiloOverflowTests`, 27 October 2026).
+long before 1M tokens: such a run was refused once with 413, reset, and went on with a quarter
+less than it had (`KiloOverflowTests`: 23.9 MB of screenshots, 61k tokens, went on at 46k); since
+28 October the screenshots before the latest are left out instead, and the context stays (see
+"Pictures a request"). Both cases pass against Kilo (`KiloOverflowTests`, 28 October 2026).
+
+### Pictures a request
+Some servers take fewer pictures in one request than a run keeps. munito's gateway
+(`https://api.munito.ai/inference/v1`, measured 28 October 2026) takes 8, counted over all the
+messages and whatever their size (8 pictures of 64x64 or 1280x544 go through, a 9th small one in a
+message of its own is refused), on DeepSeek V4.1 Flash and Qwen 3.8 alike; Gemma 4 there takes none.
+A 9th is answered 400 "too many image inputs". A run keeps a screenshot of every step until a context
+reset, so a Unity run there failed at its 9th screenshot, with 2560x1088 ones a few thousand tokens
+into a 1M context.
+
+Every screenshot stays in the conversation until such an error, as before; only then are they
+left out. Such an error (`TooManyImagesException`, told apart from "takes no pictures") doesn't
+reset the context: every screenshot but the latest is put in words at once ("An earlier
+screenshot, left out: the server takes only so many pictures in one request.") and the step is
+sent again. The pictures tools and the user gave (a ComfyUI result, a reference) stay; only if they
+alone are still too many do the oldest of them go, the user's last, never the latest. The cap is the
+one the error names, or one under the pictures refused, since a run grows by one a step; the session
+keeps it (`MaxImages`), so when the run gets there again its screenshots go before the request
+rather than after a refusal. A chat that already held more is refused again under the first guess
+(12 sent: 11 learned, refused at 9: 8), and refused with one picture, the server is taken to take
+none. A request refused for its size (413, Kilo's 20 MB) with more than one screenshot in it is
+handled the same way, without a reset; only if it is still too large, or has none to leave out, is
+the context reset smaller.
+
+The wording isn't uniform: munito's "too many image inputs", vLLM's "At most 1 image(s) may be
+provided in one request." (its `--limit-mm-per-prompt`, 1 a request unless set; Azure says the
+same), Anthropic's "too many images and documents: 104 + 1 > 100" (Sloperator's own Claude
+requests leave the oldest out past 100, fifty at a time). OpenRouter and Kilo pass on the model
+server's; OpenAI, llama-server and LM Studio name no cap. A picture too big for many-image requests
+(Anthropic's 2000 pixels past 20) is not one of these.
+
+All at once rather than one a step, for the prompt cache, and for Claude: a picture left out changes
+the request from there on, everything after it is read again, and Claude's thinking, sent back
+signed and bound to what came before it, is dropped (with `drop_block`, not refused) after it. A
+screenshot dropped each step would do both every step. Measured on munito, 16 simulated screenshot
+steps (2560x1088, a 1.6k-token result each; munito reports cached tokens, noisily): all kept until 8
+then only the latest, 41.3k and 25.4k tokens read anew in two passes (117k sent); only the latest
+kept every step, 20.0k, 24.9k and 29.4k (64k sent); halves at 8, 34.5k and 60.8k; the latest 4 moved
+every step, 77.5k. A 2560x1088 screenshot is about 960 tokens on DeepSeek V4.1 Flash (8 were 7.7k),
+and 2.7k by Qwen's count of one per 32x32 pixels. Keeping only the latest by default was weighed
+(28 October 2026) and left out: it would cost Claude its thinking at every step.
+
+`MunitoImageCapTests` (BB_MUNITO_KEY) runs it against munito: nine screenshots, as in the run that
+failed, are refused once, the cap learned is 8 and the model still names the latest screen's colour;
+eight more are left out before the request, which isn't refused. `KiloOverflowTests` (BB_KILO=1)
+sends Kilo 21 MB of screenshots: refused once, sent again with the latest, no reset.
 
 LM Studio loads a model on first use with the context its settings give it, and out of the box
 that is 4k: less than Sloperator's instructions and tools alone (about 9k tokens), so every request
@@ -3090,6 +3138,7 @@ SSH tests against a lab VM started with `. ./scripts/sysadmin/lab.ps1; Reset-Lab
 $env:BB_SERVER_URL = "http://localhost:1234/v1"; $env:BB_SERVER_MODEL = "qwen3.8-27b@iq2_s"
 dotnet test --filter ServerIntegrationTests
 $env:BB_KILO = "1"; dotnet test --filter KiloOverflowTests   # a run past Kilo's count and its 20 MB at the 1M assumed recovers; 6 requests
+$env:BB_MUNITO_KEY = "<munito key>"; dotnet test --filter MunitoImageCapTests   # more screenshots than munito's 8 a request are left out; 3 requests
 dotnet test --filter ClickAccuracyTests   # click hit rate in 16 hard scenes; BB_CLICK_SCENES, BB_CLICK_TRIALS, BB_CLICK_COORDS=pixels|grid
 $env:BB_SSH_TEST_HOST = "admin@127.0.0.2"; $env:BB_SSH_TEST_KEY = "$PWD\.dev\sysadmin-lab\key\admin_ed25519"
 dotnet test --filter SshIntegrationTests  # ssh, file tools and copy; BB_SSH_TEST_BIG_GB=3 adds a 3 GB copy each way (BB_SSH_TEST_HOST2: a second server)

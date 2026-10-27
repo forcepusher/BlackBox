@@ -103,6 +103,22 @@ public class ChatClientTests
     public void Errors_saying_the_model_takes_no_pictures_are_told_apart(string error, bool refused) =>
         Assert.Equal(refused, OpenAiChatClient.LooksLikeImagesRefused(error));
 
+    [Theory]
+    [InlineData("too many image inputs", true, null)]                                         // munito, 28 October 2026
+    [InlineData("Too many images in the request: at most 8 images are allowed.", true, 8)]
+    [InlineData("You can send a maximum of 5 images per request", true, 5)]
+    [InlineData("At most 1 image(s) may be provided in one request.", true, 1)]                // vLLM, Azure
+    [InlineData("too many images and documents: 104 + 1 > 100", true, 100)]                   // Anthropic
+    [InlineData("messages.3.content.1.image.source.base64.data: At least one of the image dimensions exceed max allowed size for many-image requests: 2000 pixels", false, null)]
+    [InlineData("image input is not supported", false, null)]
+    [InlineData("too many tokens in the prompt", false, null)]
+    [InlineData("The image is 21 MB; the most is 20 MB.", false, null)]
+    public void Errors_saying_a_request_had_too_many_pictures_are_told_apart(string error, bool tooMany, int? limit)
+    {
+        Assert.Equal(tooMany, OpenAiChatClient.LooksLikeTooManyImages(error));
+        Assert.Equal(limit, TooManyImagesException.ParseLimit(error));
+    }
+
     [Fact]
     public async Task A_server_refusing_pictures_says_so_rather_than_being_asked_again()
     {

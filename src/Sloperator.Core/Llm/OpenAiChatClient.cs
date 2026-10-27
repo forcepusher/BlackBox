@@ -70,6 +70,30 @@ public sealed class RequestTooLargeException(string serverMessage, long bytes)
 public sealed class ImagesRefusedException(string serverMessage) : LlmException("The model in use doesn't take pictures: " + serverMessage);
 
 /// <summary>
+/// The server takes pictures, but fewer in one request than this one carried: munito's gateway
+/// takes 8 (measured 28 October 2026, whatever their size, across all the messages) and answers a
+/// 9th with 400 "too many image inputs". A run keeps a screenshot of every step, so the step after
+/// the 8th failed, and every one after it.
+/// </summary>
+public sealed class TooManyImagesException(string serverMessage, int sent)
+    : LlmException($"The server takes fewer pictures in one request than the {sent} sent: {serverMessage}")
+{
+    /// <summary>The pictures the refused request carried (0 when said in the stream, until the request is looked at).</summary>
+    public int Sent { get; } = sent;
+
+    public string ServerMessage { get; } = serverMessage;
+
+    /// <summary>The most the error says it takes, if it says.</summary>
+    public int? Limit { get; } = ParseLimit(serverMessage);
+
+    internal static int? ParseLimit(string message)
+    {
+        var m = Regex.Match(message, @"too many images[^:]*:[^>]*> (\d+)|(?:at most|maximum(?: number)? of|max(?:imum)?(?: is|:)?|up to|limit(?: is|:| of)?) (\d+) (?:images?|pictures?)|(\d+) (?:images?|pictures?) (?:at most|maximum|per (?:request|prompt|message))", RegexOptions.IgnoreCase);
+        return m.Success && int.TryParse(m.Groups.Values.Skip(1).First(g => g.Success).Value, out var n) ? n : null;
+    }
+}
+
+/// <summary>
 /// The server is holding requests back (HTTP 429): too many in a while, or a free allowance used up
 /// (Kilo's free models take 200 requests an hour). Sending again after a wait gets through.
 /// </summary>
@@ -283,6 +307,8 @@ public sealed partial class OpenAiChatClient
                 {
                     throw new ConnectionLostException($"The connection to {_baseUrl} dropped while it answered {status}: {ex.Message}", false, ex);
                 }
+                if (status is 400 or 413 or 422 && HasImages(messages) && LooksLikeTooManyImages(err))
+                    throw new TooManyImagesException(ErrorText(err).Clip(300), ImageCount(messages));
                 if (LooksLikeContextOverflow(err))
                     throw new ContextOverflowException(err.Clip(500));
                 if (status == 413)
@@ -318,8 +344,12 @@ public sealed partial class OpenAiChatClient
                 return await ReadStreamAsync(reader, d => { received = true; onDelta?.Invoke(d); }, ct,
                     onToolCall: name => { received = true; toolCall = name; }).ConfigureAwait(false);
             }
+            catch (TooManyImagesException ex) when (ex.Sent == 0)
+            {
+                throw new TooManyImagesException(ex.ServerMessage, ImageCount(messages));
+            }
             // A gateway passes the model server's refusal on in the stream.
-            catch (LlmException ex) when (ex is not (RateLimitedException or ContextOverflowException or ImagesRefusedException)
+            catch (LlmException ex) when (ex is not (RateLimitedException or ContextOverflowException or ImagesRefusedException or TooManyImagesException)
                                           && HasImages(messages) && LooksLikeImagesRefused(ex.Message))
             {
                 throw new ImagesRefusedException(ex.Message.Replace("Server error: ", "").Clip(300));
@@ -366,6 +396,8 @@ public sealed partial class OpenAiChatClient
                 // OpenRouter and Kilo pass on an upstream 429 in the stream, under HTTP 200.
                 if (code == "429")
                     throw new RateLimitedException("Server error: " + errorText.Clip(300), RetryAfter(null, error.ToJsonString(), DateTimeOffset.UtcNow));
+                if (LooksLikeTooManyImages(errorText))
+                    throw new TooManyImagesException(errorText.Clip(300), 0);
                 if (LooksLikeContextOverflow(errorText))
                     throw new ContextOverflowException(errorText);
                 // The model server behind a gateway failed or stalled mid-way: sent again like a
@@ -717,6 +749,20 @@ public sealed partial class OpenAiChatClient
     }
 
     private static bool HasImages(IReadOnlyList<ChatMessage> messages) => messages.Any(m => m.Parts?.Any(p => p.IsImage) == true);
+
+    internal static int ImageCount(IReadOnlyList<ChatMessage> messages) => messages.Sum(m => m.Parts?.Count(p => p.IsImage) ?? 0);
+
+    /// <summary>
+    /// An error saying the request carried more pictures than the server takes. The wording isn't
+    /// the same anywhere: "too many image inputs" (munito), "At most 1 image(s) may be provided in
+    /// one request." (vLLM's --limit-mm-per-prompt, and Azure), "too many images and documents:
+    /// 104 + 1 > 100" (Anthropic); gateways (OpenRouter, Kilo) pass the model server's on. OpenAI,
+    /// llama-server and LM Studio name no such cap.
+    /// </summary>
+    internal static bool LooksLikeTooManyImages(string err) => TooManyImagesWords().IsMatch(err);
+
+    [GeneratedRegex(@"too many (image|picture)|(at most|maximum( number)? of|max(imum)?|up to|limit( of)?) \d* ?(image\(s\)|images|pictures|image inputs)|(images?|pictures?) (limit|count) (exceeded|reached)|exceeds? the (maximum|max|limit)[^.]{0,30}(images|pictures)", RegexOptions.IgnoreCase)]
+    private static partial Regex TooManyImagesWords();
 
     [GeneratedRegex(@"(?<![-/])\b(images?|vision|multi-?modal|image_url|mmproj)\b(?![-:/])", RegexOptions.IgnoreCase)]
     private static partial Regex ImageWord();

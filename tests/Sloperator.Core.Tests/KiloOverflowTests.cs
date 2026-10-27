@@ -9,8 +9,8 @@ namespace Sloperator.Core.Tests;
 
 /// <summary>
 /// Opt-in: a run on Kilo's free Nemotron, at the 1M Sloperator assumes, grown past what Kilo takes,
-/// must recover and finish. Set BB_KILO=1 to run them; no key is needed. Each sends three requests
-/// (refused, handoff note, retry) of Kilo's 200 an hour, one of them over 20 MB.
+/// must recover and finish. Set BB_KILO=1 to run them; no key is needed. Each sends two or three
+/// requests (refused, a handoff note for text, retry) of Kilo's 200 an hour, one of them over 20 MB.
 /// </summary>
 public class KiloOverflowTests
 {
@@ -73,7 +73,8 @@ public class KiloOverflowTests
 
     /// <summary>
     /// Screenshots of 21 MB, few tokens: Kilo takes requests of 20 MB at most and answers 413 with
-    /// FUNCTION_PAYLOAD_TOO_LARGE, long before 1M tokens.
+    /// FUNCTION_PAYLOAD_TOO_LARGE, long before 1M tokens. The screenshots but the latest are left
+    /// out and the request sent again.
     /// </summary>
     [Fact]
     public async Task Screenshots_past_Kilos_20_MB_at_the_1M_assumed_are_recovered()
@@ -91,7 +92,9 @@ public class KiloOverflowTests
         var observer = await AskPasswordAsync(session);
 
         Assert.Contains(observer.Notices, n => n.Contains("more than the server takes"));
-        Assert.InRange(session.ContextTokens, 16_384, 60_000);
+        // The screenshots before the latest went; the context wasn't reset, nor made smaller.
+        Assert.DoesNotContain(observer.Notices, n => n.Contains("Context reset"));
+        Assert.Equal(ServerSettings.FallbackContextSize, session.ContextTokens);
     }
 
     /// <summary>A picture that doesn't compress: random pixels, about 1.3 MB as a JPEG at 1600 × 900.</summary>
