@@ -923,8 +923,9 @@
                      MaxHeight="200" VerticalContentAlignment="Center"
                      Watermark="{Binding InputHint}" />
             <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Bottom" Margin="8,0,0,0">
-              <!-- The logo blob, as tall as Send and 8 from it (with the spacing); it dances while a prompt runs. -->
-              <views:PartyBlob Dancing="{Binding IsBusy}" Width="32" Height="32" Margin="0,0,2,0" VerticalAlignment="Bottom" />
+              <!-- The logo blob, as tall as Send and 8 from it (with the spacing); it dances while a prompt runs.
+                   Not with the intro, which has the logo already. -->
+              <views:PartyBlob Dancing="{Binding IsBusy}" IsVisible="{Binding !ShowIntro}" Width="32" Height="32" Margin="0,0,2,0" VerticalAlignment="Bottom" />
               <Button Classes="primary" Content="Send" Command="{Binding SendCommand}" MinHeight="32" />
               <Button Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" Background="{StaticResource BbError}" MinHeight="32" />
             </StackPanel>
