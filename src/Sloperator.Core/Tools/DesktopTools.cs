@@ -221,6 +221,9 @@ public sealed class MouseClickTool : DesktopActionTool
         return Named(args) is { } t ? $"{kind}{button} {t}" : $"{kind}{button} at {Fmt(args)}";
     }
 
+    /// <summary>The height of the row a target with look-alikes is looked for in, as a share of the screen's; 1 or more: the whole screen. Changed only to measure (ClickAccuracyTests).</summary>
+    internal static double RowShare { get; set; } = 0.25;
+
     /// <summary>What which says when nothing else on the screen looks like the target.</summary>
     internal const string OnlyOne = "only one";
 
@@ -315,9 +318,9 @@ public sealed class MouseClickTool : DesktopActionTool
                 ? part.ToScreen(p.X, p.Y)
                 : null;
         (int X, int Y)? near = null;
-        if (given is { } aimed && Agent.FreshLook.Cropped)
+        if (given is { } aimed && Agent.FreshLook.Cropped && !(lookAlikes && RowShare >= 1))
         {
-            var part = space.Part(lookAlikes ? space.Row(aimed.Y) : space.Around(aimed.X, aimed.Y));
+            var part = space.Part(lookAlikes && RowShare > 0 ? space.Row(aimed.Y, RowShare) : space.Around(aimed.X, aimed.Y));
             near = await LookAsync(part, now.Crop(part.Screen.X - space.Screen.X, part.Screen.Y - space.Screen.Y, part.Screen.Width, part.Screen.Height)).ConfigureAwait(false);
         }
         if ((near ?? await LookAsync(space, now).ConfigureAwait(false)) is { } found)
