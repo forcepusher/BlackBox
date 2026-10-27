@@ -24,16 +24,9 @@ public partial class FileChangesPanel : UserControl
         DiffList.AddHandler(PointerMovedEvent, OnDiffMoved, RoutingStrategies.Bubble, handledEventsToo: true);
         DiffList.AddHandler(PointerReleasedEvent, (_, _) => EndDrag(), RoutingStrategies.Bubble, handledEventsToo: true);
         DiffList.AddHandler(PointerCaptureLostEvent, (_, _) => EndDrag(), RoutingStrategies.Bubble, handledEventsToo: true);
-        // Scrolled by hand (the wheel, keys), the diff stays where the user took it: no more watching.
-        DiffList.AddHandler(PointerWheelChangedEvent, (_, _) => _vm?.StopWatching(), RoutingStrategies.Tunnel);
-        DiffList.AddHandler(KeyDownEvent, (_, e) =>
-        {
-            if (e.Key is Key.PageUp or Key.PageDown or Key.Home or Key.End or Key.Up or Key.Down)
-                _vm?.StopWatching();
-        }, RoutingStrategies.Tunnel);
         _dragScroll = new DispatcherTimer(TimeSpan.FromMilliseconds(30), DispatcherPriority.Input, (_, _) => DragScroll());
         // A file picked by hand, with the mouse or the keys: a section's list made again after a refresh
-        // selects its file too, which must not go there nor stop watching.
+        // selects its file too, which must not go there.
         FileLists.AddHandler(PointerPressedEvent, (_, _) => _byHand = true, RoutingStrategies.Tunnel, handledEventsToo: true);
         FileLists.AddHandler(KeyDownEvent, (_, _) => _byHand = true, RoutingStrategies.Tunnel, handledEventsToo: true);
         FileLists.AddHandler(PointerReleasedEvent, (_, _) => Dispatcher.UIThread.Post(() => _byHand = false, DispatcherPriority.Background), RoutingStrategies.Bubble, handledEventsToo: true);
@@ -69,9 +62,6 @@ public partial class FileChangesPanel : UserControl
     private void OnDiffPressed(object? sender, PointerPressedEventArgs e)
     {
         EndDrag();
-        // The scrollbar, taken by hand: no more watching.
-        if ((e.Source as Visual)?.FindAncestorOfType<ScrollBar>(includeSelf: true) is not null)
-            _vm?.StopWatching();
         var point = e.GetCurrentPoint(DiffList);
         // A row's Stage button is pressed, not the row.
         if (!point.Properties.IsLeftButtonPressed || (e.KeyModifiers & KeyModifiers.Shift) != 0 || (e.Source as Visual)?.FindAncestorOfType<Button>(includeSelf: true) is not null ||
@@ -232,11 +222,7 @@ public partial class FileChangesPanel : UserControl
     private void OnFilePicked(object? sender, SelectionChangedEventArgs e)
     {
         if (_byHand && (sender as ListBox)?.SelectedItem is DiffFileItem file && _vm is { Reselecting: false })
-        {
-            // Gone to by hand: watching would take it away again.
-            _vm.StopWatching();
             _vm.GoToCommand.Execute(file);
-        }
     }
 
     /// <summary>

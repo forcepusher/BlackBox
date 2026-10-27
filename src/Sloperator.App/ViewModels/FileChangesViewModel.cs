@@ -429,36 +429,24 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
         }
     }
 
-    /// <summary>Set by a scroll or pick by hand: watching stops until Watch is clicked again, its saved choice kept.</summary>
-    private bool _watchStopped;
-
     /// <summary>
     /// The diff follows the agent: what it just changed is selected, scrolled to and lit up a
-    /// moment. Kept in settings; turned on, it goes to the last change.
+    /// moment. Kept in settings and changed only by its toggle: scrolled or picked by hand, the diff stays
+    /// where the user took it until the agent's next change. Turned on, it goes to the last change.
     /// </summary>
     public bool Watch
     {
-        get => _chat.Panels.WatchChanges && !_watchStopped;
+        get => _chat.Panels.WatchChanges;
         set
         {
             if (value == Watch)
                 return;
-            _watchStopped = false;
             _chat.Panels.WatchChanges = value;
             OnPropertyChanged();
             _chat.SavePanels();
             if (value)
                 GoToLatest();
         }
-    }
-
-    /// <summary>The user scrolled the diff or picked something: it stays where they took it.</summary>
-    internal void StopWatching()
-    {
-        if (!Watch)
-            return;
-        _watchStopped = true;
-        OnPropertyChanged(nameof(Watch));
     }
 
     /// <summary>The lines the agent changed last, lit up while they are fresh; empty before it changed one with the panel open.</summary>
@@ -469,7 +457,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     /// <summary>How long a change stays lit before it fades (over 2 s, Border.fresh in the panel): 1.5 s and 1 s were gone before the eye got there (the user, 2026-10-27).</summary>
     private static readonly TimeSpan LitFor = TimeSpan.FromSeconds(4);
 
-    /// <summary>Set while a refresh picks the same lines again: no pick by hand, so watching goes on.</summary>
+    /// <summary>Set while a refresh picks the same lines again: no click by hand, so a hunk isn't picked whole.</summary>
     private bool _refreshing;
 
     /// <summary>Watch turned on: its file selected, the last change in sight and lit up again.</summary>
@@ -650,9 +638,6 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             }
             foreach (var row in Selection.SelectedItems.OfType<DiffRow>().Where(r => !r.IsLine).ToList())
                 Selection.Deselect(row.Index);
-            // Lines picked by hand stay in sight: the agent's next edit doesn't scroll them away.
-            if (!_refreshing && Selection.Count > 0)
-                StopWatching();
             // A file picked in two sections (staged and unstaged) is one card in the box.
             _chat.Pick(Picks().GroupBy(p => p.File.FullPath, StringComparer.OrdinalIgnoreCase)
                 .Select(g => (g.Key, $"{Capital(Lines(g.SelectMany(p => p.Rows).ToList()))} · {Path.GetFileName(g.Key)}")).ToList());

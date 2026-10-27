@@ -2336,10 +2336,11 @@ another chat's list light nothing, except when the panel opened on its own at th
 (`Fresh` with no diff before). A read that finds nothing new (the agent's next call often comes
 250 ms after, and the first change's own `ChangesUpdated` reads again) keeps the last change's rows
 and their light, the fade going on; before, its new rows replaced the lit ones unlit, so a light
-could go out at once. A wheel turn, a press on the scrollbar, PageUp/Down, Home/End or
-the arrows in the diff, a line picked or a file clicked stop watching for now (the toggle shows off)
-without saving it: the saved choice is the user's click. Turned on, Watch goes to the last change and
-lights it again. Checked in the app on 2026-10-26 with a stand-in model making four edits on cue.
+could go out at once. Only a click on the toggle turns Watch on or off (the user, 2026-10-28): a
+scroll, a line picked or a file clicked leave the diff where the user took it until the agent's next
+change, which goes there as usual. Before, any of them turned Watch off for the moment (the toggle
+showed off without saving it), which the user found it doing by itself. Turned on, Watch goes to the
+last change and lights it again. Checked in the app on 2026-10-26 with a stand-in model making four edits on cue.
 **Git: Committed, Staged, Unstaged** (the user, 2026-10-26; a dropdown of All changes / Not committed /
 Not staged before it, which the user had replaced the same day by three foldouts). Once a changed file
 is in a git repository, the file list is foldouts, **Committed**, **Staged**, **Unstaged** and
@@ -2347,7 +2348,7 @@ is in a git repository, the file list is foldouts, **Committed**, **Staged**, **
 rows leave the diff (kept folded while the panel is open). With no file in git it is the plain list as
 before. A section's list made again by a refresh selects its file too: only a press or key in the lists goes
 there (`_byHand`); before that, every refresh jumped the diff to its end and back, which left a stale
-row drawn under the last and stopped Watch. `FileChanges.DiffAsync` takes the files of the full diff and asks git once per repository:
+row drawn under the last. `FileChanges.DiffAsync` takes the files of the full diff and asks git once per repository:
 `status --porcelain -z` for their letters and `cat-file --batch` for their bytes in the index
 (`:path`) and HEAD (`HEAD:path`), read as bytes (`GitDiff.RunBytesAsync`) so a byte order mark and
 line endings stay as they are. A file then becomes up to three files, each with a `GitFile` naming its
