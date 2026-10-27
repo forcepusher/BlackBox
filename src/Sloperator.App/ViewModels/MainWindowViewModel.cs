@@ -151,9 +151,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     };
 
     /// <summary>The window is up: from now on the agent's inputs show in the screen corner, and a ring where it clicks.</summary>
-    public void ShowInputOverlay()
+    public void ShowInputOverlay((byte R, byte G, byte B)? markerColor = null)
     {
         _platform.InputOverlay.Duration = TimeSpan.FromSeconds(AgentSettings.InputLogSeconds);
+        if (markerColor is { } color)
+            _platform.InputOverlay.MarkerColor = color;
         _platform.InputOverlay.Enabled = true;
     }
 
