@@ -53,7 +53,7 @@ whatever it downloads stay in a `Data` folder next to the exe.
 
 Out of the box it runs on Kilo's free online models, with no account or key. They allow about 200
 requests an hour, so a long job may stop to wait, and your screenshots go to their servers. For
-private or long work, use your own model.
+private or long work, use [your own model](#using-your-own-model), or Claude with your Anthropic API key.
 
 ## While it works
 - **Pause/Break** (or the Stop button) stops it at any time, from any window.
@@ -74,7 +74,8 @@ private or long work, use your own model.
 ## Using your own model
 Type your server's address in the bar at the top of the window, such as `http://localhost:1234/v1`
 for LM Studio, and an API key next to it if the server needs one. Any OpenAI-compatible server works:
-LM Studio, llama.cpp, Ollama, vLLM, OpenRouter and other online APIs. Sloperator picks the strongest
+LM Studio, llama.cpp, Ollama, vLLM, OpenRouter and other online APIs, and so does Anthropic's API for
+Claude with your own API key (see below). Sloperator picks the strongest
 model the server has, or you pick one from the list.
 
 - In LM Studio, switch its server on in the Developer tab, and turn on "Serve on Local Network"
