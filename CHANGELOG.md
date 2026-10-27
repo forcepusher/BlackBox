@@ -143,6 +143,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A × at the top right of Video generator, File changes and File inspector closes the tool.
 
 ### Changed
+- A reply without tool calls ends the task: Sloperator no longer sends "Continue with the task" after
+  a reply that only looks unfinished, nor a note after thinking that went in circles, nor Claude a
+  "Continue." in your name. A reply the server's length limit cut off is still told so and goes on.
 - The app has a new name, Sloperator: the exe is `Sloperator.exe`, and `SLOPERATOR_HOME` sets the
   portable root.
 - A new icon: a yellow blob in place of the grey box, in the taskbar, the windows and the exe.

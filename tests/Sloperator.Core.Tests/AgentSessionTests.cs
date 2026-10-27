@@ -1167,43 +1167,21 @@ public class AgentSessionTests
         Assert.Equal(2, server.Requests.Count); // no handoff request in between
         Assert.Contains(observer.Notices, n => n.Contains("length limit"));
         Assert.Contains(session.History, m => m.Reasoning == "Long thoughts"); // kept, and the model asked to go on
-        Assert.StartsWith("[Sloperator] Continue with the task", LastText(server.Requests[1]));
+        Assert.Equal(AgentSession.CutOffNote, LastText(server.Requests[1]));
     }
 
     [Fact]
-    public async Task Nudges_start_over_once_the_model_is_moving_again()
+    public async Task A_reply_that_announces_a_step_without_its_call_ends_the_run()
     {
-        // Three stalls in one run, with steps in between: each one gets its nudge.
-        var server = new ScriptedServer(
-            Sse.Text("Let me look."), Sse.ToolCall("w1", "wait", """{"seconds":0}"""),
-            Sse.Text("Let me look again."), Sse.ToolCall("w2", "wait", """{"seconds":0}"""),
-            Sse.Text("Let me check once more."), Sse.ToolCall("w3", "wait", """{"seconds":0}"""),
-            Sse.Text("Done."));
+        // Whether a reply looks finished isn't guessed: nothing is sent in the user's place.
+        var server = new ScriptedServer(Sse.Text("Let me click Save."), Sse.Text("(not asked)"));
         var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
 
-        await session.RunAsync("go", observer, CancellationToken.None);
+        await session.RunAsync("save it", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal(7, server.Requests.Count);
-        Assert.Equal("Done.", session.History[^1].Content);
-    }
-
-    [Fact]
-    public async Task A_question_to_the_user_ends_the_turn_though_a_plan_follows_it()
-    {
-        // Seen in Video generator: its last sentence read as an announced step, and the nudge made the
-        // model ask the user the same question again.
-        var server = new ScriptedServer(
-            Sse.ToolCall("w1", "wait", """{"seconds":0}"""),
-            Sse.Text("Nothing's made yet.\n\nWhat do you want shot s1 to show? I'll set its frames, prompt, camera, and any line, then make the clip."),
-            Sse.Text("(not asked)"));
-        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
-
-        await session.RunAsync("Oi", observer, CancellationToken.None);
-
-        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal(2, server.Requests.Count);
-        Assert.DoesNotContain(session.History, m => m.Content == AgentSession.NudgeText);
+        Assert.Single(server.Requests);
+        Assert.Equal("Let me click Save.", session.History[^1].Content);
     }
 
     [Fact]
@@ -1278,7 +1256,7 @@ public class AgentSessionTests
     }
 
     [Fact]
-    public async Task Thinking_that_repeats_itself_is_cut_off_and_the_model_told_to_look_again()
+    public async Task Thinking_that_repeats_itself_is_cut_off_and_the_request_sent_again()
     {
         // From a real run: the model misread the board and wrote this paragraph about 30 times.
         const string loop =
@@ -1298,7 +1276,7 @@ public class AgentSessionTests
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
         Assert.Contains(observer.Notices, n => n.Contains("repeating"));
         Assert.Equal(2, server.Requests.Count);
-        Assert.Equal(AgentSession.RepetitionNote, server.Requests[1]["messages"]!.AsArray()[^1]!["content"]!.ToString());
+        Assert.Equal(server.Requests[0].ToJsonString(), server.Requests[1].ToJsonString()); // nothing added to it
         Assert.DoesNotContain(session.History, m => m.Reasoning?.Contains("misread") == true);
     }
 

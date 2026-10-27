@@ -1881,11 +1881,24 @@ prints the traceback and exits with 0.
 
 Models often fumble tool-call syntax, so Sloperator repairs calls on the fly: Qwen XML, Gemma 4 and
 JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…) and misnamed
-arguments (`coordinate: [x, y]`) are all accepted, and a model that announces a step without taking
-it gets nudged to continue. A reply that puts a question to the user (one with you, your, me, shall I
-or should I in it) ends the turn whatever comes after it: "What do you want shot s1 to show? I'll set
-its frames, then make the clip." was nudged for its last sentence, and the model asked the same
-question again. A question it asks itself ("Did it save? Let me check.") still gets the nudge.
+arguments (`coordinate: [x, y]`) are all accepted.
+
+A reply without tool calls ends the run, whatever it says: Sloperator doesn't guess whether it looks
+finished. Only two kinds of message make the model answer again on its own, both about something
+outside it: the context reset's handoff note, and a reply the server cut off (a dropped connection,
+or the server's reply-length limit). Four others went on 2026-10-27, after about 40 tasks (files,
+code, web, Excel, a project look-up, Notepad, Paint, a long file under a reply-length cap) on Qwen
+3.8, Nemotron 3.5 Super VL and Haiku 5.5, each with them on and off: the same tasks passed either way,
+and none of the four fired once.
+- The Continue nudge for a reply that looked unfinished (empty, ending in ":" or "Let me…/I'll…").
+  Its other half stays: a reply the length limit cut off is told so and goes on. With a 2,000-token
+  cap Qwen finished a 600-line file with it and stopped with nothing written without it.
+- The note after a reply whose only call the length limit cut short: such a reply gets the cut-off
+  note above instead. A cut call among others that ran is still said with the last result.
+- The note after thinking that kept repeating ("you may have misread one…"): the looping reply is
+  still cut off, and the same request is sent again, up to three times.
+- Claude's "Continue." added when a request ended on the model's turn, in the user's name; no step
+  ends there.
 
 Before it says a task is done, the model is asked to check the result itself, not just that its
 steps ran without errors (a look at it, the file it made, a run of what it built), and to say how
