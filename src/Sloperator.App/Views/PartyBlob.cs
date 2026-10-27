@@ -25,6 +25,7 @@ public sealed class PartyBlob : Control
     private static List<(Bitmap Frame, int Ms)>? _dance;
 
     private DispatcherTimer? _timer;
+    private readonly System.Diagnostics.Stopwatch _clock = new();
     private int _at;
 
     static PartyBlob()
@@ -68,24 +69,33 @@ public sealed class PartyBlob : Control
             _at = 0;
             return;
         }
-        var dance = _dance ??= Load();
+        _dance ??= Load();
         if (_timer is null)
         {
-            _timer = new DispatcherTimer(DispatcherPriority.Background);
-            _timer.Tick += (_, _) => Advance();
+            _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(10), DispatcherPriority.Background, (_, _) => Advance());
+            _timer.Stop();
         }
         if (_timer.IsEnabled)
             return;
-        _timer.Interval = TimeSpan.FromMilliseconds(dance[_at].Ms);
+        _clock.Restart();
         _timer.Start();
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// The frame for the time since the dance began. A timer per frame's delay ran late on Windows'
+    /// 15.6 ms ticks: every frame about 33 ms, and the original GIF's 0.5 s loop took 0.69 s.
+    /// </summary>
     private void Advance()
     {
         var dance = _dance!;
-        _at = (_at + 1) % dance.Count;
-        _timer!.Interval = TimeSpan.FromMilliseconds(dance[_at].Ms);
+        var ms = _clock.ElapsedMilliseconds % dance.Sum(f => f.Ms);
+        var at = 0;
+        while (ms >= dance[at].Ms)
+            ms -= dance[at++].Ms;
+        if (at == _at)
+            return;
+        _at = at;
         InvalidateVisual();
     }
 
