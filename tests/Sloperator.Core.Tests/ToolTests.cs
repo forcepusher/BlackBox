@@ -1230,6 +1230,7 @@ public class OverlayInputTests
     {
         public bool Enabled { get; set; } = true;
         public TimeSpan Duration { get; set; }
+        public (byte R, byte G, byte B) MarkerColor { get; set; }
         public List<(string Text, (int X, int Y)? Point)> Shown { get; } = [];
         public void Show(string text, (int X, int Y)? point = null) => Shown.Add((text, point));
     }

@@ -104,6 +104,9 @@ public interface IInputOverlay
     /// <summary>How long a log line stays on screen, fade-out included.</summary>
     TimeSpan Duration { get; set; }
 
+    /// <summary>The click marker's colour, the app's accent; it gets a dark outline to show on any background.</summary>
+    (byte R, byte G, byte B) MarkerColor { get; set; }
+
     /// <param name="text">What happened, e.g. "Left click" or "Keys: Ctrl+S".</param>
     /// <param name="point">Where on the screen (physical pixels), for a marker; null for keyboard input.</param>
     void Show(string text, (int X, int Y)? point = null);
@@ -114,6 +117,7 @@ public sealed class NoInputOverlay : IInputOverlay
     public static readonly NoInputOverlay Instance = new();
     public bool Enabled { get; set; }
     public TimeSpan Duration { get; set; }
+    public (byte R, byte G, byte B) MarkerColor { get; set; }
     public void Show(string text, (int X, int Y)? point = null) { }
 }
 

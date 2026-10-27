@@ -2752,7 +2752,12 @@ Video generator, a dialog), found by their process (see Several windows). It is 
 taken, so screen recorders and screen sharing show it the rest of the time (before, an option hid
 it from them for good). Every click and key press the agent makes shows up in a
 log in the bottom-right corner that fades after 15 seconds, with a ring where it clicked. The agent
-can't see it and it never takes focus.
+can't see it and it never takes focus. The ring is in the accent colour (`BbAccent`, handed to the
+overlay when the main window opens, as the overlay draws with Skia outside Avalonia) on a dark
+outline, so the yellow still shows on a white page. It springs out to about 90 px across in 0.4
+seconds, holds, and fades over the last second of its 3 (until 28 October 2026 it was a thin pink
+ring 64 px at most, gone in 1.2 seconds, easy to miss). Its edges are drawn without antialiasing,
+since blended pixels against the window's magenta colour key would show as a pink fringe.
 
 To change or add to a task while it runs, type in the box at the bottom and press Enter. The agent
 reads the message before its next step, and a `wait` it is in ends for it. While you type there,

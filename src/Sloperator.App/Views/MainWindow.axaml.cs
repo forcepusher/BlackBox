@@ -421,7 +421,10 @@ public partial class MainWindow : Window
             if (change.PropertyName == nameof(MainWindowViewModel.Toolkit))
                 Dock();
         };
-        vm.ShowInputOverlay();
+        // The click marker is drawn outside Avalonia, so it is handed the accent colour.
+        vm.ShowInputOverlay(this.FindResource("BbAccent") is Avalonia.Media.ISolidColorBrush accent
+            ? (accent.Color.R, accent.Color.G, accent.Color.B)
+            : null);
     }
 
     /// <summary>A chat picked in the History dropdown (its command opens it): close the list and get back to typing.</summary>

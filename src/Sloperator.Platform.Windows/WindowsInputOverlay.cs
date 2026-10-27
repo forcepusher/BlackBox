@@ -8,7 +8,7 @@ namespace Sloperator.Platform.Windows;
 
 /// <summary>
 /// The on-screen input log: two small layered windows on their own UI thread, one listing the
-/// latest inputs in the bottom-right corner, one drawing a ring where the agent clicked.
+/// latest inputs in the bottom-right corner, one drawing an accent-coloured ring where the agent clicked.
 /// </summary>
 /// <remarks>
 /// Both windows are click-through (WS_EX_TRANSPARENT), never activated (WS_EX_NOACTIVATE),
@@ -20,8 +20,8 @@ namespace Sloperator.Platform.Windows;
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsInputOverlay : IInputOverlay
 {
-    private const double FadeSeconds = 1.5, MarkerSeconds = 1.2;
-    private const int MaxLines = 8, PanelWidth = 460, LineHeight = 34, MarkerSize = 72;
+    private const double FadeSeconds = 1.5, MarkerSeconds = 3, MarkerGrowSeconds = 0.4, MarkerFadeSeconds = 1;
+    private const int MaxLines = 8, PanelWidth = 460, LineHeight = 34, MarkerSize = 120;
     private const uint WM_APP_REFRESH = WM_APP + 1;
     private const uint ColorKey = 0x00FF00FF; // magenta, as COLORREF (0x00BBGGRR)
 
@@ -30,6 +30,7 @@ internal sealed class WindowsInputOverlay : IInputOverlay
     private (int X, int Y, DateTime At)? _marker;
     private volatile bool _enabled;
     private double _logSeconds = 15;
+    private SKColor _markerColor = new(0xFC, 0xC2, 0x1B); // the accent, until the app hands over its own
     private Thread? _thread;
     private uint _threadId;
     private nint _logWindow, _markerWindow;
@@ -58,6 +59,12 @@ internal sealed class WindowsInputOverlay : IInputOverlay
     {
         get => TimeSpan.FromSeconds(_logSeconds);
         set => _logSeconds = Math.Max(FadeSeconds, value.TotalSeconds);
+    }
+
+    public (byte R, byte G, byte B) MarkerColor
+    {
+        get => (_markerColor.Red, _markerColor.Green, _markerColor.Blue);
+        set => _markerColor = new SKColor(value.R, value.G, value.B);
     }
 
     public void Show(string text, (int X, int Y)? point = null)
@@ -151,7 +158,7 @@ internal sealed class WindowsInputOverlay : IInputOverlay
         }
 
         if (lines.Count > 0) DrawLog(lines); else ShowWindow(_logWindow, SW_HIDE);
-        if (marker is { } mk) DrawMarker(mk.X, mk.Y, mk.Age / MarkerSeconds); else ShowWindow(_markerWindow, SW_HIDE);
+        if (marker is { } mk) DrawMarker(mk.X, mk.Y, mk.Age); else ShowWindow(_markerWindow, SW_HIDE);
 
         // Animate only while something is on screen.
         var active = lines.Count > 0 || marker is not null;
@@ -191,15 +198,28 @@ internal sealed class WindowsInputOverlay : IInputOverlay
         });
     }
 
-    private void DrawMarker(int cx, int cy, double progress)
+    private static readonly SKColor MarkerOutline = new(20, 20, 24);
+
+    private void DrawMarker(int cx, int cy, double age)
     {
-        // The whole marker window fades, so the ring can be drawn fully opaque.
-        Paint(_markerWindow, cx - MarkerSize / 2, cy - MarkerSize / 2, MarkerSize, MarkerSize, (byte)(255 * (1 - progress)), canvas =>
+        // The ring springs out from the click, holds there, and the whole window fades at the end,
+        // so the ring can be drawn fully opaque. The accent goes on a dark outline, which keeps a
+        // light accent visible on a white page.
+        var grow = Math.Clamp(age / MarkerGrowSeconds, 0, 1);
+        var radius = 14 + 30 * (float)(1 - (1 - grow) * (1 - grow)); // ease out
+        var opacity = Math.Clamp((MarkerSeconds - age) / MarkerFadeSeconds, 0, 1);
+        Paint(_markerWindow, cx - MarkerSize / 2, cy - MarkerSize / 2, MarkerSize, MarkerSize, (byte)(255 * opacity), canvas =>
         {
-            using var ring = new SKPaint { IsAntialias = false, Style = SKPaintStyle.Stroke, StrokeWidth = 4, Color = new SKColor(255, 64, 160) };
-            using var dot = new SKPaint { IsAntialias = false, Color = new SKColor(255, 64, 160) };
-            canvas.DrawCircle(MarkerSize / 2f, MarkerSize / 2f, 8 + (float)progress * 24, ring);
-            canvas.DrawCircle(MarkerSize / 2f, MarkerSize / 2f, 4, dot);
+            // No antialiasing: blended edge pixels against the colour key would show a pink fringe.
+            using var outline = new SKPaint { IsAntialias = false, Style = SKPaintStyle.Stroke, StrokeWidth = 12, Color = MarkerOutline };
+            using var ring = new SKPaint { IsAntialias = false, Style = SKPaintStyle.Stroke, StrokeWidth = 6, Color = _markerColor };
+            using var dotOutline = new SKPaint { IsAntialias = false, Color = MarkerOutline };
+            using var dot = new SKPaint { IsAntialias = false, Color = _markerColor };
+            const float c = MarkerSize / 2f;
+            canvas.DrawCircle(c, c, radius, outline);
+            canvas.DrawCircle(c, c, radius, ring);
+            canvas.DrawCircle(c, c, 10, dotOutline);
+            canvas.DrawCircle(c, c, 6, dot);
         });
     }
 
