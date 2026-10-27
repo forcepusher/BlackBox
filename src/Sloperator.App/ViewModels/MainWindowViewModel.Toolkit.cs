@@ -281,9 +281,15 @@ public sealed partial class MainWindowViewModel
     private void OpenOnFirstChange()
     {
         _changesNotShown = false;
-        if (_settings.Panels.OpenFileChanges && Toolkit is null && !_closed)
-            SelectedToolkit = ToolkitOptions.First(o => o.Name == FileChangesName);
+        if (!_settings.Panels.OpenFileChanges || Toolkit is not null || _closed)
+            return;
+        OpeningOnFirstChange = true;
+        try { SelectedToolkit = ToolkitOptions.First(o => o.Name == FileChangesName); }
+        finally { OpeningOnFirstChange = false; }
     }
+
+    /// <summary>Set while File changes opens on the agent's first change: what its first read shows is that change, lit up.</summary>
+    internal bool OpeningOnFirstChange { get; private set; }
 
     /// <summary>Where a chat's list is kept: Data/chats/changes/id.json.</summary>
     private string ChangesFile(string chatId) => Path.Combine(_chats.Folder, "changes", Path.GetFileName(chatId) + ".json");

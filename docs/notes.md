@@ -1296,6 +1296,20 @@ take it from their owner by template binding (a style setter loses to that). Ove
 `Control`, or `ScrollBar.AllowAutoHide` on `ScrollBar`, throws at startup: both already have their
 metadata there. Fluent lays the bars over the content, so a bar covers the strip it sits on.
 
+## Accent colour
+The accent is the blob logo's yellow #FCC21B (`BbAccent`, and Fluent's own through its palette).
+Fluent was made for dark accents: it puts white on them, and a picked list row is the accent at 60%.
+On the yellow both read under 4:1 (the user's screenshot of the File changes file list, 2026-10-27,
+where the picked row's green name was lost). So `App.axaml` puts #111214 on every solid yellow: buttons,
+pressed-in toggles, accent buttons, ticks, radio dots, a switch's knob and selected text (TextBox and
+SelectableTextBlock's `SelectionForegroundBrush`, which Fluent leaves light). A picked row of a list,
+dropdown or tree is a dark tint of the yellow instead (`BbAccentTint`, Fluent's
+`SystemControlHighlightListAccent*` and `ComboBoxItem`/`TreeViewItem` selected brushes), under the
+row's own text, as the diff's picked lines have. The dark text on pressed-in toggles is for the app's
+`ghost` toggles only: an Expander's header is a ToggleButton too, checked while open, and the chat's
+Thoughts header had gone near black on the dark surface. Yellow as text or lines on the dark surfaces
+(links, icons, the playhead) reads at about 11:1 and stays.
+
 ## Several windows
 **New window** in the top bar opens another chat window, with its own chat, agent
 and MCP servers. (It was an icon at first, to keep the bar within the narrowest window, and went
@@ -2264,10 +2278,16 @@ TextBlock to Wrap, so a long line wraps under its code with the numbers and mark
 Rows stay logical lines: picks, drags (checked with a real drag across two wrapped lines) and the box's
 card are as before. **Watch**: each refresh compares the new diff with the one shown (`Fresh`: added and
 removed lines counted by file and text, as an edit moves every number below it) and marks what is new
-`IsFresh`, which lights its row (a yellow layer, fading over 1 s after 1.5 s; not the pick's look).
+`IsFresh`, which lights its row (a yellow layer, fading over 2 s after 4 s, `LitFor`; 1.5 s and 1 s
+were too short for the user, 2026-10-27; not the pick's look).
 Watching, the first fresh row's file is selected (its card over the box follows) and the row is left
 where it is in the upper half of the diff, else brought a quarter of the way down. The first read and
-another chat's list light nothing. A wheel turn, a press on the scrollbar, PageUp/Down, Home/End or
+another chat's list light nothing, except when the panel opened on its own at the agent's first change
+(`OpeningOnFirstChange`): that read is the change, so all its added and removed lines light up
+(`Fresh` with no diff before). A read that finds nothing new (the agent's next call often comes
+250 ms after, and the first change's own `ChangesUpdated` reads again) keeps the last change's rows
+and their light, the fade going on; before, its new rows replaced the lit ones unlit, so a light
+could go out at once. A wheel turn, a press on the scrollbar, PageUp/Down, Home/End or
 the arrows in the diff, a line picked or a file clicked stop watching for now (the toggle shows off)
 without saving it: the saved choice is the user's click. Turned on, Watch goes to the last change and
 lights it again. Checked in the app on 2026-10-26 with a stand-in model making four edits on cue.

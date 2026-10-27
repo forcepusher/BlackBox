@@ -169,8 +169,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The context slider goes up to 1M.
 - The second Sloperator name and logo under the title bar made way for the Toolkit dropdown.
 - The first-run hint for Ctrl+V is reworded.
+- What the agent just changed stays lit in File changes longer: 4 seconds, then a 2 second fade.
 
 ### Fixed
+- Text on the yellow accent is readable again: the picked file in File changes, picked rows in
+  lists and dropdowns, selected text, and the Thoughts header, which had gone near black.
+- When File changes opens by itself on the agent's first change, that change lights up too.
 - A message sent during a run no longer brings a second, unasked-for answer at the end of the run,
   after the model has already answered it.
 - File changes no longer lists files other programs write while a command runs, such as your
