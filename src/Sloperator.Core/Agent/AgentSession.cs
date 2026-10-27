@@ -715,7 +715,16 @@ public sealed partial class AgentSession(
         }
     }
 
+    internal const string OldScreenshotText = "(An earlier screenshot, left out: only the latest is kept.)";
+
+    /// <summary>A screenshot Sloperator took after a step, or the screen a context reset carried; not a picture the user or a tool gave.</summary>
+    private static bool IsScreenshot(ChatMessage m) =>
+        !m.FromUser && m.Parts is [{ Text: { } said }, { IsImage: true }] && (said == ScreenshotText || said.StartsWith(CurrentScreenText, StringComparison.Ordinal));
+
     /// <summary>
+    /// Unless the settings keep them, every screenshot but the latest is put in words: the user saw
+    /// no reply read an older one, and leaving out the one before each step breaks the prompt
+    /// cache only that one step back, while the context no longer fills with pictures.
     /// Over <see cref="MaxImages"/>, the oldest pictures are put in words until half of it is left,
     /// screenshots and tools' pictures before the user's own, and never the latest, which is the
     /// screen. Half, not one under: the requests after keep the same start, which the server has
@@ -723,6 +732,17 @@ public sealed partial class AgentSession(
     /// </summary>
     private void LeaveOutOldImages()
     {
+        // Not with Claude: its thinking is bound to what came before it, and a screenshot left out
+        // under the last reply would drop that reply's thinking at every step. Its API takes 100.
+        var screens = History.Where(IsScreenshot).ToList();
+        if (!client.BindsThinking && toolContext.Settings.Screenshots switch
+            {
+                ScreenshotHistory.Latest => true,
+                ScreenshotHistory.Batch => screens.Count > AgentSettings.BatchScreenshots,
+                _ => false,
+            })
+            foreach (var m in screens.SkipLast(1))
+                m.Parts = [m.Parts![0], ContentPart.FromText(OldScreenshotText)];
         var images = History.Where(m => m.Parts is not null).SelectMany(m => m.Parts!.Select((p, i) => (m, i, p))).Where(x => x.p.IsImage).ToList();
         if (MaxImages == 0 || images.Count <= MaxImages)
             return;

@@ -4,6 +4,17 @@ using System.Text.Json.Serialization;
 
 namespace Sloperator.Core.Settings;
 
+/// <summary>Which screenshots stay in the conversation, as pictures, until a context reset.</summary>
+public enum ScreenshotHistory
+{
+    /// <summary>Only the latest; the ones before it are said in words.</summary>
+    Latest,
+    /// <summary>All of them until there are <see cref="AgentSettings.BatchScreenshots"/>, then all but the latest at once.</summary>
+    Batch,
+    /// <summary>All of them.</summary>
+    All,
+}
+
 public enum ApprovalMode
 {
     /// <summary>Ask before every tool call.</summary>
@@ -254,6 +265,16 @@ public sealed class AgentSettings
     [JsonIgnore]
     public (int Width, int Height) ScreenshotBox =>
         (Math.Clamp(ScreenshotMaxWidth, MinScreenshotWidth, MaxScreenshotSide), Math.Clamp(ScreenshotMaxHeight, MinScreenshotHeight, MaxScreenshotSide));
+
+    /// <summary>
+    /// Which screenshots stay in the conversation: only the latest by default (since 28 October
+    /// 2026). Leaving out the one before it each step breaks the prompt cache only one step back,
+    /// and sends the fewest tokens (see docs/notes.md, "Screenshots kept").
+    /// </summary>
+    public ScreenshotHistory Screenshots { get; set; } = ScreenshotHistory.Latest;
+
+    /// <summary>How many screenshots <see cref="ScreenshotHistory.Batch"/> keeps before it drops all but the latest: munito's cap.</summary>
+    public const int BatchScreenshots = 8;
 
     /// <summary>Attach a fresh screenshot after mouse/keyboard actions. Internal (tests turn it off).</summary>
     [JsonIgnore]

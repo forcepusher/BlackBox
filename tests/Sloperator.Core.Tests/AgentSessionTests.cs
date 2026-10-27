@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Sloperator.Core.Agent;
 using Sloperator.Core.Llm;
 using Sloperator.Core.Platform;
@@ -53,8 +54,10 @@ public class AgentSessionTests
         Assert.Contains("not valid JSON", session.History[2].Content);
     }
 
-    [Fact]
-    public async Task Screenshots_are_sent_as_user_images_and_the_history_only_grows()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Screenshots_are_sent_as_user_images_and_the_history_only_grows(bool keep)
     {
         var server = new ScriptedServer(
             Sse.ToolCall("s1", "screenshot", "{}"),
@@ -64,19 +67,25 @@ public class AgentSessionTests
             Sse.ToolCall("s5", "screenshot", "{}"),
             Sse.ToolCall("s6", "screenshot", "{}"),
             Sse.Text("Done."));
-        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), screenshots: keep ? ScreenshotHistory.All : ScreenshotHistory.Latest);
 
         await session.RunAsync("look", observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
-        Assert.Equal(6, Images(server.Requests[^1]));
-        // Every request starts with the previous one unchanged, so the server's cache always holds.
+        // By default only the latest screenshot goes; the earlier ones are said in words.
+        Assert.Equal(keep ? 6 : 1, Images(server.Requests[^1]));
+        Assert.Equal(keep ? 0 : 5, Regex.Count(server.Requests[^1].ToJsonString(), Regex.Escape(AgentSession.OldScreenshotText)));
+        // Every request starts with the previous one unchanged, so the server's cache holds; but
+        // for the screenshot left out, the last one before it, when only the latest is kept.
         for (var i = 1; i < server.Requests.Count; i++)
         {
             var before = server.Requests[i - 1]["messages"]!.AsArray();
             var after = server.Requests[i]["messages"]!.AsArray();
-            for (var m = 0; m < before.Count; m++)
-                Assert.Equal(before[m]!.ToJsonString(), after[m]!.ToJsonString());
+            var changed = Enumerable.Range(0, before.Count).Where(m => before[m]!.ToJsonString() != after[m]!.ToJsonString()).ToList();
+            if (keep || Images(server.Requests[i - 1]) == 0)
+                Assert.Empty(changed);
+            else
+                Assert.Equal([before.Count - 1], changed); // the screenshot, last in the request before
         }
     }
 
@@ -239,6 +248,21 @@ public class AgentSessionTests
         Assert.Equal("Short answer.", session.History[^1].Content);
     }
 
+    [Fact]
+    public async Task Batch_keeps_screenshots_until_eight_then_only_the_latest()
+    {
+        var server = new ScriptedServer(Sse.Text("Done."), Sse.Text("Done again."));
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), screenshots: ScreenshotHistory.Batch);
+        AddScreenshotSteps(session, 8);
+
+        await session.RunAsync("what now?", observer, CancellationToken.None);
+        AddScreenshotSteps(session, 1);
+        await session.RunAsync("and now?", observer, CancellationToken.None);
+
+        Assert.Equal([8, 1], server.Requests.Select(r => ImagesSent(r).Count));
+        Assert.Equal("data:image/png;base64," + Convert.ToBase64String([0]), ImagesSent(server.Requests[1])[0]); // the 9th, the latest
+    }
+
     /// <summary>munito's gateway, measured 28 October 2026: 8 pictures a request, a 9th refused.</summary>
     private const string TooManyImages = """{"error":{"message":"too many image inputs","type":"invalid_request_error","param":"messages","code":null}}""";
 
@@ -262,7 +286,7 @@ public class AgentSessionTests
     {
         var server = new ScriptedServer(Sse.Text("Done."), Sse.Text("Done again."));
         server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages));
-        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 1_000_000);
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 1_000_000, screenshots: ScreenshotHistory.All);
         AddScreenshotSteps(session, 9);
 
         await session.RunAsync("what now?", observer, CancellationToken.None);
@@ -294,7 +318,7 @@ public class AgentSessionTests
         server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages)); // 4 sent: 3, 2 kept
         server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages)); // 2 sent: 1
         server.Failures.Enqueue((HttpStatusCode.BadRequest, TooManyImages)); // 1 sent: none
-        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 1_000_000);
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform(), contextTokens: 1_000_000, screenshots: ScreenshotHistory.All);
         AddScreenshotSteps(session, 9);
 
         await session.RunAsync("what now?", observer, CancellationToken.None);
@@ -1672,9 +1696,9 @@ public class AgentSessionTests
         Assert.NotNull(session.History[^1].Reasoning);
     }
 
-    private static (AgentSession, RecordingObserver) CreateSession(ScriptedServer server, string dir, IPlatformServices platform, int contextTokens = 0, string baseUrl = "http://test")
+    private static (AgentSession, RecordingObserver) CreateSession(ScriptedServer server, string dir, IPlatformServices platform, int contextTokens = 0, string baseUrl = "http://test", ScreenshotHistory screenshots = ScreenshotHistory.Latest)
     {
-        var settings = new AgentSettings { ScreenshotAfterActions = false, Approval = ApprovalMode.AskRisky };
+        var settings = new AgentSettings { ScreenshotAfterActions = false, Approval = ApprovalMode.AskRisky, Screenshots = screenshots };
         var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = dir };
         var client = new OpenAiChatClient(new HttpClient(server), baseUrl, null);
         var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(includeScreenTools: true), ctx, "system prompt", contextTokens: contextTokens);

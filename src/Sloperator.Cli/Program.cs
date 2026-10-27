@@ -5,7 +5,7 @@ using Sloperator.Core.Platform;
 using Sloperator.Core.Settings;
 using Sloperator.Core.Tools;
 
-// Usage: sloperator-cli [--root DIR] [--url URL] [--model ID] [--effort LEVEL] [--yes] [--save-shots DIR] [--full-results] [--attach FILE]... [--then TEXT]... [--no-index] "task"
+// Usage: sloperator-cli [--root DIR] [--url URL] [--model ID] [--effort LEVEL] [--yes] [--save-shots DIR] [--full-results] [--attach FILE]... [--then TEXT]... [--no-index] [--screenshots latest|batch|all] "task"
 //   --root        portable folder (default: SLOPERATOR_HOME, else .dev/ when run from the repository, else the exe folder);
 //                 its Data/mcp.json lists the MCP servers to start, as in the app
 //   --url/--model override the server address and model saved in Data/settings.json; with no model, or one the
@@ -41,6 +41,7 @@ var effortOverride = Take("--effort");
 var autoYes = Flag("--yes");
 var fullResults = Flag("--full-results");
 var noIndex = Flag("--no-index");
+var screenshots = Take("--screenshots");
 var attached = new List<string>();
 while (Take("--attach") is { } file)
     attached.Add(Path.GetFullPath(file));
@@ -50,7 +51,7 @@ while (Take("--then") is { } later)
 var task = string.Join(' ', argsList);
 if (string.IsNullOrWhiteSpace(task))
 {
-    Console.Error.WriteLine("Usage: sloperator-cli [--root DIR] [--url URL] [--model ID] [--effort LEVEL] [--yes] [--save-shots DIR] [--attach FILE]... [--then TEXT]... [--no-index] \"task\"");
+    Console.Error.WriteLine("Usage: sloperator-cli [--root DIR] [--url URL] [--model ID] [--effort LEVEL] [--yes] [--save-shots DIR] [--attach FILE]... [--then TEXT]... [--no-index] [--screenshots latest|batch|all] \"task\"");
     return 2;
 }
 if (attached.FirstOrDefault(f => !File.Exists(f) && !Directory.Exists(f)) is { } missing)
@@ -82,6 +83,15 @@ using var stopKey = platform.StopKey.Watch(() =>
 });
 
 var agent = settings.Agent;
+if (screenshots is not null)
+{
+    if (!Enum.TryParse<ScreenshotHistory>(screenshots, ignoreCase: true, out var kept))
+    {
+        Console.Error.WriteLine("--screenshots takes latest, batch or all");
+        return 2;
+    }
+    agent.Screenshots = kept;
+}
 platform.InputOverlay.Duration = TimeSpan.FromSeconds(AgentSettings.InputLogSeconds);
 platform.InputOverlay.Enabled = true;
 if (urlOverride is not null) settings.Server.BaseUrl = urlOverride;

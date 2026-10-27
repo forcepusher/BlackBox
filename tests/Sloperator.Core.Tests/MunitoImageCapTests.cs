@@ -29,7 +29,7 @@ public class MunitoImageCapTests
             Model = Environment.GetEnvironmentVariable("BB_MUNITO_MODEL") is { Length: > 0 } model ? model : "deepseek-ai/deepseek-v4.1-flash-1017",
         };
         var connection = BackendConnection.Create(LlmHttp.Create(TimeSpan.FromMinutes(5)), server);
-        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings { Screenshots = ScreenshotHistory.All }, WorkingDirectory = Path.GetTempPath() };
         var session = new AgentSession(connection.Client, connection.Options, ToolRegistry.CreateDefault(false), ctx,
             "You are a test assistant.", contextTokens: ServerSettings.FallbackContextSize);
         session.History.Add(new ChatMessage { Role = ChatRole.User, Content = "Take screenshots until the screen turns a colour other than blue.", FromUser = true });

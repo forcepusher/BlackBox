@@ -77,12 +77,18 @@ public class PromptCacheTests
         {
             // The same tools, model and template switches...
             Assert.Equal(AllBut(requests[0], "messages"), AllBut(requests[i], "messages"));
-            // ...and everything said so far, unchanged, with the new messages after it.
+            // ...and everything said so far, unchanged, with the new messages after it; but for an
+            // earlier screenshot, said in words once a newer one came (only the latest is kept).
             var before = requests[i - 1]["messages"]!.AsArray();
             var after = requests[i]["messages"]!.AsArray();
             Assert.True(after.Count > before.Count, $"request {i + 1} is not longer than the one before it");
             for (var m = 0; m < before.Count; m++)
-                Assert.Equal(before[m]!.ToJsonString(), after[m]!.ToJsonString());
+                if (before[m]!.ToJsonString() != after[m]!.ToJsonString())
+                {
+                    Assert.Contains("image_url", before[m]!.ToJsonString());
+                    Assert.DoesNotContain("image_url", after[m]!.ToJsonString());
+                    Assert.Contains(AgentSession.OldScreenshotText, after[m]!.ToJsonString());
+                }
         }
         // The thinking goes back as it came, for the templates that write it into the prompt again.
         var thoughts = requests[^1]["messages"]!.AsArray().Select(m => m!["reasoning_content"]?.GetValue<string>()).OfType<string>().ToList();
