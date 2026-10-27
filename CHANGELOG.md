@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- The blob beside **Send** dances while a prompt runs, and goes back to the still logo when it ends.
 - File changes opens by itself the first time the agent changes a file in a chat, unless another tool
   is open. Closed, it stays closed in that chat. Turn it off under Settings → Toolkit.
 - File changes in a git repository lists the files in **Committed**, **Staged** and **Unstaged**
