@@ -47,6 +47,16 @@ public sealed class ScreenSpace
             Math.Clamp(y - height / 2, Screen.Y, Screen.Y + Screen.Height - height), width, height);
     }
 
+    /// <summary>
+    /// The strip of the screen as wide as the screen and a quarter as high, centred on a point's
+    /// height: as many pixels as <see cref="Around"/>, with the whole row the point is in.
+    /// </summary>
+    public ScreenRect Row(int y)
+    {
+        var height = Math.Max(1, Screen.Height / 4);
+        return new(Screen.X, Math.Clamp(y - height / 2, Screen.Y, Screen.Y + Screen.Height - height), Screen.Width, height);
+    }
+
     public ScreenRect Screen { get; }
     public int ImageWidth { get; }
     public int ImageHeight { get; }

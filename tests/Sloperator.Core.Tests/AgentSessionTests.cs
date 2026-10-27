@@ -1001,7 +1001,7 @@ public class AgentSessionTests
             },
         };
 
-        await new MouseClickTool().ExecuteAsync(new JsonObject { ["target"] = "OK button", ["x"] = 50, ["y"] = 50 }, ctx, CancellationToken.None);
+        await new MouseClickTool().ExecuteAsync(new JsonObject { ["target"] = "OK button", ["which"] = "only one", ["x"] = 50, ["y"] = 50 }, ctx, CancellationToken.None);
 
         Assert.NotNull(clicked);
         Assert.True(clicked >= TimeSpan.FromMilliseconds(700), $"clicked {clicked?.TotalMilliseconds} ms into the typing");
@@ -1124,7 +1124,7 @@ public class AgentSessionTests
         // request failed: the screenshot stays in the conversation.
         const string refusal = """data: {"error":{"message":"image input is not supported - hint: if this is unexpected, you may need to provide the mmproj","code":400}}""" + "\n\n";
         var replies = new Queue<string>([Sse.ToolCall("s1", "screenshot", "{}"), Sse.ToolCall("s2", "screenshot", "{}"),
-            Sse.ToolCall("m1", "mouse_click", """{"target": "OK button", "x": 100, "y": 50}"""), Sse.Text("I can't see the screen, but the file is saved.")]);
+            Sse.ToolCall("m1", "mouse_click", """{"target": "OK button", "which": "only one", "x": 100, "y": 50}"""), Sse.Text("I can't see the screen, but the file is saved.")]);
         var server = new ScriptedServer { Responder = req => Images(req) > 0 ? refusal : replies.Dequeue() };
         var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
 

@@ -143,6 +143,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A × at the top right of Video generator, File changes and File inspector closes the tool.
 
 ### Changed
+- The agent says what tells a click's target apart from look-alikes (the row, card or dialog it is
+  in), so it much less often clicks the same button in the wrong row of a list.
 - The ring where the agent clicks is bigger, in the accent yellow with a dark outline, and stays on
   screen for 3 seconds instead of just over one.
 - A reply without tool calls ends the task: Sloperator no longer sends "Continue with the task" after

@@ -1879,7 +1879,7 @@ prints the traceback and exits with 0.
 | Tool | What it does |
 | --- | --- |
 | `screenshot` | Captures a screen scaled down to fit the max screenshot size, on the 32px vision grid; `screen=N` looks at another monitor |
-| `mouse_click` | Clicks a named target where a fresh look at the screen finds it (see below); `modifiers` holds keys through the click, as in Ctrl+click to add to a selection or Shift+click to select a range |
+| `mouse_click` | Clicks a named target, with `which` saying what tells it apart from look-alikes, where a fresh look at the screen finds it (see below); `modifiers` holds keys through the click, as in Ctrl+click to add to a selection or Shift+click to select a range |
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
@@ -2023,6 +2023,22 @@ notification's close button, the notification was gone by the click, and the loo
 window's own close button and closed the chat. So when the look finds the target far from where
 the model aimed (more than 8% of the screen) and the screen there is no longer what the model saw,
 nothing is clicked: the model gets the new screen, and a click it then asks for again goes ahead.
+
+Look-alikes are the commonest confusion: the same Open, Rename and Delete buttons on every row of a
+file list, an Add to cart button on every card. So `mouse_click` has a second required argument,
+`which`: what tells the target apart from everything else on the screen that looks like it (the row,
+card, dialog or label it belongs to), or "only one". A click with a `target` and no `which` is an
+argument error and clicks nothing; a click with neither (an unnamed spot) needs none. The look is asked
+for both ("Delete button, in the row of report.xlsx"), and for a target with look-alikes it is shown
+the screen-wide row around the aim (a quarter of the screen's height, as many pixels as the quarter)
+instead of the quarter: in a 2560-wide file list the quarter around an Open button held only other
+rows' Open buttons, not the file names, and the look moved clicks the model had aimed at the right row
+to another one. A move of half the usual 2% is told for such a target, as rows can be that close.
+`ClickAccuracyTests` has two scenes for it, `rows` (a file list of 14 near-identical names, the
+buttons 1,700 px right of them) and `cards` (12 near-identical product names). With qwen3.8, 8 trials
+each on the same layouts (27 October 2026): `rows` 1/8 before (the model's own aim was on the right
+row 6 times) and 6/8 after, `cards` 8/8 both times; the model gave a `which` in all 16 clicks. The two
+misses left are the look moving a well-aimed click one or two rows up, which the result now says.
 
 ### Folder index
 `index_folder` gives the model what Cursor's codebase indexing gives its own: a project's layout
