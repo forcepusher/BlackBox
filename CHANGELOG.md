@@ -1,5 +1,5 @@
 # Changelog
-All notable changes to BlackBox are written down in this file.
+All notable changes to Sloperator are written down in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -62,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **Copy** button.
 - **File inspector** in the **Toolkit** dropdown: a file from the chat shown whole on the left of
   the chat. Markdown is formatted as replies are, .csv as a table, text and code as they are, and
-  pictures, video and sound as in the chat, PDF pages drawn by BlackBox itself (with PDFium, Chrome's
+  pictures, video and sound as in the chat, PDF pages drawn by Sloperator itself (with PDFium, Chrome's
   PDF engine); Word, Excel, PowerPoint and web pages show as in Explorer's preview pane.
 - With File inspector open, the file shows over the chat's box, and text you select in it goes into
   your message as where it is (lines, or cells of a table), so you can ask about that part. A click
@@ -76,14 +76,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   files.
 - Markdown files (.md) get a card like other documents, under the reply that names them and under
   write_file when the agent writes one.
-- `Data\errors.log`: every error BlackBox shows (in the chat, in the banner under the top bar, in
+- `Data\errors.log`: every error Sloperator shows (in the chat, in the banner under the top bar, in
   Video generator, or when it can't start), with the details behind it, to read after the chat or the
   window is gone.
-- Folder index: before it works on a project or a big folder, BlackBox indexes it by itself, as
+- Folder index: before it works on a project or a big folder, Sloperator indexes it by itself, as
   Cursor does: what kind of project it is, its README, its folders and what its main files define,
   and a search that finds where anything is by names or by what the code does, with every line that
   has a name it asks for. Indexes are kept in `Data\index` and bring themselves up to date on every use.
-- Several BlackBox windows at once: **New window** at the top, or starting BlackBox again, opens
+- Several Sloperator windows at once: **New window** at the top, or starting Sloperator again, opens
   another window with a chat and an agent of its own, a step down and to the
   right of the one in front. The windows take turns with the mouse and keyboard, stay out of each
   other's screenshots, all pause while you type in any of them, and one Pause/Break stops them all.
@@ -93,8 +93,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chat, the window growing to that side: a viewer, and the video on one timeline you drag sideways,
   where all of it is worked on: References (pictures), the video clips and the sound lines.
   Right-click a row to create a card, clip or sound there: **File…** copies a file of yours in,
-  **Generate** has BlackBox make it; dropping files on the timeline copies them in too. Click
-  anything there and it goes into the chat's box; say what to make or change and BlackBox writes
+  **Generate** has Sloperator make it; dropping files on the timeline copies them in too. Click
+  anything there and it goes into the chat's box; say what to make or change and Sloperator writes
   the prompts, picks the models, makes it with ComfyUI and looks at it, in the chat, where you watch
   and can stop it. Earlier versions are kept, and **Use this version** puts one back. Or ask for a
   video in the chat.
@@ -104,12 +104,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Each sound line in Video generator has a volume slider under its name, kept with the video and
   heard when you play it and in the joined video.
 - A video is its folder, with two folders in it: References (your pictures and sounds, copied in, and
-  the images BlackBox generates for frames to be made from) and Generated (each clip's frames and
+  the images Sloperator generates for frames to be made from) and Generated (each clip's frames and
   file, the songs), and the joined video. Every file has a `.json` of its name beside it saying what
   it is and how it was made (`s1.json` for `s1.mp4`), and the ComfyUI workflow that made it, which
   opens in ComfyUI as it is.
 - Videos get sound lines, as a video editor has sound tracks: add as many as you need, lay your sounds and songs
-  BlackBox makes (about a minute long, the best of three, judged by SongEval) on them, drag each to
+  Sloperator makes (about a minute long, the best of three, judged by SongEval) on them, drag each to
   where it starts or to another sound line, and trim it at either end. Spoken lines are in one cloned
   voice with lip sync, and fresh looks at every shot, cut and the whole video catch
   broken bodies, frozen or jumping action, a camera that moves when it shouldn't and a change of
@@ -126,7 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whole 1M context on Auto.
 - An effort dropdown next to the model, medium unless picked, for models whose server says they
   take one.
-- Messages sent while BlackBox works wait above the box until the model reads them: × takes one
+- Messages sent while Sloperator works wait above the box until the model reads them: × takes one
   back, and **Interrupt the model** (or Ctrl+Enter) has it read at once.
 - A full-screen viewer for the pictures and videos in the chat and in Video generator, with the others
   an arrow key away. Videos in the chat play by themselves, muted, while they are on screen.
@@ -143,6 +143,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A × at the top right of Video generator, File changes and File inspector closes the tool.
 
 ### Changed
+- The app has a new name, Sloperator: the exe is `Sloperator.exe`, and `SLOPERATOR_HOME` sets the
+  portable root.
 - A new icon: a yellow blob in place of the grey box, in the taskbar, the windows and the exe.
 - Tables in replies are real tables: a grid with a header row, in the chat's font, each cell
   wrapping inside its own column. One too wide for the chat scrolls sideways.
@@ -158,7 +160,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every scrollbar (the chat, panels, lists, previews) always shows in full, with its arrows,
   instead of a thin line that grows under the pointer.
 - The context slider goes up to 1M.
-- The second BlackBox name and logo under the title bar made way for the Toolkit dropdown.
+- The second Sloperator name and logo under the title bar made way for the Toolkit dropdown.
 - The first-run hint for Ctrl+V is reworded.
 
 ### Fixed
@@ -167,8 +169,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - File changes no longer lists files other programs write while a command runs, such as your
   `.claude.json`: it lists only the files the model writes or edits with its file tools, not what
   its commands change.
-- File changes no longer lists the agent's own notes in BlackBox's scratch folder, or other files in
-  BlackBox's Data folder.
+- File changes no longer lists the agent's own notes in Sloperator's scratch folder, or other files in
+  Sloperator's Data folder.
 - Text with a link in it shows the text cursor, as all other chat text does; it showed the arrow.
 - A table whose alignment line has single dashes (`|:-:|`) is read as a table, in the chat and in
   documents written from Markdown.
@@ -201,10 +203,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Picking a tool in the **Toolkit** dropdown, or None, changes the window in one go: no more frame
   of the chat at the wrong width, an empty or black panel, or the list still open over it.
 - A reply that asks you something ends the turn, even when it says what the agent will do after your
-  answer: BlackBox no longer tells it to "Continue with the task", which made it ask you again.
-- The `BlackBox.exe` and `blackbox-cli.exe` that `dotnet build` makes run on a PC without .NET installed,
+  answer: Sloperator no longer tells it to "Continue with the task", which made it ask you again.
+- The `Sloperator.exe` and `sloperator-cli.exe` that `dotnet build` makes run on a PC without .NET installed,
   instead of asking for the .NET Desktop Runtime.
-- A picture BlackBox was reading when a program started no longer stays locked until that program
+- A picture Sloperator was reading when a program started no longer stays locked until that program
   ends: it can be deleted or replaced at once.
 - Selecting text in the chat starts wherever the drag does: beside a short line, between lines or
   letters, just left of or above a reply or code block, and in the padding of your messages, not only
@@ -222,11 +224,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Picking Video generator widens the window to the left in one smooth step: the chat no longer jumps
   sideways and back, and the new part of the window isn't black while the panel appears.
 - In Video generator, a picture you give for a reference (pasted, attached or dropped) is kept exactly as
-  it is, in References, and the references are made from all of it: BlackBox cut one
+  it is, in References, and the references are made from all of it: Sloperator cut one
   pose out of a character lineup and showed the cut-out as your picture.
 - A task whose last step the server failed a few times before answering no longer looks as if it
   ended on that error: the lines about the tries come before the answer, not after it.
-- A click of the agent's that lands on a dialog of BlackBox's goes to what is behind it, as one on
+- A click of the agent's that lands on a dialog of Sloperator's goes to what is behind it, as one on
   the chat window always did; keys meant for another program no longer land in it.
 - Links whose address holds parentheses (Wikipedia's) open whole, and an address followed by
   Chinese or Japanese punctuation no longer takes it in.
@@ -245,13 +247,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its tool calls.
 - A Claude request bigger than the account's input tokens a minute no longer waits for ever: the
   context gets smaller.
-- A chat whose window was closed while BlackBox worked says so when opened again, with Continue.
-- A ComfyUI BlackBox started is no longer closed at the end of a task while another BlackBox (the
+- A chat whose window was closed while Sloperator worked says so when opened again, with Continue.
+- A ComfyUI Sloperator started is no longer closed at the end of a task while another Sloperator (the
   command line) may be between two of its jobs.
 - The sysadmin migration ticket finds backups written under /var/lib and /var/local too.
 - The note to index a project no longer comes back with every message of a chat that indexed it.
 - Messages sent while a task starts up are no longer stuck above the box, or sent on without the
-  first one, when the start fails; a chat left for another while BlackBox works says it stopped,
+  first one, when the start fails; a chat left for another while Sloperator works says it stopped,
   with Continue, when opened again, a task that has just ended keeps its end when another chat is
   opened at once, and a message still waiting when its window closes is kept in the chat.
 - Several windows: once a click is held back because another window's agent changed the screen,
@@ -262,10 +264,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   window closed while its MCP servers restarted no longer leaves them running.
 - Video generator: Continue sends a message the model never had whole, with the video it was about; chats
   begun with Video generator open are named after the video and what was picked too, not "Make it." alone;
-  a change made by hand while BlackBox changes the video in the chat no longer writes over BlackBox's
+  a change made by hand while Sloperator changes the video in the chat no longer writes over Sloperator's
   change, nor is a shot's length being dragged lost to it; a shot added after one was deleted no
   longer brings back the deleted shot's clip; a video named again keeps its joined video; a version isn't
-  put back while BlackBox makes a piece of the video; two new videos started in two windows at once no
+  put back while Sloperator makes a piece of the video; two new videos started in two windows at once no
   longer share a folder; a piece of the video open is no longer shown as being made when the chat
   makes another video's.
 - A piece asked for in Video generator is made again when its look finds something wrong, up to
@@ -275,13 +277,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   video laid out in the same task without a path no longer replaces the first; a remake that fails
   or is stopped leaves the piece with its settings and look; a clip asked for while several were
   being made is made with its own seed; a speaking shot's version keeps its line.
-- A ComfyUI that BlackBox started, with nothing left to do, is closed when BlackBox closes, also
+- A ComfyUI that Sloperator started, with nothing left to do, is closed when Sloperator closes, also
   when its window was closed in the middle of a task.
 - Folder index: projects in OneDrive folders are indexed (only their top folder was), files kept
   online only aren't downloaded, linked files are read as the files they point to, a search that
   finds nothing says what the index doesn't search, big workbooks are read one at a time, and an
   index file damaged on disk is built again.
-- BlackBox.exe and the MCP servers it starts say version 1.0.0, as released, not 0.1.0.
+- Sloperator.exe and the MCP servers it starts say version 1.0.0, as released, not 0.1.0.
 - Claude: MCP tools whose argument schema is a union work; a long task no longer stops on more than
   100 pictures in a request; a reply cut off mid-thought no longer breaks the next request; older
   Claude models point accurately on 4:3 and 5:4 screens.
@@ -297,7 +299,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The first release.
 
 ### Added
-- A single portable `BlackBox.exe` that installs nothing and keeps its settings, chats and
+- A single portable `Sloperator.exe` that installs nothing and keeps its settings, chats and
   downloads in a `Data` folder next to it.
 - Desktop control: the model sees the screen and uses the mouse and keyboard in any program, on
   every monitor. Every click is aimed by a fresh look at the screen, a click that changed nothing is
@@ -305,12 +307,12 @@ The first release.
 - Clicks with keys held, held keys, drags, scrolling, sequences of key presses and waiting for the
   screen to change.
 - Any OpenAI-compatible model server: LM Studio, llama.cpp, Ollama, vLLM, OpenRouter and other
-  online APIs. BlackBox picks the strongest model the server offers by its agent benchmark score,
+  online APIs. Sloperator picks the strongest model the server offers by its agent benchmark score,
   and starts on Kilo's free models, which need no account or key.
 - The server, API key, model and context size in the bar at the top, with how full the context is.
 - Long jobs: the context starts afresh with a handoff note when it fills, dropped requests are sent
   again, and a server that can't be reached or fails is waited for.
-- Pause/Break stops BlackBox from any window, Continue carries on after a stop, and messages typed
+- Pause/Break stops Sloperator from any window, Continue carries on after a stop, and messages typed
   while it works correct it; it holds off the mouse and keyboard while you type.
 - A log of the agent's inputs in a corner of the screen, left out of its screenshots.
 - History: every chat is saved from its first message and can be carried on. Replies are shown as
@@ -329,5 +331,5 @@ The first release.
 - A command-line runner, and benchmarks: desktop tasks, 2048 and Unity 2048, clicks, a sysadmin
   lab, a chat stand-in lab and ComfyUI requests.
 
-[unreleased]: https://github.com/forcepusher/BlackBox/compare/1.0.0...HEAD
-[1.0.0]: https://github.com/forcepusher/BlackBox/releases/tag/1.0.0
+[unreleased]: https://github.com/forcepusher/Sloperator/compare/1.0.0...HEAD
+[1.0.0]: https://github.com/forcepusher/Sloperator/releases/tag/1.0.0

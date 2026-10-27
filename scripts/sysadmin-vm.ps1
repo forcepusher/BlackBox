@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Builds the sysadmin lab that sysadmin-test.ps1 hands to BlackBox: a Debian 13 server in
+  Builds the sysadmin lab that sysadmin-test.ps1 hands to Sloperator: a Debian 13 server in
   QEMU, admin@127.0.0.2 with a key. Portable: QEMU and everything else lives in
   .dev\sysadmin-lab\; nothing is installed, no admin rights or Windows features are needed, and
   deleting the folder removes it all. QEMU runs in software emulation, several times slower
@@ -121,9 +121,9 @@ if (Test-Path $LabBase) {
   Remove-Item $LabBase, $LabTaskDisk -ErrorAction SilentlyContinue
 }
 
-# 3. The admin key BlackBox gets, and the harness logs in with.
+# 3. The admin key Sloperator gets, and the harness logs in with.
 if (-not (Test-Path $LabKey)) {
-  $r = Invoke-LabExe "ssh-keygen.exe" @("-q", "-t", "ed25519", "-N", "", "-C", "blackbox-lab-admin", "-f", $LabKey)
+  $r = Invoke-LabExe "ssh-keygen.exe" @("-q", "-t", "ed25519", "-N", "", "-C", "sloperator-lab-admin", "-f", $LabKey)
   if ($r.Code -ne 0) { throw "ssh-keygen failed: $($r.Err)" }
 }
 Protect-LabKey $LabKey
@@ -155,7 +155,7 @@ runcmd:
 "@
 $utf8 = New-Object Text.UTF8Encoding $false
 [IO.File]::WriteAllText((Join-Path $seedDir "user-data"), $userData.Replace("`r`n", "`n"), $utf8)
-[IO.File]::WriteAllText((Join-Path $seedDir "meta-data"), "instance-id: blackbox-lab-1`nlocal-hostname: lab01`n", $utf8)
+[IO.File]::WriteAllText((Join-Path $seedDir "meta-data"), "instance-id: sloperator-lab-1`nlocal-hostname: lab01`n", $utf8)
 if (-not ("LabIsoWriter" -as [type])) {
   Add-Type -TypeDefinition @"
 using System; using System.IO; using System.Runtime.InteropServices;

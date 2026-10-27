@@ -1,18 +1,18 @@
 {
   "projects": {
-    "blackbox": { "folder": "BlackBox", "source": "..", "commit": "6fc10f2" },
+    "sloperator": { "folder": "Sloperator", "source": "..", "commit": "6fc10f2" },
     "fluffymeow": { "folder": "FluffyMeow", "source": "C:\\Repos\\FluffyMeow", "commit": "d85638bea", "history": false, "exclude": ["Backend/VirtualMachine"] }
   },
   "tasks": [
     {
       "id": "explain",
-      "project": "blackbox",
+      "project": "sloperator",
       "kind": "explain the project",
       "prompt": "Explain the project in {path} to a developer who is new to it: what the program does, how the code is organised (its projects and main folders, and what each is responsible for), and how a user's request travels through the code from the moment it is sent until tools run and the answer comes back. Name the key classes and files. Don't change any files.",
       "rubric": [
         "Says it is an AI agent that operates the user's Windows computer (screenshots, mouse and keyboard) and also works with files, the shell and more, driven by a model on an OpenAI-compatible server such as LM Studio (Anthropic's API is also spoken)",
-        "Names the four projects under src and their roles: BlackBox.App (the Avalonia desktop window), BlackBox.Core (agent, model clients, tools, settings), BlackBox.Platform.Windows (Win32 screen capture and input), BlackBox.Cli (headless command-line runner)",
-        "Mentions the tests folder (BlackBox.Core.Tests, and/or ChatLab, McpTestServer) and/or docs/notes.md and scripts",
+        "Names the four projects under src and their roles: Sloperator.App (the Avalonia desktop window), Sloperator.Core (agent, model clients, tools, settings), Sloperator.Platform.Windows (Win32 screen capture and input), Sloperator.Cli (headless command-line runner)",
+        "Mentions the tests folder (Sloperator.Core.Tests, and/or ChatLab, McpTestServer) and/or docs/notes.md and scripts",
         "Request flow starts in the UI: MainWindowViewModel (or the CLI's Program.cs) builds the run with AgentSetup.Create",
         "AgentSession (RunAsync) runs the loop: system prompt (SystemPrompt) plus history sent to the model, streamed reply, tool calls run, results appended, repeat until a reply has no tool calls",
         "Names the model client layer: OpenAiChatClient (and/or AnthropicMessages, BackendConnection, ServerProbe)",
@@ -22,7 +22,7 @@
     },
     {
       "id": "context",
-      "project": "blackbox",
+      "project": "sloperator",
       "kind": "how does it work (code question)",
       "prompt": "In the project at {path}: what does the agent do when the conversation gets close to the model's context limit? Explain when exactly it triggers (how the threshold is computed and from what token count), what happens step by step, and what the conversation holds afterwards. Name the classes, methods and files involved. Don't change any files.",
       "rubric": [
@@ -38,11 +38,11 @@
     },
     {
       "id": "repeat",
-      "project": "blackbox",
+      "project": "sloperator",
       "kind": "trace a message to its cause",
       "prompt": "In the project at {path}, users sometimes see the notice 'The model's thinking started repeating itself; cut it off and asked it to look again.' Explain exactly how the program decides that the model's output is repeating (what it compares, how often it checks, and every threshold involved) and what it does afterwards, including how many times it will do so. Name the classes, methods and files. Don't change any files.",
       "rubric": [
-        "Detection is in RepetitionGuard (src/BlackBox.Core/Agent/RepetitionGuard.cs), which watches the reply while it streams (OnDelta)",
+        "Detection is in RepetitionGuard (src/Sloperator.Core/Agent/RepetitionGuard.cs), which watches the reply while it streams (OnDelta)",
         "It checks every 100 new characters, once the reply is at least 600 characters (TailChars 200 x Repeats 3)",
         "It takes the last 200 characters (the tail) and looks for earlier occurrences of exactly that text in the reply (IsRepeating)",
         "A tail with fewer than 50 letters (a quarter of 200) is not counted: digits and punctuation repeat legitimately",
@@ -54,48 +54,48 @@
     },
     {
       "id": "observers",
-      "project": "blackbox",
+      "project": "sloperator",
       "kind": "find every use (enumerate)",
       "prompt": "In the project at {path}, list every class that implements the IAgentObserver interface, in the application code and in the tests, with the file each one is in and one line on what it is used for. Also say which file defines the interface. Don't change any files.",
       "expect": ["MainWindowViewModel", "ConsoleObserver", "FirstClickObserver", "TimingObserver", "RecordingObserver"],
       "rubric": [
-        "MainWindowViewModel in src/BlackBox.App/ViewModels/MainWindowViewModel.cs (the app window shows the run)",
-        "ConsoleObserver in src/BlackBox.Cli/Program.cs (prints the run in the command-line runner)",
-        "FirstClickObserver in tests/BlackBox.Core.Tests/ClickAccuracyTests.cs",
-        "TimingObserver in tests/BlackBox.Core.Tests/PromptCacheTests.cs",
-        "RecordingObserver in tests/BlackBox.Core.Tests/TestDoubles.cs",
-        "The interface is defined in src/BlackBox.Core/Agent/AgentSession.cs (not in a file of its own)",
+        "MainWindowViewModel in src/Sloperator.App/ViewModels/MainWindowViewModel.cs (the app window shows the run)",
+        "ConsoleObserver in src/Sloperator.Cli/Program.cs (prints the run in the command-line runner)",
+        "FirstClickObserver in tests/Sloperator.Core.Tests/ClickAccuracyTests.cs",
+        "TimingObserver in tests/Sloperator.Core.Tests/PromptCacheTests.cs",
+        "RecordingObserver in tests/Sloperator.Core.Tests/TestDoubles.cs",
+        "The interface is defined in src/Sloperator.Core/Agent/AgentSession.cs (not in a file of its own)",
         "No class is listed that does not implement it (deduct for each wrong one)"
       ]
     },
     {
       "id": "wait",
-      "project": "blackbox",
+      "project": "sloperator",
       "kind": "locate and edit",
-      "prompt": "In the project at {path}: the agent's wait tool can wait at most 10 minutes. Raise that limit to 30 minutes. Update anything that states the old limit (code, tool descriptions, documentation), and make sure the solution still builds (dotnet build BlackBox.slnx).",
+      "prompt": "In the project at {path}: the agent's wait tool can wait at most 10 minutes. Raise that limit to 30 minutes. Update anything that states the old limit (code, tool descriptions, documentation), and make sure the solution still builds (dotnet build Sloperator.slnx).",
       "checks": [
-        { "name": "limit", "kind": "match", "path": "src/BlackBox.Core/Tools/DesktopTools.cs", "pattern": "MaxSeconds\\s*=\\s*(1800|30\\s*\\*\\s*60)\\s*;", "required": true },
+        { "name": "limit", "kind": "match", "path": "src/Sloperator.Core/Tools/DesktopTools.cs", "pattern": "MaxSeconds\\s*=\\s*(1800|30\\s*\\*\\s*60)\\s*;", "required": true },
         { "name": "docs", "kind": "match", "path": "docs/notes.md", "pattern": "\\| `wait` \\|[^\\r\\n]*30 minutes", "required": false },
-        { "name": "build", "kind": "build", "target": "BlackBox.slnx", "required": true }
+        { "name": "build", "kind": "build", "target": "Sloperator.slnx", "required": true }
       ],
-      "expectedFiles": ["src/BlackBox.Core/Tools/DesktopTools.cs", "docs/notes.md"]
+      "expectedFiles": ["src/Sloperator.Core/Tools/DesktopTools.cs", "docs/notes.md"]
     },
     {
       "id": "rename",
-      "project": "blackbox",
+      "project": "sloperator",
       "kind": "cross-file refactor",
-      "prompt": "In the project at {path}, rename the class HeadlessBrowser to BackgroundBrowser everywhere it is used, in the application and in the tests, and rename its file to match. Then make sure the whole solution still builds, tests included (dotnet build BlackBox.slnx).",
+      "prompt": "In the project at {path}, rename the class HeadlessBrowser to BackgroundBrowser everywhere it is used, in the application and in the tests, and rename its file to match. Then make sure the whole solution still builds, tests included (dotnet build Sloperator.slnx).",
       "checks": [
         { "name": "no old name", "kind": "nomatch", "glob": "*.cs", "pattern": "\\bHeadlessBrowser\\b", "required": true },
-        { "name": "file renamed", "kind": "exists", "path": "src/BlackBox.Core/Web/BackgroundBrowser.cs", "required": true },
-        { "name": "old file gone", "kind": "missing", "path": "src/BlackBox.Core/Web/HeadlessBrowser.cs", "required": true },
-        { "name": "build", "kind": "build", "target": "BlackBox.slnx", "required": true }
+        { "name": "file renamed", "kind": "exists", "path": "src/Sloperator.Core/Web/BackgroundBrowser.cs", "required": true },
+        { "name": "old file gone", "kind": "missing", "path": "src/Sloperator.Core/Web/HeadlessBrowser.cs", "required": true },
+        { "name": "build", "kind": "build", "target": "Sloperator.slnx", "required": true }
       ],
       "expectedFiles": [
-        "src/BlackBox.Core/Agent/AgentSetup.cs", "src/BlackBox.Core/Comfy/ComfyFrontend.cs", "src/BlackBox.Core/Settings/AppPaths.cs",
-        "src/BlackBox.Core/Tools/ToolBase.cs", "src/BlackBox.Core/Web/BackgroundBrowser.cs", "src/BlackBox.Core/Web/HeadlessBrowser.cs",
-        "src/BlackBox.Core/Web/WebPage.cs", "src/BlackBox.Core/Web/WebSearch.cs", "tests/BlackBox.Core.Tests/ComfyFrontendTests.cs",
-        "tests/BlackBox.Core.Tests/FolderIndexTests.cs", "tests/BlackBox.Core.Tests/WebToolsTests.cs", "docs/notes.md"
+        "src/Sloperator.Core/Agent/AgentSetup.cs", "src/Sloperator.Core/Comfy/ComfyFrontend.cs", "src/Sloperator.Core/Settings/AppPaths.cs",
+        "src/Sloperator.Core/Tools/ToolBase.cs", "src/Sloperator.Core/Web/BackgroundBrowser.cs", "src/Sloperator.Core/Web/HeadlessBrowser.cs",
+        "src/Sloperator.Core/Web/WebPage.cs", "src/Sloperator.Core/Web/WebSearch.cs", "tests/Sloperator.Core.Tests/ComfyFrontendTests.cs",
+        "tests/Sloperator.Core.Tests/FolderIndexTests.cs", "tests/Sloperator.Core.Tests/WebToolsTests.cs", "docs/notes.md"
       ]
     },
     {

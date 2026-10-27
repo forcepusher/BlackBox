@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Windows builds include the Windows desktop backend; other OSes build the portable core only. -->
+    <TargetFramework Condition="$([MSBuild]::IsOSPlatform('Windows'))">net10.0-windows</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Sloperator.Core\Sloperator.Core.csproj" />
+    <ProjectReference Include="..\..\src\Sloperator.Platform.Windows\Sloperator.Platform.Windows.csproj" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <!-- The MCP test server: used in-process, and started as a child process by the stdio tests. -->
+    <ProjectReference Include="..\Sloperator.McpTestServer\Sloperator.McpTestServer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Real screenshots for ClickAccuracyTests. -->
+    <None Include="ClickScenes\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -21,8 +21,8 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path "$re
   $env:DOTNET_ROOT = "$repo\.dev\dotnet"
   $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
 }
-$cli = Join-Path $repo "src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe"
-if (-not (Test-Path $cli)) { dotnet build (Join-Path $repo "src\BlackBox.Cli") -v q | Out-Null }
+$cli = Join-Path $repo "src\Sloperator.Cli\bin\Debug\net10.0-windows\sloperator-cli.exe"
+if (-not (Test-Path $cli)) { dotnet build (Join-Path $repo "src\Sloperator.Cli") -v q | Out-Null }
 $out = Join-Path $repo (".dev\agent-tasks\" + (Get-Date -Format "yyyyMMdd-HHmmss"))
 New-Item -ItemType Directory -Force $out | Out-Null
 $rootArgs = @()
@@ -30,7 +30,7 @@ if ($Root) { $rootArgs = @("--root", $Root) }
 if ($Url) { $rootArgs += @("--url", $Url) }
 if ($Model) { $rootArgs += @("--model", $Model) }
 
-# ---- windows and screens, in physical pixels as BlackBox sees them
+# ---- windows and screens, in physical pixels as Sloperator sees them
 if (-not ("AgentTasks.Win" -as [type])) {
   Add-Type -Namespace AgentTasks -Name Win -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
@@ -48,7 +48,7 @@ if (-not ("AgentTasks.Win" -as [type])) {
 }
 [AgentTasks.Win]::SetProcessDpiAwarenessContext([IntPtr](-4)) | Out-Null
 Add-Type -AssemblyName System.Windows.Forms, UIAutomationClient, UIAutomationTypes
-# The primary first, then the others left to right: BlackBox numbers them the same way.
+# The primary first, then the others left to right: Sloperator numbers them the same way.
 $screens = @([System.Windows.Forms.Screen]::AllScreens | Sort-Object { -not $_.Primary }, { $_.Bounds.X }, { $_.Bounds.Y } | ForEach-Object Bounds)
 
 function Wait-Window([Diagnostics.Process]$p) {
@@ -181,7 +181,7 @@ foreach ($name in $names) {
   if (-not (Wait-Job $job -Timeout 600)) {
     Stop-Job $job
     # Only this run's CLI: another suite may be running its own.
-    Get-CimInstance Win32_Process -Filter "Name='blackbox-cli.exe'" | Where-Object { $_.CommandLine -like "*$out*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+    Get-CimInstance Win32_Process -Filter "Name='sloperator-cli.exe'" | Where-Object { $_.CommandLine -like "*$out*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
     Add-Content $log "`n[done] TIMEOUT after 600s"
   }
   Remove-Job $job -Force

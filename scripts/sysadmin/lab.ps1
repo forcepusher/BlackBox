@@ -1,5 +1,5 @@
 <#
-  Shared helpers for the sysadmin lab: the Debian VM BlackBox administers over SSH in
+  Shared helpers for the sysadmin lab: the Debian VM Sloperator administers over SSH in
   sysadmin-test.ps1, built by sysadmin-vm.ps1. Dot-source it: . "$PSScriptRoot\sysadmin\lab.ps1"
 
   The lab is portable: QEMU runs from .dev\sysadmin-lab\qemu\ (no install, no driver, no admin
@@ -13,7 +13,7 @@
   thrown away afterwards, so a reset takes a second.
 
   $env:LAB_INSTANCE = 1 (2, ...) runs another lab VM next to the first, at 127.0.0.3 (.4, ...),
-  for instance to check the checks while BlackBox works on the first.
+  for instance to check the checks while Sloperator works on the first.
   Keep this file ASCII: Windows PowerShell 5.1 reads a BOM-less script as ANSI.
 #>
 $LabRepo = Split-Path (Split-Path $PSScriptRoot)
@@ -122,7 +122,7 @@ function Stop-LabVm {
 function Start-LabVm([string]$disk, [string[]]$extra = @(), [int]$Cpus = 4, [int]$MemoryMB = 4096) {
   Stop-LabVm
   $fwd = ($LabPorts | ForEach-Object { "hostfwd=tcp:${LabIp}:$_-:$_" }) -join ","
-  $qargs = @("-name", "BlackBox-Lab$LabSuffix", "-machine", "q35", "-accel", "tcg,thread=multi", "-cpu", "max",
+  $qargs = @("-name", "Sloperator-Lab$LabSuffix", "-machine", "q35", "-accel", "tcg,thread=multi", "-cpu", "max",
     "-smp", [string]$Cpus, "-m", [string]$MemoryMB, "-rtc", "base=utc",
     "-drive", "file=$disk,if=virtio,format=qcow2,cache=writeback,discard=unmap",
     "-netdev", "user,id=n0,hostname=lab01,$fwd", "-device", "virtio-net-pci,netdev=n0",

@@ -1,0 +1,946 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sloperator.App.ViewModels"
+        xmlns:views="using:Sloperator.App.Views"
+        x:Class="Sloperator.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="{Binding WindowTitle}"
+        Icon="/Assets/sloperator.ico"
+        Width="900" Height="760" MinWidth="660" MinHeight="480"
+        WindowStartupLocation="CenterScreen">
+
+  <Window.Styles>
+    <!-- The intro in an unused chat: the cards on what Sloperator can do, and Pause/Break drawn as a key. -->
+    <Style Selector="StackPanel.conversation.unused">
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="PathIcon.capability">
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Margin" Value="0,1,10,0" />
+      <Setter Property="Foreground" Value="{StaticResource BbAccent}" />
+    </Style>
+    <Style Selector="TextBlock.capability">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.muted.warning">
+      <Setter Property="Foreground" Value="{StaticResource BbAccent}" />
+    </Style>
+    <Style Selector="Border.key">
+      <Setter Property="Background" Value="{StaticResource BbSurfaceRaised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbMuted}" />
+      <Setter Property="BorderThickness" Value="1,1,1,2" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="7,1" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.key > TextBlock">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <!-- Previews of files under a tool call or a reply. -->
+    <Style Selector="Border.preview">
+      <Setter Property="Background" Value="{StaticResource BbSurfaceRaised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="8" />
+      <Setter Property="MaxWidth" Value="498" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Button.picture">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.picture /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.bigPlay">
+      <Setter Property="Width" Value="56" />
+      <Setter Property="Height" Value="56" />
+      <Setter Property="CornerRadius" Value="28" />
+      <Setter Property="Background" Value="#B0000000" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.roundPlay">
+      <Setter Property="Width" Value="36" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="CornerRadius" Value="18" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="{StaticResource BbAccent}" />
+      <Setter Property="Foreground" Value="#111214" />
+    </Style>
+    <!-- Files going with a message: thumbnails of pictures, and the name of anything else. -->
+    <Style Selector="Border.attachment">
+      <Setter Property="Background" Value="{StaticResource BbSurfaceRaised}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Border.attachment.file">
+      <Setter Property="Padding" Value="8,5" />
+    </Style>
+    <Style Selector="Border.attachment PathIcon">
+      <Setter Property="Width" Value="16" />
+      <Setter Property="Height" Value="16" />
+      <Setter Property="Foreground" Value="{StaticResource BbAccent}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- On a card from an open tool (a pick, or what the message is about there): points at its panel,
+         which docks left of the chat. 4 from the icon after it. -->
+    <Style Selector="Border.attachment PathIcon.toolArrow">
+      <Setter Property="Width" Value="8" />
+      <Setter Property="Height" Value="8" />
+      <Setter Property="Margin" Value="0,0,-4,0" />
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+      <Setter Property="Data" Value="M16 4 6 12 16 20z" />
+    </Style>
+    <Style Selector="Button.removeAttachment">
+      <Setter Property="Width" Value="20" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0,-6,-6,0" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="#E0111214" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbMuted}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Button.removeAttachment PathIcon">
+      <Setter Property="Width" Value="8" />
+      <Setter Property="Height" Value="8" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.removeAttachment:pointerover PathIcon">
+      <Setter Property="Foreground" Value="{StaticResource BbError}" />
+    </Style>
+    <!-- × on a message waiting for the model's next step. -->
+    <Style Selector="Button.cancelQueued">
+      <Setter Property="Width" Value="22" />
+      <Setter Property="Height" Value="22" />
+      <Setter Property="CornerRadius" Value="11" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.cancelQueued PathIcon">
+      <Setter Property="Width" Value="10" />
+      <Setter Property="Height" Value="10" />
+    </Style>
+    <Style Selector="Button.cancelQueued:pointerover PathIcon">
+      <Setter Property="Foreground" Value="{StaticResource BbError}" />
+    </Style>
+    <!-- The Toolkit dropdown in the top bar: flat, as the buttons beside it. -->
+    <Style Selector="ComboBox.toolkit">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Padding" Value="10,4,6,4" />
+    </Style>
+  </Window.Styles>
+
+  <!-- How each kind of file is previewed: under the tool call that made or showed it, and under a
+       reply that names it by its path. -->
+  <Window.DataTemplates>
+    <!-- Right-click on a picture in the chat: Copy (see OnCopyPicture). -->
+    <DataTemplate DataType="vm:ImagePreview">
+      <Border Classes="preview">
+        <StackPanel Spacing="8">
+          <Button Classes="picture" Click="OnPictureClick" ToolTip.Tip="See it full screen" HorizontalAlignment="Left" AutomationProperties.Name="{Binding FileName}">
+            <Button.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="Copy" Click="OnCopyPicture" />
+              </ContextMenu>
+            </Button.ContextMenu>
+            <Image Source="{Binding Image}" MaxWidth="480" MaxHeight="480" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+          </Button>
+          <views:PreviewFooter />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:AnimationPreview">
+      <Border Classes="preview">
+        <StackPanel Spacing="8">
+          <Button Classes="picture" Click="OnPictureClick" ToolTip.Tip="See it full screen" HorizontalAlignment="Left" AutomationProperties.Name="{Binding FileName}">
+            <Button.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="Copy" Click="OnCopyPicture" />
+              </ContextMenu>
+            </Button.ContextMenu>
+            <Image Source="{Binding Image}" MaxWidth="480" MaxHeight="480" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+          </Button>
+          <views:PreviewFooter />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:VideoPreview">
+      <Border Classes="preview">
+        <StackPanel Spacing="6">
+          <!-- The menu is the panel's, so the play button over the middle of the picture has it too. -->
+          <Panel HorizontalAlignment="Left" MaxWidth="480" views:InView.Video="True">
+            <Panel.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="Copy" Click="OnCopyPicture" ToolTip.Tip="The frame on screen, with the video's file" />
+              </ContextMenu>
+            </Panel.ContextMenu>
+            <Button Classes="picture" Click="OnPictureClick" ToolTip.Tip="Watch it full screen, with its sound" AutomationProperties.Name="Watch full screen">
+              <Image Source="{Binding Frame}" MaxWidth="480" MaxHeight="480" MinHeight="120" MinWidth="200" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+            </Button>
+            <Button Classes="bigPlay" Command="{Binding PlayCommand}" IsVisible="{Binding !IsPlaying}" ToolTip.Tip="Play" AutomationProperties.Name="Play video">
+              <PathIcon Data="M8 5v14l11-7z" Width="24" Height="24" Foreground="White" />
+            </Button>
+          </Panel>
+          <DockPanel>
+            <Button DockPanel.Dock="Left" Classes="ghost" Padding="8,4" Command="{Binding PlayCommand}" VerticalAlignment="Center" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause">
+              <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" />
+            </Button>
+            <!-- In the chat a video plays without its sound; full screen it has it. -->
+            <PathIcon DockPanel.Dock="Right" Data="{Binding SoundIcon}" Width="14" Height="14" Margin="10,0,2,0" Foreground="{StaticResource BbMuted}" VerticalAlignment="Center"
+                      ToolTip.Tip="It plays here without its sound. Click the picture to watch it full screen, with its sound." />
+            <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
+            <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" Margin="8,-8,0,-8" VerticalAlignment="Center" />
+          </DockPanel>
+          <views:PreviewFooter />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:AudioPreview">
+      <Border Classes="preview" Width="498">
+        <StackPanel Spacing="6">
+          <DockPanel>
+            <Button DockPanel.Dock="Left" Classes="roundPlay" Command="{Binding PlayCommand}" VerticalAlignment="Center" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause sound">
+              <PathIcon Data="{Binding PlayIcon}" Width="14" Height="14" Foreground="#111214" />
+            </Button>
+            <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
+            <Panel Height="56" Margin="10,0,0,0">
+              <Image Source="{Binding Waveform}" Stretch="Fill" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+              <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" VerticalAlignment="Center" Opacity="0.85" />
+            </Panel>
+          </DockPanel>
+          <views:PreviewFooter />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:ModelPreview">
+      <Border Classes="preview">
+        <StackPanel Spacing="6">
+          <views:ModelViewer Mesh="{Binding Mesh}" Width="480" Height="360" HorizontalAlignment="Left" ToolTip.Tip="Drag to turn it, scroll to come closer, double-click to see it as at first" />
+          <views:PreviewFooter />
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+    <!-- The toolkit's panel, on the left of the chat. -->
+    <DataTemplate DataType="vm:VideoGeneratorViewModel">
+      <views:VideoGeneratorPanel />
+    </DataTemplate>
+    <DataTemplate DataType="vm:FileChangesViewModel">
+      <views:FileChangesPanel />
+    </DataTemplate>
+    <DataTemplate DataType="vm:FileInspectorViewModel">
+      <views:FileInspectorPanel />
+    </DataTemplate>
+
+    <!-- A document: a peek at its start as the File inspector panel draws it, which opens full screen,
+         over the card with its name. The peek is the box of a picture's thumbnail in a message (at most
+         300x180 in a 1-pixel frame); what doesn't fit it is cut off. -->
+    <DataTemplate DataType="vm:FileCardPreview">
+      <Border Classes="preview" Width="498">
+        <StackPanel Spacing="8">
+          <Button Classes="picture" Click="OnPictureClick" IsVisible="{Binding HasPeek}" HorizontalAlignment="Left"
+                  ToolTip.Tip="See it full screen" AutomationProperties.Name="{Binding FileName}">
+            <Border Classes="attachment" Background="{StaticResource BbBackground}">
+              <Panel>
+                <Image Source="{Binding Thumbnail}" IsVisible="{Binding Thumbnail, Converter={x:Static ObjectConverters.IsNotNull}}" MaxWidth="300" MaxHeight="180"
+                       Stretch="Uniform" RenderOptions.BitmapInterpolationMode="HighQuality" />
+                <Panel Width="300" MaxHeight="180" ClipToBounds="True" IsVisible="{Binding Thumbnail, Converter={x:Static ObjectConverters.IsNull}}">
+                  <views:MarkdownView Source="{Binding PeekMarkdown}" IsVisible="{Binding PeekMarkdown, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                      Width="{Binding PeekMarkdownWidth}" IsHitTestVisible="False" Margin="12,8" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                  <TextBlock Text="{Binding PeekText}" IsVisible="{Binding PeekText, Converter={x:Static ObjectConverters.IsNotNull}}" IsHitTestVisible="False"
+                             FontFamily="Cascadia Mono,Consolas,monospace" FontSize="11" TextWrapping="NoWrap" Margin="12,8" VerticalAlignment="Top" />
+                </Panel>
+              </Panel>
+            </Border>
+          </Button>
+          <DockPanel>
+            <PathIcon DockPanel.Dock="Left" Width="22" Height="22" Margin="2,0,10,0" Foreground="{StaticResource BbAccent}" VerticalAlignment="Center"
+                      Data="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+            <views:PreviewFooter />
+          </DockPanel>
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+  </Window.DataTemplates>
+
+  <!-- A tool of the toolkit (Video generator) in a column of its own on the left, the chat on the right.
+       Shown and hidden by the window as it makes room for it (MainWindow.Dock). -->
+  <Grid x:Name="Columns" ColumnDefinitions="0,0,*">
+    <Border x:Name="ToolkitHost" Grid.Column="0" IsVisible="False">
+      <ContentControl x:Name="ToolkitContent" />
+    </Border>
+    <GridSplitter x:Name="ToolkitSplitter" Grid.Column="1" IsVisible="False" Background="{StaticResource BbBorder}" ResizeDirection="Columns" />
+
+  <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*,Auto">
+
+    <!-- Header -->
+    <Border Grid.Row="0" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,8">
+      <DockPanel>
+        <!-- Tools that open on the left of the chat and work through it; the arrow says where.
+             Where the window's name stood a second time, under the title bar's. -->
+        <ComboBox x:Name="ToolkitBox" DockPanel.Dock="Left" Classes="toolkit" ItemsSource="{Binding ToolkitOptions}" SelectedItem="{Binding SelectedToolkit}"
+                  VerticalAlignment="Center" AutomationProperties.Name="Toolkit"
+                  ToolTip.Tip="Tools that open on the left of the chat: what you pick in them goes into your message">
+          <ComboBox.SelectionBoxItemTemplate>
+            <DataTemplate x:DataType="vm:ToolkitOption">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Width="10" Height="10" VerticalAlignment="Center" Foreground="{StaticResource BbAccent}" Data="M14 7l-5 5 5 5z" />
+                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
+              </StackPanel>
+            </DataTemplate>
+          </ComboBox.SelectionBoxItemTemplate>
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:ToolkitOption">
+              <StackPanel Spacing="1" Width="300">
+                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                <TextBlock Classes="muted" Text="{Binding Description}" TextWrapping="Wrap" />
+              </StackPanel>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <!-- The tools are still being built: said once, quietly, beside the dropdown. -->
+        <TextBlock DockPanel.Dock="Left" Classes="muted" Text="in development" VerticalAlignment="Center" Margin="10,0,0,0"
+                   ToolTip.Tip="The Toolkit's tools are still being built and may change" />
+
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <!-- Earlier chats, newest first: a row opens one, its trash button deletes it. A chat another
+               Sloperator window has open says so, and its row brings that window forward. -->
+          <Button x:Name="HistoryButton" Classes="ghost" ToolTip.Tip="Earlier chats" AutomationProperties.Name="History">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="History" VerticalAlignment="Center" />
+              <PathIcon Width="10" Height="10" VerticalAlignment="Center" Data="M7 10l5 5 5-5z" />
+            </StackPanel>
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedRight" FlyoutPresenterClasses="history">
+                <Panel Width="340">
+                  <TextBlock Classes="muted" IsVisible="{Binding !HasPastChats}" TextWrapping="Wrap" Margin="10,8"
+                             Text="No chats yet. Every chat is kept here from its first message on." />
+                  <ItemsControl ItemsSource="{Binding PastChats}" IsVisible="{Binding HasPastChats}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PastChat">
+                        <Border Classes="pastChat" Classes.current="{Binding IsCurrent}">
+                          <Grid ColumnDefinitions="*,Auto">
+                            <Button Grid.ColumnSpan="2" Classes="pastChat" Command="{Binding OpenCommand}" Click="OnPastChatClick" AutomationProperties.Name="{Binding Title}">
+                              <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Classes="muted" Text="{Binding When}" />
+                              </StackPanel>
+                            </Button>
+                            <Button Grid.Column="1" Classes="deleteChat" Command="{Binding DeleteCommand}" ToolTip.Tip="Delete this chat" AutomationProperties.Name="Delete chat"
+                                    IsVisible="{Binding !IsElsewhere}">
+                              <PathIcon Width="16" Height="16" Data="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
+                            </Button>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Panel>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+          <Button Classes="ghost" Content="New chat" Command="{Binding NewChatCommand}" />
+          <!-- Another window beside this one, with a chat and an agent of its own, for another task at
+               the same time. Named: as an icon alone, it went unnoticed. -->
+          <Button Classes="ghost" Content="New window" Command="{Binding NewWindowCommand}"
+                  ToolTip.Tip="Another window, with a chat of its own, to work on another task at the same time" />
+          <Button Classes="ghost" Content="Settings" Click="OnSettingsClick" />
+        </StackPanel>
+        <!-- The server's state, between the name and the buttons: what gets shorter in a narrow window,
+             so the buttons keep their names. With no room at all it is clipped away rather than drawn
+             over History (Video generator's panel at its default width). -->
+        <DockPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0" ClipToBounds="True">
+          <Ellipse DockPanel.Dock="Left" Classes="status" Classes.checking="{Binding IsChecking}" Classes.connected="{Binding IsConnected}" Classes.failed="{Binding IsFailed}"
+                   Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,6,0" />
+          <TextBlock DockPanel.Dock="Left" Classes="muted" Text="{Binding ServerStatusText}" TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding ServerStatusText}" VerticalAlignment="Center" />
+          <TextBlock Classes="muted" Text="{Binding ContextUsage, StringFormat='· {0}'}" IsVisible="{Binding HasContextUsage}" TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding ContextUsageTip}" VerticalAlignment="Center" Margin="6,0,0,0" />
+        </DockPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- What the agent talks to: server and key, then model and how much context to use.
+         The labels share a column so both rows line up, and both rows are exactly as tall as a text
+         box so every field and button in a row shares its top and bottom edges. -->
+    <Border Grid.Row="1" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,8">
+      <Grid ColumnDefinitions="Auto,3*,Auto,2*,Auto" RowDefinitions="32,32" RowSpacing="8" VerticalAlignment="Center">
+        <TextBlock Grid.Row="0" Grid.Column="0" Classes="muted" Text="Server" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ServerAddress}" Watermark="http://localhost:1234/v1" MinWidth="270" />
+        <TextBlock Grid.Row="0" Grid.Column="2" Classes="muted" Text="API key" VerticalAlignment="Center" Margin="14,0,8,0" />
+        <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding ApiKey}" PasswordChar="•" RevealPassword="{Binding ShowApiKey}" MinWidth="120"
+                 Watermark="Optional"
+                 ToolTip.Tip="Sent to the server with every request. Saved in plain text in the Data folder next to Sloperator, so keep that folder private." />
+        <ToggleButton Grid.Row="0" Grid.Column="4" Classes="ghost" IsChecked="{Binding ShowApiKey}" Margin="6,0,0,0" Padding="8,6"
+                      VerticalAlignment="Stretch" ToolTip.Tip="Show or hide the API key" AutomationProperties.Name="Show API key">
+          <Panel>
+            <PathIcon Width="16" Height="16" IsVisible="{Binding !ShowApiKey}"
+                      Data="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
+            <PathIcon Width="16" Height="16" IsVisible="{Binding ShowApiKey}"
+                      Data="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z" />
+          </Panel>
+        </ToggleButton>
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Classes="muted" Text="Model" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <DockPanel Grid.Row="1" Grid.Column="1">
+          <Button DockPanel.Dock="Right" Classes="ghost" Content="↻" Margin="6,0,0,0" VerticalAlignment="Stretch" Command="{Binding CheckServerCommand}"
+                  ToolTip.Tip="Ask the server again for its models and context size" />
+          <!-- How hard the model thinks; greyed out for a model whose server lists no effort for it. -->
+          <ComboBox x:Name="EffortBox" DockPanel.Dock="Right" ItemsSource="{Binding EffortOptions}" SelectedItem="{Binding SelectedEffort}" IsEnabled="{Binding CanSetEffort}"
+                    Width="148" Margin="6,0,0,0" VerticalAlignment="Stretch" ToolTip.Tip="{Binding EffortToolTip}" ToolTip.ShowOnDisabled="True"
+                    AutomationProperties.Name="Effort" />
+          <ComboBox x:Name="ModelBox" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                    PlaceholderText="No models: check the server address" ToolTip.Tip="{Binding ModelToolTip}" />
+        </DockPanel>
+        <TextBlock Grid.Row="1" Grid.Column="2" Classes="muted" Text="Context" VerticalAlignment="Center" Margin="14,0,8,0" />
+        <DockPanel Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="2" ToolTip.Tip="{Binding ContextToolTip}">
+          <CheckBox DockPanel.Dock="Right" Content="Auto" IsChecked="{Binding AutoContext}" Margin="10,0,0,0" MinWidth="0" />
+          <TextBox x:Name="ContextBox" DockPanel.Dock="Right" Text="{Binding ContextInput, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding !AutoContext}"
+                   Width="90" Padding="6,5" TextAlignment="Right" VerticalAlignment="Stretch" VerticalContentAlignment="Center" />
+          <!-- Fluent's slider is 50px tall with the track in its middle: stretched over the 32px row
+               plus these margins, the track sits on the row's centre line. -->
+          <Slider Minimum="0" Maximum="{Binding ContextMaxIndex}" Value="{Binding ContextIndex}" TickFrequency="1" IsSnapToTickEnabled="True"
+                  IsEnabled="{Binding !AutoContext}" VerticalAlignment="Stretch" Margin="0,-9,6,-9" MinWidth="60" />
+        </DockPanel>
+      </Grid>
+    </Border>
+
+    <!-- Not connected yet, or the picked model isn't on the server: what to do about it -->
+    <Border Grid.Row="2" IsVisible="{Binding ShowSetupBanner}" Background="{StaticResource BbSurfaceRaised}"
+            BorderBrush="{StaticResource BbAccent}" BorderThickness="0,0,0,2" Padding="16,12">
+      <Grid ColumnDefinitions="*,Auto" MaxWidth="860">
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding SetupTitle}" FontWeight="SemiBold" />
+          <TextBlock Classes="muted" Text="{Binding SetupText}" TextWrapping="Wrap" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="12,0,0,0">
+          <Button Classes="ghost" Content="Use Kilo's free models" Command="{Binding UseKiloCommand}" IsVisible="{Binding OffersKilo}"
+                  ToolTip.Tip="Connects to Kilo's AI gateway (ai-gateway.kilo.ai), whose free models answer without an account or a key: up to 200 requests an hour" />
+          <Button Classes="ghost" Content="Check again" Command="{Binding CheckServerCommand}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Conversation. Until the chat is used, the intro sits under whatever notices came up (an MCP
+         server that failed to start), the two in the middle of the window, or read from the top
+         when they don't fit. Spacing lives on the content as a margin, not as ScrollViewer padding:
+         padding is not part of the scroll extent, so the last lines ended up clipped. -->
+    <!-- Focus brings an item into view only from the keyboard (see MainWindow): a click on a picture
+         partly out of view focused its button and scrolled the whole picture in, a jump under the mouse. -->
+    <!-- Its bar always shows (the user, 2026-10-24: waiting for it to show up to grab it was annoying). -->
+    <ScrollViewer x:Name="ChatScroll" Grid.Row="3" HorizontalScrollBarVisibility="Disabled" BringIntoViewOnFocusChange="False" AllowAutoHide="False">
+      <StackPanel Classes="conversation" Classes.unused="{Binding ShowIntro}" MaxWidth="860" Margin="16,12,16,16" Spacing="10">
+        <!-- Unclipped (an ItemsControl and a ContentControl clip to their bounds by default), so a
+             message's text can reach past its sides: a drag in the gutter beside it starts a selection. -->
+        <ItemsControl ItemsSource="{Binding Items}" ClipToBounds="False">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Spacing="10" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+
+          <!-- Every line as its kind shows it (the templates below), each with the time it happened;
+               the line a run ended with says under it how long the run took. -->
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ChatItemViewModel">
+              <StackPanel Spacing="6">
+                <ContentControl Content="{Binding}" ClipToBounds="False" />
+                <TextBlock Classes="muted" Text="{Binding RunTookText}" IsVisible="{Binding HasRunTook}" HorizontalAlignment="Center" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+
+          <ItemsControl.DataTemplates>
+
+            <DataTemplate DataType="vm:UserMessageItem">
+              <StackPanel HorizontalAlignment="Right" MaxWidth="640" Margin="60,0,0,0" Spacing="3">
+                <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Right" />
+                <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="0,8" HorizontalAlignment="Right">
+                  <StackPanel Spacing="6">
+                    <!-- Sent with a tool open, in a chat saved before tools gave cards: which video, and what was picked in it. -->
+                    <TextBlock Classes="muted" Text="{Binding Via}" IsVisible="{Binding HasVia}" FontSize="12" TextWrapping="Wrap" Margin="12,0" />
+                    <!-- The files that came with it: a picture as itself, anything else by its name; a click opens it.
+                         A tool's pick shows as what it is there, and with nothing picked, the card of what
+                         the message was about in the tool; either comes first, as they showed over the box. -->
+                    <WrapPanel IsVisible="{Binding HasAttachments}" HorizontalAlignment="Right" Margin="12,4,12,0">
+                    <ItemsControl ItemsSource="{Binding Wholes}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ToolCardItem">
+                          <Border Classes="attachment file" Margin="6,0,0,6" ToolTip.Tip="{Binding Tip}" AutomationProperties.Name="{Binding Title}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                              <PathIcon Classes="toolArrow" />
+                              <PathIcon Data="{Binding Icon}" />
+                              <StackPanel Spacing="1">
+                                <TextBlock Text="{Binding Title}" MaxWidth="260" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Classes="muted" Text="{Binding Details}" />
+                              </StackPanel>
+                            </StackPanel>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ItemsControl ItemsSource="{Binding Attachments}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel HorizontalAlignment="Right" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:AttachmentItem">
+                          <Button Classes="picture" Click="OnAttachmentClick" ToolTip.Tip="{Binding Tip}" Margin="0,0,0,6"
+                                  AutomationProperties.Name="{Binding FileName}">
+                            <Button.ContextMenu>
+                              <ContextMenu>
+                                <MenuItem Header="Copy" Click="OnCopyPicture" />
+                              </ContextMenu>
+                            </Button.ContextMenu>
+                            <Panel Margin="6,0,0,0">
+                              <Border Classes="attachment" IsVisible="{Binding !ShowsName}">
+                                <Image Source="{Binding Thumbnail}" MaxHeight="180" MaxWidth="300" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+                              </Border>
+                              <Border Classes="attachment file" IsVisible="{Binding ShowsName}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                  <PathIcon Classes="toolArrow" IsVisible="{Binding Picked}" />
+                                  <PathIcon Data="{Binding Icon}" />
+                                  <StackPanel Spacing="1">
+                                    <TextBlock Text="{Binding Title}" MaxWidth="260" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Classes="muted" Text="{Binding Details}" />
+                                  </StackPanel>
+                                </StackPanel>
+                              </Border>
+                            </Panel>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    </WrapPanel>
+                    <!-- The bubble's padding is the text's own, so a drag that starts in it selects too. Its sides
+                         are the text's padding rather than a margin turned inside out: the bubble is as wide as its
+                         text, and Avalonia cuts a measured width to what the parent offers before taking a negative
+                         margin off, so a long line came back narrower than measured, wrapped once more and
+                         lost the last line of the message under the bubble's edge. -->
+                    <SelectableTextBlock views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" Margin="0,-8" Padding="12,8" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </DataTemplate>
+
+            <!-- Over each step: when the model was asked and how long it took, the breakdown in the
+                 tooltip. A step that only called tools shows this line alone. -->
+            <DataTemplate DataType="vm:AssistantMessageItem">
+              <StackPanel Spacing="6" Margin="0,0,40,0">
+                <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Left" />
+                <Expander IsVisible="{Binding HasReasoning}" Header="{Binding ThinkingLabel}" HorizontalAlignment="Stretch" IsExpanded="True"
+                          Padding="10,6">
+                  <SelectableTextBlock Classes="muted" views:MarkdownText.Plain="{Binding ShownReasoning}" TextWrapping="Wrap" Margin="-8,-4" Padding="8,4" />
+                </Expander>
+                <views:MarkdownView Source="{Binding ShownText}" IsVisible="{Binding HasText}" />
+                <TextBlock Classes="muted" Text="{Binding TypingText}" IsVisible="{Binding ShowTypingDots}" />
+                <ItemsControl ItemsSource="{Binding Previews}" IsVisible="{Binding HasPreviews}" Margin="0,4,0,0">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="8" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                </ItemsControl>
+              </StackPanel>
+            </DataTemplate>
+
+            <DataTemplate DataType="vm:ToolCallItem">
+              <Border Classes="card" Margin="0,0,40,0">
+                <StackPanel Spacing="6">
+                  <!-- The summary takes the width that is left, so a long command wraps inside the card
+                       (in a horizontal StackPanel it had all the width it wanted and ran past the
+                       card's edge); past three lines it ends in "…", the whole of it in the tooltip.
+                       On the right: when the call began to run, and how it ended in how long. -->
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding StatusText}" VerticalAlignment="Top" Margin="4,0,0,0" />
+                    <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText, StringFormat='{}{0} ·'}" IsVisible="{Binding HasTime}"
+                               ToolTip.Tip="{Binding TimeTip}" VerticalAlignment="Top" Margin="8,0,0,0" />
+                    <Border DockPanel.Dock="Left" Background="{StaticResource BbSurfaceRaised}" CornerRadius="4" Padding="6,1" VerticalAlignment="Top" Margin="0,0,8,0">
+                      <TextBlock Text="{Binding Name}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Foreground="{StaticResource BbAccent}" />
+                    </Border>
+                    <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" ToolTip.Tip="{Binding Summary}" />
+                  </DockPanel>
+
+                  <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsAwaitingApproval}">
+                    <Button Classes="primary" Content="Allow" Command="{Binding ApproveCommand}" />
+                    <Button Classes="ghost" Content="Deny" Command="{Binding DenyCommand}" />
+                  </StackPanel>
+
+                  <Button Classes="picture" Click="OnScreenshotClick" IsVisible="{Binding HasScreenshot}" HorizontalAlignment="Left"
+                          ToolTip.Tip="See it full screen" AutomationProperties.Name="Screenshot">
+                    <Button.ContextMenu>
+                      <ContextMenu>
+                        <MenuItem Header="Copy" Click="OnCopyPicture" />
+                      </ContextMenu>
+                    </Button.ContextMenu>
+                    <Image Source="{Binding Screenshot}" MaxWidth="480" Stretch="Uniform" />
+                  </Button>
+
+                  <ItemsControl ItemsSource="{Binding Previews}" IsVisible="{Binding HasPreviews}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Spacing="8" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                  </ItemsControl>
+
+                  <Expander IsVisible="{Binding HasResult}" Header="Output" Padding="8,4" HorizontalAlignment="Stretch">
+                    <SelectableTextBlock Text="{Binding ResultText}" TextWrapping="Wrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Margin="-8,-4" Padding="8,4" />
+                  </Expander>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+
+            <DataTemplate DataType="vm:NoticeItem">
+              <!-- As wide as its words, so their sides are the text's padding (see the user's bubble). -->
+              <Border Padding="2,6" CornerRadius="6" Background="{StaticResource BbSurface}" HorizontalAlignment="Center">
+                <!-- After a stop (Pause/Break, Stop, an error), Continue carries on with the task where it stopped. -->
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Classes="primary" Content="Continue" Padding="12,3" Margin="4,-2,8,-2" VerticalAlignment="Center"
+                          IsVisible="{Binding CanContinue}" Command="{Binding ContinueCommand}"
+                          ToolTip.Tip="Carry on with the task where I stopped" />
+                  <TextBlock DockPanel.Dock="Left" Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}"
+                             VerticalAlignment="Center" Margin="8,0,0,0" />
+                  <SelectableTextBlock Classes="muted" Classes.error="{Binding IsError}" views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                       Margin="0,-4" Padding="8,4" />
+                </DockPanel>
+              </Border>
+            </DataTemplate>
+
+          </ItemsControl.DataTemplates>
+        </ItemsControl>
+
+        <!-- What Sloperator can do and how to stop or correct it, until the chat is used. Short enough
+             to take in at a glance: down to the window's MinWidth every sentence of the two notes
+             keeps to one line and every card's text to two. The details show where they come up
+             instead: the pause line while the user types, Continue after a stop, the paperclip's
+             tooltip. -->
+        <StackPanel IsVisible="{Binding ShowIntro}" MaxWidth="640" Spacing="14">
+          <StackPanel Spacing="6">
+            <Image Source="/Assets/sloperator.png" Width="40" Height="40" RenderOptions.BitmapInterpolationMode="HighQuality" />
+            <TextBlock Text="What should I do on your computer?" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460"
+                       Text="Describe a task in your own words, and I'll work on it until it's done." />
+          </StackPanel>
+
+          <!-- How to stop it comes first: it is what someone needs once Sloperator has the mouse. Next to
+               it, how to set it straight without stopping it, which the user counts among the things
+               that make Sloperator special: in plain text, not grey. It is a sentence, not a key cap,
+               as Enter only sends a message: Pause/Break is the one key that works in any window. -->
+          <Border Classes="card">
+            <StackPanel Spacing="6">
+              <DockPanel>
+                <Border Classes="key" Margin="0,0,8,0">
+                  <TextBlock Text="Pause/Break" />
+                </Border>
+                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Text="stops me at any time, in any window." />
+              </DockPanel>
+              <TextBlock TextWrapping="Wrap" Text="Type corrections and hints below as I work: tell me when I go wrong." />
+              <TextBlock Classes="muted" TextWrapping="Wrap" Text="While I work I use your mouse and keyboard, but I pause while you type." />
+              <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding ApprovalNote}" />
+            </StackPanel>
+          </Border>
+
+          <!-- Files and pictures go with a message: said where it is seen, as it isn't obvious in a chat box. -->
+          <Border Classes="card">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" Margin="0,0,8,0" VerticalAlignment="Top">
+                <Border Classes="key">
+                  <TextBlock Text="Ctrl" />
+                </Border>
+                <Border Classes="key">
+                  <TextBlock Text="V" />
+                </Border>
+              </StackPanel>
+              <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
+                         Text="can paste a screenshot into your message, you can also drag and drop files." />
+            </DockPanel>
+          </Border>
+
+          <!-- Several tasks at once, a window each. -->
+          <Border Classes="card">
+            <DockPanel>
+              <Border DockPanel.Dock="Left" Classes="key" Margin="0,0,8,0" VerticalAlignment="Top">
+                <TextBlock Text="New window" />
+              </Border>
+              <TextBlock TextWrapping="Wrap" VerticalAlignment="Center"
+                         Text="button at the top opens another window, so I can multitask in parallel." />
+            </DockPanel>
+          </Border>
+
+          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
+            <Border Grid.Row="0" Grid.Column="0" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M13 1.07V9h7c0-4.08-3.05-7.44-7-7.93zM4 15c0 4.42 3.58 8 8 8s8-3.58 8-8v-4H4v4zm7-13.93C7.05 1.56 4 4.92 4 9h7V1.07z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Use any app" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I see the screen and use the mouse and keyboard, in any program." />
+                  <TextBlock Classes="muted warning" TextWrapping="Wrap" IsVisible="{Binding !CanSeeScreen}"
+                             Text="This model can't see images: pick another." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="0" Grid.Column="1" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Pictures, video and sound" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I make them with ComfyUI, installing it and the models if needed." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="1" Grid.Column="0" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Game development" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I make games in any game engine: Unity, Unreal, Godot or the one you use." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="1" Grid.Column="1" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7 1.49 0 2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Get what a job needs" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I download the programs a job needs and connect their MCP servers, like Blender's." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="2" Grid.Column="0" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M20 13H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1v-6c0-.55-.45-1-1-1zM7 19c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM20 3H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zM7 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Work on servers" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I log in over SSH to set servers up or fix them, and copy files to and from them." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="2" Grid.Column="1" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Documents" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I write and edit Word, Excel, PowerPoint and PDF files, no Office needed." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="3" Grid.Column="0" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Look things up" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I search the web and read pages when I'm not sure of something." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="3" Grid.Column="1" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Chat for you" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I reply in your chat apps while you're away, and say I'm your assistant if asked." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="4" Grid.Column="0" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Long jobs" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I keep going for hours when a job needs it, like making a game and play-testing it." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <Border Grid.Row="4" Grid.Column="1" Classes="card">
+              <DockPanel>
+                <PathIcon Classes="capability" Data="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="capability" Text="Projects and files" />
+                  <TextBlock Classes="muted" TextWrapping="Wrap" Text="I index a project to find my way around it, edit files anywhere and run commands." />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+          </Grid>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Input -->
+    <Border Grid.Row="4" Padding="16,8,16,14">
+      <StackPanel MaxWidth="860" Spacing="6">
+        <!-- Messages sent during the run that the model hasn't read yet, as their bubbles will be: each
+             joins the chat when it is read; × takes one back, "Interrupt the model" has them read now. -->
+        <Border Classes="queued" IsVisible="{Binding HasQueued}">
+          <StackPanel Spacing="6">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Classes="ghost" Content="Interrupt the model" Command="{Binding InterruptCommand}" Padding="10,2" VerticalAlignment="Center"
+                      ToolTip.Tip="Read them now: I stop thinking, writing or running a tool, and go on from your messages. Ctrl+Enter sends a message this way." />
+              <TextBlock Classes="muted" Text="{Binding QueuedTitle}" VerticalAlignment="Center" />
+            </DockPanel>
+            <ItemsControl ItemsSource="{Binding Queued}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Spacing="4" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:QueuedMessageItem">
+                  <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="12,6,6,6" HorizontalAlignment="Right" MaxWidth="640" Opacity="0.8">
+                    <DockPanel>
+                      <Button DockPanel.Dock="Right" Classes="cancelQueued" Command="{Binding CancelCommand}" Margin="8,0,0,0" VerticalAlignment="Top"
+                              ToolTip.Tip="Cancel: take it back unsent" AutomationProperties.Name="Cancel queued message">
+                        <PathIcon Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                      </Button>
+                      <StackPanel Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Classes="muted" Text="{Binding Via}" IsVisible="{Binding HasVia}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" IsVisible="{Binding HasText}" />
+                        <TextBlock Classes="muted" Text="{Binding FilesText}" IsVisible="{Binding HasFiles}" />
+                      </StackPanel>
+                    </DockPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+        <!-- While the user types to it during a run, the agent's clicks and keys wait; said here,
+             so the pause doesn't look like a hang and they know their typing is safe. -->
+        <DockPanel IsVisible="{Binding TypingPause}" Margin="4,0">
+          <PathIcon DockPanel.Dock="Left" Width="12" Height="12" Margin="0,0,8,0" Foreground="{StaticResource BbAccent}"
+                    VerticalAlignment="Center" Data="M3,2 H6 V14 H3 Z M10,2 H13 V14 H10 Z" />
+          <!-- Resume lets the agent go on at once and keeps the draft, for someone who started typing and changed their mind. -->
+          <Button DockPanel.Dock="Right" Classes="ghost" Content="Resume" Command="{Binding ResumeCommand}" Margin="8,0,0,0" Padding="10,2"
+                  IsVisible="{Binding TypingPauseHere}"
+                  VerticalAlignment="Center" ToolTip.Tip="Let me carry on now; what you typed stays in the box." />
+          <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BbAccent}" VerticalAlignment="Center" Text="{Binding TypingPauseText}" />
+        </DockPanel>
+        <!-- One line of text is exactly as tall as the Send button, and both sit on the same
+             bottom edge, so they line up; longer text grows the box upwards with Send staying put. -->
+        <Border Classes="card composer" Padding="6">
+          <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
+            <!-- The files going with the message (dropped, pasted or picked); × takes one off. Each
+                 item keeps room above and to its right for the × that sits over its corner: the
+                 list clips what goes past its edges, and the ×'s top was cut off. -->
+            <WrapPanel Grid.Row="0" Grid.ColumnSpan="3" IsVisible="{Binding ShowsBoxRow}" Margin="4,2,4,6">
+              <!-- With nothing picked in the open tool, what a message is about there (the whole video, the document shown;
+                   the tool itself while it shows nothing), as a pick shows and where it would come: before the user's own files. -->
+              <ContentControl Content="{Binding WholeCard}" IsVisible="{Binding ShowsWhole}">
+                <ContentControl.ContentTemplate>
+                  <DataTemplate x:DataType="vm:ToolCardItem">
+                    <Panel Margin="0,8,12,0" ToolTip.Tip="{Binding Tip}">
+                      <Border Classes="attachment file" MinHeight="36" AutomationProperties.Name="{Binding Title}">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,10,0">
+                          <PathIcon Classes="toolArrow" />
+                          <PathIcon Data="{Binding Icon}" />
+                          <StackPanel Spacing="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}" MaxWidth="220" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Classes="muted" Text="{Binding Details}" />
+                          </StackPanel>
+                        </StackPanel>
+                      </Border>
+                    </Panel>
+                  </DataTemplate>
+                </ContentControl.ContentTemplate>
+              </ContentControl>
+              <!-- A tool's picks come first in the list (see MainWindowViewModel.Pick). -->
+              <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:AttachmentItem">
+                    <Panel Margin="0,8,12,0" ToolTip.Tip="{Binding Tip}">
+                      <Panel.ContextMenu>
+                        <ContextMenu>
+                          <MenuItem Header="Copy" Click="OnCopyPicture" />
+                        </ContextMenu>
+                      </Panel.ContextMenu>
+                      <!-- A click on the picture shows it full screen, as one in the chat. -->
+                      <Border Classes="attachment" IsVisible="{Binding !ShowsName}" Cursor="Hand" PointerReleased="OnComposerPictureReleased" AutomationProperties.Name="{Binding FileName}">
+                        <Image Source="{Binding Thumbnail}" Height="64" MaxWidth="160" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+                      </Border>
+                      <Border Classes="attachment file" IsVisible="{Binding ShowsName}" MinHeight="36">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,10,0">
+                          <PathIcon Classes="toolArrow" IsVisible="{Binding Picked}" />
+                          <PathIcon Data="{Binding Icon}" />
+                          <StackPanel Spacing="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}" MaxWidth="220" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Classes="muted" Text="{Binding Details}" />
+                          </StackPanel>
+                        </StackPanel>
+                      </Border>
+                      <!-- A tool's pick has none: it is unpicked in its panel (see AttachmentItem.CanRemove). -->
+                      <Button Classes="removeAttachment" Command="{Binding RemoveCommand}" IsVisible="{Binding CanRemove}" ToolTip.Tip="Take it off the message"
+                              AutomationProperties.Name="{Binding FileName, StringFormat='Remove {0}'}">
+                        <PathIcon Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                      </Button>
+                    </Panel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </WrapPanel>
+            <!-- Files go with a message from here too, besides dropping them on the window or pasting them. -->
+            <Button x:Name="AttachButton" Grid.Row="1" Grid.Column="0" Classes="ghost" BorderThickness="0" Padding="6" Margin="0,0,4,0" VerticalAlignment="Bottom" MinHeight="32"
+                    Click="OnAttachClick" AutomationProperties.Name="Attach files"
+                    ToolTip.Tip="Attach files or pictures to your message. You can also drop them on this window, or paste a screenshot or copied files with Ctrl+V.">
+              <PathIcon Width="18" Height="18" Foreground="{StaticResource BbMuted}"
+                        Data="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z" />
+            </Button>
+            <!-- During a run Send stays: a message then goes to the agent before its next step. -->
+            <TextBox x:Name="InputBox" Grid.Row="1" Grid.Column="1" Classes="composer" Text="{Binding Input}" AcceptsReturn="True" TextWrapping="Wrap"
+                     MaxHeight="200" VerticalContentAlignment="Center"
+                     Watermark="{Binding InputHint}" />
+            <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Bottom" Margin="8,0,0,0">
+              <Button Classes="primary" Content="Send" Command="{Binding SendCommand}" MinHeight="32" />
+              <Button Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" Background="{StaticResource BbError}" MinHeight="32" />
+            </StackPanel>
+          </Grid>
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <!-- Files dragged over the chat: where they go. The drop itself lands on the window. -->
+    <Panel Grid.Row="0" Grid.RowSpan="5" IsVisible="{Binding IsDropping}" IsHitTestVisible="False" Background="#EC111214">
+      <Rectangle Margin="14" RadiusX="12" RadiusY="12" Stroke="{StaticResource BbAccent}" StrokeThickness="2" StrokeDashArray="6,4" />
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+        <PathIcon Width="36" Height="36" Foreground="{StaticResource BbAccent}" HorizontalAlignment="Center"
+                  Data="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z" />
+        <TextBlock Text="Drop to attach" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+        <TextBlock Classes="muted" Text="They go with your next message, and I can work with them." HorizontalAlignment="Center" />
+      </StackPanel>
+    </Panel>
+  </Grid>
+  </Grid>
+</Window>

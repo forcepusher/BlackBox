@@ -1,0 +1,156 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sloperator.App.ViewModels"
+        xmlns:views="using:Sloperator.App.Views"
+        x:Class="Sloperator.App.Views.MediaViewer"
+        x:DataType="vm:MediaViewerViewModel"
+        Title="{Binding Name}"
+        Icon="/Assets/sloperator.ico"
+        SystemDecorations="None"
+        ShowInTaskbar="False"
+        WindowStartupLocation="Manual"
+        Background="#000000">
+
+  <Window.Styles>
+    <!-- The bar over the top and the arrows at the sides: dim until the mouse is on them. -->
+    <Style Selector="Border.bar">
+      <Setter Property="Background" Value="#B0000000" />
+      <Setter Property="Padding" Value="16,10" />
+    </Style>
+    <Style Selector="Button.side">
+      <Setter Property="Width" Value="56" />
+      <Setter Property="Height" Value="56" />
+      <Setter Property="CornerRadius" Value="28" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="20" />
+      <Setter Property="Background" Value="#70000000" />
+      <Setter Property="Opacity" Value="0.55" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.side:pointerover">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <!-- After a moment without the mouse moving they fade away, to leave the picture whole. -->
+    <Style Selector="Border.top, Button.side">
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.25" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector=":is(Window).idle Border.top, :is(Window).idle Button.side">
+      <Setter Property="Opacity" Value="0" />
+    </Style>
+    <Style Selector="Button.side PathIcon">
+      <Setter Property="Width" Value="22" />
+      <Setter Property="Height" Value="22" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+  </Window.Styles>
+
+  <Window.DataTemplates>
+    <DataTemplate DataType="vm:ViewerPicture">
+      <views:PictureZoom Source="{Binding Image}" BesideClicked="OnBesideClicked" />
+    </DataTemplate>
+
+    <DataTemplate DataType="vm:AnimationPreview">
+      <Panel Background="Transparent" PointerReleased="OnBackdropReleased">
+        <Image Source="{Binding Image}" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="HighQuality" HorizontalAlignment="Center" VerticalAlignment="Center" />
+      </Panel>
+    </DataTemplate>
+
+    <!-- A video with its sound: a click on the picture plays or pauses it, one beside it closes. -->
+    <DataTemplate DataType="vm:VideoPreview">
+      <DockPanel>
+        <Border DockPanel.Dock="Bottom" Classes="bar">
+          <DockPanel>
+            <Button DockPanel.Dock="Left" Classes="ghost" Padding="10,6" Command="{Binding PlayCommand}" VerticalAlignment="Center"
+                    ToolTip.Tip="Play or pause (Space)" AutomationProperties.Name="Play or pause">
+              <PathIcon Data="{Binding PlayIcon}" Width="14" Height="14" />
+            </Button>
+            <Button DockPanel.Dock="Right" Classes="ghost" Padding="10,6" Margin="8,0,0,0" Command="{Binding ToggleSoundCommand}" VerticalAlignment="Center"
+                    ToolTip.Tip="Sound on or off (M)" AutomationProperties.Name="Sound on or off">
+              <PathIcon Data="{Binding SoundIcon}" Width="16" Height="16" />
+            </Button>
+            <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="10,0,0,0" />
+            <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" Margin="10,-8,0,-8" VerticalAlignment="Center" />
+          </DockPanel>
+        </Border>
+        <Panel Background="Transparent" PointerReleased="OnBackdropReleased">
+          <Image Source="{Binding Frame}" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="HighQuality" HorizontalAlignment="Center" VerticalAlignment="Center"
+                 PointerReleased="OnVideoReleased" AutomationProperties.Name="Play or pause video" />
+        </Panel>
+      </DockPanel>
+    </DataTemplate>
+
+    <!-- A document, as the File inspector panel shows it: in a column clear of the bar and the arrows
+         (Windows' previewers draw in a window of their own, over anything laid on them). A click on
+         the dark beside it goes back to the chat. -->
+    <DataTemplate DataType="vm:FileInspectorViewModel">
+      <Panel Background="Transparent" PointerReleased="OnBackdropReleased">
+        <Border MaxWidth="1100" Margin="96,56,96,24" Background="{StaticResource BbBackground}" CornerRadius="8" ClipToBounds="True">
+          <views:FileInspectorView />
+        </Border>
+      </Panel>
+    </DataTemplate>
+  </Window.DataTemplates>
+
+  <Grid ColumnDefinitions="*,Auto">
+    <Panel>
+      <ContentControl Content="{Binding Shown}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+
+      <Button Classes="side" HorizontalAlignment="Left" Command="{Binding PreviousCommand}" IsVisible="{Binding HasMany}"
+              ToolTip.Tip="The one before (Left arrow)" AutomationProperties.Name="Previous">
+        <PathIcon Data="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+      </Button>
+      <Button Classes="side" HorizontalAlignment="Right" Command="{Binding NextCommand}" IsVisible="{Binding HasMany}"
+              ToolTip.Tip="The next one (Right arrow)" AutomationProperties.Name="Next">
+        <PathIcon Data="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+      </Button>
+
+      <!-- Which file, and what to do with it. -->
+      <Border Classes="bar top" VerticalAlignment="Top">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="12,0,0,0">
+            <Button Classes="ghost" Padding="10,4" Content="Prompt" Command="{Binding ToggleRecipeCommand}" IsVisible="{Binding HasRecipe}"
+                    ToolTip.Tip="The prompts and settings it was made with, read from the file (P)" />
+            <Button Classes="ghost" Padding="10,4" Content="Show in folder" Command="{Binding ShowInFolderCommand}" IsVisible="{Binding HasFile}" />
+            <Button Classes="ghost" Padding="10,4" Click="OnCloseClick" ToolTip.Tip="Back to the chat (Esc)" AutomationProperties.Name="Close">
+              <PathIcon Width="12" Height="12" Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+            </Button>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <TextBlock Classes="muted" Text="{Binding Details}" VerticalAlignment="Center" />
+            <TextBlock Classes="muted" Text="{Binding Counter}" VerticalAlignment="Center" />
+          </StackPanel>
+        </DockPanel>
+      </Border>
+    </Panel>
+
+    <!-- What it was made with, beside it. -->
+    <Border Grid.Column="1" Width="420" IsVisible="{Binding ShowRecipe}" Background="{StaticResource BbSurface}"
+            BorderBrush="{StaticResource BbBorder}" BorderThickness="1,0,0,0">
+      <DockPanel>
+        <DockPanel DockPanel.Dock="Top" Margin="16,12,10,4">
+          <Button DockPanel.Dock="Right" Classes="ghost" Padding="8,4" Command="{Binding ToggleRecipeCommand}" ToolTip.Tip="Hide" AutomationProperties.Name="Hide the prompt">
+            <PathIcon Width="10" Height="10" Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+          </Button>
+          <TextBlock Text="Made with" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" />
+        </DockPanel>
+        <!-- Room around the text as its margin: a ScrollViewer's padding isn't taken from the width, and the text ran past the edge. -->
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <Panel Margin="16,4,16,16">
+            <Panel IsVisible="{Binding HasRecipe}">
+              <views:RecipeView DataContext="{Binding Recipe}" />
+            </Panel>
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="This file doesn't say what it was made with."
+                       IsVisible="{Binding !HasRecipe}" />
+          </Panel>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+  </Grid>
+</Window>

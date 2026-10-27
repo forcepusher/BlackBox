@@ -1,0 +1,203 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Sloperator.App.App"
+             RequestedThemeVariant="Dark">
+
+  <Application.Resources>
+    <SolidColorBrush x:Key="BbBackground" Color="#111214" />
+    <SolidColorBrush x:Key="BbSurface" Color="#1A1C1F" />
+    <SolidColorBrush x:Key="BbSurfaceRaised" Color="#23262A" />
+    <SolidColorBrush x:Key="BbBorder" Color="#2F3338" />
+    <SolidColorBrush x:Key="BbMuted" Color="#8B9199" />
+    <SolidColorBrush x:Key="BbAccent" Color="#E0A64B" />
+    <SolidColorBrush x:Key="BbUserBubble" Color="#2A2F36" />
+    <SolidColorBrush x:Key="BbOk" Color="#5FB878" />
+    <SolidColorBrush x:Key="BbError" Color="#E06C6C" />
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <Style Selector="Window">
+      <Setter Property="Background" Value="{StaticResource BbBackground}" />
+    </Style>
+
+    <Style Selector="TextBlock.muted, SelectableTextBlock.muted">
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="SelectableTextBlock.muted.error">
+      <Setter Property="Foreground" Value="{StaticResource BbError}" />
+    </Style>
+    <!-- Without a background a text block is hit only on its glyphs, so a drag had to start exactly
+         on a letter; transparent, its whole box (line gaps, the space after a short line) starts one. -->
+    <Style Selector="SelectableTextBlock">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <!-- A fenced code block in a reply (MarkdownView): its language and Copy over the code. -->
+    <Style Selector="Border.code">
+      <Setter Property="Background" Value="{StaticResource BbSurface}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <!-- A table in a reply (MarkdownTable): a grid on the code blocks' surface, its header row raised. -->
+    <Style Selector="Border.mdTable">
+      <Setter Property="Background" Value="{StaticResource BbSurface}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <!-- A reply's quotes (MarkdownParts): a bar beside each level, the text muted; and a rule across. -->
+    <Style Selector="Border.mdQuote">
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="4,0,0,0" />
+      <Setter Property="Padding" Value="12,0,0,0" />
+    </Style>
+    <Style Selector="Border.mdRule">
+      <Setter Property="Background" Value="{StaticResource BbBorder}" />
+    </Style>
+    <Style Selector="Border.mdBox">
+      <Setter Property="BorderBrush" Value="{StaticResource BbMuted}" />
+    </Style>
+    <Style Selector="Border.mdTicked">
+      <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
+      <Setter Property="Background" Value="{StaticResource BbAccent}" />
+    </Style>
+    <Style Selector="TextBlock.mdMuted, SelectableTextBlock.mdMuted">
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+    </Style>
+    <Style Selector="DockPanel.codeHeader">
+      <Setter Property="Margin" Value="12,4,4,0" />
+    </Style>
+    <!-- The code sits 12,2,12,10 inside the box as before; its text block reaches 11 past the box's
+         sides and 3 under it (over the 1px border), so a drag from there selects. Whole multiples of 4
+         are whole pixels at every usual scale, so the box rounds to the same size as without them. -->
+    <Style Selector="SelectableTextBlock.code">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="LineHeight" Value="19" />
+      <Setter Property="Margin" Value="-12,0,-12,-4" />
+      <Setter Property="Padding" Value="24,2,24,14" />
+    </Style>
+    <Style Selector="Button.copyCode">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+
+    <!-- The server dot in the top bar: grey until checked, then amber, green or red. -->
+    <Style Selector="Ellipse.status">
+      <Setter Property="Fill" Value="{StaticResource BbMuted}" />
+    </Style>
+    <Style Selector="Ellipse.status.checking">
+      <Setter Property="Fill" Value="{StaticResource BbAccent}" />
+    </Style>
+    <Style Selector="Ellipse.status.connected">
+      <Setter Property="Fill" Value="{StaticResource BbOk}" />
+    </Style>
+    <Style Selector="Ellipse.status.failed">
+      <Setter Property="Fill" Value="{StaticResource BbError}" />
+    </Style>
+
+    <Style Selector="TextBlock.h2">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Margin" Value="0,12,0,4" />
+    </Style>
+
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{StaticResource BbAccent}" />
+      <Setter Property="Foreground" Value="#111214" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#EDB866" />
+      <Setter Property="Foreground" Value="#111214" />
+    </Style>
+
+    <Style Selector="Button.ghost">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <!-- Every dropdown's arrow is the solid triangle History has (the user, 2026-10-24: "Arrows
+         need consistency"), not Fluent's thin chevron. Set in its template, the chevron is taken
+         over only by a style that depends on a state, as these two together. -->
+    <Style Selector="ComboBox:not(:disabled) /template/ PathIcon#DropDownGlyph, ComboBox:disabled /template/ PathIcon#DropDownGlyph">
+      <Setter Property="Data" Value="M7 10l5 5 5-5z" />
+      <Setter Property="Width" Value="10" />
+      <Setter Property="Height" Value="10" />
+    </Style>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{StaticResource BbSurface}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12,10" />
+    </Style>
+
+    <!-- Fluent gives an Expander a 48px minimum height and applies it to the body as well as
+         the header, so a one-line body (short Thoughts) sat on an empty band. Without it the
+         header is as tall as its chevron button and the body hugs its text. -->
+    <Style Selector="Expander">
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+
+    <!-- The History dropdown: a plain list on the surface colour. A row lights up under the
+         pointer and stays lit for the chat on screen; its trash button turns red under the pointer. -->
+    <Style Selector="FlyoutPresenter.history">
+      <Setter Property="Background" Value="{StaticResource BbSurface}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="MaxHeight" Value="440" />
+    </Style>
+    <Style Selector="Border.pastChat">
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.pastChat:pointerover, Border.pastChat.current">
+      <Setter Property="Background" Value="{StaticResource BbSurfaceRaised}" />
+    </Style>
+    <Style Selector="Button.pastChat">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="10,6,40,6" />
+    </Style>
+    <Style Selector="Button.pastChat /template/ ContentPresenter, Button.deleteChat /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <!-- The icon sits as far in from the row's right edge as the title does from its left. -->
+    <Style Selector="Button.deleteChat">
+      <Setter Property="Padding" Value="6" />
+      <Setter Property="Margin" Value="0,0,4,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.deleteChat PathIcon">
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+    </Style>
+    <Style Selector="Button.deleteChat:pointerover PathIcon">
+      <Setter Property="Foreground" Value="{StaticResource BbError}" />
+    </Style>
+
+    <!-- The message box: the card around it is the visible field, so the TextBox itself stays
+         flat in every state and the card's border shows focus instead. -->
+    <Style Selector="Border.composer:focus-within">
+      <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
+    </Style>
+    <Style Selector="TextBox.composer /template/ Border#PART_BorderElement,
+                     TextBox.composer:pointerover /template/ Border#PART_BorderElement,
+                     TextBox.composer:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+  </Application.Styles>
+</Application>

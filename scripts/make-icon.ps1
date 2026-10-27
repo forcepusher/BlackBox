@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-  Draws the BlackBox logo (a charcoal cube box with an overhanging lid) and writes the app icon.
+  Draws the Sloperator logo (a charcoal cube box with an overhanging lid) and writes the app icon.
 
 .DESCRIPTION
-  Writes src/BlackBox.App/Assets/blackbox.ico (16-256 px, PNG entries) and blackbox.png (256 px).
+  Writes src/Sloperator.App/Assets/sloperator.ico (16-256 px, PNG entries) and sloperator.png (256 px).
   Each size is drawn on its own, 4x oversampled, so the small ones stay crisp.
 
 .EXAMPLE
@@ -16,7 +16,7 @@ $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
 
 $root = Split-Path $PSScriptRoot
-$assets = Join-Path $root "src/BlackBox.App/Assets"
+$assets = Join-Path $root "src/Sloperator.App/Assets"
 $sizes = 256, 128, 64, 48, 40, 32, 24, 20, 16
 
 # The box in unit space: a cube with a lid band, seen from a little above and off to the left,
@@ -134,9 +134,9 @@ for ($i = 0; $i -lt $sizes.Count; $i++) {
 }
 foreach ($p in $pngs) { $w.Write([byte[]]$p) }
 $w.Flush()
-[IO.File]::WriteAllBytes((Join-Path $assets "blackbox.ico"), $ms.ToArray())
-$images[256].Save((Join-Path $assets "blackbox.png"), [System.Drawing.Imaging.ImageFormat]::Png)
-Write-Host "Wrote blackbox.ico ($($sizes -join ', ') px) and blackbox.png"
+[IO.File]::WriteAllBytes((Join-Path $assets "sloperator.ico"), $ms.ToArray())
+$images[256].Save((Join-Path $assets "sloperator.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+Write-Host "Wrote sloperator.ico ($($sizes -join ', ') px) and sloperator.png"
 
 if ($Preview) {
     # Each size at 1x and blown up 4x (nearest neighbour), on the app's dark surface, the taskbar and white.

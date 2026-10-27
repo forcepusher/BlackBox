@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Long-running test: BlackBox makes a 2048 game in Unity, play-tests it in the editor through the
+  Long-running test: Sloperator makes a 2048 game in Unity, play-tests it in the editor through the
   desktop, fixes it until it works, then makes a Windows build and checks that too.
   It drives your actual mouse and keyboard for as long as the run takes: don't touch the PC.
 
@@ -33,8 +33,8 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path "$re
   $env:DOTNET_ROOT = "$repo\.dev\dotnet"
   $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
 }
-$cli = Join-Path $repo "src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe"
-dotnet build (Join-Path $repo "src\BlackBox.Cli") -v q | Out-Null
+$cli = Join-Path $repo "src\Sloperator.Cli\bin\Debug\net10.0-windows\sloperator-cli.exe"
+dotnet build (Join-Path $repo "src\Sloperator.Cli") -v q | Out-Null
 # Earlier Unity runs move to .dev\unity2048-archive first, so the agent can't reuse their code.
 $archive = Join-Path $repo ".dev\unity2048-archive"
 Get-ChildItem (Join-Path $repo ".dev\game2048") -Directory -Filter *-unity -ErrorAction SilentlyContinue | ForEach-Object {

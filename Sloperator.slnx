@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Sloperator.App/Sloperator.App.csproj" />
+    <Project Path="src/Sloperator.Cli/Sloperator.Cli.csproj" />
+    <Project Path="src/Sloperator.Core/Sloperator.Core.csproj" />
+    <Project Path="src/Sloperator.Platform.Windows/Sloperator.Platform.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Sloperator.App.Tests/Sloperator.App.Tests.csproj" />
+    <Project Path="tests/Sloperator.ChatLab/Sloperator.ChatLab.csproj" />
+    <Project Path="tests/Sloperator.Core.Tests/Sloperator.Core.Tests.csproj" />
+    <Project Path="tests/Sloperator.McpTestServer/Sloperator.McpTestServer.csproj" />
+  </Folder>
+</Solution>

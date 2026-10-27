@@ -1,4 +1,4 @@
-# ComfyUI benchmark: BlackBox makes pictures, video, sound, music, speech and a 3D model with the
+# ComfyUI benchmark: Sloperator makes pictures, video, sound, music, speech and a 3D model with the
 # ComfyUI on this PC, each from one plain request, and the results are checked from the run's log
 # (the files the comfyui tool reported, their kind, length and sound). Uses the model in
 # Data/settings.json under the root. Runs land in .dev/comfy/<time>/, one log per task and a results.md.
@@ -11,7 +11,7 @@ param(
     [string[]]$Tasks = @('picture', 'img2img', 'named', 'video', 'sound', 'music', 'speech', 'model3d', 'combo'),
     [switch]$StopComfy,
     [int]$MinutesPerTask = 45,
-    # A portable root of its own (its Data/ holds settings.json); BlackBox's .dev/ by default.
+    # A portable root of its own (its Data/ holds settings.json); Sloperator's .dev/ by default.
     [string]$Root
 )
 $ErrorActionPreference = 'Stop'
@@ -21,8 +21,8 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path "$re
     $env:DOTNET_ROOT = "$repo\.dev\dotnet"
     $env:PATH = "$env:DOTNET_ROOT;$env:PATH"
 }
-$cli = Join-Path $repo 'src\BlackBox.Cli\bin\Debug\net10.0-windows\blackbox-cli.exe'
-dotnet build (Join-Path $repo 'src\BlackBox.Cli\BlackBox.Cli.csproj') -v q -nologo | Out-Null
+$cli = Join-Path $repo 'src\Sloperator.Cli\bin\Debug\net10.0-windows\sloperator-cli.exe'
+dotnet build (Join-Path $repo 'src\Sloperator.Cli\Sloperator.Cli.csproj') -v q -nologo | Out-Null
 if (-not (Test-Path $cli)) { throw "The CLI didn't build: $cli" }
 $out = Join-Path $repo (".dev\comfy\" + (Get-Date -Format 'yyyyMMdd-HHmm'))
 New-Item -ItemType Directory -Force $out | Out-Null
@@ -80,7 +80,7 @@ foreach ($name in $Tasks) {
     Write-Host "== ${name}: $($t.Prompt)"
     $log = Join-Path $out "$name.log"
     $start = Get-Date
-    # Waits for BlackBox only: Start-Process -Wait would also wait for a ComfyUI it starts.
+    # Waits for Sloperator only: Start-Process -Wait would also wait for a ComfyUI it starts.
     $cliArgs = @('--yes', '--save-shots', "`"$(Join-Path $out "$name-shots")`"")
     if ($Root) { $cliArgs += @('--root', "`"$((Resolve-Path $Root).Path)`"") }
     if ($t.Attach) { $cliArgs += @('--attach', "`"$($t.Attach)`"") }
