@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Saved chats keep the pictures the model was shown (screenshots, zoomed crops) in a folder beside
+  the chat, `Data/chats/<chat id>/`. Opening a chat again gives the model its pictures back, also
+  after copying the chat and its folder to another computer.
 - The blob beside **Send** dances while a prompt runs, and goes back to the still logo when it ends.
   It shows once a chat has started; the start screen keeps its own logo. It dances on the beat of
   120 BPM music.

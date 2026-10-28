@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
 
 namespace Sloperator.Core.Llm;
@@ -11,9 +12,15 @@ public static class ChatRole
 }
 
 /// <summary>A piece of multimodal message content (text or an inline image).</summary>
-public sealed record ContentPart(string? Text = null, byte[]? ImageBytes = null, string ImageMime = "image/jpeg")
+public sealed record ContentPart(string? Text = null, [property: JsonIgnore] byte[]? ImageBytes = null, string ImageMime = "image/jpeg")
 {
     public bool IsImage => ImageBytes is not null;
+
+    /// <summary>
+    /// For a picture in a saved chat: its file in the chat's folder (see <see cref="Chats.ChatPictures"/>),
+    /// which the bytes are read back from when the chat is opened again.
+    /// </summary>
+    public string? File { get; init; }
 
     public static ContentPart FromText(string text) => new(Text: text);
 
