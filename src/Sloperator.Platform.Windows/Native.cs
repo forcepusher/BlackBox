@@ -79,6 +79,18 @@ internal static partial class Native
     [LibraryImport("user32.dll", EntryPoint = "MapVirtualKeyW")]
     public static partial uint MapVirtualKey(uint uCode, uint uMapType);
 
+    [LibraryImport("user32.dll", EntryPoint = "VkKeyScanExW")]
+    public static partial short VkKeyScanEx(ushort ch, nint dwhkl);
+
+    [LibraryImport("user32.dll", EntryPoint = "MapVirtualKeyExW")]
+    public static partial uint MapVirtualKeyEx(uint uCode, uint uMapType, nint dwhkl);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint GetKeyboardLayout(uint idThread);
+
+    [LibraryImport("user32.dll")]
+    public static partial short GetKeyState(int nVirtKey);
+
     // ---- user32: screen / DPI ---------------------------------------------------------
 
     public const int SM_CXSCREEN = 0;

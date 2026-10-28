@@ -84,6 +84,9 @@ internal sealed class WindowsInputController : IInputController
 
     public void TypeText(string text)
     {
+        // The layout of the window being typed into, which may not be Sloperator's.
+        var layout = GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), out _));
+        var capsLock = (GetKeyState(0x14) & 1) != 0;
         var count = 0;
         foreach (var ch in text)
         {
@@ -98,13 +101,43 @@ internal sealed class WindowsInputController : IInputController
                     TapVk(0x09);
                     break;
                 default:
-                    // Unicode injection types the exact character regardless of keyboard layout.
-                    Send(Key(0, ch, KEYEVENTF_UNICODE), Key(0, ch, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP));
+                    Send(CharInputs(ch, layout, capsLock));
                     break;
             }
             // Small pauses keep slower apps (and remote sessions) from dropping characters.
             if (++count % 16 == 0) Thread.Sleep(10);
         }
+    }
+
+    /// <summary>
+    /// The presses that type <paramref name="ch"/>: the key that makes it on the keyboard
+    /// <paramref name="layout"/>, with Shift or AltGr as it needs, as a person types it; Unicode
+    /// injection (the character itself, whatever the layout) when no key makes it. Blender 5.2's text
+    /// fields take no Unicode injection at all: all 1,080 characters of a type_text went nowhere, while
+    /// key presses landed (measured 2026-10-28).
+    /// </summary>
+    internal static INPUT[] CharInputs(char ch, nint layout, bool capsLock)
+    {
+        var scan = VkKeyScanEx(ch, layout);
+        var vk = (ushort)(scan & 0xFF);
+        var shift = (scan >> 8) & 1;
+        var altGr = ((scan >> 8) & 6) == 6;
+        // Ctrl or Alt alone don't type a character; nor does a key that isn't there (-1).
+        if (scan == -1 || ((scan >> 8) & 6) is 2 or 4 || (scan >> 8) > 7)
+            return [Key(0, ch, KEYEVENTF_UNICODE), Key(0, ch, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP)];
+        // With Caps Lock on, Shift gives a letter's other case.
+        if (capsLock && char.IsLetter(ch))
+            shift ^= 1;
+        var held = new List<ushort>();
+        if (shift == 1) held.Add(0x10);
+        if (altGr) { held.Add(0x11); held.Add(0x12); }
+        var inputs = new List<INPUT>();
+        inputs.AddRange(held.Select(k => VkInput(k, up: false)));
+        var code = (ushort)MapVirtualKeyEx(vk, 0, layout);
+        inputs.Add(Key(vk, code, 0));
+        inputs.Add(Key(vk, code, KEYEVENTF_KEYUP));
+        inputs.AddRange(Enumerable.Reverse(held).Select(k => VkInput(k, up: true)));
+        return inputs.ToArray();
     }
 
     public void PressKeys(IReadOnlyList<string> keys)

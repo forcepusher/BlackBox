@@ -196,6 +196,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - A broken glTF whose nodes loop back on themselves opens at once instead of after a pause.
+- Typing works in Blender's text fields: the agent types by pressing the keys, as a person does,
+  where before Blender dropped every character it typed.
+- The click and key log no longer feeds the app being worked in a stream of mouse moves while it
+  shows: with the pointer still, a text box got 17 a second as the agent typed into it.
 - Clicks with DeepSeek V4.1 Flash land where they should again: the look that aims each click now
   says how big the screenshot is, so DeepSeek answers in pixels instead of its own 0-1000 grid, which
   moved clicks far to the left.

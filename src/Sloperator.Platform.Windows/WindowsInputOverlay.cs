@@ -227,13 +227,26 @@ internal sealed class WindowsInputOverlay : IInputOverlay
         (byte)(from.Green + (to.Green - from.Green) * t),
         (byte)(from.Blue + (to.Blue - from.Blue) * t));
 
+    /// <summary>Where each window was last placed, so a frame that only redraws it doesn't place it again.</summary>
+    private readonly Dictionary<nint, (int X, int Y, int Width, int Height)> _placed = [];
+
     /// <summary>
     /// Moves the window, sets its overall opacity and draws into it. Pixels left in the key colour
     /// are see-through. Layered windows keep what is drawn into them, so no WM_PAINT is needed.
     /// </summary>
-    private static void Paint(nint hwnd, int x, int y, int width, int height, byte opacity, Action<SKCanvas> draw)
+    /// <remarks>
+    /// The window is placed only when it shows or moves, not on every frame: each SetWindowPos makes
+    /// Windows send a mouse move to the window under the pointer, wherever the overlay is, and at
+    /// 25 frames a second the app being typed into got a stream of them for as long as the log showed
+    /// (17 a second into a text box, measured 2026-10-28), with the pointer still.
+    /// </remarks>
+    private void Paint(nint hwnd, int x, int y, int width, int height, byte opacity, Action<SKCanvas> draw)
     {
-        SetWindowPos(hwnd, HWND_TOPMOST, x, y, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        if (!IsWindowVisible(hwnd) || !_placed.TryGetValue(hwnd, out var at) || at != (x, y, width, height))
+        {
+            SetWindowPos(hwnd, HWND_TOPMOST, x, y, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            _placed[hwnd] = (x, y, width, height);
+        }
         SetLayeredWindowAttributes(hwnd, ColorKey, opacity, LWA_COLORKEY | LWA_ALPHA);
         var target = GetDC(hwnd);
         var memory = CreateCompatibleDC(target);

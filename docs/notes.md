@@ -1970,7 +1970,7 @@ prints the traceback and exits with 0.
 | `screenshot` | Captures a screen scaled down to fit the max screenshot size, on the 32px vision grid; `screen=N` looks at another monitor |
 | `mouse_click` | Clicks a named target, with `which` saying what tells it apart from look-alikes, where a fresh look at the screen finds it (see below); `modifiers` holds keys through the click, as in Ctrl+click to add to a selection or Shift+click to select a range |
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
-| `type_text`, `press_keys` | Unicode typing and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
+| `type_text`, `press_keys` | Typing as key presses (see below) and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
 | `index_folder` | Indexes a folder, as Cursor does a codebase: an overview of the project (its kind, README, folders and what its main files define), and with `query` a search of its files by names or by what the code does (see below) |
 | `read_file`, `write_file`, `edit_file`, `list_directory` | File work; `read_file` also reads PDF, Word, Excel and PowerPoint files as text and shows pictures, videos, sounds and 3D models to the model; `write_file` makes documents from Markdown and `edit_file` changes them in place (see Documents); `edit_file` keeps a file's encoding and Windows line endings and can replace every occurrence (`replace_all`); with `host` they work on an SSH server instead (see below) |
@@ -1988,6 +1988,16 @@ prints the traceback and exits with 0.
 Models often fumble tool-call syntax, so Sloperator repairs calls on the fly: Qwen XML, Gemma 4 and
 JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…) and misnamed
 arguments (`coordinate: [x, y]`) are all accepted.
+
+`type_text` presses the key that makes each character on the keyboard layout of the window being
+typed into, holding Shift or AltGr (Ctrl+Alt) as it needs and minding Caps Lock, as a person types.
+Only a character no key makes (an accent that takes a dead key, another script, an emoji) goes as
+Unicode injection (KEYEVENTF_UNICODE). Until 28 October 2026 everything went that way, and Blender
+5.2's text fields take none of it: driving Sloperator against the Extensions search, Blender's own
+event log (`--debug-events`) showed not one event for 1,080 typed characters, while the click and the
+keys of a `press_keys` that followed landed in the field, which kept editing all along. Typed as key
+presses, the same text arrived exactly, punctuation and capitals included; into a WinForms text box
+with Caps Lock on too, and accented, Japanese and emoji text through the fallback.
 
 A reply without tool calls ends the run, whatever it says: Sloperator doesn't guess whether it looks
 finished. Only two kinds of message make the model answer again on its own, both about something
@@ -2962,7 +2972,13 @@ outline, so the yellow still shows on a white page. It widens steadily from 20 t
 across over its 3 seconds and fades over the last one (until 28 October 2026 it was a thin pink
 ring 64 px at most, gone in 1.2 seconds, easy to miss; for a day it sprang out in 0.4 seconds and
 held, which lost the widening the user liked). Its edges are drawn without antialiasing,
-since blended pixels against the window's magenta colour key would show as a pink fringe.
+since blended pixels against the window's magenta colour key would show as a pink fringe. Both
+windows are placed (SetWindowPos) only when they show or move, and only redrawn on the other frames:
+each SetWindowPos makes Windows send a mouse move to the window under the pointer, wherever the
+overlay is, so placing them on every frame (25 a second) sent the app being typed into some 17
+mouse moves a second for as long as the log showed, with the pointer still (measured on 28 October
+2026 with a logging text box in another app, against a scripted stand-in model; after the change, none).
+Focus never left that text box, with Sloperator beside it or over the click point.
 
 To change or add to a task while it runs, type in the box at the bottom and press Enter. The agent
 reads the message before its next step, and a `wait` it is in ends for it. While you type there,
