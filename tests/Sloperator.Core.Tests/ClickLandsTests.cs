@@ -14,7 +14,7 @@ namespace Sloperator.Core.Tests;
 /// Opt-in (set BB_DESKTOP_TESTS=1, uses the real mouse): what the mouse does lands on what the model
 /// aimed at in its screenshot, whatever the display scaling. A small red square is found in
 /// Sloperator's own screenshot, as a model finds a button, and moved over, clicked, double-clicked,
-/// dragged from and clicked by name (aimed again by a fresh look), in screenshot pixels and on the
+/// and dragged from, in screenshot pixels and on the
 /// 0-1000 grid, with the screenshot scaled down, and from a thread left DPI-unaware. Screenshots, screens and the cursor must all be in
 /// the same pixels: on a 1920x1200 screen at 125%, coordinates read off a 1536x960 picture landed every
 /// click 25% too far right and down (2026-10-28). Before clicking, the spot is checked to be the
@@ -72,29 +72,16 @@ public class ClickLandsTests
         await new MouseMoveTool().ExecuteAsync(new JsonObject { ["x"] = x, ["y"] = y }, ctx, CancellationToken.None);
         Assert.True(square.Hovered.Wait(TimeSpan.FromSeconds(2)), "mouse_move didn't come over the square");
 
-        await new MouseClickTool().ExecuteAsync(new JsonObject { ["target"] = "", ["which"] = MouseClickTool.OnlyOne, ["x"] = x, ["y"] = y }, ctx, CancellationToken.None);
+        await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = x, ["y"] = y }, ctx, CancellationToken.None);
         Assert.True(square.WaitForClicks(1), "mouse_click missed the square");
 
-        await new MouseClickTool().ExecuteAsync(new JsonObject { ["target"] = "", ["which"] = MouseClickTool.OnlyOne, ["x"] = x, ["y"] = y, ["clicks"] = 2 }, ctx, CancellationToken.None);
+        await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = x, ["y"] = y, ["clicks"] = 2 }, ctx, CancellationToken.None);
         Assert.True(square.DoubleClicked.Wait(TimeSpan.FromSeconds(2)), "the double click missed the square");
 
         var clicks = square.Clicks;
         var away = grid is { } g2 ? (x - g2 / 20.0, y) : (x - bitmap.Width / 20.0, y);
         await new MouseDragTool().ExecuteAsync(new JsonObject { ["x"] = x, ["y"] = y, ["to_x"] = away.Item1, ["to_y"] = away.Item2 }, ctx, CancellationToken.None);
         Assert.True(square.WaitForClicks(clicks + 1), "the drag didn't start on the square");
-
-        // A named click is aimed again by a fresh look at the screen, in a cropped part of it: aimed
-        // a little off, it must still land on what the look found.
-        clicks = square.Clicks;
-        ctx.Locate = (jpeg, part, target, ct) =>
-        {
-            using var seen = SKBitmap.Decode(jpeg);
-            var (px, py) = RedCentre(seen);
-            return Task.FromResult<(double X, double Y)?>((px * part.ModelWidth / seen.Width, py * part.ModelHeight / seen.Height));
-        };
-        var off = grid is { } g3 ? (x + g3 / 40.0, y + g3 / 40.0) : (x + bitmap.Width / 40.0, y + bitmap.Height / 40.0);
-        await new MouseClickTool().ExecuteAsync(new JsonObject { ["target"] = "Red square", ["which"] = MouseClickTool.OnlyOne, ["x"] = off.Item1, ["y"] = off.Item2 }, ctx, CancellationToken.None);
-        Assert.True(square.WaitForClicks(clicks + 1), "the click the fresh look aimed missed the square");
     }
 
     private static bool OnSquare((int X, int Y) point, RedSquare square)

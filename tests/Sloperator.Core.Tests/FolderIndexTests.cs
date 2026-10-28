@@ -61,7 +61,7 @@ public class FolderIndexTests : IDisposable
     internal static readonly (string Query, string File)[] RepositoryQuestions =
     [
         ("where the settings are saved to disk", "AppSettings.cs"),
-        ("how a click is aimed with a fresh look at the screen", "FreshLook.cs"),
+        ("a sharp enlarged picture of part of the screen with rulers", "ZoomTool.cs"),
         ("Pause/Break stops the agent", "WindowsStopKey.cs"),
         ("handoff note when the context is full", "AgentSession.Handoff.cs"),
         ("second start hands off to the running instance over a named pipe", "SingleInstance.cs"),

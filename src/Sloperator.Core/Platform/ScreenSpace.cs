@@ -24,37 +24,9 @@ public sealed class ScreenSpace
     {
         Screen = screen;
         Grid = grid;
-        _scale = box is { } b ? Math.Min(1.0, Math.Min((double)b.Width / screen.Width, (double)b.Height / screen.Height)) : 1.0;
-        ImageWidth = Snap(screen.Width * _scale);
-        ImageHeight = Snap(screen.Height * _scale);
-    }
-
-    private readonly double _scale;
-
-    /// <summary>
-    /// The space of a part of this screen (in screen pixels), shown at the same scale: a fresh look
-    /// at the part around a click reads a quarter of the screenshot (see <see cref="Around"/>).
-    /// Its x/y map to screen pixels like this space's do.
-    /// </summary>
-    public ScreenSpace Part(ScreenRect part) =>
-        new(part, ((int)Math.Round(part.Width * _scale), (int)Math.Round(part.Height * _scale)), Grid);
-
-    /// <summary>The half as wide and half as high part of the screen centred on a point (screen pixels), kept inside the screen at its edges.</summary>
-    public ScreenRect Around(int x, int y)
-    {
-        var (width, height) = (Math.Max(1, Screen.Width / 2), Math.Max(1, Screen.Height / 2));
-        return new(Math.Clamp(x - width / 2, Screen.X, Screen.X + Screen.Width - width),
-            Math.Clamp(y - height / 2, Screen.Y, Screen.Y + Screen.Height - height), width, height);
-    }
-
-    /// <summary>
-    /// The strip of the screen as wide as the screen and <paramref name="share"/> of its height, centred
-    /// on a point's height: at a quarter as many pixels as <see cref="Around"/>, with the whole row the point is in.
-    /// </summary>
-    public ScreenRect Row(int y, double share = 0.25)
-    {
-        var height = Math.Clamp((int)(Screen.Height * share), 1, Screen.Height);
-        return new(Screen.X, Math.Clamp(y - height / 2, Screen.Y, Screen.Y + Screen.Height - height), Screen.Width, height);
+        var scale = box is { } b ? Math.Min(1.0, Math.Min((double)b.Width / screen.Width, (double)b.Height / screen.Height)) : 1.0;
+        ImageWidth = Snap(screen.Width * scale);
+        ImageHeight = Snap(screen.Height * scale);
     }
 
     public ScreenRect Screen { get; }
@@ -69,7 +41,7 @@ public sealed class ScreenSpace
     private static int Snap(double size) => Math.Max(Patch, (int)Math.Round(size / Patch) * Patch);
 
     /// <summary>
-    /// How the model's x/y relate to the screenshot, for the system prompt and a fresh look. Pixels
+    /// How the model's x/y relate to the screenshot, for the system prompt. Pixels
     /// come with the image's size: told only "pixels of the screenshot", DeepSeek V4.1 Flash answered
     /// fresh looks on a 0-1000 grid, so on a 2560-wide screen every x it found landed at 1000/2560
     /// of the target's (the Hierarchy tab at x 1368 came back as 551; 8 of 8 Unity targets so).

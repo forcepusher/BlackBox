@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- The agent can zoom in on part of the screen: a sharp, enlarged picture of it with rulers in
+  screenshot coordinates, to aim at small things such as a list's rows or a toolbar's buttons.
 - The blob beside **Send** dances while a prompt runs, and goes back to the still logo when it ends.
   It shows once a chat has started; the start screen keeps its own logo. It dances on the beat of
   120 BPM music.
@@ -159,8 +161,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   git's `@@ -96,8 +96,9 @@` line. Clicking it still picks the block.
 - The +3 and -2 counts in File changes (the file list, each file's header and the summary at the top)
   show added lines in green and removed lines in red.
-- The agent says what tells a click's target apart from look-alikes (the row, card or dialog it is
-  in), so it much less often clicks the same button in the wrong row of a list.
+- Clicks go exactly where the agent aims. The fresh look that aimed every click again, in a request of
+  its own, is gone: it re-guessed from one picture without what the agent knew, and moved DeepSeek's
+  well-aimed clicks a row off or into another panel. The agent zooms in instead when it isn't sure.
 - On Auto, Sloperator takes a server that doesn't say how large its context is to have 1M tokens (it
   was 100k), and uses all of a hosted service's 1M, Kilo's and OpenRouter's too (it used 100k of it).
 - When a server refuses a conversation as too long without naming a smaller size (Kilo names 1M,
@@ -200,9 +203,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where before Blender dropped every character it typed.
 - The click and key log no longer feeds the app being worked in a stream of mouse moves while it
   shows: with the pointer still, a text box got 17 a second as the agent typed into it.
-- Clicks with DeepSeek V4.1 Flash land where they should again: the look that aims each click now
-  says how big the screenshot is, so DeepSeek answers in pixels instead of its own 0-1000 grid, which
-  moved clicks far to the left.
 - A server that takes only so many pictures in one request (munito takes 8) no longer ends a long run
   with "too many image inputs": the screenshots before the latest are left out and the run goes on.
   A request too large for the server (Kilo takes 20 MB) does the same, rather than resetting the
