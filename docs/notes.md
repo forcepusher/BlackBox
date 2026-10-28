@@ -1835,6 +1835,20 @@ instead; a reply cut off by the context limit, or a server's "context length exc
 triggers the same reset and a retry. A reply cut off by a reply-length limit set on the server
 (the token counts show the context isn't full) is kept, and the model is asked to go on.
 
+A context size picked during a run counts from the run's next step (`AgentSession.UseContextSize`):
+lowered below what the conversation fills, it resets the context there. The run used to keep the
+size it started with, and lowering it to have the context reset did nothing until the next message.
+The reset can also be asked for. **Summarize context** in the chat's right-click menu (one menu for
+the whole log, Copy for selected text above it; a picture keeps its own) resets it at once with no
+run going, or before the model's next step during one, or before the run ends when it came as the
+model wrote its final answer. The model has `reset_context` for when the user tells it to hand off
+or start fresh: told "Do a handoff to reset the context" (chat 20261028-032542), it had no way to,
+wrote a handoff file in the scratch folder and went on in the same full context. The tool's reset
+comes before the next step; right after a reset it is refused (fewer than two replies since the
+note), since the user's message that asked for it is kept and asks again. A note refused on the
+whole conversation (a chat opened again with more screenshots than munito's 8) is asked for once
+more on the conversation's latest part, without pictures, before the record of the last steps.
+
 The system prompt holds the date but not the time, so it stays the same for every message of a
 chat and the server never has to read the whole conversation again because of it.
 
