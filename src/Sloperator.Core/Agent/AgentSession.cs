@@ -482,12 +482,23 @@ public sealed partial class AgentSession(
                     }
                     var result = await RunToolAsync(call, observer, ct, calls.Token).ConfigureAwait(false);
                     // A call Interrupt stopped failed for no fault of the model's.
+                    // Each note the model is sent shows in the chat as a line of its own, as the
+                    // user asked: what Sloperator tells the model is no secret.
                     if (!calls.Interrupted(ct) && loops.Check(call, result) is { } warning)
+                    {
                         notes.Add("[Sloperator] " + warning);
+                        observer.OnNotice("Told the model it seems to be going in circles and should try another way.");
+                    }
                     if (!calls.Interrupted(ct) && guesswork?.Check(ToolCallRepair.ResolveTool(call.Name, tools), result, call.Arguments) is { } lookItUp)
+                    {
                         notes.Add(lookItUp);
+                        observer.OnNotice("Asked the model to look this up with web_search before its next try.");
+                    }
                     if (tools.Find("index_folder") is not null && _projects.Check(ToolCallRepair.ResolveTool(call.Name, tools), call.Arguments, result, toolContext) is { } indexIt)
+                    {
                         notes.Add(indexIt);
+                        observer.OnNotice($"Asked the model to index {ProjectNudge.RootIn(indexIt)} before going through its files.");
+                    }
                     // A model that can't see gets no picture (an MCP tool's, say): its server
                     // refused that request and every one after it, since the conversation keeps it.
                     if (result.Image is not null && !toolContext.SeesImages)

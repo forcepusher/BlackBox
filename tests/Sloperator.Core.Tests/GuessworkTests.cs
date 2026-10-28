@@ -154,7 +154,8 @@ public class GuessworkTests
             var session = new AgentSession(new OpenAiChatClient(new HttpClient(server), "http://test", null), new ChatRequestOptions(),
                 ToolRegistry.CreateDefault(includeScreenTools: false, includeWebTools: web), ctx, "sys");
 
-            await session.RunAsync("read it", new RecordingObserver(), CancellationToken.None);
+            var observer = new RecordingObserver();
+            await session.RunAsync("read it", observer, CancellationToken.None);
 
             // Said after the second result, in a message of its own.
             var r1 = session.History.FindIndex(m => m.ToolCallId == "r1");
@@ -162,6 +163,8 @@ public class GuessworkTests
             Assert.DoesNotContain(session.History.Skip(r1).Take(r2 - r1), m => m.Content?.Contains("web_search") == true);
             Assert.Equal(web, session.History[r2 + 1].Role == ChatRole.User && session.History[r2 + 1].Content!.Contains("look it up with web_search"));
             Assert.DoesNotContain(session.History, m => m.Role == ChatRole.Tool && m.Content!.Contains("web_search"));
+            // The chat shows a line where the note was sent.
+            Assert.Equal(web, observer.Notices.Contains("Asked the model to look this up with web_search before its next try."));
         }
     }
 

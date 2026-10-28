@@ -29,6 +29,14 @@ internal sealed partial class ProjectNudge
         "tells you what is in it and what its files define, and index_folder with query= finds where anything is in it " +
         "far faster than listing folders and opening files one by one.";
 
+    /// <summary>The project a <see cref="Note"/> is about, for the line the chat shows.</summary>
+    internal static string RootIn(string note)
+    {
+        const string start = "[Sloperator] ";
+        var end = note.IndexOf(" is a project (", StringComparison.Ordinal);
+        return note.StartsWith(start, StringComparison.Ordinal) && end > start.Length ? note[start.Length..end] : "the project";
+    }
+
     /// <summary>After a context reset the overview is gone from the conversation, so a project is worth indexing again.</summary>
     public void Forget()
     {
