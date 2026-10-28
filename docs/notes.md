@@ -2490,6 +2490,11 @@ single-number gutter showed where kept lines sat before. The model still gets th
 (the user, 2026-10-28): each is split into its added, removed and other ("binary", "no lines") parts
 (`DiffFileItem.AddedCount`, `RemovedCount`, `OtherCount`; `SummaryFiles`, `SummaryAdded`, `SummaryRemoved`), shown as
 Runs with `Run.addedCount` and `Run.removedCount`.
+**The file list is one line a file** (the user, 2026-10-29, so a long list fits): the name (13 px,
+cut short at its start) and its counts (12 px muted) at the right, padding 8,4. A row is 24 px (30 at
+125%) where the two-line row (name, then "modified · +3 -2") was 43; with 24 files the panel showed 19
+before and all 24 after, room for about 40. The status word went to the tooltip under the full path
+(`DiffFileItem.Tip`): added and deleted already show as the name's green and red, renamed as "a -> b".
 **Watch**: each refresh compares the new diff with the one shown (`Fresh`: added and
 removed lines counted by file and text, as an edit moves every number below it) and marks what is new
 `IsFresh`, which lights its row (a yellow layer, fading over 2 s after 4 s, `LitFor`; 1.5 s and 1 s
