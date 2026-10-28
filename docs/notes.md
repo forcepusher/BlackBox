@@ -2405,14 +2405,18 @@ scroll the diff (`Reselecting`). With no file or line picked, a message goes wit
 Checked in the app on 2026-10-28 with a stand-in model: opened by the agent's edit with nothing
 selected and no card, a click selects the file and puts its card in the box, a second click takes
 both away, and of two messages only the one sent with the file carried the panel's context.
-Lines and a file are never picked at once (the user, 2026-10-28: with lines picked, the file they
-came from could be selected or not, which meant nothing): picking lines lets go of the file, and with
-lines picked a click on a file only goes to it (its list's selection is put back after the click,
-`SyncSections` posted), so lines in another file can still be Ctrl+clicked; after Esc a click selects
-it. Checked in the app the same day: line, then file (lines kept, file not selected), Esc then file
-(selected), file then line (file let go, the line's card alone); and with three files changed, click,
-Ctrl+click on and off, Shift+click a run, a second click on the only one, each with the list's
-selection (UI Automation) and the box's cards agreeing, and a message sent with two told the model both.
+**A file or its lines** (the user, 2026-10-28, after a first take that made them exclude each other):
+a file with lines picked in it is about those lines and shows grey in the list, selected or not
+(`DiffFileItem.HasPickedLines`, set in `OnPicked`; `ListBoxItem.lines`, set from `OnFileContainer`);
+with its lines let go it is yellow and whole again if it is selected. Files and lines mix across files:
+the box has a card for each file's lines and each file selected whole (`WholeFiles`), Stage, Unstage and
+Discard take both ("2 lines in 2 files · 1 whole file"), and the model is told the whole files with
+their diffs and then the lines, in one 300-line budget. `DiffFileItem` is a class now, not a record, to
+tell of that change. Checked in the app the same day with three files: a and c selected, a line of a
+picked (a grey, c yellow, cards "Whole file · c.py" and "Line 99 · a.py"), that line Ctrl+clicked off
+(a yellow again), lines in a and b (both grey, b not selected), and the message sent told the model c
+whole and the two lines. Before that, with click, Ctrl+click on and off, Shift+click a run and a second
+click on the only one, the list's selection (UI Automation) and the box's cards agreed.
 **Wrap and Watch** (the user, 2026-10-26), toggles in the bar between the summary and the ×, shown
 once a file changed, both on by default and kept in settings.json under `panels` (`wrapDiff`,
 `watchChanges`; `PanelSettings`). **Wrap**: the diff's code column is `*` (under a sideways scroll it

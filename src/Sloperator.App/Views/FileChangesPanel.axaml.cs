@@ -237,6 +237,20 @@ public partial class FileChangesPanel : UserControl
         Dispatcher.UIThread.Post(() => DiffList.ScrollIntoView(row), DispatcherPriority.Background);
     }
 
+    /// <summary>A file's row in the list: ListBoxItem.lines (grey) while some of its lines are picked.</summary>
+    private void OnFileContainer(object? sender, ContainerPreparedEventArgs e)
+    {
+        if (e.Container is not ListBoxItem item || item.DataContext is not DiffFileItem file)
+            return;
+        item.Classes.Set("lines", file.HasPickedLines);
+        // Each list is made again with new files on a refresh, so a row holds one file for its life.
+        file.PropertyChanged += (_, a) =>
+        {
+            if (a.PropertyName == nameof(DiffFileItem.HasPickedLines) && item.DataContext == file)
+                item.Classes.Set("lines", file.HasPickedLines);
+        };
+    }
+
     private void OnFilePicked(object? sender, SelectionChangedEventArgs e)
     {
         // To the file just clicked in: the last one added, Shift+click adding a run.

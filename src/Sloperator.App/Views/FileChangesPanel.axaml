@@ -107,6 +107,13 @@
       <Setter Property="Padding" Value="10,5" />
       <Setter Property="MinHeight" Value="0" />
     </Style>
+    <!-- A file some of whose lines are picked: grey, selected or not, as only those lines are (the
+         user, 2026-10-28); yellow again once they are let go, if it is selected. -->
+    <Style Selector="ListBox.files ListBoxItem.lines /template/ ContentPresenter#PART_ContentPresenter,
+                     ListBox.files ListBoxItem.lines:selected /template/ ContentPresenter#PART_ContentPresenter,
+                     ListBox.files ListBoxItem.lines:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SystemControlHighlightListMediumBrush}" />
+    </Style>
 <!-- Stage, Unstage and Discard over the diff. -->
     <Style Selector="Button.act">
       <Setter Property="Height" Value="28" />
@@ -195,7 +202,7 @@
                   </StackPanel>
                 </Button>
                 <ListBox Classes="files" ItemsSource="{Binding Files}" Selection="{Binding Selection}" SelectionMode="Multiple" IsVisible="{Binding IsExpanded}"
-                         SelectionChanged="OnFilePicked" ContextRequested="OnFileMenu" AutomationProperties.Name="{Binding ListName}"
+                         SelectionChanged="OnFilePicked" ContainerPrepared="OnFileContainer" ContextRequested="OnFileMenu" AutomationProperties.Name="{Binding ListName}"
                          ScrollViewer.VerticalScrollBarVisibility="Disabled">
                   <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:DiffFileItem">
