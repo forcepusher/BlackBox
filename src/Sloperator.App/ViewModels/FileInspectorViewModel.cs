@@ -59,7 +59,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
 
     /// <summary>The file shown; null before one is.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FileName), nameof(HasFile), nameof(Whole))]
+    [NotifyPropertyChangedFor(nameof(FileName), nameof(HasFile))]
     private string? _path;
 
     public string FileName => System.IO.Path.GetFileName(Path ?? "");
@@ -77,12 +77,12 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
     public bool HasMessage => Message is not null;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Whole), nameof(WholeTip), nameof(ShowsMarkdown), nameof(CanFreeze))]
+    [NotifyPropertyChangedFor(nameof(ShowsMarkdown), nameof(CanFreeze))]
     private string? _markdown;
 
     /// <summary>Text in a fixed-width font: code, a log, a document's text where nothing on this PC previews it.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Whole), nameof(WholeTip), nameof(ShowsText), nameof(CanFreeze))]
+    [NotifyPropertyChangedFor(nameof(ShowsText), nameof(CanFreeze))]
     private string? _text;
 
     /// <summary>What <see cref="Markdown"/> or <see cref="Text"/> is: the file as written (its lines are the file's), a CSV drawn as a table, or a document's text only.</summary>
@@ -91,7 +91,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
     private Shown _shown;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Whole), nameof(WholeTip), nameof(CanZoom))]
+    [NotifyPropertyChangedFor(nameof(CanZoom))]
     private Bitmap? _picture;
 
     /// <summary>The picture file's own size, which an area on it is told in.</summary>
@@ -99,29 +99,29 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
 
     /// <summary>A video, in a player of the panel's own: frame by frame, zoomed, an area marked on a frame.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Whole), nameof(WholeTip), nameof(CanZoom))]
+    [NotifyPropertyChangedFor(nameof(CanZoom))]
     private InspectorVideoViewModel? _video;
 
     /// <summary>An animation, frame by frame as a video is.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Whole), nameof(WholeTip), nameof(CanZoom))]
+    [NotifyPropertyChangedFor(nameof(CanZoom))]
     private InspectorAnimationViewModel? _animation;
 
     /// <summary>A sound, as its waveform.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Whole), nameof(WholeTip), nameof(CanZoom), nameof(MaxZoom))]
+    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(MaxZoom))]
     private InspectorSoundViewModel? _sound;
 
     /// <summary>A 3D model, to turn about.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Whole), nameof(WholeTip), nameof(CanZoom), nameof(MaxZoom), nameof(CanFreeze), nameof(ShowsModel))]
+    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(MaxZoom), nameof(CanFreeze), nameof(ShowsModel))]
     private InspectorModelViewModel? _model;
 
     public bool ShowsModel => Model is not null && Frozen is null;
 
     /// <summary>A PDF's pages, drawn by PDFium as they come on screen; null for any other file.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Whole), nameof(WholeTip), nameof(CanZoom))]
+    [NotifyPropertyChangedFor(nameof(CanZoom))]
     private IReadOnlyList<PdfPageItem>? _pages;
 
     /// <summary>The PDF the pages are drawn from, open while it is shown.</summary>
@@ -129,7 +129,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
 
     /// <summary>The file for Windows' previewer to draw (see <see cref="Views.ShellPreviewHost"/>).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsShell), nameof(WholeTip), nameof(CanFreeze))]
+    [NotifyPropertyChangedFor(nameof(ShowsShell), nameof(CanFreeze))]
     private string? _shellPath;
 
     /// <summary>What a load under way is: one started after it wins.</summary>
@@ -384,19 +384,6 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
         }
         Model = null;
     }
-
-    /// <summary>
-    /// Over the chat's box while nothing is selected: the file, as a selection is shown, so the user
-    /// sees what a message is about ("notes.md", "whole document").
-    /// </summary>
-    public (string Title, string Details)? Whole => Path is null ? null : (FileName, Markdown is not null || Text is not null && _shown != Shown.Hex || Pages is not null || ShellPath is not null ? "whole document" : "whole file");
-
-    public string WholeTip => Markdown is not null || Text is not null
-        ? "What you type is about this file. Select text in it, or drag over it with Area on, to ask about that."
-        : ShellPath is not null || Model is not null ? "What you type is about this file. Drag over it with Area on to ask about a part."
-        : Sound is not null ? "What you type is about this sound. Drag over it to ask about a stretch."
-        : Pages is not null || Picture is not null || Video is not null || Animation is not null ? "What you type is about this file. Drag over it to ask about an area."
-        : "What you type is about this file.";
 
     // ---- zoom -----------------------------------------------------------------------------------
 

@@ -144,6 +144,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A × at the top right of Video generator, File changes and File inspector closes the tool.
 
 ### Changed
+- A toolkit panel puts a card over the box, and tells the model about itself, only once you pick
+  something in it. File changes no longer selects a file by itself (Watch included). Its file list selects as
+  Sourcetree's does: click one, Ctrl+click to add or take off, Shift+click a run. Selected files go in your
+  message, a second click on the only one takes it out. A file whose lines you pick turns grey and goes
+  as those lines, and yellow and whole again when they are let go. The whole-video
+  and whole-document cards are gone.
 - The File changes diff shows one line number instead of two, the old one greyed out on removed lines,
   with + or - right after it. The numbers take only as much room as the file's longest one, so the code
   starts much further left.

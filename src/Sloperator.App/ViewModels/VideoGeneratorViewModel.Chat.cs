@@ -36,25 +36,6 @@ public sealed partial class VideoGeneratorViewModel
         return (via, context);
     }
 
-    /// <summary>
-    /// Over the chat's box while nothing is picked: the video, as a pick is shown, so the user sees what
-    /// a message is about then ("Untitled video", "whole video · not made yet" until it is joined).
-    /// </summary>
-    public (string Title, string Details)? Whole => (VideoName, !HasJoinedVideo ? "whole video · not made yet" : _board.JoinedIsStale ? "whole video · not joined since the latest changes" : "whole video");
-
-    public string WholeTip => "What you type is about this video. Pick something in it to ask about that.";
-
-    /// <summary>A clapperboard (Material's movie icon).</summary>
-    public string WholeIcon => "M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z";
-
-    // Whole follows the name and the joined video, wherever those are told.
-    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        base.OnPropertyChanged(e);
-        if (e.PropertyName is nameof(VideoName) or nameof(HasJoinedVideo))
-            base.OnPropertyChanged(nameof(Whole));
-    }
-
     /// <summary>A pick: in a few words for the bubble, in full for the model, and the piece it is, if one.</summary>
     private sealed record Pick(string Short, string Long, VideoPiece? Piece);
 

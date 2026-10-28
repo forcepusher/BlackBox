@@ -27,14 +27,32 @@ public partial class FileChangesPanel : UserControl
         _dragScroll = new DispatcherTimer(TimeSpan.FromMilliseconds(30), DispatcherPriority.Input, (_, _) => DragScroll());
         // A file picked by hand, with the mouse or the keys: a section's list made again after a refresh
         // selects its file too, which must not go there.
-        FileLists.AddHandler(PointerPressedEvent, (_, _) => _byHand = true, RoutingStrategies.Tunnel, handledEventsToo: true);
+        FileLists.AddHandler(PointerPressedEvent, OnFilePressed, RoutingStrategies.Tunnel, handledEventsToo: true);
         FileLists.AddHandler(KeyDownEvent, (_, _) => _byHand = true, RoutingStrategies.Tunnel, handledEventsToo: true);
-        FileLists.AddHandler(PointerReleasedEvent, (_, _) => Dispatcher.UIThread.Post(() => _byHand = false, DispatcherPriority.Background), RoutingStrategies.Bubble, handledEventsToo: true);
+        FileLists.AddHandler(PointerReleasedEvent, (_, _) =>
+        {
+            // The only file selected, clicked again with no key held: let go, which the list itself doesn't do.
+            if (_lone is { } file)
+                _vm?.LetGoOf(file);
+            _lone = null;
+            Dispatcher.UIThread.Post(() => _byHand = false, DispatcherPriority.Background);
+        }, RoutingStrategies.Bubble, handledEventsToo: true);
         FileLists.AddHandler(KeyUpEvent, (_, _) => Dispatcher.UIThread.Post(() => _byHand = false, DispatcherPriority.Background), RoutingStrategies.Bubble, handledEventsToo: true);
     }
 
     /// <summary>Set from a press or key in the file lists until it is let go.</summary>
     private bool _byHand;
+
+    /// <summary>The file pressed while it was the only one selected, no key held: let go on the release.</summary>
+    private DiffFileItem? _lone;
+
+    private void OnFilePressed(object? sender, PointerPressedEventArgs e)
+    {
+        _byHand = true;
+        _lone = e.KeyModifiers == KeyModifiers.None && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
+            && (e.Source as Control)?.FindLogicalAncestorOfType<ListBoxItem>(includeSelf: true) is { DataContext: DiffFileItem file }
+            && _vm?.IsOnlySelected(file) == true ? file : null;
+    }
 
     // ---- picking lines by a drag -----------------------------------------------------------------
 
@@ -219,9 +237,24 @@ public partial class FileChangesPanel : UserControl
         Dispatcher.UIThread.Post(() => DiffList.ScrollIntoView(row), DispatcherPriority.Background);
     }
 
+    /// <summary>A file's row in the list: ListBoxItem.lines (grey) while some of its lines are picked.</summary>
+    private void OnFileContainer(object? sender, ContainerPreparedEventArgs e)
+    {
+        if (e.Container is not ListBoxItem item || item.DataContext is not DiffFileItem file)
+            return;
+        item.Classes.Set("lines", file.HasPickedLines);
+        // Each list is made again with new files on a refresh, so a row holds one file for its life.
+        file.PropertyChanged += (_, a) =>
+        {
+            if (a.PropertyName == nameof(DiffFileItem.HasPickedLines) && item.DataContext == file)
+                item.Classes.Set("lines", file.HasPickedLines);
+        };
+    }
+
     private void OnFilePicked(object? sender, SelectionChangedEventArgs e)
     {
-        if (_byHand && (sender as ListBox)?.SelectedItem is DiffFileItem file && _vm is { Reselecting: false })
+        // To the file just clicked in: the last one added, Shift+click adding a run.
+        if (_byHand && e.AddedItems.OfType<DiffFileItem>().LastOrDefault() is { } file && _vm is { Reselecting: false })
             _vm.GoToCommand.Execute(file);
     }
 

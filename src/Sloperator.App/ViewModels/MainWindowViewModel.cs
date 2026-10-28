@@ -80,7 +80,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         Attachments.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasAttachments));
-            WholeChanged();
             SendCommand.NotifyCanExecuteChanged();
         };
         Queued.CollectionChanged += (_, _) =>

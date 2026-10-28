@@ -12,8 +12,16 @@ using static Sloperator.Core.Strings;
 namespace Sloperator.App.ViewModels;
 
 /// <summary>A file in the panel's list of changed files: a click there goes to it in the diff (Row, -1 while its section is folded).</summary>
-public sealed record DiffFileItem(DiffFile File, int Row, string FullPath)
+public sealed partial class DiffFileItem(DiffFile file, int row, string fullPath) : ObservableObject
 {
+    public DiffFile File { get; } = file;
+    public int Row { get; } = row;
+    public string FullPath { get; } = fullPath;
+
+    /// <summary>Some of its lines are picked: the list shows it grey, not as a whole file selected (the user, 2026-10-28).</summary>
+    [ObservableProperty]
+    private bool _hasPickedLines;
+
     public string Name => File.Display;
     public string Status => File.Status;
     public string Counts => File.Counts;
@@ -33,7 +41,7 @@ public sealed record DiffFileItem(DiffFile File, int Row, string FullPath)
     public string SectionWord => Section?.ToString().ToLowerInvariant() ?? "";
 
     /// <summary>A zero for each digit of the widest line number in its diff: an unseen copy sizes the number column to it.</summary>
-    public string NumberSizer { get; } = new('0', File.Lines.Select(l => l.New ?? l.Old ?? 0).DefaultIfEmpty().Max().ToString(CultureInfo.InvariantCulture).Length);
+    public string NumberSizer { get; } = new('0', file.Lines.Select(l => l.New ?? l.Old ?? 0).DefaultIfEmpty().Max().ToString(CultureInfo.InvariantCulture).Length);
 
     /// <summary>The same file in the same section (the diff in it may have changed).</summary>
     internal bool IsSame(DiffFileItem? other) => other is not null && Section == other.Section && string.Equals(FullPath, other.FullPath, StringComparison.OrdinalIgnoreCase);
@@ -58,11 +66,16 @@ public sealed partial class FileSection(FileChangesViewModel panel, string name,
 
     partial void OnIsExpandedChanged(bool value) => panel.Folded(this);
 
-    /// <summary>The file selected in this section's list; null when the selected file is in another.</summary>
-    [ObservableProperty]
-    private DiffFileItem? _selected;
+    /// <summary>The files selected in this section's list (Ctrl+click adds one, Shift+click a run); none when the selected files are in another.</summary>
+    public SelectionModel<DiffFileItem> Selection { get; } = MakeSelection(panel);
 
-    partial void OnSelectedChanged(DiffFileItem? value) => panel.SectionPicked(value);
+    private static SelectionModel<DiffFileItem> MakeSelection(FileChangesViewModel panel)
+    {
+        // No source of its own: the list gives it its items (set here, the list didn't take it, and showed nothing selected).
+        var selection = new SelectionModel<DiffFileItem> { SingleSelect = false };
+        selection.SelectionChanged += (sender, _) => panel.SectionPicked((SelectionModel<DiffFileItem>)sender!);
+        return selection;
+    }
 
     [RelayCommand]
     private void Toggle() => IsExpanded = !IsExpanded;
@@ -223,24 +236,65 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             Show(_diff, keepPicks: true, fresh: false);
     }
 
-    /// <summary>Set while the sections' selections follow <see cref="CurrentFile"/>.</summary>
+    /// <summary>Set while the sections' selections follow <see cref="SelectedFiles"/>.</summary>
     private bool _syncing;
 
-    /// <summary>A file clicked in a section's list: the one selected (the other sections' lists let theirs go).</summary>
-    internal void SectionPicked(DiffFileItem? file)
+    /// <summary>
+    /// Files clicked in a section's list, as Sourcetree's lists take them (the user, 2026-10-28): a
+    /// click selects that file alone, Ctrl+click adds or takes one off, Shift+click a run, and the
+    /// files are in one section at a time (a click in another lets go of this one's). A click on the
+    /// only file selected lets it go (<see cref="LetGoOf"/>). Lines and files are never picked at once
+    /// (the user, 2026-10-28: with lines picked, the file they were in could be selected or not,
+    /// which said nothing): with lines picked a click only goes to the file, so lines in another
+    /// are Ctrl+clicked after.
+    /// </summary>
+    internal void SectionPicked(SelectionModel<DiffFileItem> changed)
     {
-        if (!_syncing && file is not null)
-            CurrentFile = file;
+        if (_syncing || Sections.FirstOrDefault(s => s.Selection == changed) is not { } section)
+            return;
+        var files = changed.SelectedItems.OfType<DiffFileItem>().ToList();
+        if (files.Count > 0)
+            SelectFiles(files);
+        else if (SelectedFiles.Count > 0 && SelectedFiles.All(section.Files.Contains))
+            SelectFiles([]);
     }
 
-    partial void OnCurrentFileChanged(DiffFileItem? value)
+    /// <summary>A press on the only file selected, with no key held: it is let go, as a second click on it does.</summary>
+    internal bool IsOnlySelected(DiffFileItem file) => SelectedFiles is [var only] && only == file;
+
+    internal void LetGoOf(DiffFileItem file)
     {
+        if (SelectedFiles is [var only] && only == file)
+            SelectFiles([]);
+    }
+
+    private void SelectFiles(IReadOnlyList<DiffFileItem> files)
+    {
+        SelectedFiles = files;
         ActionsChanged();
+        SyncSections();
+        OnPicked();
+    }
+
+    /// <summary>The sections' lists select <see cref="SelectedFiles"/>, each theirs if there, else none.</summary>
+    private void SyncSections()
+    {
         _syncing = true;
         try
         {
+            // Only what differs: a list cleared and selected again in its own click showed nothing selected.
             foreach (var section in Sections)
-                section.Selected = section.Files.Contains(value) ? value : null;
+                for (var i = 0; i < section.Files.Count; i++)
+                {
+                    var want = SelectedFiles.Contains(section.Files[i]);
+                    if (want != section.Selection.IsSelected(i))
+                    {
+                        if (want)
+                            section.Selection.Select(i);
+                        else
+                            section.Selection.Deselect(i);
+                    }
+                }
         }
         finally
         {
@@ -249,20 +303,13 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     }
 
     /// <summary>
-    /// The file selected in the list: with no lines picked, what a message is about (its whole change,
-    /// as the box's card says). The first file until another is clicked, kept across a refresh.
+    /// The files selected in the list: with no lines picked, picks of their whole changes in the box
+    /// ("Whole file · notes.md"). None until one is clicked, kept across a refresh.
     /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Whole))]
-    private DiffFileItem? _currentFile;
+    private IReadOnlyList<DiffFileItem> SelectedFiles { get; set; } = [];
 
     /// <summary>Set while a refresh selects the file again, which goes nowhere in the diff: only a click there does.</summary>
     internal bool Reselecting { get; private set; }
-
-    /// <summary>Over the chat's box while no line is picked: the selected file, as a pick shows ("notes.md", "whole file · +10 -3").</summary>
-    public (string Title, string Details)? Whole => CurrentFile is { } file ? (Path.GetFileName(file.FullPath), $"whole file · {(file.Section is null ? "" : file.SectionWord + " · ")}{file.Status} · {file.Counts}") : null;
-
-    public string WholeTip => "What you type is about this file's changes. Click or drag lines to ask about those.";
 
     /// <summary>The rows picked; their lines go into the chat's box.</summary>
     public SelectionModel<DiffRow> Selection { get; }
@@ -326,7 +373,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     private void Show(DiffResult diff, bool keepPicks, bool fresh)
     {
         var picked = keepPicks ? Selection.SelectedItems.OfType<DiffRow>().Select(r => r.Key).ToHashSet() : [];
-        var current = keepPicks ? CurrentFile : null;
+        var current = keepPicks ? SelectedFiles : [];
         var before = fresh ? _diff : null;
         _diff = diff;
         Status = Hint;
@@ -363,9 +410,6 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             foreach (var row in _latest)
                 row.IsFresh = true;
             _fade.Start();
-            // Watching, the file changed is the one selected, as a click on it would.
-            if (Watch)
-                current = _latest[0].File;
         }
         else if (keepPicks)
         {
@@ -402,11 +446,12 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
                 {
                     _syncing = false;
                 }
-                // The same file in the same section, else in another (staged since), else the first.
-                CurrentFile = files.FirstOrDefault(f => f.IsSame(current))
-                    ?? files.FirstOrDefault(f => current is not null && string.Equals(f.FullPath, current.FullPath, StringComparison.OrdinalIgnoreCase))
-                    ?? files.FirstOrDefault();
-                OnCurrentFileChanged(CurrentFile);
+                // Each the same file in the same section, else in another (staged since); none unless clicked.
+                SelectedFiles = current.Select(c => files.FirstOrDefault(f => f.IsSame(c))
+                        ?? files.FirstOrDefault(f => string.Equals(f.FullPath, c.FullPath, StringComparison.OrdinalIgnoreCase)))
+                    .OfType<DiffFileItem>().Distinct().ToList();
+                ActionsChanged();
+                SyncSections();
             }
             finally
             {
@@ -512,14 +557,11 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     /// <summary>Set while a refresh picks the same lines again: no click by hand, so a hunk isn't picked whole.</summary>
     private bool _refreshing;
 
-    /// <summary>Watch turned on: its file selected, the last change in sight and lit up again.</summary>
+    /// <summary>Watch turned on: the last change in sight and lit up again (its file isn't selected: only a click selects one).</summary>
     private void GoToLatest()
     {
         if (_latest.Count == 0 || _latest[0].Index >= Rows.Count || !ReferenceEquals(Rows[_latest[0].Index], _latest[0]))
             return;
-        Reselecting = true;
-        try { CurrentFile = _latest[0].File; }
-        finally { Reselecting = false; }
         foreach (var row in _latest)
             row.IsFresh = true;
         _fade.Stop();
@@ -552,13 +594,20 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     /// </summary>
     private List<(DiffFileItem File, IReadOnlyCollection<(int? Old, int? New)>? Lines)> Targets()
     {
-        if (Selection.Count > 0)
-            return Picks()
-                .Select(p => (p.File, (IReadOnlyCollection<(int? Old, int? New)>?)p.Rows.Where(r => r.IsAdded || r.IsRemoved)
-                    .Select(r => r.IsAdded ? ((int?)null, r.Line!.Value.New) : (r.Line!.Value.Old, (int?)null)).ToList()))
-                .Where(p => p.Item2!.Count > 0).ToList();
-        return CurrentFile is { Row: >= 0 } current ? [(current, null)] : [];
+        var picks = Picks();
+        return picks
+            .Select(p => (p.File, (IReadOnlyCollection<(int? Old, int? New)>?)p.Rows.Where(r => r.IsAdded || r.IsRemoved)
+                .Select(r => r.IsAdded ? ((int?)null, r.Line!.Value.New) : (r.Line!.Value.Old, (int?)null)).ToList()))
+            .Where(p => p.Item2!.Count > 0)
+            .Concat(WholeFiles().Where(f => f.Row >= 0).Select(f => (f, (IReadOnlyCollection<(int? Old, int? New)>?)null)))
+            .ToList();
     }
+
+    /// <summary>
+    /// The files selected whole: those selected in the list with none of their lines picked. A file whose
+    /// lines are picked is about those, and shows grey in the list; with its lines let go, it is whole again.
+    /// </summary>
+    private List<DiffFileItem> WholeFiles() => SelectedFiles.Where(f => !f.HasPickedLines).ToList();
 
     /// <summary>The action bar's actions.</summary>
     private enum GitAct { Stage, Unstage, Discard }
@@ -588,8 +637,21 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             var targets = Targets();
             if (targets.Count == 0)
                 return Selection.Count > 0 ? "No changed line picked" : "";
+            if (targets.Count > 1 && targets.All(t => t.Lines is null))
+                return $"{targets.Select(t => t.File.FullPath.ToUpperInvariant()).Distinct().Count()} files" + (targets[0].File.Section is { } s && targets.All(t => t.File.Section == s) ? " · " + targets[0].File.SectionWord : "");
             if (targets.Count > 1)
-                return $"{targets.Sum(t => t.Lines?.Count ?? 0)} lines in {targets.Select(t => t.File.FullPath.ToUpperInvariant()).Distinct().Count()} files";
+            {
+                // "3 lines in 2 files", and the files whole beside them: "3 lines in 2 files · 1 whole file".
+                var lineCount = targets.Sum(t => t.Lines?.Count ?? 0);
+                var lineFiles = targets.Where(t => t.Lines is not null).Select(t => t.File.FullPath.ToUpperInvariant()).Distinct().Count();
+                var wholeFiles = targets.Where(t => t.Lines is null).Select(t => t.File.FullPath.ToUpperInvariant()).Distinct().Count();
+                var parts = new List<string>();
+                if (lineFiles > 0)
+                    parts.Add($"{lineCount} {(lineCount == 1 ? "line" : "lines")} in {lineFiles} {(lineFiles == 1 ? "file" : "files")}");
+                if (wholeFiles > 0)
+                    parts.Add($"{wholeFiles} whole {(wholeFiles == 1 ? "file" : "files")}");
+                return string.Join(" · ", parts);
+            }
             var (file, lines) = targets[0];
             var where = file.Section is null ? "" : " · " + file.SectionWord;
             if (lines is null)
@@ -600,7 +662,14 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     }
 
     /// <summary>"the picked lines", else the selected file's name, for the tooltips.</summary>
-    private string What => Selection.Count > 0 ? "the picked lines" : CurrentFile is { } file ? Path.GetFileName(file.FullPath) : "the file";
+    private string What => (Selection.Count > 0, WholeFiles()) switch
+    {
+        (true, []) => "the picked lines",
+        (true, _) => "what is picked",
+        (false, [var file]) => Path.GetFileName(file.FullPath),
+        (false, []) => "the file",
+        (false, var files) => $"{files.Count} files",
+    };
 
     public string StageTip => CanStage ? $"Stage {What} in git" : "Pick unstaged lines, or select an unstaged file, to stage them";
 
@@ -616,7 +685,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
                 return Targets().Any(t => t.File.Section == GitSection.Committed) ? "Committed changes can't be discarded here"
                     : Targets().Count > 0 ? "Only changes not staged yet can be discarded: unstage these first"
                     : "Pick unstaged lines, or select an unstaged file, to discard them";
-            if (targets[0].Lines is null && targets[0].File.IsNew)
+            if (targets is [{ Lines: null, File.IsNew: true }])
                 return $"Move {Path.GetFileName(targets[0].File.FullPath)} to the Recycle Bin";
             var how = targets.All(t => t.File.Section == GitSection.Unstaged) ? " as staged" : targets.All(t => t.File.Section is null) ? " as before the agent's changes" : "";
             return $"Put {What} back{how}";
@@ -690,9 +759,17 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             }
             foreach (var row in Selection.SelectedItems.OfType<DiffRow>().Where(r => !r.IsLine).ToList())
                 Selection.Deselect(row.Index);
-            // A file picked in two sections (staged and unstaged) is one card in the box.
-            _chat.Pick(Picks().GroupBy(p => p.File.FullPath, StringComparer.OrdinalIgnoreCase)
-                .Select(g => (g.Key, $"{Capital(Lines(g.SelectMany(p => p.Rows).ToList()))} · {Path.GetFileName(g.Key)}")).ToList());
+            // A file picked in two sections (staged and unstaged) is one card in the box: its lines,
+            // and the files selected in the list whose lines aren't picked, whole.
+            var picks = Picks();
+            foreach (var file in Files)
+                file.HasPickedLines = picks.Any(p => p.File == file);
+            var lines = picks.GroupBy(p => p.File.FullPath, StringComparer.OrdinalIgnoreCase)
+                .Select(g => (g.Key, $"{Capital(Lines(g.SelectMany(p => p.Rows).ToList()))} · {Path.GetFileName(g.Key)}")).ToList();
+            _chat.Pick(lines.Concat(WholeFiles().Select(f => f.FullPath).Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Where(p => !lines.Any(l => string.Equals(l.Key, p, StringComparison.OrdinalIgnoreCase)))
+                    .Select(p => (p, $"Whole file · {Path.GetFileName(p)}")))
+                .ToList());
             ActionsChanged();
         }
         finally
@@ -771,39 +848,51 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
                 : "[The File changes panel is open beside the chat, showing the files you changed in this chat, each against what it held before your first change to it: ")
             .Append(string.Join(", ", diff.Files.Take(30).Select(f => $"{diff.FullPath(f)} ({(f.Git is { } g ? g.Section.ToString().ToLowerInvariant() + ", " : "")}{f.Status}, {f.Counts})")))
             .Append(diff.Files.Count > 30 ? $" and {diff.Files.Count - 30} more. " : ". ");
-        if (picks.Count == 0)
+        // The files selected in the list whole (as their cards in the box said), and the lines picked.
+        var whole = WholeFiles().Where(f => files.Contains(f.FullPath, StringComparer.OrdinalIgnoreCase)).ToList();
+        if (picks.Count == 0 && whole.Count == 0)
         {
-            if (CurrentFile is not { } current)
-            {
-                context.Append("What they say is about these changes unless they say otherwise.]");
-                return (via, context.ToString());
-            }
-            // No lines picked: the file selected in the list, whole, as its card in the box said.
-            context.Append($"They have {current.FullPath} ({Where(current)}{current.Status}, {current.Counts}) selected in it: what they say is about the change to that file unless they say otherwise. Its diff:\n");
-            var lines = current.File.Lines;
-            foreach (var line in lines.Take(MaxPickedLines))
-                AppendLine(context, line);
-            if (lines.Count > MaxPickedLines)
-                context.Append($"[... {lines.Count - MaxPickedLines} more lines of its diff]\n");
-            context.Append(Numbers);
-            return ($"File changes · {Path.GetFileName(current.FullPath)}", context.ToString());
+            context.Append("What they say is about these changes unless they say otherwise.]");
+            return (via, context.ToString());
         }
-        context.Append(picks.Count == 1 ? "They selected these lines in it" : "They selected lines in it").Append(", which is what they refer to:");
-        var shown = 0;
-        foreach (var (file, rows) in picks)
+        via = "File changes · " + string.Join(", ", picks.Select(p => $"{Path.GetFileName(p.File.FullPath)} {Lines(p.Rows)}")
+            .Concat(whole.Select(f => Path.GetFileName(f.FullPath)).Distinct()));
+        context.Append("What they say is about what they selected in it unless they say otherwise.");
+        var left = MaxPickedLines;
+        if (whole.Count > 0)
         {
-            context.Append($"\n{file.FullPath} ({Where(file)}{file.Status}), {Lines(rows)}:\n");
-            foreach (var row in rows)
+            context.Append(whole.Count == 1 ? " This file, whole:" : " These files, whole:");
+            foreach (var file in whole)
             {
-                if (shown++ == MaxPickedLines)
-                {
-                    context.Append($"[... {picks.Sum(p => p.Rows.Count) - MaxPickedLines} more selected lines]\n");
-                    break;
-                }
-                AppendLine(context, row.Line!.Value);
+                context.Append($"\n{file.FullPath} ({Where(file)}{file.Status}, {file.Counts}):\n");
+                var lines = file.File.Lines;
+                foreach (var line in lines.Take(Math.Max(left, 0)))
+                    AppendLine(context, line);
+                if (lines.Count > left)
+                    context.Append($"[... {lines.Count - Math.Max(left, 0)} more lines of its diff]\n");
+                left -= lines.Count;
             }
-            if (shown > MaxPickedLines)
-                break;
+        }
+        if (picks.Count > 0)
+        {
+            context.Append(whole.Count > 0 ? "\nAnd these lines:" : " These lines:");
+            var total = picks.Sum(p => p.Rows.Count);
+            var shown = 0;
+            foreach (var (file, rows) in picks)
+            {
+                context.Append($"\n{file.FullPath} ({Where(file)}{file.Status}), {Lines(rows)}:\n");
+                foreach (var row in rows)
+                {
+                    if (shown++ >= Math.Max(left, 0))
+                    {
+                        context.Append($"[... {total - shown + 1} more selected lines]\n");
+                        break;
+                    }
+                    AppendLine(context, row.Line!.Value);
+                }
+                if (shown > Math.Max(left, 0))
+                    break;
+            }
         }
         context.Append(Numbers);
         return (via, context.ToString());
@@ -829,25 +918,32 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             .Append(' ').Append(number).Append('\t').Append(line.Text).Append('\n');
     }
 
-
-    /// <summary>The message went with the picked lines: they are no longer picked.</summary>
+    /// <summary>The message went with the picked lines, or the selected files: they are no longer picked.</summary>
     public void Sent()
     {
         _picking = true;
-        try { Selection.Clear(); }
+        try
+        {
+            Selection.Clear();
+            SelectFiles([]);
+        }
         finally { _picking = false; }
     }
 
-    /// <summary>A click away from the lines, or Esc: none is picked, and their files leave the box. False when none was.</summary>
+    /// <summary>A click away from the lines, or Esc: no line or file is picked, and their files leave the box. False when none was.</summary>
     public bool Unpick()
     {
-        if (Selection.Count == 0)
+        if (Selection.Count == 0 && SelectedFiles.Count == 0)
             return false;
+        _picking = true;
+        try { SelectFiles([]); }
+        finally { _picking = false; }
         Selection.Clear();
+        OnPicked();
         return true;
     }
 
-    /// <summary>A file taken off the box (its ×): its lines are no longer picked here either.</summary>
+    /// <summary>A file taken off the box (sent): its lines, or it whole, are no longer picked here either.</summary>
     private void OnBoxChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (_picking || e.OldItems is null)
@@ -861,6 +957,8 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             for (var i = 0; i < Rows.Count; i++)
                 if (Selection.IsSelected(i) && gone.Contains(Rows[i].File.FullPath))
                     Selection.Deselect(i);
+            if (SelectedFiles.Any(f => gone.Contains(f.FullPath)))
+                SelectFiles(SelectedFiles.Where(f => !gone.Contains(f.FullPath)).ToList());
         }
         finally
         {

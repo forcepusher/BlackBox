@@ -801,7 +801,7 @@ one's width to the other's: the view model sets the new tool in one change (it w
 and the window shrank to the chat and grew back), the window sets the panel's content itself (a
 binding took it after the layout), and the dropdown's list is closed first (it lingered a frame over
 the resized window). Measured after: popup closed, then one frame with all of the switch, for every
-pick of None, Video generator and File changes either way. The window's place is saved without the panel. **What a tool gives a message is always a card** over the box (the user, 2026-10-25, after a message sent with File changes open showed only a grey "File changes" over its words): a pick (`MainWindowViewModel.Pick`, an `AttachmentItem` with a caption) or, with none, what the message is about there (`IToolkit.Whole`, a `ToolCardItem`; a tool showing nothing yet gets one naming it, "nothing in it yet", and the model is told the panel is open). Neither has the × the user's own files have (`AttachmentItem.CanRemove` is false for a pick; the user's call: a pick is unpicked in its panel, a click away or Esc, which brings the whole card back, so box and panel can't disagree). Every panel puts what it picks in the box through `Pick`, so a new one gets this as is; `ToolCardTests` fails if a × in the box is shown for anything but `CanRemove`. Sent, the cards go with the message (`UserInput.Cards`, kept in the chat as `ChatEntry.Cards`) and show in its bubble as its files do, a pick by its caption; a chat saved before shows its grey line as it was. **The × at the right end of every tool's top bar** closes the tool, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`ToolkitClose`, 30 square as the Toolkit dropdown, 12 right of what is beside it), so it looks and sits the same in each. Video generator's frame fields are 30 high there: their own 32 made its bar 2 px taller (at 125%) than the other tools' and the chat's, and its × sat lower. **Made narrower, the panel gives way first** (`ToolkitColumns`,
+pick of None, Video generator and File changes either way. The window's place is saved without the panel. **What a tool gives a message is a card of what was picked in it** over the box (the user, 2026-10-25, after a message sent with File changes open showed only a grey "File changes" over its words): a pick (`MainWindowViewModel.Pick`, an `AttachmentItem` with a caption). With nothing picked there is no card, and a message the user types goes as it is, with no word of the tool (`WithToolkit`; the user, 2026-10-28: until then a card of the whole item, `IToolkit.Whole`, stood there, and File changes selected its first file by itself, so a card of what they never picked went with every message, with no × to take it off). The tool's own messages (Make the video) still say what it shows. A pick has no × as the user's own files have (`AttachmentItem.CanRemove` is false for a pick; the user's call: a pick is unpicked in its panel, a click away or Esc, so box and panel can't disagree). Every panel puts what it picks in the box through `Pick`, so a new one gets this as is; `ToolCardTests` fails if a × in the box is shown for anything but `CanRemove`. Sent, the cards go with the message (`UserInput.Cards`, kept in the chat as `ChatEntry.Cards`) and show in its bubble as its files do, a pick by its caption; a chat saved before shows its grey line as it was. **The × at the right end of every tool's top bar** closes the tool, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`ToolkitClose`, 30 square as the Toolkit dropdown, 12 right of what is beside it), so it looks and sits the same in each. Video generator's frame fields are 30 high there: their own 32 made its bar 2 px taller (at 125%) than the other tools' and the chat's, and its × sat lower. **Made narrower, the panel gives way first** (`ToolkitColumns`,
 `MainWindow.FitColumns` on the columns' SizeChanged): down to its least (`ToolkitOption.MinWidth`,
 splitter included: Video generator 770, where its top bar still fits in one row with the video's name cut
 short; File changes 560), then the window stops, at the panel's least plus the chat's 660 (no more than
@@ -841,7 +841,7 @@ from the thumb after 4 pixels: the thumb stayed put while the timeline slid and 
 wheel scrolls sideways and Ctrl+wheel zooms. A clip clicked doesn't scroll into view
 (`BringIntoViewOnFocusChange` off): partly scrolled out, it moved from under the pointer between
 press and release. A click away from every piece (the timeline's empty space, around the viewer) or
-Esc (not while typing) shows the whole video again, nothing going into the box. The whole videos
+Esc (not while typing) shows the whole video again, nothing going into the box (nor about the video with a message). The whole videos
 folder is watched: what the chat, another window or Explorer changes in the open video shows; its
 folder renamed is followed, and gone, the video changed last opens. Nothing is saved into a folder
 that went: it would come back.
@@ -943,11 +943,9 @@ select folder or image or video, it shows up in main chat window prompt, and the
 prompt to describe what you wanna do with it"): a folder, a picture, a clip or a sound on the
 timeline, is a chip under the box ("The start of shot 1 · Moon start.png", "not made yet" for a
 piece planned), a click away or Esc takes it off, another pick takes its place, and sent, it goes with the message
-(a piece not made yet as its place, with no file). With nothing picked, the same chip stands there for
-the video itself (`IToolkit.Whole`: its name, "whole video", "· not made yet" until it is joined,
-no ×), where a pick would come, so the row keeps its height when a pick
-takes its place; it shows what the model is told then, the whole video (the user, 2026-10-25), and
-goes with the panel. A tool's cards, this one or the picks, come before the user's own files, over
+(a piece not made yet as its place, with no file). With nothing picked there is no chip, and a typed
+message goes without the video (the user, 2026-10-28; from 2026-10-25 a chip of the whole video stood
+there, `IToolkit.Whole`, and the model was told the message was about it). A tool's cards, this one or the picks, come before the user's own files, over
 the box and in the sent bubble, and each has a small muted ◀ at its left, pointing at the panel it
 comes from (the user, 2026-10-26; style `PathIcon.toolArrow`, 8 px, 4 px from the icon). Checked in
 the app on 2026-10-26 with File inspector and Video generator open and a pasted file of the user's.
@@ -2402,12 +2400,37 @@ A right-click on a file in the list offers **Show in folder** (the user, 2026-10
 opens on its folder with it selected, through the file cards' `FilePreview.ShowInFolder`; greyed
 out for a deleted file. The menu is a plain `ContextMenu`, as the Video generator's are; checked
 with a real right-click on 2026-10-26.
-**With no lines picked, the file selected in the list** is what a message is about (the user,
-2026-10-25: "currently selected changed file should be visible in the chat context"): its card over the
-box ("notes.md", "whole file · added · +99"), and for the model the files list as above, which file is
-selected, and its diff (at most 300 lines). It is the first file until another is clicked, and stays
-selected across a refresh; that reselecting doesn't scroll the diff (`Reselecting`). Nothing changed
-yet, the card is the tool's own ("File changes", "nothing in it yet").
+**With no lines picked, the files selected in the list** are what a message is about (the user,
+2026-10-25: "currently selected changed file should be visible in the chat context"): a pick each in the
+box ("Whole file · notes.md", from `OnPicked`), and for the model the files list as above, which files
+are selected, and their diffs (at most 300 lines together). No file is selected until one is clicked (the
+user, 2026-10-28: the first file was selected by itself, its card went with every message, and nothing
+let it go). The lists select as Sourcetree's do (the user, 2026-10-28, "I like the way it's done in
+Sourcetree"; tried there on a scratch repo the same day): a click selects that file alone, Ctrl+click
+adds or takes off one, Shift+click a run from the last clicked, and the files are in one section at a
+time, a click in another letting go of this one's, Ctrl held or not. Each section has its own
+`SelectionModel` (`SelectionMode` Multiple; given no source, as the list's own items are taken: one
+made with the files showed nothing selected), and `SyncSections` changes only the rows that differ
+(cleared and selected again inside the list's click, it showed nothing selected either). Unlike
+Sourcetree, a click on the only file selected lets it go (`IsOnlySelected`, `LetGoOf` on the release),
+as do a click away and Esc, and a message sent with them. Sourcetree's diff shows only the selected
+files; here it still shows all of them. They stay selected across a refresh; that reselecting doesn't
+scroll the diff (`Reselecting`). With no file or line picked, a message goes without the panel's word.
+Checked in the app on 2026-10-28 with a stand-in model: opened by the agent's edit with nothing
+selected and no card, a click selects the file and puts its card in the box, a second click takes
+both away, and of two messages only the one sent with the file carried the panel's context.
+**A file or its lines** (the user, 2026-10-28, after a first take that made them exclude each other):
+a file with lines picked in it is about those lines and shows grey in the list, selected or not
+(`DiffFileItem.HasPickedLines`, set in `OnPicked`; `ListBoxItem.lines`, set from `OnFileContainer`);
+with its lines let go it is yellow and whole again if it is selected. Files and lines mix across files:
+the box has a card for each file's lines and each file selected whole (`WholeFiles`), Stage, Unstage and
+Discard take both ("2 lines in 2 files · 1 whole file"), and the model is told the whole files with
+their diffs and then the lines, in one 300-line budget. `DiffFileItem` is a class now, not a record, to
+tell of that change. Checked in the app the same day with three files: a and c selected, a line of a
+picked (a grey, c yellow, cards "Whole file · c.py" and "Line 99 · a.py"), that line Ctrl+clicked off
+(a yellow again), lines in a and b (both grey, b not selected), and the message sent told the model c
+whole and the two lines. Before that, with click, Ctrl+click on and off, Shift+click a run and a second
+click on the only one, the list's selection (UI Automation) and the box's cards agreed.
 **Wrap and Watch** (the user, 2026-10-26), toggles in the bar between the summary and the ×, shown
 once a file changed, both on by default and kept in settings.json under `panels` (`wrapDiff`,
 `watchChanges`; `PanelSettings`). **Wrap**: the diff's code column is `*` (under a sideways scroll it
@@ -2437,8 +2460,8 @@ Runs with `Run.addedCount` and `Run.removedCount`.
 removed lines counted by file and text, as an edit moves every number below it) and marks what is new
 `IsFresh`, which lights its row (a yellow layer, fading over 2 s after 4 s, `LitFor`; 1.5 s and 1 s
 were too short for the user, 2026-10-27; not the pick's look).
-Watching, the first fresh row's file is selected (its card over the box follows) and the row is left
-where it is in the upper half of the diff, else brought a quarter of the way down. The first read and
+Watching, the first fresh row is left (its file isn't selected: only a click selects one, the user,
+2026-10-28) where it is in the upper half of the diff, else brought a quarter of the way down. The first read and
 another chat's list light nothing, except when the panel opened on its own at the agent's first change
 (`OpeningOnFirstChange`): that read is the change, so all its added and removed lines light up
 (`Fresh` with no diff before). A read that finds nothing new (the agent's next call often comes
