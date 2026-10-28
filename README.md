@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/8a6d325e-0564-483e-95d7-42900efc6903
   `http://localhost:1234/v1` as the server. Pick a model that sees images (Qwen3.8 27B is the one
   tested most), give it at least 64k of context, and turn off its "Image Input: Never exceed 2048 px"
   option. llama.cpp, Ollama and vLLM work the same way.
-- **Other online APIs:** any OpenAI-compatible server, such as OpenRouter: its address and your key.
+- **Other online APIs:** any OpenAI-compatible server, such as [OpenRouter](https://openrouter.ai): its address and your key.
 
 Sloperator picks the strongest model the server has, or you pick one from the list.
 
