@@ -68,10 +68,15 @@ public sealed class ScreenSpace
 
     private static int Snap(double size) => Math.Max(Patch, (int)Math.Round(size / Patch) * Patch);
 
-    /// <summary>How the model's x/y relate to the screenshot, for the system prompt.</summary>
+    /// <summary>
+    /// How the model's x/y relate to the screenshot, for the system prompt and a fresh look. Pixels
+    /// come with the image's size: told only "pixels of the screenshot", DeepSeek V4.1 Flash answered
+    /// fresh looks on a 0-1000 grid, so on a 2560-wide screen every x it found landed at 1000/2560
+    /// of the target's (the Hierarchy tab at x 1368 came back as 551; 8 of 8 Unity targets so).
+    /// </summary>
     public string Describe() => Grid is { } g
         ? $"x/y are on a 0-{g} grid over the screenshot, whatever its size: (0, 0) is its top-left corner and ({g}, {g}) its bottom-right."
-        : "x/y are pixels of the screenshot, origin top-left.";
+        : $"x/y are pixels of the screenshot, which is {ImageWidth}x{ImageHeight}, origin top-left.";
 
     /// <summary>
     /// That grid steps aren't square, for the system prompt. Drawing a circle in Paint, qwen3.8

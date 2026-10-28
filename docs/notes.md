@@ -2099,6 +2099,20 @@ with the note, 0 of 8 without it, and 4 of 10 when every click used the model's 
 Before the fresh look, a red ring drawn at the click added nothing to the note, nor did a prompt
 rule about aiming carefully or temperature 0.2 instead of 0.6.
 
+The look's instructions give the image's size along with "pixels of the screenshot" (the quarter's
+own size for a quarter). Without it DeepSeek V4.1 Flash (munito.ai) answered looks on a 0-1000 grid,
+the way it was trained to point: on a 2560×1080 Unity screenshot it put the Hierarchy tab, at x 1368,
+at (551, 84), and every one of eight targets so, x at 1000/2560 of the right one and y nearly right
+(1080 is close to 1000). Read as pixels, each look dragged the click to the left: in a user's Unity
+run the model's own aims were often close and the look moved them hundreds of pixels off. Asked the
+same with the size given, it answered in pixels: 38 of 57 Unity targets on the quarter around an aim
+40-60 px off, 25 of 57 on the whole screen, where it still slips into the grid now and then (the Play
+button at x 536). On the grid instead of pixels, its looks were worse: 13 and 24 of 57. munito reads
+a picture at no more than about 1,000 tokens (a 1920×810 one costs 974, a 2560×1080 one 1,014), so a
+whole screenshot reaches it shrunk; enlarging the quarter 1.5 or 2 times didn't help it (38 and 37 of
+57), nor did reasoning effort high (36 of 57). Its pointing itself is fine: asked for eight red dots
+on a 2560×1080 picture whose size it was told, it was within 10 px of each.
+
 A look can also find the wrong thing, and then the screen does change. In Blender it took the
 Animation tab for the "MCP for Blender" tab under it. The model saw the Animation panel open and
 named the tab again twice, aiming lower each time, and both times the look moved the click back up.
