@@ -2936,7 +2936,13 @@ outline, so the yellow still shows on a white page. It widens steadily from 20 t
 across over its 3 seconds and fades over the last one (until 28 October 2026 it was a thin pink
 ring 64 px at most, gone in 1.2 seconds, easy to miss; for a day it sprang out in 0.4 seconds and
 held, which lost the widening the user liked). Its edges are drawn without antialiasing,
-since blended pixels against the window's magenta colour key would show as a pink fringe.
+since blended pixels against the window's magenta colour key would show as a pink fringe. Both
+windows are placed (SetWindowPos) only when they show or move, and only redrawn on the other frames:
+each SetWindowPos makes Windows send a mouse move to the window under the pointer, wherever the
+overlay is, so placing them on every frame (25 a second) sent the app being typed into some 17
+mouse moves a second for as long as the log showed, with the pointer still (measured on 28 October
+2026 with a logging text box in another app, against a scripted stand-in model; after the change, none).
+Focus never left that text box, with Sloperator beside it or over the click point.
 
 To change or add to a task while it runs, type in the box at the bottom and press Enter. The agent
 reads the message before its next step, and a `wait` it is in ends for it. While you type there,
