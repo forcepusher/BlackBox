@@ -29,6 +29,16 @@ public class ToolTests
     }
 
     [Fact]
+    public void Pixel_coordinates_are_described_with_the_image_size()
+    {
+        // Told only "pixels", DeepSeek V4.1 Flash answered fresh looks on a 0-1000 grid.
+        var space = new ScreenSpace(new ScreenRect(0, 0, 2560, 1080), (2560, 1080));
+        Assert.Contains("2560x1088", space.Describe());
+        // A fresh look's quarter of the screen is described with its own size.
+        Assert.Contains("1280x544", space.Part(space.Around(1300, 90)).Describe());
+    }
+
+    [Fact]
     public void A_point_given_as_fractions_of_the_screenshot_lands_where_it_means()
     {
         // Kilo's free Nemotron answered (0.8711, 0.8833) for a button at (1110, 635) on a 1280x720

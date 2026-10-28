@@ -187,6 +187,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - What the agent just changed stays lit in File changes longer: 4 seconds, then a 2 second fade.
 
 ### Fixed
+- Clicks with DeepSeek V4.1 Flash land where they should again: the look that aims each click now
+  says how big the screenshot is, so DeepSeek answers in pixels instead of its own 0-1000 grid, which
+  moved clicks far to the left.
 - A server that takes only so many pictures in one request (munito takes 8) no longer ends a long run
   with "too many image inputs": the screenshots before the latest are left out and the run goes on.
   A request too large for the server (Kilo takes 20 MB) does the same, rather than resetting the
