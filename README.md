@@ -29,6 +29,7 @@ https://github.com/user-attachments/assets/8a6d325e-0564-483e-95d7-42900efc6903
 Sloperator picks the strongest model the server has, or you pick one from the list.
 
 If you still have no idea what to do, you can ask the free model to connect another model for you.
+Just like with MCPs, tell Sloperator what you want to be connected and that'll be done.
 
 ## Building
 You need Windows and the .NET 10 SDK.
