@@ -31,7 +31,7 @@ Sloperator picks the strongest model the server has, or you pick one from the li
 If you still have no idea what to do, you can ask the free model to connect another model for you.
 Just like with MCPs, tell Sloperator what you want to be connected and that'll be done.
 
-## Building
+## Building (you don't have to, download from [Releases](https://github.com/forcepusher/Sloperator/releases))
 You need Windows and the .NET 10 SDK.
 
 ```powershell
