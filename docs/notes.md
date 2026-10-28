@@ -1304,14 +1304,14 @@ metadata there. Fluent lays the bars over the content, so a bar covers the strip
 Left of Send and Stop, 32 px like the buttons and 8 px from Send, `PartyBlob` (Views/PartyBlob.cs)
 shows the logo (Assets/sloperator.png) still, and the blobs.gg party blob (Assets/partyblob.gif: 128 px,
 20 frames, 16 KB) dancing while `IsBusy`, the whole run, so it dances until Stop or the reply ends.
-Its pace is 1.5 times what the user first saw (2026-10-27): the blobs.gg original has 20 frames of
-30 and 20 ms (0.5 s a loop), which the first `PartyBlob` played in 692 ms, its timer per frame's
-delay running late on Windows' 15.6 ms ticks (every frame about 33 ms). A 0.25 s loop (every other
-frame) was too fast. The file keeps all 20 frames with delays of 30 and 20 ms, more of them 20, for
-a 0.46 s loop; GIF players clamp delays under 20 ms (browsers to 100), so none is shorter. Only the
-delay bytes differ from the original. `PartyBlob` now picks the frame for the time since the dance
-began on a 10 ms timer, so it keeps the file's pace. Measured in the app by sampling the blob on
-screen every 8 ms for 3 s.
+A loop is one beat at 120 BPM, the most common music tempo (the user, 2026-10-28): exactly 0.5 s,
+20 frames of 30 and 20 ms in turn, which is the blobs.gg file unchanged. On the way there: the first
+`PartyBlob` played it in 692 ms, its timer per frame's delay running late on Windows' 15.6 ms ticks
+(every frame about 33 ms); a 0.25 s loop (every other frame) was too fast, 0.46 s (1.5 times the
+692 ms) a little off the beat. GIF delays are in 10 ms steps and players clamp those under 20 ms
+(browsers to 100), so 30/20 in turn is the even pace of 25 ms a frame. `PartyBlob` picks the frame
+for the time since the dance began on a 10 ms timer, so it keeps the file's pace. Measured in the app
+by sampling the blob on screen every 8 ms for 3 s.
 The window shows one blob at most (the user, 2026-10-27): while the intro is up (`ShowIntro`, an empty
 chat or one of notices only) its logo is the blob and this one is hidden; it appears with the first
 prompt and goes again with New chat. The title bar's icon is the window's, not counted. The GIF is "apartyblob" from github.com/Raymo111/emoji, Apache
