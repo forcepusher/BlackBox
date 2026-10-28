@@ -46,6 +46,7 @@ public sealed class WindowsPlatform : IPlatformServices
     /// </summary>
     public static bool MoveAndWiden(nint hwnd, int dx, int wider, uint fill, byte[]? cover = null, int coverWidth = 0)
     {
+        EnsurePhysicalPixels();
         if (!GetWindowRect(hwnd, out var r) || !ClientOnScreen(hwnd, out var before))
             return false;
         var shield = cover is not null && coverWidth > 0 ? WindowCover.Make(hwnd, before.Left + dx, before.Top, coverWidth, cover) : 0;

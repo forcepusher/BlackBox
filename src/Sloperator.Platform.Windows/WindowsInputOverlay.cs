@@ -106,6 +106,7 @@ internal sealed class WindowsInputOverlay : IInputOverlay
 
     private void Run(ManualResetEventSlim ready)
     {
+        EnsurePhysicalPixels();
         _threadId = GetCurrentThreadId();
         _wndProc = DefWindowProc;
         var wc = new WNDCLASSEX

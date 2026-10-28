@@ -2066,6 +2066,19 @@ and never scaled up (`AgentSettings.ScreenshotMaxWidth`/`ScreenshotMaxHeight`, k
 user: "wide full HD"): 1920×1080 and 21:9 screens go as they are, 4K goes at 1920×1080. Clicks map
 back through `ScreenSpace` per monitor, in physical pixels, so each screen's own scaling and its
 place in the desktop don't matter (`ToolTests.Screenshots_fit_the_max_size_and_clicks_land_on_the_real_screen_of_every_monitor`).
+That holds because the whole process is per-monitor DPI aware (the manifest, shared by the CLI, and
+`WindowsPlatform` for hosts without it): screens, captures and the cursor are all in the same physical
+pixels. A thread can still be put in another DPI context, so everything that reads or sets positions
+(the cursor, screens, captures, stepping aside, the input overlay, the window cover) first puts its
+thread back in physical pixels (`Native.EnsurePhysicalPixels`). On the laptop's 1920×1200 screen at
+125%, `ClickLandsTests` (`BB_DESKTOP_TESTS=1`, the real mouse) finds a red square of another process
+in Sloperator's own screenshot, scaled down to 1024×640, as a model finds a button, and moves over
+it, clicks, double-clicks, drags from it and clicks it by name through a fresh look, in pixels and on
+the 0-1000 grid, and from a thread left DPI-unaware: all landed (28 October 2026). With the cursor
+moved to four fifths of the point, as a DPI-unaware process does, every case failed, and with the
+guard taken out the DPI-unaware thread's did. Scripts that drive Sloperator must work in physical pixels too: Windows PowerShell
+is DPI aware in some hosts and not in others, and click targets read off a 1536×960 screenshot of
+that screen landed every click 25% too far right and down.
 Claude's own limit (`ToolContext.MaxScreenshotSide`) still applies over the setting.
 The click benchmark takes another box with `BB_CLICK_RES=1920x1080`.
 

@@ -21,6 +21,7 @@ internal sealed class WindowsScreenCapture : IScreenCapture
 
     public IReadOnlyList<ScreenRect> GetScreens()
     {
+        EnsurePhysicalPixels();
         var monitors = new List<(ScreenRect Rect, bool Primary)>();
         EnumDisplayMonitors(0, 0, (nint monitor, nint hdc, ref RECT rect, nint lParam) =>
         {
@@ -40,6 +41,7 @@ internal sealed class WindowsScreenCapture : IScreenCapture
 
     public RawImage Capture(ScreenRect region, bool includeCursor)
     {
+        EnsurePhysicalPixels();
         lock (Gate)
         {
             var hidden = HideOwnWindows(region);
@@ -60,14 +62,18 @@ internal sealed class WindowsScreenCapture : IScreenCapture
     /// process draws in (Windows' previewers): Sloperator's other windows over it (a tooltip, a menu)
     /// left out. Null when it isn't on screen.
     /// </summary>
-    internal static RawImage? CaptureWindow(nint hwnd) =>
-        GetWindowRect(hwnd, out var r) && r.Right > r.Left && r.Bottom > r.Top
+    internal static RawImage? CaptureWindow(nint hwnd)
+    {
+        EnsurePhysicalPixels();
+        return GetWindowRect(hwnd, out var r) && r.Right > r.Left && r.Bottom > r.Top
             ? CaptureIn(hwnd, new ScreenRect(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top))
             : null;
+    }
 
     /// <summary>The screen's <paramref name="region"/>, of window <paramref name="hwnd"/>'s, with Sloperator's other windows over it left out.</summary>
     internal static RawImage? CaptureIn(nint hwnd, ScreenRect region)
     {
+        EnsurePhysicalPixels();
         if (region.Width <= 0 || region.Height <= 0)
             return null;
         lock (Gate)

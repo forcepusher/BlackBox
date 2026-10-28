@@ -48,9 +48,17 @@ internal sealed class WindowsInputController : IInputController
             NamedKeys["f" + i] = (ushort)(0x70 + i - 1);
     }
 
-    public (int X, int Y) GetCursorPosition() => GetCursorPos(out var p) ? (p.X, p.Y) : (0, 0);
+    public (int X, int Y) GetCursorPosition()
+    {
+        EnsurePhysicalPixels();
+        return GetCursorPos(out var p) ? (p.X, p.Y) : (0, 0);
+    }
 
-    public void MoveMouse(int x, int y) => SetCursorPos(x, y);
+    public void MoveMouse(int x, int y)
+    {
+        EnsurePhysicalPixels();
+        SetCursorPos(x, y);
+    }
 
     public void MouseDown(MouseButton button) => SendMouse(Flags(button).Down);
 
