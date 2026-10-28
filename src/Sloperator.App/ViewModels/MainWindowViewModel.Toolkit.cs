@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Avalonia.Threading;
@@ -28,19 +27,6 @@ public interface IToolkit : IDisposable
 
     /// <summary>Files dropped on the tool's panel; false when the tool doesn't take them (they then go with the next message).</summary>
     bool Drop(IReadOnlyList<string> paths);
-
-    /// <summary>
-    /// What a message is about while nothing is picked in the tool, shown over the chat's box where a
-    /// pick would be ("Untitled video", "whole video"); null when the tool shows nothing yet, and the
-    /// card then names the tool. A change is told by the tool's PropertyChanged under this name.
-    /// </summary>
-    (string Title, string Details)? Whole => null;
-
-    /// <summary>The tooltip of <see cref="Whole"/>'s card: what it is, and how to pick something instead.</summary>
-    string WholeTip => "";
-
-    /// <summary>The path data of the icon on <see cref="Whole"/>'s card; a file's with none.</summary>
-    string? WholeIcon => null;
 }
 
 /// <summary>
@@ -95,48 +81,6 @@ public sealed partial class MainWindowViewModel
 
     public bool HasToolkit => Toolkit is not null;
 
-    partial void OnToolkitChanged(IToolkit? oldValue, IToolkit? newValue)
-    {
-        if (oldValue is INotifyPropertyChanged old)
-            old.PropertyChanged -= OnToolkitPropertyChanged;
-        if (newValue is INotifyPropertyChanged now)
-            now.PropertyChanged += OnToolkitPropertyChanged;
-        WholeChanged();
-    }
-
-    private void OnToolkitPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is nameof(IToolkit.Whole) or nameof(IToolkit.WholeTip))
-            WholeChanged();
-    }
-
-    /// <summary>
-    /// What a message is about with nothing picked in the open tool (the whole video), as a card; with
-    /// a tool that shows nothing yet, the tool itself. Every open tool has one or a pick in the box,
-    /// so what goes with a message from it is always in view (the user, 2026-10-25).
-    /// </summary>
-    private ToolCard WholeOf(IToolkit toolkit) =>
-        toolkit.Whole is { } whole ? new ToolCard(whole.Title, whole.Details, Icon: toolkit.WholeIcon)
-        : new ToolCard(SelectedToolkit?.Name ?? "Toolkit", EmptyToolkit);
-
-    private const string EmptyToolkit = "nothing in it yet";
-
-    /// <summary>The card over the box of what a message is about in the open tool; null with something picked there, or no tool open.</summary>
-    [ObservableProperty]
-    private ToolCardItem? _wholeCard;
-
-    public bool ShowsWhole => WholeCard is not null;
-
-    /// <summary>The row over the box: the files going with the message, and what it is about in the open tool.</summary>
-    public bool ShowsBoxRow => HasAttachments || ShowsWhole;
-
-    private void WholeChanged()
-    {
-        WholeCard = Toolkit is { } toolkit && !Attachments.Any(a => a.Picked) && WholeOf(toolkit) is { } card ? new ToolCardItem(card, toolkit.WholeTip) : null;
-        OnPropertyChanged(nameof(ShowsWhole));
-        OnPropertyChanged(nameof(ShowsBoxRow));
-    }
-
     partial void OnSelectedToolkitChanged(ToolkitOption? value)
     {
         var old = Toolkit;
@@ -186,11 +130,11 @@ public sealed partial class MainWindowViewModel
             return;
         if (!withPicks)
         {
-            _ = SendAsync(WithToolkit(new UserInput(text), []));
+            _ = SendAsync(WithToolkit(new UserInput(text), [], fromTool: true));
             return;
         }
         var picked = Attachments.Where(a => a.Picked).ToList();
-        var input = WithToolkit(new UserInput(text, picked.Where(a => File.Exists(a.Path) || Directory.Exists(a.Path)).Select(a => a.Path).ToList()), Picked);
+        var input = WithToolkit(new UserInput(text, picked.Where(a => File.Exists(a.Path) || Directory.Exists(a.Path)).Select(a => a.Path).ToList()), Picked, fromTool: true);
         foreach (var pick in picked)
             RemoveAttachment(pick);
         _ = SendAsync(input);
@@ -199,17 +143,17 @@ public sealed partial class MainWindowViewModel
     /// <summary>
     /// A message as the model gets it while a tool is open: with what the tool says about it and what
     /// was picked in it, which then goes with it (none for a message of the tool's own: what is picked
-    /// stays in the box for the next), and the cards of those as the box showed them. A tool with
-    /// nothing to say still has the model told it is open, as its card says.
+    /// stays in the box for the next), and the cards of those as the box showed them. A message the
+    /// user typed with nothing picked goes as it is: no card, no word of the tool (the user,
+    /// 2026-10-28: a card of what they never picked, with no × to take it off, was context they
+    /// didn't choose). The tool's own messages (Make the video) always say what the tool shows.
     /// </summary>
-    private UserInput WithToolkit(UserInput input, IReadOnlyList<string> picked)
+    private UserInput WithToolkit(UserInput input, IReadOnlyList<string> picked, bool fromTool = false)
     {
-        if (Toolkit is not { } toolkit)
+        if (Toolkit is not { } toolkit || picked.Count == 0 && !fromTool)
             return input;
         var cards = Attachments.Where(a => a.Picked && picked.Contains(a.Path, StringComparer.OrdinalIgnoreCase))
             .Select(a => new ToolCard(a.Title, Path: a.Path)).ToList();
-        if (cards.Count == 0)
-            cards.Add(WholeOf(toolkit));
         var name = SelectedToolkit?.Name ?? "Toolkit";
         var about = toolkit.About(picked) ?? (name, $"[The {name} panel is open beside the chat, with nothing in it yet.]");
         if (picked.Count > 0)

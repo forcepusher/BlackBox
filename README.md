@@ -17,7 +17,7 @@ whatever it downloads stay in a `Data` folder next to the exe.
   **Generate** to have Sloperator make it; you can also drop files on the timeline. A sound line's **+**
   makes a sound: a file of yours, **Foley** for what the clips under it show, or **Music**. The video's name at
   the top opens your other videos. Click anything on the timeline to put it in your message, and say
-  what you want in plain words (with nothing picked, it is about the whole video). Sloperator writes the
+  what you want in plain words. Sloperator writes the
   prompts, picks the models, makes it and looks at it, in the chat, where you can watch it and stop
   it; right-click a piece to get an earlier version back. Or just ask for a video in the chat.
 - **See what changed.** Pick **File changes** in the **Toolkit** dropdown: it opens on the left of the chat
@@ -25,7 +25,7 @@ whatever it downloads stay in a `Data` folder next to the exe.
   (Shift+click for a range, Ctrl+click for more) to put them in your message, then ask about them or
   have them changed. **Watch** follows the agent's edits as they happen; **Wrap** wraps long lines.
   In a git repository the files are split into **Committed**, **Staged** and **Unstaged**. **Stage**, **Unstage**
-  and **Discard** act on the picked lines (click a "Lines" divider for its hunk, a file's name for all of it), else the file.
+  and **Discard** act on the picked lines (click a "Lines" divider for its hunk, a file's name for all of it), else the file you clicked in the list. Click it again to let it go.
 - **See a file.** Click a file's preview in the chat to see it full screen, or press **Inspect** to
   open it in **File inspector** on the left of the chat (its folder button opens any file). Markdown, PDF, Word, Excel, PowerPoint, tables,
   text, pictures, video, animations, sound, 3D models (an FBX plays its animations), and any other

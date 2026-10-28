@@ -851,27 +851,7 @@
             <!-- The files going with the message (dropped, pasted or picked); × takes one off. Each
                  item keeps room above and to its right for the × that sits over its corner: the
                  list clips what goes past its edges, and the ×'s top was cut off. -->
-            <WrapPanel Grid.Row="0" Grid.ColumnSpan="3" IsVisible="{Binding ShowsBoxRow}" Margin="4,2,4,6">
-              <!-- With nothing picked in the open tool, what a message is about there (the whole video, the document shown;
-                   the tool itself while it shows nothing), as a pick shows and where it would come: before the user's own files. -->
-              <ContentControl Content="{Binding WholeCard}" IsVisible="{Binding ShowsWhole}">
-                <ContentControl.ContentTemplate>
-                  <DataTemplate x:DataType="vm:ToolCardItem">
-                    <Panel Margin="0,8,12,0" ToolTip.Tip="{Binding Tip}">
-                      <Border Classes="attachment file" MinHeight="36" AutomationProperties.Name="{Binding Title}">
-                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,10,0">
-                          <PathIcon Classes="toolArrow" />
-                          <PathIcon Data="{Binding Icon}" />
-                          <StackPanel Spacing="1" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding Title}" MaxWidth="220" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Classes="muted" Text="{Binding Details}" />
-                          </StackPanel>
-                        </StackPanel>
-                      </Border>
-                    </Panel>
-                  </DataTemplate>
-                </ContentControl.ContentTemplate>
-              </ContentControl>
+            <WrapPanel Grid.Row="0" Grid.ColumnSpan="3" IsVisible="{Binding HasAttachments}" Margin="4,2,4,6">
               <!-- A tool's picks come first in the list (see MainWindowViewModel.Pick). -->
               <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}">
                 <ItemsControl.ItemsPanel>

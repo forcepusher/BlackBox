@@ -194,7 +194,7 @@
                     <TextBlock Text="{Binding Count}" Classes="muted" Margin="4,0,0,0" VerticalAlignment="Center" />
                   </StackPanel>
                 </Button>
-                <ListBox Classes="files" ItemsSource="{Binding Files}" SelectedItem="{Binding Selected, Mode=TwoWay}" IsVisible="{Binding IsExpanded}"
+                <ListBox Classes="files" ItemsSource="{Binding Files}" SelectedItem="{Binding Selected, Mode=TwoWay}" SelectionMode="Single,Toggle" IsVisible="{Binding IsExpanded}"
                          SelectionChanged="OnFilePicked" ContextRequested="OnFileMenu" AutomationProperties.Name="{Binding ListName}"
                          ScrollViewer.VerticalScrollBarVisibility="Disabled">
                   <ListBox.ItemTemplate>
