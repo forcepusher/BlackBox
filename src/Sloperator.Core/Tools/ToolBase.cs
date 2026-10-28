@@ -59,18 +59,9 @@ public sealed class ToolContext
     public int CurrentScreen { get; set; }
 
     /// <summary>
-    /// Finds a named thing on a screenshot (JPEG) of the given space (the whole screen, or the part
-    /// around a click) in a fresh conversation with the model; returns its centre in the model's
-    /// coordinates for that space, or null. Set by the agent session; mouse_click aims with it
-    /// (see <see cref="Agent.FreshLook"/>).
-    /// </summary>
-    public Func<byte[], ScreenSpace, string, CancellationToken, Task<(double X, double Y)?>>? Locate { get; set; }
-
-    /// <summary>
-    /// The screen as the model last saw it, which its next click is aimed by: the agent sets it
-    /// before each reply's tool calls, and the first action of the reply clears it, as the
-    /// screen then changes in ways the model hasn't seen yet. A click compares it with the screen
-    /// at the moment of the click (see <see cref="MouseClickTool"/>).
+    /// The screen as the model last saw it: the agent sets it before each reply's tool calls, and
+    /// the first action of the reply clears it, as the screen then changes in ways the model hasn't
+    /// seen yet. A wait for a change compares it with the screen now (see <see cref="WaitTool"/>).
     /// </summary>
     public (ScreenRect Screen, RawImage Frame)? Seen { get; set; }
 
@@ -100,9 +91,6 @@ public sealed class ToolContext
 
     /// <summary>The latest screenshot taken for the model (screen and frame).</summary>
     public (ScreenRect Screen, RawImage Frame)? LastShot { get; set; }
-
-    /// <summary>Where the last click that was held back because the screen had changed was aimed (screen pixels).</summary>
-    internal (int X, int Y)? HeldBack { get; set; }
 
     /// <summary>Whose turn it is with the mouse and keyboard among Sloperator's windows; null where only one agent runs (the command line, tests).</summary>
     public Platform.DesktopTurn? DesktopTurn { get; init; }

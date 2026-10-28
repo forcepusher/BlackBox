@@ -65,34 +65,30 @@ public abstract class DesktopActionTool : Tool
         var paused = System.Diagnostics.Stopwatch.StartNew();
         while (ctx.UserComposing?.Invoke() == true && paused.Elapsed < MaxUserPause)
             await Task.Delay(200, ct).ConfigureAwait(false);
-        var (text, check, moved) = await ActAsync(args, ctx, ct).ConfigureAwait(false);
+        var (text, check) = await ActAsync(args, ctx, ct).ConfigureAwait(false);
         // The screen now changes in ways the model hasn't seen; a later click in the same reply
         // is aimed at what it expects, not at what it saw.
         ctx.Seen = null;
         if (!ctx.Settings.ScreenshotAfterActions)
-            return new ToolResult(moved is null ? text : text + "\n" + moved);
+            return new ToolResult(text);
 
         // Give the UI a moment to react before looking at it.
         await Task.Delay(500, ct).ConfigureAwait(false);
-        // A fresh look that misses misses the same way again, so a retry goes to the model's own x/y.
         // A click on what is already selected changes nothing either: Paint's oval tool, picked by
         // one of the first clicks, was clicked some twenty times more, each "probably missed".
         if (check is not null && await check.MissedAsync(ctx, ct).ConfigureAwait(false))
             text += "\nNothing on screen changed after this click, so it probably missed, unless what you clicked was already selected or switched on " +
                     "(a tool, a tab, a checkbox), which a click doesn't change: then go on. If the mouse pointer in the screenshot is not on what you meant, " +
-                    "click again with target left out and x, y on it. If it only needs more time to respond, wait instead; " +
+                    "zoom in on what you meant and click again. If it only needs more time to respond, wait instead; " +
                     "if you clicked an empty spot only to focus a window, ignore this.";
-        else if (moved is not null)
-            text += "\n" + moved;
         var shot = ScreenshotTool.Take(ctx);
         return shot with { Text = text + "\n" + shot.Text };
     }
 
     /// <summary>
-    /// What an action did; for a click, also the screen just before it, to tell a miss by (see <see cref="ClickCheck"/>),
-    /// and what to tell the model when a fresh look moved the click away from its aim, unless the click missed (the miss note says it then).
+    /// What an action did; for a click, also the screen just before it, to tell a miss by (see <see cref="ClickCheck"/>).
     /// </summary>
-    private protected readonly record struct Acted(string Text, ClickCheck? Check = null, string? Moved = null)
+    private protected readonly record struct Acted(string Text, ClickCheck? Check = null)
     {
         public static implicit operator Acted(string text) => new(text);
     }
@@ -101,7 +97,7 @@ public abstract class DesktopActionTool : Tool
 
     /// <summary>
     /// The wait <see cref="ExecuteAsync"/> makes before an action, made again inside one that takes
-    /// a while (a click whose target is still being looked for, a series of presses, long text):
+    /// a while (a series of presses, long text):
     /// typing to the agent that starts meanwhile must hold the rest too. Returns whether it waited:
     /// the keyboard is then in Sloperator's window, and keys meant for another need it given back.
     /// </summary>
@@ -195,16 +191,9 @@ public sealed class MouseClickTool : DesktopActionTool
 {
     public override string Name => "mouse_click";
     public override string Description =>
-        "Click something on the screen. Name it in target, and say in which what tells it apart from anything else on the screen that looks like it; " +
-        "Sloperator finds it on the current screen and clicks its centre. " +
-        "Also give x, y where you see it, in screenshot coordinates: they are used when it can't be found by name.";
+        "Click at (x, y) in screenshot coordinates. When something is small or close to things like it (a row of a list, a menu item, a tab), " +
+        "zoom in on it first and aim from the zoomed picture.";
     public override JsonObject Parameters => Schema(
-        ("target", Str("What to click, named so someone who hasn't seen your earlier steps can find it: its text or icon and what kind of thing it is, " +
-                       "e.g. \"File menu\", \"Delete button\", \"Bold icon\". " +
-                       "Leave it out only to click an exact spot that has no name (an empty area, a point in a drawing)."), true),
-        ("which", Str("What tells it apart from everything else on the screen that looks like it or has the same text: the row, item, card, dialog or panel " +
-                      "it belongs to and the label or text next to it, e.g. \"in the row of report-q1 (1).xlsx\", \"on the card of Wireless Mouse M330\", " +
-                      $"\"in the Export dialog\". Write \"{OnlyOne}\" when nothing else on the screen looks like it."), true),
         ("x", Num("X in screenshot coordinates"), true),
         ("y", Num("Y in screenshot coordinates"), true),
         ("button", Str("Mouse button, default left", "left", "right", "middle"), false),
@@ -218,59 +207,15 @@ public sealed class MouseClickTool : DesktopActionTool
         if (Modifiers(args) is { Count: > 0 } held)
             kind = Held(held) + "+" + kind.ToLowerInvariant();
         var button = GetString(args, "button") is { } b && b != "left" ? $" ({b})" : "";
-        return Named(args) is { } t ? $"{kind}{button} {t}" : $"{kind}{button} at {Fmt(args)}";
+        return $"{kind}{button} at {Fmt(args)}";
     }
-
-    /// <summary>
-    /// The height of the screen-wide row a target with look-alikes is looked for in first, as a share of the
-    /// screen's: 1 or more, the whole screen (the default); 0, the quarter around the aim. Changed only to measure (ClickAccuracyTests).
-    /// </summary>
-    internal static double RowShare { get; set; } = 1;
-
-    /// <summary>What which says when nothing else on the screen looks like the target.</summary>
-    internal const string OnlyOne = "only one";
-
-    /// <summary>
-    /// The target with what tells it apart from its look-alikes ("Delete button, in the row of
-    /// report.xlsx"), as the look is asked for it; just the target when it has none; null without a target.
-    /// </summary>
-    internal static string? Named(JsonObject args)
-    {
-        if (GetString(args, "target")?.Trim() is not { Length: > 0 } target)
-            return null;
-        return LookAlikes(args) && GetString(args, "which")?.Trim().TrimEnd('.') is { Length: > 0 } which ? $"{target}, {which}" : target;
-    }
-
-    /// <summary>Whether which says something else on the screen looks like the target: anything but "only one".</summary>
-    internal static bool LookAlikes(JsonObject args) =>
-        GetString(args, "which")?.Trim().TrimEnd('.') is { Length: > 0 } which && !which.Equals(OnlyOne, StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>How far, as a share of the screen's longer side, the look may find the target from where the model aimed before the click can be held back.</summary>
-    private const double FarShare = 0.08;
-
-    /// <summary>The half-width of the square around the model's aim compared with what it saw, as a share of the screen's longer side.</summary>
-    private const double AroundShare = 0.05;
-
-    /// <summary>
-    /// How far, as a share of the screen's longer side, the look may move the click from the model's aim before the result says so: about a row of a menu or a tab.
-    /// Half that for a target with look-alikes, whose rows can be closer together.
-    /// </summary>
-    private const double MovedShare = 0.02;
 
     private protected override async Task<Acted> ActAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var modifiers = Modifiers(args, ctx);
-        var (aimed, note, moved) = await AimAsync(args, ctx, ct).ConfigureAwait(false);
-        if (aimed is not { } point)
-            return note; // held back: nothing was clicked
-        // The look is a request to the model, seconds long: typing to the agent that started
-        // meanwhile holds the click too. It went ahead mid-word, and the rest of the message
-        // landed in the window it clicked.
-        await WaitWhileUserTypesAsync(ctx, ct).ConfigureAwait(false);
+        var point = Point(args, ctx);
         var button = ParseButton(GetString(args, "button"));
         var clicks = Math.Clamp((int)(GetNumber(args, "clicks") ?? 1), 1, 3);
-        // The screen just before the click, not before the look: what changed while the model
-        // looked (some 15 s) is no reaction to the click.
         var check = ClickCheck.Enabled && ctx.Settings.ScreenshotAfterActions ? ClickCheck.Start(ctx) : null;
         using var aside = Aside(ctx, point);
         ctx.Platform.Input.MoveMouse(point.X, point.Y);
@@ -279,96 +224,7 @@ public sealed class MouseClickTool : DesktopActionTool
             await Task.Delay(60, ct).ConfigureAwait(false);
             ctx.Platform.Input.Click(button, clicks);
         }
-        return new(note + clicks switch { 2 => "Double-clicked.", 3 => "Triple-clicked.", _ => "Clicked." }, check, moved);
-    }
-
-    /// <summary>
-    /// Where a fresh look at the screen finds the target (see <see cref="Agent.FreshLook"/>), or
-    /// the call's own x/y when there is no target or the look doesn't find it. Deep in a long run
-    /// the model's own coordinates drift (a wrong belief about where something is, or the previous
-    /// call's point copied), while the same model looking at the screen afresh gets them right.
-    /// No point when the click is held back because what the model aimed at is gone (see <see cref="Gone"/>).
-    /// </summary>
-    /// <returns>
-    /// Also, when the look moved the click away from the model's aim, a note that says so. The look
-    /// can be the one that is wrong: in Blender it took the Animation tab for the "MCP for Blender"
-    /// tab under it, and the model, seeing the wrong panel open, named the tab again twice, aiming
-    /// lower each time, and both times the look moved the click back up. Told where the click went,
-    /// the model can aim itself.
-    /// </returns>
-    /// <remarks>
-    /// The look is shown the quarter of the screen around the model's aim, and the whole screen only
-    /// when the target isn't there: reading a whole 2560x1080 screenshot took a 27B model 9 s, a
-    /// quarter of it 3 s, and the model's own aim is mostly off by tens of pixels, not hundreds.
-    /// A target with look-alikes (which says what tells it apart) is looked for on the whole screen:
-    /// what tells it apart can be anywhere. In a file list the quarter around an Open button held only
-    /// other rows' Open buttons, not the file names, and the look moved a click the model had aimed at
-    /// the right row to another one; a screen-wide row a quarter as high fixed that, but not the OK
-    /// button of four look-alike dialogs, whose titles were 480 px higher.
-    /// </remarks>
-    private static async Task<((int X, int Y)? Point, string Note, string? Moved)> AimAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
-    {
-        var space = ctx.GetScreenSpace();
-        (int X, int Y)? given = GetNumber(args, "x") is { } x && GetNumber(args, "y") is { } y ? space.ToScreen(x, y) : null;
-        if (Named(args) is { } named && string.IsNullOrWhiteSpace(GetString(args, "which")))
-            throw new ToolArgumentException($"Say in which what tells the {named} apart from anything else on the screen that looks like it " +
-                                            $"(the row, card, dialog or label it belongs to), or \"{OnlyOne}\" if nothing does.");
-        if (Named(args) is not { } target || ctx.Locate is not { } locate)
-            return (given ?? throw new ToolArgumentException("Give target, or x and y."), "", null);
-        var lookAlikes = LookAlikes(args);
-        var now = ctx.Platform.Screen.Capture(space.Screen, includeCursor: false);
-        async Task<(int X, int Y)?> LookAsync(ScreenSpace part, RawImage frame) =>
-            await locate(part.Encode(frame), part, target, ct).ConfigureAwait(false) is { } p && p.X >= 0 && p.Y >= 0 && p.X <= part.ModelWidth && p.Y <= part.ModelHeight
-                ? part.ToScreen(p.X, p.Y)
-                : null;
-        (int X, int Y)? near = null;
-        if (given is { } aimed && Agent.FreshLook.Cropped && !(lookAlikes && RowShare >= 1))
-        {
-            var part = space.Part(lookAlikes && RowShare > 0 ? space.Row(aimed.Y, RowShare) : space.Around(aimed.X, aimed.Y));
-            near = await LookAsync(part, now.Crop(part.Screen.X - space.Screen.X, part.Screen.Y - space.Screen.Y, part.Screen.Width, part.Screen.Height)).ConfigureAwait(false);
-        }
-        if ((near ?? await LookAsync(space, now).ConfigureAwait(false)) is { } found)
-        {
-            if (given is { } aim && Gone(ctx, space.Screen, now, aim, found))
-            {
-                ctx.HeldBack = aim;
-                return (null, $"Nothing was clicked: the {target} was found far from where you aimed, and the screen there has changed since your " +
-                              "last screenshot, so what you meant may have closed or moved. Look at the screenshot below and click again if it is still what you want.", null);
-            }
-            ctx.HeldBack = null;
-            string? moved = null;
-            if (given is { } from && Distance(from, found) >= Math.Max(space.Screen.Width, space.Screen.Height) * (lookAlikes ? MovedShare / 2 : MovedShare))
-            {
-                var (mx, my) = space.ToModel(found.X, found.Y);
-                moved = $"A fresh look found the {target} at ({mx}, {my}), not where you aimed {Fmt(args)}, and the click went there. " +
-                        "If the mouse pointer in the screenshot is not on what you meant, click again with target left out and x, y on it: a look would find the same thing again.";
-            }
-            return (found, "", moved);
-        }
-        ctx.HeldBack = null;
-        return given is { } g
-            ? (g, $"Sloperator could not find the {target} on the screen by name, so it clicked at your x, y. ", null)
-            : throw new InvalidOperationException($"Sloperator could not find the {target} on the screen. Name it differently, or give x and y.");
-    }
-
-    private static double Distance((int X, int Y) a, (int X, int Y) b) => Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2));
-
-    /// <summary>
-    /// Whether what the model aimed at has gone since it looked: the fresh look finds the target
-    /// far from where the model aimed, and there the screen is no longer what the model saw. The
-    /// common case is a notification that closed by itself in the seconds before the click: the
-    /// look then finds something else that fits the words, such as the close button of the window
-    /// under it, and clicking that would do harm. A click the model asks for again after seeing the
-    /// new screen goes ahead.
-    /// </summary>
-    private static bool Gone(ToolContext ctx, ScreenRect screen, RawImage now, (int X, int Y) aim, (int X, int Y) found)
-    {
-        if (ctx.Seen is not { } seen || seen.Screen != screen)
-            return false;
-        var side = Math.Max(screen.Width, screen.Height);
-        if (Distance(aim, found) < side * FarShare || (ctx.HeldBack is { } held && Distance(held, aim) < side * FarShare / 2))
-            return false;
-        return ClickCheck.ChangedAround(seen.Frame, now, aim.X - screen.X, aim.Y - screen.Y, (int)(side * AroundShare));
+        return new(clicks switch { 2 => "Double-clicked.", 3 => "Triple-clicked.", _ => "Clicked." }, check);
     }
 
     internal static MouseButton ParseButton(string? s) => s?.ToLowerInvariant() switch

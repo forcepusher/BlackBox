@@ -9,8 +9,6 @@ namespace Sloperator.Core.Tools;
 /// after the click (without the mouse cursor); a change near the click, or a big one anywhere
 /// (a dialog opening), counts as a reaction. Small changes elsewhere (a clock, a blinking caret,
 /// the hover highlight under the old mouse position) don't.
-/// Clicks are aimed by a fresh look (see Agent.FreshLook); when that misses, it misses the same
-/// way again, and only the note gets the model to aim itself (ClickAccuracyTests, two more tries).
 /// </summary>
 internal sealed class ClickCheck
 {

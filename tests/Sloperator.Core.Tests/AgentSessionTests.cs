@@ -1088,35 +1088,6 @@ public class AgentSessionTests
     }
 
     [Fact]
-    public async Task A_click_waits_for_typing_that_started_while_its_target_was_looked_for()
-    {
-        // The look is a request to the model, seconds long: the user isn't typing when the click
-        // starts, and is by the time it is aimed.
-        System.Diagnostics.Stopwatch? typing = null;
-        TimeSpan? clicked = null;
-        var platform = new FakePlatform();
-        platform.OnClick = _ => clicked = typing?.Elapsed;
-        var ctx = new ToolContext
-        {
-            Platform = platform,
-            Settings = new AgentSettings { ScreenshotAfterActions = false },
-            WorkingDirectory = Path.GetTempPath(),
-            UserComposing = () =>
-            {
-                if (typing is not null)
-                    return typing.Elapsed < TimeSpan.FromMilliseconds(700);
-                typing = System.Diagnostics.Stopwatch.StartNew();
-                return false;
-            },
-        };
-
-        await new MouseClickTool().ExecuteAsync(new JsonObject { ["target"] = "OK button", ["which"] = "only one", ["x"] = 50, ["y"] = 50 }, ctx, CancellationToken.None);
-
-        Assert.NotNull(clicked);
-        Assert.True(clicked >= TimeSpan.FromMilliseconds(700), $"clicked {clicked?.TotalMilliseconds} ms into the typing");
-    }
-
-    [Fact]
     public async Task Typing_that_starts_during_a_series_of_presses_holds_the_rest_and_gives_the_keyboard_back()
     {
         var platform = new FakePlatform();
@@ -1233,7 +1204,7 @@ public class AgentSessionTests
         // request failed: the screenshot stays in the conversation.
         const string refusal = """data: {"error":{"message":"image input is not supported - hint: if this is unexpected, you may need to provide the mmproj","code":400}}""" + "\n\n";
         var replies = new Queue<string>([Sse.ToolCall("s1", "screenshot", "{}"), Sse.ToolCall("s2", "screenshot", "{}"),
-            Sse.ToolCall("m1", "mouse_click", """{"target": "OK button", "which": "only one", "x": 100, "y": 50}"""), Sse.Text("I can't see the screen, but the file is saved.")]);
+            Sse.ToolCall("m1", "mouse_click", """{"x": 100, "y": 50}"""), Sse.Text("I can't see the screen, but the file is saved.")]);
         var server = new ScriptedServer { Responder = req => Images(req) > 0 ? refusal : replies.Dequeue() };
         var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform());
 

@@ -352,14 +352,6 @@ public sealed partial class AgentSession(
         // A picture given earlier in the chat (a reference sheet) is still the one to follow.
         toolContext.UserPictures = UserInput.PicturesIn(History);
         toolContext.UserMessage = _arrived.Token;
-        if (toolContext.Locate is null && FreshLook.Enabled)
-        {
-            var look = new FreshLook(client, requestOptions);
-            // Not once the server has refused pictures: every click would send it one more.
-            toolContext.Locate = (image, space, target, ct2) => toolContext.SeesImages
-                ? look.LocateAsync(image, space.Describe(), target, ct2)
-                : Task.FromResult<(double X, double Y)?>(null);
-        }
         if (toolContext.Ask is null)
         {
             var eyes = new FreshLook(client, requestOptions);

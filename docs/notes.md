@@ -1975,7 +1975,8 @@ prints the traceback and exits with 0.
 | Tool | What it does |
 | --- | --- |
 | `screenshot` | Captures a screen scaled down to fit the max screenshot size, on the 32px vision grid; `screen=N` looks at another monitor |
-| `mouse_click` | Clicks a named target, with `which` saying what tells it apart from look-alikes, where a fresh look at the screen finds it (see below); `modifiers` holds keys through the click, as in Ctrl+click to add to a selection or Shift+click to select a range |
+| `mouse_click` | Clicks at x/y (see below); `modifiers` holds keys through the click, as in Ctrl+click to add to a selection or Shift+click to select a range |
+| `zoom` | A sharp, enlarged picture of the region around x/y, with rulers in screenshot coordinates, to aim at small things (see below) |
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Typing as key presses (see below) and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
@@ -2080,7 +2081,7 @@ pixels. A thread can still be put in another DPI context, so everything that rea
 thread back in physical pixels (`Native.EnsurePhysicalPixels`). On the laptop's 1920×1200 screen at
 125%, `ClickLandsTests` (`BB_DESKTOP_TESTS=1`, the real mouse) finds a red square of another process
 in Sloperator's own screenshot, scaled down to 1024×640, as a model finds a button, and moves over
-it, clicks, double-clicks, drags from it and clicks it by name through a fresh look, in pixels and on
+it, clicks, double-clicks and drags from it, in pixels and on
 the 0-1000 grid, and from a thread left DPI-unaware: all landed (28 October 2026). With the cursor
 moved to four fifths of the point, as a DPI-unaware process does, every case failed, and with the
 guard taken out the DPI-unaware thread's did. Scripts that drive Sloperator must work in physical pixels too: Windows PowerShell
@@ -2094,100 +2095,52 @@ The measurements that made native the default: in LM Studio, turn off the model'
 text links 15/16 at full resolution, 8/16 at 1920×1080); a server that resizes the image moves
 every click of a model that points in pixels.
 
-Every click is aimed by a fresh look. `mouse_click` names its `target` ("File menu", "Save button
-in the Export dialog"); Sloperator takes a new screenshot and asks the model, in a separate request
-with only that screenshot, where the target is, and clicks there. The x/y the model gives are used
-only when the look can't find the target, or when the model leaves `target` out to click a spot
-that has no name. Deep in a long run the model settles on wrong ideas of where things are (in a
-Unity run: "the menu bar is at y≈3", three times, 28 px above the menus) and copies its previous
-call's coordinates after writing the right ones, while the same model looking at the screen afresh
-gets them right. In `ClickAccuracyTests` (qwen3.8, 79 trials in 16 scenes) first clicks hit 69 times
-against 57 with the model's own coordinates, and 19 of 19 menus, tabs and buttons on a real Unity
-screenshot (`ClickScenes/unity-editor.png`) against 10; with the first screenshot shifted 30 px, as
-a misjudged screen would be, 30 of 31 against 0.
+A click goes exactly to the x/y the model gives. When something is small or close to things like it,
+the model zooms in first (`zoom`): Sloperator captures the region around a point at the screen's own
+pixels, enlarges it to fit the screenshot's size (at most 4 times), and draws rulers along its top and
+left edges labelled in screenshot coordinates, so the model reads the x/y to click off them and never
+works in the zoomed picture's own pixels. A server that reads every picture at a fixed budget (munito,
+about 1,000 tokens) sees a whole 2560x1080 screenshot shrunk, where a 16 px row of Unity's Hierarchy is
+a few pixels high; a region of it isn't. Sent at the desktop's own pixels instead of enlarged, a
+640x270 zoom left DeepSeek worse off: 10 of 28 clicks (Unity 7 of 19) against 20 of 28 (Unity 13 of
+19) on the same scenes, as munito reads a small picture at fewer tokens, not at more detail.
 
-The look is shown the quarter of the screen around where the model aimed (half as wide and half as
-high, at the same scale), and the whole screen only when the target isn't there: on a 2560×1080
-screen that is 680 image tokens instead of 2,720. Qwen 3 and later answer it without thinking:
-Sloperator begins their reply with an empty think block, as their chat template does when thinking is
-off (in LM Studio, `enable_thinking`, `reasoning_effort` and `/no_think` changed nothing for
-qwen3.8; a server that refuses a begun reply is asked again the usual way, and from then on). With
-qwen3.8 on an RTX 5070 Ti, which reads about 500 tokens a second, a look at the whole screen took
-15-17 s (9 s reading it, the rest thinking); the look at the quarter around the aim takes about 3 s,
-and both found 19 of 19 targets on the Unity screenshot. On eight of the harder scenes of
-`ClickAccuracyTests` (tiny, dense, edges, similar, links, hidden, ultrawide and Unity; 40 trials on
-the same layouts) clicks hit 37 times with the new look in 17 minutes, and 31 times with the old one
-in 37 minutes. On the dense table the old look thought so long that two of three trials ran out of
-their five minutes, and on the 5120×1440 screen (7,200 image tokens) it missed all three buttons.
+Until 28 October 2026 every named click was aimed again by a **fresh look**: `mouse_click` took a
+`target` and a `which` (what told it apart from look-alikes), and a separate request with only a new
+screenshot (the quarter around the aim, or the whole screen for look-alikes) asked the model where the
+target was; the click went there. It was made for qwen3.8, which deep in a long run settled on wrong
+ideas of where things were (in `ClickAccuracyTests` first clicks hit 69 of 79 with it against 57, and
+19 of 19 Unity targets against 10). It needed a pile of things around it: the look-alike argument, a
+note when the look moved a click, holding a click back when the look found the target far off on a
+changed screen, a thinking-free reply for Qwen, the quarter crop. And it isolated the click from what
+the model knew: in a DeepSeek V4.1 Flash run (munito) the model measured the Hierarchy's rows with
+crops and pixel scans of its own (16 px apart), and its bare x/y clicks hit 5 of 5, while its named
+clicks hit 2 of 8: the look, re-guessing from one shrunk picture, put them a row off or 1,000 px into
+the Scene view, overriding coordinates the model had right. On single cold clicks (10 scenes, two
+layouts each, 73 trials) DeepSeek hit 22 with the look and 17 without, most misses on both near
+(within 40 px), which zooming is for. The user chose to drop it.
 
-After each click Sloperator also compares the screen just before it (after the look, so what changed
-while the model looked doesn't count) with the screen after it. When nothing changed near
-the click and nothing big changed anywhere (a dialog opening), the click almost certainly missed,
-and the result says so. A fresh look that misses misses the same way again, so the note tells the
-model to click again with `target` left out and its own x/y. On the scenes where looks miss (a dense
-table, half-covered buttons, an ultrawide screen) 4 of 9 misses were fixed within two more clicks
-with the note, 0 of 8 without it, and 4 of 10 when every click used the model's own coordinates.
-Before the fresh look, a red ring drawn at the click added nothing to the note, nor did a prompt
-rule about aiming carefully or temperature 0.2 instead of 0.6.
+After each click Sloperator also compares the screen just before it with the screen after it. When
+nothing changed near the click and nothing big changed anywhere (a dialog opening), the click almost
+certainly missed, and the result says so and tells the model to zoom in and click again. With the
+fresh look, on the scenes where clicks missed (a dense table, half-covered buttons, an ultrawide
+screen) 4 of 9 misses were fixed within two more clicks with the note, 0 of 8 without it. A red ring
+drawn at the click added nothing to the note, nor did a prompt rule about aiming carefully or
+temperature 0.2 instead of 0.6.
 
-The look's instructions give the image's size along with "pixels of the screenshot" (the quarter's
-own size for a quarter). Without it DeepSeek V4.1 Flash (munito.ai) answered looks on a 0-1000 grid,
-the way it was trained to point: on a 2560×1080 Unity screenshot it put the Hierarchy tab, at x 1368,
-at (551, 84), and every one of eight targets so, x at 1000/2560 of the right one and y nearly right
-(1080 is close to 1000). Read as pixels, each look dragged the click to the left: in a user's Unity
-run the model's own aims were often close and the look moved them hundreds of pixels off. Asked the
-same with the size given, it answered in pixels: 38 of 57 Unity targets on the quarter around an aim
-40-60 px off, 25 of 57 on the whole screen, where it still slips into the grid now and then (the Play
-button at x 536). On the grid instead of pixels, its looks were worse: 13 and 24 of 57. munito reads
-a picture at no more than about 1,000 tokens (a 1920×810 one costs 974, a 2560×1080 one 1,014), so a
-whole screenshot reaches it shrunk; enlarging the quarter 1.5 or 2 times didn't help it (38 and 37 of
-57), nor did reasoning effort high (36 of 57). Its pointing itself is fine: asked for eight red dots
-on a 2560×1080 picture whose size it was told, it was within 10 px of each.
+Pixel coordinates are described with the image's size ("pixels of the screenshot, which is
+2560x1088"). Told only "pixels of the screenshot", DeepSeek V4.1 Flash answered on a 0-1000 grid, the
+way it was trained to point: on a 2560x1080 Unity screenshot it put the Hierarchy tab, at x 1368, at
+(551, 84). Its pointing itself is fine: asked for eight red dots on a 2560x1080 picture whose size it
+was told, it was within 10 px of each.
 
-A look can also find the wrong thing, and then the screen does change. In Blender it took the
-Animation tab for the "MCP for Blender" tab under it. The model saw the Animation panel open and
-named the tab again twice, aiming lower each time, and both times the look moved the click back up.
-So when the look moves a click more than 2% of the screen away from the model's aim, the result
-says where the click went, and that with `target` left out the click goes to the model's x/y.
-
-A notification that closes by itself in the seconds before the click is the opposite case: the
-look then finds something else that fits the words. In a chat run the model aimed at a desktop
-notification's close button, the notification was gone by the click, and the look found the chat
-window's own close button and closed the chat. So when the look finds the target far from where
-the model aimed (more than 8% of the screen) and the screen there is no longer what the model saw,
-nothing is clicked: the model gets the new screen, and a click it then asks for again goes ahead.
-
-Look-alikes are the commonest confusion: the same Open, Rename and Delete buttons on every row of a
-file list, an Add to cart button on every card. So `mouse_click` has a second required argument,
-`which`: what tells the target apart from everything else on the screen that looks like it (the row,
-card, dialog or label it belongs to), or "only one". A click with a `target` and no `which` is an
-argument error and clicks nothing; a click with neither (an unnamed spot) needs none. The look is asked
-for both ("Delete button, in the row of report.xlsx"), and for a target with look-alikes it is shown
-the whole screen instead of the quarter around the aim, as what tells it apart can be anywhere: in a
-2560-wide file list the quarter around an Open button held only other rows' Open buttons, not the
-file names, and the look moved clicks the model had aimed at the right row to another one. A move of
-half the usual 2% is told for such a target, as rows can be that close.
-
-`ClickAccuracyTests` has four scenes for it: `rows` (a file list of 14 near-identical names, the
-buttons 1,700 px right of them), `cards` (12 near-identical product names), `dialogs` (four dialogs
-alike but for their titles, 480 px above their OK and Cancel) and `toggles` (20 near-identical
-settings, rows 36 px apart, switches 1,500 px right of them). With qwen3.8 (27 October 2026), on the
-same layouts each time (`BB_CLICK_ROW` picks the look's part):
-
-| Look for look-alikes | rows | cards | dialogs | toggles |
-| --- | --- | --- | --- | --- |
-| Before `which` (quarter around the aim) | 1/8 | 8/8 | | |
-| Quarter around the aim, with `which` | 4/5 | | | |
-| Screen-wide row a quarter as high | 6/8 | 8/8 | 5/7 | 7/7 |
-| Whole screen | 5/5 | | 7/7 | 7/7 |
-
-and the whole screen 16/16 on four fresh layouts of each. In `rows` before, the model's own aim was
-on the right row 6 times of 8. The row missed dialogs because their titles were outside it. The whole
-screen costs about 5 s a click (trials of 27-29 s against 21-24 s), and the model gives a `which`
-other than "only one" for most clicks, unique targets included ("the button labeled Save near the
-top"), so most clicks pay it. It gave a `which` in every click measured. Elsewhere nothing measurably
-changed: `similar` 5/5 before and with the whole screen; `hidden` (half-covered buttons) 3/13 before
-and 0/13 after, both missing the same way, about 55 px right, at the covered middle of the button.
+`ClickAccuracyTests` has scenes for look-alikes too: `rows` (a file list of 14 near-identical names,
+the buttons 1,700 px right of them), `cards` (12 near-identical product names), `dialogs` (four
+dialogs alike but for their titles, 480 px above their OK and Cancel) and `toggles` (20 near-identical
+settings, rows 36 px apart, switches 1,500 px right of them). `BB_CLICK_ZOOM=0` measures without the
+zoom tool. With it, DeepSeek V4.1 Flash on munito hit 28 of 46 on the ten scenes of
+the comparison above (Unity 13 of 19), against 14 with the fresh look and 11 with neither, zooming
+before most clicks.
 
 
 ### Folder index

@@ -20,12 +20,11 @@ namespace Sloperator.Core.Tests;
 /// BB_CLICK_COORDS=pixels|grid (default: what Sloperator picks for the model), BB_CLICK_RES (the box screenshots
 /// fit, as 1920x1080; default the setting's), BB_CLICK_SEED (first layout, default 1000), BB_CLICK_TAG (report name),
 /// BB_CLICK_RETRY (extra clicks allowed after a miss, default 0: the target reacts when hit, so a
-/// miss gets Sloperator's miss note), BB_CLICK_CHECK=0 (no miss note), BB_CLICK_LOOK=0 (clicks go to the model's own x/y instead of where a fresh look finds the target),
-/// BB_CLICK_CROP=0 (the look sees the whole screen, not the quarter around the model's aim), BB_CLICK_THINK=1 (the look may think), BB_CLICK_ROW (the height of the screen-wide row a target with look-alikes is looked for in, as a share of the screen's; default 1: the whole screen; 0: the quarter), BB_CLICK_RULE
+/// miss gets Sloperator's miss note), BB_CLICK_CHECK=0 (no miss note), BB_CLICK_ZOOM=0 (no zoom tool), BB_CLICK_RULE
 /// (extra instructions for the system prompt, to measure a prompt rule), BB_CLICK_TEMP (a temperature
 /// sent with the benchmark's own requests instead of the server's), BB_CLICK_SHIFT (the first screenshot
 /// shows everything this many pixels higher, so the model misjudges where things are, as one deep in a
-/// long run does; the fresh look sees the true screen). The report goes to
+/// long run does; later screenshots and zooms show the true screen). The report goes to
 /// bb-click-TAG.txt in the temp folder, with the first screenshot of each scene next to it.
 /// </summary>
 public class ClickAccuracyTests
@@ -149,10 +148,7 @@ public class ClickAccuracyTests
         var (allHits, allTrials) = (0, 0);
         var retries = int.TryParse(Env("BB_CLICK_RETRY"), out var rt) ? rt : 0;
         ClickCheck.Enabled = Env("BB_CLICK_CHECK") != "0";
-        FreshLook.Enabled = Env("BB_CLICK_LOOK") != "0";
-        FreshLook.Cropped = Env("BB_CLICK_CROP") != "0";
-        FreshLook.Thinking = Env("BB_CLICK_THINK") == "1";
-        MouseClickTool.RowShare = double.TryParse(Env("BB_CLICK_ROW"), System.Globalization.CultureInfo.InvariantCulture, out var rs) ? rs : 1;
+        var zoom = Env("BB_CLICK_ZOOM") != "0";
         var (retried, fixedLater) = (0, 0);
         var shift = int.TryParse(Env("BB_CLICK_SHIFT"), out var sh) ? sh : 0;
         foreach (var scene in Scenes.Where(s => only is null || only.Contains(s.Name)))
@@ -178,7 +174,7 @@ public class ClickAccuracyTests
                 if (Env("BB_CLICK_TEMP") is { } temperature) // Sloperator itself sends no sampling settings
                     connection.Options.Extra!["temperature"] = double.Parse(temperature, System.Globalization.CultureInfo.InvariantCulture);
                 var prompt = SystemPrompt.Build(platform.Name, ctx.ScreenSpaces(), Path.GetTempPath(), Env("BB_CLICK_RULE") ?? "");
-                var session = new AgentSession(connection.Client, connection.Options, ToolRegistry.CreateDefault(true), ctx, prompt, contextTokens: context ?? 0);
+                var session = new AgentSession(connection.Client, connection.Options, new ToolRegistry(ToolRegistry.CreateDefault(true).All.Where(t => zoom || t is not ZoomTool)), ctx, prompt, contextTokens: context ?? 0);
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
                 // The target reacts when it is hit (its pixels invert), so a click that misses leaves
@@ -233,10 +229,9 @@ public class ClickAccuracyTests
         foreach (var line in summary)
             Log(line);
         Log($"TOTAL {allHits}/{allTrials} with {Model}, coordinates: {grid?.ToString() ?? "pixels"}, screenshots: {resolution.Item1}x{resolution.Item2}, " +
-            (FreshLook.Enabled ? $"fresh look at {(!FreshLook.Cropped ? "the whole screen" : MouseClickTool.RowShare >= 1 ? "the quarter around the aim (the whole screen for look-alikes)" :
-                MouseClickTool.RowShare > 0 ? $"the quarter around the aim (a row {MouseClickTool.RowShare:0.##} high for look-alikes)" : "the quarter around the aim")}, thinking {(FreshLook.Thinking || !FreshLook.ThinksInQwenTags(Model) ? "on" : "skipped")}" : "no fresh look"));
+            (zoom ? "zoom tool" : "no zoom tool"));
         if (retries > 0)
-            Log($"RETRY {fixedLater}/{retried} first-click misses hit within {retries} more tries (miss check {(ClickCheck.Enabled ? "on" : "off")}, fresh look {(FreshLook.Enabled ? "on" : "off")})");
+            Log($"RETRY {fixedLater}/{retried} first-click misses hit within {retries} more tries (miss check {(ClickCheck.Enabled ? "on" : "off")}, {(zoom ? "zoom tool" : "no zoom tool")})");
     }
 
     /// <summary>The whole desktop with the scene on its screen and plain buttons on the others; targets in desktop coordinates.</summary>
@@ -636,7 +631,7 @@ public class ClickAccuracyTests
         private int _clicks;
         public string? Args { get; private set; }
         public string Calls { get; private set; } = "";
-        private int _count;
+        private int _count, _zooms;
 
         /// <summary>How a run without a click ended: the stop, its detail, the last notice and the model's last words.</summary>
         public string Ending { get; private set; } = "";
@@ -662,7 +657,9 @@ public class ClickAccuracyTests
 
         public void OnToolFinished(ToolCall call, ToolResult result)
         {
-            if (_clicks >= maxClicks || (_clicks > 0 && hit?.Invoke() != false) || ++_count >= 4 + 2 * (maxClicks - 1))
+            // Zooms to aim count apart: a model that zooms before it clicks gets up to four of them.
+            if (_clicks >= maxClicks || (_clicks > 0 && hit?.Invoke() != false) ||
+                (call.Name == "zoom" ? ++_zooms > 4 : ++_count >= 4 + 2 * (maxClicks - 1)))
                 cts.Cancel();
         }
     }

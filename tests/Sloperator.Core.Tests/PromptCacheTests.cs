@@ -23,9 +23,9 @@ public class PromptCacheTests
         var paths = new AppPaths(Directory.CreateTempSubdirectory("bb-cache-").FullName);
         AgentSession? session = null;
         var replies = new Queue<string>([
-            // A look, a click (whose fresh look is a request of its own) and an answer.
+            // A look, a click and an answer.
             Sse.Thought("I should look at the screen first.", Sse.ToolCall("c1", "screenshot", "{}")),
-            Sse.Thought("The OK button is in the middle.", Sse.ToolCall("c2", "mouse_click", """{"target":"OK button","which":"only one","x":100,"y":50}""")),
+            Sse.Thought("The OK button is in the middle.", Sse.ToolCall("c2", "mouse_click", """{"x":100,"y":50}""")),
             Sse.Thought("It closed.", Sse.Text("Clicked OK.")),
             // The next message, and one the user sends while the model works on it.
             Sse.Thought("Typing it.", Sse.ToolCall("c3", "type_text", """{"text":"hello"}""")),
@@ -39,8 +39,6 @@ public class PromptCacheTests
         {
             Responder = request =>
             {
-                if (request["tools"] is null)
-                    return Sse.Text("(100, 50)"); // a click's fresh look
                 if (replies.Count == 5)
                     session!.Steer("and press Enter after it");
                 return replies.Dequeue();
@@ -72,7 +70,7 @@ public class PromptCacheTests
 
         var requests = server.Requests.Where(r => r["tools"] is not null).ToList();
         Assert.Equal(8, requests.Count);
-        Assert.Equal(1, server.Requests.Count(r => r["tools"] is null));
+        Assert.Equal(0, server.Requests.Count(r => r["tools"] is null));
         for (var i = 1; i < requests.Count; i++)
         {
             // The same tools, model and template switches...
