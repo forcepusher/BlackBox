@@ -1,7 +1,6 @@
 # Sloperator
-Sloperator does work on your Windows PC for you. Tell it what you want in plain words, and an AI model
-does it the way a person would: it looks at the screen, clicks, types, edits files and runs commands
-until the job is done.
+Sloperator does work on your Windows PC for you. Say what you want, and an AI model does it on your
+actual desktop with the mouse and keyboard, as you would, until the job is done.
 
 It is a single portable `Sloperator.exe`. Nothing gets installed: its settings, chats and whatever it
 downloads stay in a `Data` folder next to the exe.
