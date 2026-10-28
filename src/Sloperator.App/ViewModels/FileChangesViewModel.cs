@@ -26,6 +26,9 @@ public sealed partial class DiffFileItem(DiffFile file, int row, string fullPath
     public string Status => File.Status;
     public string Counts => File.Counts;
 
+    /// <summary>Its row's tooltip: the full path and the status ("modified", "renamed"), which the one-line row leaves out.</summary>
+    public string Tip => $"{FullPath}\n{Status}";
+
     /// <summary>The counts in three parts, so "+10" shows green and "-3" red: "+10", " -3" (with its space after an
     /// added count), and "binary" or "no lines" when there is neither.</summary>
     public string AddedCount => File.Binary || File.Added == 0 ? "" : $"+{File.Added}";
