@@ -41,4 +41,4 @@ dotnet test              # unit tests
 ```
 
 How each part works and why, the test scripts and the benchmark results are in
-[docs/notes.md](docs/notes.md).
+[docs/notes.md](docs/notes.md), which is meant to be read by LLMs, not people.
