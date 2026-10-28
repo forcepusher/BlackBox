@@ -28,6 +28,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private readonly ChatWindows _windows;
     private readonly HttpClient _http = LlmHttp.Create(Timeout.InfiniteTimeSpan);
     private List<ChatMessage> _history = [];
+    /// <summary>The file names given to the pictures in the chat, kept beside it in Data/chats/&lt;id&gt;/.</summary>
+    private ChatPictures _pictures = new();
     private readonly ChatStore _chats;
     private readonly ChatSaver _chatSaver;
     private readonly McpHost _mcp = new();

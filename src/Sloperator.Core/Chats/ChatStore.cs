@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Sloperator.Core.Agent;
@@ -59,8 +60,8 @@ public sealed class ChatEntry
 
 /// <summary>
 /// A chat saved in Data/chats: what the window showed, and the conversation the model had, so it
-/// can be picked up again. Screenshots are not kept: they would make every file megabytes long,
-/// and the model takes a new one when it carries on.
+/// can be picked up again. The pictures the model was shown are kept beside it, in a folder named
+/// after the chat (see <see cref="ChatPictures"/>), and the conversation names each one's file.
 /// </summary>
 public sealed class SavedChat
 {
@@ -69,6 +70,39 @@ public sealed class SavedChat
     public DateTime Updated { get; set; }
     public List<ChatEntry> Entries { get; set; } = [];
     public List<ChatMessage> History { get; set; } = [];
+
+    /// <summary>Pictures to write into the chat's folder with this version, by file name; not part of the JSON.</summary>
+    [JsonIgnore]
+    public Dictionary<string, byte[]> NewPictures { get; set; } = [];
+}
+
+/// <summary>
+/// The pictures the model was shown in one chat (screenshots, zoomed crops, pictures tools made),
+/// each given a file name in the order they came: 0001.jpg, 0002.png… Each is named once, however
+/// many versions of the chat are saved while it is in the conversation.
+/// </summary>
+public sealed class ChatPictures(int first = 1)
+{
+    private readonly Lock _gate = new();
+    private readonly ConditionalWeakTable<byte[], string> _names = new();
+    private int _next = first;
+
+    /// <summary>The file name of the picture, and whether it was given just now (so it still has to be written).</summary>
+    public (string Name, bool IsNew) NameOf(ContentPart picture)
+    {
+        // A picture read back from the chat's folder keeps its file.
+        if (picture.File is { } kept)
+            return (kept, false);
+        lock (_gate)
+        {
+            if (_names.TryGetValue(picture.ImageBytes!, out var name))
+                return (name, false);
+            var extension = picture.ImageMime switch { "image/png" => ".png", "image/webp" => ".webp", "image/gif" => ".gif", _ => ".jpg" };
+            name = _next++.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) + extension;
+            _names.Add(picture.ImageBytes!, name);
+            return (name, true);
+        }
+    }
 }
 
 /// <summary>What the history dropdown lists: the start of each file, without its contents.</summary>
@@ -143,7 +177,13 @@ public sealed class ChatStore(string dir)
         try
         {
             var chat = JsonSerializer.Deserialize(File.ReadAllText(PathOf(id)), ChatJson.Default.SavedChat);
-            if (chat is not null) chat.Id = id;
+            if (chat is null)
+                return null;
+            chat.Id = id;
+            // The pictures back from the chat's folder, as the model was shown them.
+            foreach (var m in chat.History.Where(m => m.Parts is not null))
+                m.Parts = m.Parts!.Select(p => p.File is not { } name ? p : ReadPicture(id, name) is { } bytes ? p with { ImageBytes = bytes }
+                    : ContentPart.FromText($"(A picture, {name}, is missing from the saved chat's folder.)")).ToList();
             return chat;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
@@ -152,24 +192,79 @@ public sealed class ChatStore(string dir)
         }
     }
 
-    /// <summary>Writes the chat; through a temporary file, so a crash mid-write leaves the previous version.</summary>
-    public void Save(SavedChat chat) => AtomicFile.Write(PathOf(chat.Id), JsonSerializer.Serialize(chat, ChatJson.Default.SavedChat));
+    /// <summary>
+    /// Writes the chat's new pictures into its folder, then the chat; the chat through a temporary
+    /// file, so a crash mid-write leaves the previous version.
+    /// </summary>
+    public void Save(SavedChat chat)
+    {
+        if (chat.NewPictures.Count > 0)
+        {
+            var folder = PicturesOf(chat.Id);
+            Directory.CreateDirectory(folder);
+            // Before the chat that names them; one already there is the same picture.
+            foreach (var (name, bytes) in chat.NewPictures)
+                if (!File.Exists(Path.Combine(folder, name)))
+                    File.WriteAllBytes(Path.Combine(folder, name), bytes);
+        }
+        AtomicFile.Write(PathOf(chat.Id), JsonSerializer.Serialize(chat, ChatJson.Default.SavedChat));
+    }
+
+    /// <summary>The number the chat's next picture gets: after those already in its folder, so a chat carried on doesn't write over them.</summary>
+    public int NextPictureNumber(string id)
+    {
+        try
+        {
+            var folder = PicturesOf(id);
+            if (!Directory.Exists(folder))
+                return 1;
+            return Directory.EnumerateFiles(folder).Select(f => int.TryParse(Path.GetFileNameWithoutExtension(f), out var n) ? n : 0).DefaultIfEmpty(0).Max() + 1;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return 1;
+        }
+    }
 
     public void Delete(string id)
     {
         try { File.Delete(PathOf(id)); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        try { Directory.Delete(PicturesOf(id), recursive: true); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     private string PathOf(string id) => Path.Combine(Folder, Path.GetFileName(id) + ".json");
 
-    /// <summary>
-    /// A copy of the model's conversation fit for saving: screenshots replaced by a note, and tool
-    /// calls a stop left unanswered given placeholder results, so carrying on is a valid request.
-    /// The pictures a user's message came with are left out too: their paths are in its text.
-    /// </summary>
-    public static List<ChatMessage> ForSaving(IEnumerable<ChatMessage> history)
+    /// <summary>Where the chat's pictures are kept: Data/chats/&lt;id&gt;/.</summary>
+    public string PicturesOf(string id) => Path.Combine(Folder, Path.GetFileName(id));
+
+    private byte[]? ReadPicture(string id, string name)
     {
+        try { return File.ReadAllBytes(Path.Combine(PicturesOf(id), Path.GetFileName(name))); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>
+    /// A copy of the model's conversation fit for saving, with tool calls a stop left unanswered
+    /// given placeholder results, so carrying on is a valid request. With <paramref name="pictures"/>,
+    /// each picture stays where it was as the name of its file in the chat's folder, the bytes of
+    /// those not written yet going in <paramref name="newPictures"/>, and <see cref="Load"/> puts
+    /// them back: the chat opened again, here or on another computer, has the conversation the
+    /// model had. Without, each picture is put in words (a copy for a model that is shown none).
+    /// </summary>
+    public static List<ChatMessage> ForSaving(IEnumerable<ChatMessage> history, ChatPictures? pictures = null, Dictionary<string, byte[]>? newPictures = null)
+    {
+        ContentPart Saved(ContentPart part)
+        {
+            if (!part.IsImage)
+                return part;
+            var (name, isNew) = pictures!.NameOf(part);
+            if (isNew)
+                newPictures?.Add(name, part.ImageBytes!);
+            return new ContentPart(ImageMime: part.ImageMime) { File = name };
+        }
+
         // Through the list's own enumerator, which throws when the run changes the list meanwhile
         // (a copy made from the window's thread): Select over a List copies its array unchecked
         // in .NET 10, and a context reset clearing it gave a torn copy or a null message.
@@ -179,11 +274,12 @@ public sealed class ChatStore(string dir)
         var copy = messages.Select(m => new ChatMessage
         {
             Role = m.Role,
-            Content = m.Parts is null
+            Content = m.Parts is null || pictures is not null
                 ? m.Content
                 : m.FromUser
                     ? m.Parts[0].Text + "\n(The pictures aren't kept in the saved chat: read_file shows them again.)"
                     : string.Join("\n", m.Parts.Where(p => !p.IsImage).Select(p => p.Text)) + (m.Parts.Any(p => p.IsImage) ? "\n(Screenshot not kept in the saved chat.)" : ""),
+            Parts = pictures is null ? null : m.Parts?.Select(Saved).ToList(),
             Reasoning = m.Reasoning,
             ToolCalls = m.ToolCalls?.Select(c => new ToolCall { Id = c.Id, Name = c.Name, Arguments = c.Arguments }).ToList(),
             ToolCallId = m.ToolCallId,
@@ -206,11 +302,14 @@ public sealed class ChatSaver(ChatStore store)
     private bool _writing;
     private Task _writer = Task.CompletedTask;
 
-    /// <summary>Writes the chat soon; a version still waiting for the same chat is replaced by it.</summary>
+    /// <summary>Writes the chat soon; a version still waiting for the same chat is replaced by it, and hands it its pictures.</summary>
     public void Save(SavedChat chat)
     {
         lock (_gate)
         {
+            if (_pending.TryGetValue(chat.Id, out var older))
+                foreach (var (name, bytes) in older.NewPictures)
+                    chat.NewPictures.TryAdd(name, bytes);
             _pending[chat.Id] = chat;
             if (_writing)
                 return;

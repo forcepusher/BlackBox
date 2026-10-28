@@ -1268,8 +1268,15 @@ folder. The frame tool now says when a frame is made from words alone in a video
 Every chat is saved on its own in `Data/chats/` from its first message on, after every step, and
 named after that message. **History** next to **New chat** lists them, the latest first: pick one to
 read it and carry on where it stopped (the model gets the conversation back), or delete it with its
-trash button. Screenshots are not kept in the saved file; the model takes a new one when it carries
-on. Picking another chat or New chat while a task runs stops the task, and keeps it as far as it got,
+trash button. The pictures the model was shown (screenshots, zoomed crops, pictures tools made or
+the user sent) are kept beside the chat, in `Data/chats/<id>/` as `0001.jpg`, `0002.png`… in the
+order they came, each written once, before the chat that names it. The saved conversation keeps
+each picture where it was as its file name in that folder, and opening the chat reads them back,
+so the model carries on with the context it had, here or on another computer the chat file and its
+folder were copied to (a picture missing from the folder becomes a note saying so). The JSON stays
+small; the numbering carries on after the files already there. Deleting the chat deletes its folder.
+A version of a chat replaced before it was written hands its unwritten pictures to the next.
+Pictures the agent had put in words (over the server's limit) stay words. Picking another chat or New chat while a task runs stops the task, and keeps it as far as it got,
 saying so with Continue ("Stopped: another chat was opened."; before the model had the message,
 Continue sends that again). Messages still waiting above the box go back into it, unless the model
 had just read one: that one joins the chat it was sent in. A task that has just ended saves its

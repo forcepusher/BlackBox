@@ -76,6 +76,7 @@ public sealed partial class MainWindowViewModel
             SaveChat(SnapshotHistory()); // the last save of a run that has just ended, not made yet
         // The stopped run keeps its own list until it ends, so it can't write into the next chat.
         _history = [];
+        _pictures = new();
         _steerPending.Clear();
         _forNextRun.Clear();
         // Logins belong to the chat: the next one starts logged out (the stopped run's tools fail).
@@ -119,6 +120,7 @@ public sealed partial class MainWindowViewModel
         _chatTitle = chat.Title;
         OnPropertyChanged(nameof(WindowTitle));
         _history = chat.History;
+        _pictures = new(_chats.NextPictureNumber(chat.Id));
         UseChanges(FileChanges.Load(ChangesFile(chat.Id)));
         var withFiles = new List<(ChatItemViewModel, Func<IReadOnlyList<string>>)>();
         foreach (var entry in chat.Entries)
@@ -208,21 +210,25 @@ public sealed partial class MainWindowViewModel
         MarkCurrentChat();
     }
 
-    /// <summary>A copy of the model's conversation to save; null if a run changed it while it was being copied.</summary>
-    private List<ChatMessage>? SnapshotHistory()
+    /// <summary>
+    /// A copy of the model's conversation to save, with the pictures in it not written yet; null if
+    /// a run changed it while it was being copied.
+    /// </summary>
+    private SavedChat? SnapshotHistory()
     {
-        try { return ChatStore.ForSaving(_history); }
+        var pictures = new Dictionary<string, byte[]>();
+        try { return new SavedChat { History = ChatStore.ForSaving(_history, _pictures, pictures), NewPictures = pictures }; }
         catch (Exception ex) when (ex is InvalidOperationException or NullReferenceException or ArgumentException) { return null; }
     }
 
     /// <summary>Writes the chat on screen to its file and moves it to the top of the History list. A chat with nothing typed yet isn't saved.</summary>
-    private void SaveChat(List<ChatMessage>? history)
+    private void SaveChat(SavedChat? chat)
     {
         // A chat with nothing typed yet isn't saved. One whose first message the chat has dropped
         // to stay small (TrimChat, some 200 steps into a long run) still is: it stopped being
         // saved there, and the rest of the run was lost to History and to a crash.
         var first = Items.OfType<UserMessageItem>().FirstOrDefault();
-        if (history is null || first is null && _chatTitle is null)
+        if (chat is null || first is null && _chatTitle is null)
             return;
         _chatId ??= ChatStore.NewId();
         Changes.KeepIn(ChangesFile(_chatId));
@@ -236,15 +242,11 @@ public sealed partial class MainWindowViewModel
             _chatTitle = ChatStore.TitleFrom(first.Via is { } via ? $"{text.Trim().Split('\n')[0]} ({(via.StartsWith(video, StringComparison.Ordinal) ? via[video.Length..] : via)})" : text);
             OnPropertyChanged(nameof(WindowTitle));
         }
-        var chat = new SavedChat
-        {
-            Id = _chatId,
-            Title = _chatTitle,
-            Updated = DateTime.UtcNow,
-            // A reply bubble with nothing in it yet (a step just started) is left out.
-            Entries = Items.Where(i => i is not AssistantMessageItem { IsStreaming: true, HasText: false, HasReasoning: false }).Select(ToEntry).ToList(),
-            History = history,
-        };
+        chat.Id = _chatId;
+        chat.Title = _chatTitle;
+        chat.Updated = DateTime.UtcNow;
+        // A reply bubble with nothing in it yet (a step just started) is left out.
+        chat.Entries = Items.Where(i => i is not AssistantMessageItem { IsStreaming: true, HasText: false, HasReasoning: false }).Select(ToEntry).ToList();
         // Written in the background: a long run's chat is megabytes, at every step.
         _chatSaver.Save(chat);
 

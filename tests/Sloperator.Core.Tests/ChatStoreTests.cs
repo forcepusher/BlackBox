@@ -115,6 +115,75 @@ public class ChatStoreTests : IDisposable
     }
 
     [Fact]
+    public void Pictures_are_kept_beside_the_chat_in_order_each_written_once()
+    {
+        var store = new ChatStore(_dir);
+        var shot = ContentPart.FromImage([1, 2, 3], "image/jpeg");
+        var zoom = ContentPart.FromImage([4, 5], "image/png");
+        var history = new List<ChatMessage>
+        {
+            ChatMessage.User("Look at the screen"),
+            new() { Role = ChatRole.User, Parts = [ContentPart.FromText("Screenshot after the last action:"), shot] },
+        };
+        var pictures = new ChatPictures();
+
+        var first = new Dictionary<string, byte[]>();
+        var saved = ChatStore.ForSaving(history, pictures, first);
+        Assert.Equal("0001.jpg", saved[1].Parts![1].File);
+        Assert.Null(saved[1].Parts![1].ImageBytes);
+        Assert.Equal(["0001.jpg"], first.Keys);
+        store.Save(new SavedChat { Id = "c1", Title = "t", History = saved, NewPictures = first });
+
+        history.Add(new() { Role = ChatRole.Tool, ToolCallId = "z", Parts = [ContentPart.FromText("Zoomed in:"), zoom] });
+        var second = new Dictionary<string, byte[]>();
+        saved = ChatStore.ForSaving(history, pictures, second);
+        Assert.Equal("0001.jpg", saved[1].Parts![1].File); // the same name in every version
+        Assert.Equal("0002.png", saved[2].Parts![1].File);
+        Assert.Equal(["0002.png"], second.Keys);
+        store.Save(new SavedChat { Id = "c1", Title = "t", History = saved, NewPictures = second });
+
+        Assert.Equal([1, 2, 3], File.ReadAllBytes(Path.Combine(store.PicturesOf("c1"), "0001.jpg")));
+        Assert.Equal([4, 5], File.ReadAllBytes(Path.Combine(store.PicturesOf("c1"), "0002.png")));
+        Assert.DoesNotContain(store.List(), h => h.Id != "c1"); // the folder isn't listed as a chat
+        Assert.Equal(3, store.NextPictureNumber("c1")); // carried on, the chat's pictures go after these
+
+        // Opened again, on another computer: the conversation has its pictures back where they were.
+        var elsewhere = new ChatStore(_dir + "-copy");
+        Directory.CreateDirectory(elsewhere.PicturesOf("c1"));
+        File.Copy(Path.Combine(_dir, "c1.json"), Path.Combine(elsewhere.Folder, "c1.json"));
+        foreach (var picture in Directory.GetFiles(store.PicturesOf("c1")))
+            File.Copy(picture, Path.Combine(elsewhere.PicturesOf("c1"), Path.GetFileName(picture)));
+        var loaded = elsewhere.Load("c1")!.History;
+        Assert.Equal("Screenshot after the last action:", loaded[1].Parts![0].Text);
+        Assert.Equal([1, 2, 3], loaded[1].Parts![1].ImageBytes);
+        Assert.Equal("image/png", loaded[2].Parts![1].ImageMime);
+        Assert.Equal([4, 5], loaded[2].Parts![1].ImageBytes);
+        // Saved again, it names the same files and writes none.
+        var again = new Dictionary<string, byte[]>();
+        Assert.Equal("0002.png", ChatStore.ForSaving(loaded, new ChatPictures(3), again)[2].Parts![1].File);
+        Assert.Empty(again);
+        // A picture gone from the folder becomes a note, and the chat still opens.
+        File.Delete(Path.Combine(elsewhere.PicturesOf("c1"), "0001.jpg"));
+        Assert.Contains("missing", elsewhere.Load("c1")!.History[1].Parts![1].Text);
+        Directory.Delete(elsewhere.Folder, recursive: true);
+
+        store.Delete("c1");
+        Assert.False(Directory.Exists(store.PicturesOf("c1")));
+    }
+
+    [Fact]
+    public void A_chat_version_replaced_before_it_was_written_hands_on_its_pictures()
+    {
+        var store = new ChatStore(_dir);
+        var saver = new ChatSaver(store);
+        for (var i = 1; i <= 20; i++)
+            saver.Save(new SavedChat { Id = "c1", Title = "t", NewPictures = new() { [$"{i:D4}.jpg"] = [(byte)i] } });
+        Assert.True(saver.Flush(TimeSpan.FromSeconds(10)));
+
+        Assert.Equal(20, Directory.GetFiles(store.PicturesOf("c1")).Length);
+    }
+
+    [Fact]
     public void The_list_reads_only_the_start_of_each_file()
     {
         var store = new ChatStore(_dir);
