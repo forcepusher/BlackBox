@@ -272,7 +272,10 @@ sides (an FBX with animations also at four times of its first, from the front le
 them), an animated GIF or WebP as frames.
 Video and sound are decoded by Windows' own Media Foundation (MP4/H.264, MOV, MP3, AAC, FLAC, WAV
 play on every Windows 10 and 11), else by ffmpeg when one is on the PATH, in `Data/tools` or in
-ComfyUI's folder; 3D models are drawn by Sloperator itself.
+ComfyUI's folder; 3D models are drawn by Sloperator itself. A glTF's node tree is walked with two
+guards: a node already on the way down to it is skipped (a loop), and nodes shared without a loop
+stop after four visits per node (10,000 at least); a one-node loop took 0.2 s with the old 100,000-visit
+cap alone, and over a test's 5 s with the rest of the suite running beside it (2026-10-28).
 
 **FBX** (`Mesh.Fbx`, MeshFbx.cs; the user's choice, 2026-10-26, over Assimp, a 15-20 MB native DLL,
 and Autodesk's SDK, whose licence keeps it out): FBX 7.x read by Sloperator, binary (from 7.5 its

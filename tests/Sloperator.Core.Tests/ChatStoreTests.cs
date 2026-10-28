@@ -129,17 +129,20 @@ public class ChatStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task A_chat_is_saved_even_while_another_program_holds_the_file_for_a_moment()
+    public void A_chat_is_saved_even_while_another_program_holds_the_file_for_a_moment()
     {
         var store = new ChatStore(_dir);
         store.Save(new SavedChat { Id = "c", Title = "First" });
         // An antivirus scanner or indexer that has the file open blocks replacing it.
         var held = new FileStream(Path.Combine(_dir, "c.json"), FileMode.Open, FileAccess.Read, FileShare.Read);
-        var release = Task.Run(async () => { await Task.Delay(120); held.Dispose(); }, TestContext.Current.CancellationToken);
+        // Let go on a thread of its own: a pool task waited behind the rest of the suite's work past
+        // the save's half second of tries, and the test failed now and then in a full run.
+        var release = new Thread(() => { Thread.Sleep(120); held.Dispose(); });
+        release.Start();
 
         store.Save(new SavedChat { Id = "c", Title = "Second" });
 
-        await release;
+        release.Join();
         Assert.Equal("Second", store.Load("c")!.Title);
         Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
     }

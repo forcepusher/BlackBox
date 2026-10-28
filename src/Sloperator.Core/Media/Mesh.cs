@@ -142,9 +142,13 @@ public sealed partial class Mesh : IDisposable
             var roots = scene?["nodes"] is JsonArray r ? r.Select(n => (int?)n ?? -1).ToList()
                 : Enumerable.Range(0, (json["nodes"] as JsonArray)?.Count ?? 0).ToList();
             // A node tree that loops back on itself, each node with two children, would be walked
-            // 2^64 times within the depth limit: the walk ends once it has seen every node a few times.
+            // 2^64 times within the depth limit: a node already on the way down to it is not walked
+            // again (a loop ends at once; before, a one-node loop took 100,000 visits, 0.2 s alone and
+            // over the test's 5 s with the rest of the suite running), and nodes shared without a loop
+            // end once the walk has seen every node a few times.
             var visits = 0;
-            var maxVisits = Math.Max(100_000, 4 * ((json["nodes"] as JsonArray)?.Count ?? 0));
+            var onPath = new HashSet<int>();
+            var maxVisits = Math.Max(10_000, 4 * ((json["nodes"] as JsonArray)?.Count ?? 0));
             if (json["nodes"] is null && json["meshes"] is JsonArray meshesOnly)
                 for (var m = 0; m < meshesOnly.Count; m++)
                     AddMesh(m, Matrix4x4.Identity);
@@ -155,13 +159,15 @@ public sealed partial class Mesh : IDisposable
 
             void Visit(int index, Matrix4x4 parent, int depth)
             {
-                if (depth > 64 || index < 0 || ++visits > maxVisits || json["nodes"] is not JsonArray nodes || index >= nodes.Count || nodes[index] is not JsonObject node)
+                if (depth > 64 || index < 0 || onPath.Contains(index) || ++visits > maxVisits || json["nodes"] is not JsonArray nodes || index >= nodes.Count || nodes[index] is not JsonObject node)
                     return;
                 var world = LocalMatrix(node) * parent;
                 if ((int?)node["mesh"] is { } m)
                     AddMesh(m, world);
+                onPath.Add(index);
                 foreach (var child in node["children"] as JsonArray ?? [])
                     Visit((int?)child ?? -1, world, depth + 1);
+                onPath.Remove(index);
             }
 
             void AddMesh(int index, Matrix4x4 world)
