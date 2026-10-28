@@ -3189,8 +3189,25 @@ $env:BB_KILO = "1"; dotnet test --filter KiloOverflowTests   # a run past Kilo's
 $env:BB_MUNITO_KEY = "<munito key>"; dotnet test --filter MunitoImageCapTests   # more screenshots than munito's 8 a request are left out; 3 requests
 dotnet test --filter ClickAccuracyTests   # click hit rate in 16 hard scenes; BB_CLICK_SCENES, BB_CLICK_TRIALS, BB_CLICK_COORDS=pixels|grid
 $env:BB_SSH_TEST_HOST = "admin@127.0.0.2"; $env:BB_SSH_TEST_KEY = "$PWD\.dev\sysadmin-lab\key\admin_ed25519"
-dotnet test --filter SshIntegrationTests  # ssh, file tools and copy; BB_SSH_TEST_BIG_GB=3 adds a 3 GB copy each way (BB_SSH_TEST_HOST2: a second server)
+dotnet test --filter SshIntegrationTests  # ssh, file tools and copy; BB_SSH_TEST_BIG_GB=3 adds a 3 GB copy each way (BB_SSH_TEST_HOST2: a second server), BB_SSH_TEST_REBOOT=1 reboots the VM
+$env:BB_TEXT_ONLY_URL = "<server>/v1"; $env:BB_TEXT_ONLY_MODEL = "<a model without vision>"; dotnet test --filter TextOnlyServerTests
+$env:BB_DESKTOP_TESTS = "1"   # ClickLandsTests and DesktopIntegrationTests: the real mouse, on the real screen
+$env:BB_COMFY_ONLINE = "1"    # ComfyUI's latest release and the model search on Civitai and Hugging Face
+$env:BB_MCP_NPX = "1"         # a real MCP server started with npx (Node and the network)
+$env:BB_DOC_OUT = "<folder>"; $env:BB_INDEX_PROBE = "<file>"   # sample documents to open in Office; a folder-index report of this repository
 ```
+
+None of these take a key from a file: for a server that wants one (an LM Studio API token, munito),
+`ServerIntegrationTests`, `PromptCacheTests` and `TextOnlyServerTests` were pointed at a local
+pass-through that adds it. Before 1.1.0 (29 October 2026) the whole suite ran with all of the above on
+the workstation: Qwen 3.8 q6_k_xl at 100k context, munito (DeepSeek V4.1 Flash, Gemma 4 12B as the
+text-only model), Kilo's Nemotron, and the SSH lab VM. The reset test lost the vault code once in two
+runs on Qwen: the handoff request came back "Context size has been exceeded" at 82k of 100k, and the
+note made from the last steps instead didn't hold it.
+The click benchmark (all 16 scenes, 5 tries each, the unity scene's 19 targets) hit 84 of 114 on
+Qwen 3.8 q6_k_xl with the zoom tool: hidden 0/5, cards 1/5, dense 1/5, ultrawide 2/5, dialogs, edges,
+links and similar 3/5, unity 15/19, the rest 4 or 5 of 5. DeepSeek on munito couldn't be measured:
+the free tier answered 503 "capacity is full" to most trials.
 
 ## Project structure
 - `src/Sloperator.Core`: OpenAI-compatible streaming client, server probe, agent loop, tools,

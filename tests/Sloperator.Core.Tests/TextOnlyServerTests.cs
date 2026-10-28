@@ -45,7 +45,8 @@ public class TextOnlyServerTests
         await session.RunAsync("Without any tools, answer in one word: which program did I ask about?", observer, TestContext.Current.CancellationToken);
         TestContext.Current.SendDiagnosticMessage("Switched model: " + string.Join(" | ", observer.Notices));
         Assert.True(observer.StopReason == AgentStopReason.Completed, $"{observer.StopReason}: {observer.Detail}");
-        Assert.Contains(observer.Notices, n => n.Contains("doesn't take pictures") && n.Contains("image input"));
+        // The rest of the notice is the server's own words, which differ by server.
+        Assert.Contains(observer.Notices, n => n.Contains("doesn't take pictures"));
         Assert.DoesNotContain(history, m => m.Parts?.Any(p => p.IsImage) == true);
 
         // A server that didn't say the model can't see: it gets the screen tools, and its first

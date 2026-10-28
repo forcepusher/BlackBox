@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.1.0] - 2026-10-29
 ### Added
 - The agent can zoom in on part of the screen: a sharp, enlarged picture of it with rulers in
   screenshot coordinates, to aim at small things such as a list's rows or a toolbar's buttons.
@@ -149,6 +151,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rename or delete this one (to the Recycle Bin). On the timeline, right-click a card, clip or sound
   to rename or delete it, or to see an earlier version of it.
 - A × at the top right of Video generator, File changes and File inspector closes the tool.
+- A slim line in the chat when Sloperator sends the model a note: that it is going in circles, should
+  look something up on the web, or should index the project first.
 
 ### Changed
 - Every Toolkit panel (File changes, File inspector, Video generator) opens at the same width.
@@ -156,6 +160,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sound or 3D model, then **Prompt** in the panel's top bar to see the prompts and settings it was made
   with under it. The chat's previews and the full-screen viewer no longer have a Prompt button.
 - **Toolkit** is the first section in Settings, above Safety.
+- Sloperator's notes to the model come as a message of their own after the tool results, and the model
+  is told they come from Sloperator: Claude took one inside a screenshot's result for an injected
+  instruction and ignored it.
 - A toolkit panel puts a card over the box, and tells the model about itself, only once you pick
   something in it. File changes no longer selects a file by itself (Watch included). Its file list selects as
   Sourcetree's does: click one, Ctrl+click to add or take off, Shift+click a run. Selected files go in your
@@ -209,6 +216,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Show in folder** in the full-screen viewer.
 
 ### Fixed
+- On a screen scaled above 100%, a click, double-click or drag could land short of where the agent
+  aimed, towards the top left: the pointer and the screenshots now always agree.
+- A saved Claude chat keeps Claude's thinking, so opened again it goes on with it.
 - A broken glTF whose nodes loop back on themselves opens at once instead of after a pause.
 - Typing works in Blender's text fields: the agent types by pressing the keys, as a person does,
   where before Blender dropped every character it typed.
@@ -289,7 +299,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the chat window always did; keys meant for another program no longer land in it.
 - Links whose address holds parentheses (Wikipedia's) open whole, and an address followed by
   Chinese or Japanese punctuation no longer takes it in.
-
 - Making a shot, the song or the video again no longer fails with "the process cannot access the
   file" while the one before plays in the chat.
 - A frame made from a picture of another shape (a square picture of a character) comes out the
@@ -340,7 +349,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   online only aren't downloaded, linked files are read as the files they point to, a search that
   finds nothing says what the index doesn't search, big workbooks are read one at a time, and an
   index file damaged on disk is built again.
-- Sloperator.exe and the MCP servers it starts say version 1.0.0, as released, not 0.1.0.
+- Sloperator.exe and the MCP servers it starts say the version released, not 0.1.0.
 - Claude: MCP tools whose argument schema is a union work; a long task no longer stops on more than
   100 pictures in a request; a reply cut off mid-thought no longer breaks the next request; older
   Claude models point accurately on 4:3 and 5:4 screens.
@@ -388,5 +397,6 @@ The first release.
 - A command-line runner, and benchmarks: desktop tasks, 2048 and Unity 2048, clicks, a sysadmin
   lab, a chat stand-in lab and ComfyUI requests.
 
-[unreleased]: https://github.com/forcepusher/Sloperator/compare/1.0.0...HEAD
+[unreleased]: https://github.com/forcepusher/Sloperator/compare/1.1.0...HEAD
+[1.1.0]: https://github.com/forcepusher/Sloperator/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/forcepusher/Sloperator/releases/tag/1.0.0
