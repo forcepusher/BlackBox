@@ -228,13 +228,18 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
 
     /// <summary>
     /// A file clicked in a section's list: the one selected (the other sections' lists let theirs go).
-    /// Clicked again, it is let go, and a message is about all the changes again.
+    /// Clicked again, it is let go. Lines and a file are never picked at once (the user, 2026-10-28:
+    /// with lines picked, the file they were in could be selected or not, which said nothing): with
+    /// lines picked a click only goes to the file, so lines in another are Ctrl+clicked after.
     /// </summary>
     internal void SectionPicked(FileSection section, DiffFileItem? file)
     {
         if (_syncing)
             return;
-        if (file is not null)
+        if (file is not null && Selection.Count > 0)
+            // After the list is done with the click: set inside it, its selection doesn't take.
+            Dispatcher.UIThread.Post(SyncSections);
+        else if (file is not null)
             CurrentFile = file;
         else if (Sections.Contains(section) && CurrentFile is { } current && section.Files.Contains(current))
             CurrentFile = null;
@@ -243,17 +248,23 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     partial void OnCurrentFileChanged(DiffFileItem? value)
     {
         ActionsChanged();
+        SyncSections();
+        OnPicked();
+    }
+
+    /// <summary>The sections' lists select <see cref="CurrentFile"/>, each theirs if it is there, else none.</summary>
+    private void SyncSections()
+    {
         _syncing = true;
         try
         {
             foreach (var section in Sections)
-                section.Selected = section.Files.Contains(value) ? value : null;
+                section.Selected = section.Files.Contains(CurrentFile) ? CurrentFile : null;
         }
         finally
         {
             _syncing = false;
         }
-        OnPicked();
     }
 
     /// <summary>
@@ -688,6 +699,9 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             // A file picked in two sections (staged and unstaged) is one card in the box. With no
             // line picked, the file selected in the list, whole.
             var picks = Picks();
+            // Lines picked let go of the file selected: one or the other.
+            if (picks.Count > 0 && CurrentFile is not null)
+                CurrentFile = null;
             _chat.Pick(picks.Count == 0 && CurrentFile is { } current ? [(current.FullPath, $"Whole file · {Path.GetFileName(current.FullPath)}")]
                 : picks.GroupBy(p => p.File.FullPath, StringComparer.OrdinalIgnoreCase)
                     .Select(g => (g.Key, $"{Capital(Lines(g.SelectMany(p => p.Rows).ToList()))} · {Path.GetFileName(g.Key)}")).ToList());

@@ -2397,6 +2397,12 @@ scroll the diff (`Reselecting`). With no file or line picked, a message goes wit
 Checked in the app on 2026-10-28 with a stand-in model: opened by the agent's edit with nothing
 selected and no card, a click selects the file and puts its card in the box, a second click takes
 both away, and of two messages only the one sent with the file carried the panel's context.
+Lines and a file are never picked at once (the user, 2026-10-28: with lines picked, the file they
+came from could be selected or not, which meant nothing): picking lines lets go of the file, and with
+lines picked a click on a file only goes to it (its list's selection is put back after the click,
+`SyncSections` posted), so lines in another file can still be Ctrl+clicked; after Esc a click selects
+it. Checked in the app the same day: line, then file (lines kept, file not selected), Esc then file
+(selected), file then line (file let go, the line's card alone).
 **Wrap and Watch** (the user, 2026-10-26), toggles in the bar between the summary and the ×, shown
 once a file changed, both on by default and kept in settings.json under `panels` (`wrapDiff`,
 `watchChanges`; `PanelSettings`). **Wrap**: the diff's code column is `*` (under a sideways scroll it
