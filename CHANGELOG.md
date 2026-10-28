@@ -204,6 +204,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The first-run hint for Ctrl+V is reworded.
 - What the agent just changed stays lit in File changes longer: 4 seconds, then a 2 second fade.
 
+### Removed
+- **Show in folder** in the full-screen viewer.
+
 ### Fixed
 - A broken glTF whose nodes loop back on themselves opens at once instead of after a pause.
 - Typing works in Blender's text fields: the agent types by pressing the keys, as a person does,
