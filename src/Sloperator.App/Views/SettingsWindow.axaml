@@ -37,6 +37,9 @@
 
     <ScrollViewer Margin="16,8">
       <StackPanel Spacing="4" Margin="0,0,12,16">
+        <TextBlock Classes="h2" Text="Toolkit" />
+        <CheckBox IsChecked="{Binding Panels.OpenFileChanges}" Content="Open File changes when the agent first changes a file in a chat" />
+
         <TextBlock Classes="h2" Text="Safety" />
         <Grid Classes="form" ColumnDefinitions="160,*">
           <TextBlock Classes="label" Text="Ask me first" />
@@ -57,9 +60,6 @@
         <SelectableTextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
         <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="Sloperator starts these when you click Save and each time it opens."
                    ToolTip.Tip="{Binding Paths.McpConfigFile, StringFormat='Kept in {0}'}" />
-
-        <TextBlock Classes="h2" Text="Toolkit" />
-        <CheckBox IsChecked="{Binding Panels.OpenFileChanges}" Content="Open File changes when the agent first changes a file in a chat" />
 
         <TextBlock Classes="h2" Text="Advanced" />
         <Grid Classes="form" ColumnDefinitions="160,*">
