@@ -45,6 +45,9 @@
           <TextBlock Classes="label" Text="Ask me first" />
           <ComboBox Grid.Column="1" ItemsSource="{Binding ApprovalModes}" SelectedIndex="{Binding ApprovalIndex}" HorizontalAlignment="Stretch" />
         </Grid>
+        <CheckBox x:Name="ScreenshotsBox" IsChecked="{Binding Agent.EnableScreenshots}" Content="Enable screenshots" />
+        <!-- No clicking blind: the mouse and keyboard only go with screenshots. -->
+        <CheckBox IsChecked="{Binding Agent.EnableControl}" IsEnabled="{Binding #ScreenshotsBox.IsChecked}" Content="Enable keyboard and mouse control" />
 
         <TextBlock Classes="h2" Text="Things Sloperator should always know" />
         <TextBox Text="{Binding Agent.CustomInstructions}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100"

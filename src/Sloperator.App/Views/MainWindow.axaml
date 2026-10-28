@@ -713,8 +713,8 @@
                 <StackPanel Spacing="3">
                   <TextBlock Classes="capability" Text="Use any app" />
                   <TextBlock Classes="muted" TextWrapping="Wrap" Text="I see the screen and use the mouse and keyboard, in any program." />
-                  <TextBlock Classes="muted warning" TextWrapping="Wrap" IsVisible="{Binding !CanSeeScreen}"
-                             Text="This model can't see images: pick another." />
+                  <TextBlock Classes="muted warning" TextWrapping="Wrap" IsVisible="{Binding ScreenNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                             Text="{Binding ScreenNote}" />
                 </StackPanel>
               </DockPanel>
             </Border>

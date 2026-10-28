@@ -368,7 +368,7 @@ public sealed partial class MainWindowViewModel
             OnContextChanged();
         }
         server.SupportsVision = (probe.Vision ?? true) && _imagesRefused != ImagesKey(server);
-        OnPropertyChanged(nameof(CanSeeScreen));
+        OnPropertyChanged(nameof(ScreenNote));
         server.EffortLevels = probe.Efforts ?? [];
         OnEffortsChanged();
         var status = "Connected" + (!server.SupportsVision ? " · no vision" : "");

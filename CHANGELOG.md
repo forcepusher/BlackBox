@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   later line leave the chat and the saved chat, the files the agent wrote or edited from then on go back
   to how they were, and the message goes back into the box. What commands, copies and clicks in other
   programs changed isn't undone; the chat says which of those ran.
+- **Enable screenshots** and **Enable keyboard and mouse control** under Settings → Safety. With
+  screenshots off the agent doesn't look at the screen, and can't use the mouse and keyboard either;
+  with control off it looks but doesn't click or type.
 
 ## [1.1.0] - 2026-10-29
 ### Added
