@@ -19,7 +19,7 @@ Its settings, chats and whatever it downloads stay in a `Data` folder next to th
 
 ## Connecting a model
 - **Free, no account:** out of the box it runs on Kilo's free online models. They allow about 200
-  requests an hour, so a long job may stop to wait.
+  requests an hour.
 - **Claude:** type `api.anthropic.com` as the server and your Anthropic API key next to it.
 - **Your own PC:** in [LM Studio](https://lmstudio.ai), turn its server on in the Developer tab and type
   `http://localhost:1234/v1` as the server. Pick a model that sees images (Qwen3.8 27B is the one
