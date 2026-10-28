@@ -9,7 +9,7 @@ Its settings, chats and whatever it downloads stay in a `Data` folder next to th
 
 ## Getting started
 1. Download `Sloperator.exe` from [Releases](https://github.com/forcepusher/Sloperator/releases) and
-   put it in a folder of your own (Documents, the Desktop, a USB stick), not in Program Files.
+   put it in whatever folder you like (not Program Files).
 2. Double-click it. If Windows says "Windows protected your PC", click **More info**, then
    **Run anyway**.
 3. Pick a model in the bar at the top (below), type what you want done and press Enter.
