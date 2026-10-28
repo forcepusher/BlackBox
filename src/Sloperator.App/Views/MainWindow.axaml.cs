@@ -314,9 +314,10 @@ public partial class MainWindow : Window
     // ---- right-click in the chat ---------------------------------------------------------------------
 
     /// <summary>
-    /// The chat's right-click menu, one for the whole log: Copy for selected text, then what can be
-    /// done with the conversation (Summarize context). A picture keeps its own menu (Copy of the
-    /// picture). What concerns the message right-clicked goes in this menu too (see <see cref="ChatMenuItems"/>).
+    /// The chat's right-click menu, one for the whole log: Copy for selected text, Undo message and
+    /// everything below on a message of the user's, then Summarize context. It opens before a text
+    /// block's own menu (Copy alone) could. A picture keeps its own (Copy of the picture), and so do
+    /// a message's files.
     /// </summary>
     private void OnChatMenu(object? sender, ContextRequestedEventArgs e)
     {
