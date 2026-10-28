@@ -2094,7 +2094,9 @@ pixels, enlarges it to fit the screenshot's size (at most 4 times), and draws ru
 left edges labelled in screenshot coordinates, so the model reads the x/y to click off them and never
 works in the zoomed picture's own pixels. A server that reads every picture at a fixed budget (munito,
 about 1,000 tokens) sees a whole 2560x1080 screenshot shrunk, where a 16 px row of Unity's Hierarchy is
-a few pixels high; a region of it isn't.
+a few pixels high; a region of it isn't. Sent at the desktop's own pixels instead of enlarged, a
+640x270 zoom left DeepSeek worse off: 10 of 28 clicks (Unity 7 of 19) against 20 of 28 (Unity 13 of
+19) on the same scenes, as munito reads a small picture at fewer tokens, not at more detail.
 
 Until 28 October 2026 every named click was aimed again by a **fresh look**: `mouse_click` took a
 `target` and a `which` (what told it apart from look-alikes), and a separate request with only a new
@@ -2129,7 +2131,9 @@ was told, it was within 10 px of each.
 the buttons 1,700 px right of them), `cards` (12 near-identical product names), `dialogs` (four
 dialogs alike but for their titles, 480 px above their OK and Cancel) and `toggles` (20 near-identical
 settings, rows 36 px apart, switches 1,500 px right of them). `BB_CLICK_ZOOM=0` measures without the
-zoom tool.
+zoom tool. With it, DeepSeek V4.1 Flash on munito hit 28 of 46 on the ten scenes of
+the comparison above (Unity 13 of 19), against 14 with the fresh look and 11 with neither, zooming
+before most clicks.
 
 
 ### Folder index
