@@ -5,7 +5,7 @@ It uses the actual desktop via keyboard and mouse when needed.
 It is a single portable `Sloperator.exe`. Nothing gets installed.\
 Its settings, chats and whatever it downloads stay in a `Data` folder next to the exe.
 
-[![Sloperator answering its first message (click to play)](docs/demo-poster.png)](docs/demo.mp4)
+<img src="docs/demo.gif" width="453" alt="Sloperator answering its first message">
 
 ## Getting started
 1. Download `Sloperator.exe` from [Releases](https://github.com/forcepusher/Sloperator/releases) and
