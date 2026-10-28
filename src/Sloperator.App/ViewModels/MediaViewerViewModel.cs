@@ -16,7 +16,6 @@ public sealed record MediaEntry(object Source, string? Path, byte[]? Picture, st
 /// The full-screen viewer, over the screen the chat is on: a picture at the screen's size (the
 /// wheel comes closer), an animation, or a video playing with its sound, and the chat's other
 /// pictures, videos and documents one arrow key away (a document shown as in the File inspector panel).
-/// Prompt shows what the file was made with.
 /// </summary>
 public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
 {
@@ -55,19 +54,6 @@ public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _details = "";
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasRecipe))]
-    private MediaRecipe? _recipe;
-
-    public bool HasRecipe => Recipe is not null;
-
-    /// <summary>The panel with the prompts and settings is open; it stays open from one file to the next.</summary>
-    [ObservableProperty]
-    private bool _showRecipe;
-
-    [RelayCommand]
-    private void ToggleRecipe() => ShowRecipe = !ShowRecipe;
-
     private bool CanGoBack() => Index > 0;
     private bool CanGoOn() => Index < _entries.Count - 1;
 
@@ -99,7 +85,6 @@ public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
     {
         Release();
         Index = index;
-        Recipe = null;
         Details = "";
         var entry = _entries[index];
         if (entry.Path is not { } path)
@@ -125,26 +110,13 @@ public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
             return;
         }
         Shown = new ViewerPicture(path, null, _width * 2, PictureLoaded);
-        var at = index;
-        Task.Run(() =>
-        {
-            var recipe = MediaRecipe.Read(path);
-            Dispatcher.UIThread.Post(() =>
-            {
-                if (Index == at && Shown is ViewerPicture) Recipe = recipe;
-            });
-        });
     }
 
-    /// <summary>A video's or animation's details and recipe, as its preview reads them.</summary>
+    /// <summary>A video's or animation's details, as its preview reads them.</summary>
     private void OnPreviewChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (!ReferenceEquals(sender, Shown) || sender is not FilePreview preview)
-            return;
-        if (e.PropertyName == nameof(FilePreview.Details))
+        if (ReferenceEquals(sender, Shown) && sender is FilePreview preview && e.PropertyName == nameof(FilePreview.Details))
             Details = preview.Details;
-        else if (e.PropertyName == nameof(FilePreview.Recipe))
-            Recipe = preview.Recipe;
     }
 
     /// <summary>A document's details ("PDF, 12 pages, 1.1 MB"), as the panel reads them.</summary>

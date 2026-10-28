@@ -5,20 +5,9 @@
              x:Class="Sloperator.App.Views.PreviewFooter"
              x:DataType="vm:FilePreview">
   <!-- Under every preview: the file's name and what it is, and buttons to see it in the File inspector
-       panel or find it; for a file made with a prompt, Prompt shows that prompt and the
-       settings it was made with. -->
+       panel (with the prompt it was made with, if the file says) or find it. -->
   <DockPanel>
     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="10,0,0,0">
-      <Button Classes="ghost" Padding="10,3" Content="Prompt" IsVisible="{Binding HasRecipe}"
-              ToolTip.Tip="The prompts and settings it was made with, read from the file">
-        <Button.Flyout>
-          <Flyout Placement="TopEdgeAlignedRight">
-            <ScrollViewer MaxHeight="520" Width="440" HorizontalScrollBarVisibility="Disabled">
-              <views:RecipeView DataContext="{Binding Recipe}" Margin="4,2,14,4" />
-            </ScrollViewer>
-          </Flyout>
-        </Button.Flyout>
-      </Button>
       <Button Classes="ghost" Padding="10,3" Content="Inspect" Click="OnInspect" ToolTip.Tip="See it in the File inspector panel" />
       <Button Classes="ghost" Padding="10,3" Content="Show in folder" Command="{Binding ShowInFolderCommand}" ToolTip.Tip="{Binding Path}" />
     </StackPanel>

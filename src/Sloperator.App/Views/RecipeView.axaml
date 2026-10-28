@@ -25,9 +25,14 @@
       </ItemsControl.ItemTemplate>
     </ItemsControl>
     <ItemsControl ItemsSource="{Binding Settings}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel Spacing="4" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
       <ItemsControl.ItemTemplate>
         <DataTemplate x:DataType="media:RecipeSetting">
-          <Grid ColumnDefinitions="110,*" Margin="0,1">
+          <Grid ColumnDefinitions="112,*">
             <TextBlock Classes="muted" Text="{Binding Name}" />
             <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
           </Grid>

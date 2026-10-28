@@ -364,10 +364,14 @@ and the side buttons go through the chat's other pictures and videos, Esc, × or
 picture goes back. The agent's clicks step it aside as they do the chat's window, and its keys go to
 the window under both (before, from the chat they could go to the Video generator window there was then).
 
-**Prompt** under a picture, video or sound made with ComfyUI shows the prompts it was made with and
+**Prompt** in the File inspector panel's bar (see [File inspector](#file-inspector)), for a picture,
+animation, video, sound or 3D model made with ComfyUI, shows the prompts it was made with and
 the settings that matter for making it again (model, LoRAs with their strength, shift, sampler,
 scheduler, steps, CFG, seed, denoise, size, a song's tempo and key, the pictures it started from),
-with Copy for each prompt and for all of it; the viewer has it too (P). It is read from the file
+with Copy for each prompt and for all of it (`RecipeView`). Until 2026-10-28 it was a Prompt button
+under each preview in the chat (a flyout) and in the full-screen viewer (a side panel, P); the user
+had both taken off, as the File inspector is where a file is inspected and the app has no
+duplicate controls. It is read from the file
 itself, so it works for files the user made in ComfyUI as well: ComfyUI keeps the workflow it ran
 in every file it saves, in a PNG's text chunks, an MP4's tags (Video Combine's as a string of JSON),
 an MP3's TXXX frame or a FLAC's comments. The API form of the workflow is found by how it begins
@@ -2568,7 +2572,13 @@ the window lays the panel out before it grows); picked from the dropdown it wait
 file dropped on it, or one picked with the folder button. Its top bar has the file's name, what it is, the folder (Open
 file: a picker in the shown file's folder, listing "Files it shows" first, then each kind from
 `FileInspector.PickerTypes`, then All files, since anything else opens in hex; the user's request,
-2026-10-26, not Open in the default program, which the cards no longer have) and the × that closes it; Show in folder was there too until the user had it taken off (2026-10-25), as the file's card in the chat has it. A message sent
+2026-10-26, not Open in the default program, which the cards no longer have) and the × that closes it; Show in folder was there too until the user had it taken off (2026-10-25), as the file's card in the chat has it. For a picture, animation, video, sound or 3D model that says
+how it was made (`MediaRecipe.Read`, run beside the file's own load so a large file's wait doesn't
+hold the picture), the bar has **Prompt** too: a toggle that shows its prompts and settings under the
+file, in a section at most half the panel's height (set on resize in `FileInspectorPanel`) that
+scrolls past that; it stays on from one file to the next, and is hidden for a file that says
+nothing. It is in the panel only, not in `FileInspectorView`, so the full-screen viewer's peek at a
+document doesn't carry it. A message sent
 while it shows a file carries "File inspector · name" over the bubble and tells the model which file
 is open, so "what does this say" is about it. Which way a file is shown (`FileInspector.KindOf`,
 by its extension, the formats Sloperator already reads and writes; the file itself is `FileInspectorView`,
