@@ -2066,6 +2066,15 @@ and never scaled up (`AgentSettings.ScreenshotMaxWidth`/`ScreenshotMaxHeight`, k
 user: "wide full HD"): 1920×1080 and 21:9 screens go as they are, 4K goes at 1920×1080. Clicks map
 back through `ScreenSpace` per monitor, in physical pixels, so each screen's own scaling and its
 place in the desktop don't matter (`ToolTests.Screenshots_fit_the_max_size_and_clicks_land_on_the_real_screen_of_every_monitor`).
+That holds because the whole process is per-monitor DPI aware (the manifest, and `WindowsPlatform`
+for hosts without it): screens, captures and the cursor are all in the same physical pixels. On the
+laptop's 1920×1200 screen at 125%, `ClickLandsTests` (`BB_DESKTOP_TESTS=1`, the real mouse) finds a
+red square of another process in Sloperator's own screenshot, scaled down to 1024×640, as a model
+finds a button, and clicks it through `mouse_click` in pixels and on the 0-1000 grid: both landed
+(28 October 2026), and with the cursor moved to four fifths of the point, as a DPI-unaware process
+would, both failed. Scripts that drive Sloperator must work in physical pixels too: Windows PowerShell
+is DPI aware in some hosts and not in others, and click targets read off a 1536×960 screenshot of
+that screen landed every click 25% too far right and down.
 Claude's own limit (`ToolContext.MaxScreenshotSide`) still applies over the setting.
 The click benchmark takes another box with `BB_CLICK_RES=1920x1080`.
 
