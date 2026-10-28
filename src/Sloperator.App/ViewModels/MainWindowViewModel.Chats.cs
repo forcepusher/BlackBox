@@ -122,6 +122,7 @@ public sealed partial class MainWindowViewModel
         _history = chat.History;
         _pictures = new(_chats.NextPictureNumber(chat.Id));
         UseChanges(FileChanges.Load(ChangesFile(chat.Id)));
+        Changes.TurnsUpTo(chat.Entries.Max(e => e.Turn) ?? 0);
         var withFiles = new List<(ChatItemViewModel, Func<IReadOnlyList<string>>)>();
         foreach (var entry in chat.Entries)
         {
@@ -170,6 +171,94 @@ public sealed partial class MainWindowViewModel
             try { File.Delete(file); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
+    }
+
+    // ---- Undo message and everything below ---------------------------------------------
+
+    /// <summary>A message is being undone: nothing is sent until it is.</summary>
+    private bool _undoing;
+
+    /// <summary>Whether a message can be undone now: not while a task runs, which would go on writing after the cut.</summary>
+    internal bool CanUndo => !IsBusy && !_undoing && !_closed;
+
+    /// <summary>
+    /// Undo message and everything below, on a message of the user's: it and every later line go
+    /// from the chat, the model's conversation is cut where it had the message (so the thinking and
+    /// pictures that came after go with it, the pictures from the chat's folder too), the files
+    /// write_file and edit_file changed from then on are put back as they were before it, and the
+    /// message goes back into the box to be changed and sent again. What other tools changed (a
+    /// command, a copy, a click in another program) can't be put back: the chat says which ran.
+    /// </summary>
+    internal async Task UndoFromAsync(UserMessageItem message)
+    {
+        if (!CanUndo || Items.IndexOf(message) is not (>= 0 and var at))
+            return;
+        _undoing = true;
+        SendCommand.NotifyCanExecuteChanged();
+        try
+        {
+            var sent = Items.OfType<UserMessageItem>().ToList();
+            var cut = ChatCut.HistoryStart(_history, sent.Select(u => u.Input).ToList(), sent.IndexOf(message));
+            var calls = Items.Skip(at).OfType<ToolCallItem>().Select(t => (t.Name, Ran: t.State is not (ToolItemState.Denied or ToolItemState.AwaitingApproval))).ToList();
+            var back = message.Turn is { } turn ? await Changes.RollBackAsync(turn, FileChangesViewModel.ToRecycleBin, CancellationToken.None) : null;
+            _history.RemoveRange(cut, _history.Count - cut);
+            for (var i = Items.Count - 1; i >= at; i--)
+            {
+                Items[i].DisposePreviews();
+                Items.RemoveAt(i);
+            }
+            _current = null;
+            BackInTheBox([message.Input]);
+            // A task stopped just before the message can be carried on again.
+            foreach (var notice in Items.OfType<NoticeItem>())
+                notice.CanContinue = notice.Stopped && ReferenceEquals(notice, Items.LastOrDefault());
+            if (!Items.OfType<UserMessageItem>().Any())
+                ForgetChat();
+            if (ChatCut.Said(back, calls) is { } said)
+                Items.Add(new NoticeItem(said, isError: false));
+            if (_chatId is not { } id)
+                return;
+            var chat = SnapshotHistory();
+            SaveChat(chat);
+            if (chat is null)
+                return;
+            // The pictures only the undone part of the conversation had: once the chat that no longer names them is on the disk.
+            _chatSaver.Flush(TimeSpan.FromSeconds(10));
+            _chats.DropPicturesBut(id, chat.History.SelectMany(m => m.Parts ?? []).Select(p => p.File).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            _undoing = false;
+            SendCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    /// <summary>
+    /// Its first message undone, the chat has nothing left to keep: its file, pictures and list of
+    /// changes go, and the window is on a new chat with what was undone in the box. The notices
+    /// shown before the first message stay.
+    /// </summary>
+    private void ForgetChat()
+    {
+        if (_chatId is { } id)
+        {
+            _chatSaver.Flush(TimeSpan.FromSeconds(10));
+            _chatSaver.Forget(id);
+            _chats.Delete(id);
+            try { File.Delete(ChangesFile(id)); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            if (PastChats.FirstOrDefault(r => r.Id == id) is { } row)
+                PastChats.Remove(row);
+            OnPropertyChanged(nameof(HasPastChats));
+        }
+        _history = [];
+        _pictures = new();
+        _chatId = null;
+        _chatTitle = null;
+        UseChanges(new FileChanges());
+        OnPropertyChanged(nameof(WindowTitle));
+        ContextUsage = "";
+        MarkCurrentChat();
     }
 
     private void MarkCurrentChat()
@@ -270,7 +359,7 @@ public sealed partial class MainWindowViewModel
     {
         var entry = item switch
         {
-            UserMessageItem u => new ChatEntry { Kind = ChatEntryKind.User, Text = u.Text, Files = u.Files.Count > 0 ? u.Files : null, Via = u.Via, Context = u.Context, Cards = u.Cards?.ToList() },
+            UserMessageItem u => new ChatEntry { Kind = ChatEntryKind.User, Text = u.Text, Turn = u.Turn, Files = u.Files.Count > 0 ? u.Files : null, Via = u.Via, Context = u.Context, Cards = u.Cards?.ToList() },
             AssistantMessageItem a => new ChatEntry
             {
                 Kind = ChatEntryKind.Assistant, Text = a.Text, Reasoning = a.Reasoning, Ended = a.Ended, Sent = a.SentAt, FirstWords = a.FirstWords,
@@ -291,7 +380,7 @@ public sealed partial class MainWindowViewModel
     {
         ChatItemViewModel item = e.Kind switch
         {
-            ChatEntryKind.User => new UserMessageItem(e.Text ?? "", e.Files, e.Cards) { Via = e.Via, Context = e.Context },
+            ChatEntryKind.User => new UserMessageItem(e.Text ?? "", e.Files, e.Cards) { Via = e.Via, Context = e.Context, Turn = e.Turn },
             ChatEntryKind.Assistant => new AssistantMessageItem
             {
                 Text = e.Text ?? "", Reasoning = e.Reasoning ?? "", IsStreaming = false, Ended = e.Ended, SentAt = e.Sent, FirstWords = e.FirstWords,

@@ -479,7 +479,7 @@
           <ItemsControl.DataTemplates>
 
             <DataTemplate DataType="vm:UserMessageItem">
-              <StackPanel HorizontalAlignment="Right" MaxWidth="640" Margin="60,0,0,0" Spacing="3">
+              <StackPanel HorizontalAlignment="Right" MaxWidth="640" Margin="60,0,0,0" Spacing="3" ContextRequested="OnUserMessageMenu">
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Right" />
                 <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="0,8" HorizontalAlignment="Right">
                   <StackPanel Spacing="6">
@@ -545,7 +545,16 @@
                          text, and Avalonia cuts a measured width to what the parent offers before taking a negative
                          margin off, so a long line came back narrower than measured, wrapped once more and
                          lost the last line of the message under the bubble's edge. -->
-                    <SelectableTextBlock views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" Margin="0,-8" Padding="12,8" />
+                    <SelectableTextBlock views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" Margin="0,-8" Padding="12,8">
+                      <!-- The theme's own menu (Copy), with Undo message and everything below under it. -->
+                      <SelectableTextBlock.ContextFlyout>
+                        <MenuFlyout Placement="Bottom" Opening="OnUserMessageFlyout">
+                          <MenuItem Header="Copy" Command="{Binding $parent[SelectableTextBlock].Copy}" IsEnabled="{Binding $parent[SelectableTextBlock].CanCopy}"
+                                    InputGesture="{x:Static TextBox.CopyGesture}" />
+                          <MenuItem Header="Undo message and everything below" Click="OnUndoMessage" />
+                        </MenuFlyout>
+                      </SelectableTextBlock.ContextFlyout>
+                    </SelectableTextBlock>
                   </StackPanel>
                 </Border>
               </StackPanel>

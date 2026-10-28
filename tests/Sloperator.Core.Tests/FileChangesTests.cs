@@ -175,4 +175,87 @@ public class FileChangesTests : IDisposable
         Assert.Equal(@"C:\", FileChanges.CommonFolder([@"C:\a\x.cs", @"C:\ab\y.cs"]));
         Assert.Equal("", FileChanges.CommonFolder([@"C:\a\x.cs", @"D:\a\y.cs"]));
     }
+
+    [Fact]
+    public async Task Undoing_a_message_puts_the_files_back_as_they_were_before_it()
+    {
+        // Undo message and everything below: a file changed before the message keeps that change, one
+        // made after it goes to the Recycle Bin (here, the list of deleted files).
+        var store = Path.Combine(_root, "changes.json");
+        var changes = new FileChanges();
+        changes.KeepIn(store);
+        var ctx = Ctx(changes);
+        var notes = Path.Combine(_root, "notes.txt");
+        File.WriteAllText(notes, "one\n");
+        var made = Path.Combine(_root, "made.txt");
+
+        changes.NewTurn();
+        await Run(new EditFileTool(), new JsonObject { ["path"] = notes, ["old_text"] = "one", ["new_text"] = "two" }, ctx);
+        var second = changes.NewTurn();
+        await Run(new EditFileTool(), new JsonObject { ["path"] = notes, ["old_text"] = "two", ["new_text"] = "three" }, ctx);
+        await Run(new WriteFileTool(), new JsonObject { ["path"] = made, ["content"] = "new\n" }, ctx);
+        changes.NewTurn();
+        await Run(new EditFileTool(), new JsonObject { ["path"] = notes, ["old_text"] = "three", ["new_text"] = "four" }, ctx);
+
+        // Kept with the chat: opened again, it rolls back as well.
+        changes = FileChanges.Load(store);
+        List<string> deleted = [];
+        var back = await changes.RollBackAsync(second, p => { deleted.Add(p); File.Delete(p); }, TestContext.Current.CancellationToken);
+
+        Assert.Equal("two\n", File.ReadAllText(notes));
+        Assert.Equal([notes], back.Restored);
+        Assert.Equal([made], back.Deleted);
+        Assert.Equal([made], deleted);
+        Assert.Empty(back.Failed);
+        // The first message's change is still the chat's, and the made file has left the list.
+        Assert.Equal(["notes.txt"], FileChanges.Load(store).Diff().Files.Select(f => f.Path));
+
+        // The next message's changes are its own, and undoing it leaves the first message's in place.
+        var next = changes.NewTurn();
+        Assert.True(next > second);
+        await Run(new EditFileTool(), new JsonObject { ["path"] = notes, ["old_text"] = "two", ["new_text"] = "five" }, Ctx(changes));
+        await changes.RollBackAsync(next, File.Delete, TestContext.Current.CancellationToken);
+        Assert.Equal("two\n", File.ReadAllText(notes));
+        // Undoing the first message too, the file is as it was before the agent.
+        await changes.RollBackAsync(1, File.Delete, TestContext.Current.CancellationToken);
+        Assert.Equal("one\n", File.ReadAllText(notes));
+        Assert.True(changes.IsEmpty);
+    }
+
+    [Fact]
+    public async Task A_Word_document_is_put_back_byte_for_byte()
+    {
+        var doc = Path.Combine(_root, "report.docx");
+        var changes = new FileChanges();
+        var ctx = Ctx(changes);
+        await Run(new WriteFileTool(), new JsonObject { ["path"] = doc, ["content"] = "# Report\n\nFirst draft." }, ctx);
+        var before = File.ReadAllBytes(doc);
+
+        var turn = changes.NewTurn();
+        await Run(new WriteFileTool(), new JsonObject { ["path"] = doc, ["content"] = "# Report\n\nSecond draft." }, ctx);
+        Assert.NotEqual(before, File.ReadAllBytes(doc));
+
+        var back = await changes.RollBackAsync(turn, File.Delete, TestContext.Current.CancellationToken);
+        Assert.Equal([doc], back.Restored);
+        Assert.Equal(before, File.ReadAllBytes(doc));
+    }
+
+    [Fact]
+    public async Task A_list_kept_before_turns_still_reads_and_a_chat_opened_again_numbers_on()
+    {
+        var store = Path.Combine(_root, "old.json");
+        var file = Path.Combine(_root, "a.txt");
+        File.WriteAllText(file, "now\n");
+        File.WriteAllText(store, new JsonObject { ["files"] = new JsonArray(new JsonObject { ["path"] = file, ["exists"] = true, ["text"] = "before\n" }) }.ToJsonString());
+
+        var changes = FileChanges.Load(store);
+        Assert.Single(changes.Diff().Files);
+        // Its messages had turns up to 3 though nothing was kept for them: the next is 4.
+        changes.TurnsUpTo(3);
+        Assert.Equal(4, changes.NewTurn());
+        // Undoing a message of this version leaves what came before turns (turn 0) alone.
+        var back = await changes.RollBackAsync(4, File.Delete, TestContext.Current.CancellationToken);
+        Assert.Empty(back.Restored);
+        Assert.Equal("now\n", File.ReadAllText(file));
+    }
 }

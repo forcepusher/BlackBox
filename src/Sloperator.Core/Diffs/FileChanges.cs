@@ -9,7 +9,9 @@ namespace Sloperator.Core.Diffs;
 /// for the File changes panel: write_file and edit_file read their file before they run. What a
 /// run_shell command changes isn't listed: a folder watched while it ran can't tell its writes from
 /// other programs' (a Claude Code beside Sloperator rewrote .claude.json in the home folder during a
-/// command's sleep, and it was listed as the model's).
+/// command's sleep, and it was listed as the model's). Each message of the user's starts a turn
+/// (<see cref="NewTurn"/>), and a file keeps what it held before its first change in each turn, so
+/// undoing a message puts the files back as they were before it (<see cref="RollBackAsync"/>).
 /// </summary>
 public sealed class FileChanges
 {
@@ -19,16 +21,41 @@ public sealed class FileChanges
     /// <summary>Files kept at most.</summary>
     private const int MaxFiles = 500;
 
-    /// <summary>A file as it was or is: Exists false when it isn't there; Text null for one that isn't text or is too big.</summary>
-    private sealed record Content(bool Exists, string? Text)
+    /// <summary>
+    /// A file as it was or is: Exists false when it isn't there; Text null for one that isn't text or is too big.
+    /// A Word, Excel, PowerPoint or PDF file, whose Text is what read_file shows, keeps its Bytes too, to be put back.
+    /// </summary>
+    private sealed record Content(bool Exists, string? Text, byte[]? Bytes = null)
     {
         public static readonly Content Absent = new(false, null);
     }
 
+    /// <summary>What a file held before its first change in a turn; the first is what it held before the agent changed it at all.</summary>
+    private sealed record Version(int Turn, Content Content);
+
     private readonly Lock _gate = new();
-    private readonly Dictionary<string, Content> _before = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<Version>> _versions = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _order = [];
     private string? _store;
+
+    /// <summary>The turn the changes made now belong to; 0 in a list kept before there were turns.</summary>
+    private int _turn;
+
+    private Content Before(string path) => _versions[path][0].Content;
+
+    /// <summary>A message of the user's: the changes from now on are its turn's. Returns the turn's number, to roll back to.</summary>
+    public int NewTurn()
+    {
+        lock (_gate)
+            return ++_turn;
+    }
+
+    /// <summary>A chat opened again: its messages had turns up to <paramref name="turn"/>, which the list may not have kept (it is kept only once a file changes).</summary>
+    public void TurnsUpTo(int turn)
+    {
+        lock (_gate)
+            _turn = Math.Max(_turn, turn);
+    }
 
     /// <summary>Raised on the agent's thread after a call that may have changed files.</summary>
     public event Action<FileChanges>? Changed;
@@ -61,18 +88,25 @@ public sealed class FileChanges
         var changes = new FileChanges { _store = file };
         try
         {
-            if (File.Exists(file) && JsonNode.Parse(File.ReadAllText(file))?["files"] is JsonArray files)
+            if (File.Exists(file) && JsonNode.Parse(File.ReadAllText(file)) is JsonObject json && json["files"] is JsonArray files)
+            {
+                changes._turn = json["turn"]?.GetValue<int>() ?? 0;
                 foreach (var f in files.OfType<JsonObject>())
                 {
                     // "known": false was a file a command changed before Sloperator read it, which may have been another program's.
-                    if (f["path"]?.GetValue<string>() is not { Length: > 0 } path || changes._before.ContainsKey(path) || f["known"]?.GetValue<bool>() == false)
+                    if (f["path"]?.GetValue<string>() is not { Length: > 0 } path || changes._versions.ContainsKey(path) || f["known"]?.GetValue<bool>() == false)
                         continue;
-                    changes._before[path] = new Content(f["exists"]?.GetValue<bool>() ?? false, f["text"]?.GetValue<string>());
+                    changes._versions[path] = [Read(f), .. (f["later"] as JsonArray ?? []).OfType<JsonObject>().Select(Read)];
                     changes._order.Add(path);
                 }
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or FormatException) { }
         return changes;
+
+        // A list kept before there were turns has the first version alone, as turn 0.
+        static Version Read(JsonObject v) => new(v["turn"]?.GetValue<int>() ?? 0, new Content(v["exists"]?.GetValue<bool>() ?? false, v["text"]?.GetValue<string>(),
+            v["bytes"]?.GetValue<string>() is { } bytes ? Convert.FromBase64String(bytes) : null));
     }
 
     private void Save()
@@ -83,13 +117,17 @@ public sealed class FileChanges
         {
             if ((file = _store) is null || _order.Count == 0)
                 return;
+            // The first version where lists kept before turns had it, the later ones under it.
             json = new JsonObject
             {
-                ["files"] = new JsonArray(_order.Select(p => (JsonNode)new JsonObject
+                ["turn"] = _turn,
+                ["files"] = new JsonArray(_order.Select(p =>
                 {
-                    ["path"] = p,
-                    ["exists"] = _before[p].Exists,
-                    ["text"] = _before[p].Text,
+                    var file = Write(_versions[p][0]);
+                    file.Insert(0, "path", p);
+                    if (_versions[p].Count > 1)
+                        file["later"] = new JsonArray(_versions[p].Skip(1).Select(v => (JsonNode)Write(v)).ToArray());
+                    return (JsonNode)file;
                 }).ToArray()),
             }.ToJsonString();
         }
@@ -99,6 +137,14 @@ public sealed class FileChanges
             Settings.AtomicFile.Write(file, json);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+
+        static JsonObject Write(Version v) => new()
+        {
+            ["exists"] = v.Content.Exists,
+            ["text"] = v.Content.Text,
+            ["bytes"] = v.Content.Bytes is { } bytes ? Convert.ToBase64String(bytes) : null,
+            ["turn"] = v.Turn,
+        };
     }
 
     // ---- around a tool call -------------------------------------------------------------------------
@@ -151,23 +197,102 @@ public sealed class FileChanges
         }
     }
 
-    /// <summary>A file the agent is about to change: what it holds now, unless that is known already.</summary>
+    /// <summary>A file the agent is about to change: what it holds now, unless that is known already for this turn.</summary>
     private void Remember(string path)
     {
         path = Path.GetFullPath(path);
-        lock (_gate)
-            if (_before.ContainsKey(path) || _order.Count >= MaxFiles)
-                return;
-        var now = Read(path);
+        int turn;
         lock (_gate)
         {
-            if (_before.TryAdd(path, now))
+            turn = _turn;
+            if (_versions.TryGetValue(path, out var known) ? known[^1].Turn == turn : _order.Count >= MaxFiles)
+                return;
+        }
+        var now = Read(path, keepDocument: true);
+        lock (_gate)
+        {
+            if (!_versions.TryGetValue(path, out var versions))
+            {
+                _versions[path] = [new Version(turn, now)];
                 _order.Add(path);
+            }
+            else if (versions[^1].Turn != turn)
+                versions.Add(new Version(turn, now));
         }
     }
 
-    /// <summary>A file's text as the diff compares it: Word, Excel, PowerPoint and PDF files by the text read_file shows.</summary>
-    private static Content Read(string path)
+    /// <summary>What <see cref="RollBackAsync"/> did: the files put back as they were, those deleted, and those it couldn't put back, with why.</summary>
+    public sealed record RollBack(IReadOnlyList<string> Restored, IReadOnlyList<string> Deleted, IReadOnlyList<(string Path, string Why)> Failed);
+
+    /// <summary>
+    /// Undoes the changes made from <paramref name="turn"/> on: each file the agent changed since is
+    /// put back as it was before its first change in that turn or a later one, a file it made goes to
+    /// <paramref name="delete"/>, and what the list kept of those turns goes. A file that wasn't text,
+    /// was too big, or can't be written is left as it is, and said in <see cref="RollBack.Failed"/>.
+    /// </summary>
+    public async Task<RollBack> RollBackAsync(int turn, Action<string> delete, CancellationToken ct)
+    {
+        List<(string Path, Content Then)> back = [];
+        lock (_gate)
+        {
+            foreach (var path in _order.ToList())
+            {
+                var versions = _versions[path];
+                if (versions.FindIndex(v => v.Turn >= turn) is not (>= 0 and var first))
+                    continue;
+                back.Add((path, versions[first].Content));
+                versions.RemoveRange(first, versions.Count - first);
+                if (versions.Count == 0)
+                {
+                    _versions.Remove(path);
+                    _order.Remove(path);
+                }
+            }
+        }
+        List<string> restored = [], deleted = [];
+        List<(string, string)> failed = [];
+        foreach (var (path, then) in back)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                if (!then.Exists)
+                {
+                    if (File.Exists(path))
+                    {
+                        delete(path);
+                        deleted.Add(path);
+                    }
+                    continue;
+                }
+                if (then.Bytes is { } bytes)
+                    await File.WriteAllBytesAsync(path, bytes, ct).ConfigureAwait(false);
+                else if (then.Text is { } text && !DocumentText.Handles(path))
+                {
+                    if (File.Exists(path) && Read(path).Text == text)
+                        continue; // as it was already
+                    await TextFiles.WriteAllAsync(path, text, File.Exists(path) ? TextFiles.Detect(path) : TextFiles.ForNewFile(path), ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    failed.Add((path, "Sloperator didn't keep what it held: it isn't text, or was too big."));
+                    continue;
+                }
+                restored.Add(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                failed.Add((path, ex.Message));
+            }
+        }
+        Save();
+        try { Changed?.Invoke(this); }
+        catch (Exception ex) when (ex is not OutOfMemoryException) { }
+        return new RollBack(restored, deleted, failed);
+    }
+
+    /// <summary>A file's text as the diff compares it: Word, Excel, PowerPoint and PDF files by the text read_file shows (and with <paramref name="keepDocument"/>, their bytes).</summary>
+    private static Content Read(string path, bool keepDocument = false)
     {
         try
         {
@@ -177,7 +302,7 @@ public sealed class FileChanges
             if (info.Length > MaxBytes)
                 return new Content(true, null);
             if (DocumentText.Handles(path))
-                return new Content(true, DocumentText.Read(path));
+                return new Content(true, DocumentText.Read(path), keepDocument ? File.ReadAllBytes(path) : null);
             var head = new byte[8000];
             int read;
             using (var stream = TextFiles.OpenRead(path))
@@ -202,7 +327,7 @@ public sealed class FileChanges
     {
         List<(string Path, Content Before)> files;
         lock (_gate)
-            files = _order.Select(p => (p, _before[p])).ToList();
+            files = _order.Select(p => (p, Before(p))).ToList();
         var shown = new List<(string Path, DiffFile File)>();
         foreach (var (path, before) in files)
         {
@@ -259,7 +384,7 @@ public sealed class FileChanges
             }
             Content? before;
             lock (_gate)
-                _before.TryGetValue(path, out before);
+                before = _versions.TryGetValue(path, out var versions) ? versions[0].Content : null;
             var (index, head, now) = (FromGit(read.Index, path), FromGit(read.Head, path), Read(path));
             var disk = GitChanges.OnDisk(path);
             var utf8 = (Index: read.Index is null || GitChanges.Lines(read.Index) is not null, Head: read.Head is null || GitChanges.Lines(read.Head) is not null,
@@ -327,7 +452,7 @@ public sealed class FileChanges
         {
             Content? content;
             lock (_gate)
-                _before.TryGetValue(path, out content);
+                content = _versions.TryGetValue(path, out var versions) ? versions[0].Content : null;
             if (content is null)
                 return "Sloperator has nothing of this file from before.";
             (existed, before) = (content.Exists, content.Text);

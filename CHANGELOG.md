@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- Right-click a message of yours in the chat for **Undo message and everything below**: it and every
+  later line leave the chat and the saved chat, the files the agent wrote or edited from then on go back
+  to how they were, and the message goes back into the box. What commands, copies and clicks in other
+  programs changed isn't undone; the chat says which of those ran.
 
 ## [1.1.0] - 2026-10-29
 ### Added

@@ -734,7 +734,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             Status = act switch { GitAct.Stage => "Not staged: ", GitAct.Unstage => "Not unstaged: ", _ => "Not discarded: " } + string.Join(" ", errors);
     }
 
-    private static void ToRecycleBin(string path) =>
+    internal static void ToRecycleBin(string path) =>
         Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
 
     // ---- what is picked, into the chat's box -----------------------------------------------------------
