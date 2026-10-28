@@ -159,8 +159,8 @@ internal sealed partial class Guesswork(Func<DateTime>? clock = null)
     /// <summary>
     /// Reads a reply before its calls run: a try it calls wrong counts as a failed one, and a
     /// question about how something is done that it goes on without looking up gets
-    /// <see cref="QuestionNote"/>, once until it looks something up; either note comes with the
-    /// reply's first result. Going on past an error it was told to look up makes the next script or
+    /// <see cref="QuestionNote"/>, once until it looks something up; either note comes after the
+    /// reply's results. Going on past an error it was told to look up makes the next script or
     /// command that fails say so.
     /// </summary>
     public void Read(ChatMessage reply, IReadOnlyList<Tool?> calls)

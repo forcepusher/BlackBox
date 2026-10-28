@@ -6,8 +6,8 @@ namespace Sloperator.Core.Agent;
 
 /// <summary>
 /// Notices when the model is stuck: the same action over and over, or actions that leave the
-/// screen exactly as it was. It never stops the run (long tasks are legitimate); it adds a note to
-/// the tool result telling the model to change approach. Memory use is fixed, however long the run.
+/// screen exactly as it was. It never stops the run (long tasks are legitimate); it adds a note after
+/// the tool results telling the model to change approach. Memory use is fixed, however long the run.
 /// </summary>
 internal sealed class LoopDetector
 {
@@ -28,7 +28,7 @@ internal sealed class LoopDetector
     private byte[]? _lastScreen;
     private int _unchanged;
 
-    /// <summary>Returns a note to append to the tool result, or null if all looks fine.</summary>
+    /// <summary>Returns a note to say after the tool results, or null if all looks fine.</summary>
     public string? Check(ToolCall call, ToolResult result)
     {
         var notes = new List<string>();

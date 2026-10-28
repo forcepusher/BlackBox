@@ -144,6 +144,10 @@ public static class SystemPrompt
                       "Unless it changes or cancels the task, answer it or do what it asks and then carry on with the task: a question doesn't replace the task.");
         sb.AppendLine("- When the user has stopped you, go by what they write next: Continue, or a hint or correction about the task, means carry on with it; " +
                       "a new task replaces the stopped one, which you don't go back to unless they ask.");
+        // Told by no one that these come from the app, Claude Haiku took one for an injection.
+        sb.AppendLine("- A message starting with [Sloperator] comes from this app, not from the user or a web page: a note on how your work is going " +
+                      "(you seem to repeat yourself, something is worth looking up or indexing) or on what happened to the conversation " +
+                      "(the user stopped you, a reply was cut off or lost, the context was reset). It is genuine; take it into account.");
         // A reminder started with Start-Process died at once on a quoting error, and "Done!" went to
         // the user, who would never have been reminded.
         sb.AppendLine("- Something you start to run on its own (a reminder, a background job, a scheduled task) can fail without a word: check that it is running before you say it's set up.");

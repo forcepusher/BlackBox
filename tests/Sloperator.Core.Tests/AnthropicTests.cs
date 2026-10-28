@@ -436,10 +436,10 @@ public class AnthropicTests
         Assert.Equal(["First I need to see the screen.", "Notepad is closed; I'll wait a moment.", "Two things at once."], thoughts);
         Assert.Equal("Done.", session.History.Last().Content);
 
-        // The chat saved and opened again (History): its screenshots and thinking aren't kept, and
-        // carrying on with it is a valid conversation.
+        // The chat saved and opened again (History): its thinking is kept, signed, and carrying on
+        // with it is a valid conversation, even with its screenshots left out here.
         var reopened = Chats.ChatStore.ForSaving(session.History);
-        Assert.All(reopened, m => Assert.Null(m.AnthropicContent));
+        Assert.Equal(3, reopened.Count(m => m.AnthropicContent?.Any(b => (string?)b!["type"] == "thinking" && (string?)b["signature"] is { Length: > 0 }) == true));
         var again = new AgentSession(client, Opus, ToolRegistry.CreateDefault(true), ctx, "You are Sloperator, test prompt.", reopened, 200_000);
         await again.RunAsync("Now close it.", observer, CancellationToken.None);
         Assert.Empty(api.Violations);

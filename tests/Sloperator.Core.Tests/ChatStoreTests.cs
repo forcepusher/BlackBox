@@ -14,6 +14,22 @@ public class ChatStoreTests : IDisposable
         if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true);
     }
 
+    /// <summary>Claude's signed thinking goes on with a chat opened again (see <see cref="ChatMessage.AnthropicContent"/>).</summary>
+    [Fact]
+    public void Claudes_signed_thinking_is_saved_with_the_chat()
+    {
+        var store = new ChatStore(_dir);
+        var blocks = new System.Text.Json.Nodes.JsonArray(
+            new System.Text.Json.Nodes.JsonObject { ["type"] = "thinking", ["thinking"] = "Press win+r first.", ["signature"] = "c2lnbmVk" },
+            new System.Text.Json.Nodes.JsonObject { ["type"] = "tool_use", ["id"] = "c1", ["name"] = "press_keys", ["input"] = new System.Text.Json.Nodes.JsonObject { ["keys"] = "win+r" } });
+        var reply = new ChatMessage { Role = ChatRole.Assistant, ToolCalls = [new ToolCall { Id = "c1", Name = "press_keys", Arguments = "{\"keys\":\"win+r\"}" }], AnthropicContent = blocks };
+        var chat = new SavedChat { Id = ChatStore.NewId(), Title = "Open Notepad", Updated = DateTime.UtcNow, History = ChatStore.ForSaving([ChatMessage.User("Open Notepad"), reply, ChatMessage.ToolResult("c1", "ok")]) };
+        store.Save(chat);
+
+        var loaded = store.Load(chat.Id)!.History[1].AnthropicContent!;
+        Assert.Equal(blocks.ToJsonString(), loaded.ToJsonString());
+    }
+
     [Fact]
     public void A_saved_chat_reads_back_as_it_was()
     {
