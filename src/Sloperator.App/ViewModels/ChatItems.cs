@@ -77,6 +77,9 @@ public sealed class UserMessageItem(string text, IReadOnlyList<string>? files = 
     /// <summary>What of the open tool went with it (see <see cref="UserInput.Cards"/>).</summary>
     public IReadOnlyList<ToolCard>? Cards { get; } = cards;
 
+    /// <summary>The File changes turn it started, for Undo message and everything below to put the files back to; null in a chat saved before there were turns.</summary>
+    public int? Turn { get; init; }
+
     /// <summary>The message as sent, to send again.</summary>
     public UserInput Input => new(Text, Files) { Via = Via, Context = Context, Cards = Cards };
 

@@ -1303,6 +1303,38 @@ its line too. A call that runs past a few seconds counts its time like the wait 
 and the line a task ended with says under it how long the whole task took ("Worked for 25 min 13 s").
 The times are saved with the chat; a chat saved before they were kept shows none.
 
+**Undo message and everything below** (the user, 2026-10-29) is the right-click menu of a message of
+the user's: on its words under the text's own Copy (the theme's menu, which took the right-click
+first, so the entry has to be in it), elsewhere in the bubble alone in the same kind of menu, not on
+its files (their menu has Copy). Greyed out while a task runs, which would go on writing after the cut. It takes the message and every line after it out of
+the chat, cuts the model's conversation where the model had the message (the replies, thinking,
+Claude's signed thinking blocks and pictures after it go too), deletes the pictures in
+`Data/chats/<id>/` the conversation no longer names once the shorter chat is on the disk, and puts
+the message back in the box with its files. Undoing the first message forgets the chat altogether:
+its file, folder and list of changes, and its History row. The chat on screen and the conversation
+are separate lists, and don't line up one to one: messages sent together are one message to the
+model, one sent during a run has a note in front of its words, Continue's resend isn't a line of the
+chat, a context reset keeps only the user's messages, and a long run's chat drops its oldest lines.
+So `ChatCut.HistoryStart` finds the chat's messages, in order, by how their words begin a line of a
+user message (files alone by their first file's line); a message the model never had cuts where the
+next one it had begins. Undoing the second of two messages sent together takes the first's words
+from the model too (it stays on screen).
+
+The files go back through File changes (`FileChanges.RollBackAsync`): every message of the user's
+starts a turn (`NewTurn`, saved with the message as `ChatEntry.Turn` and in the list as `turn`), and
+write_file and edit_file keep what a file held before its first change in each turn, not just before
+the first change in the chat. Undoing a message writes each file back as it was before its first
+change in that turn or a later one, sends a file made since to the Recycle Bin (as Discard does), and
+drops what was kept for those turns; the next message gets a number after every one used, so nothing
+kept is taken for it. Word, Excel, PowerPoint and PDF files keep their bytes as well as their text (the
+diff compares the text) and go back byte for byte; anything else that isn't text or is over 2 MB can't
+go back and is said. What else changes things isn't kept and can't be undone: run_shell, ssh, copy,
+ComfyUI and video jobs, MCP tools, write_file and edit_file on an SSH host, and clicks and typing in
+other programs. The chat says which of those ran in the part undone ("Not undone, as Sloperator
+doesn't keep what they change: run_shell ×2 and mouse_click."), with the files put back and any that
+couldn't be; nothing when only looking tools ran. A chat saved before turns has none on its messages,
+so its files stay as they are, and the chat says so if write_file or edit_file ran.
+
 ## Scrollbars
 Every scrollbar is the full one, arrows and thumb, all the time: the user didn't want the thin line
 Fluent shows until the pointer comes near (2026-10-26; the chat's had been full since 2026-10-24).

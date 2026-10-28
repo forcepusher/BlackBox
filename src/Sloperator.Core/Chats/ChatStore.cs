@@ -37,6 +37,9 @@ public sealed class ChatEntry
     /// <summary>For a message sent with a tool open: its cards (see <see cref="UserInput.Cards"/>).</summary>
     public List<ToolCard>? Cards { get; set; }
 
+    /// <summary>For a message of the user's: the File changes turn it started (see <see cref="Diffs.FileChanges.NewTurn"/>), to undo the files back to. Chats saved before turns were kept have none.</summary>
+    public int? Turn { get; set; }
+
     /// <summary>For a notice: a run ended here before its task was done (stopped, or an error), so the chat offers to carry on.</summary>
     public bool Stopped { get; set; }
 
@@ -232,6 +235,23 @@ public sealed class ChatStore(string dir)
         try { File.Delete(PathOf(id)); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         try { Directory.Delete(PicturesOf(id), recursive: true); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    /// <summary>Deletes the chat's pictures its conversation no longer names (messages were undone), and the folder once it is empty.</summary>
+    public void DropPicturesBut(string id, IReadOnlySet<string> named)
+    {
+        try
+        {
+            var folder = PicturesOf(id);
+            if (!Directory.Exists(folder))
+                return;
+            // Only the pictures' own names (0001.jpg…): nothing else is Sloperator's to delete there.
+            foreach (var file in Directory.EnumerateFiles(folder).Where(f => int.TryParse(Path.GetFileNameWithoutExtension(f), out _) && !named.Contains(Path.GetFileName(f))).ToList())
+                File.Delete(file);
+            if (!Directory.EnumerateFileSystemEntries(folder).Any())
+                Directory.Delete(folder);
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 

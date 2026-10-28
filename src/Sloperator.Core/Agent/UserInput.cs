@@ -48,7 +48,7 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
     }
 
     /// <summary>The words as the model reads them: the context first, when there is one.</summary>
-    private string ModelText => Context is null ? Text : Text.Trim().Length == 0 ? Context : $"{Context}\n{Text}";
+    internal string ModelText => Context is null ? Text : Text.Trim().Length == 0 ? Context : $"{Context}\n{Text}";
 
     /// <summary>How many attached pictures the model sees in one message; the others it opens with read_file.</summary>
     private const int MaxShown = 6;

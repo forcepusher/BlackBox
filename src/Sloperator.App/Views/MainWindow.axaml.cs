@@ -308,6 +308,39 @@ public partial class MainWindow : Window
         finally { _pastingText = false; }
     }
 
+    // ---- right-click on a message of the user's → Undo message and everything below -----------------
+
+    /// <summary>
+    /// The menu of a message of the user's: on its words the text's own menu with Undo message and
+    /// everything below under Copy, elsewhere in the bubble that alone, in the same kind of menu, at
+    /// the pointer as the text's opens. Its files have their own (Copy). Greyed out while a task runs.
+    /// </summary>
+    private void OnUserMessageMenu(object? sender, ContextRequestedEventArgs e)
+    {
+        if (e.Handled || sender is not Control { DataContext: UserMessageItem } bubble)
+            return;
+        e.Handled = true;
+        var undo = new MenuItem { Header = "Undo message and everything below", DataContext = bubble.DataContext };
+        undo.Click += OnUndoMessage;
+        var menu = new MenuFlyout { Placement = PlacementMode.Bottom };
+        menu.Items.Add(undo);
+        menu.Opening += OnUserMessageFlyout;
+        menu.ShowAt(bubble, showAtPointer: true);
+    }
+
+    private void OnUserMessageFlyout(object? sender, EventArgs e)
+    {
+        foreach (var item in (sender as MenuFlyout)?.Items.OfType<MenuItem>() ?? [])
+            if (item.Header is "Undo message and everything below")
+                item.IsEnabled = Vm.CanUndo;
+    }
+
+    private async void OnUndoMessage(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as StyledElement)?.DataContext is UserMessageItem message)
+            await Vm.UndoFromAsync(message);
+    }
+
     // ---- right-click → Copy on a picture in the chat ------------------------------------------------
 
     /// <summary>The picture last put on the clipboard: programs read it from Sloperator when they paste, so it stays until the next copy.</summary>
