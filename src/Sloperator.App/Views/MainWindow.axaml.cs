@@ -66,6 +66,9 @@ public partial class MainWindow : Window
         // Other windows add chats while this one is open, and have some open themselves.
         ((Avalonia.Controls.Primitives.PopupFlyoutBase)HistoryButton.Flyout!).Opening += (_, _) => Vm.RefreshPastChats();
 
+        // The chat's own right-click menu, before a text block's (Copy alone) can open.
+        ChatScroll.AddHandler(ContextRequestedEvent, OnChatMenu, RoutingStrategies.Tunnel);
+
         // What Tab or the arrow keys move to is scrolled into view; what a click focuses stays where
         // it is under the mouse (the chat's ScrollViewer does neither by itself, see its markup).
         ChatScroll.AddHandler(GotFocusEvent, (_, e) =>
@@ -308,31 +311,69 @@ public partial class MainWindow : Window
         finally { _pastingText = false; }
     }
 
-    // ---- right-click on a message of the user's → Undo message and everything below -----------------
+    // ---- right-click in the chat ---------------------------------------------------------------------
 
     /// <summary>
-    /// The menu of a message of the user's: on its words the text's own menu with Undo message and
-    /// everything below under Copy, elsewhere in the bubble that alone, in the same kind of menu, at
-    /// the pointer as the text's opens. Its files have their own (Copy). Greyed out while a task runs.
+    /// The chat's right-click menu, one for the whole log: Copy for selected text, then what can be
+    /// done with the conversation (Summarize context). A picture keeps its own menu (Copy of the
+    /// picture). What concerns the message right-clicked goes in this menu too (see <see cref="ChatMenuItems"/>).
     /// </summary>
-    private void OnUserMessageMenu(object? sender, ContextRequestedEventArgs e)
+    private void OnChatMenu(object? sender, ContextRequestedEventArgs e)
     {
-        if (e.Handled || sender is not Control { DataContext: UserMessageItem } bubble)
+        if (e.Source is not Control source)
+            return;
+        var between = source.GetSelfAndVisualAncestors().OfType<Control>().TakeWhile(c => !ReferenceEquals(c, ChatScroll)).ToList();
+        if (between.Any(c => c.ContextMenu is not null))
             return;
         e.Handled = true;
-        var undo = new MenuItem { Header = "Undo message and everything below", DataContext = bubble.DataContext };
-        undo.Click += OnUndoMessage;
-        var menu = new MenuFlyout { Placement = PlacementMode.Bottom };
-        menu.Items.Add(undo);
-        menu.Opening += OnUserMessageFlyout;
-        menu.ShowAt(bubble, showAtPointer: true);
+        var menu = new ContextMenu { ItemsSource = ChatMenuItems(source) };
+        menu.Open(source);
     }
 
-    private void OnUserMessageFlyout(object? sender, EventArgs e)
+    /// <summary>The chat menu's items for a right-click on <paramref name="source"/>.</summary>
+    private List<Control> ChatMenuItems(Control source)
     {
-        foreach (var item in (sender as MenuFlyout)?.Items.OfType<MenuItem>() ?? [])
-            if (item.Header is "Undo message and everything below")
-                item.IsEnabled = Vm.CanUndo;
+        var selected = SelectedTexts(source);
+        var copy = new MenuItem { Header = "Copy", IsEnabled = selected.Count > 0, InputGesture = new KeyGesture(Key.C, KeyModifiers.Control) };
+        copy.Click += async (_, _) =>
+        {
+            try
+            {
+                if (Clipboard is { } clipboard)
+                    await clipboard.SetTextAsync(string.Join(Environment.NewLine, selected.Select(t => t.SelectedText)));
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                // Another program holds the clipboard; the next try will do.
+            }
+        };
+        List<Control> items = [copy];
+        // On a message of the user's (its words or anywhere in its bubble); greyed out while a task runs.
+        if (source.GetSelfAndVisualAncestors().OfType<Control>().FirstOrDefault(c => c.DataContext is UserMessageItem)?.DataContext is UserMessageItem message)
+        {
+            var undo = new MenuItem { Header = "Undo message and everything below", DataContext = message, IsEnabled = Vm.CanUndo };
+            undo.Click += OnUndoMessage;
+            items.Add(undo);
+        }
+        var summarize = new MenuItem { Header = "Summarize context", IsEnabled = Vm.CanSummarizeContext };
+        ToolTip.SetTip(summarize, "The model writes a handoff note on the conversation so far, and its context starts afresh from it: " +
+                                  "your messages, the note and the latest screenshot. During a task it happens before the model's next step.");
+        summarize.Click += (_, _) => Vm.SummarizeContext();
+        items.Add(new Separator());
+        items.Add(summarize);
+        return items;
+    }
+
+    /// <summary>
+    /// The text selected where the right-click was: in a reply, every block of it the selection
+    /// spans (see <see cref="MarkdownView"/>); elsewhere the block clicked.
+    /// </summary>
+    private static List<SelectableTextBlock> SelectedTexts(Control source)
+    {
+        IEnumerable<SelectableTextBlock> texts = source.FindAncestorOfType<MarkdownView>(includeSelf: true) is { } reply
+            ? reply.GetVisualDescendants().OfType<SelectableTextBlock>()
+            : source.FindAncestorOfType<SelectableTextBlock>(includeSelf: true) is { } block ? [block] : [];
+        return texts.Where(t => t.SelectionStart != t.SelectionEnd).ToList();
     }
 
     private async void OnUndoMessage(object? sender, RoutedEventArgs e)

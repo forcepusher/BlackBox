@@ -1636,7 +1636,9 @@ public class AgentSessionTests
     [Fact]
     public async Task Without_a_note_from_the_model_the_reset_keeps_a_record_of_the_last_steps()
     {
+        // Refused on the whole conversation and again on its latest part.
         var server = new ScriptedServer(Sse.Text("Done."));
+        server.Failures.Enqueue((HttpStatusCode.BadRequest, """{"error":"boom"}"""));
         server.Failures.Enqueue((HttpStatusCode.BadRequest, """{"error":"boom"}"""));
         var (session, observer) = LongSession(server, contextTokens: 40_000);
 
@@ -1646,6 +1648,140 @@ public class AgentSessionTests
         var note = session.History.Single(m => m.Content?.StartsWith(AgentSession.HandoffHeader) == true).Content!;
         Assert.Contains("You called wait", note);
         Assert.Equal("THE TASK", session.History[0].Content);
+    }
+
+    [Fact]
+    public async Task A_note_refused_on_the_whole_conversation_is_asked_for_on_its_latest_part()
+    {
+        // A chat opened again carries more screenshots than munito takes in one request (8).
+        var server = new ScriptedServer(Sse.Text("NOTE: waited 60 times."), Sse.Text("Done."));
+        server.Failures.Enqueue((HttpStatusCode.BadRequest, """{"error":{"message":"too many image inputs"}}"""));
+        var (session, observer) = LongSession(server, contextTokens: 40_000);
+
+        await session.RunAsync("and now finish", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(AgentSession.HandoffRequest, LastText(server.Requests[1]));
+        Assert.Equal(0, Images(server.Requests[1]));
+        Assert.Contains(session.History, m => m.Content?.Contains("waited 60 times") == true);
+    }
+
+    [Fact]
+    public async Task A_smaller_context_picked_during_a_run_resets_the_context_at_the_next_step()
+    {
+        // Lowered in the app to have the context reset, the size did nothing: the run kept the one
+        // it started with.
+        AgentSession? session = null;
+        var server = new ScriptedServer
+        {
+            Responder = req =>
+            {
+                if (LastText(req) == AgentSession.HandoffRequest)
+                    return Sse.Text("NOTE: waited.");
+                if (LastText(req) == "wait, then finish")
+                {
+                    session!.UseContextSize(40_000);
+                    return Sse.ToolCall("w1", "wait", """{"seconds":0}""");
+                }
+                return Sse.Text("Done.");
+            },
+        };
+        (session, var observer) = LongSession(server, contextTokens: 1_000_000);
+
+        await session.RunAsync("wait, then finish", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(40_000, session.ContextTokens);
+        Assert.Equal(AgentSession.HandoffRequest, LastText(server.Requests[1]));
+        Assert.StartsWith(AgentSession.HandoffHeader, session.History[2].Content);
+    }
+
+    [Fact]
+    public async Task Told_to_reset_its_context_the_model_resets_it_once()
+    {
+        // Told "Do a handoff to reset the context", the model wrote a handoff file and went on in
+        // the same full context: it had no way to reset it. After the reset the user's message is
+        // still there, and asks for it again.
+        var server = new ScriptedServer
+        {
+            Responder = req => LastText(req) == AgentSession.HandoffRequest ? Sse.Text("NOTE: the chat button is done.")
+                : req["messages"]!.AsArray().Any(m => m!["role"]!.ToString() == "tool" && m["content"]!.ToString().Contains("just reset")) ? Sse.Text("Done.")
+                : Sse.ToolCall($"r{Guid.NewGuid():N}", "reset_context", "{}"),
+        };
+        var (session, observer) = LongSession(server, contextTokens: 1_000_000);
+
+        await session.RunAsync("Do a handoff to reset the context", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Single(server.Requests, r => LastText(r) == AgentSession.HandoffRequest);
+        Assert.Equal(["THE TASK", "Do a handoff to reset the context"], session.History.Where(m => m.FromUser).Select(m => m.Content));
+        Assert.Contains(session.History, m => m.Content?.StartsWith(AgentSession.HandoffHeader) == true && m.Content.Contains("chat button"));
+        Assert.Contains(observer.Notices, n => n.StartsWith("Summarizing the context"));
+    }
+
+    [Fact]
+    public async Task Summarize_context_resets_the_context_of_a_chat_with_no_run_going()
+    {
+        var server = new ScriptedServer(Sse.Text("NOTE: waited 60 times."));
+        var (session, observer) = LongSession(server, contextTokens: 1_000_000);
+
+        await session.SummarizeAsync(observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Single(server.Requests);
+        Assert.Equal(AgentSession.HandoffRequest, LastText(server.Requests[0]));
+        Assert.Equal("THE TASK", session.History[0].Content);
+        Assert.StartsWith(AgentSession.HandoffHeader, session.History[1].Content);
+        Assert.Equal([7, 7, 7], session.History[^1].Parts![1].ImageBytes);
+
+        // Right after, there is nothing new to summarize.
+        await session.SummarizeAsync(observer, CancellationToken.None);
+        Assert.Single(server.Requests);
+        Assert.Contains(observer.Notices, n => n.StartsWith("There is nothing to summarize"));
+    }
+
+    [Fact]
+    public async Task Summarize_context_during_a_run_resets_before_the_next_step_and_the_task_goes_on()
+    {
+        AgentSession? session = null;
+        var server = new ScriptedServer
+        {
+            Responder = req =>
+            {
+                if (LastText(req) == AgentSession.HandoffRequest)
+                    return Sse.Text("NOTE: waited.");
+                if (LastText(req) == "wait, then finish")
+                {
+                    session!.AskReset();
+                    return Sse.ToolCall("w1", "wait", """{"seconds":0}""");
+                }
+                return Sse.Text("Done.");
+            },
+        };
+        (session, var observer) = LongSession(server, contextTokens: 1_000_000);
+
+        await session.RunAsync("wait, then finish", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(3, server.Requests.Count);
+        Assert.Equal(AgentSession.HandoffRequest, LastText(server.Requests[1]));
+        Assert.StartsWith(AgentSession.HandoffHeader, server.Requests[2]["messages"]!.AsArray()[3]!["content"]!.ToString());
+
+        // Picked as the model wrote its final answer: the reset comes before the run ends.
+        var last = new ScriptedServer
+        {
+            Responder = req =>
+            {
+                if (LastText(req) == AgentSession.HandoffRequest)
+                    return Sse.Text("NOTE: answered.");
+                session!.AskReset();
+                return Sse.Text("Here is the answer.");
+            },
+        };
+        (session, observer) = LongSession(last, contextTokens: 1_000_000);
+        await session.RunAsync("a question", observer, CancellationToken.None);
+        Assert.Equal(2, last.Requests.Count);
+        Assert.Contains(session.History, m => m.Content?.StartsWith(AgentSession.HandoffHeader) == true);
     }
 
     [Fact]

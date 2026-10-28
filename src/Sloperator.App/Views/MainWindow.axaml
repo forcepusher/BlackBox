@@ -454,7 +454,9 @@
     <!-- Focus brings an item into view only from the keyboard (see MainWindow): a click on a picture
          partly out of view focused its button and scrolled the whole picture in, a jump under the mouse. -->
     <!-- Its bar always shows (the user, 2026-10-24: waiting for it to show up to grab it was annoying). -->
-    <ScrollViewer x:Name="ChatScroll" Grid.Row="3" HorizontalScrollBarVisibility="Disabled" BringIntoViewOnFocusChange="False" AllowAutoHide="False">
+    <!-- Transparent, so a right-click between messages opens the chat's menu too (see MainWindow.OnChatMenu). -->
+    <ScrollViewer x:Name="ChatScroll" Grid.Row="3" HorizontalScrollBarVisibility="Disabled" BringIntoViewOnFocusChange="False" AllowAutoHide="False"
+                  Background="Transparent">
       <StackPanel Classes="conversation" Classes.unused="{Binding ShowIntro}" MaxWidth="860" Margin="16,12,16,16" Spacing="10">
         <!-- Unclipped (an ItemsControl and a ContentControl clip to their bounds by default), so a
              message's text can reach past its sides: a drag in the gutter beside it starts a selection. -->
@@ -479,7 +481,7 @@
           <ItemsControl.DataTemplates>
 
             <DataTemplate DataType="vm:UserMessageItem">
-              <StackPanel HorizontalAlignment="Right" MaxWidth="640" Margin="60,0,0,0" Spacing="3" ContextRequested="OnUserMessageMenu">
+              <StackPanel HorizontalAlignment="Right" MaxWidth="640" Margin="60,0,0,0" Spacing="3">
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Right" />
                 <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="0,8" HorizontalAlignment="Right">
                   <StackPanel Spacing="6">
@@ -545,16 +547,8 @@
                          text, and Avalonia cuts a measured width to what the parent offers before taking a negative
                          margin off, so a long line came back narrower than measured, wrapped once more and
                          lost the last line of the message under the bubble's edge. -->
-                    <SelectableTextBlock views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" Margin="0,-8" Padding="12,8">
-                      <!-- The theme's own menu (Copy), with Undo message and everything below under it. -->
-                      <SelectableTextBlock.ContextFlyout>
-                        <MenuFlyout Placement="Bottom" Opening="OnUserMessageFlyout">
-                          <MenuItem Header="Copy" Command="{Binding $parent[SelectableTextBlock].Copy}" IsEnabled="{Binding $parent[SelectableTextBlock].CanCopy}"
-                                    InputGesture="{x:Static TextBox.CopyGesture}" />
-                          <MenuItem Header="Undo message and everything below" Click="OnUndoMessage" />
-                        </MenuFlyout>
-                      </SelectableTextBlock.ContextFlyout>
-                    </SelectableTextBlock>
+                    <!-- Its right-click menu is the chat's (MainWindow.OnChatMenu): Copy, Undo message and everything below, Summarize context. -->
+                    <SelectableTextBlock views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" Margin="0,-8" Padding="12,8" />
                   </StackPanel>
                 </Border>
               </StackPanel>

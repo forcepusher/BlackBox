@@ -48,6 +48,7 @@ public sealed class ToolRegistry
             yield return new WebSearchTool();
             yield return new FetchPageTool();
         }
+        yield return new ResetContextTool();
     }
 
     public IReadOnlyCollection<Tool> All => _tools.Values;

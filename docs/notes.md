@@ -1304,9 +1304,9 @@ and the line a task ended with says under it how long the whole task took ("Work
 The times are saved with the chat; a chat saved before they were kept shows none.
 
 **Undo message and everything below** (the user, 2026-10-29) is the right-click menu of a message of
-the user's: on its words under the text's own Copy (the theme's menu, which took the right-click
-first, so the entry has to be in it), elsewhere in the bubble alone in the same kind of menu, not on
-its files (their menu has Copy). Greyed out while a task runs, which would go on writing after the cut. It takes the message and every line after it out of
+the user's: in the chat's one right-click menu (`MainWindow.OnChatMenu`, which opens before the
+text's own and has Copy for the selection), under Copy, on its words or anywhere in the bubble, not
+on its files (their menu has Copy). Greyed out while a task runs, which would go on writing after the cut. It takes the message and every line after it out of
 the chat, cuts the model's conversation where the model had the message (the replies, thinking,
 Claude's signed thinking blocks and pictures after it go too), deletes the pictures in
 `Data/chats/<id>/` the conversation no longer names once the shorter chat is on the disk, and puts
