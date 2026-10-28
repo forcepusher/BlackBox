@@ -1716,16 +1716,16 @@ public class AgentSessionTests
         Assert.Single(server.Requests, r => LastText(r) == AgentSession.HandoffRequest);
         Assert.Equal(["THE TASK", "Do a handoff to reset the context"], session.History.Where(m => m.FromUser).Select(m => m.Content));
         Assert.Contains(session.History, m => m.Content?.StartsWith(AgentSession.HandoffHeader) == true && m.Content.Contains("chat button"));
-        Assert.Contains(observer.Notices, n => n.StartsWith("Summarizing the context"));
+        Assert.Contains(observer.Notices, n => n.StartsWith("Compacting the context"));
     }
 
     [Fact]
-    public async Task Summarize_context_resets_the_context_of_a_chat_with_no_run_going()
+    public async Task Compact_context_resets_the_context_of_a_chat_with_no_run_going()
     {
         var server = new ScriptedServer(Sse.Text("NOTE: waited 60 times."));
         var (session, observer) = LongSession(server, contextTokens: 1_000_000);
 
-        await session.SummarizeAsync(observer, CancellationToken.None);
+        await session.CompactAsync(observer, CancellationToken.None);
 
         Assert.Equal(AgentStopReason.Completed, observer.StopReason);
         Assert.Single(server.Requests);
@@ -1734,14 +1734,14 @@ public class AgentSessionTests
         Assert.StartsWith(AgentSession.HandoffHeader, session.History[1].Content);
         Assert.Equal([7, 7, 7], session.History[^1].Parts![1].ImageBytes);
 
-        // Right after, there is nothing new to summarize.
-        await session.SummarizeAsync(observer, CancellationToken.None);
+        // Right after, there is nothing new to compact.
+        await session.CompactAsync(observer, CancellationToken.None);
         Assert.Single(server.Requests);
-        Assert.Contains(observer.Notices, n => n.StartsWith("There is nothing to summarize"));
+        Assert.Contains(observer.Notices, n => n.StartsWith("There is nothing to compact"));
     }
 
     [Fact]
-    public async Task Summarize_context_during_a_run_resets_before_the_next_step_and_the_task_goes_on()
+    public async Task Compact_context_during_a_run_resets_before_the_next_step_and_the_task_goes_on()
     {
         AgentSession? session = null;
         var server = new ScriptedServer

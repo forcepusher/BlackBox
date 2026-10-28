@@ -315,7 +315,7 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// The chat's right-click menu, one for the whole log: Copy for selected text, Undo message and
-    /// everything below on a message of the user's, then Summarize context. It opens before a text
+    /// everything below on a message of the user's, then Compact context. It opens before a text
     /// block's own menu (Copy alone) could. A picture keeps its own (Copy of the picture), and so do
     /// a message's files.
     /// </summary>
@@ -358,12 +358,12 @@ public partial class MainWindow : Window
             undo.Click += OnUndoMessage;
             items.Add(undo);
         }
-        var summarize = new MenuItem { Header = "Summarize context", IsEnabled = Vm.CanSummarizeContext };
-        ToolTip.SetTip(summarize, "The model writes a handoff note on the conversation so far, and its context starts afresh from it: " +
+        var compact = new MenuItem { Header = "Compact context", IsEnabled = Vm.CanCompactContext };
+        ToolTip.SetTip(compact, "The model writes a handoff note on the conversation so far, and its context starts afresh from it: " +
                                   "your messages, the note and the latest screenshot. During a task it happens before the model's next step.");
-        summarize.Click += (_, _) => Vm.SummarizeContext();
+        compact.Click += (_, _) => Vm.CompactContext();
         items.Add(new Separator());
-        items.Add(summarize);
+        items.Add(compact);
         return items;
     }
 

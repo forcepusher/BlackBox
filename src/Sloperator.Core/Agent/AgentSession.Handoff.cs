@@ -69,13 +69,13 @@ public sealed partial class AgentSession
     /// </summary>
     /// <param name="overflowed">The server refused the conversation as too long (or too big, or more input than a minute takes):
     /// the note is asked for on its latest part, without pictures, which fits.</param>
-    /// <param name="asked">The user (Summarize context) or the model (reset_context) asked for it, rather than the context filling up.</param>
+    /// <param name="asked">The user (Compact context) or the model (reset_context) asked for it, rather than the context filling up.</param>
     internal async Task ResetContextAsync(IAgentObserver observer, CancellationToken ct, bool overflowed = false, bool asked = false)
     {
         _resetAsked = false;
         var before = TokensInUse();
         observer.OnNotice(asked
-            ? "Summarizing the context: asking the model for a handoff note, then starting fresh…"
+            ? "Compacting the context: asking the model for a handoff note, then starting fresh…"
             : "The context is nearly full. Asking the model for a handoff note, then starting fresh…");
 
         string note;
@@ -142,8 +142,8 @@ public sealed partial class AgentSession
     private volatile bool _resetAsked;
 
     /// <summary>
-    /// Summarize context, during a run: the context is reset with a handoff note before the
-    /// model's next step, unless there is nothing to summarize then (no reply since the last
+    /// Compact context, during a run: the context is reset with a handoff note before the
+    /// model's next step, unless there is nothing to compact then (no reply since the last
     /// reset). Any thread.
     /// </summary>
     public void AskReset() => _resetAsked = true;
@@ -157,7 +157,7 @@ public sealed partial class AgentSession
         return true;
     }
 
-    /// <summary>A reset asked for is due before this step; one with nothing to summarize is dropped.</summary>
+    /// <summary>A reset asked for is due before this step; one with nothing to compact is dropped.</summary>
     private bool ResetDue()
     {
         if (!_resetAsked)
@@ -176,16 +176,16 @@ public sealed partial class AgentSession
     }
 
     /// <summary>
-    /// Summarize context with no run going: the model writes a handoff note on the conversation
+    /// Compact context with no run going: the model writes a handoff note on the conversation
     /// so far and it takes the conversation's place, as a full context does in a run.
     /// </summary>
-    public async Task SummarizeAsync(IAgentObserver observer, CancellationToken ct)
+    public async Task CompactAsync(IAgentObserver observer, CancellationToken ct)
     {
         try
         {
             if (RepliesSinceReset() == 0)
             {
-                observer.OnNotice("There is nothing to summarize yet: the context holds no replies since it was last reset.");
+                observer.OnNotice("There is nothing to compact yet: the context holds no replies since it was last reset.");
                 observer.OnFinished(AgentStopReason.Completed, null);
                 return;
             }

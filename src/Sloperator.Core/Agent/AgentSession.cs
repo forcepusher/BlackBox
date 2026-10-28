@@ -458,7 +458,7 @@ public sealed partial class AgentSession(
                     // ":" never fired in about 40 tasks on Qwen 3.8, Nemotron and Haiku (2026-10-27),
                     // and a nudge after an answer to a message that came in on top of the request
                     // made the model answer a second time what it had just said.
-                    // Summarize context, picked as the model wrote this answer: before the end.
+                    // Compact context, picked as the model wrote this answer: before the end.
                     if (ResetDue())
                         await ResetContextAsync(observer, ct, asked: true).ConfigureAwait(false);
                     observer.OnFinished(AgentStopReason.Completed, null);

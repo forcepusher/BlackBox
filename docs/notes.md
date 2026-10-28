@@ -1838,7 +1838,7 @@ triggers the same reset and a retry. A reply cut off by a reply-length limit set
 A context size picked during a run counts from the run's next step (`AgentSession.UseContextSize`):
 lowered below what the conversation fills, it resets the context there. The run used to keep the
 size it started with, and lowering it to have the context reset did nothing until the next message.
-The reset can also be asked for. **Summarize context** in the chat's right-click menu (one menu for
+The reset can also be asked for. **Compact context** in the chat's right-click menu (one menu for
 the whole log, Copy for selected text above it; a picture keeps its own) resets it at once with no
 run going, or before the model's next step during one, or before the run ends when it came as the
 model wrote its final answer. The model has `reset_context` for when the user tells it to hand off

@@ -547,7 +547,7 @@
                          text, and Avalonia cuts a measured width to what the parent offers before taking a negative
                          margin off, so a long line came back narrower than measured, wrapped once more and
                          lost the last line of the message under the bubble's edge. -->
-                    <!-- Its right-click menu is the chat's (MainWindow.OnChatMenu): Copy, Undo message and everything below, Summarize context. -->
+                    <!-- Its right-click menu is the chat's (MainWindow.OnChatMenu): Copy, Undo message and everything below, Compact context. -->
                     <SelectableTextBlock views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" Margin="0,-8" Padding="12,8" />
                   </StackPanel>
                 </Border>

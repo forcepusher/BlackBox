@@ -14,7 +14,8 @@ public sealed class ResetContextTool : Tool
     public override string Description =>
         "Reset your context: next you are asked for a handoff note for yourself, then the conversation is replaced by the user's messages, " +
         "that note and the current screenshot, and you carry on from there. Use it when the user asks you to reset, summarize or compact your " +
-        "context, hand off or start fresh (\"Summarize context\" asks for this tool, not for a summary in your reply); the app does this by itself when the context is nearly full. Call it alone, as your reply's last call.";
+        "context, hand off or start fresh (\"Compact context\" or \"Summarize context\" asks for this tool, not for a summary in your reply); " +
+        "the app does this by itself when the context is nearly full. Call it alone, as your reply's last call.";
 
     public override ToolRisk Risk => ToolRisk.ReadOnly;
 
