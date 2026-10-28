@@ -149,6 +149,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A × at the top right of Video generator, File changes and File inspector closes the tool.
 
 ### Changed
+- **Toolkit** is the first section in Settings, above Safety.
 - A toolkit panel puts a card over the box, and tells the model about itself, only once you pick
   something in it. File changes no longer selects a file by itself (Watch included). Its file list selects as
   Sourcetree's does: click one, Ctrl+click to add or take off, Shift+click a run. Selected files go in your
