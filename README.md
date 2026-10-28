@@ -60,8 +60,8 @@ private or long work, use [your own model](#using-your-own-model), or Claude wit
 - Type in the box to correct it or add to the task. It holds off the mouse and keyboard while you type.
   Your message waits above the box until it reads it: × takes it back, and **Interrupt the model**
   (or Ctrl+Enter) has it read right away, cutting short what it was thinking or running.
-- Click a picture or video in the chat to see it full screen. **Prompt** under one made with ComfyUI
-  (or AUTOMATIC1111) shows the prompts and settings it was made with.
+- Click a picture or video in the chat to see it full screen. **Inspect** opens it in the File inspector,
+  where **Prompt** shows the prompts and settings it was made with (ComfyUI or AUTOMATIC1111).
 - Paste a screenshot or files with Ctrl+V, or drop them on the window, to send them with a message.
 - **History** keeps every chat, so you can come back to one and carry on.
 - **Several tasks at once:** **New window** at the top (or starting Sloperator again) opens another

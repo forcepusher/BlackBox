@@ -37,24 +37,6 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
     [ObservableProperty]
     private string _details = "";
 
-    /// <summary>The prompts and settings the file says it was made with (ComfyUI keeps them in every file it saves); null when it says none.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasRecipe))]
-    private MediaRecipe? _recipe;
-
-    public bool HasRecipe => Recipe is not null;
-
-    /// <summary>Reads what the file says it was made with, off the UI thread.</summary>
-    private void LoadRecipe() => Task.Run(() =>
-    {
-        try
-        {
-            if (MediaRecipe.Read(Path) is { } recipe)
-                Show(() => Recipe = recipe);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException) { /* a workflow the reader didn't expect: no button */ }
-    });
-
     [RelayCommand]
     private void ShowInFolder() => ShowInFolder(Path);
 
@@ -112,8 +94,6 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
             _ => new FileCardPreview(path),
         };
         preview.Load();
-        if (kind is "image" or "animation" or "video" or "audio")
-            preview.LoadRecipe();
         return preview;
     }
 

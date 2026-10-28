@@ -72,9 +72,6 @@ public partial class MediaViewer : Window
             case Key.M when Vm.Shown is VideoPreview video:
                 video.ToggleSoundCommand.Execute(null);
                 break;
-            case Key.P when Vm.HasRecipe:
-                Vm.ToggleRecipeCommand.Execute(null);
-                break;
             default:
                 return;
         }

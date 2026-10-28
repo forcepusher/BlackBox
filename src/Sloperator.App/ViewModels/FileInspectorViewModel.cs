@@ -1,6 +1,7 @@
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Sloperator.Core.Documents;
+using Sloperator.Core.Media;
 using Sloperator.Core.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -135,6 +136,24 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
     /// <summary>What a load under way is: one started after it wins.</summary>
     private int _loading;
 
+    /// <summary>The prompts and settings a picture, animation, video, sound or 3D model says it was made with (ComfyUI keeps them in every file it saves); null when it says none.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRecipe))]
+    private MediaRecipe? _recipe;
+
+    public bool HasRecipe => Recipe is not null;
+
+    /// <summary>Prompt is on: what the file was made with shows under it; it stays on from one file to the next.</summary>
+    [ObservableProperty]
+    private bool _showRecipe;
+
+    /// <summary>Reads what the file says it was made with, beside the file's own load, so a large one's wait doesn't hold the picture.</summary>
+    private void LoadRecipe(int load, string path) => Task.Run(() =>
+    {
+        if (MediaRecipe.Read(path) is { } recipe)
+            Post(load, () => Recipe = recipe);
+    });
+
     /// <summary>Shows <paramref name="path"/> in the panel, in place of the file shown.</summary>
     public void Show(string path)
     {
@@ -146,6 +165,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
         Zoom = 1;
         Path = path;
         Details = "";
+        Recipe = null;
         Message = "Loading…";
         Task.Run(() =>
         {
@@ -158,6 +178,8 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
                 }
                 var size = FilePreview.Size(path);
                 var kind = FileInspector.KindOf(path);
+                if (kind is InspectorKind.Picture or InspectorKind.Animation or InspectorKind.Video or InspectorKind.Sound or InspectorKind.Model)
+                    LoadRecipe(load, path);
                 switch (kind)
                 {
                     case InspectorKind.Markdown:
