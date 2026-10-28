@@ -334,14 +334,16 @@ public partial class MainWindow : Window
     /// <summary>The chat menu's items for a right-click on <paramref name="source"/>.</summary>
     private List<Control> ChatMenuItems(Control source)
     {
+        // Read now: the text block loses its selection with the focus as the menu opens.
         var selected = SelectedTexts(source);
+        var text = string.Join(Environment.NewLine, selected.Select(t => t.SelectedText));
         var copy = new MenuItem { Header = "Copy", IsEnabled = selected.Count > 0, InputGesture = new KeyGesture(Key.C, KeyModifiers.Control) };
         copy.Click += async (_, _) =>
         {
             try
             {
                 if (Clipboard is { } clipboard)
-                    await clipboard.SetTextAsync(string.Join(Environment.NewLine, selected.Select(t => t.SelectedText)));
+                    await clipboard.SetTextAsync(text);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
