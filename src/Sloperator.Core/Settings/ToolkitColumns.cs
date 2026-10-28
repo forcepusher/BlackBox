@@ -13,6 +13,13 @@ public static class ToolkitColumns
     /// <summary>How narrow the chat may get: the window's own least width, as set in its markup.</summary>
     public const double ChatMin = 660;
 
+    /// <summary>
+    /// How wide every tool's panel opens, splitter included: one width for all of them (the user,
+    /// 2026-10-28; until then each had its own, 880, 760 and 960). Above the widest least, Video
+    /// generator's 770.
+    /// </summary>
+    public const double PanelWidth = 880;
+
     /// <summary>The splitter between the panel and the chat.</summary>
     public const double Splitter = 4;
 

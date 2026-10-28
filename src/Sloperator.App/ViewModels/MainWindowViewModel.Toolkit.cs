@@ -30,12 +30,15 @@ public interface IToolkit : IDisposable
 }
 
 /// <summary>
-/// An entry of the Toolkit dropdown: None, or a tool with how wide its panel opens and how narrow it
-/// may get with its top bar still in one row, both with the splitter on its right, and how short the
-/// window may get with it open (0: as short as the chat may).
+/// An entry of the Toolkit dropdown: None, or a tool with how narrow its panel may get with its top
+/// bar still in one row, splitter included, and how short the window may get with it open (0: as
+/// short as the chat may). Every tool's panel opens as wide (<see cref="ToolkitColumns.PanelWidth"/>).
 /// </summary>
-public sealed record ToolkitOption(string Name, string Description, double Width, double MinWidth, double MinHeight, Func<MainWindowViewModel, IToolkit>? Open)
+public sealed record ToolkitOption(string Name, string Description, double MinWidth, double MinHeight, Func<MainWindowViewModel, IToolkit>? Open)
 {
+    /// <summary>How wide the panel opens, splitter included; 0 for None.</summary>
+    public double Width => Open is null ? 0 : ToolkitColumns.PanelWidth;
+
     /// <summary>What the dropdown says while it is picked: "Toolkit" with none, else the tool's name.</summary>
     public string Label => Open is null ? "Toolkit" : Name;
 
@@ -49,12 +52,12 @@ public sealed partial class MainWindowViewModel
     /// <summary>What the Toolkit dropdown offers: nothing, or a tool whose panel opens on the left of the chat.</summary>
     public IReadOnlyList<ToolkitOption> ToolkitOptions { get; } =
     [
-        new("None", "The chat alone", 0, 0, 0, null),
-        new(FileChangesName, "See the files the agent changes in this chat as it works: click lines to ask about them", 880, 560, 0,
+        new("None", "The chat alone", 0, 0, null),
+        new(FileChangesName, "See the files the agent changes in this chat as it works: click lines to ask about them", 560, 0,
             vm => new FileChangesViewModel(vm)),
-        new(FileInspectorName, "See a file from the chat beside it: documents, spreadsheets, pictures, video, sound, 3D, code", 760, 420, 0,
+        new(FileInspectorName, "See a file from the chat beside it: documents, spreadsheets, pictures, video, sound, 3D, code", 420, 0,
             vm => new FileInspectorViewModel(vm._previews, vm, vm._paths.PastedDir)),
-        new("Video generator", "Plan a video shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 960, 770, 600,
+        new("Video generator", "Plan a video shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 770, 600,
             vm => new VideoGeneratorViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
     ];
 

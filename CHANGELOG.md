@@ -151,6 +151,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A × at the top right of Video generator, File changes and File inspector closes the tool.
 
 ### Changed
+- Every Toolkit panel (File changes, File inspector, Video generator) opens at the same width.
 - **Prompt** has moved to the File inspector panel: press **Inspect** on a picture, animation, video,
   sound or 3D model, then **Prompt** in the panel's top bar to see the prompts and settings it was made
   with under it. The chat's previews and the full-screen viewer no longer have a Prompt button.
