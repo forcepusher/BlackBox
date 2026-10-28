@@ -64,10 +64,10 @@ public sealed class ChatMessage
     /// <summary>
     /// For replies from Anthropic's Messages API: the reply's content blocks as they came, its
     /// thinking (with the signature Claude checks) among them, sent back as they are (see
-    /// <see cref="AnthropicMessages"/>). Not saved with the chat: a saved chat leaves its screenshots
-    /// out, and thinking sent back after an earlier message changed is refused.
+    /// <see cref="AnthropicMessages"/>). Saved with the chat, which keeps its pictures, so a chat
+    /// opened again goes on with Claude's thinking; where an earlier message changed after all, the
+    /// request asks for that thinking to be dropped rather than refused.
     /// </summary>
-    [System.Text.Json.Serialization.JsonIgnore]
     public JsonArray? AnthropicContent { get; set; }
 
     public bool HasToolCalls => ToolCalls is { Count: > 0 };

@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Sloperator.Core.Agent;
 using Sloperator.Core.Llm;
@@ -281,6 +282,7 @@ public sealed class ChatStore(string dir)
                     : string.Join("\n", m.Parts.Where(p => !p.IsImage).Select(p => p.Text)) + (m.Parts.Any(p => p.IsImage) ? "\n(Screenshot not kept in the saved chat.)" : ""),
             Parts = pictures is null ? null : m.Parts?.Select(Saved).ToList(),
             Reasoning = m.Reasoning,
+            AnthropicContent = (JsonArray?)m.AnthropicContent?.DeepClone(),
             ToolCalls = m.ToolCalls?.Select(c => new ToolCall { Id = c.Id, Name = c.Name, Arguments = c.Arguments }).ToList(),
             ToolCallId = m.ToolCallId,
             FromUser = m.FromUser,

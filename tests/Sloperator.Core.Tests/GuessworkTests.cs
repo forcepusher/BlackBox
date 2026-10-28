@@ -156,9 +156,12 @@ public class GuessworkTests
 
             await session.RunAsync("read it", new RecordingObserver(), CancellationToken.None);
 
-            var results = session.History.Where(m => m.Role == ChatRole.Tool).Select(m => m.Content!).ToList();
-            Assert.DoesNotContain("web_search", results[0]);
-            Assert.Equal(web, results[1].Contains("look it up with web_search"));
+            // Said after the second result, in a message of its own.
+            var r1 = session.History.FindIndex(m => m.ToolCallId == "r1");
+            var r2 = session.History.FindIndex(m => m.ToolCallId == "r2");
+            Assert.DoesNotContain(session.History.Skip(r1).Take(r2 - r1), m => m.Content?.Contains("web_search") == true);
+            Assert.Equal(web, session.History[r2 + 1].Role == ChatRole.User && session.History[r2 + 1].Content!.Contains("look it up with web_search"));
+            Assert.DoesNotContain(session.History, m => m.Role == ChatRole.Tool && m.Content!.Contains("web_search"));
         }
     }
 
@@ -176,7 +179,8 @@ public class GuessworkTests
 
         await session.RunAsync("Build a geometry nodes graph in Blender", new RecordingObserver(), CancellationToken.None);
 
-        Assert.EndsWith(Guesswork.NameNote, session.History.Single(m => m.Role == ChatRole.Tool).Content);
+        var result = session.History.FindIndex(m => m.Role == ChatRole.Tool);
+        Assert.Equal(Guesswork.NameNote, session.History[result + 1].Content);
     }
 
     private static readonly WriteFileTool Write = new();
@@ -472,10 +476,13 @@ public class GuessworkTests
         await session.RunAsync("Make the bunny dance like in dance.mp4", observer, CancellationToken.None);
 
         // The note says to search; it neither quotes the model's thinking nor brings search results.
-        var results = session.History.Where(m => m.Role == ChatRole.Tool).Select(m => m.Content!).ToList();
-        Assert.EndsWith("\n" + Guesswork.QuestionNote, results[0]);
-        Assert.DoesNotContain("LTX", results[0]);
-        Assert.DoesNotContain(Guesswork.QuestionNote, results[1]);
+        // It follows the first result in a message of its own: inside a tool result, Claude took
+        // such a note for an injection.
+        var w1 = session.History.FindIndex(m => m.ToolCallId == "w1");
+        Assert.Equal(ChatRole.User, session.History[w1 + 1].Role);
+        Assert.Equal(Guesswork.QuestionNote, session.History[w1 + 1].Content);
+        Assert.Single(session.History, m => m.Content == Guesswork.QuestionNote);
+        Assert.DoesNotContain(session.History, m => m.Role == ChatRole.Tool && m.Content!.Contains("[Sloperator]"));
         Assert.DoesNotContain(observer.Notices, n => n.Contains("Looked up"));
     }
 }

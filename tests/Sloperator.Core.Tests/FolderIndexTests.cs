@@ -606,9 +606,11 @@ public class FolderIndexTests : IDisposable
 
         await session.RunAsync("What does f1.txt say?", new RecordingObserver(), CancellationToken.None);
 
-        var results = session.History.Where(m => m.Role == Llm.ChatRole.Tool).Select(m => m.Content!).ToList();
-        Assert.EndsWith(ProjectNudge.Note(project, "a git repository"), results[0]);
-        Assert.DoesNotContain("[Sloperator]", results[1]);
+        // Said after the result, in a message of its own.
+        var c1 = session.History.FindIndex(m => m.ToolCallId == "c1");
+        Assert.Equal(ProjectNudge.Note(project, "a git repository"), session.History[c1 + 1].Content);
+        Assert.Single(session.History, m => m.Content?.StartsWith("[Sloperator]") == true);
+        Assert.DoesNotContain(session.History, m => m.Role == Llm.ChatRole.Tool && m.Content!.Contains("[Sloperator]"));
     }
 
     [Fact]
@@ -667,14 +669,13 @@ public class FolderIndexTests : IDisposable
             Sse.ToolCall("c1", "read_file", Json(told, "f1.txt")),
             Sse.ToolCall("c2", "index_folder", new JsonObject { ["path"] = indexed }.ToJsonString()),
             Sse.Text("Read and indexed.")).RunAsync("Read f1 and index the other", new RecordingObserver(), CancellationToken.None);
-        Assert.Contains(ProjectNudge.Note(told, "a git repository"), history.Single(m => m.ToolCallId == "c1").Content);
+        Assert.Equal(ProjectNudge.Note(told, "a git repository"), history[history.FindIndex(m => m.ToolCallId == "c1") + 1].Content);
 
         await Session(
             Sse.ToolCall("c3", "read_file", Json(told, "f2.txt")),
             Sse.ToolCall("c4", "read_file", Json(indexed, "f2.txt")),
             Sse.Text("Both say hello.")).RunAsync("And f2 in both?", new RecordingObserver(), CancellationToken.None);
-        Assert.DoesNotContain("[Sloperator]", history.Single(m => m.ToolCallId == "c3").Content);
-        Assert.DoesNotContain("[Sloperator]", history.Single(m => m.ToolCallId == "c4").Content);
+        Assert.Single(history, m => m.Content?.StartsWith("[Sloperator]") == true);
     }
 
     [Fact]

@@ -470,6 +470,7 @@ public sealed partial class AgentSession(
                 toolContext.ScreenStale = false;
                 var called = reply.ToolCalls!.Select(c => ToolCallRepair.ResolveTool(c.Name, tools)).ToList();
                 guesswork?.Read(reply, called);
+                var notes = new List<string>();
                 using var calls = new StepScope(this, ct);
                 foreach (var call in reply.ToolCalls!)
                 {
@@ -482,11 +483,11 @@ public sealed partial class AgentSession(
                     var result = await RunToolAsync(call, observer, ct, calls.Token).ConfigureAwait(false);
                     // A call Interrupt stopped failed for no fault of the model's.
                     if (!calls.Interrupted(ct) && loops.Check(call, result) is { } warning)
-                        result = result with { Text = result.Text + "\n" + warning };
+                        notes.Add("[Sloperator] " + warning);
                     if (!calls.Interrupted(ct) && guesswork?.Check(ToolCallRepair.ResolveTool(call.Name, tools), result, call.Arguments) is { } lookItUp)
-                        result = result with { Text = result.Text + "\n" + lookItUp };
+                        notes.Add(lookItUp);
                     if (tools.Find("index_folder") is not null && _projects.Check(ToolCallRepair.ResolveTool(call.Name, tools), call.Arguments, result, toolContext) is { } indexIt)
-                        result = result with { Text = result.Text + "\n" + indexIt };
+                        notes.Add(indexIt);
                     // A model that can't see gets no picture (an MCP tool's, say): its server
                     // refused that request and every one after it, since the conversation keeps it.
                     if (result.Image is not null && !toolContext.SeesImages)
@@ -496,9 +497,9 @@ public sealed partial class AgentSession(
                     if (result.Image is not null)
                         (shown, screenshot, caption) = (message, ContentPart.FromImage(result.Image, result.ImageMime), result.ImageCaption);
                 }
-                // The whole calls ran; the cut one is said with the last result.
+                // The whole calls ran; the cut one is said after their results.
                 if (cutCall && last is not null)
-                    last.Content += "\n" + CutToolCallNote;
+                    notes.Add(CutToolCallNote);
 
                 // Most OpenAI-compatible servers only accept images in user messages,
                 // so the screenshot (or a picture read_file opened) is delivered right after the tool results.
@@ -507,6 +508,11 @@ public sealed partial class AgentSession(
                     shown!.Content += caption is null ? "\n(The screenshot is attached in the next message.)" : "\n(The picture is attached in the next message.)";
                     History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText(caption ?? ScreenshotText), screenshot] });
                 }
+                // Sloperator's notes come in a message of their own, after the results: inside a
+                // tool result, where text from a web page or a file could have put them, Claude
+                // Haiku took one for an injection and went on without it.
+                if (notes.Count > 0)
+                    History.Add(ChatMessage.User(string.Join("\n", notes)));
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
