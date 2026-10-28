@@ -11,8 +11,9 @@ namespace Sloperator.Core.Tests;
 public class ToolkitColumnsTests
 {
     [Theory]
-    [InlineData(960, 770)] // Video generator
-    [InlineData(880, 560)] // File changes
+    [InlineData(ToolkitColumns.PanelWidth, 770)] // Video generator
+    [InlineData(ToolkitColumns.PanelWidth, 560)] // File changes
+    [InlineData(ToolkitColumns.PanelWidth, 420)] // File inspector
     public void At_the_least_width_with_a_panel_open_both_keep_their_least(double opened, double least)
     {
         var window = ToolkitColumns.WindowMin(least);

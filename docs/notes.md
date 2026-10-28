@@ -786,7 +786,7 @@ the dropdown and centred on it. Its
 arrows are solid triangles, the left one and the dropdown's, as History's and every dropdown's are
 (the user: "Arrows need consistency"; Fluent's thin chevron is replaced in App.axaml by a style
 that depends on a state, as a plain one loses to what the template sets). Picked,
-the window grows to the left by the tool's width (960), so the chat stays where it was on the
+the window grows to the left by the tool's width (880 for every tool, `ToolkitColumns.PanelWidth`; the user, 2026-10-28: until then each had its own, 880, 760 and 960), so the chat stays where it was on the
 screen, as far as the screen has room; None gives the room back, and a window neither moved nor
 resized since goes back where it was. It moves and resizes in one step (`MainWindow.Place`, one
 SetWindowPos on Windows), with the panel laid out at the new size before: moved by Position and
@@ -2518,7 +2518,7 @@ commit showed no hint. In the app, two lines picked in the panel and "What do th
 do?" got an answer about exactly those lines, with no tool call.
 
 ### File inspector
-**File inspector** in the Toolkit dropdown (`FileInspectorViewModel`, `FileInspectorPanel`; 760 wide, least
+**File inspector** in the Toolkit dropdown (`FileInspectorViewModel`, `FileInspectorPanel`; least
 420) shows one file whole on the left of the chat. A card's **Inspect** opens it on that file
 (`MainWindowViewModel.Inspect`: the dropdown switches to it through the same path as a pick, so
 the window lays the panel out before it grows); picked from the dropdown it waits for an Inspect, a
