@@ -3204,6 +3204,10 @@ the workstation: Qwen 3.8 q6_k_xl at 100k context, munito (DeepSeek V4.1 Flash, 
 text-only model), Kilo's Nemotron, and the SSH lab VM. The reset test lost the vault code once in two
 runs on Qwen: the handoff request came back "Context size has been exceeded" at 82k of 100k, and the
 note made from the last steps instead didn't hold it.
+The click benchmark (all 16 scenes, 5 tries each, the unity scene's 19 targets) hit 84 of 114 on
+Qwen 3.8 q6_k_xl with the zoom tool: hidden 0/5, cards 1/5, dense 1/5, ultrawide 2/5, dialogs, edges,
+links and similar 3/5, unity 15/19, the rest 4 or 5 of 5. DeepSeek on munito couldn't be measured:
+the free tier answered 503 "capacity is full" to most trials.
 
 ## Project structure
 - `src/Sloperator.Core`: OpenAI-compatible streaming client, server probe, agent loop, tools,
