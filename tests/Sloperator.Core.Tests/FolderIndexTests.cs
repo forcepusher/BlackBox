@@ -604,13 +604,15 @@ public class FolderIndexTests : IDisposable
         var session = new AgentSession(new Llm.OpenAiChatClient(new HttpClient(server), "http://test", null), new Llm.ChatRequestOptions(),
             ToolRegistry.CreateDefault(includeScreenTools: false), ctx, "system prompt");
 
-        await session.RunAsync("What does f1.txt say?", new RecordingObserver(), CancellationToken.None);
+        var observer = new RecordingObserver();
+        await session.RunAsync("What does f1.txt say?", observer, CancellationToken.None);
 
         // Said after the result, in a message of its own.
         var c1 = session.History.FindIndex(m => m.ToolCallId == "c1");
         Assert.Equal(ProjectNudge.Note(project, "a git repository"), session.History[c1 + 1].Content);
         Assert.Single(session.History, m => m.Content?.StartsWith("[Sloperator]") == true);
         Assert.DoesNotContain(session.History, m => m.Role == Llm.ChatRole.Tool && m.Content!.Contains("[Sloperator]"));
+        Assert.Contains($"Asked the model to index {project} before going through its files.", observer.Notices);
     }
 
     [Fact]
