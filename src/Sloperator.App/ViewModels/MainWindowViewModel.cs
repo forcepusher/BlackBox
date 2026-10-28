@@ -140,8 +140,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     [ObservableProperty]
     private bool _showIntro = true;
 
-    /// <summary>Whether the model in use takes images; without them the agent has no screen tools, which the intro says.</summary>
-    public bool CanSeeScreen => _settings.Server.SupportsVision;
+    /// <summary>
+    /// The intro's line on why the agent can't see the screen or use the mouse and keyboard: the model
+    /// takes no images, or Settings turned them off. Empty when it can do both.
+    /// </summary>
+    public string ScreenNote =>
+        !_settings.Server.SupportsVision ? "This model can't see images: pick another." :
+        !_settings.Agent.EnableScreenshots ? "Screenshots are turned off in Settings." :
+        !_settings.Agent.EnableControl ? "Keyboard and mouse control is turned off in Settings: I only look." : "";
 
     /// <summary>The intro's line on what Sloperator asks before it acts, after "Ask me first" in Settings.</summary>
     public string ApprovalNote => _settings.Agent.Approval switch
@@ -616,7 +622,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 if (ImagesKey(server) == imagesKey)
                 {
                     server.SupportsVision = false;
-                    OnPropertyChanged(nameof(CanSeeScreen));
+                    OnPropertyChanged(nameof(ScreenNote));
                 }
             }
         }

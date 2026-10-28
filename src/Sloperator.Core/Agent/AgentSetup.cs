@@ -47,9 +47,10 @@ public static class AgentSetup
             Changes = changes,
         };
 
-        // A model that can't see gets no screen tools, nor does an OS without desktop control.
+        // A model that can't see gets no screen tools, nor does an OS without desktop control, nor
+        // a user who turned screenshots off in Settings.
         IReadOnlyList<ScreenSpace>? screens = null;
-        if (backend.Vision)
+        if (backend.Vision && agent.EnableScreenshots)
         {
             try { screens = ctx.ScreenSpaces(); }
             catch (NotSupportedException) { }
@@ -61,10 +62,11 @@ public static class AgentSetup
 
         // The MCP tools are a snapshot: the tool list stays the same for the whole run, unless the
         // agent sets up a server itself (mcp_servers), whose tools then join it.
-        var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: [new McpServersTool(), .. mcp.Tools], includeIndex: folderIndex);
+        var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: [new McpServersTool(), .. mcp.Tools], includeIndex: folderIndex,
+            includeControl: agent.Controls);
         mcpSetup.Registry = registry;
         string Prompt() => SystemPrompt.Build(platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, mcp.Connected, webSearch: true, paths.ToolsDir, paths.ScratchDir,
-            folderIndex);
+            folderIndex, control: agent.Controls);
         var session = new AgentSession(backend.Client, backend.Options, registry, ctx, Prompt(), history, backend.ContextTokens);
         // A server the agent adds or removes: the prompt then lists the servers as the next
         // message's will, in the same request whose tools change anyway.

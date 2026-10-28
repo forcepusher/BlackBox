@@ -13,9 +13,10 @@ public static class SystemPrompt
     /// <param name="toolsDirectory">Where portable programs the agent downloads go (Sloperator's Data/tools), or null to leave it out.</param>
     /// <param name="scratchDirectory">Where helper files the agent makes go (Sloperator's Data/scratch), or null to leave it out.</param>
     /// <param name="folderIndex">Whether index_folder is in the tool list.</param>
+    /// <param name="control">Whether the mouse and keyboard tools are in the tool list along with the screen's (the user can turn them off in Settings).</param>
     public static string Build(string platformName, IReadOnlyList<ScreenSpace>? screens, string workingDirectory, string customInstructions,
         IReadOnlyList<McpServerStatus>? mcpServers = null, bool webSearch = false, string? toolsDirectory = null, string? scratchDirectory = null,
-        bool folderIndex = true)
+        bool folderIndex = true, bool control = true)
     {
         var screen = screens is { Count: > 0 } ? screens[0] : null;
         var sb = new StringBuilder();
@@ -66,7 +67,10 @@ public static class SystemPrompt
                           "Index a folder once per chat; later calls bring it up to date.");
         sb.AppendLine("- To see what changed in a project or folder (your own edits, the user's work, a commit, two copies of a file), use diff " +
                       "rather than reading the files again or running git through run_shell.");
-        if (screen is not null)
+        if (screen is not null && !control)
+            sb.AppendLine("- You can look at the screen (screenshot, zoom, wait) but not use the mouse or keyboard: the user has turned that off. " +
+                          "Do the work through files, the shell and MCP servers, and look at the screen to check what they did.");
+        else if (screen is not null)
         {
             sb.AppendLine("- Start GUI tasks with a screenshot. Look before you click; never guess coordinates.");
             sb.AppendLine("- Aim for the center of buttons, fields and icons. After each action, check the new screenshot to confirm it worked before moving on.");

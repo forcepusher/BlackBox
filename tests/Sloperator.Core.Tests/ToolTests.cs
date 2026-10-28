@@ -304,6 +304,32 @@ public class ToolTests
     }
 
     [Fact]
+    public void Settings_take_away_the_screen_or_only_the_mouse_and_keyboard()
+    {
+        string[] look = ["screenshot", "zoom", "wait"], act = ["mouse_click", "mouse_move", "mouse_drag", "scroll", "type_text", "press_keys"];
+        bool Has(ToolRegistry r, string name) => r.Find(name) is not null;
+
+        var all = ToolRegistry.CreateDefault(includeScreenTools: true);
+        Assert.All(look.Concat(act), n => Assert.True(Has(all, n), n));
+        var looking = ToolRegistry.CreateDefault(includeScreenTools: true, includeControl: false);
+        Assert.All(look, n => Assert.True(Has(looking, n), n));
+        Assert.All(act, n => Assert.False(Has(looking, n), n));
+        // No clicking blind: without screenshots there are no mouse and keyboard tools either.
+        var blind = ToolRegistry.CreateDefault(includeScreenTools: false, includeControl: true);
+        Assert.All(look.Concat(act), n => Assert.False(Has(blind, n), n));
+
+        Assert.True(new AgentSettings().Controls);
+        Assert.False(new AgentSettings { EnableControl = false }.Controls);
+        Assert.False(new AgentSettings { EnableScreenshots = false, EnableControl = true }.Controls);
+
+        ScreenSpace[] screens = [new(new ScreenRect(0, 0, 1920, 1080), (1920, 1080))];
+        var lookOnly = Sloperator.Core.Agent.SystemPrompt.Build("Test OS", screens, "C:\\", "", control: false);
+        Assert.Contains("not use the mouse or keyboard", lookOnly);
+        Assert.DoesNotContain("Look before you click", lookOnly);
+        Assert.Contains("Look before you click", Sloperator.Core.Agent.SystemPrompt.Build("Test OS", screens, "C:\\", ""));
+    }
+
+    [Fact]
     public void The_system_prompt_lists_the_screens_and_where_they_are()
     {
         var spaces = new List<ScreenSpace>

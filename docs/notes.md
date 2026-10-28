@@ -1998,6 +1998,17 @@ prints the traceback and exits with 0.
 | `mcp_servers` | Adds, removes and lists MCP servers: a server the agent adds starts at once, its tools join the run, and it is kept in `Data/mcp.json` for later tasks (see below) |
 | `<server>__<tool>` | Any tool of the MCP servers you or the agent added (see below) |
 
+Settings → Safety has **Enable screenshots** and **Enable keyboard and mouse control**, both on by
+default (`agent.enableScreenshots`, `agent.enableControl`). Screenshots off takes away `screenshot`,
+`zoom` and `wait`, and with them the mouse and keyboard tools, whatever the second box says: the
+user's rule is no clicking blind, so that box is greyed out then. Control off keeps the three that
+look and takes away `mouse_*`, `scroll`, `type_text` and `press_keys`; the prompt's rules for
+clicking give way to one line saying the agent can look but not act, and to do the work through
+files, the shell and MCP servers. A model that takes no images has neither, as before. The start
+screen's "Use any app" card says which of these is why. The screenshot after each action
+(`ScreenshotAfterActions`) only comes with the action tools, so it needs no box of its own; it stays
+an internal switch for tests. The settings apply from the next message.
+
 Models often fumble tool-call syntax, so Sloperator repairs calls on the fly: Qwen XML, Gemma 4 and
 JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…) and misnamed
 arguments (`coordinate: [x, y]`) are all accepted.

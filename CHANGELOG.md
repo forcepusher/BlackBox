@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- **Enable screenshots** and **Enable keyboard and mouse control** under Settings → Safety. With
+  screenshots off the agent doesn't look at the screen, and can't use the mouse and keyboard either;
+  with control off it looks but doesn't click or type.
 
 ## [1.1.0] - 2026-10-29
 ### Added

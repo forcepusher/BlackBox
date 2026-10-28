@@ -255,6 +255,16 @@ public sealed class AgentSettings
     public (int Width, int Height) ScreenshotBox =>
         (Math.Clamp(ScreenshotMaxWidth, MinScreenshotWidth, MaxScreenshotSide), Math.Clamp(ScreenshotMaxHeight, MinScreenshotHeight, MaxScreenshotSide));
 
+    /// <summary>The agent may look at the screen: screenshot, zoom and wait. Off, it works through files, the shell and MCP servers only.</summary>
+    public bool EnableScreenshots { get; set; } = true;
+
+    /// <summary>The agent may use the mouse and keyboard; only while it can see the screen too (see <see cref="Controls"/>).</summary>
+    public bool EnableControl { get; set; } = true;
+
+    /// <summary>Whether the agent gets the mouse and keyboard tools: never blind, without screenshots.</summary>
+    [JsonIgnore]
+    public bool Controls => EnableScreenshots && EnableControl;
+
     /// <summary>Attach a fresh screenshot after mouse/keyboard actions. Internal (tests turn it off).</summary>
     [JsonIgnore]
     public bool ScreenshotAfterActions { get; set; } = true;

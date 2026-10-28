@@ -14,23 +14,31 @@ public sealed class ToolRegistry
 
     /// <param name="extra">Tools from outside Sloperator (MCP servers), offered after its own.</param>
     /// <param name="includeIndex">Whether index_folder is offered: off only to measure what the index changes (sloperator-cli --no-index).</param>
-    public static ToolRegistry CreateDefault(bool includeScreenTools, IEnumerable<Tool>? extra = null, bool includeWebTools = true, bool includeIndex = true) =>
-        new(DefaultTools(includeScreenTools, includeWebTools, includeIndex).Concat(extra ?? []));
+    /// <param name="includeScreenTools">Whether the agent can look at the screen: screenshot, zoom and wait.</param>
+    /// <param name="includeControl">Whether it can also use the mouse and keyboard; never without <paramref name="includeScreenTools"/>.</param>
+    public static ToolRegistry CreateDefault(bool includeScreenTools, IEnumerable<Tool>? extra = null, bool includeWebTools = true, bool includeIndex = true,
+        bool includeControl = true) =>
+        new(DefaultTools(includeScreenTools, includeScreenTools && includeControl, includeWebTools, includeIndex).Concat(extra ?? []));
 
-    private static IEnumerable<Tool> DefaultTools(bool includeScreenTools, bool includeWebTools, bool includeIndex)
+    private static IEnumerable<Tool> DefaultTools(bool includeScreenTools, bool includeControl, bool includeWebTools, bool includeIndex)
     {
         if (includeScreenTools)
         {
             yield return new ScreenshotTool();
             yield return new ZoomTool();
+        }
+        if (includeControl)
+        {
             yield return new MouseClickTool();
             yield return new MouseMoveTool();
             yield return new MouseDragTool();
             yield return new ScrollTool();
             yield return new TypeTextTool();
             yield return new PressKeysTool();
-            yield return new WaitTool();
         }
+        // Looks at the screen while it waits; last, where it was before the mouse and keyboard could be turned off.
+        if (includeScreenTools)
+            yield return new WaitTool();
         yield return new ReadFileTool();
         yield return new WriteFileTool();
         yield return new EditFileTool();
