@@ -69,15 +69,27 @@ public sealed partial class AgentSession
     /// </summary>
     /// <param name="overflowed">The server refused the conversation as too long (or too big, or more input than a minute takes):
     /// the note is asked for on its latest part, without pictures, which fits.</param>
-    internal async Task ResetContextAsync(IAgentObserver observer, CancellationToken ct, bool overflowed = false)
+    /// <param name="asked">The user (Compact context) or the model (reset_context) asked for it, rather than the context filling up.</param>
+    internal async Task ResetContextAsync(IAgentObserver observer, CancellationToken ct, bool overflowed = false, bool asked = false)
     {
+        _resetAsked = false;
         var before = TokensInUse();
-        observer.OnNotice("The context is nearly full. Asking the model for a handoff note, then starting fresh…");
+        observer.OnNotice(asked
+            ? "Compacting the context: asking the model for a handoff note, then starting fresh…"
+            : "The context is nearly full. Asking the model for a handoff note, then starting fresh…");
 
         string note;
         try
         {
             note = await WriteHandoffNoteAsync(observer, overflowed, ct).ConfigureAwait(false);
+        }
+        catch (LlmException ex) when (!overflowed)
+        {
+            // Asked on the whole conversation, the note can fail where its steps didn't: a chat
+            // opened again carries more screenshots than a server takes in one request (munito: 8).
+            // Its latest part, without pictures, fits.
+            observer.OnNotice("The model couldn't write a handoff note on the whole conversation (" + ex.Message + "); asking again on its latest part.", ex);
+            note = await TryHandoffNoteAsync(observer, ct).ConfigureAwait(false);
         }
         catch (LlmException ex)
         {
@@ -111,6 +123,97 @@ public sealed partial class AgentSession
         if (EstimateTokens() > ResetThreshold)
             FitContext(ResetThreshold);
         observer.OnNotice($"Context reset: about {before / 1000}k tokens replaced by a handoff note ({EstimateTokens() / 1000 + 1}k).");
+    }
+
+    private async Task<string> TryHandoffNoteAsync(IAgentObserver observer, CancellationToken ct)
+    {
+        try
+        {
+            return await WriteHandoffNoteAsync(observer, overflowed: true, ct).ConfigureAwait(false);
+        }
+        catch (LlmException ex)
+        {
+            observer.OnNotice("The model couldn't write a handoff note (" + ex.Message + "); using a record of the last steps instead.", ex);
+            return "";
+        }
+    }
+
+    /// <summary>A reset was asked for (see <see cref="AskReset"/>): it comes before the model's next step.</summary>
+    private volatile bool _resetAsked;
+
+    /// <summary>
+    /// Compact context, during a run: the context is reset with a handoff note before the
+    /// model's next step, unless there is nothing to compact then (no reply since the last
+    /// reset). Any thread.
+    /// </summary>
+    public void AskReset() => _resetAsked = true;
+
+    /// <summary>reset_context: as <see cref="AskReset"/>, but not again right after a reset, whose kept message (the user's "reset your context") asked for it once more.</summary>
+    private bool ModelAsksReset()
+    {
+        if (RepliesSinceReset() < 2)
+            return false;
+        _resetAsked = true;
+        return true;
+    }
+
+    /// <summary>A reset asked for is due before this step; one with nothing to compact is dropped.</summary>
+    private bool ResetDue()
+    {
+        if (!_resetAsked)
+            return false;
+        if (RepliesSinceReset() > 0)
+            return true;
+        _resetAsked = false;
+        return false;
+    }
+
+    /// <summary>The model's replies since the last handoff note, or in the whole conversation when there was none. On the run's thread.</summary>
+    private int RepliesSinceReset()
+    {
+        var note = History.FindLastIndex(m => m.Content?.StartsWith(HandoffHeader, StringComparison.Ordinal) == true);
+        return History.Skip(note + 1).Count(m => m.Role == ChatRole.Assistant);
+    }
+
+    /// <summary>
+    /// Compact context with no run going: the model writes a handoff note on the conversation
+    /// so far and it takes the conversation's place, as a full context does in a run.
+    /// </summary>
+    public async Task CompactAsync(IAgentObserver observer, CancellationToken ct)
+    {
+        try
+        {
+            if (RepliesSinceReset() == 0)
+            {
+                observer.OnNotice("There is nothing to compact yet: the context holds no replies since it was last reset.");
+                observer.OnFinished(AgentStopReason.Completed, null);
+                return;
+            }
+            // As before a step: a chat opened again can hold more pictures than the server takes.
+            LeaveOutOldImages();
+            await ResetContextAsync(observer, ct, asked: true).ConfigureAwait(false);
+            observer.OnFinished(AgentStopReason.Completed, null);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            observer.OnFinished(AgentStopReason.Cancelled, null);
+        }
+        catch (Exception ex)
+        {
+            observer.OnFailed(ex);
+            observer.OnFinished(AgentStopReason.Error, ex.Message, ex);
+        }
+    }
+
+    /// <summary>
+    /// The context size picked in the app while a run goes on: it counts from the next step, so a
+    /// smaller one resets the context there. The run read it once when it started, and lowering
+    /// it to have the context reset did nothing until the next message. Any thread.
+    /// </summary>
+    public void UseContextSize(int tokens)
+    {
+        if (tokens > 0)
+            contextTokens = tokens;
     }
 
     private async Task<string> WriteHandoffNoteAsync(IAgentObserver observer, bool overflowed, CancellationToken ct)

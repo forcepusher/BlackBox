@@ -540,8 +540,42 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// </summary>
     private bool _lastSavePending;
 
-    /// <summary>One run of the agent on <paramref name="input"/>. Returns what the user sent too late for it, to run next, or null.</summary>
-    private async Task<UserInput?> RunAsync(UserInput input)
+    /// <summary>Compact context, in the chat's right-click menu: there is a conversation, and it is this chat's.</summary>
+    public bool CanCompactContext => _history.Count > 0 && !_runDetached && !_closed;
+
+    /// <summary>Compact context was picked while the run was still starting up (no session yet); asked of it once it has one.</summary>
+    private bool _compactPending;
+
+    /// <summary>
+    /// Compact context: the model writes a handoff note on the conversation so far, which then
+    /// takes its place, as when the context fills up. During a run that happens before the model's
+    /// next step, and the task goes on from the note.
+    /// </summary>
+    public void CompactContext()
+    {
+        if (!CanCompactContext)
+            return;
+        if (IsBusy)
+        {
+            if (_session is { } running) running.AskReset();
+            else _compactPending = true;
+            AddNotice("I'll compact the context before my next step.", isError: false);
+            return;
+        }
+        _ = CompactNowAsync();
+    }
+
+    private async Task CompactNowAsync()
+    {
+        for (var next = await RunAsync(null); next is not null;)
+            next = await RunAsync(next);
+    }
+
+    /// <summary>
+    /// One run of the agent on <paramref name="input"/>, or with none a summary of the context (see
+    /// <see cref="CompactContext"/>). Returns what the user sent too late for it, to run next, or null.
+    /// </summary>
+    private async Task<UserInput?> RunAsync(UserInput? input)
     {
         _runStarted = DateTime.UtcNow;
         _runDetached = false;
@@ -607,10 +641,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             foreach (var pending in _steerPending)
                 session.Steer(pending);
             _steerPending.Clear();
+            if (_compactPending)
+                session.AskReset();
+            _compactPending = false;
             _tick.Start();
             delivered = true;
             _unread = null;
-            await Task.Run(() => session.RunAsync(input, this, ct), CancellationToken.None);
+            await Task.Run(() => input is null ? session.CompactAsync(this, ct) : session.RunAsync(input, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
             _settings.Server.LearnContextLimit(session.ContextTokens);
             OnContextChanged();
@@ -642,6 +679,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         {
             late = [.. _session?.TakeUndelivered() ?? [], .. _steerPending];
             _steerPending.Clear();
+            _compactPending = false;
             // After the run's last posted updates (its "Stopped." notice) have reached the chat.
             var chatId = _chatId;
             if (!_runDetached)

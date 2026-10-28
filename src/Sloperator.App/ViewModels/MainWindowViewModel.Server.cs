@@ -81,6 +81,7 @@ public sealed partial class MainWindowViewModel
             SaveSettings();
             OnPropertyChanged();
             OnContextChanged();
+            ContextPickedDuringRun();
         }
     }
 
@@ -129,6 +130,21 @@ public sealed partial class MainWindowViewModel
         _settings.Server.ManualContextSize = size;
         SaveSettings();
         OnContextChanged();
+        ContextPickedDuringRun();
+    }
+
+    /// <summary>
+    /// A size picked while the agent works counts from its next step: a smaller one than the
+    /// conversation fills resets the context there. The run used to keep the size it started with,
+    /// so lowering it to have the context reset did nothing until the next message.
+    /// </summary>
+    private void ContextPickedDuringRun()
+    {
+        if (_session is not { } session || _runDetached)
+            return;
+        // The bar over the chat shows the new size after the model's next reply: the conversation
+        // is counted on the agent's thread, which may be changing it right now.
+        session.UseContextSize(_settings.Server.ContextSize);
     }
 
     /// <summary>LM Studio said the model isn't loaded yet; it has no context size until the first message loads it.</summary>

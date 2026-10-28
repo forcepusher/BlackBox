@@ -89,6 +89,12 @@ public sealed class ToolContext
     /// <summary>How many times the agent has started the context afresh with a handoff note in this run: what a tool showed before is gone.</summary>
     public int ContextResets { get; set; }
 
+    /// <summary>
+    /// Has the context reset with a handoff note before the model's next step (reset_context):
+    /// false when it was just reset and nothing has happened since. Set by the agent session.
+    /// </summary>
+    public Func<bool>? ResetContext { get; set; }
+
     /// <summary>The latest screenshot taken for the model (screen and frame).</summary>
     public (ScreenRect Screen, RawImage Frame)? LastShot { get; set; }
 

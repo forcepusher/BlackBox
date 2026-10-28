@@ -357,6 +357,7 @@ public sealed partial class AgentSession(
             var eyes = new FreshLook(client, requestOptions);
             toolContext.Ask = (images, question, ct2) => toolContext.SeesImages ? eyes.AskAsync(images, question, ct2) : Task.FromResult<string?>(null);
         }
+        toolContext.ResetContext ??= ModelAsksReset;
         toolContext.InConversation ??= text => History.Any(m => m.Content?.Contains(text, StringComparison.Ordinal) == true ||
                                                                 m.Parts?.Any(p => p.Text?.Contains(text, StringComparison.Ordinal) == true) == true);
         var cutOffs = 0;
@@ -380,7 +381,9 @@ public sealed partial class AgentSession(
                 turnEnded = false;
                 // The reset first: its handoff note is a reply of its own, and the step's reply
                 // comes after it, in a new step.
-                if (contextTokens > 0 && TokensInUse() > ResetThreshold)
+                if (ResetDue())
+                    await ResetContextAsync(observer, ct, asked: true).ConfigureAwait(false);
+                else if (contextTokens > 0 && TokensInUse() > ResetThreshold)
                     await ResetContextAsync(observer, ct).ConfigureAwait(false);
                 observer.OnStepStarted(step);
                 LeaveOutOldImages();
@@ -425,8 +428,9 @@ public sealed partial class AgentSession(
                     observer.OnNotice("The server stopped the reply at its length limit (in LM Studio: Limit Response Length); asking the model to go on.");
                 // "The task is complete" followed by yet another screenshot: small models can keep
                 // re-verifying forever. A completion claim with only look-only calls ends the turn.
+                // Not a reset it asked for ("Handoff written, all done." with reset_context).
                 if (reply.HasToolCalls && LooksFinished(reply.Content) &&
-                    reply.ToolCalls!.All(c => ToolCallRepair.ResolveTool(c.Name, tools)?.Risk == ToolRisk.ReadOnly))
+                    reply.ToolCalls!.All(c => ToolCallRepair.ResolveTool(c.Name, tools) is { Risk: ToolRisk.ReadOnly } t && t is not ResetContextTool))
                     reply.ToolCalls = null;
                 History.Add(reply);
                 observer.OnAssistantMessage(reply);
@@ -454,6 +458,9 @@ public sealed partial class AgentSession(
                     // ":" never fired in about 40 tasks on Qwen 3.8, Nemotron and Haiku (2026-10-27),
                     // and a nudge after an answer to a message that came in on top of the request
                     // made the model answer a second time what it had just said.
+                    // Compact context, picked as the model wrote this answer: before the end.
+                    if (ResetDue())
+                        await ResetContextAsync(observer, ct, asked: true).ConfigureAwait(false);
                     observer.OnFinished(AgentStopReason.Completed, null);
                     return;
                 }
