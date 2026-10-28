@@ -6,8 +6,8 @@ using SkiaSharp;
 namespace Sloperator.Core.Tools;
 
 /// <summary>
-/// A sharp, enlarged picture of part of the screen, with rulers in screenshot coordinates along its
-/// top and left edges, for the model to aim a click from. A whole screenshot reaches some models
+/// A sharp, enlarged picture of part of the screen, with rulers in screenshot coordinates on its
+/// sides and a faint grid over it, for the model to aim a click from. A whole screenshot reaches some models
 /// shrunk (munito reads any picture at about 1,000 tokens), so a 16 px row of Unity's Hierarchy is a
 /// few pixels high there; DeepSeek V4.1 Flash, cropping and reading parts of the screen with
 /// scripts of its own, then aimed 5 of 5 clicks at the right row.
@@ -25,7 +25,7 @@ public sealed class ZoomTool : Tool
 
     public override string Name => "zoom";
     public override string Description =>
-        "Look closer at part of the screen: a sharp, enlarged picture of the region around (x, y), with rulers along its top and left edges " +
+        "Look closer at part of the screen: a sharp, enlarged picture of the region around (x, y), with rulers and a faint grid " +
         "in screenshot coordinates. Use it before clicking anything small or close to things like it, and read the x/y to click off the rulers.";
     public override ToolRisk Risk => ToolRisk.ReadOnly;
     public override JsonObject Parameters => Schema(
@@ -62,7 +62,11 @@ public sealed class ZoomTool : Tool
         return Math.Clamp(side, Math.Min(MinSide, screenSide), screenSide);
     }
 
-    /// <summary>The region enlarged, with a ruler along its top and left edges labelled in the model's coordinates.</summary>
+    /// <summary>
+    /// The region enlarged, with rulers on all four sides labelled in the model's coordinates, finer
+    /// ticks between the labels and a faint grid line across the picture at each label: qwen3.8, with
+    /// labels on two sides only, read a click 55 grid steps off the one it had zoomed in on.
+    /// </summary>
     internal static byte[] Render(RawImage frame, double scale, ScreenSpace space, ScreenRect region)
     {
         var (w, h) = ((int)Math.Round(frame.Width * scale), (int)Math.Round(frame.Height * scale));
@@ -72,7 +76,7 @@ public sealed class ZoomTool : Tool
         try
         {
             src.InstallPixels(info, handle.AddrOfPinnedObject(), frame.Stride);
-            using var surface = SKSurface.Create(new SKImageInfo(w + Ruler, h + Ruler, SKColorType.Bgra8888, SKAlphaType.Premul));
+            using var surface = SKSurface.Create(new SKImageInfo(w + 2 * Ruler, h + 2 * Ruler, SKColorType.Bgra8888, SKAlphaType.Premul));
             var canvas = surface.Canvas;
             canvas.Clear(SKColors.White);
             using (var image = SKImage.FromBitmap(src))
@@ -81,29 +85,50 @@ public sealed class ZoomTool : Tool
 
             using var ink = new SKPaint { Color = SKColors.Black, IsAntialias = true, StrokeWidth = 1, TextSize = 12 };
             using var font = new SKFont(SKTypeface.Default, 12);
+            // Magenta, half see-through: visible on light and dark interfaces alike, and seldom their own colour.
+            using var grid = new SKPaint { Color = new SKColor(255, 0, 255, 110), StrokeWidth = 1 };
             var (x0, y0) = space.ToModel(region.X, region.Y);
             var (x1, y1) = space.ToModel(region.X + region.Width, region.Y + region.Height);
             // Where a model coordinate lies on the picture.
             float Px(double x) => Ruler + (float)((x - x0) * w / Math.Max(1, x1 - x0));
             float Py(double y) => Ruler + (float)((y - y0) * h / Math.Max(1, y1 - y0));
+            var (right, bottom) = (Ruler + w, Ruler + h);
             var xStep = Step(x1 - x0, w);
-            for (var x = Math.Ceiling(x0 / xStep) * xStep; x <= x1; x += xStep)
+            foreach (var x in Ticks(x0, x1, Minor(xStep)))
             {
                 var px = Px(x);
-                canvas.DrawLine(px, Ruler - 8, px, Ruler, ink);
+                var major = x % xStep == 0;
+                var tick = major ? 8 : 4;
+                canvas.DrawLine(px, Ruler - tick, px, Ruler, ink);
+                canvas.DrawLine(px, bottom, px, bottom + tick, ink);
+                if (!major)
+                    continue;
+                // A grid line across the picture, and the label above and below it.
+                canvas.DrawLine(px, Ruler, px, bottom, grid);
                 var label = x.ToString(CultureInfo.InvariantCulture);
-                canvas.DrawText(label, Math.Clamp(px - ink.MeasureText(label) / 2, 0, w + Ruler - ink.MeasureText(label)), Ruler - 11, font, ink);
+                var lx = Math.Clamp(px - ink.MeasureText(label) / 2, 0, w + 2 * Ruler - ink.MeasureText(label));
+                canvas.DrawText(label, lx, Ruler - 11, font, ink);
+                canvas.DrawText(label, lx, bottom + 21, font, ink);
             }
             var yStep = Step(y1 - y0, h);
-            for (var y = Math.Ceiling(y0 / yStep) * yStep; y <= y1; y += yStep)
+            foreach (var y in Ticks(y0, y1, Minor(yStep)))
             {
                 var py = Py(y);
-                canvas.DrawLine(Ruler - 6, py, Ruler, py, ink);
-                canvas.Save();
-                canvas.RotateDegrees(-90, Ruler - 10, py);
+                var major = y % yStep == 0;
+                var tick = major ? 6 : 3;
+                canvas.DrawLine(Ruler - tick, py, Ruler, py, ink);
+                canvas.DrawLine(right, py, right + tick, py, ink);
+                if (!major)
+                    continue;
+                canvas.DrawLine(Ruler, py, right, py, grid);
                 var label = y.ToString(CultureInfo.InvariantCulture);
-                canvas.DrawText(label, Ruler - 10 - ink.MeasureText(label) / 2, py, font, ink);
-                canvas.Restore();
+                foreach (var (at, turn) in new[] { (Ruler - 10f, -90f), (right + 10f, 90f) })
+                {
+                    canvas.Save();
+                    canvas.RotateDegrees(turn, at, py);
+                    canvas.DrawText(label, at - ink.MeasureText(label) / 2, py, font, ink);
+                    canvas.Restore();
+                }
             }
             using var snapshot = surface.Snapshot();
             using var data = snapshot.Encode(SKEncodedImageFormat.Jpeg, 90);
@@ -113,6 +138,16 @@ public sealed class ZoomTool : Tool
         {
             handle.Free();
         }
+    }
+
+    /// <summary>The step between unlabelled ticks: a fifth of a labelled step of 5, 10, 50…, a half of one of 2, 20…; none for a step of 1.</summary>
+    internal static double Minor(double step) => step % 5 == 0 ? step / 5 : step % 2 == 0 ? step / 2 : step;
+
+    /// <summary>The multiples of a step from <paramref name="from"/> to <paramref name="to"/>.</summary>
+    private static IEnumerable<double> Ticks(double from, double to, double step)
+    {
+        for (var t = Math.Ceiling(from / step) * step; t <= to; t += step)
+            yield return t;
     }
 
     /// <summary>A round step (1, 2 or 5 times a power of ten) that puts a tick about every 80 pixels of the picture.</summary>

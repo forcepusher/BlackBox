@@ -125,7 +125,7 @@ public class ToolTests
         Assert.StartsWith("Zoomed in on (480, 264) to (800, 440) of the screenshot, 2x.", result.Text);
         Assert.NotNull(result.ImageCaption);
         using (var codec = SkiaSharp.SKCodec.Create(new MemoryStream(result.Image!)))
-            Assert.Equal((1252 + 30, 704 + 30), (codec.Info.Width, codec.Info.Height)); // fits the screenshot's size, with the rulers
+            Assert.Equal((1252 + 60, 704 + 60), (codec.Info.Width, codec.Info.Height)); // fits the screenshot's size, with rulers on every side
 
         // Never more than 4x, kept inside the screen, a quarter of the screenshot by default.
         result = await zoom.ExecuteAsync(new JsonObject { ["x"] = 5, ["y"] = 5, ["width"] = 20, ["height"] = 20 }, ctx, CancellationToken.None);
@@ -137,6 +137,7 @@ public class ToolTests
         Assert.Equal(10, ZoomTool.Step(100, 800));
         Assert.Equal(100, ZoomTool.Step(1000, 1280));
         Assert.Equal(1, ZoomTool.Step(5, 1280));
+        Assert.Equal([10, 2, 1, 1], new double[] { 50, 10, 2, 1 }.Select(ZoomTool.Minor));
     }
 
     [Fact]
