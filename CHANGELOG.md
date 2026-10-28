@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   screenshots off the agent doesn't look at the screen, and can't use the mouse and keyboard either;
   with control off it looks but doesn't click or type.
 
+### Changed
+- File changes lists each file on one compact line, its name and its counts, so a long list fits;
+  whether it was modified or renamed shows in its tooltip.
+
 ## [1.1.0] - 2026-10-29
 ### Added
 - The agent can zoom in on part of the screen: a sharp, enlarged picture of it with rulers in
