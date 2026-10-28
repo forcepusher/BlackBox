@@ -1,5 +1,5 @@
 # Sloperator
-Sloperator works on your PC to get the job done. Say what you want and watch it go. It uses your
+Sloperator works on your PC to get the job done. Say what you want and watch it go. It uses the
 actual desktop via keyboard and mouse when needed.
 
 It is a single portable `Sloperator.exe`. Nothing gets installed: its settings, chats and whatever it
