@@ -41,6 +41,9 @@ public class ClickLandsTests
             CoordinateGrid = grid,
         };
         var cursorBefore = platform.Input.GetCursorPosition();
+        // The screen before the square shows: red already on it (desktop icons, a red line in another
+        // app) isn't taken for the square.
+        var before = (await new ScreenshotTool().ExecuteAsync(new JsonObject(), ctx, CancellationToken.None)).Image!;
         // Away from the middle, where a wrong scale moves a point the most.
         using var square = new RedSquare(screen.X + screen.Width * 7 / 10, screen.Y + screen.Height * 7 / 10, 40);
         try
@@ -51,7 +54,7 @@ public class ClickLandsTests
             {
                 if (unawareThread)
                     SetThreadDpiAwarenessContext(-1); // DPI_AWARENESS_CONTEXT_UNAWARE
-                Act(ctx, square, grid).GetAwaiter().GetResult();
+                Act(ctx, square, grid, before).GetAwaiter().GetResult();
             }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
         finally
@@ -60,11 +63,12 @@ public class ClickLandsTests
         }
     }
 
-    private static async Task Act(ToolContext ctx, RedSquare square, int? grid)
+    private static async Task Act(ToolContext ctx, RedSquare square, int? grid, byte[] before)
     {
         var shot = await new ScreenshotTool().ExecuteAsync(new JsonObject(), ctx, CancellationToken.None);
         using var bitmap = SKBitmap.Decode(shot.Image!);
-        var (cx, cy) = RedCentre(bitmap);
+        using var without = SKBitmap.Decode(before);
+        var (cx, cy) = RedCentre(bitmap, without);
         var (x, y) = grid is { } g ? (cx * g / bitmap.Width, cy * g / bitmap.Height) : (cx, cy);
         var aim = ctx.GetScreenSpace().ToScreen(x, y);
         Assert.True(OnSquare(aim, square), $"({x:0}, {y:0}) in the screenshot is {aim} on the screen, not on the square");
@@ -90,16 +94,17 @@ public class ClickLandsTests
         return GetAncestor(WindowFromPoint(new POINT { X = point.X, Y = point.Y }), GA_ROOT) == square.Handle;
     }
 
-    /// <summary>The centre of the red pixels, in the picture's pixels.</summary>
-    private static (double X, double Y) RedCentre(SKBitmap bitmap)
+    /// <summary>The centre of the pixels that are red in <paramref name="bitmap"/> and weren't in <paramref name="before"/>, in the picture's pixels.</summary>
+    private static (double X, double Y) RedCentre(SKBitmap bitmap, SKBitmap before)
     {
+        static bool Red(SKColor c) => c.Red > 200 && c.Green < 50 && c.Blue < 50;
+        Assert.Equal((bitmap.Width, bitmap.Height), (before.Width, before.Height));
         double sx = 0, sy = 0;
         var n = 0;
         for (var y = 0; y < bitmap.Height; y++)
             for (var x = 0; x < bitmap.Width; x++)
             {
-                var c = bitmap.GetPixel(x, y);
-                if (c.Red > 200 && c.Green < 50 && c.Blue < 50) { sx += x; sy += y; n++; }
+                if (Red(bitmap.GetPixel(x, y)) && !Red(before.GetPixel(x, y))) { sx += x; sy += y; n++; }
             }
         Assert.True(n > 0, "the square isn't in the screenshot");
         return (sx / n + 0.5, sy / n + 0.5);
