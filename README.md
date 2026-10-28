@@ -23,7 +23,7 @@ Its settings, chats and whatever it downloads stay in a `Data` folder next to th
 - **Claude:** type `api.anthropic.com` as the server and your Anthropic API key next to it.
 - **Your own PC:** in [LM Studio](https://lmstudio.ai), turn its server on in the Developer tab and type
   `http://localhost:1234/v1` as the server. Pick a model that sees images (Qwen3.8 27B is the one
-  tested most), give it at least 32k of context, and turn off its "Image Input: Never exceed 2048 px"
+  tested most), give it at least 64k of context, and turn off its "Image Input: Never exceed 2048 px"
   option. llama.cpp, Ollama and vLLM work the same way.
 - **Other online APIs:** any OpenAI-compatible server, such as OpenRouter: its address and your key.
 
