@@ -193,6 +193,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - What the agent just changed stays lit in File changes longer: 4 seconds, then a 2 second fade.
 
 ### Fixed
+- A broken glTF whose nodes loop back on themselves opens at once instead of after a pause.
 - Clicks with DeepSeek V4.1 Flash land where they should again: the look that aims each click now
   says how big the screenshot is, so DeepSeek answers in pixels instead of its own 0-1000 grid, which
   moved clicks far to the left.

@@ -1366,6 +1366,18 @@ public class MeshTests : IDisposable
     }
 
     [Fact]
+    public void A_gltf_whose_nodes_are_shared_without_a_loop_is_read_in_a_moment()
+    {
+        // 60 nodes, each the next one's two children: no loop, yet 2^60 paths.
+        var nodes = string.Join(", ", Enumerable.Range(0, 60).Select(i => i < 59 ? $"{{\"children\": [{i + 1}, {i + 1}]}}" : "{}"));
+        var path = Write("shared.gltf", $$"""{"asset": {"version": "2.0"}, "scenes": [{"nodes": [0]}], "nodes": [{{nodes}}], "meshes": []}""");
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        using var mesh = Mesh.Load(path);
+        Assert.Equal(0, mesh.TriangleCount);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), $"took {clock.Elapsed}");
+    }
+
+    [Fact]
     public void A_glb_is_read_with_its_node_transform_and_drawn_in_the_middle_of_the_picture()
     {
         // One triangle, moved 10 units along x by its node.
