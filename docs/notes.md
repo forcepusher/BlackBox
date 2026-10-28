@@ -312,7 +312,8 @@ any other file gets a card. Each has Inspect (the file in the File inspector pan
 user renamed them on 2026-10-26) and Show in folder. A saved chat shows them again when it is
 opened, as long as the files are still there. Open (the file's own program) was on every card until
 2026-10-25: the user had it taken off for Preview, as the panel shows a file without leaving Sloperator;
-the full-screen viewer of pictures and videos lost its Open too.
+the full-screen viewer of pictures and videos lost its Open too, and on 2026-10-28 its Show in
+folder (the user had it taken off; the cards in the chat keep theirs).
 
 A document's card (every kind the panel shows that isn't a picture or media: Markdown, CSV/TSV, text
 and code, PDF, Office, web pages) has a peek over its name since 2026-10-26, the user's "one universal

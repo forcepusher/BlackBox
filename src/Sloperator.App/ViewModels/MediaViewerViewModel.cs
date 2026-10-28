@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Diagnostics;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Sloperator.Core.Media;
@@ -37,13 +36,12 @@ public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
     private object? _shown;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Name), nameof(Counter), nameof(HasFile))]
-    [NotifyCanExecuteChangedFor(nameof(PreviousCommand), nameof(NextCommand), nameof(ShowInFolderCommand))]
+    [NotifyPropertyChangedFor(nameof(Name), nameof(Counter))]
+    [NotifyCanExecuteChangedFor(nameof(PreviousCommand), nameof(NextCommand))]
     private int _index;
 
     public MediaEntry Current => _entries[Index];
     public string Name => Current.Name;
-    public bool HasFile => Current.Path is not null;
 
     /// <summary>"3 of 7", when the chat has more than one.</summary>
     public string Counter => _entries.Count > 1 ? $"{Index + 1} of {_entries.Count}" : "";
@@ -68,17 +66,6 @@ public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
     {
         if (Shown is VideoPreview video)
             video.PlayCommand.Execute(null);
-    }
-
-    [RelayCommand(CanExecute = nameof(HasFile))]
-    private void ShowInFolder()
-    {
-        var path = Current.Path!;
-        Task.Run(() =>
-        {
-            try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true })?.Dispose(); }
-            catch (Exception ex) when (ex is Win32Exception or InvalidOperationException) { }
-        });
     }
 
     private void ShowEntry(int index)
