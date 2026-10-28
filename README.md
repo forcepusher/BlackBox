@@ -40,5 +40,4 @@ dotnet test              # unit tests
 ./scripts/publish.ps1    # makes publish/Sloperator.exe
 ```
 
-How each part works and why, the test scripts and the benchmark results are in
-[docs/notes.md](docs/notes.md), which is meant to be read by LLMs, not people.
+Details are in [docs/notes.md](docs/notes.md), which is meant to be read by LLMs, not people.
