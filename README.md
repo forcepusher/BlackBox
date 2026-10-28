@@ -17,7 +17,7 @@ Its settings, chats and whatever it downloads stay in a `Data` folder next to th
 **Pause/Break** stops it at any time. It doesn't ask before it acts; to approve each step, turn on
 "Ask me first" in Settings.
 
-## Picking a model
+## Connecting a model
 - **Free, no account:** out of the box it runs on Kilo's free online models. They allow about 200
   requests an hour, so a long job may stop to wait.
 - **Claude:** type `api.anthropic.com` as the server and your Anthropic API key next to it.
