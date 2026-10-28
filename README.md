@@ -1,9 +1,7 @@
 # Sloperator
-Sloperator works on your PC to get the job done. Say what you want and watch it go. It uses the
-actual desktop via keyboard and mouse when needed.
+Sloperator works on your PC to get the job done. Say what you want and watch it go.It uses the actual desktop via keyboard and mouse when needed.
 
-It is a single portable `Sloperator.exe`. Nothing gets installed: its settings, chats and whatever it
-downloads stay in a `Data` folder next to the exe.
+It is a single portable `Sloperator.exe`. Nothing gets installed.Its settings, chats and whatever it downloads stay in a `Data` folder next to the exe.
 
 [![Sloperator answering its first message (click to play)](docs/demo-poster.png)](docs/demo.mp4)
 
