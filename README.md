@@ -45,8 +45,9 @@ whatever it downloads stay in a `Data` folder next to the exe.
 - **Long jobs.** It keeps going for hours when a job needs it.
 
 ## Getting started
-1. Put `Sloperator.exe` in a folder of your own (Documents, the Desktop, a USB stick), not in
-   Program Files. To make the exe yourself, see [Building](#building).
+1. Download `Sloperator.exe` from [Releases](https://github.com/forcepusher/Sloperator/releases) and
+   put it in a folder of your own (Documents, the Desktop, a USB stick), not in Program Files. To
+   make the exe yourself, see [Building](#building).
 2. Double-click it. If Windows says "Windows protected your PC", click **More info**, then
    **Run anyway**.
 3. Type what you want done and press Enter.
