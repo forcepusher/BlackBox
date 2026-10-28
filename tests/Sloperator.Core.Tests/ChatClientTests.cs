@@ -95,6 +95,7 @@ public class ChatClientTests
     [InlineData("Qwen3-32B is not a multimodal model", true)]                                                           // vLLM
     [InlineData("Model does not support images. Please use a model that does.", true)]                                  // LM Studio
     [InlineData("Failed to deserialize the JSON body: unknown variant `image_url`, expected `text`", true)]               // DeepSeek
+    [InlineData("'image' is not supported: not available for this model", true)]                                       // munito (Gemma 4)
     [InlineData("Invalid tool schema", false)]
     [InlineData("The image is 21 MB; the most is 20 MB.", false)]
     [InlineData("registry.ollama.ai/library/llama3.2-vision:latest does not support tools", false)]                    // a model's name

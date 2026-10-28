@@ -732,7 +732,8 @@ public sealed partial class OpenAiChatClient
     /// An error saying the model takes no pictures: "image input is not supported" (llama-server
     /// without its projector), "No endpoints found that support image input" (OpenRouter), "image_url
     /// is only supported by certain models" (OpenAI), "is not a multimodal model" (vLLM), "Model does
-    /// not support images" (LM Studio), "unknown variant `image_url`" (DeepSeek).
+    /// not support images" (LM Studio), "unknown variant `image_url`" (DeepSeek), "'image' is not
+    /// supported" (munito).
     /// </summary>
     internal static bool LooksLikeImagesRefused(string err)
     {
