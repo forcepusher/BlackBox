@@ -18,6 +18,7 @@ internal sealed class WindowsHostWindow : IHostWindow
 {
     public IDisposable StepAside(params (int X, int Y)[] points)
     {
+        EnsurePhysicalPixels();
         // Top to bottom, as EnumWindows lists them; each one left out of the screenshots, so the
         // model aimed at what is behind it.
         var moved = new List<nint>();
@@ -54,6 +55,7 @@ internal sealed class WindowsHostWindow : IHostWindow
 
     public void YieldFocus()
     {
+        EnsurePhysicalPixels();
         var foreground = GetForegroundWindow();
         if (foreground == 0 || GetWindowThreadProcessId(foreground, out var owner) == 0 || owner != Environment.ProcessId)
             return;

@@ -27,6 +27,7 @@ public static class WindowCover
     /// </summary>
     internal static unsafe nint Make(nint owner, int x, int y, int width, byte[] bgra)
     {
+        EnsurePhysicalPixels();
         Hide();
         var height = bgra.Length / 4 / width;
         if (width <= 0 || height <= 0)

@@ -127,6 +127,29 @@ internal static partial class Native
 
     public static readonly nint DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4;
 
+    [LibraryImport("user32.dll")]
+    public static partial nint SetThreadDpiAwarenessContext(nint value);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint GetThreadDpiAwarenessContext();
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool AreDpiAwarenessContextsEqual(nint a, nint b);
+
+    /// <summary>
+    /// Puts the calling thread in physical pixels (per-monitor DPI aware) if it isn't: screens,
+    /// captures, the cursor and windows must all be in the same pixels at any display scaling. The
+    /// process is already (the manifest, <see cref="WindowsPlatform"/>), but a thread can be put in
+    /// another context, and in a DPI-unaware one the cursor lands at 1/1.25 of the point on a 125%
+    /// screen while captures stay physical. Called on entry by everything that reads or sets positions.
+    /// </summary>
+    public static void EnsurePhysicalPixels()
+    {
+        if (!AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2))
+            SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     public struct CURSORINFO
     {
