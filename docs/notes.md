@@ -2386,13 +2386,21 @@ A right-click on a file in the list offers **Show in folder** (the user, 2026-10
 opens on its folder with it selected, through the file cards' `FilePreview.ShowInFolder`; greyed
 out for a deleted file. The menu is a plain `ContextMenu`, as the Video generator's are; checked
 with a real right-click on 2026-10-26.
-**With no lines picked, the file selected in the list** is what a message is about (the user,
-2026-10-25: "currently selected changed file should be visible in the chat context"): a pick in the box
-("Whole file · notes.md", from `OnPicked`), and for the model the files list as above, which file is
-selected, and its diff (at most 300 lines). No file is selected until one is clicked (the user,
-2026-10-28: the first file was selected by itself, its card went with every message, and nothing let
-it go); a click on it again lets it go (the lists' `SelectionMode` is `Single,Toggle`), as do a click
-away and Esc, and a message sent with it. It stays selected across a refresh; that reselecting doesn't
+**With no lines picked, the files selected in the list** are what a message is about (the user,
+2026-10-25: "currently selected changed file should be visible in the chat context"): a pick each in the
+box ("Whole file · notes.md", from `OnPicked`), and for the model the files list as above, which files
+are selected, and their diffs (at most 300 lines together). No file is selected until one is clicked (the
+user, 2026-10-28: the first file was selected by itself, its card went with every message, and nothing
+let it go). The lists select as Sourcetree's do (the user, 2026-10-28, "I like the way it's done in
+Sourcetree"; tried there on a scratch repo the same day): a click selects that file alone, Ctrl+click
+adds or takes off one, Shift+click a run from the last clicked, and the files are in one section at a
+time, a click in another letting go of this one's, Ctrl held or not. Each section has its own
+`SelectionModel` (`SelectionMode` Multiple; given no source, as the list's own items are taken: one
+made with the files showed nothing selected), and `SyncSections` changes only the rows that differ
+(cleared and selected again inside the list's click, it showed nothing selected either). Unlike
+Sourcetree, a click on the only file selected lets it go (`IsOnlySelected`, `LetGoOf` on the release),
+as do a click away and Esc, and a message sent with them. Sourcetree's diff shows only the selected
+files; here it still shows all of them. They stay selected across a refresh; that reselecting doesn't
 scroll the diff (`Reselecting`). With no file or line picked, a message goes without the panel's word.
 Checked in the app on 2026-10-28 with a stand-in model: opened by the agent's edit with nothing
 selected and no card, a click selects the file and puts its card in the box, a second click takes
@@ -2402,7 +2410,9 @@ came from could be selected or not, which meant nothing): picking lines lets go 
 lines picked a click on a file only goes to it (its list's selection is put back after the click,
 `SyncSections` posted), so lines in another file can still be Ctrl+clicked; after Esc a click selects
 it. Checked in the app the same day: line, then file (lines kept, file not selected), Esc then file
-(selected), file then line (file let go, the line's card alone).
+(selected), file then line (file let go, the line's card alone); and with three files changed, click,
+Ctrl+click on and off, Shift+click a run, a second click on the only one, each with the list's
+selection (UI Automation) and the box's cards agreeing, and a message sent with two told the model both.
 **Wrap and Watch** (the user, 2026-10-26), toggles in the bar between the summary and the ×, shown
 once a file changed, both on by default and kept in settings.json under `panels` (`wrapDiff`,
 `watchChanges`; `PanelSettings`). **Wrap**: the diff's code column is `*` (under a sideways scroll it
