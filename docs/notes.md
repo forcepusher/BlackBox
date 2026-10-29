@@ -1705,8 +1705,7 @@ of the limit from then on, after a handoff note; the cost grows
   latest reply's must otherwise go back whole while its calls are answered). A context reset keeps only the user's messages, the handoff note
   and a screenshot, which the check allows. Effort is the one picked in the top bar (see Effort,
   below), sent as `output_config.effort`, the handoff note's too (another effort would read the
-  whole conversation anew), except for fresh looks and quick questions, which ask for low: every
-  Claude since 4.6 thinks, and only effort says how much. Thinking counts toward the reply limit, so requests ask for 64k (the
+  whole conversation anew): every Claude since 4.6 thinks, and only effort says how much. Thinking counts toward the reply limit, so requests ask for 64k (the
   model's limit if lower) whatever smaller limit a caller set; only what is written is paid for and
   counts toward the output tokens a minute.
 - Refusals: on the models that take it (Opus and Fable 5 on, Sonnet 5.5), a request Anthropic's
