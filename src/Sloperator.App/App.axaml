@@ -210,7 +210,9 @@
     </Style>
     <!-- A button that opens a list beside the top bar's dropdowns (Servers): drawn as they are, its
          word at their padding and the arrow 10 from the right; a ghost button there looked out of
-         place (the user, 2026-10-29). -->
+         place (the user, 2026-10-29). Hovered and pressed it changes as they do: their fill and border,
+         the text staying light (Fluent has no ComboBoxForegroundPointerOver, and a missing brush made
+         it black) and no shrinking, which a button does pressed. -->
     <Style Selector="Button.dropdown">
       <Setter Property="Background" Value="{DynamicResource ComboBoxBackground}" />
       <Setter Property="BorderBrush" Value="{DynamicResource ComboBoxBorderBrush}" />
@@ -221,12 +223,15 @@
     <Style Selector="Button.dropdown:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource ComboBoxBackgroundPointerOver}" />
       <Setter Property="BorderBrush" Value="{DynamicResource ComboBoxBorderBrushPointerOver}" />
-      <Setter Property="Foreground" Value="{DynamicResource ComboBoxForegroundPointerOver}" />
+      <Setter Property="Foreground" Value="{DynamicResource ComboBoxForeground}" />
     </Style>
     <Style Selector="Button.dropdown:pressed /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource ComboBoxBackgroundPressed}" />
       <Setter Property="BorderBrush" Value="{DynamicResource ComboBoxBorderBrushPressed}" />
-      <Setter Property="Foreground" Value="{DynamicResource ComboBoxForegroundPressed}" />
+      <Setter Property="Foreground" Value="{DynamicResource ComboBoxForeground}" />
+    </Style>
+    <Style Selector="Button.dropdown:pressed">
+      <Setter Property="RenderTransform" Value="none" />
     </Style>
     <Style Selector="Button.dropdown PathIcon">
       <Setter Property="Foreground" Value="{DynamicResource ComboBoxDropDownGlyphForeground}" />
