@@ -237,7 +237,7 @@ public sealed class ModelViewer : Control
 
     public override void Render(DrawingContext context)
     {
-        context.FillRectangle(new SolidColorBrush(Color.FromRgb(36, 36, 40)), new Rect(Bounds.Size));
+        context.FillRectangle(new SolidColorBrush(Color.FromRgb(38, 38, 38)), new Rect(Bounds.Size));
         if (_image is { } image)
             context.DrawImage(image, new Rect(0, 0, image.PixelSize.Width, image.PixelSize.Height), new Rect(Bounds.Size));
     }

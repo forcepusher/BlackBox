@@ -38,6 +38,22 @@ public sealed class WindowsPlatform : IPlatformServices
     public static void AllowToFront(int processId) => AllowSetForegroundWindow((uint)processId);
 
     /// <summary>
+    /// Draws <paramref name="hwnd"/>'s title bar dark, as the window under it: Windows' dark one on
+    /// Windows 10, in <paramref name="caption"/> with <paramref name="text"/> (0xRRGGBB) on Windows 11,
+    /// which alone takes colours. Called before the window is first shown, so its frame is drawn dark
+    /// from the start. What Windows doesn't take is left as it is.
+    /// </summary>
+    public static void DarkTitleBar(nint hwnd, uint caption, uint text)
+    {
+        if (DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, 1, sizeof(int)) != 0)
+            DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, 1, sizeof(int));
+        DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, (int)ColorRef(caption), sizeof(int));
+        DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, (int)ColorRef(text), sizeof(int));
+    }
+
+    private static uint ColorRef(uint rgb) => (rgb >> 16 & 0xFF) | (rgb & 0xFF00) | (rgb & 0xFF) << 16;
+
+    /// <summary>
     /// Moves <paramref name="hwnd"/> sideways by <paramref name="dx"/> pixels and makes it
     /// <paramref name="wider"/> pixels wider (narrower when negative) in one step, so the screen never
     /// shows it moved and not yet resized. With a <paramref name="cover"/> (a picture of all it is about

@@ -46,7 +46,7 @@
     </Style>
     <!-- A clip's start or end frame: its picture, else a dashed place; the one picked has the accent around it. -->
     <Style Selector="Border.slot">
-      <Setter Property="Background" Value="#0B0C0E" />
+      <Setter Property="Background" Value="#0C0C0C" />
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="4" />
@@ -78,7 +78,7 @@
       <Setter Property="MinHeight" Value="0" />
     </Style>
     <Style Selector="Border.thumb">
-      <Setter Property="Background" Value="#0B0C0E" />
+      <Setter Property="Background" Value="#0C0C0C" />
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="4" />
@@ -139,7 +139,7 @@
         <Button DockPanel.Dock="Left" Classes="accent" Width="40" Height="40" CornerRadius="20" Padding="0" Background="{StaticResource BbAccent}"
                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                 Command="{Binding PlayCommand}" VerticalAlignment="Center" AutomationProperties.Name="Play or pause sound">
-          <PathIcon Data="{Binding PlayIcon}" Width="16" Height="16" Foreground="#111214" />
+          <PathIcon Data="{Binding PlayIcon}" Width="16" Height="16" Foreground="{StaticResource BbOnAccent}" />
         </Button>
         <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
         <Panel Height="64" Margin="12,0,0,0">
@@ -150,7 +150,7 @@
     </DataTemplate>
 
     <DataTemplate DataType="vm:PictureView">
-      <Border Classes="thumb" Background="#15171A">
+      <Border Classes="thumb" Background="{StaticResource BbBar}">
         <Panel>
           <Button Classes="bare" Click="OnMediaClick" IsVisible="{Binding Picture, Converter={x:Static ObjectConverters.IsNotNull}}" ToolTip.Tip="Full screen"
                   AutomationProperties.Name="Picture full screen" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
@@ -198,12 +198,12 @@
 
     <!-- The timeline, where the video is worked on: References, the clips and the sound lines, under one scroll.
          Right-click a row to create there; drop files on it to copy them in. -->
-    <Border DockPanel.Dock="Bottom" Background="#15171A" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0">
+    <Border DockPanel.Dock="Bottom" Background="{StaticResource BbBar}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0">
       <DockPanel>
         <Grid DockPanel.Dock="Top" Height="40" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="12,0">
           <Button Classes="accent icon" CornerRadius="16" Background="{StaticResource BbAccent}" VerticalAlignment="Center"
                   Command="{Binding PlayStripCommand}" ToolTip.Tip="Play the sound lines with each clip's frames from the playhead" AutomationProperties.Name="Play the storyboard">
-            <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" Foreground="#111214" />
+            <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" Foreground="{StaticResource BbOnAccent}" />
           </Button>
           <TextBlock Grid.Column="1" Text="{Binding PlayTime}" FontFamily="Consolas, monospace" Foreground="{StaticResource BbAccent}" VerticalAlignment="Center" Margin="12,0" />
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
@@ -275,7 +275,7 @@
                             <DockPanel>
                               <TextBlock DockPanel.Dock="Bottom" Text="{Binding State}" FontSize="10" Classes="muted" Margin="6,0,6,3" TextTrimming="CharacterEllipsis" />
                               <TextBlock DockPanel.Dock="Bottom" Text="{Binding Name}" FontSize="11" Margin="6,1,6,0" TextTrimming="CharacterEllipsis" />
-                              <Panel Background="#0B0C0E">
+                              <Panel Background="#0C0C0C">
                                 <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
                                 <!-- A video file: a play mark at its corner, as a clip has none. -->
                                 <Border IsVisible="{Binding IsVideo}" Background="#B0000000" CornerRadius="3" Padding="4,3" Margin="4" HorizontalAlignment="Left" VerticalAlignment="Bottom">
@@ -369,7 +369,7 @@
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:SoundLineItem">
                         <!-- The line, and its dashed + after its last sound: a click makes a new sound there. -->
-                        <Border Height="{x:Static vm:VideoGeneratorViewModel.SoundLineHeight}" BorderBrush="#1E2024" BorderThickness="0,0,0,1">
+                        <Border Height="{x:Static vm:VideoGeneratorViewModel.SoundLineHeight}" BorderBrush="{StaticResource BbLine}" BorderThickness="0,0,0,1">
                           <Canvas>
                             <Button Classes="bare" Canvas.Left="{Binding AddX}" Canvas.Top="4" Width="56" Height="40" Click="OnCreateSound"
                                     HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"

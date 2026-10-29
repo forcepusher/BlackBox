@@ -1366,6 +1366,10 @@ it covers the ScrollViewers in the markup and the ones inside a ListBox's or Tex
 take it from their owner by template binding (a style setter loses to that). Overriding it on
 `Control`, or `ScrollBar.AllowAutoHide` on `ScrollBar`, throws at startup: both already have their
 metadata there. Fluent lays the bars over the content, so a bar covers the strip it sits on.
+Every bar is drawn alike in App.axaml (see Colours): Fluent's 16 wide, on the background with a line
+on its inner side (an inset `BoxShadow` on the template's root, so the bar stays 16 wide and the
+thumb in its middle), the thumb 12 wide (2 in from either side), 4 round, #424242, lighter under the
+pointer and pressed, the arrows muted.
 
 ## Focus on a click away
 A click away from the text box being typed in takes the focus off it, in every window, for every box
@@ -1425,7 +1429,8 @@ Servers' lists unlike the dropdowns'):
   `ToggleButton.ghost`) has `MinHeight` 32 and its content in its middle; `.small` makes it 24,
   `.icon` square with the icon in its middle. A class that sizes a button itself sets `MinHeight`
   too (the attachment's ×, File… and Generate on a card), or the 32 wins over its `Height`.
-- **Buttons**: `ghost` (a border on no fill: most of them, and the app's toggles until pressed in,
+- **Buttons**: `ghost` (the usual button, filled with a border a shade lighter since the neutral look
+  (see Colours; it was a border on no fill): most of them, and the app's toggles until pressed in,
   which the style had missed: Area, Prompt and the API key's eye were filled grey beside outlined
   buttons), `flat` (no border either: the paperclip,
   File changes' foldouts, a code block's Copy), `bare` (no look of its own in any state: a picture,
@@ -1435,9 +1440,9 @@ Servers' lists unlike the dropdowns'):
 - **What opens a list** has its arrow, the solid triangle, 10 from its right edge and 12 from its
   word, and doesn't shrink pressed: `Button.menu` (History, the video's name; ghost),
   `ComboBox.ghost` (the Side panel dropdown, drawn as the ghost buttons beside it, which lit up under
-  the pointer while it went dark), `Button.dropdown` (Servers, drawn as the dropdowns around it).
-  Under the pointer and pressed, the ghost ones fill as a ghost button does, the field ones
-  (dropdowns, Servers) as a dropdown does.
+  the pointer while it went dark), `Button.dropdown` (Servers, its word and arrow as the dropdowns'
+  around it, filled as a button). Under the pointer and pressed these light as a button does; a
+  dropdown that holds a value (the model, the effort) is a field, whose border lightens.
 - **Lists**: a dropdown's list, a menu (right-click or a button's) and History's and Servers' lists
   are one look, Fluent's (its popup surface, border and corners, 4 over and under the rows; rows
   11 in, 6 over and under). History and Servers had a bordered list on the panel's colour with
@@ -1445,10 +1450,10 @@ Servers' lists unlike the dropdowns'):
   under the pointer and pressed, the chat or server in use tinted as a dropdown's pick, the trash
   button as far in from the right as the title from the left.
 - **Bars**: the chat's top bar and server rows, each side panel's top bar and Settings' foot are one
-  `Border.bar`: the surface, a line on the inner side, 16 in from the window's edge and 8 over and
+  `Border.bar`: the background, a line on the inner side, 16 in from the window's edge and 8 over and
   under 32-high controls, so every bar is 49 high (at 125%: 61 px) and the chat's top bar and a
-  panel's line up. In them buttons are 8 apart and 12 from text. The splitters are one
-  `GridSplitter` style (the border colour).
+  panel's line up; the chat's server rows (`Border.bar.fields`) a shade lighter. In them buttons are
+  8 apart and 12 from text. The splitters are one `GridSplitter` style (the title bar's colour).
 - **Labels** left of a field are `TextBlock.label` (grey, 12, centred on the field): the chat's
   Server, API key, Model and Context, Settings' (which were 14 and white) and Video generator's.
 - **Spacing** goes in steps of 4, whole pixels at 100, 125, 150 and 175%: bars, cards (12 all
@@ -1469,15 +1474,64 @@ the pointer and pressed the Side panel dropdown now as History and New chat besi
 The accent is the blob logo's yellow #FCC21B (`BbAccent`, and Fluent's own through its palette).
 Fluent was made for dark accents: it puts white on them, and a picked list row is the accent at 60%.
 On the yellow both read under 4:1 (the user's screenshot of the File changes file list, 2026-10-27,
-where the picked row's green name was lost). So `App.axaml` puts #111214 on every solid yellow: buttons,
+where the picked row's green name was lost). So `App.axaml` puts #1A1A1A (`BbOnAccent`; #111214
+before the neutral look) on every solid yellow: buttons,
 pressed-in toggles, accent buttons, ticks, radio dots, a switch's knob and selected text (TextBox and
 SelectableTextBlock's `SelectionForegroundBrush`, which Fluent leaves light). A picked row of a list,
-dropdown or tree is a dark tint of the yellow instead (`BbAccentTint`, Fluent's
+dropdown or tree is the yellow at 12% instead (16% under the pointer, 20% pressed: Fluent's
 `SystemControlHighlightListAccent*` and `ComboBoxItem`/`TreeViewItem` selected brushes), under the
-row's own text, as the diff's picked lines have. The dark text on pressed-in toggles is for the app's
+row's own text; a picked line of the diff 16% (`BbAccentTint`). The dark text on pressed-in toggles is for the app's
 `ghost` toggles only: an Expander's header is a ToggleButton too, checked while open, and the chat's
 Thoughts header had gone near black on the dark surface. Yellow as text or lines on the dark surfaces
 (links, icons, the playhead) reads at about 11:1 and stays.
+
+## Colours
+Every grey is neutral, its red, green and blue equal: the "Neutral · #161616" mockup the user picked
+on 2026-10-29 (the design canvas's second row; the earlier greys were a cool blue-grey, #111214 to
+#2F3338). Only colours, borders, corners and the title bar changed: every control's box is where and
+as big as it was (UI Automation boxes compared before and after at 125%: the same to the pixel but
+the scrollbar's thumb), the text in them where it was, except Thoughts (below). The greys are
+`App.axaml`'s brushes, and Fluent's own control brushes are pointed at them there, so a control
+takes its look from its kind:
+- **Surfaces**, darkest first: the frame #101010 (`BbFrame`: the title bar where Windows takes a
+  colour, the splitters), a field #111111 (`BbField`: text boxes, a dropdown that holds a value),
+  the background #161616 (`BbBackground`: the window, every bar, Output's well, a scrollbar), the
+  chat's server rows #191919 (`BbBar`), a notice #1B1B1B, a card #1E1E1E (`BbSurface`: tool cards,
+  the message box, a code block, a file's header in the diff), what sits on a card #262626
+  (`BbSurfaceRaised`: previews, the files over the message box), a chip #2A2A2A (`BbChip`: a tool's
+  name; a file whose lines are picked), a button #252525 (`BbButton`; the user's bubble too), lighter
+  under the pointer #2C2C2C and pressed #333333.
+- **Lines**: between regions #232323 (`BbLine`: under a bar, a scrollbar's inner side), around and
+  inside a card #2A2A2A (`BbBorder`), around a control #323232 (`BbControlBorder`), #3A3A3A under the
+  pointer, the yellow around a field being typed in.
+- **Text**: the main #F0F0F0 (`BbText`, and Fluent's `BaseHigh` in its palette, so every control's
+  text), secondary #BBBBBB (a notice's words, Output's and Thoughts' headers), muted #A2A2A2
+  (`BbMuted`: labels, times, the message box's hint, thoughts), faint #808080 (`BbFaint`: line
+  numbers, what is disabled, an empty field's hint), code #E8E8E8 (`BbCode`).
+- **Diff**: an added line's row the green #50C878 at 11%, its number, marker and counts #7FD9A2 (a new
+  file's name too); a removed line's the red #F05A5A at 13%, #F28B82 (its number no longer greyed
+  out: the red says it is the old file's). The server dot is #4CC38A when connected; a hunk's divider
+  has no band, only its words.
+- **Corners**: 8 for every control (Fluent's `ControlCornerRadius`), a notice, a well, a code block
+  and the files over the message box; 12 a card and the user's bubble; 16 the message box; 6 a tool's
+  name; 4 a check box and a scrollbar's thumb. No shadows.
+- **The title bar** is dark in every window (`App.Initialize`, on each window's template, before it
+  is first shown: `WindowsPlatform.DarkTitleBar`, DWM's immersive dark mode, then #101010 under
+  #BBBBBB text). Windows 10 takes only the dark mode (its own dark grey and white text); the colours
+  are Windows 11's. Avalonia makes the bar dark by itself only on Windows 11.
+- **Lines added without moving anything** are inset box shadows: a notice's border and a
+  scrollbar's line (1 px and sharp at 125%). A border of 1 with a padding 1 less made a notice 2 px
+  shorter at 125% (the border rounds to 1 px, the padding to 6 rather than 8), and a margin of -1 to
+  take a border back lost a line's last words (`ChatLayoutTests`, the bubble's old bug). The mockup's
+  line over a file's header in the diff is left out: a diff row's border is its left side alone (the
+  pick's bar), and Avalonia draws no box shadow on a border whose sides differ.
+- **Thoughts** (the design thread's thinking-block spec, 2026-10-29): the one change in size. Its
+  header is 40 high (was 34) on the card's colour, the thoughts under it on #191919 in muted 14 on
+  lines of 20 (were 12), 16 in and 12 over and under (were 8 and 4). Every expander's header (Output,
+  Screenshot too) lights as a button does under the pointer, its word to the main text's.
+- Left as they were: popups and menus (Fluent's #2B2B2B, already neutral), the Video generator's
+  sound blocks (#2A3A4A, a colour, not a grey) and the waveform on them. The Video generator's own
+  greys, the timeline's and the 3D view's are the neutral ones nearest them.
 
 ## Several windows
 **New window** in the top bar opens another chat window, with its own chat, agent
@@ -1674,11 +1728,12 @@ them as History lists chats: the one in use highlighted, a row switches to that 
 and model (`Use`; the context's Auto and size stay), its trash button removes it. Removing the one in
 use keeps it out until the address is typed again or another is picked: the check before every task
 had put it straight back. The button is as wide as the effort dropdown under it, so the address and
-the model box end on one line, and drawn as a dropdown (`Button.dropdown`: the ComboBox's fill,
-border, padding and arrow 10 from the right); as a ghost button captioned "Saved" it looked out of
-place among them (the user, 2026-10-29). Hovered and pressed it takes their fill and border too, its text
-staying light: Fluent has no `ComboBoxForegroundPointerOver` or `...Pressed`, and set to those it went
-black; and it doesn't shrink pressed as a button does.
+the model box end on one line, its word and arrow placed as a dropdown's (`Button.dropdown`: the
+ComboBox's padding and arrow 10 from the right); as a ghost button captioned "Saved" it looked out
+of place among them (the user, 2026-10-29). Since the neutral look (see Colours) it is filled as a
+button beside the address field, as the mockup the user picked has it, and hovered and pressed it
+lights as a button does, its text staying light: Fluent has no `ComboBoxForegroundPointerOver` or
+`...Pressed`, and set to those it went black; and it doesn't shrink pressed as a button does.
 
 The model dropdown lists the models by name, ignoring case and with numbers by value (qwen3-8b
 before qwen3-14b; `CompareOptions.NumericOrdering`), whatever order the server lists them in. Each

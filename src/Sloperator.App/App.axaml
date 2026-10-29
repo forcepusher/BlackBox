@@ -5,63 +5,183 @@
              RequestedThemeVariant="Dark">
 
   <Application.Resources>
-    <SolidColorBrush x:Key="BbBackground" Color="#111214" />
-    <SolidColorBrush x:Key="BbSurface" Color="#1A1C1F" />
-    <SolidColorBrush x:Key="BbSurfaceRaised" Color="#23262A" />
-    <SolidColorBrush x:Key="BbBorder" Color="#2F3338" />
-    <SolidColorBrush x:Key="BbMuted" Color="#8B9199" />
+    <!-- Greys, every one neutral (red, green and blue equal: no warm or cool tint), the "Neutral ·
+         #161616" look the user picked (2026-10-29; docs/notes.md, Colours). From the darkest: the
+         window's frame (title bar, the splitters), a field, the background, the chat's server rows,
+         a notice, a card, what sits on a card, a chip (a tool's name; a file whose lines are picked),
+         a button and its states. -->
+    <SolidColorBrush x:Key="BbFrame" Color="#101010" />
+    <SolidColorBrush x:Key="BbField" Color="#111111" />
+    <SolidColorBrush x:Key="BbBackground" Color="#161616" />
+    <SolidColorBrush x:Key="BbBar" Color="#191919" />
+    <SolidColorBrush x:Key="BbNotice" Color="#1B1B1B" />
+    <SolidColorBrush x:Key="BbSurface" Color="#1E1E1E" />
+    <SolidColorBrush x:Key="BbSurfaceRaised" Color="#262626" />
+    <SolidColorBrush x:Key="BbChip" Color="#2A2A2A" />
+    <SolidColorBrush x:Key="BbButton" Color="#252525" />
+    <SolidColorBrush x:Key="BbButtonHover" Color="#2C2C2C" />
+    <SolidColorBrush x:Key="BbButtonPressed" Color="#333333" />
+    <SolidColorBrush x:Key="BbUserBubble" Color="#252525" />
+    <!-- Lines: between regions (under a bar, beside a list), around a card or inside one, around a
+         control and around one under the pointer. -->
+    <SolidColorBrush x:Key="BbLine" Color="#232323" />
+    <SolidColorBrush x:Key="BbBorder" Color="#2A2A2A" />
+    <SolidColorBrush x:Key="BbControlBorder" Color="#323232" />
+    <SolidColorBrush x:Key="BbControlBorderHover" Color="#3A3A3A" />
+    <!-- Text: the main one (Fluent's own too, through its palette below); secondary (a notice, an
+         Output or Thoughts header), muted (labels, times, hints, thoughts), faint (line numbers, what
+         is disabled, an empty field's hint), and code. -->
+    <SolidColorBrush x:Key="BbText" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="BbSecondary" Color="#BBBBBB" />
+    <SolidColorBrush x:Key="BbMuted" Color="#A2A2A2" />
+    <SolidColorBrush x:Key="BbFaint" Color="#808080" />
+    <SolidColorBrush x:Key="BbCode" Color="#E8E8E8" />
     <!-- The yellow of the blob logo (docs/logo/blob.svg); lighter under the pointer, darker pressed.
-         Dark text (#111214) on it reads at about 12:1. -->
+         Dark text (#1A1A1A, BbOnAccent) on it reads at about 11:1. -->
     <SolidColorBrush x:Key="BbAccent" Color="#FCC21B" />
     <SolidColorBrush x:Key="BbAccentHover" Color="#FDD45F" />
     <SolidColorBrush x:Key="BbAccentPressed" Color="#DEAB18" />
+    <SolidColorBrush x:Key="BbOnAccent" Color="#1A1A1A" />
     <!-- Fluent puts white on its accent, which is lost on the yellow: a ticked box's tick is dark
          instead (a pressed-in toggle's too, in the styles below). -->
-    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundChecked" Color="#111214" />
-    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" Color="#111214" />
-    <SolidColorBrush x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" Color="#111214" />
-    <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#111214" />
-    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#111214" />
-    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#111214" />
-    <SolidColorBrush x:Key="RadioButtonCheckGlyphFill" Color="#111214" />
-    <SolidColorBrush x:Key="RadioButtonCheckGlyphFillPointerOver" Color="#111214" />
-    <SolidColorBrush x:Key="RadioButtonCheckGlyphFillPressed" Color="#111214" />
-    <SolidColorBrush x:Key="AccentButtonForeground" Color="#111214" />
-    <SolidColorBrush x:Key="AccentButtonForegroundPointerOver" Color="#111214" />
-    <SolidColorBrush x:Key="AccentButtonForegroundPressed" Color="#111214" />
-    <SolidColorBrush x:Key="ToggleButtonForegroundChecked" Color="#111214" />
-    <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPointerOver" Color="#111214" />
-    <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPressed" Color="#111214" />
+    <StaticResource x:Key="CheckBoxCheckGlyphForegroundChecked" ResourceKey="BbOnAccent" />
+    <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" ResourceKey="BbOnAccent" />
+    <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" ResourceKey="BbOnAccent" />
+    <StaticResource x:Key="ToggleSwitchKnobFillOn" ResourceKey="BbOnAccent" />
+    <StaticResource x:Key="ToggleSwitchKnobFillOnPointerOver" ResourceKey="BbOnAccent" />
+    <StaticResource x:Key="ToggleSwitchKnobFillOnPressed" ResourceKey="BbOnAccent" />
+    <StaticResource x:Key="RadioButtonCheckGlyphFill" ResourceKey="BbOnAccent" />
+    <StaticResource x:Key="RadioButtonCheckGlyphFillPointerOver" ResourceKey="BbOnAccent" />
+    <StaticResource x:Key="RadioButtonCheckGlyphFillPressed" ResourceKey="BbOnAccent" />
+    <StaticResource x:Key="AccentButtonForeground" ResourceKey="BbOnAccent" />
+    <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="BbOnAccent" />
+    <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="BbOnAccent" />
+    <StaticResource x:Key="ToggleButtonForegroundChecked" ResourceKey="BbOnAccent" />
+    <StaticResource x:Key="ToggleButtonForegroundCheckedPointerOver" ResourceKey="BbOnAccent" />
+    <StaticResource x:Key="ToggleButtonForegroundCheckedPressed" ResourceKey="BbOnAccent" />
     <!-- A picked row in a list or dropdown: Fluent lays the yellow at 60% under white text (and the
-         file list's green and red names), which reads at under 4:1. A dark tint of it instead, under
-         the row's own text, as the diff's picked lines have. -->
-    <SolidColorBrush x:Key="BbAccentTint" Color="#5A765B0D" />
-    <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush" Color="#5A765B0D" />
-    <SolidColorBrush x:Key="SystemControlHighlightListAccentMediumBrush" Color="#78765B0D" />
-    <SolidColorBrush x:Key="SystemControlHighlightListAccentHighBrush" Color="#96765B0D" />
-    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="#5A765B0D" />
-    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="#78765B0D" />
-    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPressed" Color="#96765B0D" />
-    <SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="#5A765B0D" />
-    <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="#78765B0D" />
-    <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPressed" Color="#96765B0D" />
+         file list's green and red names), which reads at under 4:1. The yellow at 12% instead (16
+         under the pointer, 20 pressed), under the row's own text; a picked line of the diff 16%. -->
+    <SolidColorBrush x:Key="BbAccentTint" Color="#29FCC21B" />
+    <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush" Color="#1FFCC21B" />
+    <SolidColorBrush x:Key="SystemControlHighlightListAccentMediumBrush" Color="#29FCC21B" />
+    <SolidColorBrush x:Key="SystemControlHighlightListAccentHighBrush" Color="#33FCC21B" />
+    <StaticResource x:Key="ComboBoxItemBackgroundSelected" ResourceKey="SystemControlHighlightListAccentLowBrush" />
+    <StaticResource x:Key="ComboBoxItemBackgroundSelectedPointerOver" ResourceKey="SystemControlHighlightListAccentMediumBrush" />
+    <StaticResource x:Key="ComboBoxItemBackgroundSelectedPressed" ResourceKey="SystemControlHighlightListAccentHighBrush" />
+    <StaticResource x:Key="TreeViewItemBackgroundSelected" ResourceKey="SystemControlHighlightListAccentLowBrush" />
+    <StaticResource x:Key="TreeViewItemBackgroundSelectedPointerOver" ResourceKey="SystemControlHighlightListAccentMediumBrush" />
+    <StaticResource x:Key="TreeViewItemBackgroundSelectedPressed" ResourceKey="SystemControlHighlightListAccentHighBrush" />
     <!-- Fluent's paddings put more room under the text than over it, for Segoe UI, whose capitals sit
          low in their line. Inter's sit in its middle (ascent 0.969 em, descent 0.242, capitals 0.727),
          so with those paddings every dropdown's text was 2 px (at 125%) over its middle, a button's 1:
          the same room over and under it instead (the user, 2026-10-29). -->
     <Thickness x:Key="ComboBoxPadding">12,6,0,6</Thickness>
-    <SolidColorBrush x:Key="BbUserBubble" Color="#2A2F36" />
-    <SolidColorBrush x:Key="BbOk" Color="#5FB878" />
+    <!-- The server dot when connected; a diff's added and removed lines (their counts, numbers and
+         markers, a new file's name), their rows a tint of the same. -->
+    <SolidColorBrush x:Key="BbOk" Color="#4CC38A" />
+    <SolidColorBrush x:Key="BbAdded" Color="#7FD9A2" />
+    <SolidColorBrush x:Key="BbRemoved" Color="#F28B82" />
+    <SolidColorBrush x:Key="BbAddedRow" Color="#1C50C878" />
+    <SolidColorBrush x:Key="BbRemovedRow" Color="#21F05A5A" />
     <SolidColorBrush x:Key="BbError" Color="#E06C6C" />
     <SolidColorBrush x:Key="BbErrorHover" Color="#E88787" />
     <SolidColorBrush x:Key="BbErrorPressed" Color="#C75E5E" />
+
+    <!-- Every control's corners: 8 (a card 12, the message box 16, set in the styles below). -->
+    <CornerRadius x:Key="ControlCornerRadius">8</CornerRadius>
+    <!-- Fluent's controls drawn in the greys above. A button (and a toggle not pressed in) is filled,
+         its border a shade lighter, both lighter again under the pointer and pressed; a field (a
+         text box, a dropdown that holds a value) is darker than the background, its border lighter
+         under the pointer, the yellow while typed in; disabled, either is a button's fill with faint
+         text. -->
+    <StaticResource x:Key="ButtonBackground" ResourceKey="BbButton" />
+    <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="BbButtonHover" />
+    <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="BbButtonPressed" />
+    <StaticResource x:Key="ButtonBackgroundDisabled" ResourceKey="BbButton" />
+    <StaticResource x:Key="ButtonBorderBrush" ResourceKey="BbControlBorder" />
+    <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="BbControlBorderHover" />
+    <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="BbControlBorderHover" />
+    <StaticResource x:Key="ButtonBorderBrushDisabled" ResourceKey="BbControlBorder" />
+    <StaticResource x:Key="ButtonForegroundDisabled" ResourceKey="BbFaint" />
+    <StaticResource x:Key="ToggleButtonBackground" ResourceKey="BbButton" />
+    <StaticResource x:Key="ToggleButtonBackgroundPointerOver" ResourceKey="BbButtonHover" />
+    <StaticResource x:Key="ToggleButtonBackgroundPressed" ResourceKey="BbButtonPressed" />
+    <StaticResource x:Key="ToggleButtonBackgroundDisabled" ResourceKey="BbButton" />
+    <StaticResource x:Key="ToggleButtonBorderBrush" ResourceKey="BbControlBorder" />
+    <StaticResource x:Key="ToggleButtonBorderBrushPointerOver" ResourceKey="BbControlBorderHover" />
+    <StaticResource x:Key="ToggleButtonBorderBrushPressed" ResourceKey="BbControlBorderHover" />
+    <StaticResource x:Key="ToggleButtonBorderBrushDisabled" ResourceKey="BbControlBorder" />
+    <StaticResource x:Key="ToggleButtonForegroundDisabled" ResourceKey="BbFaint" />
+    <StaticResource x:Key="TextControlBackground" ResourceKey="BbField" />
+    <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="BbField" />
+    <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="BbField" />
+    <StaticResource x:Key="TextControlBackgroundDisabled" ResourceKey="BbButton" />
+    <StaticResource x:Key="TextControlBorderBrush" ResourceKey="BbControlBorder" />
+    <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="BbControlBorderHover" />
+    <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="BbAccent" />
+    <StaticResource x:Key="TextControlBorderBrushDisabled" ResourceKey="BbControlBorder" />
+    <StaticResource x:Key="TextControlForegroundDisabled" ResourceKey="BbFaint" />
+    <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="BbFaint" />
+    <StaticResource x:Key="TextControlPlaceholderForegroundPointerOver" ResourceKey="BbFaint" />
+    <StaticResource x:Key="TextControlPlaceholderForegroundFocused" ResourceKey="BbFaint" />
+    <StaticResource x:Key="TextControlPlaceholderForegroundDisabled" ResourceKey="BbFaint" />
+    <StaticResource x:Key="ComboBoxBackground" ResourceKey="BbField" />
+    <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="BbField" />
+    <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="BbSurface" />
+    <StaticResource x:Key="ComboBoxBackgroundDisabled" ResourceKey="BbButton" />
+    <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="BbControlBorder" />
+    <StaticResource x:Key="ComboBoxBorderBrushPointerOver" ResourceKey="BbControlBorderHover" />
+    <StaticResource x:Key="ComboBoxBorderBrushPressed" ResourceKey="BbControlBorderHover" />
+    <StaticResource x:Key="ComboBoxBorderBrushDisabled" ResourceKey="BbControlBorder" />
+    <StaticResource x:Key="ComboBoxForegroundDisabled" ResourceKey="BbFaint" />
+    <StaticResource x:Key="ComboBoxDropDownGlyphForegroundDisabled" ResourceKey="BbFaint" />
+    <!-- A check box: its empty box's border faint, lighter under the pointer. -->
+    <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUnchecked" ResourceKey="BbFaint" />
+    <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedPointerOver" ResourceKey="BbSecondary" />
+    <!-- A slider's track a control's border, lighter under the pointer; its value and thumb the yellow. -->
+    <StaticResource x:Key="SliderTrackFill" ResourceKey="BbControlBorder" />
+    <StaticResource x:Key="SliderTrackFillPointerOver" ResourceKey="BbControlBorderHover" />
+    <StaticResource x:Key="SliderTrackFillPressed" ResourceKey="BbControlBorder" />
+    <!-- Output and Screenshot on a card: a well of the background's colour, its border a card's, its
+         header's word secondary and its chevron muted. Under the pointer and pressed the header
+         lights as a button does, its border too, its word the main text's (Thoughts, which is drawn
+         on the card's colour, in the styles below, likewise). -->
+    <StaticResource x:Key="ExpanderHeaderBackground" ResourceKey="BbBackground" />
+    <StaticResource x:Key="ExpanderHeaderBackgroundPointerOver" ResourceKey="BbButton" />
+    <StaticResource x:Key="ExpanderHeaderBackgroundPressed" ResourceKey="BbButtonHover" />
+    <StaticResource x:Key="ExpanderHeaderBackgroundDisabled" ResourceKey="BbBackground" />
+    <StaticResource x:Key="ExpanderHeaderBorderBrush" ResourceKey="BbBorder" />
+    <StaticResource x:Key="ExpanderHeaderBorderBrushPointerOver" ResourceKey="BbControlBorderHover" />
+    <StaticResource x:Key="ExpanderHeaderBorderBrushPressed" ResourceKey="BbControlBorderHover" />
+    <StaticResource x:Key="ExpanderHeaderForeground" ResourceKey="BbSecondary" />
+    <StaticResource x:Key="ExpanderHeaderForegroundPointerOver" ResourceKey="BbText" />
+    <StaticResource x:Key="ExpanderHeaderForegroundPressed" ResourceKey="BbText" />
+    <StaticResource x:Key="ExpanderChevronForeground" ResourceKey="BbMuted" />
+    <StaticResource x:Key="ExpanderChevronForegroundPointerOver" ResourceKey="BbSecondary" />
+    <StaticResource x:Key="ExpanderChevronForegroundPressed" ResourceKey="BbSecondary" />
+    <SolidColorBrush x:Key="ExpanderChevronBackgroundPointerOver" Color="Transparent" />
+    <StaticResource x:Key="ExpanderContentBackground" ResourceKey="BbBackground" />
+    <StaticResource x:Key="ExpanderContentBorderBrush" ResourceKey="BbBorder" />
+    <!-- Scrollbars (see the styles below): on the background, the thumb lighter under the pointer and
+         pressed, the arrows muted. -->
+    <StaticResource x:Key="ScrollBarBackground" ResourceKey="BbBackground" />
+    <StaticResource x:Key="ScrollBarBackgroundPointerOver" ResourceKey="BbBackground" />
+    <SolidColorBrush x:Key="ScrollBarTrackFill" Color="Transparent" />
+    <SolidColorBrush x:Key="ScrollBarTrackFillPointerOver" Color="Transparent" />
+    <Color x:Key="ScrollBarThumbBackgroundColor">#424242</Color>
+    <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="#555555" />
+    <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="#6A6A6A" />
+    <StaticResource x:Key="ScrollBarButtonArrowForeground" ResourceKey="BbMuted" />
+    <StaticResource x:Key="ScrollViewerScrollBarsSeparatorBackground" ResourceKey="BbBackground" />
   </Application.Resources>
 
   <Application.Styles>
-    <!-- Fluent's own accent (sliders, check boxes, toggles) is the same yellow, not the Windows one. -->
+    <!-- Fluent's own accent (sliders, check boxes, toggles) is the same yellow, not the Windows one,
+         and its text (BaseHigh, white) the main text's #F0F0F0. -->
     <FluentTheme>
       <FluentTheme.Palettes>
-        <ColorPaletteResources x:Key="Dark" Accent="#FCC21B" />
+        <ColorPaletteResources x:Key="Dark" Accent="#FCC21B" BaseHigh="#F0F0F0" />
       </FluentTheme.Palettes>
     </FluentTheme>
 
@@ -121,10 +241,10 @@
     <!-- Selected text sits on the yellow, so it turns dark there, as on a button; Fluent leaves it
          light (about 1.6:1). -->
     <Style Selector="SelectableTextBlock">
-      <Setter Property="SelectionForegroundBrush" Value="#111214" />
+      <Setter Property="SelectionForegroundBrush" Value="{StaticResource BbOnAccent}" />
     </Style>
     <Style Selector="TextBox">
-      <Setter Property="SelectionForegroundBrush" Value="#111214" />
+      <Setter Property="SelectionForegroundBrush" Value="{StaticResource BbOnAccent}" />
     </Style>
 
     <!-- A fenced code block in a reply (MarkdownView): its language and Copy over the code. -->
@@ -132,14 +252,14 @@
       <Setter Property="Background" Value="{StaticResource BbSurface}" />
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="CornerRadius" Value="8" />
     </Style>
     <!-- A table in a reply (MarkdownTable): a grid on the code blocks' surface, its header row raised. -->
     <Style Selector="Border.mdTable">
       <Setter Property="Background" Value="{StaticResource BbSurface}" />
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="CornerRadius" Value="8" />
     </Style>
     <!-- A reply's quotes (MarkdownParts): a bar beside each level, the text muted; and a rule across. -->
     <Style Selector="Border.mdQuote">
@@ -151,7 +271,7 @@
       <Setter Property="Background" Value="{StaticResource BbBorder}" />
     </Style>
     <Style Selector="Border.mdBox">
-      <Setter Property="BorderBrush" Value="{StaticResource BbMuted}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbFaint}" />
     </Style>
     <Style Selector="Border.mdTicked">
       <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
@@ -167,6 +287,7 @@
          sides and 3 under it (over the 1px border), so a drag from there selects. Whole multiples of 4
          are whole pixels at every usual scale, so the box rounds to the same size as without them. -->
     <Style Selector="SelectableTextBlock.code">
+      <Setter Property="Foreground" Value="{StaticResource BbCode}" />
       <Setter Property="FontSize" Value="13" />
       <Setter Property="LineHeight" Value="19" />
       <Setter Property="Margin" Value="-12,0,-12,-4" />
@@ -179,9 +300,10 @@
       <Setter Property="Background" Value="{StaticResource BbBackground}" />
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="CornerRadius" Value="8" />
     </Style>
     <Style Selector="SelectableTextBlock.command">
+      <Setter Property="Foreground" Value="{StaticResource BbCode}" />
       <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,monospace" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="LineHeight" Value="16" />
@@ -217,55 +339,67 @@
     </Style>
 
     <!-- The bar along the top of the chat and of each side panel, and along the foot of Settings:
-         the surface, a line on its inner side, 16 in from the window's edge, its buttons and
-         dropdowns 8 from its edges, so every such bar is 49 high and those side by side line up. -->
+         on the background, a line on its inner side, 16 in from the window's edge, its buttons and
+         dropdowns 8 from its edges, so every such bar is 49 high and those side by side line up.
+         The chat's server rows (fields) are a shade lighter. -->
     <Style Selector="Border.bar">
-      <Setter Property="Background" Value="{StaticResource BbSurface}" />
-      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="Background" Value="{StaticResource BbBackground}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbLine}" />
       <Setter Property="BorderThickness" Value="0,0,0,1" />
       <Setter Property="Padding" Value="16,8" />
+    </Style>
+    <Style Selector="Border.bar.fields">
+      <Setter Property="Background" Value="{StaticResource BbBar}" />
     </Style>
     <Style Selector="Border.bar.foot">
       <Setter Property="BorderThickness" Value="0,1,0,0" />
     </Style>
-    <!-- The line between the chat and a side panel, and between File changes' list and its diff. -->
+    <!-- The gap between the chat and a side panel, and between File changes' list and its diff: the
+         title bar's colour. -->
     <Style Selector="GridSplitter">
-      <Setter Property="Background" Value="{StaticResource BbBorder}" />
+      <Setter Property="Background" Value="{StaticResource BbFrame}" />
     </Style>
 
     <Style Selector="Button.primary">
       <Setter Property="Background" Value="{StaticResource BbAccent}" />
-      <Setter Property="Foreground" Value="#111214" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
+      <Setter Property="Foreground" Value="{StaticResource BbOnAccent}" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
     <!-- A button on the accent (primary, or accent for a round play button) stays on it under the
-         pointer and pressed instead of going to Fluent's grey. -->
+         pointer and pressed instead of going to Fluent's grey, its border too. -->
     <Style Selector="Button.primary:pointerover /template/ ContentPresenter, Button.accent:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{StaticResource BbAccentHover}" />
-      <Setter Property="Foreground" Value="#111214" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbAccentHover}" />
+      <Setter Property="Foreground" Value="{StaticResource BbOnAccent}" />
     </Style>
     <Style Selector="Button.primary:pressed /template/ ContentPresenter, Button.accent:pressed /template/ ContentPresenter">
       <Setter Property="Background" Value="{StaticResource BbAccentPressed}" />
-      <Setter Property="Foreground" Value="#111214" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbAccentPressed}" />
+      <Setter Property="Foreground" Value="{StaticResource BbOnAccent}" />
     </Style>
     <!-- Stop: red, and stays red under the pointer and pressed, lighter and darker as the yellow ones
          do (Fluent's grey took its colour away under the pointer). -->
     <Style Selector="Button.danger">
       <Setter Property="Background" Value="{StaticResource BbError}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbError}" />
     </Style>
     <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{StaticResource BbErrorHover}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbErrorHover}" />
     </Style>
     <Style Selector="Button.danger:pressed /template/ ContentPresenter">
       <Setter Property="Background" Value="{StaticResource BbErrorPressed}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbErrorPressed}" />
     </Style>
 
-    <!-- The app's usual button: its border on no fill; under the pointer and pressed it fills as
-         Fluent's buttons do. A toggle too (Wrap, Area, the API key's eye) until it is pressed in: the
-         style named only buttons, so they sat filled grey beside ghost buttons. -->
+    <!-- The app's usual button: filled, its border a shade lighter, both lighter under the pointer
+         and pressed as Fluent's buttons are (see Button* above). A toggle too (Wrap, Area, the API
+         key's eye) until it is pressed in: the style named only buttons, so they sat apart from the
+         ghost buttons. -->
     <Style Selector="Button.ghost, ToggleButton.ghost">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="Background" Value="{StaticResource BbButton}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbControlBorder}" />
       <Setter Property="BorderThickness" Value="1" />
     </Style>
     <!-- No border either, where it sits in a box of its own (the paperclip, a list's foldout, Copy). -->
@@ -302,37 +436,37 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Data" Value="M7 10l5 5 5-5z" />
     </Style>
-    <!-- A button that opens a list beside the top bar's dropdowns (Servers): drawn as they are, its
-         word at their padding and the arrow 10 from the right; a ghost button there looked out of
-         place (the user, 2026-10-29). Hovered and pressed it changes as they do: their fill and border,
-         the text staying light (Fluent has no ComboBoxForegroundPointerOver, and a missing brush made
-         it black) and no shrinking, which a button does pressed. -->
+    <!-- A button that opens a list beside the top bar's dropdowns (Servers): its word at their
+         padding and the arrow 10 from the right, as theirs; filled as a button, beside the address
+         field (the Neutral look, 2026-10-29). Hovered and pressed it changes as a button does, the
+         text staying light (Fluent has no ComboBoxForegroundPointerOver, and a missing brush made it
+         black) and no shrinking, which a button does pressed. -->
     <Style Selector="Button.dropdown">
-      <Setter Property="Background" Value="{DynamicResource ComboBoxBackground}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource ComboBoxBorderBrush}" />
+      <Setter Property="Background" Value="{DynamicResource ButtonBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrush}" />
       <Setter Property="BorderThickness" Value="{DynamicResource ComboBoxBorderThemeThickness}" />
       <Setter Property="Padding" Value="12,0,0,0" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     </Style>
     <Style Selector="Button.dropdown:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource ComboBoxBackgroundPointerOver}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource ComboBoxBorderBrushPointerOver}" />
+      <Setter Property="Background" Value="{DynamicResource ButtonBackgroundPointerOver}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrushPointerOver}" />
       <Setter Property="Foreground" Value="{DynamicResource ComboBoxForeground}" />
     </Style>
     <Style Selector="Button.dropdown:pressed /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource ComboBoxBackgroundPressed}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource ComboBoxBorderBrushPressed}" />
+      <Setter Property="Background" Value="{DynamicResource ButtonBackgroundPressed}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrushPressed}" />
       <Setter Property="Foreground" Value="{DynamicResource ComboBoxForeground}" />
     </Style>
     <Style Selector="Button.dropdown PathIcon">
       <Setter Property="Foreground" Value="{DynamicResource ComboBoxDropDownGlyphForeground}" />
     </Style>
     <!-- The Side panel dropdown in the top bar: drawn as the ghost buttons beside it (History, New
-         chat), its word where theirs is, not as a field; under the pointer and pressed it fills as
-         they do (a dropdown darkens, and it went dark beside History lighting up). -->
+         chat), its word where theirs is, not as a field; under the pointer and pressed it lights as
+         they do (a dropdown's field stays dark, and it went dark beside History lighting up). -->
     <Style Selector="ComboBox.ghost">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="Background" Value="{StaticResource BbButton}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbControlBorder}" />
       <Setter Property="Padding" Value="8,0,0,0" />
     </Style>
     <Style Selector="ComboBox.ghost:pointerover /template/ Border#Background">
@@ -346,10 +480,10 @@
     <!-- Only the app's own toggles (Wrap, Watch, Area, Show), which go yellow pressed in: an Expander's
          header is a ToggleButton too, checked while open, on the dark surface. -->
     <Style Selector="ToggleButton.ghost:checked /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Foreground" Value="#111214" />
+      <Setter Property="Foreground" Value="{StaticResource BbOnAccent}" />
     </Style>
     <Style Selector="ToggleButton.ghost:checked PathIcon">
-      <Setter Property="Foreground" Value="#111214" />
+      <Setter Property="Foreground" Value="{StaticResource BbOnAccent}" />
     </Style>
 
     <!-- Every dropdown's arrow is the solid triangle History has (the user, 2026-10-24: "Arrows
@@ -372,8 +506,61 @@
       <Setter Property="Background" Value="{StaticResource BbSurface}" />
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="CornerRadius" Value="12" />
       <Setter Property="Padding" Value="12" />
+    </Style>
+    <!-- The tool's name on a card (read_file, run_shell): yellow on a chip of its own. -->
+    <Style Selector="Border.tag">
+      <Setter Property="Background" Value="{StaticResource BbChip}" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <!-- A line from Sloperator in the chat (a nudge to the model, a stop): boxed, its words secondary,
+         its time muted. The border is an inset shadow, so the box is as big as without one at every
+         scale: a padding a pixel less rounded to 2 px shorter at 125%, and a margin of -1 to take a
+         border back lost the last words of some lines (ChatLayoutTests). -->
+    <Style Selector="Border.notice">
+      <Setter Property="Background" Value="{StaticResource BbNotice}" />
+      <Setter Property="BoxShadow" Value="inset 0 0 0 1 #2A2A2A" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="2,6" />
+    </Style>
+    <Style Selector="Border.notice SelectableTextBlock.muted:not(.error)">
+      <Setter Property="Foreground" Value="{StaticResource BbSecondary}" />
+    </Style>
+
+    <!-- Every check box's box 4 round (Fluent's takes the controls' 8). -->
+    <Style Selector="CheckBox">
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <!-- A slider's thumb: 16 of yellow in a 2 px ring of the server rows' colour, as big as Fluent's
+         20. Set in its template, taken over only by a style that depends on a state. -->
+    <Style Selector="Slider:not(:disabled) /template/ Thumb, Slider:disabled /template/ Thumb">
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBar}" />
+    </Style>
+    <!-- A list's row (File changes' files) lights to a card's colour under the pointer, a button's
+         pressed; a picked one keeps its tint (Fluent's). -->
+    <Style Selector="ListBoxItem:not(:selected):pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource BbSurface}" />
+    </Style>
+    <Style Selector="ListBoxItem:not(:selected):pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource BbButton}" />
+    </Style>
+    <!-- Every scrollbar (the full one, see App.Initialize): the background with a line on its inner
+         side (inset, so the bar is as wide as before), the thumb 2 in from its sides, 4 round. -->
+    <Style Selector="ScrollBar:vertical /template/ Border#VerticalRoot">
+      <Setter Property="BoxShadow" Value="inset 1 0 0 0 #232323" />
+    </Style>
+    <Style Selector="ScrollBar:horizontal /template/ Border#HorizontalRoot">
+      <Setter Property="BoxShadow" Value="inset 0 1 0 0 #232323" />
+    </Style>
+    <Style Selector="ScrollBar:vertical /template/ Thumb">
+      <Setter Property="Width" Value="12" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="ScrollBar:horizontal /template/ Thumb">
+      <Setter Property="Height" Value="12" />
+      <Setter Property="CornerRadius" Value="4" />
     </Style>
 
     <!-- Fluent gives an Expander a 48px minimum height and applies it to the body as well as
@@ -381,6 +568,22 @@
          header is as tall as its chevron button and the body hugs its text. -->
     <Style Selector="Expander">
       <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <!-- Thoughts (Thinking… while they stream) over a reply: a header of the card's colour, 40 high
+         (the body is always taller), and under it the thoughts on the server rows' colour, in muted
+         14 on lines of 20; 16 in from the sides as the header's word, 12 over and under (the text's
+         own padding, see MainWindow). The body's border leaves out its top, where it meets the
+         header, and Fluent rounds only the header's top corners while open. -->
+    <Style Selector="Expander.thoughts">
+      <Setter Property="MinHeight" Value="40" />
+      <Setter Property="Background" Value="{StaticResource BbBar}" />
+    </Style>
+    <Style Selector="Expander.thoughts /template/ ToggleButton#ExpanderHeader">
+      <Setter Property="Background" Value="{StaticResource BbSurface}" />
+    </Style>
+    <Style Selector="Expander.thoughts SelectableTextBlock.muted">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="LineHeight" Value="20" />
     </Style>
 
     <!-- History's and Servers' lists, drawn as a dropdown's list (they were a bordered list on the
@@ -438,7 +641,12 @@
     </Style>
 
     <!-- The message box: the card around it is the visible field, so the TextBox itself stays
-         flat in every state and the card's border shows focus instead. -->
+         flat in every state and the card's border shows focus instead. Bordered as a control, 16
+         round; its hint muted, not an empty field's faint. -->
+    <Style Selector="Border.composer">
+      <Setter Property="BorderBrush" Value="{StaticResource BbControlBorder}" />
+      <Setter Property="CornerRadius" Value="16" />
+    </Style>
     <Style Selector="Border.composer:focus-within">
       <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
     </Style>
@@ -447,6 +655,11 @@
                      TextBox.composer:focus /template/ Border#PART_BorderElement">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="TextBox.composer /template/ TextBlock#PART_Watermark,
+                     TextBox.composer:pointerover /template/ TextBlock#PART_Watermark,
+                     TextBox.composer:focus /template/ TextBlock#PART_Watermark">
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
     </Style>
 
   </Application.Styles>

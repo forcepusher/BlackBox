@@ -9,11 +9,11 @@ namespace Sloperator.App.Views;
 /// <summary>The window's palette (App.axaml), for what the timeline draws itself.</summary>
 internal static class VideoColors
 {
-    public static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#8B9199"));
-    public static readonly IBrush Text = new SolidColorBrush(Color.Parse("#E6E8EB"));
+    public static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#A2A2A2"));
+    public static readonly IBrush Text = new SolidColorBrush(Color.Parse("#F0F0F0"));
     public static readonly IPen WavePen = new Pen(new SolidColorBrush(Color.Parse("#6B8299")), 1);
-    public static readonly IPen Tick = new Pen(new SolidColorBrush(Color.Parse("#4A4F56")), 1);
-    public static readonly IPen Border = new Pen(new SolidColorBrush(Color.Parse("#2F3338")), 1);
+    public static readonly IPen Tick = new Pen(new SolidColorBrush(Color.Parse("#4D4D4D")), 1);
+    public static readonly IPen Border = new Pen(new SolidColorBrush(Color.Parse("#2A2A2A")), 1);
     public static readonly IPen Picked = new Pen(new SolidColorBrush(Color.Parse("#FCC21B")), 2);
     public static readonly IPen End = new Pen(new SolidColorBrush(Color.Parse("#FCC21B")), 1);
 
