@@ -45,6 +45,37 @@ public class ChatClientTests
     }
 
     [Fact]
+    public async Task OpenRouters_reasoning_details_are_put_together_and_sent_back()
+    {
+        // As OpenRouter streamed Haiku 5.5's thinking on 2026-10-29: the text a few words at a
+        // time, the signature last, all under one index.
+        var sse = string.Join("\n",
+            """data: {"choices":[{"delta":{"role":"assistant","content":"","reasoning":"17*23:","reasoning_details":[{"type":"reasoning.text","text":"17*23:","format":"anthropic-claude-v1","index":0}]}}]}""",
+            """data: {"choices":[{"delta":{"content":"","reasoning":" 340+51.","reasoning_details":[{"type":"reasoning.text","text":" 340+51.","format":"anthropic-claude-v1","index":0}]}}]}""",
+            """data: {"choices":[{"delta":{"content":"","reasoning":"","reasoning_details":[{"type":"reasoning.text","signature":"c2lnbmVk","format":"anthropic-claude-v1","index":0}]}}]}""",
+            """data: {"choices":[{"delta":{"content":"391"},"finish_reason":"stop"}]}""",
+            "data: [DONE]");
+        var msg = await OpenAiChatClient.ReadStreamAsync(new StringReader(sse), null, CancellationToken.None);
+        Assert.Equal("17*23: 340+51.", msg.Reasoning);
+        var detail = Assert.Single(msg.ReasoningDetails!)!;
+        Assert.Equal("17*23: 340+51.", (string)detail["text"]!);
+        Assert.Equal("c2lnbmVk", (string)detail["signature"]!);
+        Assert.Equal("anthropic-claude-v1", (string)detail["format"]!);
+
+        var sent = OpenAiChatClient.BuildRequest([ChatMessage.User("17*23?"), msg, ChatMessage.User("Thanks")], [], new ChatRequestOptions { Model = "anthropic/claude-haiku-5.5" }, sendReasoning: true);
+        Assert.Equal("c2lnbmVk", (string)sent["messages"]![1]!["reasoning_details"]![0]!["signature"]!);
+        // A server that turned the reasoning down gets none of it.
+        Assert.Null(OpenAiChatClient.BuildRequest([msg], [], new ChatRequestOptions(), sendReasoning: false)["messages"]![0]!["reasoning_details"]);
+
+        // Claude's thinking cut off before its signature came would be refused: left out.
+        var cut = await OpenAiChatClient.ReadStreamAsync(new StringReader(string.Join("\n",
+            """data: {"choices":[{"delta":{"reasoning":"Let me","reasoning_details":[{"type":"reasoning.text","text":"Let me","format":"anthropic-claude-v1","index":0}]},"finish_reason":"length"}]}""",
+            "data: [DONE]")), null, CancellationToken.None);
+        Assert.Equal("Let me", cut.Reasoning);
+        Assert.Null(cut.ReasoningDetails);
+    }
+
+    [Fact]
     public async Task Stream_cut_off_without_done_is_reported_as_a_drop()
     {
         var sse = """data: {"choices":[{"delta":{"content":"Half a sent"}}]}""";

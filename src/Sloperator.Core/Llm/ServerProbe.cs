@@ -190,14 +190,17 @@ public static partial class ServerProbe
 
         static List<string>? Strings(JsonNode? node) => node is JsonArray a ? a.Select(Str).OfType<string>().ToList() : null;
 
-        // OpenRouter routes "reasoning" to every model that thinks on request, as low to high. Not
-        // Claude's or Gemini's through it: with thinking on, a tool call wants the signed thinking
-        // before it back (OpenRouter's reasoning_details), which Sloperator doesn't keep, and the
-        // request is refused; they ran with thinking off before there was an effort to pick.
+        // OpenRouter routes "reasoning" to every model that thinks on request, as low to high, and
+        // to Claude as the levels its version takes (older ones get a thinking budget for low to
+        // high). Asked for none, Claude 5 thinks anyway but OpenRouter sends no word of it. Its
+        // signed thinking goes back with the reply (ChatMessage.ReasoningDetails). Not Gemini's yet:
+        // its tool calls want their own signatures back, untried through Sloperator.
         static IReadOnlyList<string>? ListedEfforts(List<string>? parameters, string id) =>
             parameters is null ? null
-            : id.StartsWith("anthropic/", StringComparison.OrdinalIgnoreCase) || id.StartsWith("google/gemini", StringComparison.OrdinalIgnoreCase) ? []
-            : parameters.Contains("reasoning") || parameters.Contains("reasoning_effort") ? OpenAiEfforts : [];
+            : id.StartsWith("google/gemini", StringComparison.OrdinalIgnoreCase) ? []
+            : !parameters.Contains("reasoning") && !parameters.Contains("reasoning_effort") ? []
+            : id.StartsWith("anthropic/", StringComparison.OrdinalIgnoreCase) && EffortsByName(id) is { Count: > 0 } claude ? claude
+            : OpenAiEfforts;
 
         // Prices come as text ("0", "0.0000003" per token) or as numbers.
         static decimal? Price(JsonNode? node) => node is JsonValue v

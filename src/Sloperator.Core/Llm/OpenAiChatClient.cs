@@ -317,6 +317,14 @@ public sealed partial class OpenAiChatClient
                 if ((status is 400 or 404 or 415 or 422 || status >= 500) && HasImages(messages) && LooksLikeImagesRefused(err))
                     throw new ImagesRefusedException(ErrorText(err).Clip(300));
                 // Strict providers reject fields they do not know. Drop ours and try once more.
+                // Claude's thinking sent back through a gateway and refused (its signature no longer
+                // matches): the run goes on without the earlier thinking.
+                if (status == 400 && sendReasoning && messages.Any(m => m.ReasoningDetails is { Count: > 0 })
+                    && err.Contains("signature", StringComparison.OrdinalIgnoreCase))
+                {
+                    _reasoningRejected = true;
+                    return await CompleteAsync(messages, tools, options, onDelta, ct, onSending).ConfigureAwait(false);
+                }
                 if (status is 400 or 422 && (sendReasoning || sendExtras) && LooksLikeUnknownField(err))
                 {
                     _reasoningRejected |= sendReasoning;
@@ -367,6 +375,7 @@ public sealed partial class OpenAiChatClient
         var content = new StringBuilder();
         var reasoning = new StringBuilder();
         var calls = new SortedDictionary<int, (string Id, string Name, StringBuilder Args)>();
+        var details = new SortedDictionary<int, JsonObject>();
         var finished = false;
         string? finishReason = null;
         int? promptTokens = null, completionTokens = null;
@@ -434,6 +443,25 @@ public sealed partial class OpenAiChatClient
                 onDelta?.Invoke(new StreamDelta(StreamChannel.Reasoning, r));
             }
 
+            // Pieces of one entry share its index: its text comes a few words at a time, its
+            // signature last.
+            if (delta["reasoning_details"] is JsonArray pieces)
+            {
+                foreach (var piece in pieces.OfType<JsonObject>())
+                {
+                    var index = GetInt(piece, "index") ?? details.Count;
+                    if (!details.TryGetValue(index, out var entry))
+                        details[index] = entry = new JsonObject();
+                    foreach (var (key, value) in piece)
+                    {
+                        if (key is "text" or "summary" or "data" && entry[key] is JsonValue before && before.TryGetValue<string>(out var start) && value is JsonValue more && more.TryGetValue<string>(out var rest))
+                            entry[key] = start + rest;
+                        else if (value is not null)
+                            entry[key] = value.DeepClone();
+                    }
+                }
+            }
+
             if (GetString(delta, "content") is { Length: > 0 } c)
             {
                 content.Append(c);
@@ -489,6 +517,11 @@ public sealed partial class OpenAiChatClient
             PromptTokens = promptTokens,
             CompletionTokens = completionTokens,
         };
+        // Not Claude's thinking cut off before its signature came (a reply that ran out of room
+        // mid-thought): sent back, it would be refused.
+        var signed = details.Values.Where(d => GetString(d, "format")?.StartsWith("anthropic", StringComparison.Ordinal) != true || GetString(d, "signature") is { Length: > 0 } || GetString(d, "type") == "reasoning.encrypted").ToList();
+        if (signed.Count > 0)
+            message.ReasoningDetails = new JsonArray(signed.ToArray<JsonNode?>());
         if (calls.Count > 0)
         {
             message.ToolCalls = calls.Values
@@ -632,6 +665,8 @@ public sealed partial class OpenAiChatClient
         // and breaks the server's prompt cache at every assistant turn.
         if (sendReasoning && m.Role == ChatRole.Assistant && !string.IsNullOrEmpty(m.Reasoning))
             obj["reasoning_content"] = m.Reasoning;
+        if (sendReasoning && m.Role == ChatRole.Assistant && m.ReasoningDetails is { Count: > 0 } details)
+            obj["reasoning_details"] = details.DeepClone();
 
         return obj;
     }

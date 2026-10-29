@@ -73,6 +73,14 @@ public sealed class ChatMessage
     /// </summary>
     public JsonArray? AnthropicContent { get; set; }
 
+    /// <summary>
+    /// For replies through OpenRouter-style gateways: the reply's thinking as they sent it
+    /// (<c>reasoning_details</c>, Claude's signature among it), put together from the stream and
+    /// sent back with the reply when <see cref="ChatRequestOptions.SendReasoning"/> is on. Without
+    /// it OpenRouter leaves Claude's earlier thinking out of the prompt.
+    /// </summary>
+    public JsonArray? ReasoningDetails { get; set; }
+
     public bool HasToolCalls => ToolCalls is { Count: > 0 };
 
     public static ChatMessage System(string text) => new() { Role = ChatRole.System, Content = text };
