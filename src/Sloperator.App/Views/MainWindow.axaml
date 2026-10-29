@@ -391,14 +391,15 @@
         <TextBlock Grid.Row="0" Grid.Column="0" Classes="muted" Text="Server" VerticalAlignment="Center" Margin="0,0,8,0" />
         <DockPanel Grid.Row="0" Grid.Column="1">
           <!-- The servers that answered before, each with its key and model: a row switches to it,
-               its trash button forgets it. Looks and works as History does; as wide as the effort
-               dropdown under it, so the address and the model end on one line. -->
-          <Button x:Name="SavedServersButton" DockPanel.Dock="Right" Classes="ghost" Width="112" Margin="8,0,0,0" VerticalAlignment="Stretch" HorizontalContentAlignment="Center"
+               its trash button forgets it. Its list works as History's does, the button looks like
+               the dropdowns around it; as wide as the effort dropdown under it, so the address and
+               the model end on one line. -->
+          <Button x:Name="SavedServersButton" DockPanel.Dock="Right" Classes="dropdown" Width="112" Margin="8,0,0,0" VerticalAlignment="Stretch"
                   ToolTip.Tip="Servers that answered before, each with its API key and model" AutomationProperties.Name="Saved servers">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="Saved" VerticalAlignment="Center" />
-              <PathIcon Width="10" Height="10" VerticalAlignment="Center" Data="M7 10l5 5 5-5z" />
-            </StackPanel>
+            <DockPanel>
+              <PathIcon DockPanel.Dock="Right" Width="10" Height="10" Margin="0,0,9,0" VerticalAlignment="Center" Data="M7 10l5 5 5-5z" />
+              <TextBlock Text="Servers" VerticalAlignment="Center" />
+            </DockPanel>
             <Button.Flyout>
               <Flyout Placement="BottomEdgeAlignedRight" FlyoutPresenterClasses="history">
                 <Panel Width="340">
