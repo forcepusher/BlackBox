@@ -294,7 +294,27 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
                 var from = Math.Clamp(region.Y - DesktopOrigin.Y + row + shift, 0, d.Height - 1);
                 Array.Copy(d.Bgra, from * d.Stride + (region.X - DesktopOrigin.X) * 4, pixels, row * region.Width * 4, region.Width * 4);
             }
+        if (includeCursor)
+            DrawPointer(pixels, region);
         return new(region.Width, region.Height, pixels);
+    }
+
+    /// <summary>
+    /// The mouse pointer on a capture that includes it, as the real screen shows it: a dark arrow tip at
+    /// the cursor. Without it the model never sees where its last click landed.
+    /// </summary>
+    private void DrawPointer(byte[] pixels, ScreenRect region)
+    {
+        var (px, py) = (Cursor.X - region.X, Cursor.Y - region.Y);
+        for (var dy = 0; dy < 16; dy++)
+            for (var dx = 0; dx <= Math.Min(dy, 9); dx++)
+            {
+                var (x, y) = (px + dx, py + dy);
+                if (x < 0 || y < 0 || x >= region.Width || y >= region.Height)
+                    continue;
+                var i = (y * region.Width + x) * 4;
+                (pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]) = (0, 0, 0, 255);
+            }
     }
     public (int X, int Y) GetCursorPosition() => Cursor;
     public void MoveMouse(int x, int y) { Cursor = (x, y); Actions.Add($"move {x},{y}"); }
