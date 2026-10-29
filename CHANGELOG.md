@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The model list is read from the server again each time its dropdown opens, so a model loaded there
   meanwhile shows up. The wider model box, the shorter effort dropdown ("Medium" rather than "Medium
   effort") and a context box as wide as its size make the top bar tidier.
+- In the chat, the screen a click, a wait or another action left is folded under **Screenshot**, as
+  a call's output is; a screenshot the agent took to look stays open.
+- A shell command's card says **Run a command** and, in a few words, what the command does, with the
+  whole command shown under it in a code box instead of in the title.
 
 ### Removed
 - The ↻ button next to the model: opening the model dropdown does what it did.

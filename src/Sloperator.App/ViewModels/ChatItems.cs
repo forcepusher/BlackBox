@@ -302,7 +302,30 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
     public string Arguments { get; init; } = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Title), nameof(Command), nameof(HasCommand))]
     private string _summary = summary;
+
+    /// <summary>
+    /// The card's line beside the tool's name: the summary, or for a shell command a short title with
+    /// what the model said it does ("Run a command · List the newest log files"), the command itself
+    /// under it in a block of its own (a whole command in bold was too much, the user, 2026-10-29).
+    /// </summary>
+    public string Title => !HasCommand ? Summary : CommandParts().Description is { } d ? $"Run a command · {d}" : "Run a command";
+
+    /// <summary>The command a run_shell call ran, from its summary, so a saved chat shows it too; null for any other call.</summary>
+    public string? Command => CommandParts().Command;
+
+    /// <summary>A run_shell summary: "Run: " and the command, with the model's description on a line over it if it gave one (ShellTool.Describe).</summary>
+    private (string? Description, string? Command) CommandParts()
+    {
+        if (Name != "run_shell")
+            return (null, null);
+        if (Summary.StartsWith("Run: ", StringComparison.Ordinal))
+            return (null, Summary[5..]);
+        return Summary.IndexOf("\nRun: ", StringComparison.Ordinal) is var at and > 0 ? (Summary[..at], Summary[(at + 6)..]) : (null, null);
+    }
+
+    public bool HasCommand => Command is { Length: > 0 };
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsAwaitingApproval), nameof(StatusText), nameof(IsError))]
@@ -313,8 +336,19 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
     private string _resultText = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasScreenshot))]
+    [NotifyPropertyChangedFor(nameof(HasScreenshot), nameof(HasOpenScreenshot), nameof(HasFoldedScreenshot))]
     private Bitmap? _screenshot;
+
+    /// <summary>The tools called to look: their picture is the answer, shown open on the card.</summary>
+    private static readonly HashSet<string> Looks = ["screenshot", "zoom"];
+
+    /// <summary>
+    /// A picture a look gave stays open. The screen an action left (a click, a wait, a key) is folded
+    /// as the output is: a chat of clicks was mostly screenshots. It is the same picture the model got.
+    /// </summary>
+    public bool HasOpenScreenshot => HasScreenshot && Looks.Contains(Name);
+
+    public bool HasFoldedScreenshot => HasScreenshot && !Looks.Contains(Name);
 
     /// <summary>The screenshot as the model got it, at its full size, for Copy; it goes when the thumbnail does.</summary>
     public byte[]? ScreenshotData { get; set; }
