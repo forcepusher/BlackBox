@@ -1873,6 +1873,20 @@ every step, 77.5k. A 2560x1088 screenshot is about 960 tokens on DeepSeek V4.1 F
 and 2.7k by Qwen's count of one per 32x32 pixels. Keeping only the latest by default was weighed
 (28 October 2026) and left out: it would cost Claude its thinking at every step.
 
+Making the earlier screenshots smaller was tried too (29 October 2026): every 6 steps, those before the
+latest at half size and JPEG quality 60, all at once, about a quarter of their bytes and image tokens
+each (60 screenshots of 1920x1216: 168 KB whole, 39 KB so). On Anthropic's API it dropped Claude's
+signed thinking after each one changed (12 of 12 thinking blocks in a test run), and the user wants one
+behaviour for every provider, without what doesn't work for Claude, so it was taken out: a screenshot
+stays as it was sent. A lower JPEG quality for every screenshot was measured instead
+(`AgentSettings.ScreenshotQuality`, the click benchmark's BB_CLICK_QUALITY): the same pixels and image
+tokens in fewer bytes, at 70 76% of 85's over those 60 screenshots and 76% to 88% on the benchmark's
+scenes. On 8 hard scenes × 5 (buttons, tiny, dense, faint, jpeg, similar, links, rows; qwen3.8 with
+zoom, 2560x1080) 85 hit 33 and then 32 of 40, 70 hit 31 and 60 hit 30, the extra misses a few pixels
+off small links and rows. Fewer bytes saves no tokens or context and matters only over a slow link or
+near a gateway's size limit, so the user kept 85; zoomed pictures stay at 90. Repeats of the very same screen, which could be sent as words, never happened in 521
+saved screenshots in a row (a clock, the cursor or a caret always differs).
+
 `MunitoImageCapTests` (BB_MUNITO_KEY) runs it against munito: nine screenshots, as in the run that
 failed, are refused once, the cap learned is 8 and the model still names the latest screen's colour;
 eight more are left out before the request, which isn't refused. `KiloOverflowTests` (BB_KILO=1)

@@ -172,7 +172,7 @@ public sealed class ScreenshotTool : Tool
         var frame = ctx.Platform.Screen.Capture(space.Screen, includeCursor: true);
         ctx.LastShot = (space.Screen, frame);
         ctx.DesktopTurn?.Looked(ctx);
-        var jpeg = space.Encode(frame);
+        var jpeg = space.Encode(frame, ctx.Settings.ScreenshotQuality);
         var count = ctx.Screens.Count;
         var which = count > 1 ? $"Screenshot of screen {ctx.CurrentScreen + 1} of {count}" : "Screenshot";
         // The image size only matters when x/y are its pixels.
