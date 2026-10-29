@@ -1454,20 +1454,34 @@ name on a card 2 over and none under. Measured with `.dev/chat-menu-test/text-ce
 with ink, each control's capitals from their top to the baseline) and `text-layout.ps1` (each
 control's text block against its middle), on the laptop at 125%: everything within 0.5 px.
 
-Half a pixel is as close as it gets: Windows hints Inter's capitals to whole pixels (14 at 125% is
-13 rows, sharp at top and bottom) and puts the baseline on a whole row, so in a 40-px control there
-are 13 rows over the capitals and 14 under, or the other way round. The app has them 13 over
-everywhere, so what matters is that things side by side agree. A sweep after the restyle (the user,
-2026-10-30, on the Side panel dropdown; `.dev/centre-test/`: `texts.ps1` finds every word UI
-Automation knows, the box it sits in, and where its capitals' line is to a tenth of a pixel)
-found every button, dropdown, field, list and menu row, chip, notice, Thoughts header, table cell and
-History, Servers and Side panel row at 0 to 0.5 px, and four places a pixel off what is beside them,
-now level: the arrow left of Side panel (10 high, 12.5 px, it rounded down to 0.5 under the middle
-while the words are 0.5 over; 0.8 under it lifts it), the message box's words and hint against Send
-(Fluent's text box has 6 over and 5 under; `TextBox.composer` has 5.6 and 5.4), File… and Generate
-on the Video generator's cards (1 px high; `Button.choice` has 1.8 over and 0.2 under), and Settings'
-labels against their dropdowns (`Grid.form > TextBlock.label`, 0.8 under; the chat's labels were
-level already: a smaller label's capitals in the middle of the field's, its baseline a pixel higher).
+Windows hints Inter's capitals to whole pixels (sharp at top and bottom) and puts the baseline on a
+whole row. At 100%, where the user works every day (a 2560x1080 screen; the laptop is at 125%), 14's
+capitals are 10 or 11 rows in a 32-px control and can sit exactly in its middle; at 125% they are 13
+rows in 40, so 13 over and 14 under is as close as it gets, and what matters there is that things side
+by side agree. A sweep after the restyle (the user, 2026-10-30: "Side panel text vertical centering
+looks off", a screenshot at 100%) measured both scales with `.dev/centre-test/` (`texts.ps1` finds
+every word UI Automation knows, the box it sits in and where its capitals' line is, to a tenth of a
+pixel; `check100.ps1` and friends measure 100% on the 125% laptop with a DPI-unaware build, never
+committed). Found and fixed:
+- Every dropdown's word (Side panel, the model, the effort, Settings' "Ask me first") was a pixel
+  under the buttons' at 100%: Fluent's dropdown lays its content over its whole height, border and
+  all, a button inside its border. `ComboBoxPadding` (and `ComboBox.ghost`) 1 over and under stands
+  for the border; with 6 and 6 the word rounded a pixel low.
+- The context size's box (5 over and under) was a pixel low at 100%; 0 now, centred as a button.
+- The message box's words and hint were a pixel under Send's at both scales (Fluent's text box has 6
+  over and 5 under); `TextBox.composer` sits 0.6 higher, a pixel at both, its height the same.
+- The arrow left of Side panel, 12.5 px at 125%, rounded a pixel under the dropdown's word there:
+  0.5 under it rounds to nothing at 100% and a pixel at 125%. A nudge that is a pixel at one scale and
+  none at the other has to round that way (Avalonia rounds each margin to whole pixels, half to even).
+- File… and Generate on the Video generator's cards were a pixel high at 125%: they have a height of
+  their own (17.6) and half a pixel over the word; paddings that lowered them at 125% lowered them at
+  100% too, or made them a pixel taller.
+- Settings' labels sat a pixel under their dropdowns' words at 125% (`Grid.form > TextBlock.label`,
+  0.8 under; nothing at 100%). A label's smaller capitals are in the middle of the field's, as in the
+  chat's bars, its baseline a pixel higher.
+Everything else (buttons, fields, list and menu rows, chips, notices, the Thoughts header, table
+cells, History, Servers and Side panel rows, Copy, Discard) was centred at 100% and within half a
+pixel, level with its neighbours, at 125%.
 
 ## Selected text
 Avalonia (11.3.22, and its master) draws a selection in a text block made of runs (a reply: bold,

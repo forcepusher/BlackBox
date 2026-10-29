@@ -66,10 +66,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Selecting part of a reply redrew the selected words in the code font a size larger, and the rest of
   the line moved along as the selection grew; selected words now keep their own font, size and weight.
-- A few things sat a pixel off what is beside them: the arrow beside **Side panel** a pixel under its words,
-  the words typed in the message box (and its hint) a pixel under Send's, **File…** and **Generate** on
-  the Video generator's cards a pixel over their middle, and Settings' "Ask me first" a pixel under its
-  dropdown's words.
+- Every dropdown's word (**Side panel**, the model, the effort, the ones in Settings) sat a pixel low at
+  100% scaling, under the buttons' beside it; it is in the middle now. Also level now: the context size
+  in its box, the words typed in the message box (and its hint) with Send's, the arrow beside **Side
+  panel** with its word at 125%, **File…** and **Generate** on the Video generator's cards, and the
+  labels in Settings with their dropdowns.
 - The app icon has a soft shadow, so the yellow blob keeps a clear edge on a light taskbar.
 - A text box (the prompt, the server address, the API key, the context size, the boxes in Settings)
   kept the focus and its caret after a click on empty space, a panel or a label; a click anywhere away

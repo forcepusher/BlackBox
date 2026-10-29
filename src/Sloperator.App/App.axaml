@@ -75,8 +75,11 @@
     <!-- Fluent's paddings put more room under the text than over it, for Segoe UI, whose capitals sit
          low in their line. Inter's sit in its middle (ascent 0.969 em, descent 0.242, capitals 0.727),
          so with those paddings every dropdown's text was 2 px (at 125%) over its middle, a button's 1:
-         the same room over and under it instead (the user, 2026-10-29). -->
-    <Thickness x:Key="ComboBoxPadding">12,6,0,6</Thickness>
+         the same room over and under it instead (the user, 2026-10-29). A dropdown lays its word over
+         its whole height, border and all, where a button lays its inside the border: 1 over and under
+         stands for the border, so a dropdown's word rounds to where a button's does (with 6 and 6, or
+         none, it sat a pixel under the buttons' at 100%; the user, 2026-10-30). -->
+    <Thickness x:Key="ComboBoxPadding">12,1,0,1</Thickness>
     <!-- The server dot when connected; a diff's added and removed lines (their counts, numbers and
          markers, a new file's name), their rows a tint of the same. -->
     <SolidColorBrush x:Key="BbOk" Color="#4CC38A" />
@@ -467,7 +470,8 @@
     <Style Selector="ComboBox.ghost">
       <Setter Property="Background" Value="{StaticResource BbButton}" />
       <Setter Property="BorderBrush" Value="{StaticResource BbControlBorder}" />
-      <Setter Property="Padding" Value="8,0,0,0" />
+      <!-- 1 over and under for the border, as ComboBoxPadding. -->
+      <Setter Property="Padding" Value="8,1,0,1" />
     </Style>
     <Style Selector="ComboBox.ghost:pointerover /template/ Border#Background">
       <Setter Property="Background" Value="{DynamicResource ButtonBackgroundPointerOver}" />
@@ -648,10 +652,10 @@
       <Setter Property="CornerRadius" Value="16" />
     </Style>
     <!-- Fluent's text box has 6 over its text and 5 under (TextControlThemePadding, for Segoe UI), so
-         the message box's words (and its hint) sat a pixel under Send's beside them at 125%; 0.4 higher,
-         they are level, the box as tall. -->
+         the message box's words (and its hint) sat a pixel under Send's beside them at 100% and 125%.
+         0.6 up rounds to a pixel up at both, the box as tall (its border is the card's, around it). -->
     <Style Selector="TextBox.composer">
-      <Setter Property="Padding" Value="10,5.6,6,5.4" />
+      <Setter Property="Margin" Value="0,-0.6,0,0.6" />
     </Style>
     <Style Selector="Border.composer:focus-within">
       <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />

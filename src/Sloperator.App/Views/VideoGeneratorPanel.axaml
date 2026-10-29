@@ -38,12 +38,15 @@
     <Style Selector="Border.block.selected Border.handle">
       <Setter Property="Background" Value="{StaticResource BbAccent}" />
     </Style>
-    <!-- File… and Generate on a new card or sound: smaller than a small button, to fit a card. 0.8
-         more over the word than under it: with the same, it sat a pixel high at 125%. -->
+    <!-- File… and Generate on a new card or sound: smaller than a small button, to fit a card. A
+         height of their own (18 at 100%, 22 at 125%) and half a pixel more over the word: sized by
+         their padding they were a pixel high at 125%, and every padding that lowered them there
+         lowered them at 100% too or made them a pixel taller. -->
     <Style Selector="Button.choice">
-      <Setter Property="Padding" Value="6,1.8,6,0.2" />
+      <Setter Property="Padding" Value="6,0.5,6,0" />
       <Setter Property="FontSize" Value="11" />
       <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Height" Value="17.6" />
     </Style>
     <!-- A clip's start or end frame: its picture, else a dashed place; the one picked has the accent around it. -->
     <Style Selector="Border.slot">
