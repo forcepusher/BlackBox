@@ -247,7 +247,7 @@ public sealed partial class VideoGeneratorViewModel
                                 return;
                             }
                             _shown = (path, stamp, bitmap);
-                            Viewer = new PictureView(bitmap, caption, null);
+                            Viewer = new PictureView(bitmap, caption, null, path);
                         });
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { }

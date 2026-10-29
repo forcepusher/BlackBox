@@ -396,10 +396,32 @@ AUTOMATIC1111's and Forge's "parameters" text is read too. Over the 901 pictures
 in the PC's ComfyUI output folder it took at most 66 ms a file; 51 said nothing (files ffmpeg or a
 script made from ComfyUI's), and the 62 without a prompt had an empty one in their workflow.
 
-Right-click → Copy on any picture in the chat (a preview, a picture in your message or under the
-box, a tool's screenshot) puts it on the clipboard at its full size, not the chat's, together with
-its file: Paint, Word or a chat app's box paste the picture, Explorer and mail paste the file. A
-video gives the frame on screen with its file; a screenshot, which has no file, the picture alone.
+**Copy image and Copy file** (the user, 2026-10-29: every image in the app, then "Add copy for video
+too and all other files actually") are one right-click menu for every picture and file Sloperator
+shows, `Views/CopyMenu.cs`. A view says what it shows with attached properties: `CopyMenu.Image` (the
+picture on screen), `CopyMenu.Data` (its bytes when no file has it: a screenshot) and `CopyMenu.File`;
+a right-click on it or on anything in it without a menu of its own opens the menu. Menus of their own
+(the Video generator's card, clip, frame and sound menus, File changes' file menu) take
+`CopyMenu.Items` at their end. The chat's own menu (`MainWindow.OnChatMenu`) leaves a control with
+either alone.
+
+- **Copy image**, on a picture or on whatever shows one (a video's frame, a document's peek, a PDF
+  page, the frozen view of Area, the Video generator's frames, cards and clip strips, the logo): the
+  picture at its full size, not the size it is shown at, decoded from its file or bytes. A picture
+  file goes with it, so Paint, Word or a chat app's box paste the picture and Explorer or mail the
+  file. A video's frame is the one on screen at the click, copied before anything is awaited, as the
+  next frame lets go of it (read at the right-click instead, a playing video's copy came back empty).
+- **Copy file**, on any other file (a video, a sound, a 3D model, a document, a folder): the file alone,
+  as Explorer's Copy puts it. A picture has no Copy file: its Copy image carries the file.
+
+The menu reads nothing from the disk before a click (a share whose server is off would hold it), so a
+file that has gone shows its entry and copies nothing; File changes, which looks anyway, greys it out.
+The picture last copied is kept until the next copy, as programs read it from Sloperator when they
+paste. Where a right drag pans (a picture or frame in the File inspector, a 3D model, a waveform), a
+drag of 4 DIPs or more opens no menu; a right-click that moved nothing does. Where it is: previews in the
+chat and the full-screen viewer (and its title bar), a tool's screenshot open or folded, files in a
+message and under the box, the File inspector (its file and its title bar; text keeps its own Copy),
+the Video generator's viewer and timeline, and File changes' files.
 
 A chat video that played nothing (its file deleted or no longer readable) no longer starts again
 by itself, which it did at once, for ever, opening the decoder and ffmpeg each time. Opening the
@@ -1319,7 +1341,7 @@ The times are saved with the chat; a chat saved before they were kept shows none
 **Undo message and everything below** (the user, 2026-10-29) is the right-click menu of a message of
 the user's: in the chat's one right-click menu (`MainWindow.OnChatMenu`, which opens before the
 text's own and has Copy for the selection), under Copy, on its words or anywhere in the bubble, not
-on its files (their menu has Copy). Greyed out while a task runs, which would go on writing after the cut. It takes the message and every line after it out of
+on its files (their menu has Copy image or Copy file). Greyed out while a task runs, which would go on writing after the cut. It takes the message and every line after it out of
 the chat, cuts the model's conversation where the model had the message (the replies, thinking,
 Claude's signed thinking blocks and pictures after it go too), deletes the pictures in
 `Data/chats/<id>/` the conversation no longer names once the shorter chat is on the disk, and puts
@@ -2012,7 +2034,7 @@ A context size picked during a run counts from the run's next step (`AgentSessio
 lowered below what the conversation fills, it resets the context there. The run used to keep the
 size it started with, and lowering it to have the context reset did nothing until the next message.
 The reset can also be asked for. **Compact context** in the chat's right-click menu (one menu for
-the whole log, Copy for selected text above it; a picture keeps its own) resets it at once with no
+the whole log, Copy for selected text above it; a picture or file keeps its own) resets it at once with no
 run going, or before the model's next step during one, or before the run ends when it came as the
 model wrote its final answer. The model has `reset_context` for when the user tells it to hand off
 or start fresh: told "Do a handoff to reset the context" (chat 20261028-032542), it had no way to,

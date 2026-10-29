@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Right-click any picture in Sloperator for **Copy image**, and any other file (a video, a sound, a
+  document) for **Copy file**: in the chat, the full-screen viewer, the File inspector, the Video
+  generator and File changes.
 - Right-click a message of yours in the chat for **Undo message and everything below**: it and every
   later line leave the chat and the saved chat, the files the agent wrote or edited from then on go back
   to how they were, and the message goes back into the box. What commands, copies and clicks in other
@@ -20,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   message goes to the new model.
 
 ### Changed
+- A chat video's right-click Copy is now two entries: **Copy image** for the frame on screen and
+  **Copy file** for the video.
 - Every model clicks in pixels of the screenshot. Qwen 3 and later, Gemma 4 and Nemotron no longer get
   a 0-1000 grid: told the screenshot's size, Qwen clicks as well in pixels.
 - Claude through OpenRouter (and any server whose model list says it takes reasoning) gets the effort

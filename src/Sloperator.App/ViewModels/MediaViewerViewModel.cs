@@ -36,7 +36,7 @@ public sealed partial class MediaViewerViewModel : ObservableObject, IDisposable
     private object? _shown;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Name), nameof(Counter))]
+    [NotifyPropertyChangedFor(nameof(Current), nameof(Name), nameof(Counter))]
     [NotifyCanExecuteChangedFor(nameof(PreviousCommand), nameof(NextCommand))]
     private int _index;
 
@@ -140,8 +140,13 @@ public sealed partial class ViewerPicture : ObservableObject, IDisposable
 
     private bool _disposed;
 
+    /// <summary>Its file, or its bytes when it has none (a screenshot): Copy image copies it whole from them.</summary>
+    public string? Path { get; }
+    public byte[]? Data { get; }
+
     public ViewerPicture(string? path, byte[]? data, int width, Action<ViewerPicture, string> loaded)
     {
+        (Path, Data) = (path, data);
         Task.Run(() =>
         {
             Bitmap? bitmap = null;

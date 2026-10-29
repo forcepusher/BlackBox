@@ -64,6 +64,10 @@ public sealed class ModelViewer : Control
     public const double StartYaw = -30, StartPitch = 15;
     private Point? _dragFrom;
     private bool _panning;
+
+    /// <summary>Where a drag began, and whether it has moved: a right-click that moved nothing opens the menu (Copy file).</summary>
+    private Point _dragStart;
+    private bool _dragged;
     private WriteableBitmap? _image;
     private int _request;
     private bool _drawing;
@@ -108,7 +112,8 @@ public sealed class ModelViewer : Control
         _panning = !point.IsLeftButtonPressed;
         if (_panning && !CanPan)
             return;
-        _dragFrom = e.GetPosition(this);
+        _dragFrom = _dragStart = e.GetPosition(this);
+        _dragged = false;
         e.Pointer.Capture(this);
         e.Handled = true;
     }
@@ -119,6 +124,7 @@ public sealed class ModelViewer : Control
         if (_dragFrom is not { } from)
             return;
         var at = e.GetPosition(this);
+        _dragged |= Math.Abs(at.X - _dragStart.X) + Math.Abs(at.Y - _dragStart.Y) >= 4;
         _dragFrom = at;
         if (_panning)
         {
@@ -145,6 +151,9 @@ public sealed class ModelViewer : Control
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
+        // Handled before the base sees it: a drag that moved the model opens no right-click menu.
+        if (_dragFrom is not null && _dragged)
+            e.Handled = true;
         base.OnPointerReleased(e);
         if (_dragFrom is null)
             return;

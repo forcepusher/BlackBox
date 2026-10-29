@@ -254,6 +254,9 @@ public sealed class WaveformView : Control
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
+        // Handled before the base sees it: a drag that moved the view opens no right-click menu (Copy file).
+        if (_drag == Drag.Pan && _moved)
+            e.Handled = true;
         base.OnPointerReleased(e);
         if (_sound is not { } sound || _drag == Drag.None)
             return;

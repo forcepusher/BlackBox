@@ -135,16 +135,11 @@
   <!-- How each kind of file is previewed: under the tool call that made or showed it, and under a
        reply that names it by its path. -->
   <Window.DataTemplates>
-    <!-- Right-click on a picture in the chat: Copy (see OnCopyPicture). -->
+    <!-- A right-click anywhere on a preview: Copy image or Copy file (see CopyMenu). -->
     <DataTemplate DataType="vm:ImagePreview">
-      <Border Classes="preview">
+      <Border Classes="preview" views:CopyMenu.Image="{Binding Image}" views:CopyMenu.File="{Binding Path}">
         <StackPanel Spacing="8">
           <Button Classes="bare" Click="OnPictureClick" ToolTip.Tip="See it full screen" HorizontalAlignment="Left" AutomationProperties.Name="{Binding FileName}">
-            <Button.ContextMenu>
-              <ContextMenu>
-                <MenuItem Header="Copy" Click="OnCopyPicture" />
-              </ContextMenu>
-            </Button.ContextMenu>
             <Image Source="{Binding Image}" MaxWidth="480" MaxHeight="480" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
           </Button>
           <views:PreviewFooter />
@@ -153,14 +148,9 @@
     </DataTemplate>
 
     <DataTemplate DataType="vm:AnimationPreview">
-      <Border Classes="preview">
+      <Border Classes="preview" views:CopyMenu.Image="{Binding Image}" views:CopyMenu.File="{Binding Path}">
         <StackPanel Spacing="8">
           <Button Classes="bare" Click="OnPictureClick" ToolTip.Tip="See it full screen" HorizontalAlignment="Left" AutomationProperties.Name="{Binding FileName}">
-            <Button.ContextMenu>
-              <ContextMenu>
-                <MenuItem Header="Copy" Click="OnCopyPicture" />
-              </ContextMenu>
-            </Button.ContextMenu>
             <Image Source="{Binding Image}" MaxWidth="480" MaxHeight="480" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
           </Button>
           <views:PreviewFooter />
@@ -168,16 +158,11 @@
       </Border>
     </DataTemplate>
 
+    <!-- Copy image is the frame on screen, Copy file the video. -->
     <DataTemplate DataType="vm:VideoPreview">
-      <Border Classes="preview">
+      <Border Classes="preview" views:CopyMenu.Image="{Binding Frame}" views:CopyMenu.File="{Binding Path}">
         <StackPanel Spacing="8">
-          <!-- The menu is the panel's, so the play button over the middle of the picture has it too. -->
           <Panel HorizontalAlignment="Left" MaxWidth="480" views:InView.Video="True">
-            <Panel.ContextMenu>
-              <ContextMenu>
-                <MenuItem Header="Copy" Click="OnCopyPicture" ToolTip.Tip="The frame on screen, with the video's file" />
-              </ContextMenu>
-            </Panel.ContextMenu>
             <Button Classes="bare" Click="OnPictureClick" ToolTip.Tip="Watch it full screen, with its sound" AutomationProperties.Name="Watch full screen">
               <Image Source="{Binding Frame}" MaxWidth="480" MaxHeight="480" MinHeight="120" MinWidth="200" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
             </Button>
@@ -201,7 +186,7 @@
     </DataTemplate>
 
     <DataTemplate DataType="vm:AudioPreview">
-      <Border Classes="preview" Width="498">
+      <Border Classes="preview" Width="498" views:CopyMenu.File="{Binding Path}">
         <StackPanel Spacing="8">
           <DockPanel>
             <Button DockPanel.Dock="Left" Classes="roundPlay accent" Command="{Binding PlayCommand}" VerticalAlignment="Center" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause sound">
@@ -219,7 +204,7 @@
     </DataTemplate>
 
     <DataTemplate DataType="vm:ModelPreview">
-      <Border Classes="preview">
+      <Border Classes="preview" views:CopyMenu.File="{Binding Path}">
         <StackPanel Spacing="8">
           <views:ModelViewer Mesh="{Binding Mesh}" Width="480" Height="360" HorizontalAlignment="Left" ToolTip.Tip="Drag to turn it, scroll to come closer, double-click to see it as at first" />
           <views:PreviewFooter />
@@ -242,7 +227,7 @@
          over the card with its name. The peek is the box of a picture's thumbnail in a message (at most
          300x180 in a 1-pixel frame); what doesn't fit it is cut off. -->
     <DataTemplate DataType="vm:FileCardPreview">
-      <Border Classes="preview" Width="498">
+      <Border Classes="preview" Width="498" views:CopyMenu.Image="{Binding Thumbnail}" views:CopyMenu.File="{Binding Path}">
         <StackPanel Spacing="8">
           <Button Classes="bare" Click="OnPictureClick" IsVisible="{Binding HasPeek}" HorizontalAlignment="Left"
                   ToolTip.Tip="See it full screen" AutomationProperties.Name="{Binding FileName}">
@@ -483,12 +468,8 @@
             <!-- A tool call's picture, as the model got it: open on the card for a look, folded for an action. -->
             <DataTemplate x:Key="ToolShot" x:DataType="vm:ToolCallItem">
               <Button Classes="bare" Click="OnScreenshotClick" HorizontalAlignment="Left"
+                      views:CopyMenu.Image="{Binding Screenshot}" views:CopyMenu.Data="{Binding ScreenshotData}"
                       ToolTip.Tip="See it full screen" AutomationProperties.Name="Screenshot">
-                <Button.ContextMenu>
-                  <ContextMenu>
-                    <MenuItem Header="Copy" Click="OnCopyPicture" />
-                  </ContextMenu>
-                </Button.ContextMenu>
                 <Image Source="{Binding Screenshot}" MaxWidth="480" Stretch="Uniform" />
               </Button>
             </DataTemplate>
@@ -548,12 +529,7 @@
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:AttachmentItem">
                           <Button Classes="bare" Click="OnAttachmentClick" ToolTip.Tip="{Binding Tip}" Margin="0,0,0,6"
-                                  AutomationProperties.Name="{Binding FileName}">
-                            <Button.ContextMenu>
-                              <ContextMenu>
-                                <MenuItem Header="Copy" Click="OnCopyPicture" />
-                              </ContextMenu>
-                            </Button.ContextMenu>
+                                  views:CopyMenu.File="{Binding Path}" AutomationProperties.Name="{Binding FileName}">
                             <Panel Margin="6,0,0,0">
                               <Border Classes="attachment" IsVisible="{Binding !ShowsName}">
                                 <Image Source="{Binding Thumbnail}" MaxHeight="180" MaxWidth="300" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
@@ -684,7 +660,8 @@
              tooltip. -->
         <StackPanel IsVisible="{Binding ShowIntro}" MaxWidth="640" Spacing="12">
           <StackPanel Spacing="6">
-            <Image Source="/Assets/sloperator.png" Width="40" Height="40" RenderOptions.BitmapInterpolationMode="HighQuality" />
+            <Image Source="/Assets/sloperator.png" Width="40" Height="40" RenderOptions.BitmapInterpolationMode="HighQuality"
+                   views:CopyMenu.Image="{Binding Source, RelativeSource={RelativeSource Self}}" />
             <TextBlock Text="What should I do on your computer?" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
             <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460"
                        Text="Describe a task in your own words, and I'll work on it until it's done." />
@@ -900,12 +877,7 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:AttachmentItem">
-                    <Panel Margin="0,8,12,0" ToolTip.Tip="{Binding Tip}">
-                      <Panel.ContextMenu>
-                        <ContextMenu>
-                          <MenuItem Header="Copy" Click="OnCopyPicture" />
-                        </ContextMenu>
-                      </Panel.ContextMenu>
+                    <Panel Margin="0,8,12,0" ToolTip.Tip="{Binding Tip}" views:CopyMenu.File="{Binding Path}">
                       <!-- A click on the picture shows it full screen, as one in the chat. -->
                       <Border Classes="attachment" IsVisible="{Binding !ShowsName}" Cursor="Hand" PointerReleased="OnComposerPictureReleased" AutomationProperties.Name="{Binding FileName}">
                         <Image Source="{Binding Thumbnail}" Height="64" MaxWidth="160" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />

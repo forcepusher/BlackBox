@@ -90,6 +90,18 @@ public sealed partial class VideoGeneratorViewModel
         return items;
     }
 
+    /// <summary>The file a card, frame, clip or sound is, once made: what Copy image or Copy file at the end of its menu copies.</summary>
+    public string? FileOf(object? thing)
+    {
+        var file = thing switch
+        {
+            ReferenceCard card => card.Path,
+            IVideoPiece piece => piece.Piece.File(_board),
+            _ => null,
+        };
+        return file is not null && File.Exists(file) ? file : null;
+    }
+
     /// <summary>What the video's name at the top offers: the videos to open, a new one, and this one renamed or deleted.</summary>
     public IReadOnlyList<VideoMenuItem?> VideoMenu()
     {
