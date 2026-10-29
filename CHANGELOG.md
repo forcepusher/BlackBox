@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - The ↻ button next to the model: opening the model dropdown does what it did.
+- "in development" beside the **Toolkit** dropdown.
 
 ## [1.1.0] - 2026-10-29
 ### Added

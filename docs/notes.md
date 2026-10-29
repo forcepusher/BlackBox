@@ -793,9 +793,8 @@ making... Put filmmaking button under Toolkit dropdown menu with None and Filmma
 will be more tools extending to the left side of the screen later."). The **Toolkit** dropdown
 takes the place of the second Sloperator logo and name under the title bar, an arrow on it pointing
 left, where its tools open: None or Video generator (`ToolkitOption`, `IToolkit`, more to come); it
-now reads None, File changes, File inspector, Video generator (the user, 2026-10-26). A muted "in development" beside it (the
-user, 2026-10-24) says its tools are still being built: the header's `muted` text, 10 px right of
-the dropdown and centred on it. Its
+now reads None, File changes, File inspector, Video generator (the user, 2026-10-26). A muted "in
+development" beside it (the user, 2026-10-24) went on 2026-10-29, at the user's word. Its
 arrows are solid triangles, the left one and the dropdown's, as History's and every dropdown's are
 (the user: "Arrows need consistency"; Fluent's thin chevron is replaced in App.axaml by a style
 that depends on a state, as a plain one loses to what the template sets). Picked,
