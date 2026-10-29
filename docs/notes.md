@@ -543,7 +543,7 @@ the Takes folders of a day before; it names References and Generated now.)
 A video of more than one shot (a music video, a story, an ad) is planned as a **storyboard** and
 made piece by piece with ComfyUI: one video model run can't hold a story together for more than
 a few seconds, and not every video is one continuous camera shot. **Video generator**, picked in the
-**Toolkit** dropdown at the top left of the chat window, opens in a panel on the left of the chat
+**Side panel** dropdown at the top left of the chat window, opens in a panel on the left of the chat
 (see "The Video generator panel" below): what the user picks in it goes into the chat's box, they say
 there what to do with it, and the agent does it with its `video` tool, which reads and writes the
 same video the panel shows. A video can start in either and go on in the other.
@@ -790,7 +790,9 @@ camera should go on.
 **The Video generator panel** ("Filmmaking" until the user renamed it Video editor on 2026-10-25, and Video generator on 2026-10-26; 2026-10-24, the user's design: "Filmmaking window should extend current
 window to the left side instead of opening a new separate window... Use the main chat for film
 making... Put filmmaking button under Toolkit dropdown menu with None and Filmmaking options. There
-will be more tools extending to the left side of the screen later."). The **Toolkit** dropdown
+will be more tools extending to the left side of the screen later."). The **Side panel** dropdown
+("Toolkit" until 2026-10-29: the user found it said nothing of what it does, and the agent's own
+tools are something else; code names such as `IToolkit` stay)
 takes the place of the second Sloperator logo and name under the title bar, an arrow pointing
 left beside it (outside the button since 2026-10-29, at the user's word), where its tools open: None or Video generator (`ToolkitOption`, `IToolkit`, more to come); it
 now reads None, File changes, File inspector, Video generator (the user, 2026-10-26). A muted "in

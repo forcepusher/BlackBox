@@ -39,8 +39,8 @@ public sealed record ToolkitOption(string Name, string Description, double MinWi
     /// <summary>How wide the panel opens, splitter included; 0 for None.</summary>
     public double Width => Open is null ? 0 : ToolkitColumns.PanelWidth;
 
-    /// <summary>What the dropdown says while it is picked: "Toolkit" with none, else the tool's name.</summary>
-    public string Label => Open is null ? "Toolkit" : Name;
+    /// <summary>What the dropdown says while it is picked: "Side panel" with none, else the tool's name.</summary>
+    public string Label => Open is null ? "Side panel" : Name;
 
     public override string ToString() => Name;
 }
@@ -157,7 +157,7 @@ public sealed partial class MainWindowViewModel
             return input;
         var cards = Attachments.Where(a => a.Picked && picked.Contains(a.Path, StringComparer.OrdinalIgnoreCase))
             .Select(a => new ToolCard(a.Title, Path: a.Path)).ToList();
-        var name = SelectedToolkit?.Name ?? "Toolkit";
+        var name = SelectedToolkit?.Name ?? "Side panel";
         var about = toolkit.About(picked) ?? (name, $"[The {name} panel is open beside the chat, with nothing in it yet.]");
         if (picked.Count > 0)
             toolkit.Sent();
