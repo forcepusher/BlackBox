@@ -286,7 +286,7 @@ public sealed class VideoGeneratorTool : Tool
             var added = board.AddFirstFrames();
             if (added.Count > 0)
                 board.Save();
-            line = $"Saved the video in {board.Folder}: each piece in References or Generated with its settings in a .json beside it. The user sees it in the Video generator panel (Toolkit, at the top of Sloperator).\n" +
+            line = $"Saved the video in {board.Folder}: each piece in References or Generated with its settings in a .json beside it. The user sees it in the Video generator panel (Side panel, at the top left of Sloperator).\n" +
                    (added.Count == 0 ? "" : $"Shots without a first frame got one each from their prompts ({string.Join(", ", added.Select(f => f.Id))}): " +
                                             "rewrite each as the still picture the shot starts on, with who is in it as the references show them.\n");
         }

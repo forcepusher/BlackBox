@@ -37,7 +37,7 @@
 
     <ScrollViewer Margin="16,8">
       <StackPanel Spacing="4" Margin="0,0,12,16">
-        <TextBlock Classes="h2" Text="Toolkit" />
+        <TextBlock Classes="h2" Text="Side panel" />
         <CheckBox IsChecked="{Binding Panels.OpenFileChanges}" Content="Open File changes when the agent first changes a file in a chat" />
 
         <TextBlock Classes="h2" Text="Safety" />
