@@ -361,6 +361,7 @@ public sealed partial class AgentSession(
         toolContext.InConversation ??= text => History.Any(m => m.Content?.Contains(text, StringComparison.Ordinal) == true ||
                                                                 m.Parts?.Any(p => p.Text?.Contains(text, StringComparison.Ordinal) == true) == true);
         var cutOffs = 0;
+        var missChecked = false;
         var loops = new LoopDetector();
         // Pointing at web_search only makes sense when the model has it. Kept for the chat: "still
         // wrong" in the next message is a failed try, and the time since the last look-up goes on.
@@ -458,6 +459,16 @@ public sealed partial class AgentSession(
                     // ":" never fired in about 40 tasks on Qwen 3.8, Nemotron and Haiku (2026-10-27),
                     // and a nudge after an answer to a message that came in on top of the request
                     // made the model answer a second time what it had just said.
+                    // Ending right after a click that changed nothing: Qwen 3.8 often talked itself
+                    // into the click having worked ("the cursor is on it", "that may be normal").
+                    // It is asked once a run to look again; a second end stands.
+                    if (!missChecked && LastClickMissed())
+                    {
+                        missChecked = true;
+                        observer.OnNotice("The last click changed nothing on screen; asked the model to check it before finishing.");
+                        History.Add(ChatMessage.User(MissedEndNote));
+                        continue;
+                    }
                     // Compact context, picked as the model wrote this answer: before the end.
                     if (ResetDue())
                         await ResetContextAsync(observer, ct, asked: true).ConfigureAwait(false);
@@ -590,6 +601,26 @@ public sealed partial class AgentSession(
 
     /// <summary>How many replies in a row the length limit may cut off before the run ends.</summary>
     private const int MaxCutOffs = 3;
+
+    /// <summary>A reply that ends the task right after a click that changed nothing on screen.</summary>
+    internal const string MissedEndNote =
+        "[Sloperator] Your last click changed nothing on screen, so it probably missed, yet you ended there. Zoom in on what you meant to click: " +
+        "if it isn't selected or changed, click it again; if it already was, say so.";
+
+    /// <summary>Whether the tool results since the model's previous reply include a click that changed nothing.</summary>
+    private bool LastClickMissed()
+    {
+        for (var i = History.Count - 2; i >= 0; i--)
+        {
+            var m = History[i];
+            if (m.Role == ChatRole.Assistant)
+                return false;
+            if (m.Role == ChatRole.Tool && (m.Content?.Contains(ClickCheck.MissedNote, StringComparison.Ordinal) == true ||
+                                            m.Parts?.Any(p => p.Text?.Contains(ClickCheck.MissedNote, StringComparison.Ordinal) == true) == true))
+                return true;
+        }
+        return false;
+    }
 
     /// <summary>
     /// Takes the tool calls whose arguments aren't whole JSON out of a reply the length limit
