@@ -5,17 +5,17 @@
 .DESCRIPTION
   Writes src/Sloperator.App/Assets/sloperator.ico (16-256 px, PNG entries).
   Each size is drawn on its own, 4x oversampled, so the small ones stay crisp.
-  The icon's blob has a thin dark outline, so its pale yellow keeps its edge on a light taskbar or
-  Explorer; on a dark one the outline melts into the background and it looks as it did without.
-  The app's own sloperator.png (256 px, the SVG as it is) has no outline: the app is dark, and its
+  The icon's blob has a soft drop shadow, so its pale yellow keeps its edge on a light taskbar or
+  Explorer; on a dark one the shadow melts into the background and it looks as it did without.
+  The app's own sloperator.png (256 px, the SVG as it is) has no shadow: the app is dark, and its
   still blob must line up with the party blob GIF. -Edge none draws that.
 
 .EXAMPLE
   ./scripts/make-icon.ps1
-  ./scripts/make-icon.ps1 -Edge shadow -Out preview   # a soft shadow instead, written elsewhere
+  ./scripts/make-icon.ps1 -Edge outline -Out preview   # a thin dark outline instead, written elsewhere
 #>
 param(
-    [ValidateSet("outline", "shadow", "none")] [string]$Edge = "outline",
+    [ValidateSet("outline", "shadow", "none")] [string]$Edge = "shadow",
     [string]$Out
 )
 
