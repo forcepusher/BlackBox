@@ -1614,7 +1614,9 @@ use keeps it out until the address is typed again or another is picked: the chec
 had put it straight back. The button is as wide as the effort dropdown under it, so the address and
 the model box end on one line, and drawn as a dropdown (`Button.dropdown`: the ComboBox's fill,
 border, padding and arrow 10 from the right); as a ghost button captioned "Saved" it looked out of
-place among them (the user, 2026-10-29).
+place among them (the user, 2026-10-29). Hovered and pressed it takes their fill and border too, its text
+staying light: Fluent has no `ComboBoxForegroundPointerOver` or `...Pressed`, and set to those it went
+black; and it doesn't shrink pressed as a button does.
 
 The model dropdown lists the models by name, ignoring case and with numbers by value (qwen3-8b
 before qwen3-14b; `CompareOptions.NumericOrdering`), whatever order the server lists them in. Each
