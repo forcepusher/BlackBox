@@ -14,8 +14,7 @@ namespace Sloperator.Core.Tests;
 /// Opt-in (set BB_DESKTOP_TESTS=1, uses the real mouse): what the mouse does lands on what the model
 /// aimed at in its screenshot, whatever the display scaling. A small red square is found in
 /// Sloperator's own screenshot, as a model finds a button, and moved over, clicked, double-clicked,
-/// and dragged from, in screenshot pixels and on the
-/// 0-1000 grid, with the screenshot scaled down, and from a thread left DPI-unaware. Screenshots, screens and the cursor must all be in
+/// and dragged from, in screenshot pixels, with the screenshot scaled down, and from a thread left DPI-unaware. Screenshots, screens and the cursor must all be in
 /// the same pixels: on a 1920x1200 screen at 125%, coordinates read off a 1536x960 picture landed every
 /// click 25% too far right and down (2026-10-28). Before clicking, the spot is checked to be the
 /// square's, so a miss fails without clicking anything else.
@@ -24,10 +23,9 @@ namespace Sloperator.Core.Tests;
 public class ClickLandsTests
 {
     [Theory]
-    [InlineData(null, false)]
-    [InlineData(1000, false)]
-    [InlineData(1000, true)]
-    public async Task What_the_mouse_does_lands_on_what_the_screenshot_shows_there(int? grid, bool unawareThread)
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task What_the_mouse_does_lands_on_what_the_screenshot_shows_there(bool unawareThread)
     {
         Assert.SkipWhen(Environment.GetEnvironmentVariable("BB_DESKTOP_TESTS") is null, "Set BB_DESKTOP_TESTS=1 to run (uses the real mouse).");
         var platform = new WindowsPlatform();
@@ -38,7 +36,6 @@ public class ClickLandsTests
             // Smaller than any screen, so the screenshot is scaled down too.
             Settings = new AgentSettings { ScreenshotAfterActions = false, ScreenshotMaxWidth = 1024, ScreenshotMaxHeight = 640 },
             WorkingDirectory = Path.GetTempPath(),
-            CoordinateGrid = grid,
         };
         var cursorBefore = platform.Input.GetCursorPosition();
         // The screen before the square shows: red already on it (desktop icons, a red line in another
@@ -54,7 +51,7 @@ public class ClickLandsTests
             {
                 if (unawareThread)
                     SetThreadDpiAwarenessContext(-1); // DPI_AWARENESS_CONTEXT_UNAWARE
-                Act(ctx, square, grid, before).GetAwaiter().GetResult();
+                Act(ctx, square, before).GetAwaiter().GetResult();
             }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
         finally
@@ -63,13 +60,13 @@ public class ClickLandsTests
         }
     }
 
-    private static async Task Act(ToolContext ctx, RedSquare square, int? grid, byte[] before)
+    private static async Task Act(ToolContext ctx, RedSquare square, byte[] before)
     {
         var shot = await new ScreenshotTool().ExecuteAsync(new JsonObject(), ctx, CancellationToken.None);
         using var bitmap = SKBitmap.Decode(shot.Image!);
         using var without = SKBitmap.Decode(before);
         var (cx, cy) = RedCentre(bitmap, without);
-        var (x, y) = grid is { } g ? (cx * g / bitmap.Width, cy * g / bitmap.Height) : (cx, cy);
+        var (x, y) = (cx, cy);
         var aim = ctx.GetScreenSpace().ToScreen(x, y);
         Assert.True(OnSquare(aim, square), $"({x:0}, {y:0}) in the screenshot is {aim} on the screen, not on the square");
 
@@ -83,7 +80,7 @@ public class ClickLandsTests
         Assert.True(square.DoubleClicked.Wait(TimeSpan.FromSeconds(2)), "the double click missed the square");
 
         var clicks = square.Clicks;
-        var away = grid is { } g2 ? (x - g2 / 20.0, y) : (x - bitmap.Width / 20.0, y);
+        var away = (x - bitmap.Width / 20.0, y);
         await new MouseDragTool().ExecuteAsync(new JsonObject { ["x"] = x, ["y"] = y, ["to_x"] = away.Item1, ["to_y"] = away.Item2 }, ctx, CancellationToken.None);
         Assert.True(square.WaitForClicks(clicks + 1), "the drag didn't start on the square");
     }

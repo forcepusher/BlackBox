@@ -266,8 +266,7 @@ public sealed partial class OpenAiChatClient
             return await CompleteClaudeAsync(messages, tools, options, onDelta, ct, onSending).ConfigureAwait(false);
         var sendReasoning = options.SendReasoning && !_reasoningRejected;
         var sendExtras = !_extrasRejected;
-        var payload = Encoding.UTF8.GetBytes(BuildRequest(messages, tools, options, sendReasoning, sendExtras, PromptShifts.GetValueOrDefault(_baseUrl),
-            effortAsObject: OpenRouterStyle(_baseUrl)).ToJsonString());
+        var payload = Encoding.UTF8.GetBytes(BuildRequest(messages, tools, options, sendReasoning, sendExtras, PromptShifts.GetValueOrDefault(_baseUrl)).ToJsonString());
         // Cancelled when sending stalls. Once the request is out, only Stop ends the wait: a
         // server reading a long prompt sends nothing for minutes.
         using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -317,6 +316,14 @@ public sealed partial class OpenAiChatClient
                 if ((status is 400 or 404 or 415 or 422 || status >= 500) && HasImages(messages) && LooksLikeImagesRefused(err))
                     throw new ImagesRefusedException(ErrorText(err).Clip(300));
                 // Strict providers reject fields they do not know. Drop ours and try once more.
+                // Claude's thinking sent back through a gateway and refused (its signature no longer
+                // matches): the run goes on without the earlier thinking.
+                if (status == 400 && sendReasoning && messages.Any(m => m.ReasoningDetails is { Count: > 0 })
+                    && err.Contains("signature", StringComparison.OrdinalIgnoreCase))
+                {
+                    _reasoningRejected = true;
+                    return await CompleteAsync(messages, tools, options, onDelta, ct, onSending).ConfigureAwait(false);
+                }
                 if (status is 400 or 422 && (sendReasoning || sendExtras) && LooksLikeUnknownField(err))
                 {
                     _reasoningRejected |= sendReasoning;
@@ -367,6 +374,7 @@ public sealed partial class OpenAiChatClient
         var content = new StringBuilder();
         var reasoning = new StringBuilder();
         var calls = new SortedDictionary<int, (string Id, string Name, StringBuilder Args)>();
+        var details = new SortedDictionary<int, JsonObject>();
         var finished = false;
         string? finishReason = null;
         int? promptTokens = null, completionTokens = null;
@@ -434,6 +442,25 @@ public sealed partial class OpenAiChatClient
                 onDelta?.Invoke(new StreamDelta(StreamChannel.Reasoning, r));
             }
 
+            // Pieces of one entry share its index: its text comes a few words at a time, its
+            // signature last.
+            if (delta["reasoning_details"] is JsonArray pieces)
+            {
+                foreach (var piece in pieces.OfType<JsonObject>())
+                {
+                    var index = GetInt(piece, "index") ?? details.Count;
+                    if (!details.TryGetValue(index, out var entry))
+                        details[index] = entry = new JsonObject();
+                    foreach (var (key, value) in piece)
+                    {
+                        if (key is "text" or "summary" or "data" && entry[key] is JsonValue before && before.TryGetValue<string>(out var start) && value is JsonValue more && more.TryGetValue<string>(out var rest))
+                            entry[key] = start + rest;
+                        else if (value is not null)
+                            entry[key] = value.DeepClone();
+                    }
+                }
+            }
+
             if (GetString(delta, "content") is { Length: > 0 } c)
             {
                 content.Append(c);
@@ -489,6 +516,11 @@ public sealed partial class OpenAiChatClient
             PromptTokens = promptTokens,
             CompletionTokens = completionTokens,
         };
+        // Not Claude's thinking cut off before its signature came (a reply that ran out of room
+        // mid-thought): sent back, it would be refused.
+        var signed = details.Values.Where(d => GetString(d, "format")?.StartsWith("anthropic", StringComparison.Ordinal) != true || GetString(d, "signature") is { Length: > 0 } || GetString(d, "type") == "reasoning.encrypted").ToList();
+        if (signed.Count > 0)
+            message.ReasoningDetails = new JsonArray(signed.ToArray<JsonNode?>());
         if (calls.Count > 0)
         {
             message.ToolCalls = calls.Values
@@ -504,17 +536,9 @@ public sealed partial class OpenAiChatClient
         return message;
     }
 
-    /// <summary>
-    /// OpenRouter and Kilo's gateway, which take the effort as <c>reasoning: {effort}</c> for every
-    /// model they route to; other servers take OpenAI's <c>reasoning_effort</c>.
-    /// </summary>
-    internal static bool OpenRouterStyle(string baseUrl) =>
-        KiloGateway.Is(baseUrl) || Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) && uri.Host.EndsWith("openrouter.ai", StringComparison.OrdinalIgnoreCase);
-
     /// <param name="promptShift">Blank lines in front of the system prompt (see <see cref="ShiftPrompt"/>).</param>
-    /// <param name="effortAsObject"><see cref="ChatRequestOptions.Effort"/> as OpenRouter's <c>reasoning: {effort}</c> (see <see cref="OpenRouterStyle"/>).</param>
     internal static JsonObject BuildRequest(IReadOnlyList<ChatMessage> messages, IReadOnlyList<ToolDefinition> tools, ChatRequestOptions options,
-        bool sendReasoning = false, bool sendExtras = true, int promptShift = 0, bool effortAsObject = false)
+        bool sendReasoning = false, bool sendExtras = true, int promptShift = 0)
     {
         var msgs = new JsonArray();
         foreach (var m in messages)
@@ -560,14 +584,10 @@ public sealed partial class OpenAiChatClient
                 foreach (var (key, value) in options.Extra)
                     req[key] = value?.DeepClone();
             // Only for a model its server says takes it (see ServerProbe), so a strict server that
-            // turns it down anyway gets it dropped with the other extras.
+            // turns it down anyway gets it dropped with the other extras. OpenRouter and Kilo take
+            // it too, low to max, as they take their own reasoning: {effort} (tried 2026-10-29).
             if (options.Effort is { } effort)
-            {
-                if (effortAsObject)
-                    req["reasoning"] = new JsonObject { ["effort"] = effort };
-                else
-                    req["reasoning_effort"] = effort;
-            }
+                req["reasoning_effort"] = effort;
         }
 
         return req;
@@ -632,6 +652,8 @@ public sealed partial class OpenAiChatClient
         // and breaks the server's prompt cache at every assistant turn.
         if (sendReasoning && m.Role == ChatRole.Assistant && !string.IsNullOrEmpty(m.Reasoning))
             obj["reasoning_content"] = m.Reasoning;
+        if (sendReasoning && m.Role == ChatRole.Assistant && m.ReasoningDetails is { Count: > 0 } details)
+            obj["reasoning_details"] = details.DeepClone();
 
         return obj;
     }

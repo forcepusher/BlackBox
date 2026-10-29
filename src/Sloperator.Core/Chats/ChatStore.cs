@@ -306,6 +306,7 @@ public sealed class ChatStore(string dir)
             Parts = pictures is null ? null : m.Parts?.Select(Saved).ToList(),
             Reasoning = m.Reasoning,
             AnthropicContent = (JsonArray?)m.AnthropicContent?.DeepClone(),
+            ReasoningDetails = (JsonArray?)m.ReasoningDetails?.DeepClone(),
             ToolCalls = m.ToolCalls?.Select(c => new ToolCall { Id = c.Id, Name = c.Name, Arguments = c.Arguments }).ToList(),
             ToolCallId = m.ToolCallId,
             FromUser = m.FromUser,

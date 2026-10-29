@@ -1521,10 +1521,7 @@ copied in a browser, files copied in Explorer), or pick them with the paperclip 
 They wait under the box, × takes one off, and they go with the next message; a message can be
 files alone. The agent gets each one's full path, to work on it with its tools (a picture to start
 a ComfyUI job from, a document to read, a folder to go through), and sees the pictures among them
-as `read_file` shows a picture; a model that can't see images gets the paths. A model that points
-on a 0-1000 grid (Qwen3 and later, Gemma 4, Nemotron) is told how its places in a picture become
-the picture's own pixels, for a crop: qwen3.8 took its grid numbers for pixels of the smaller view
-it was shown and cut the wrong figure from a reference sheet three times. A pasted picture is
+as `read_file` shows a picture; a model that can't see images gets the paths. A pasted picture is
 saved as a PNG in `Data/pasted` first and deleted with its chat; dropped files stay where they
 are. Text on the clipboard is pasted as text, also when a picture comes with it (cells copied from
 Excel bring one). The message's bubble shows its pictures and the names of its other files, and a
@@ -1635,10 +1632,16 @@ next message. It goes only to a model whose server says it takes one, and is gre
 otherwise, saying why in its tooltip:
 - Anthropic's model list says each model's levels (`capabilities.effort`); without it, the
   version does (4.7 on: low to max; 4.6: no xhigh; Opus 4.5: low to high; Haiku 4.5: none).
-- OpenRouter and Kilo list `reasoning` among a model's `supported_parameters`; the effort goes as
-  their `reasoning: {effort}`. Not for Claude or Gemini through them: with thinking on, a tool call
-  wants the signed thinking before it back (their `reasoning_details`), which Sloperator doesn't keep,
-  so those run with thinking off as before (a review found it; not tried against OpenRouter).
+- OpenRouter and Kilo list `reasoning` among a model's `supported_parameters`; such a model takes
+  the levels its family and version do (Claude 5: low to max), else low to high. No branching by
+  provider: the effort goes as `reasoning_effort` everywhere, which OpenRouter and Kilo take as
+  their own `reasoning: {effort}` (tried 2026-10-29: Haiku 5.5 thought 283 tokens at low, 856 at
+  max). Asked for none, Haiku 5.5 through OpenRouter thinks anyway but sends only an empty, signed
+  entry, so no thinking showed. Whatever thinking a server sends (`reasoning_content`,
+  `reasoning_details` with Claude's signature) goes back with the reply as it came; without
+  `reasoning_details` OpenRouter leaves Claude's earlier thinking out of the prompt after a tool
+  call (no error). A refusal naming the signature sends the request again without it. Gemini's
+  signed thinking goes back the same way, untried.
 - LM Studio 0.4 lists `capabilities.reasoning.allowed_options` (gpt-oss: low, medium, high; a model
   that only turns thinking on and off takes none); it goes as `reasoning_effort`. The test server's
   LM Studio lists no reasoning options for qwen3.8 (its switches, `reasoning_effort` among them,
@@ -1712,8 +1715,7 @@ of the limit from then on, after a handoff note; the cost grows
   latest reply's must otherwise go back whole while its calls are answered). A context reset keeps only the user's messages, the handoff note
   and a screenshot, which the check allows. Effort is the one picked in the top bar (see Effort,
   below), sent as `output_config.effort`, the handoff note's too (another effort would read the
-  whole conversation anew), except for fresh looks and quick questions, which ask for low: every
-  Claude since 4.6 thinks, and only effort says how much. Thinking counts toward the reply limit, so requests ask for 64k (the
+  whole conversation anew): every Claude since 4.6 thinks, and only effort says how much. Thinking counts toward the reply limit, so requests ask for 64k (the
   model's limit if lower) whatever smaller limit a caller set; only what is written is paid for and
   counts toward the output tokens a minute.
 - Refusals: on the models that take it (Opus and Fable 5 on, Sonnet 5.5), a request Anthropic's
@@ -2234,17 +2236,16 @@ screenshot names ("Screenshot of screen 2 of 2"); a context reset says it with t
 with Claude's window on screen 2 in its last screenshot, Opus 5.5 clicked screen 2's coordinates on
 screen 1 and typed its test prompt into Notepad there, and did the same after the next message.
 
-Coordinates follow what the model was trained on. Qwen3 and later point on a 0-1000 grid over the
-image, so for them x/y are on that grid; asked for pixels, qwen3.8 slipped back to the grid in about
-a third of its clicks and missed by hundreds of pixels (11/16 hits against 16/16 on the grid in
-`ClickAccuracyTests`). Gemma 4 points on the same grid: given pixels, it aimed at Notepad's Save
-As dialog with grid positions (Save at 492, 671 where the grid has it at 496, 678), so its clicks
-landed up and to the left, in the folder list, and it never saved the file. Every other model
-gets screenshot pixels. The grid's steps aren't square
-(on a 1920×1200 screen an x step is 1.92 px and a y step 1.2 px): asked to draw a circle in Paint,
-qwen3.8 dragged as many x as y steps and got 346×217 and 385×241 px ovals before it worked that
-out. So the system prompt gives both step sizes, and `mouse_drag` says how far it went in screen
-pixels.
+Every model gives x/y in pixels of the screenshot, told its size. Until 29 October 2026 Qwen3 and
+later, Gemma 4 and Nemotron were asked for positions on the 0-1000 grid they were trained on: asked
+for pixels without the size, qwen3.8 had slipped back to the grid in a third of its clicks (11/16
+against 16/16 on the grid), and Gemma 4 had aimed at Notepad's Save As dialog with grid positions.
+Once pixel prompts gave the size (see below), qwen3.8 q6_k_xl hit 21/28 in pixels against 19/28 on
+the grid (`ClickAccuracyTests`, scenes unity, rows, dialogs, hidden, 2560x1080). Nemotron 3.5 Super
+VL still answers on its grid when asked for pixels (16/28 on the grid, 7/28 in pixels through
+OpenRouter; spelling out the pixel range or a worked example made it 5/28), and Gemma 4 12B hit 0/28
+on the grid and 3/28 in pixels (31B through OpenRouter: 1/28 and 0/28). The user had the grid taken out anyway: one way of pointing for every
+model, no forks by model name. Zoom's rulers, `mouse_drag` and pictures are all in pixels.
 
 Screenshots are scaled down to fit Settings → Advanced → Max screenshot size, keeping their shape
 and never scaled up (`AgentSettings.ScreenshotMaxWidth`/`ScreenshotMaxHeight`, kept within
@@ -2260,8 +2261,8 @@ pixels. A thread can still be put in another DPI context, so everything that rea
 thread back in physical pixels (`Native.EnsurePhysicalPixels`). On the laptop's 1920×1200 screen at
 125%, `ClickLandsTests` (`BB_DESKTOP_TESTS=1`, the real mouse) finds a red square of another process
 in Sloperator's own screenshot, scaled down to 1024×640, as a model finds a button, and moves over
-it, clicks, double-clicks and drags from it, in pixels and on
-the 0-1000 grid, and from a thread left DPI-unaware: all landed (28 October 2026). With the cursor
+it, clicks, double-clicks and drags from it, in pixels (and then also on the 0-1000 grid, since
+removed), and from a thread left DPI-unaware: all landed (28 October 2026). With the cursor
 moved to four fifths of the point, as a DPI-unaware process does, every case failed, and with the
 guard taken out the DPI-unaware thread's did. Scripts that drive Sloperator must work in physical pixels too: Windows PowerShell
 is DPI aware in some hosts and not in others, and click targets read off a 1536×960 screenshot of
@@ -3371,7 +3372,7 @@ $env:BB_SERVER_URL = "http://localhost:1234/v1"; $env:BB_SERVER_MODEL = "qwen3.8
 dotnet test --filter ServerIntegrationTests
 $env:BB_KILO = "1"; dotnet test --filter KiloOverflowTests   # a run past Kilo's count and its 20 MB at the 1M assumed recovers; 6 requests
 $env:BB_MUNITO_KEY = "<munito key>"; dotnet test --filter MunitoImageCapTests   # more screenshots than munito's 8 a request are left out; 3 requests
-dotnet test --filter ClickAccuracyTests   # click hit rate in 16 hard scenes; BB_CLICK_SCENES, BB_CLICK_TRIALS, BB_CLICK_COORDS=pixels|grid
+dotnet test --filter ClickAccuracyTests   # click hit rate in 16 hard scenes; BB_CLICK_SCENES, BB_CLICK_TRIALS
 $env:BB_SSH_TEST_HOST = "admin@127.0.0.2"; $env:BB_SSH_TEST_KEY = "$PWD\.dev\sysadmin-lab\key\admin_ed25519"
 dotnet test --filter SshIntegrationTests  # ssh, file tools and copy; BB_SSH_TEST_BIG_GB=3 adds a 3 GB copy each way (BB_SSH_TEST_HOST2: a second server), BB_SSH_TEST_REBOOT=1 reboots the VM
 $env:BB_TEXT_ONLY_URL = "<server>/v1"; $env:BB_TEXT_ONLY_MODEL = "<a model without vision>"; dotnet test --filter TextOnlyServerTests

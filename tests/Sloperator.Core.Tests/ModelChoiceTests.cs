@@ -320,9 +320,14 @@ public class ModelChoiceTests
         Assert.Equal(["low", "medium", "high"], thinks.Efforts);
         var plain = ServerProbe.FromListEntry(new ModelInfo("nvidia/nemotron-3.5-super-vl:free"), JsonNode.Parse("""{"id":"nvidia/nemotron-3.5-super-vl:free","supported_parameters":["tools","max_tokens"]}""")!.AsObject());
         Assert.Empty(plain.Efforts!);
-        // Not Claude or Gemini through such a gateway: with thinking on, a tool call wants the signed thinking back.
-        foreach (var signed in new[] { "anthropic/claude-sonnet-5.5", "google/gemini-3.1-pro" })
-            Assert.Empty(ServerProbe.FromListEntry(new ModelInfo(signed), JsonNode.Parse($$"""{"id":"{{signed}}","supported_parameters":["tools","reasoning"]}""")!.AsObject()).Efforts!);
+        // Any model listed so takes the levels of its family and version (dotted, as OpenRouter
+        // writes it), low to high where they say none (a thinking budget there).
+        IReadOnlyList<string>? Routed(string id) => ServerProbe.FromListEntry(new ModelInfo(id), JsonNode.Parse($$"""{"id":"{{id}}","supported_parameters":["tools","reasoning"]}""")!.AsObject()).Efforts;
+        Assert.Equal(Efforts.Levels, Routed("anthropic/claude-haiku-5.5"));
+        Assert.Equal(["low", "medium", "high", "max"], Routed("anthropic/claude-sonnet-4.6"));
+        Assert.Equal(["low", "medium", "high"], Routed("anthropic/claude-sonnet-4.5"));
+        Assert.Empty(ServerProbe.FromListEntry(new ModelInfo("anthropic/claude-3-haiku"), JsonNode.Parse("""{"id":"anthropic/claude-3-haiku","supported_parameters":["tools"]}""")!.AsObject()).Efforts!);
+        Assert.Equal(["low", "medium", "high"], Routed("google/gemini-3.1-pro"));
         // A bare list (vLLM, OpenAI) goes by the name.
         Assert.Equal(["low", "medium", "high"], ServerProbe.FromListEntry(new ModelInfo("gpt-5.6"), JsonNode.Parse("""{"id":"gpt-5.6"}""")!.AsObject()).Efforts);
         Assert.Empty(ServerProbe.FromListEntry(new ModelInfo("Qwen/Qwen3.8-27B"), JsonNode.Parse("""{"id":"Qwen/Qwen3.8-27B","max_model_len":131072}""")!.AsObject()).Efforts!);

@@ -17,7 +17,7 @@ namespace Sloperator.Core.Tests;
 /// the click is checked against the target's bounds.
 /// Opt-in like <see cref="ServerIntegrationTests"/>: set BB_SERVER_URL and BB_SERVER_MODEL. Optional: BB_SERVER_KEY (a server that wants one),
 /// BB_CLICK_SCENES (comma-separated, default all), BB_CLICK_TRIALS (per scene, default 5),
-/// BB_CLICK_COORDS=pixels|grid (default: what Sloperator picks for the model), BB_CLICK_RES (the box screenshots
+/// BB_CLICK_RES (the box screenshots
 /// fit, as 1920x1080; default the setting's), BB_CLICK_SEED (first layout, default 1000), BB_CLICK_TAG (report name),
 /// BB_CLICK_RETRY (extra clicks allowed after a miss, default 0: the target reacts when hit, so a
 /// miss gets Sloperator's miss note), BB_CLICK_CHECK=0 (no miss note), BB_CLICK_ZOOM=0 (no zoom tool), BB_CLICK_RULE
@@ -33,7 +33,6 @@ public class ClickAccuracyTests
     private static string? Env(string name) => Environment.GetEnvironmentVariable(name) is { Length: > 0 } v ? v : null;
     private static readonly string? Url = Env("BB_SERVER_URL");
     private static readonly string? Model = Env("BB_SERVER_MODEL");
-    private static readonly string? Coords = Env("BB_CLICK_COORDS");
 
     private static readonly string[] Words =
     [
@@ -138,7 +137,6 @@ public class ClickAccuracyTests
         var resolution = Env("BB_CLICK_RES") is { } res && res.Split('x') is [var w, var h] ? (int.Parse(w), int.Parse(h)) : new AgentSettings().ScreenshotBox;
         var tag = Env("BB_CLICK_TAG") ?? "accuracy";
         var seed = int.TryParse(Env("BB_CLICK_SEED"), out var s0) ? s0 : 1000;
-        var grid = Coords switch { "pixels" => null, "grid" => 1000, _ => ModelCoordinates.GridFor(Model) };
 
         var report = new List<string>();
         var summary = new List<string>();
@@ -166,11 +164,11 @@ public class ClickAccuracyTests
                 var settings = new AgentSettings { ScreenshotMaxWidth = resolution.Item1, ScreenshotMaxHeight = resolution.Item2 };
                 if (int.TryParse(Env("BB_CLICK_QUALITY"), out var quality))
                     settings.ScreenshotQuality = quality;
-                var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = Path.GetTempPath(), CoordinateGrid = grid };
+                var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = Path.GetTempPath() };
                 if (trial == 0)
                     File.WriteAllBytes(Path.Combine(Path.GetTempPath(), $"bb-click-{tag}-{scene.Name}.jpg"), ScreenshotTool.Take(new ToolContext
                     {
-                        Platform = platform, Settings = settings, WorkingDirectory = "", CoordinateGrid = grid, CurrentScreen = scene.On,
+                        Platform = platform, Settings = settings, WorkingDirectory = "", CurrentScreen = scene.On,
                     }).Image!);
                 platform.ShiftFirstShot = shift;
                 var connection = BackendConnection.Create(http, server);
@@ -231,7 +229,7 @@ public class ClickAccuracyTests
         }
         foreach (var line in summary)
             Log(line);
-        Log($"TOTAL {allHits}/{allTrials} with {Model}, coordinates: {grid?.ToString() ?? "pixels"}, screenshots: {resolution.Item1}x{resolution.Item2}, " +
+        Log($"TOTAL {allHits}/{allTrials} with {Model}, screenshots: {resolution.Item1}x{resolution.Item2}, " +
             (zoom ? "zoom tool" : "no zoom tool") + $", JPEG quality {Env("BB_CLICK_QUALITY") ?? new AgentSettings().ScreenshotQuality.ToString()}");
         if (retries > 0)
             Log($"RETRY {fixedLater}/{retried} first-click misses hit within {retries} more tries (miss check {(ClickCheck.Enabled ? "on" : "off")}, {(zoom ? "zoom tool" : "no zoom tool")})");

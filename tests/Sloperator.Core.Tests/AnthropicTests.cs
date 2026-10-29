@@ -169,17 +169,7 @@ public class AnthropicTests
     }
 
     [Fact]
-    public async Task A_quick_look_asks_for_low_effort_and_room_to_think()
-    {
-        var (client, api) = Connect();
-        await client.CompleteAsync([ChatMessage.User("Where is Save?")], [], new ChatRequestOptions { Model = "claude-opus-5-5", MaxTokens = 4096, QuickAnswer = true }, null, CancellationToken.None);
-        var body = api.Requests.Last().Body!;
-        Assert.Equal("low", (string)body["output_config"]!["effort"]!);
-        Assert.Equal(64_000, (int)body["max_tokens"]!);
-    }
-
-    [Fact]
-    public async Task The_effort_picked_goes_to_Claude_and_to_the_handoff_note_but_not_to_a_quick_look()
+    public async Task The_effort_picked_goes_to_Claude_and_to_the_handoff_note()
     {
         var server = new ServerSettings { BaseUrl = Address, ApiKey = "sk-ant-test", Model = "claude-opus-5-5", Effort = "high" };
         var (_, api) = Connect();
@@ -192,9 +182,6 @@ public class AnthropicTests
         Assert.Empty(api.Violations);
         Assert.Equal("high", (string)api.Requests.Last().Body!["output_config"]!["effort"]!);
 
-        // A quick look stays at low whatever is picked.
-        await backend.Client.CompleteAsync([ChatMessage.User("Where is Save?")], [], new ChatRequestOptions { Model = "claude-opus-5-5", QuickAnswer = true, Effort = "high" }, null, CancellationToken.None);
-        Assert.Equal("low", (string)api.Requests.Last().Body!["output_config"]!["effort"]!);
 
         // Haiku 4.5 takes none: nothing is sent, and the request stays valid.
         server.Model = "claude-haiku-4-5-20251001";

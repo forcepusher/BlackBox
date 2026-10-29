@@ -73,6 +73,14 @@ public sealed class ChatMessage
     /// </summary>
     public JsonArray? AnthropicContent { get; set; }
 
+    /// <summary>
+    /// For replies through OpenRouter-style gateways: the reply's thinking as they sent it
+    /// (<c>reasoning_details</c>, Claude's signature among it), put together from the stream and
+    /// sent back with the reply when <see cref="ChatRequestOptions.SendReasoning"/> is on. Without
+    /// it OpenRouter leaves Claude's earlier thinking out of the prompt.
+    /// </summary>
+    public JsonArray? ReasoningDetails { get; set; }
+
     public bool HasToolCalls => ToolCalls is { Count: > 0 };
 
     public static ChatMessage System(string text) => new() { Role = ChatRole.System, Content = text };
@@ -100,12 +108,6 @@ public sealed class ChatRequestOptions
 
     /// <summary>Send earlier reasoning back as reasoning_content so thinking models keep their train of thought.</summary>
     public bool SendReasoning { get; set; }
-
-    /// <summary>
-    /// The answer is wanted soon, with little thinking first (a click's fresh look). Claude, which
-    /// always thinks, is asked for low effort; for Qwen the caller begins the reply itself.
-    /// </summary>
-    public bool QuickAnswer { get; set; }
 
     /// <summary>
     /// How hard the model is asked to think ("low" to "max", see <see cref="Settings.Efforts"/>), for a

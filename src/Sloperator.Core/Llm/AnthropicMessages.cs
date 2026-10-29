@@ -47,7 +47,7 @@ internal sealed partial record ClaudeModel(string Id, int MaxTokens, bool Adapti
         }
     }
 
-    /// <summary>What the name says: <c>claude-opus-5-5</c>, <c>claude-haiku-4-5-20251001</c>, <c>claude-3-5-sonnet-latest</c>.</summary>
+    /// <summary>What the name says: <c>claude-opus-5-5</c>, <c>claude-haiku-4-5-20251001</c>, <c>claude-3-5-sonnet-latest</c>, <c>anthropic/claude-sonnet-4.6</c>.</summary>
     public static ClaudeModel FromName(string id)
     {
         var (family, version) = Parse(id);
@@ -73,10 +73,11 @@ internal sealed partial record ClaudeModel(string Id, int MaxTokens, bool Adapti
             int.Parse(major) + (minor.Length is 1 or 2 ? int.Parse(minor) / Math.Pow(10, minor.Length) : 0);
     }
 
-    [GeneratedRegex(@"claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?", RegexOptions.IgnoreCase)]
+    // OpenRouter writes the version with a dot: anthropic/claude-haiku-5.5.
+    [GeneratedRegex(@"claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:[-.](\d+))?", RegexOptions.IgnoreCase)]
     private static partial Regex NewName();
 
-    [GeneratedRegex(@"claude-(\d+)(?:-(\d))?-(opus|sonnet|haiku)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"claude-(\d+)(?:[-.](\d))?-(opus|sonnet|haiku)", RegexOptions.IgnoreCase)]
     private static partial Regex OldName();
 
     private static int? Int(JsonNode? node) => node is JsonValue v && v.TryGetValue<int>(out var n) ? n : null;
@@ -183,8 +184,8 @@ public static partial class AnthropicMessages
             }
             req["thinking"] = thinking;
         }
-        // The effort picked in the top bar (where the model takes one), and low for a quick answer.
-        if ((options.QuickAnswer && model.Adaptive ? "low" : options.Effort) is { } effort)
+        // The effort picked in the top bar (where the model takes one).
+        if (options.Effort is { } effort)
             req["output_config"] = new JsonObject { ["effort"] = effort };
         if (model.Fallbacks && wire.Betas)
         {
