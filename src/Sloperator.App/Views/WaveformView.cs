@@ -65,11 +65,11 @@ public sealed class WaveformView : Control
 
     // ---- drawing --------------------------------------------------------------------------------
 
-    private static readonly IBrush Back = new SolidColorBrush(Color.FromRgb(0x16, 0x18, 0x1B));
-    private static readonly IBrush RulerBack = new SolidColorBrush(Color.FromRgb(0x1A, 0x1C, 0x1F));
+    private static readonly IBrush Back = new SolidColorBrush(Color.FromRgb(0x16, 0x16, 0x16));
+    private static readonly IBrush RulerBack = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E));
     private static readonly IPen Tick = new Pen(new SolidColorBrush(Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF)), 1);
     private static readonly IPen Grid = new Pen(new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF)), 1);
-    private static readonly IBrush Label = new SolidColorBrush(Color.FromRgb(0x8B, 0x91, 0x99));
+    private static readonly IBrush Label = new SolidColorBrush(Color.FromRgb(0xA2, 0xA2, 0xA2));
     private static readonly IBrush RangeFill = new SolidColorBrush(Color.FromArgb(0x30, 0xFC, 0xC2, 0x1B));
     private static readonly IPen RangeEdge = new Pen(new SolidColorBrush(Color.FromRgb(0xFC, 0xC2, 0x1B)), 1.5);
     private static readonly IPen Playhead = new Pen(Brushes.White, 1.5);

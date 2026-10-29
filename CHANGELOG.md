@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - A chat video's right-click Copy is now two entries: **Copy image** for the frame on screen and
   **Copy file** for the video.
+- A new look in neutral greys: a darker background, filled buttons, fields darker than the window,
+  rounder cards and controls, softer diff colours, and every title bar dark. Nothing moved: every
+  control is where it was and as big. The thoughts over a reply have a header of their own and
+  larger text.
 - Every model clicks in pixels of the screenshot. Qwen 3 and later, Gemma 4 and Nemotron no longer get
   a 0-1000 grid: told the screenshot's size, Qwen clicks as well in pixels.
 - Claude through OpenRouter (and any server whose model list says it takes reasoning) gets the effort

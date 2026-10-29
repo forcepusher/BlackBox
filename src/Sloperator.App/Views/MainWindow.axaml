@@ -67,14 +67,14 @@
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="Background" Value="{StaticResource BbAccent}" />
-      <Setter Property="Foreground" Value="#111214" />
+      <Setter Property="Foreground" Value="{StaticResource BbOnAccent}" />
     </Style>
     <!-- Files going with a message: thumbnails of pictures, and the name of anything else. -->
     <Style Selector="Border.attachment">
       <Setter Property="Background" Value="{StaticResource BbSurfaceRaised}" />
-      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbControlBorder}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="CornerRadius" Value="8" />
       <Setter Property="ClipToBounds" Value="True" />
     </Style>
     <Style Selector="Border.attachment.file">
@@ -106,7 +106,7 @@
       <Setter Property="VerticalAlignment" Value="Top" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
-      <Setter Property="Background" Value="#E0111214" />
+      <Setter Property="Background" Value="#E0161616" />
       <Setter Property="BorderBrush" Value="{StaticResource BbMuted}" />
       <Setter Property="BorderThickness" Value="1" />
     </Style>
@@ -190,7 +190,7 @@
         <StackPanel Spacing="8">
           <DockPanel>
             <Button DockPanel.Dock="Left" Classes="roundPlay accent" Command="{Binding PlayCommand}" VerticalAlignment="Center" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause sound">
-              <PathIcon Data="{Binding PlayIcon}" Width="14" Height="14" Foreground="#111214" />
+              <PathIcon Data="{Binding PlayIcon}" Width="14" Height="14" Foreground="{StaticResource BbOnAccent}" />
             </Button>
             <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
             <Panel Height="56" Margin="12,0,0,0">
@@ -350,7 +350,7 @@
     <!-- What the agent talks to: server and key, then model and how much context to use.
          The labels share a column so both rows line up, and both rows are exactly as tall as a text
          box so every field and button in a row shares its top and bottom edges. -->
-    <Border Grid.Row="1" Classes="bar">
+    <Border Grid.Row="1" Classes="bar fields">
       <Grid ColumnDefinitions="Auto,3*,Auto,2*,Auto" RowDefinitions="32,32" RowSpacing="8" VerticalAlignment="Center">
         <TextBlock Grid.Row="0" Grid.Column="0" Classes="label" Text="Server" Margin="0,0,8,0" />
         <DockPanel Grid.Row="0" Grid.Column="1">
@@ -496,7 +496,7 @@
             <DataTemplate DataType="vm:UserMessageItem">
               <StackPanel HorizontalAlignment="Right" MaxWidth="640" Margin="60,0,0,0" Spacing="3">
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Right" />
-                <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="0,8" HorizontalAlignment="Right">
+                <Border Background="{StaticResource BbUserBubble}" CornerRadius="12" Padding="0,8" HorizontalAlignment="Right">
                   <StackPanel Spacing="6">
                     <!-- Sent with a tool open, in a chat saved before tools gave cards: which video, and what was picked in it. -->
                     <TextBlock Classes="muted" Text="{Binding Via}" IsVisible="{Binding HasVia}" FontSize="12" TextWrapping="Wrap" Margin="12,0" />
@@ -567,9 +567,9 @@
             <DataTemplate DataType="vm:AssistantMessageItem">
               <StackPanel Spacing="6" Margin="0,0,40,0">
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Left" />
-                <Expander IsVisible="{Binding HasReasoning}" Header="{Binding ThinkingLabel}" HorizontalAlignment="Stretch" IsExpanded="True"
-                          Padding="8,4">
-                  <SelectableTextBlock Classes="muted" views:MarkdownText.Plain="{Binding ShownReasoning}" TextWrapping="Wrap" Margin="-8,-4" Padding="8,4" />
+                <Expander Classes="thoughts" IsVisible="{Binding HasReasoning}" Header="{Binding ThinkingLabel}" HorizontalAlignment="Stretch" IsExpanded="True"
+                          Padding="16,12">
+                  <SelectableTextBlock Classes="muted" views:MarkdownText.Plain="{Binding ShownReasoning}" TextWrapping="Wrap" Margin="-16,-12" Padding="16,12" />
                 </Expander>
                 <views:MarkdownView Source="{Binding ShownText}" IsVisible="{Binding HasText}" />
                 <TextBlock Classes="muted" Text="{Binding TypingText}" IsVisible="{Binding ShowTypingDots}" />
@@ -595,7 +595,7 @@
                     <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText, StringFormat='{}{0} ·'}" IsVisible="{Binding HasTime}"
                                ToolTip.Tip="{Binding TimeTip}" VerticalAlignment="Top" Margin="8,0,0,0" />
                     <!-- 2 over the name and none under: Consolas' capitals sit high in its line (1.5 px over the chip's middle at 125%). -->
-                    <Border DockPanel.Dock="Left" Background="{StaticResource BbSurfaceRaised}" CornerRadius="4" Padding="8,2,8,0" VerticalAlignment="Top" Margin="0,0,8,0">
+                    <Border DockPanel.Dock="Left" Classes="tag" Padding="8,2,8,0" VerticalAlignment="Top" Margin="0,0,8,0">
                       <TextBlock Text="{Binding Name}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Foreground="{StaticResource BbAccent}" />
                     </Border>
                     <TextBlock Text="{Binding Title}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis"
@@ -636,7 +636,7 @@
 
             <DataTemplate DataType="vm:NoticeItem">
               <!-- As wide as its words, so their sides are the text's padding (see the user's bubble). -->
-              <Border Padding="2,6" CornerRadius="6" Background="{StaticResource BbSurface}" HorizontalAlignment="Center">
+              <Border Classes="notice" HorizontalAlignment="Center">
                 <!-- After a stop (Pause/Break, Stop, an error), Continue carries on with the task where it stopped. -->
                 <DockPanel>
                   <Button DockPanel.Dock="Right" Classes="primary small" Content="Continue" Margin="4,-2,8,-2" VerticalAlignment="Center"
@@ -831,7 +831,7 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:QueuedMessageItem">
                   <!-- The text as far in as in a bubble of the chat; the × over its padding, so it doesn't make the bubble taller. -->
-                  <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="12,8,4,8" HorizontalAlignment="Right" MaxWidth="640" Opacity="0.8">
+                  <Border Background="{StaticResource BbUserBubble}" CornerRadius="12" Padding="12,8,4,8" HorizontalAlignment="Right" MaxWidth="640" Opacity="0.8">
                     <DockPanel>
                       <Button DockPanel.Dock="Right" Classes="icon small cancelQueued" Command="{Binding CancelCommand}" Margin="8,-4,0,-4" VerticalAlignment="Top"
                               ToolTip.Tip="Cancel: take it back unsent" AutomationProperties.Name="Cancel queued message">
@@ -926,7 +926,7 @@
     </Border>
 
     <!-- Files dragged over the chat: where they go. The drop itself lands on the window. -->
-    <Panel Grid.Row="0" Grid.RowSpan="5" IsVisible="{Binding IsDropping}" IsHitTestVisible="False" Background="#EC111214">
+    <Panel Grid.Row="0" Grid.RowSpan="5" IsVisible="{Binding IsDropping}" IsHitTestVisible="False" Background="#EC161616">
       <Rectangle Margin="14" RadiusX="12" RadiusY="12" Stroke="{StaticResource BbAccent}" StrokeThickness="2" StrokeDashArray="6,4" />
       <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
         <PathIcon Width="36" Height="36" Foreground="{StaticResource BbAccent}" HorizontalAlignment="Center"

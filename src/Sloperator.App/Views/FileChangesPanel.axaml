@@ -52,16 +52,16 @@
       <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
     <Style Selector="Border.row.added">
-      <Setter Property="Background" Value="#1D3527" />
+      <Setter Property="Background" Value="{StaticResource BbAddedRow}" />
     </Style>
     <Style Selector="Border.row.removed">
-      <Setter Property="Background" Value="#3A2125" />
+      <Setter Property="Background" Value="{StaticResource BbRemovedRow}" />
     </Style>
-    <Style Selector="Border.row.hunk">
-      <Setter Property="Background" Value="{StaticResource BbSurface}" />
-    </Style>
+    <!-- A file's header: a card's colour. A hunk's divider has no band of its own, only its words.
+         (No line over the header: a row's border is only its left side, for the pick, and Avalonia
+         draws no box shadow on a border whose sides differ.) -->
     <Style Selector="Border.row.header">
-      <Setter Property="Background" Value="{StaticResource BbSurfaceRaised}" />
+      <Setter Property="Background" Value="{StaticResource BbSurface}" />
       <Setter Property="Margin" Value="0,10,0,0" />
     </Style>
     <Style Selector="ListBox.diff ListBoxItem:pointerover Border.row">
@@ -72,26 +72,33 @@
       <Setter Property="Background" Value="{StaticResource BbAccentTint}" />
       <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
     </Style>
+    <!-- A line's number faint; an added line's green and a removed line's (the old file's) red, as
+         their markers. The code a shade under the main text. -->
     <Style Selector="TextBlock.number">
-      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+      <Setter Property="Foreground" Value="{StaticResource BbFaint}" />
       <Setter Property="TextAlignment" Value="Right" />
     </Style>
-    <!-- A removed line's number is the old file's: greyed out further. -->
-    <Style Selector="TextBlock.number.removed">
-      <Setter Property="Opacity" Value="0.5" />
+    <Style Selector="Border.row.added TextBlock.number">
+      <Setter Property="Foreground" Value="{StaticResource BbAdded}" />
+    </Style>
+    <Style Selector="Border.row.removed TextBlock.number">
+      <Setter Property="Foreground" Value="{StaticResource BbRemoved}" />
+    </Style>
+    <Style Selector="ListBox.diff TextBlock.code">
+      <Setter Property="Foreground" Value="{StaticResource BbCode}" />
     </Style>
     <Style Selector="TextBlock.marker.added">
-      <Setter Property="Foreground" Value="{StaticResource BbOk}" />
+      <Setter Property="Foreground" Value="{StaticResource BbAdded}" />
     </Style>
     <Style Selector="TextBlock.marker.removed">
-      <Setter Property="Foreground" Value="{StaticResource BbError}" />
+      <Setter Property="Foreground" Value="{StaticResource BbRemoved}" />
     </Style>
     <!-- "+10 -3" after a file and in the summary: added lines green, removed red, as the markers. -->
     <Style Selector="Run.addedCount">
-      <Setter Property="Foreground" Value="{StaticResource BbOk}" />
+      <Setter Property="Foreground" Value="{StaticResource BbAdded}" />
     </Style>
     <Style Selector="Run.removedCount">
-      <Setter Property="Foreground" Value="{StaticResource BbError}" />
+      <Setter Property="Foreground" Value="{StaticResource BbRemoved}" />
     </Style>
     <!-- A hunk's divider: small, muted, starting where the numbers do. -->
     <Style Selector="TextBlock.divider">
@@ -112,15 +119,16 @@
     <!-- A file some of whose lines are picked: grey, selected or not, as only those lines are (the
          user, 2026-10-28); yellow again once they are let go, if it is selected. -->
     <Style Selector="ListBox.files ListBoxItem.lines /template/ ContentPresenter#PART_ContentPresenter,
+                     ListBox.files ListBoxItem.lines:pointerover /template/ ContentPresenter#PART_ContentPresenter,
                      ListBox.files ListBoxItem.lines:selected /template/ ContentPresenter#PART_ContentPresenter,
                      ListBox.files ListBoxItem.lines:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource SystemControlHighlightListMediumBrush}" />
+      <Setter Property="Background" Value="{StaticResource BbChip}" />
     </Style>
     <!-- Stage, Unstage and Discard over the diff: one that has nothing to act on is only greyed, not
          filled: it shouldn't look the more pressable. -->
     <Style Selector="Button.act:disabled /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbControlBorder}" />
       <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
     </Style>
     <Style Selector="Button.act:disabled">
@@ -141,10 +149,10 @@
       <Setter Property="RenderTransform" Value="none" />
     </Style>
     <Style Selector="TextBlock.added">
-      <Setter Property="Foreground" Value="{StaticResource BbOk}" />
+      <Setter Property="Foreground" Value="{StaticResource BbAdded}" />
     </Style>
     <Style Selector="TextBlock.deleted">
-      <Setter Property="Foreground" Value="{StaticResource BbError}" />
+      <Setter Property="Foreground" Value="{StaticResource BbRemoved}" />
     </Style>
   </UserControl.Styles>
 
