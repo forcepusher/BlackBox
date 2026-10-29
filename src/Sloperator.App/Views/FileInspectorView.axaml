@@ -123,7 +123,7 @@
     <Border Grid.Row="1" IsVisible="{Binding Sound, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
       <DockPanel DataContext="{Binding Sound}" x:DataType="vm:InspectorSoundViewModel">
         <Button DockPanel.Dock="Left" Classes="ghost icon"
-                Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space): the stretch picked, else from the playhead" AutomationProperties.Name="Play">
+                Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space)" AutomationProperties.Name="Play">
           <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
         </Button>
         <Panel DockPanel.Dock="Left" Margin="8,0,0,0" VerticalAlignment="Center">
@@ -176,7 +176,7 @@
           <Button Classes="ghost small" Content="Back" Command="{Binding ViewFromCommand}" CommandParameter="back" ToolTip.Tip="See it from the back" />
           <Button Classes="ghost small" Content="Left" Command="{Binding ViewFromCommand}" CommandParameter="left" ToolTip.Tip="See it from its left" />
           <Button Classes="ghost small" Content="Top" Command="{Binding ViewFromCommand}" CommandParameter="top" ToolTip.Tip="See it from above" />
-          <Button Classes="ghost small" Content="Reset" Command="{Binding ViewFromCommand}" CommandParameter="start" ToolTip.Tip="As at first (or double-click it)" />
+          <Button Classes="ghost small" Content="Reset" Command="{Binding ViewFromCommand}" CommandParameter="start" ToolTip.Tip="Reset view (double-click)" />
         </StackPanel>
         <TextBlock Classes="muted" Text="{Binding ViewText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,4,0"
                    TextTrimming="CharacterEllipsis" AutomationProperties.Name="Seen from" />

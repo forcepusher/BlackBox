@@ -34,7 +34,7 @@
     <ScrollViewer>
       <StackPanel Spacing="4" Margin="16,8,28,24">
         <TextBlock Classes="h2" Text="Side panel" />
-        <CheckBox IsChecked="{Binding Panels.OpenFileChanges}" Content="Open File changes when the agent first changes a file in a chat" />
+        <CheckBox IsChecked="{Binding Panels.OpenFileChanges}" Content="Open File changes when the agent changes a file" />
 
         <TextBlock Classes="h2" Text="Safety" />
         <Grid Classes="form" ColumnDefinitions="160,*">
@@ -50,15 +50,14 @@
                  Watermark="For example: my documents are in D:\Docs. Use Firefox for browsing. Answer in German." />
 
         <TextBlock Classes="h2" Text="MCP servers" />
-        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Tools from other programs, like Blender. Sloperator adds what a task needs here by itself." />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Tools from other programs, like Blender. Sloperator adds them as needed."
+                   ToolTip.Tip="{Binding Paths.McpConfigFile, StringFormat='Kept in {0}'}" />
         <TextBox x:Name="McpBox" Text="{Binding McpConfigText}" Watermark="{Binding McpExample}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
                  FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12" MinHeight="200" Margin="0,8,0,0"
                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                 ToolTip.Tip="You can paste a server's &quot;mcpServers&quot; block from its instructions here too: Claude Desktop, LM Studio and Cursor use the same format." />
+                 ToolTip.Tip="Same format as Claude Desktop, LM Studio and Cursor" />
         <SelectableTextBlock Classes="muted error" TextWrapping="Wrap" Text="{Binding McpError}" IsVisible="{Binding HasMcpError}" />
         <SelectableTextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
-        <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="Sloperator starts these when you click Save and each time it opens."
-                   ToolTip.Tip="{Binding Paths.McpConfigFile, StringFormat='Kept in {0}'}" />
 
         <TextBlock Classes="h2" Text="Advanced" />
         <Grid Classes="form" ColumnDefinitions="160,*">
@@ -73,7 +72,7 @@
           </StackPanel>
         </Grid>
         <TextBlock Classes="muted" TextWrapping="Wrap"
-                   Text="Larger screens are scaled down to fit and use less context. 2560 × 1080 by default." />
+                   Text="Larger screens are scaled down. Default 2560 × 1080." />
       </StackPanel>
     </ScrollViewer>
   </DockPanel>

@@ -213,13 +213,12 @@ public sealed partial class MainWindowViewModel : IModelServerSwitch
             var reported = server.ContextReported ? $"The server runs this model with {server.DetectedContextSize:N0} tokens." : null;
             if (server.AutoContext)
                 return reported is not null ? $"{reported} Sloperator uses all of it. Untick Auto to use less."
-                    : _modelNotLoaded ? "The model isn't loaded on the server yet, so its context size isn't known. Your first message loads it, and the size shows here."
-                    : $"The server doesn't say how large the context is, so Sloperator assumes {server.DetectedContextSize:N0} tokens and goes lower if the server objects.";
+                    : _modelNotLoaded ? "The size shows once the model loads."
+                    : $"The server doesn't report a size: assuming {server.DetectedContextSize:N0} tokens.";
             var over = server.ContextReported && server.ContextSize > server.DetectedContextSize
-                ? $" That is more than the {server.DetectedContextSize:N0} the server runs this model with: it will refuse requests longer than that, and Sloperator then drops to its size for the rest of the task."
+                ? $"More than the server's {server.DetectedContextSize:N0}: Sloperator drops to that if refused. "
                 : "";
-            return $"Sloperator uses {server.ContextSize:N0} tokens: it starts a fresh context (with a handoff note) when a fifth is left.{over} "
-                   + "Drag the slider or type a size such as 48k, 100000 or 1M. The model on the server is not reloaded.";
+            return $"{over}Starts a fresh context when a fifth is left. Type a size like 48k or 1M.";
         }
     }
 
@@ -266,13 +265,12 @@ public sealed partial class MainWindowViewModel : IModelServerSwitch
     /// <summary>Why the model shown is the one, when Sloperator picked it.</summary>
     public string? ModelToolTip => !string.IsNullOrEmpty(_settings.Server.Model) || _settings.Server.AutoModel is not { } auto ? null
         : auto == KiloGateway.Model && KiloGateway.Is(_settings.Server.BaseUrl)
-            ? "Picked by Sloperator: of Kilo's free models, the one that clicked best in Sloperator's tests. Pick one yourself to keep using it."
+            ? "Picked automatically: the free Kilo model that clicked best in tests."
             : OpenAiChatClient.IsAnthropic(_settings.Server.BaseUrl)
                 ? auto == AnthropicMessages.DefaultModel
-                    ? "Picked by Sloperator: Claude Opus 5.5, Anthropic's recommended model. Pick one yourself to keep using it."
-                    : "Picked by Sloperator: the newest Opus, Sonnet or Haiku the key may use. Pick one yourself to keep using it."
-            : $"Picked by Sloperator as the strongest model the server offers{AutoModelDetails}: the best score on an agent benchmark, " +
-              "else the most parameters, then the most bits per weight. Pick one yourself to keep using it.";
+                    ? "Picked automatically: Claude Opus 5.5, Anthropic's recommended model."
+                    : "Picked automatically: the newest Claude model the key may use."
+            : $"Picked automatically: the strongest on this server{AutoModelDetails}.";
 
     /// <summary>
     /// The effort dropdown's levels: those the model in use takes, least to most; all of them,
@@ -303,15 +301,11 @@ public sealed partial class MainWindowViewModel : IModelServerSwitch
     {
         get
         {
-            var server = _settings.Server;
-            var model = server.ModelInUse is { Length: > 0 } m ? m : "The model";
             if (CanSetEffort)
-                return $"How hard {model} thinks before it acts: more effort is slower and, on a paid API, costs more. "
-                       + "Medium unless you pick another; a change applies from your next message.";
+                return "How hard the model thinks. More is slower and costs more.";
+            var server = _settings.Server;
             var lmStudio = !OpenAiChatClient.IsAnthropic(server.BaseUrl) && Uri.TryCreate(OpenAiChatClient.NormalizeBaseUrl(server.BaseUrl), UriKind.Absolute, out var uri) && uri.Port == 1234;
-            return lmStudio
-                ? $"{model} doesn't take an effort setting here: LM Studio lists none for it, so how much it thinks is its model setting in LM Studio."
-                : $"{model} doesn't take an effort setting, or the server doesn't say it does, so Sloperator sends none.";
+            return lmStudio ? "Effort is set in LM Studio for this model" : "This model has no effort setting";
         }
     }
 
@@ -366,8 +360,7 @@ public sealed partial class MainWindowViewModel : IModelServerSwitch
         var server = _settings.Server;
         if (string.IsNullOrWhiteSpace(server.BaseUrl))
         {
-            SetStatus(ServerState.Unknown, "Not set up", "Enter the address of your model server (for example LM Studio at http://localhost:1234/v1) at the top, " +
-                                                         "or use Kilo's free online models, which need no account.");
+            SetStatus(ServerState.Unknown, "Not set up", "Enter your server's address, or use Kilo's free models.");
             return null;
         }
 
@@ -399,13 +392,12 @@ public sealed partial class MainWindowViewModel : IModelServerSwitch
         var kilo = KiloGateway.Is(server.BaseUrl);
         if (probe.KeyRefused)
         {
-            SetStatus(ServerState.Failed, "Key refused", probe.Message + (kilo ? "" : " Or use Kilo's free online models, which need no account."));
+            SetStatus(ServerState.Failed, "Key refused", probe.Message);
             return probe;
         }
         if (!probe.Reachable)
         {
-            SetStatus(ServerState.Failed, "Offline", $"{probe.Message}{ServerAppHint(server.BaseUrl)} Check the address at the top and that the server is running" +
-                                                     (kilo ? "." : ", or use Kilo's free online models, which need no account."));
+            SetStatus(ServerState.Failed, "Offline", $"{probe.Message}{ServerAppHint(server.BaseUrl)} Check the address and that the server is running.");
             return probe;
         }
         if (probe.Model is null)

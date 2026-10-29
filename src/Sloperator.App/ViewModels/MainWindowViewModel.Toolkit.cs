@@ -52,12 +52,12 @@ public sealed partial class MainWindowViewModel
     /// <summary>What the Toolkit dropdown offers: nothing, or a tool whose panel opens on the left of the chat.</summary>
     public IReadOnlyList<ToolkitOption> ToolkitOptions { get; } =
     [
-        new("None", "The chat alone", 0, 0, null),
-        new(FileChangesName, "See the files the agent changes in this chat as it works: click lines to ask about them", 560, 0,
+        new("None", "", 0, 0, null),
+        new(FileChangesName, "Files the agent changed", 560, 0,
             vm => new FileChangesViewModel(vm)),
-        new(FileInspectorName, "See a file from the chat beside it: documents, spreadsheets, pictures, video, sound, 3D, code", 420, 0,
+        new(FileInspectorName, "Any file from the chat", 420, 0,
             vm => new FileInspectorViewModel(vm._previews, vm, vm._paths.PastedDir)),
-        new("Video generator", "Plan a video shot by shot and make it with ComfyUI: pick a picture, clip or folder and say what to do", 770, 600,
+        new("Video generator", "Plan and make a video shot by shot", 770, 600,
             vm => new VideoGeneratorViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
     ];
 

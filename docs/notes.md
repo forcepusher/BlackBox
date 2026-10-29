@@ -947,7 +947,7 @@ a song, in a Sound folder, with lip sync to its part under a shot) went with it.
 place to start one): each sound line has the dashed + after its last sound (`SoundLineItem.AddX`), and
 right-click on the line still has Create. The new sound offers **File…** (copies a sound in, as
 dropping one there does), **Foley** and **Music**, as buttons on it while it is new and first on its
-right-click menu after; its tooltip says "Nothing said yet: …" as a new clip's does. Foley turns it
+right-click menu after; its tooltip says "Nothing said yet." as a new clip's does. Foley turns it
 into `"source": "foley"` and sends "Make it." at once (there is nothing to say first); Music keeps it a
 song and sends "Make it." once its style is said, else the status line asks for it. Either sends with
 the pick in the box, as a message the user sends does: `SendFromToolkit("Make it.")` used to go with
@@ -1635,7 +1635,7 @@ What they share, and how they keep out of each other's way:
   window's program), and an agent that never looked is held back once another acted. Its own actions and plain looks don't count. One that waited
   5 minutes says so and suggests work that doesn't need them. Typing in any window's box pauses
   every window's clicks and keys, as typing in its own does ("Paused while you type in another
-  Sloperator window", without Resume, which only ends its own pause). One keyboard hook watches
+  window", without Resume, which only ends its own pause). One keyboard hook watches
   Pause/Break for all of them, and one press stops every window's run; with a hook each, the first
   that stopped its run swallowed the press, and the others never saw it.
 - **ComfyUI and the headless browser** are the process's: the server Sloperator started is closed by
@@ -3333,8 +3333,9 @@ reads the message before its next step, and a `wait` it is in ends for it. While
 its clicks and key presses hold off (for up to a minute), so they don't land in your typing. That
 includes a click whose target it is still looking for, and the rest of a series of key presses or
 of long text it is typing, which then goes back to the window it was meant for. A line above the
-box says it is paused and how it goes on: send the message, click Resume (what you typed stays in
-the box), or stop typing, after which it carries on in 15 seconds, counted down on that line. A
+box says it is paused and counts down to when it carries on by itself, 15 seconds after the last key
+("Paused while you type. I carry on in 12 s."); Resume beside it (what you typed stays in the box)
+and sending the message end the pause at once. A
 message that arrives as the run finishes starts the next one, and what the agent hadn't read when
 you stopped it goes back in the box.
 
