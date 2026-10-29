@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   effort") and a context box as wide as its size make the top bar tidier.
 - The model list is sorted by name, and a list wider than its dropdown opens from the dropdown's left
   edge instead of sticking out on the left. **Servers** looks like the dropdowns around it.
+- The Toolkit dropdown's left arrow sits beside it, outside the button.
 - In the chat, the screen a click, a wait or another action left is folded under **Screenshot**, as
   a call's output is; a screenshot the agent took to look stays open.
 - A shell command's card says **Run a command** and, in a few words, what the command does, with the

@@ -791,8 +791,8 @@ camera should go on.
 window to the left side instead of opening a new separate window... Use the main chat for film
 making... Put filmmaking button under Toolkit dropdown menu with None and Filmmaking options. There
 will be more tools extending to the left side of the screen later."). The **Toolkit** dropdown
-takes the place of the second Sloperator logo and name under the title bar, an arrow on it pointing
-left, where its tools open: None or Video generator (`ToolkitOption`, `IToolkit`, more to come); it
+takes the place of the second Sloperator logo and name under the title bar, an arrow pointing
+left beside it (outside the button since 2026-10-29, at the user's word), where its tools open: None or Video generator (`ToolkitOption`, `IToolkit`, more to come); it
 now reads None, File changes, File inspector, Video generator (the user, 2026-10-26). A muted "in
 development" beside it (the user, 2026-10-24) went on 2026-10-29, at the user's word. Its
 arrows are solid triangles, the left one and the dropdown's, as History's and every dropdown's are
