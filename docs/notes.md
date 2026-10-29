@@ -1519,10 +1519,7 @@ copied in a browser, files copied in Explorer), or pick them with the paperclip 
 They wait under the box, × takes one off, and they go with the next message; a message can be
 files alone. The agent gets each one's full path, to work on it with its tools (a picture to start
 a ComfyUI job from, a document to read, a folder to go through), and sees the pictures among them
-as `read_file` shows a picture; a model that can't see images gets the paths. A model that points
-on a 0-1000 grid (Qwen3 and later, Gemma 4, Nemotron) is told how its places in a picture become
-the picture's own pixels, for a crop: qwen3.8 took its grid numbers for pixels of the smaller view
-it was shown and cut the wrong figure from a reference sheet three times. A pasted picture is
+as `read_file` shows a picture; a model that can't see images gets the paths. A pasted picture is
 saved as a PNG in `Data/pasted` first and deleted with its chat; dropped files stay where they
 are. Text on the clipboard is pasted as text, also when a picture comes with it (cells copied from
 Excel bring one). The message's bubble shows its pictures and the names of its other files, and a
@@ -2212,17 +2209,16 @@ screenshot names ("Screenshot of screen 2 of 2"); a context reset says it with t
 with Claude's window on screen 2 in its last screenshot, Opus 5.5 clicked screen 2's coordinates on
 screen 1 and typed its test prompt into Notepad there, and did the same after the next message.
 
-Coordinates follow what the model was trained on. Qwen3 and later point on a 0-1000 grid over the
-image, so for them x/y are on that grid; asked for pixels, qwen3.8 slipped back to the grid in about
-a third of its clicks and missed by hundreds of pixels (11/16 hits against 16/16 on the grid in
-`ClickAccuracyTests`). Gemma 4 points on the same grid: given pixels, it aimed at Notepad's Save
-As dialog with grid positions (Save at 492, 671 where the grid has it at 496, 678), so its clicks
-landed up and to the left, in the folder list, and it never saved the file. Every other model
-gets screenshot pixels. The grid's steps aren't square
-(on a 1920×1200 screen an x step is 1.92 px and a y step 1.2 px): asked to draw a circle in Paint,
-qwen3.8 dragged as many x as y steps and got 346×217 and 385×241 px ovals before it worked that
-out. So the system prompt gives both step sizes, and `mouse_drag` says how far it went in screen
-pixels.
+Every model gives x/y in pixels of the screenshot, told its size. Until 29 October 2026 Qwen3 and
+later, Gemma 4 and Nemotron were asked for positions on the 0-1000 grid they were trained on: asked
+for pixels without the size, qwen3.8 had slipped back to the grid in a third of its clicks (11/16
+against 16/16 on the grid), and Gemma 4 had aimed at Notepad's Save As dialog with grid positions.
+Once pixel prompts gave the size (see below), qwen3.8 q6_k_xl hit 21/28 in pixels against 19/28 on
+the grid (`ClickAccuracyTests`, scenes unity, rows, dialogs, hidden, 2560x1080). Nemotron 3.5 Super
+VL still answers on its grid when asked for pixels (16/28 on the grid, 7/28 in pixels through
+OpenRouter; spelling out the pixel range or a worked example made it 5/28), and Gemma 4 12B hit 0/28
+on the grid and 3/28 in pixels. The user had the grid taken out anyway: one way of pointing for every
+model, no forks by model name. Zoom's rulers, `mouse_drag` and pictures are all in pixels.
 
 Screenshots are scaled down to fit Settings → Advanced → Max screenshot size, keeping their shape
 and never scaled up (`AgentSettings.ScreenshotMaxWidth`/`ScreenshotMaxHeight`, kept within
@@ -2238,8 +2234,8 @@ pixels. A thread can still be put in another DPI context, so everything that rea
 thread back in physical pixels (`Native.EnsurePhysicalPixels`). On the laptop's 1920×1200 screen at
 125%, `ClickLandsTests` (`BB_DESKTOP_TESTS=1`, the real mouse) finds a red square of another process
 in Sloperator's own screenshot, scaled down to 1024×640, as a model finds a button, and moves over
-it, clicks, double-clicks and drags from it, in pixels and on
-the 0-1000 grid, and from a thread left DPI-unaware: all landed (28 October 2026). With the cursor
+it, clicks, double-clicks and drags from it, in pixels (and then also on the 0-1000 grid, since
+removed), and from a thread left DPI-unaware: all landed (28 October 2026). With the cursor
 moved to four fifths of the point, as a DPI-unaware process does, every case failed, and with the
 guard taken out the DPI-unaware thread's did. Scripts that drive Sloperator must work in physical pixels too: Windows PowerShell
 is DPI aware in some hosts and not in others, and click targets read off a 1536×960 screenshot of
@@ -3349,7 +3345,7 @@ $env:BB_SERVER_URL = "http://localhost:1234/v1"; $env:BB_SERVER_MODEL = "qwen3.8
 dotnet test --filter ServerIntegrationTests
 $env:BB_KILO = "1"; dotnet test --filter KiloOverflowTests   # a run past Kilo's count and its 20 MB at the 1M assumed recovers; 6 requests
 $env:BB_MUNITO_KEY = "<munito key>"; dotnet test --filter MunitoImageCapTests   # more screenshots than munito's 8 a request are left out; 3 requests
-dotnet test --filter ClickAccuracyTests   # click hit rate in 16 hard scenes; BB_CLICK_SCENES, BB_CLICK_TRIALS, BB_CLICK_COORDS=pixels|grid
+dotnet test --filter ClickAccuracyTests   # click hit rate in 16 hard scenes; BB_CLICK_SCENES, BB_CLICK_TRIALS
 $env:BB_SSH_TEST_HOST = "admin@127.0.0.2"; $env:BB_SSH_TEST_KEY = "$PWD\.dev\sysadmin-lab\key\admin_ed25519"
 dotnet test --filter SshIntegrationTests  # ssh, file tools and copy; BB_SSH_TEST_BIG_GB=3 adds a 3 GB copy each way (BB_SSH_TEST_HOST2: a second server), BB_SSH_TEST_REBOOT=1 reboots the VM
 $env:BB_TEXT_ONLY_URL = "<server>/v1"; $env:BB_TEXT_ONLY_MODEL = "<a model without vision>"; dotnet test --filter TextOnlyServerTests

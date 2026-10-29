@@ -30,7 +30,6 @@ public static class AgentSetup
             Platform = platform,
             Settings = agent,
             WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            CoordinateGrid = ModelCoordinates.GridFor(backend.Options.Model),
             MaxScreenshotSide = OpenAiChatClient.IsAnthropic(backend.Client.BaseUrl) ? ClaudeModel.FromName(backend.Options.Model).ScreenshotSide : null,
             SeesImages = backend.Vision,
             UserComposing = userComposing,

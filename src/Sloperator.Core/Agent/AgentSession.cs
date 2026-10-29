@@ -258,11 +258,11 @@ public sealed partial class AgentSession(
                         _guesswork?.StartRun(input.Text);
                     }
                     first = false;
-                    History.Add(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid));
+                    History.Add(input.ToMessage(toolContext.SeesImages));
                     continue;
                 }
                 _guesswork?.Heard(input.Text);
-                History.Add(Interjection(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid)));
+                History.Add(Interjection(input.ToMessage(toolContext.SeesImages)));
             }
             toolContext.UserPictures = UserInput.PicturesIn(History);
         }
@@ -348,7 +348,7 @@ public sealed partial class AgentSession(
         // screen 2 in its last screenshot, the model clicked and typed into Notepad on screen 1.
         if (ScreenShown(History) is { } lastSeen)
             toolContext.CurrentScreen = lastSeen.Screen;
-        History.Add(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid));
+        History.Add(input.ToMessage(toolContext.SeesImages));
         // A picture given earlier in the chat (a reference sheet) is still the one to follow.
         toolContext.UserPictures = UserInput.PicturesIn(History);
         toolContext.UserMessage = _arrived.Token;

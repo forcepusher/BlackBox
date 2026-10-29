@@ -40,51 +40,31 @@ public class ToolTests
     public void A_point_given_as_fractions_of_the_screenshot_lands_where_it_means()
     {
         // Kilo's free Nemotron answered (0.8711, 0.8833) for a button at (1110, 635) on a 1280x720
-        // screenshot, though asked for pixels; and fractions on the grid too.
+        // screenshot, though asked for pixels.
         var pixels = new ScreenSpace(new ScreenRect(0, 0, 1280, 720), null);
         Assert.Equal((1115, 636), pixels.ToScreen(0.8711, 0.8833));
-        var grid = new ScreenSpace(new ScreenRect(0, 0, 2560, 1080), null, grid: 1000);
-        Assert.Equal((1456, 199), grid.ToScreen(0.5688, 0.1843));
         // Whole numbers are points as they are, however near the corner.
         Assert.Equal((1, 1), pixels.ToScreen(1, 1));
         Assert.Equal((0, 0), pixels.ToScreen(0, 0));
     }
 
     [Fact]
-    public async Task Qwen3_models_point_on_a_0_to_1000_grid()
+    public async Task Every_model_points_in_pixels_of_the_screenshot()
     {
-        Assert.Equal(1000, ModelCoordinates.GridFor("qwen3.8-27b@q6_k_xl"));
-        Assert.Equal(1000, ModelCoordinates.GridFor("Qwen/Qwen3-VL-8B-Instruct"));
-        Assert.Null(ModelCoordinates.GridFor("qwen2.5-vl-7b"));
-        // Gemma 4 points on the same grid (its Save As clicks matched it to within 15 steps).
-        Assert.Equal(1000, ModelCoordinates.GridFor("gemma-4-31b-it"));
-        Assert.Equal(1000, ModelCoordinates.GridFor("google/gemma-4-12b-it-qat"));
-        Assert.Null(ModelCoordinates.GridFor("gemma-3-27b-it"));
-        Assert.Null(ModelCoordinates.GridFor("llava-1.6-mistral-7b"));
-        // So does Nemotron: Kilo's free Super VL hit 12 of 16 targets on the grid, 0 of 4 asked for pixels.
-        Assert.Equal(1000, ModelCoordinates.GridFor("nvidia/nemotron-3.5-super-vl:free"));
-
-        // The grid spans the whole screen whatever the image size: 500,500 is the middle of a 2560x1080 screen.
-        var space = new ScreenSpace(new ScreenRect(0, 0, 2560, 1080), (1920, 1080), grid: 1000);
-        Assert.Equal((1920, 800), (space.ImageWidth, space.ImageHeight));
-        Assert.Equal((1280, 540), space.ToScreen(500, 500));
-        Assert.Equal((500, 500), space.ToModel(1280, 540));
-        Assert.Equal((2559, 1079), space.ToScreen(1000, 1000));
-
+        // Told the size, qwen3.8 (q6_k_xl) clicked better in pixels than on its 0-1000 grid: 21/28
+        // against 19/28 (2026-10-29), so no model gets the grid.
         var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1080) };
-        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false }, WorkingDirectory = Path.GetTempPath(), CoordinateGrid = 1000 };
-        await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 250, ["y"] = 100 }, ctx, CancellationToken.None);
-        Assert.Equal("move 640,108", platform.Actions[0]);
+        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false, ScreenshotMaxWidth = 1920, ScreenshotMaxHeight = 1080 }, WorkingDirectory = Path.GetTempPath() };
+        await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 960, ["y"] = 400 }, ctx, CancellationToken.None);
+        Assert.Equal("move 1280,540", platform.Actions[0]);
         var shot = await new ScreenshotTool().ExecuteAsync([], ctx, CancellationToken.None);
-        Assert.Equal("Screenshot. Mouse cursor at (250, 100).", shot.Text);
+        Assert.Equal("Screenshot 1920x800. Mouse cursor at (960, 400).", shot.Text);
 
         var prompt = Sloperator.Core.Agent.SystemPrompt.Build("Test OS", ctx.ScreenSpaces(), "C:\\", "");
-        Assert.Contains("0-1000 grid", prompt);
-        Assert.DoesNotContain("1920x800", prompt);
-        // Grid steps aren't square: a circle drawn with as many x as y steps came out an oval.
-        Assert.Contains("one x step is 2.56 px and one y step 1.08 px, so something as tall as it is wide spans 2.37 times as many y steps as x steps", prompt);
+        Assert.Contains("x/y are pixels of the screenshot, which is 1920x800", prompt);
+        Assert.DoesNotContain("grid", prompt);
         var drag = await new MouseDragTool().ExecuteAsync(new JsonObject { ["x"] = 100, ["y"] = 100, ["to_x"] = 200, ["to_y"] = 200 }, ctx, CancellationToken.None);
-        Assert.Equal("Dragged 256 x 108 px on screen.", drag.Text);
+        Assert.Equal("Dragged 134 x 135 px on screen.", drag.Text);
     }
 
     [Theory]
@@ -288,19 +268,21 @@ public class ToolTests
             Platform = platform,
             Settings = new AgentSettings { ScreenshotAfterActions = false },
             WorkingDirectory = Path.GetTempPath(),
-            CoordinateGrid = 1000,
         };
+        var first = ctx.ScreenSpaces()[0];
+        var second = ctx.ScreenSpaces()[1];
 
+        // The middle of each screen's screenshot is the middle of that screen.
         await new ScreenshotTool().ExecuteAsync(new JsonObject { ["screen"] = 2 }, ctx, CancellationToken.None);
-        await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 500, ["y"] = 500 }, ctx, CancellationToken.None);
+        await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = second.ImageWidth / 2, ["y"] = second.ImageHeight / 2 }, ctx, CancellationToken.None);
         Assert.Contains("move 4800,1140", platform.Actions);
         await new ScreenshotTool().ExecuteAsync(new JsonObject { ["screen"] = 1 }, ctx, CancellationToken.None);
-        await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 500, ["y"] = 500 }, ctx, CancellationToken.None);
+        await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = first.ImageWidth / 2, ["y"] = first.ImageHeight / 2 }, ctx, CancellationToken.None);
         Assert.Contains("move 1920,1080", platform.Actions);
 
         var prompt = Sloperator.Core.Agent.SystemPrompt.Build("Test OS", ctx.ScreenSpaces(), "C:\\", "");
-        Assert.Contains("1 (primary, 3840x2160)", prompt);
-        Assert.Contains("2 (right of screen 1, 1920x1080)", prompt);
+        Assert.Contains($"1 (primary, 3840x2160, screenshots {first.ImageWidth}x{first.ImageHeight})", prompt);
+        Assert.Contains($"2 (right of screen 1, 1920x1080, screenshots {second.ImageWidth}x{second.ImageHeight})", prompt);
     }
 
     [Fact]

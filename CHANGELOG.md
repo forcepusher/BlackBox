@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   message goes to the new model.
 
 ### Changed
+- Every model clicks in pixels of the screenshot. Qwen 3 and later, Gemma 4 and Nemotron no longer get
+  a 0-1000 grid: told the screenshot's size, Qwen clicks as well in pixels.
+- Claude through OpenRouter (and any server whose model list says it takes reasoning) gets the effort
+  picked in the top bar, so its thinking shows in the chat; the thinking goes back with each reply, so
+  Claude keeps it across tool calls.
 - File changes lists each file on one compact line, its name and its counts, so a long list fits;
   whether it was modified or renamed shows in its tooltip.
 - The model list is read from the server again each time its dropdown opens, so a model loaded there

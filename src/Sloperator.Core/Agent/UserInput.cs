@@ -68,8 +68,7 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
     /// pictures among them, shown as read_file shows a picture. A model that can't see images gets
     /// the paths alone.
     /// </summary>
-    /// <param name="grid">The grid the model points on (1000), or null when it points in pixels.</param>
-    public ChatMessage ToMessage(bool seesImages, int? grid = null)
+    public ChatMessage ToMessage(bool seesImages)
     {
         if (Files.Count == 0)
             return new ChatMessage { Role = ChatRole.User, Content = ModelText, FromUser = true, Sent = [.. Ids] };
@@ -90,8 +89,7 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
             {
                 shownCount++;
                 list.Append($"a {shown.Width}x{shown.Height} picture, shown below")
-                    .Append(shown.ShownWidth == shown.Width && shown.ShownHeight == shown.Height ? "" : $" at {shown.ShownWidth}x{shown.ShownHeight}")
-                    .Append(Picture.GridNote(shown, grid));
+                    .Append(shown.ShownWidth == shown.Width && shown.ShownHeight == shown.Height ? "" : $" at {shown.ShownWidth}x{shown.ShownHeight}");
                 pictures.Add(ContentPart.FromText(file + ":"));
                 pictures.Add(ContentPart.FromImage(shown.Jpeg, "image/jpeg"));
             }
