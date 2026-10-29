@@ -108,6 +108,49 @@ public sealed class ServerSettings
         DetectedContextSize = tokens;
         ContextReported = true;
     }
+
+    /// <summary>
+    /// The servers that answered, each with its key and model, in the order they first did: the
+    /// dropdown beside the address switches between them. Saved in settings.json as the key is.
+    /// </summary>
+    public List<SavedServer> Saved { get; set; } = [];
+
+    /// <summary>The server in use answered: adds it to <see cref="Saved"/>, or updates its key and model there.</summary>
+    /// <returns>Whether that changed the list.</returns>
+    public bool Remember()
+    {
+        if (string.IsNullOrWhiteSpace(BaseUrl))
+            return false;
+        var saved = Saved.Find(s => s.BaseUrl == BaseUrl);
+        if (saved is not null && saved.ApiKey == ApiKey && saved.Model == Model)
+            return false;
+        if (saved is null)
+            Saved.Add(saved = new SavedServer { BaseUrl = BaseUrl });
+        saved.ApiKey = ApiKey;
+        saved.Model = Model;
+        return true;
+    }
+
+    /// <summary>Uses a saved server: its address, key and model, as they were when it last answered.</summary>
+    public void Use(SavedServer saved)
+    {
+        BaseUrl = saved.BaseUrl;
+        ApiKey = saved.ApiKey;
+        Model = saved.Model;
+        AutoModel = null;
+    }
+
+    public void Forget(string baseUrl) => Saved.RemoveAll(s => s.BaseUrl == baseUrl);
+}
+
+/// <summary>A server in the top bar's saved list (see <see cref="ServerSettings.Saved"/>).</summary>
+public sealed class SavedServer
+{
+    public string BaseUrl { get; set; } = "";
+    public string ApiKey { get; set; } = "";
+
+    /// <summary>The model picked by hand there; empty when Sloperator picks.</summary>
+    public string Model { get; set; } = "";
 }
 
 /// <summary>The sizes the context slider stops at, and how sizes are written.</summary>
@@ -197,9 +240,8 @@ public static class Efforts
     /// <summary>The level as the dropdown says it.</summary>
     public static string Label(string level) => level switch
     {
-        "xhigh" => "Extra high effort",
-        "max" => "Max effort",
-        _ => char.ToUpperInvariant(level[0]) + level[1..] + " effort",
+        "xhigh" => "Extra high",
+        _ => char.ToUpperInvariant(level[0]) + level[1..],
     };
 
     /// <summary>

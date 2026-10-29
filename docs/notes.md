@@ -1562,8 +1562,21 @@ as (the geometric mean of 30B and 3B, about 9.5B). Embedding models are left out
 far too small for its size and quantization, such as a broken download. The model's tooltip says
 why it was picked. A model you pick yourself is kept, also while the
 server doesn't offer it: the strongest one stands in, a banner says so, and Sloperator goes back to
-yours as soon as the server lists it again. It checks when it connects, on ↻ and before each task.
+yours as soon as the server lists it again. It checks when it connects, each time the model dropdown
+opens (for a model loaded or downloaded on the server since; quiet, so the dot doesn't blink
+"Checking…"), and before each task. A ↻ button beside the effort did that check by hand until the
+dropdown did it itself (the user, 2026-10-29).
 The command-line runner picks the same way for the saved model or `--model`.
+
+**Saved servers**: every server that answers is kept in `server.saved` in settings.json with its key
+and the model picked there (empty when Sloperator picks), in the order they first answered
+(`ServerSettings.Remember`, at each check that finds a model). **Saved** beside the address lists
+them as History lists chats: the one in use highlighted, a row switches to that server with its key
+and model (`Use`; the context's Auto and size stay), its trash button removes it. Removing the one in
+use keeps it out until the address is typed again or another is picked: the check before every task
+had put it straight back. The button is as wide as the effort dropdown under it, so the address and
+the model box end on one line. The effort dropdown says only the level ("Medium"; its tooltip says
+it is the effort), as wide as "Extra high" needs, and the context box is as wide as its size.
 
 Sloperator sends no sampling parameters: temperature, top-k/p, reply length and thinking come from
 the server's own model configuration (in LM Studio, per model).

@@ -13,10 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enable screenshots** and **Enable keyboard and mouse control** under Settings → Safety. With
   screenshots off the agent doesn't look at the screen, and can't use the mouse and keyboard either;
   with control off it looks but doesn't click or type.
+- **Saved** next to the server address lists every server that answered, with its API key and model:
+  pick one to switch to it, or remove it with its trash button.
 
 ### Changed
 - File changes lists each file on one compact line, its name and its counts, so a long list fits;
   whether it was modified or renamed shows in its tooltip.
+- The model list is read from the server again each time its dropdown opens, so a model loaded there
+  meanwhile shows up. The wider model box, the shorter effort dropdown ("Medium" rather than "Medium
+  effort") and a context box as wide as its size make the top bar tidier.
+
+### Removed
+- The ↻ button next to the model: opening the model dropdown does what it did.
 
 ## [1.1.0] - 2026-10-29
 ### Added

@@ -14,7 +14,7 @@ namespace Sloperator.App.ViewModels;
 /// <summary>What the last server check found; drawn as the coloured dot in the top bar.</summary>
 public enum ServerState { Unknown, Checking, Connected, Failed }
 
-/// <summary>A level in the effort dropdown ("low" to "max"), shown as "Medium effort".</summary>
+/// <summary>A level in the effort dropdown ("low" to "max"), shown as "Medium".</summary>
 public sealed record EffortOption(string Level)
 {
     public override string ToString() => Efforts.Label(Level);
@@ -216,6 +216,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         foreach (var header in _chats.List())
             PastChats.Add(NewRow(header));
         OnPropertyChanged(nameof(HasPastChats));
+        SetSavedServers();
         _ = CheckServerAsync();
         _mcpConnect = ConnectMcpAsync();
     }

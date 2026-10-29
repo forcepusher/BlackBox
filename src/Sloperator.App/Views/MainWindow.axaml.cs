@@ -47,6 +47,9 @@ public partial class MainWindow : Window
             InputBox.Focus();
         };
 
+        // Opening the model dropdown asks the server again, for a model loaded there meanwhile.
+        ModelBox.DropDownOpened += (_, _) => Vm.RecheckModels();
+
         // Follow new output while the user is at the bottom; stop following when they scroll up.
         // After every layout pass (streamed text, a growing thinking block, a new screenshot)
         // pin the offset to the true end. Doing it per layout pass rather than per scroll event
@@ -505,6 +508,10 @@ public partial class MainWindow : Window
     }
 
     /// <summary>A chat picked in the History dropdown (its command opens it): close the list and get back to typing.</summary>
+    /// <summary>A saved server picked: the dropdown closes (afterwards, as History's: its row's command comes after the click).</summary>
+    private void OnSavedServerClick(object? sender, RoutedEventArgs e) =>
+        Dispatcher.UIThread.Post(() => SavedServersButton.Flyout?.Hide());
+
     private void OnPastChatClick(object? sender, RoutedEventArgs e)
     {
         _stickToBottom = true;

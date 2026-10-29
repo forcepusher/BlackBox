@@ -232,8 +232,8 @@ public class AnthropicTests
         Assert.Equal("medium", Efforts.Nearest("nonsense", ["low", "medium", "high"]));
         Assert.Null(Efforts.Nearest("medium", []));
         Assert.Equal(["low", "high"], Efforts.Of(["High", "off", "on", "low"]));
-        Assert.Equal("Extra high effort", Efforts.Label("xhigh"));
-        Assert.Equal("Medium effort", Efforts.Label("medium"));
+        Assert.Equal("Extra high", Efforts.Label("xhigh"));
+        Assert.Equal("Medium", Efforts.Label("medium"));
     }
 
     [Fact]

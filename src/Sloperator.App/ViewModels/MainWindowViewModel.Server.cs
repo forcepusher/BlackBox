@@ -24,10 +24,60 @@ public sealed partial class MainWindowViewModel
             value = value.Trim();
             if (value == _settings.Server.BaseUrl) return;
             _settings.Server.BaseUrl = value;
+            _forgotten = null;
             SaveSettingsSoon();
             OnPropertyChanged();
+            SetSavedServers();
             _ = CheckAfterTypingAsync();
         }
+    }
+
+    /// <summary>The servers that answered before, for the dropdown beside the address (see <see cref="ServerSettings.Saved"/>).</summary>
+    public ObservableCollection<SavedServerRow> SavedServers { get; } = [];
+
+    public bool HasSavedServers => SavedServers.Count > 0;
+
+    /// <summary>
+    /// The server in use, removed from the saved ones: not added back at its next check, which
+    /// comes before every task. Typing an address or picking a saved one ends that.
+    /// </summary>
+    private string? _forgotten;
+
+    private void SetSavedServers()
+    {
+        SavedServers.Clear();
+        foreach (var saved in _settings.Server.Saved)
+            SavedServers.Add(new SavedServerRow(saved, saved.BaseUrl == _settings.Server.BaseUrl, UseSavedServer, ForgetSavedServer));
+        OnPropertyChanged(nameof(HasSavedServers));
+    }
+
+    /// <summary>Switches to a saved server with its key and model, as <see cref="UseKilo"/> switches to Kilo.</summary>
+    private void UseSavedServer(SavedServer saved)
+    {
+        var server = _settings.Server;
+        server.Use(saved);
+        _forgotten = null;
+        SaveSettings();
+        // In the list before the dropdown is told, as at startup: a selection the ComboBox can't find it doesn't take.
+        _refreshingModels = true;
+        if (saved.Model.Length > 0 && !Models.Contains(saved.Model))
+            Models.Insert(0, saved.Model);
+        _refreshingModels = false;
+        OnPropertyChanged(nameof(ServerAddress));
+        OnPropertyChanged(nameof(ApiKey));
+        OnPropertyChanged(nameof(SelectedModel));
+        OnPropertyChanged(nameof(ModelToolTip));
+        SetSavedServers();
+        _ = CheckServerAsync();
+    }
+
+    private void ForgetSavedServer(SavedServer saved)
+    {
+        _settings.Server.Forget(saved.BaseUrl);
+        if (saved.BaseUrl == _settings.Server.BaseUrl)
+            _forgotten = saved.BaseUrl;
+        SaveSettings();
+        SetSavedServers();
     }
 
     /// <summary>API key typed in the top bar, for servers that want one. Saved and checked once typing pauses.</summary>
@@ -312,6 +362,13 @@ public sealed partial class MainWindowViewModel
     private Task CheckServerAsync() => ProbeServerAsync(quiet: false, CancellationToken.None);
 
     /// <summary>
+    /// The model dropdown opened: its list comes again from the server, for a model loaded or
+    /// downloaded there since the last check. Quiet, so the dot doesn't blink "Checking…" and a
+    /// context size a run learnt stays.
+    /// </summary>
+    public void RecheckModels() => _ = ProbeServerAsync(quiet: true, CancellationToken.None);
+
+    /// <summary>
     /// The check behind <see cref="CheckServerCommand"/>. Quiet, before a task: no "Checking…" in the
     /// top bar meanwhile, and the context size known for the model stays (a run may have learnt it
     /// from the server's "too long" error) unless the model to use changed.
@@ -387,6 +444,11 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(ScreenNote));
         server.EffortLevels = probe.Efforts ?? [];
         OnEffortsChanged();
+        if (server.BaseUrl != _forgotten && server.Remember())
+        {
+            SaveSettings();
+            SetSavedServers();
+        }
         var status = "Connected" + (!server.SupportsVision ? " · no vision" : "");
         if (probe.AutoPicked && server.Model.Length > 0)
             SetStatus(ServerState.Connected, status,
@@ -478,7 +540,9 @@ public sealed partial class MainWindowViewModel
         server.Model = "";
         server.AutoModel = KiloGateway.Model; // until the check finds it, or another free one
         server.AutoContext = true;
+        _forgotten = null;
         SaveSettings();
+        SetSavedServers();
         // In the list before the dropdown is told, as at startup: a selection the ComboBox can't find it doesn't take.
         _refreshingModels = true;
         if (!Models.Contains(KiloGateway.Model))

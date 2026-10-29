@@ -389,15 +389,55 @@
     <!-- What the agent talks to: server and key, then model and how much context to use.
          The labels share a column so both rows line up, and both rows are exactly as tall as a text
          box so every field and button in a row shares its top and bottom edges. -->
-    <Border Grid.Row="1" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,8">
+    <Border Grid.Row="1" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="16,8">
       <Grid ColumnDefinitions="Auto,3*,Auto,2*,Auto" RowDefinitions="32,32" RowSpacing="8" VerticalAlignment="Center">
         <TextBlock Grid.Row="0" Grid.Column="0" Classes="muted" Text="Server" VerticalAlignment="Center" Margin="0,0,8,0" />
-        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ServerAddress}" Watermark="http://localhost:1234/v1" MinWidth="270" />
-        <TextBlock Grid.Row="0" Grid.Column="2" Classes="muted" Text="API key" VerticalAlignment="Center" Margin="14,0,8,0" />
+        <DockPanel Grid.Row="0" Grid.Column="1">
+          <!-- The servers that answered before, each with its key and model: a row switches to it,
+               its trash button forgets it. Looks and works as History does; as wide as the effort
+               dropdown under it, so the address and the model end on one line. -->
+          <Button x:Name="SavedServersButton" DockPanel.Dock="Right" Classes="ghost" Width="112" Margin="8,0,0,0" VerticalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  ToolTip.Tip="Servers that answered before, each with its API key and model" AutomationProperties.Name="Saved servers">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="Saved" VerticalAlignment="Center" />
+              <PathIcon Width="10" Height="10" VerticalAlignment="Center" Data="M7 10l5 5 5-5z" />
+            </StackPanel>
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedRight" FlyoutPresenterClasses="history">
+                <Panel Width="340">
+                  <TextBlock Classes="muted" IsVisible="{Binding !HasSavedServers}" TextWrapping="Wrap" Margin="10,8"
+                             Text="No servers yet. Every server that answers is kept here with its API key and model." />
+                  <ItemsControl ItemsSource="{Binding SavedServers}" IsVisible="{Binding HasSavedServers}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:SavedServerRow">
+                        <Border Classes="pastChat" Classes.current="{Binding IsCurrent}">
+                          <Grid ColumnDefinitions="*,Auto">
+                            <Button Grid.ColumnSpan="2" Classes="pastChat" Command="{Binding UseCommand}" Click="OnSavedServerClick"
+                                    AutomationProperties.Name="{Binding Address}" ToolTip.Tip="{Binding Address}">
+                              <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding Address}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Classes="muted" Text="{Binding Details}" TextTrimming="CharacterEllipsis" />
+                              </StackPanel>
+                            </Button>
+                            <Button Grid.Column="1" Classes="deleteChat" Command="{Binding ForgetCommand}" ToolTip.Tip="Remove this server" AutomationProperties.Name="Remove server">
+                              <PathIcon Width="16" Height="16" Data="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
+                            </Button>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Panel>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+          <TextBox Text="{Binding ServerAddress}" Watermark="http://localhost:1234/v1" MinWidth="200" />
+        </DockPanel>
+        <TextBlock Grid.Row="0" Grid.Column="2" Classes="muted" Text="API key" VerticalAlignment="Center" Margin="16,0,8,0" />
         <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding ApiKey}" PasswordChar="•" RevealPassword="{Binding ShowApiKey}" MinWidth="120"
                  Watermark="Optional"
                  ToolTip.Tip="Sent to the server with every request. Saved in plain text in the Data folder next to Sloperator, so keep that folder private." />
-        <ToggleButton Grid.Row="0" Grid.Column="4" Classes="ghost" IsChecked="{Binding ShowApiKey}" Margin="6,0,0,0" Padding="8,6"
+        <ToggleButton Grid.Row="0" Grid.Column="4" Classes="ghost" IsChecked="{Binding ShowApiKey}" Margin="8,0,0,0" Padding="8,6"
                       VerticalAlignment="Stretch" ToolTip.Tip="Show or hide the API key" AutomationProperties.Name="Show API key">
           <Panel>
             <PathIcon Width="16" Height="16" IsVisible="{Binding !ShowApiKey}"
@@ -409,24 +449,24 @@
 
         <TextBlock Grid.Row="1" Grid.Column="0" Classes="muted" Text="Model" VerticalAlignment="Center" Margin="0,0,8,0" />
         <DockPanel Grid.Row="1" Grid.Column="1">
-          <Button DockPanel.Dock="Right" Classes="ghost" Content="↻" Margin="6,0,0,0" VerticalAlignment="Stretch" Command="{Binding CheckServerCommand}"
-                  ToolTip.Tip="Ask the server again for its models and context size" />
-          <!-- How hard the model thinks; greyed out for a model whose server lists no effort for it. -->
+          <!-- How hard the model thinks ("Medium"; its tooltip says it is the effort), as wide as
+               "Extra high" needs; greyed out for a model whose server lists no effort for it. -->
           <ComboBox x:Name="EffortBox" DockPanel.Dock="Right" ItemsSource="{Binding EffortOptions}" SelectedItem="{Binding SelectedEffort}" IsEnabled="{Binding CanSetEffort}"
-                    Width="148" Margin="6,0,0,0" VerticalAlignment="Stretch" ToolTip.Tip="{Binding EffortToolTip}" ToolTip.ShowOnDisabled="True"
+                    Width="112" Margin="8,0,0,0" VerticalAlignment="Stretch" ToolTip.Tip="{Binding EffortToolTip}" ToolTip.ShowOnDisabled="True"
                     AutomationProperties.Name="Effort" />
           <ComboBox x:Name="ModelBox" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                    PlaceholderText="No models: check the server address" ToolTip.Tip="{Binding ModelToolTip}" />
+                    PlaceholderText="No models: check the server address" ToolTip.Tip="{Binding ModelToolTip}" AutomationProperties.Name="Model" />
         </DockPanel>
-        <TextBlock Grid.Row="1" Grid.Column="2" Classes="muted" Text="Context" VerticalAlignment="Center" Margin="14,0,8,0" />
+        <TextBlock Grid.Row="1" Grid.Column="2" Classes="muted" Text="Context" VerticalAlignment="Center" Margin="16,0,8,0" />
         <DockPanel Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="2" ToolTip.Tip="{Binding ContextToolTip}">
-          <CheckBox DockPanel.Dock="Right" Content="Auto" IsChecked="{Binding AutoContext}" Margin="10,0,0,0" MinWidth="0" />
+          <CheckBox DockPanel.Dock="Right" Content="Auto" IsChecked="{Binding AutoContext}" Margin="8,0,0,0" MinWidth="0" />
+          <!-- As wide as the size in it ("64k", "not loaded"). -->
           <TextBox x:Name="ContextBox" DockPanel.Dock="Right" Text="{Binding ContextInput, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding !AutoContext}"
-                   Width="90" Padding="6,5" TextAlignment="Right" VerticalAlignment="Stretch" VerticalContentAlignment="Center" />
+                   MinWidth="48" Padding="8,5" TextAlignment="Right" VerticalAlignment="Stretch" VerticalContentAlignment="Center" />
           <!-- Fluent's slider is 50px tall with the track in its middle: stretched over the 32px row
                plus these margins, the track sits on the row's centre line. -->
           <Slider Minimum="0" Maximum="{Binding ContextMaxIndex}" Value="{Binding ContextIndex}" TickFrequency="1" IsSnapToTickEnabled="True"
-                  IsEnabled="{Binding !AutoContext}" VerticalAlignment="Stretch" Margin="0,-9,6,-9" MinWidth="60" />
+                  IsEnabled="{Binding !AutoContext}" VerticalAlignment="Stretch" Margin="0,-9,8,-9" MinWidth="60" />
         </DockPanel>
       </Grid>
     </Border>
