@@ -30,6 +30,7 @@ public class ChatCutTests
         // One sent while the model worked comes marked; two sent as the run ended go as one; Continue twice.
         var marked = ChatMessage.User("[Sent while you were working on \"Draw a cat\". Answer it …]\nmake it orange");
         marked.FromUser = true;
+        marked.Sent = [.. during.Ids];
         List<ChatMessage> history =
         [
             From(task), Reply("drawing"), marked, Reply("orange now"),
@@ -43,6 +44,45 @@ public class ChatCutTests
         Assert.Equal(4, ChatCut.HistoryStart(history, sent, 3));
         // The same words again are the later message.
         Assert.Equal(6, ChatCut.HistoryStart(history, sent, 4));
+    }
+
+    [Fact]
+    public void A_chat_that_dropped_its_oldest_lines_cuts_at_the_message_itself_not_one_with_its_words()
+    {
+        UserInput early = new("continue"), task = new("Draw a cat"), later = new("continue"), last = new("Make it orange");
+        List<ChatMessage> history = [From(early), Reply("going on"), From(task), Reply("drawing"), From(later), Reply("more"), From(last), Reply("orange")];
+
+        // The chat on screen no longer has "continue" and "Draw a cat" from the start of the run.
+        Assert.Equal(4, ChatCut.HistoryStart(history, [later, last], 0));
+        Assert.Equal(6, ChatCut.HistoryStart(history, [later, last], 1));
+    }
+
+    [Fact]
+    public void The_ids_are_saved_with_the_chat()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "bb-cut-ids-" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            UserInput a = new("Make a file");
+            var store = new ChatStore(dir);
+            store.Save(new SavedChat { Id = "chat", History = ChatStore.ForSaving([From(a), Reply("made")]) });
+            Assert.Equal(a.Ids, store.Load("chat")!.History[0].Sent);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Messages_from_a_chat_saved_before_ids_are_found_by_their_words()
+    {
+        UserInput a = new("Make a file") { Ids = [] }, b = new("Now rename it") { Ids = [] };
+        List<ChatMessage> history = [From(a), Reply("made"), From(b), Reply("renamed")];
+        foreach (var m in history)
+            m.Sent = null;
+
+        Assert.Equal(2, ChatCut.HistoryStart(history, [a, b], 1));
     }
 
     [Fact]

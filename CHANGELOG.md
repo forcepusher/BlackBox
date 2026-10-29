@@ -46,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or accent waited for the next letter and joined it (`"a` came out as `ä`).
 - Asked to switch back to a saved server without its key, the agent's model_server now uses the key
   saved for it.
+- Undoing a message in a long chat whose oldest lines were no longer shown could take more from the
+  model than was undone, when an older message had the same words ("continue"). Messages are now
+  found by an id of their own.
 
 ### Removed
 - The ↻ button next to the model: opening the model dropdown does what it did.

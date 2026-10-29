@@ -1326,9 +1326,15 @@ its file, folder and list of changes, and its History row. The chat on screen an
 are separate lists, and don't line up one to one: messages sent together are one message to the
 model, one sent during a run has a note in front of its words, Continue's resend isn't a line of the
 chat, a context reset keeps only the user's messages, and a long run's chat drops its oldest lines.
-So `ChatCut.HistoryStart` finds the chat's messages, in order, by how their words begin a line of a
-user message (files alone by their first file's line); a message the model never had cuts where the
-next one it had begins. Undoing the second of two messages sent together takes the first's words
+So each message the user sends gets an id (`UserInput.Ids`, several for messages sent together),
+kept with its chat line (`ChatEntry.Ids`) and with the conversation's copy of it (`ChatMessage.Sent`,
+saved with the chat, never sent to the model), which a context reset keeps as it is.
+`ChatCut.HistoryStart` cuts at the first message of the user's that carries the undone message's id
+or a later one's; a message the model never had cuts where the next one it had begins. Until
+2026-10-29 it went by words: the chat's messages in order, by how their words begin a line of a user
+message (files alone by their first file's line). Once a long run had dropped the chat's oldest lines,
+the oldest one left could match an older message with the same words ("continue"), and the model then
+lost messages still on screen (found in review); words remain for chats saved before the ids. Undoing the second of two messages sent together takes the first's words
 from the model too (it stays on screen). `ChatCut.Cut` makes the cut. A context reset puts all the
 user's messages before its handoff note, so a cut at a message from before the reset took the note
 too (found in review, 2026-10-29: undoing "Add sound" left "Build the game" and no word of the game

@@ -7,7 +7,9 @@ namespace Sloperator.Core.Agent;
 /// after it. The chat on screen and the conversation aren't one list: messages sent together are
 /// one message to the model, one sent during a run is marked as such in front of its words, Continue
 /// sends a message the chat doesn't show again, and a context reset keeps the user's messages alone.
-/// So each message the chat shows is found by its words, in order, among the user's messages.
+/// So each message carries ids (<see cref="UserInput.Ids"/>) that the conversation's copy of it keeps
+/// (<see cref="ChatMessage.Sent"/>), through resets and saving; a chat saved before they existed is
+/// matched by the words of its messages, in order, among the user's messages.
 /// </summary>
 public static class ChatCut
 {
@@ -19,6 +21,16 @@ public static class ChatCut
     /// </summary>
     public static int HistoryStart(IReadOnlyList<ChatMessage> history, IReadOnlyList<UserInput> sent, int undone)
     {
+        // By the ids a message and the conversation's copy of it share: words could match an older
+        // message with the same ones ("continue") that the chat no longer shows, once a long run
+        // had dropped the chat's oldest lines, and the model then lost more than was undone.
+        if (undone >= 0 && undone < sent.Count && sent[undone].Ids.Count > 0)
+        {
+            var ids = sent.Skip(undone).SelectMany(s => s.Ids).ToHashSet(StringComparer.Ordinal);
+            var first = history.Select((m, i) => (m, i)).FirstOrDefault(x => x.m.FromUser && x.m.Sent?.Any(ids.Contains) == true);
+            return first.m is null ? history.Count : first.i;
+        }
+        // A chat saved before messages had ids: by their words.
         // Where the search goes on: a message, and how far into it (several sent together are one).
         var (at, from) = (0, 0);
         for (var i = 0; i < sent.Count; i++)

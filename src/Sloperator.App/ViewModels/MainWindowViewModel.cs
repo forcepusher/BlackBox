@@ -370,7 +370,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             else _steerPending.Add(input);
             return;
         }
-        Items.Add(new UserMessageItem(input.Text, input.Files, input.Cards) { Via = input.Via, Context = input.Context, Turn = Changes.NewTurn() });
+        Items.Add(new UserMessageItem(input.Text, input.Files, input.Cards) { Via = input.Via, Context = input.Context, Turn = Changes.NewTurn(), Ids = input.Ids });
         SaveChat(SnapshotHistory());
         // What arrived just as a run ended, too late for it, starts the next one.
         for (UserInput? next = input; next is not null;)
@@ -396,7 +396,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         var queued = Queued.FirstOrDefault(q => ReferenceEquals(q.Input, input));
         if (queued is not null)
             Queued.Remove(queued);
-        Items.Add(new UserMessageItem(input.Text, input.Files, input.Cards) { At = queued?.SentAt ?? DateTime.UtcNow, Via = input.Via, Context = input.Context, Turn = Changes.NewTurn() });
+        Items.Add(new UserMessageItem(input.Text, input.Files, input.Cards) { At = queued?.SentAt ?? DateTime.UtcNow, Via = input.Via, Context = input.Context, Turn = Changes.NewTurn(), Ids = input.Ids });
     }
 
     /// <summary>× on a queued message: taken back unsent, unless the model has just read it, and then it joins the chat as any other.</summary>
