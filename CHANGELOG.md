@@ -46,6 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A text box (the prompt, the server address, the API key, the context size, the boxes in Settings)
   kept the focus and its caret after a click on empty space, a panel or a label; a click anywhere away
   from it now takes the focus off it.
+- Every list opened by a click hangs under its button, flush with its left edge: the Video generator's
+  videos menu opened where the mouse was, over "Frame size", and History and Servers hung from their
+  right edge. A second click on the video's name closes its menu, and Rename's box covers the name
+  rather than the window's title bar.
 - Text sat 1-2 px over the middle of dropdowns (the model, the effort), buttons, dropdown rows, the
   lines of File changes and the tool's name on a card; it is in the middle now.
 - With the chat narrow, the server address box covered the "Server" label beside it.

@@ -333,7 +333,7 @@
               <PathIcon Width="10" Height="10" VerticalAlignment="Center" Data="M7 10l5 5 5-5z" />
             </StackPanel>
             <Button.Flyout>
-              <Flyout Placement="BottomEdgeAlignedRight" FlyoutPresenterClasses="history">
+              <Flyout Placement="{x:Static views:Dropdown.Placement}" FlyoutPresenterClasses="history">
                 <Panel Width="340">
                   <TextBlock Classes="muted" IsVisible="{Binding !HasPastChats}" TextWrapping="Wrap" Margin="10,8"
                              Text="No chats yet. Every chat is kept here from its first message on." />
@@ -400,7 +400,7 @@
               <TextBlock Text="Servers" VerticalAlignment="Center" />
             </DockPanel>
             <Button.Flyout>
-              <Flyout Placement="BottomEdgeAlignedRight" FlyoutPresenterClasses="history">
+              <Flyout Placement="{x:Static views:Dropdown.Placement}" FlyoutPresenterClasses="history">
                 <Panel Width="340">
                   <TextBlock Classes="muted" IsVisible="{Binding !HasSavedServers}" TextWrapping="Wrap" Margin="10,8"
                              Text="No servers yet. Every server that answers is kept here with its API key and model." />
