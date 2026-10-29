@@ -466,7 +466,8 @@ public sealed class FileChanges
             if (lines is null && read.Index is not null)
                 return await GitChanges.RestoreAsync(read.Root, read.Path, ct).ConfigureAwait(false);
             (existed, before) = (read.Index is not null, read.Index is null || FolderDiff.IsBinary(read.Index.AsSpan(0, Math.Min(read.Index.Length, 8000))) ? null : Decode(read.Index));
-        }        try
+        }
+        try
         {
             if (lines is null)
             {

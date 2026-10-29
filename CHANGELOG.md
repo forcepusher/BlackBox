@@ -29,6 +29,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a call's output is; a screenshot the agent took to look stays open.
 - A shell command's card says **Run a command** and, in a few words, what the command does, with the
   whole command shown under it in a code box instead of in the title.
+- The single-file Sloperator.exe is 2.4 MB smaller: its native libraries are packed with Brotli.
+
+### Fixed
+- Undoing a message from before a context reset kept only the messages before it: the handoff note
+  went too, and the model had no record of the work done. The note now stays, with a word that later
+  messages were undone.
+- A Compact context that was stopped or failed offered Continue, which took up the previous task
+  instead; and compacting took Continue off a stopped task, which now gets it back.
+- `type_text` on keyboard layouts with dead keys (US-International, German, French…): a quote, caret
+  or accent waited for the next letter and joined it (`"a` came out as `ä`).
+- Asked to switch back to a saved server without its key, the agent's model_server now uses the key
+  saved for it.
 
 ### Removed
 - The ↻ button next to the model: opening the model dropdown does what it did.

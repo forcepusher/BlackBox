@@ -145,6 +145,14 @@ internal sealed class WindowsInputController : IInputController
         inputs.Add(Key(vk, code, 0));
         inputs.Add(Key(vk, code, KEYEVENTF_KEYUP));
         inputs.AddRange(Enumerable.Reverse(held).Select(k => VkInput(k, up: true)));
+        // A dead key (US-International's ' and ", German's ^) waits for the next key and joins it:
+        // "a came out as ä. Space after it gives the character itself, as a person types it.
+        if ((MapVirtualKeyEx(vk, 2, layout) & 0x80000000) != 0)
+        {
+            var space = (ushort)MapVirtualKeyEx(0x20, 0, layout);
+            inputs.Add(Key(0x20, space, 0));
+            inputs.Add(Key(0x20, space, KEYEVENTF_KEYUP));
+        }
         return inputs.ToArray();
     }
 

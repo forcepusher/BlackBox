@@ -43,7 +43,7 @@ public sealed class ModelServerTool(Func<HttpClient>? http = null) : Tool
     public override JsonObject Parameters => Schema(
         ("action", Str("What to do", "show", "connect"), true),
         ("address", Str("For connect: the server's address, such as http://localhost:1234/v1"), false),
-        ("api_key", Str("For connect: the API key the user gave for that server; leave it out for a server without one (an address already in use keeps its key)"), false),
+        ("api_key", Str("For connect: the API key the user gave for that server; leave it out for a server without one (an address in use or used before keeps its key)"), false),
         ("model", Str("For connect: the model to use, as the server lists it; leave it out for the strongest one the server offers"), false));
 
     public override string Describe(JsonObject args) => (GetString(args, "action") ?? "") switch
@@ -77,9 +77,11 @@ public sealed class ModelServerTool(Func<HttpClient>? http = null) : Tool
     private async Task<ToolResult> ConnectAsync(JsonObject args, IModelServerSwitch sw, ServerSettings current, CancellationToken ct)
     {
         var address = RequireString(args, "address").Trim();
-        // The same address again keeps its key, so "use model X" needs no key from the user.
+        // The same address again keeps its key, so "use model X" needs no key from the user; so does
+        // one in the top bar's saved servers ("switch back to Claude").
         var key = GetString(args, "api_key")?.Trim() is { Length: > 0 } given ? given
-            : SameServer(address, current.BaseUrl) ? current.ApiKey : "";
+            : SameServer(address, current.BaseUrl) ? current.ApiKey
+            : current.Saved.FirstOrDefault(s => SameServer(address, s.BaseUrl))?.ApiKey ?? "";
         var wanted = GetString(args, "model")?.Trim() ?? "";
         var probe = await ProbeAsync(new ServerSettings { BaseUrl = address, ApiKey = key }, ct).ConfigureAwait(false);
         if (probe.KeyRefused)

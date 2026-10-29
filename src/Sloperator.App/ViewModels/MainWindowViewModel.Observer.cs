@@ -270,6 +270,7 @@ public sealed partial class MainWindowViewModel
         var started = _runStarted;
         var logged = _failureLogged;
         _failureLogged = false;
+        var compacting = _compacting;
         PostTimed(at =>
         {
             var stopped = StoppedText();
@@ -285,10 +286,10 @@ public sealed partial class MainWindowViewModel
             switch (reason)
             {
                 case AgentStopReason.Cancelled:
-                    AddStopNotice(stopped, isError: false);
+                    AddStopNotice(stopped, isError: false, compacting: compacting);
                     break;
                 case AgentStopReason.Error:
-                    AddStopNotice((detail ?? "Something went wrong.") + (logged ? @" Details are in Data\crash.log." : ""), isError: true, error: error);
+                    AddStopNotice((detail ?? "Something went wrong.") + (logged ? @" Details are in Data\crash.log." : ""), isError: true, error: error, compacting: compacting);
                     break;
             }
 

@@ -77,6 +77,28 @@ public class ChatCutTests
     }
 
     [Fact]
+    public void A_cut_before_a_reset_keeps_its_handoff_note()
+    {
+        UserInput a = new("Build the game"), b = new("Add sound"), c = new("Make it louder");
+        var note = ChatMessage.User(AgentSession.HandoffHeader + "\n\nBuilt the game in C:\\game; sound half done.");
+        List<ChatMessage> history = [From(a), From(b), note, Reply("sound added"), From(c), Reply("louder")];
+
+        // Undoing "Add sound": the note stays, said to tell of work undone since.
+        ChatCut.Cut(history, ChatCut.HistoryStart(history, [a, b, c], 1));
+        Assert.Equal(3, history.Count);
+        Assert.Equal("Build the game", history[0].Content);
+        Assert.Same(note, history[1]);
+        Assert.Equal(ChatCut.UndoneNote, history[2].Content);
+        Assert.False(history[2].FromUser);
+
+        // After the reset, a cut is as it was: the note is before it.
+        List<ChatMessage> later = [From(a), From(b), note, Reply("sound added"), From(c), Reply("louder")];
+        ChatCut.Cut(later, ChatCut.HistoryStart(later, [a, b, c], 2));
+        Assert.Equal(4, later.Count);
+        Assert.Same(note, later[2]);
+    }
+
+    [Fact]
     public void The_chat_says_what_was_put_back_and_what_wasnt()
     {
         var back = new FileChanges.RollBack([@"C:\p\notes.txt"], [@"C:\p\made.txt"], [(@"C:\p\report.docx", "It is open in Word.")]);

@@ -38,6 +38,10 @@ public class TypedKeysTests
         Assert.Equal("11 12 51 51^ 12^ 11^", Presses('@', German)); // AltGr+Q
 
     [Fact]
+    public void A_dead_key_is_followed_by_space_so_it_types_itself() =>
+        Assert.Equal(("DC DC^ 20 20^", "10 DD DD^ 10^ 20 20^"), (Presses('^', German), Presses('`', German))); // ^ and Shift+´
+
+    [Fact]
     public void What_no_key_makes_goes_as_unicode() =>
         Assert.Equal(("U+00E9 U+00E9^", "U+65E5 U+65E5^"), (Presses('é', Us), Presses('日', Us)));
 }

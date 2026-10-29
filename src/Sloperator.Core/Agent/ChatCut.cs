@@ -38,6 +38,27 @@ public static class ChatCut
         return history.Count;
     }
 
+    internal const string UndoneNote =
+        "[Sloperator] The user undid their messages after the ones above, with everything you did for them: the files write_file and edit_file " +
+        "changed since were put back. Your handoff note may tell of work that is now undone; check before you go by it.";
+
+    /// <summary>
+    /// Cuts <paramref name="history"/> at <paramref name="start"/> (see <see cref="HistoryStart"/>). A
+    /// context reset since keeps its handoff note, with a word that the messages after the cut were
+    /// undone: a reset puts every message of the user's before its note, so a cut at one of them took
+    /// the note too, and the model was left with the messages before it and nothing of the work done.
+    /// </summary>
+    public static void Cut(List<ChatMessage> history, int start)
+    {
+        var note = history.FindLastIndex(m => m.Content?.StartsWith(AgentSession.HandoffHeader, StringComparison.Ordinal) == true);
+        var kept = note > start ? history[note] : null;
+        history.RemoveRange(start, history.Count - start);
+        if (kept is null)
+            return;
+        history.Add(kept);
+        history.Add(ChatMessage.User(UndoneNote));
+    }
+
     /// <summary>How the message's words begin in the conversation: what the model read first, or for files alone, the first file's line.</summary>
     private static string Key(UserInput input) =>
         UserInput.Tidy(input.ModelText) is { Length: > 0 } text ? text
