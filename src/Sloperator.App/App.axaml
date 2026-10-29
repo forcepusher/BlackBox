@@ -647,6 +647,12 @@
       <Setter Property="BorderBrush" Value="{StaticResource BbControlBorder}" />
       <Setter Property="CornerRadius" Value="16" />
     </Style>
+    <!-- Fluent's text box has 6 over its text and 5 under (TextControlThemePadding, for Segoe UI), so
+         the message box's words (and its hint) sat a pixel under Send's beside them at 125%; 0.4 higher,
+         they are level, the box as tall. -->
+    <Style Selector="TextBox.composer">
+      <Setter Property="Padding" Value="10,5.6,6,5.4" />
+    </Style>
     <Style Selector="Border.composer:focus-within">
       <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
     </Style>

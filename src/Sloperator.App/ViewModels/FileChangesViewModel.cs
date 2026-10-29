@@ -339,7 +339,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
     [ObservableProperty]
     private string _status = Hint;
 
-    private const string Hint = "Pick lines to ask about them, stage or discard them; a divider picks the lines under it, a file's name all of it.";
+    private const string Hint = "Pick lines or files to ask about them, stage or discard them.";
 
     /// <summary>Reads the files again, keeping what was picked where the same lines are still there.</summary>
     /// <param name="byUser">Read after the user staged, unstaged or discarded: what moved isn't the agent's change "just now".</param>

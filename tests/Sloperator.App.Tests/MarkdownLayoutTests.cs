@@ -41,6 +41,40 @@ public sealed class MarkdownLayoutTests
             Assert.DoesNotContain(markup, shown);
     }
 
+    [Fact]
+    public void Selected_words_keep_their_font_and_size()
+    {
+        // Avalonia drew a selection over runs at the block's size in one run's font: the whole
+        // selection turned into the code font a size up and the line grew (the user, 2026-10-30).
+        var (before, after) = HeadlessApp.Run(() =>
+        {
+            var (window, scroll) = Show("Here is **what I did** with `notes.md` and `echo hi`, step by step, all in one go.", 1000);
+            var block = scroll.GetVisualDescendants().OfType<SelectableTextBlock>().First(b => b.Inlines?.Text?.Contains("notes.md") == true);
+            var before = Shown(block);
+            block.SelectionStart = 10;
+            block.SelectionEnd = block.Inlines!.Text!.Length - 10;
+            window.UpdateLayout();
+            var after = Shown(block);
+            window.Close();
+            return (before, after);
+        });
+        Assert.Equal(before, after);
+    }
+
+    /// <summary>Each character's font, weight and size, and each line's width, in a block as laid out.</summary>
+    private static List<string> Shown(SelectableTextBlock block)
+    {
+        var all = new List<string>();
+        foreach (var line in block.TextLayout.TextLines)
+        {
+            foreach (var run in line.TextRuns.Where(r => r.Text.Length > 0))
+                foreach (var c in run.Text.ToString())
+                    all.Add($"{c} {run.Properties!.Typeface.FontFamily.Name} {run.Properties.Typeface.Weight} {run.Properties.FontRenderingEmSize}");
+            all.Add($"line {line.WidthIncludingTrailingWhitespace:F2}");
+        }
+        return all;
+    }
+
     internal static (Window, ScrollViewer) Show(string markdown, int width)
     {
         var main = new MainWindow();

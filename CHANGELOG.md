@@ -59,8 +59,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **History** and **Servers** open the same kind of list as the dropdowns, and right-click menus have
   rows as tall as a dropdown's.
 - The Video generator's menu says **Show in folder**, as everywhere else.
+- The message box's hint no longer says "Enter to send" (it says how to start a new line, and while a
+  run goes on that it pauses while you type), and File changes' help line is shorter: "Pick lines or
+  files to ask about them, stage or discard them."
 
 ### Fixed
+- Selecting part of a reply redrew the selected words in the code font a size larger, and the rest of
+  the line moved along as the selection grew; selected words now keep their own font, size and weight.
+- A few things sat a pixel off what is beside them: the arrow beside **Side panel** a pixel under its words,
+  the words typed in the message box (and its hint) a pixel under Send's, **File…** and **Generate** on
+  the Video generator's cards a pixel over their middle, and Settings' "Ask me first" a pixel under its
+  dropdown's words.
 - A text box (the prompt, the server address, the API key, the context size, the boxes in Settings)
   kept the focus and its caret after a click on empty space, a panel or a label; a click anywhere away
   from it now takes the focus off it.

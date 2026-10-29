@@ -529,10 +529,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// </summary>
     internal bool TypingHere() => Input.Length > 0 && DateTime.UtcNow - _lastTyped < TypingQuiet;
 
-    /// <summary>The hint in the empty box: what Enter does now, and that pictures and files can go in too.</summary>
+    /// <summary>The hint in the empty box: how to start a new line (Enter sending goes without saying), that the agent waits while the user types, and that pictures and files can go in too.</summary>
     public string InputHint => IsBusy
-        ? "Tell me something while I work… (Enter to send; I pause while you type)"
-        : "Describe a task, paste a screenshot or drop files… (Enter to send, Shift+Enter for a new line)";
+        ? "Tell me something while I work… (I pause while you type)"
+        : "Describe a task, paste a screenshot or drop files… (Shift+Enter for a new line)";
 
     /// <summary>When the run in progress started: from the message that started it, for how long the run took.</summary>
     private DateTime _runStarted;

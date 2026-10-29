@@ -38,9 +38,10 @@
     <Style Selector="Border.block.selected Border.handle">
       <Setter Property="Background" Value="{StaticResource BbAccent}" />
     </Style>
-    <!-- File… and Generate on a new card or sound: smaller than a small button, to fit a card. -->
+    <!-- File… and Generate on a new card or sound: smaller than a small button, to fit a card. 0.8
+         more over the word than under it: with the same, it sat a pixel high at 125%. -->
     <Style Selector="Button.choice">
-      <Setter Property="Padding" Value="6,1" />
+      <Setter Property="Padding" Value="6,1.8,6,0.2" />
       <Setter Property="FontSize" Value="11" />
       <Setter Property="MinHeight" Value="0" />
     </Style>
@@ -444,9 +445,9 @@
           <StackPanel Spacing="8" Margin="16,8">
             <Button Classes="primary" Content="Use this version" Command="{Binding UseVersionCommand}" IsVisible="{Binding IsVersionShown}" HorizontalAlignment="Left"
                     ToolTip.Tip="Put this version back in the video; the one in it now is kept as a version" />
-            <SelectableTextBlock Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" FontSize="12" />
+            <views:SelectableText Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" FontSize="12" />
             <TextBlock Classes="muted" Text="{Binding MadeWith}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding MadeWith, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-            <SelectableTextBlock Text="{Binding Look}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding HasLook}"
+            <views:SelectableText Text="{Binding Look}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding HasLook}"
                                  Classes="muted" Classes.error="{Binding LookFoundFault}" />
           </StackPanel>
         </ScrollViewer>

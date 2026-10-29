@@ -1441,6 +1441,30 @@ name on a card 2 over and none under. Measured with `.dev/chat-menu-test/text-ce
 with ink, each control's capitals from their top to the baseline) and `text-layout.ps1` (each
 control's text block against its middle), on the laptop at 125%: everything within 0.5 px.
 
+Half a pixel is as close as it gets: Windows hints Inter's capitals to whole pixels (14 at 125% is
+13 rows, sharp at top and bottom) and puts the baseline on a whole row, so in a 40-px control there
+are 13 rows over the capitals and 14 under, or the other way round. The app has them 13 over
+everywhere, so what matters is that things side by side agree. A sweep after the restyle (the user,
+2026-10-30, on the Side panel dropdown; `.dev/centre-test/`: `texts.ps1` finds every word UI
+Automation knows, the box it sits in, and where its capitals' line is to a tenth of a pixel)
+found every button, dropdown, field, list and menu row, chip, notice, Thoughts header, table cell and
+History, Servers and Side panel row at 0 to 0.5 px, and four places a pixel off what is beside them,
+now level: the arrow left of Side panel (10 high, 12.5 px, it rounded down to 0.5 under the middle
+while the words are 0.5 over; 0.8 under it lifts it), the message box's words and hint against Send
+(Fluent's text box has 6 over and 5 under; `TextBox.composer` has 5.6 and 5.4), File… and Generate
+on the Video generator's cards (1 px high; `Button.choice` has 1.8 over and 0.2 under), and Settings'
+labels against their dropdowns (`Grid.form > TextBlock.label`, 0.8 under; the chat's labels were
+level already: a smaller label's capitals in the middle of the field's, its baseline a pixel higher).
+
+## Selected text
+Avalonia (11.3.22, and its master) draws a selection in a text block made of runs (a reply: bold,
+code, headings, links) with properties of its own for the selected part, built from the block's size
+and one run's font: the whole selection turned into the code font a size up and the rest of the line
+moved along (the user's recording, 2026-10-30). `SelectableText` (Views) builds the selected part
+from each run's own properties with only the colour changed; every selectable text in the app is one
+(`KeptSelectionTextBlock` too), styled as a `SelectableTextBlock`. A text box has one font, so its
+selection was right.
+
 ## One look for every control
 Every window and side panel draws its controls from the styles in App.axaml, one a kind, not
 sizes set on each control (the user, 2026-10-30, after drift was found in turn: text boxes with
