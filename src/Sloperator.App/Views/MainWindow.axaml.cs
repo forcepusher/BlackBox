@@ -507,11 +507,11 @@ public partial class MainWindow : Window
             : null);
     }
 
-    /// <summary>A chat picked in the History dropdown (its command opens it): close the list and get back to typing.</summary>
     /// <summary>A saved server picked: the dropdown closes (afterwards, as History's: its row's command comes after the click).</summary>
     private void OnSavedServerClick(object? sender, RoutedEventArgs e) =>
         Dispatcher.UIThread.Post(() => SavedServersButton.Flyout?.Hide());
 
+    /// <summary>A chat picked in the History dropdown (its command opens it): close the list and get back to typing.</summary>
     private void OnPastChatClick(object? sender, RoutedEventArgs e)
     {
         _stickToBottom = true;

@@ -124,6 +124,12 @@ public sealed class ModelServerTests
         // A key isn't carried to another server.
         await Run(new LocalServer(["c"]), bar, new JsonObject { ["action"] = "connect", ["address"] = "http://other:1234/v1" });
         Assert.Equal("", bar.Switched[^1].Key);
+
+        // Back to a server saved in the top bar: its key comes with it.
+        bar.Current.Saved.Add(new SavedServer { BaseUrl = "http://box:8080/v1", ApiKey = "sk-secret-123" });
+        var back = await Run(server, bar, new JsonObject { ["action"] = "connect", ["address"] = "box:8080" });
+        Assert.False(back.IsError, back.Text);
+        Assert.Equal("sk-secret-123", bar.Switched[^1].Key);
     }
 
     [Fact]

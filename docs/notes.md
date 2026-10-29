@@ -12,7 +12,10 @@ your network), llama.cpp's llama-server, vLLM, or a hosted API.
 
 ## Portable layout
 No installer, no registry, nothing in AppData or %TEMP%. Ship just `Sloperator.exe`: on first run it
-unpacks its native UI libraries into `Data/runtime` next to itself.
+unpacks its native UI libraries into `Data/runtime` next to itself. They are embedded as a zip of
+the files stored as they are, packed whole with Brotli (`scripts/pack-runtime.cs`, quality 11, 16 MB
+window): 7.6 MB where the zip's own Deflate made 10.0 (Skia, PDFium, ANGLE and HarfBuzz, 23 MB
+unpacked; measured 2026-10-29), and the exe 2.4 MB smaller. Unpacking them takes about 0.4 s, once.
 
 ```
 Sloperator/
@@ -1318,7 +1321,11 @@ chat, a context reset keeps only the user's messages, and a long run's chat drop
 So `ChatCut.HistoryStart` finds the chat's messages, in order, by how their words begin a line of a
 user message (files alone by their first file's line); a message the model never had cuts where the
 next one it had begins. Undoing the second of two messages sent together takes the first's words
-from the model too (it stays on screen).
+from the model too (it stays on screen). `ChatCut.Cut` makes the cut. A context reset puts all the
+user's messages before its handoff note, so a cut at a message from before the reset took the note
+too (found in review, 2026-10-29: undoing "Add sound" left "Build the game" and no word of the game
+built). When the latest note comes after the cut, it stays, followed by a [Sloperator] line that the
+later messages were undone and their files put back, so the note may tell of undone work.
 
 The files go back through File changes (`FileChanges.RollBackAsync`): every message of the user's
 starts a turn (`NewTurn`, saved with the message as `ChatEntry.Turn` and in the list as `turn`), and
@@ -1605,8 +1612,8 @@ Thinking models get their earlier reasoning sent back each step (`reasoning_cont
 
 **The agent connects it too**: asked to connect, switch to or use another model (LM Studio on this PC,
 Claude, OpenRouter, a server the user names), the agent uses its `model_server` tool. `connect` takes
-the address, the key the user gave (an address already in use keeps its own; another server gets
-none) and a model as the server lists it or a unique part of its name (none: Sloperator's pick). The
+the address, the key the user gave (an address already in use keeps its own, as does one in the
+top bar's Saved list, so "switch back to Claude" needs no key again; another server gets none) and a model as the server lists it or a unique part of its name (none: Sloperator's pick). The
 server is checked first, as the top bar checks it, and nothing changes if it doesn't answer, turns
 the key down or has no such model; the result says why (on LM Studio's port, that its server has to
 be switched on). Otherwise the top bar takes the server, key and model as if typed there, and is
@@ -1878,6 +1885,10 @@ comes before the next step; right after a reset it is refused (fewer than two re
 note), since the user's message that asked for it is kept and asks again. A note refused on the
 whole conversation (a chat opened again with more screenshots than munito's 8) is asked for once
 more on the conversation's latest part, without pictures, before the record of the last steps.
+A compaction with no run going that is stopped or fails says so without Continue: Continue sent
+"Continue." and took the previous task up again (and a server that didn't answer was told "then
+press Continue"). Its start takes Continue off a stopped task's notice, as every run's does; with
+no message sent meanwhile, that notice gets it back when the compaction ends.
 
 The system prompt holds the date but not the time, so it stays the same for every message of a
 chat and the server never has to read the whole conversation again because of it.
@@ -2110,7 +2121,10 @@ arguments (`coordinate: [x, y]`) are all accepted.
 `type_text` presses the key that makes each character on the keyboard layout of the window being
 typed into, holding Shift or AltGr (Ctrl+Alt) as it needs and minding Caps Lock, as a person types.
 Only a character no key makes (an accent that takes a dead key, another script, an emoji) goes as
-Unicode injection (KEYEVENTF_UNICODE). Until 28 October 2026 everything went that way, and Blender
+Unicode injection (KEYEVENTF_UNICODE). A character whose own key is a dead key (US-International's
+`'` `"` `~` `^`, German's `^` and `` ` ``, French's `^`) is followed by Space, which makes it type
+itself: alone, the key waited for the next one and joined it, so `"a` came out as `ä` (found in
+review, 2026-10-29; `MapVirtualKeyEx` with MAPVK_VK_TO_CHAR sets the top bit for a dead key). Until 28 October 2026 everything went that way, and Blender
 5.2's text fields take none of it: driving Sloperator against the Extensions search, Blender's own
 event log (`--debug-events`) showed not one event for 1,080 typed characters, while the click and the
 keys of a `press_keys` that followed landed in the field, which kept editing all along. Typed as key
@@ -3113,7 +3127,7 @@ Requires the .NET 10 SDK.
 ```powershell
 dotnet build                      # debug build; keeps its Data/ in .dev/
 dotnet test                       # unit tests, and the chat's layout laid out headless (Sloperator.App.Tests)
-./scripts/publish.ps1             # single-file publish/Sloperator.exe, trimmed and compressed (about 26 MB)
+./scripts/publish.ps1             # single-file publish/Sloperator.exe, trimmed and compressed (about 28 MB)
 ./scripts/publish.ps1 -Folder     # classic self-contained folder in publish/Sloperator-win-x64
 dotnet run --project src/Sloperator.Cli -- --yes "open notepad and type hello"   # headless run
 dotnet run --project src/Sloperator.Cli -- --yes --attach photo.jpg "make it a watercolor"   # with a file, as if dropped on the window

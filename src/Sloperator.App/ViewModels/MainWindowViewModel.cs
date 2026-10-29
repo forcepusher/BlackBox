@@ -449,12 +449,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// The notice a run leaves when it ends before the task is done, with Continue on it. Ended
     /// before the model had the message at all (stopped while the model loaded, no model picked, a
     /// server that didn't answer), Continue runs that message again instead: "Continue." alone
-    /// would reach the model without the task.
+    /// would reach the model without the task. A Compact context's has no Continue (see <see cref="_compacting"/>).
     /// </summary>
-    private void AddStopNotice(string text, bool isError, UserInput? unsent = null, Exception? error = null)
+    private void AddStopNotice(string text, bool isError, UserInput? unsent = null, Exception? error = null, bool? compacting = null)
     {
         if (isError)
             Core.ErrorLog.Write(ChatPlace(), text, error);
+        if (compacting ?? _compacting)
+        {
+            Items.Add(new NoticeItem(text.Replace(", then press Continue.", ", then compact the context again.", StringComparison.Ordinal), isError));
+            return;
+        }
         Items.Add(unsent is null
             ? new NoticeItem(text, isError, CarryOn)
             : new NoticeItem(text, isError, () => _ = RunAgainAsync(unsent), unsent: true));
@@ -568,9 +573,24 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     private async Task CompactNowAsync()
     {
-        for (var next = await RunAsync(null); next is not null;)
+        // A task stopped before it can still be carried on after (the run's start takes Continue off).
+        var resumable = Items.OfType<NoticeItem>().LastOrDefault(n => n.CanContinue);
+        UserInput? next;
+        _compacting = true;
+        try { next = await RunAsync(null); }
+        finally { _compacting = false; }
+        if (next is null && resumable is not null && ReferenceEquals(Items.OfType<NoticeItem>().LastOrDefault(n => n.Stopped), resumable)
+            && !Items.Skip(Items.IndexOf(resumable)).OfType<UserMessageItem>().Any())
+            resumable.CanContinue = true;
+        while (next is not null)
             next = await RunAsync(next);
     }
+
+    /// <summary>
+    /// A Compact context with no task going is running: its stop or error offers no Continue, which
+    /// sent "Continue." and took the stopped task up again rather than compacting.
+    /// </summary>
+    private bool _compacting;
 
     /// <summary>
     /// One run of the agent on <paramref name="input"/>, or with none a summary of the context (see

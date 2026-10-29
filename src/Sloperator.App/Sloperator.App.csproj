@@ -25,10 +25,10 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
-  <!-- Single-file builds: publish.ps1 passes a zip of the native libraries, which
-       PortableRuntime unpacks into Data/runtime on first run. -->
+  <!-- Single-file builds: publish.ps1 passes the native libraries, a zip packed with Brotli
+       (pack-runtime.cs), which PortableRuntime unpacks into Data/runtime on first run. -->
   <ItemGroup Condition="'$(RuntimePayload)' != ''">
-    <EmbeddedResource Include="$(RuntimePayload)" LogicalName="Sloperator.runtime.zip" />
+    <EmbeddedResource Include="$(RuntimePayload)" LogicalName="Sloperator.runtime.br" />
   </ItemGroup>
 
   <ItemGroup>

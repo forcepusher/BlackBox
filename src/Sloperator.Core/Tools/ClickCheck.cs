@@ -117,30 +117,6 @@ internal sealed class ClickCheck
         return false;
     }
 
-    /// <summary>Share of the square around a point that must look different before it counts as changed.</summary>
-    private const double AroundShare = 0.25;
-
-    /// <summary>
-    /// Whether much of the square around (x, y), in frame pixels, looks different in the two
-    /// frames: something there opened, closed or moved. A caret or the mouse pointer is too small to count.
-    /// </summary>
-    internal static bool ChangedAround(RawImage before, RawImage after, int x, int y, int radius)
-    {
-        if (after.Width != before.Width || after.Height != before.Height)
-            return true;
-        int x0 = Math.Max(0, x - radius), x1 = Math.Min(after.Width, x + radius);
-        int y0 = Math.Max(0, y - radius), y1 = Math.Min(after.Height, y + radius);
-        long changed = 0, total = 0;
-        for (var row = y0; row < y1; row++)
-            for (var col = x0; col < x1; col++)
-            {
-                total++;
-                if (Changed(before.Bgra, after.Bgra, (row * after.Width + col) * 4))
-                    changed++;
-            }
-        return total > 0 && changed >= total * AroundShare;
-    }
-
     private static bool Changed(byte[] a, byte[] b, int i) =>
         Math.Abs(a[i] - b[i]) > Threshold || Math.Abs(a[i + 1] - b[i + 1]) > Threshold || Math.Abs(a[i + 2] - b[i + 2]) > Threshold;
 }

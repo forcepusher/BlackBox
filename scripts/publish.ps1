@@ -4,9 +4,9 @@
 
 .DESCRIPTION
   Default: one Sloperator.exe, trimmed to the parts of .NET and the libraries Sloperator uses and
-  compressed (about 26 MB instead of 102). The native libraries (Skia, HarfBuzz, ANGLE, PDFium) are
-  embedded and unpacked into Data/runtime next to the exe on first run. Copy just the exe anywhere
-  and run it.
+  compressed (about 28 MB). The native libraries (Skia, HarfBuzz, ANGLE, PDFium) are embedded,
+  packed with Brotli by pack-runtime.cs, and unpacked into Data/runtime next to the exe on first
+  run. Copy just the exe anywhere and run it.
 
   -Folder: the classic self-contained folder (exe + DLLs), handy for debugging.
 
@@ -70,13 +70,14 @@ try {
     New-Item -ItemType Directory -Force $payloadDir | Out-Null
     Get-ChildItem (Join-Path $stage "first") -File | Where-Object { $_.Extension -in ".dll", ".so", ".dylib" } |
         Copy-Item -Destination $payloadDir
-    $zip = Join-Path $stage "runtime.zip"
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [IO.Compression.ZipFile]::CreateFromDirectory($payloadDir, $zip, [IO.Compression.CompressionLevel]::Optimal, $false)
+    # Packed with Brotli by a script of its own: Windows PowerShell's .NET has no Brotli.
+    $packed = Join-Path $stage "runtime.br"
+    & dotnet run (Join-Path $PSScriptRoot "pack-runtime.cs") -- $payloadDir $packed
+    if ($LASTEXITCODE -ne 0) { throw "packing the native libraries failed" }
 
     # 2) Publish again with that payload embedded, and keep only the exe.
     $second = Join-Path $stage "second"
-    Publish $second ($singleFile + "-p:RuntimePayload=$zip")
+    Publish $second ($singleFile + "-p:RuntimePayload=$packed")
     New-Item -ItemType Directory -Force $publishRoot | Out-Null
     $exe = Join-Path $publishRoot "Sloperator.exe"
     Copy-Item (Join-Path $second "Sloperator.exe") $exe -Force
