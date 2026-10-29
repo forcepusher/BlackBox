@@ -297,6 +297,14 @@ public sealed class AgentSettings
     public (int Width, int Height) ScreenshotBox =>
         (Math.Clamp(ScreenshotMaxWidth, MinScreenshotWidth, MaxScreenshotSide), Math.Clamp(ScreenshotMaxHeight, MinScreenshotHeight, MaxScreenshotSide));
 
+    /// <summary>
+    /// The JPEG quality screenshots are sent with: 70, a tenth to a quarter fewer bytes than
+    /// the 85 it was, for the same pixels and image tokens. On 8 hard scenes × 5 (ClickAccuracyTests,
+    /// qwen3.8, 29 October 2026) 85 hit 33 and 32 of 40, 70 31, 60 30. Internal (the benchmark compares others).
+    /// </summary>
+    [JsonIgnore]
+    public int ScreenshotQuality { get; set; } = 70;
+
     /// <summary>The agent may look at the screen: screenshot, zoom and wait. Off, it works through files, the shell and MCP servers only.</summary>
     public bool EnableScreenshots { get; set; } = true;
 

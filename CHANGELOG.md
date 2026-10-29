@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   message goes to the new model.
 
 ### Changed
+- Screenshots are sent as JPEG of quality 70 rather than 85: a tenth to a quarter fewer bytes a
+  screenshot, which adds up over a long run, for about the same click accuracy.
 - File changes lists each file on one compact line, its name and its counts, so a long list fits;
   whether it was modified or renamed shows in its tooltip.
 - The model list is read from the server again each time its dropdown opens, so a model loaded there

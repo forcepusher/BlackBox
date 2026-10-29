@@ -24,7 +24,8 @@ namespace Sloperator.Core.Tests;
 /// (extra instructions for the system prompt, to measure a prompt rule), BB_CLICK_TEMP (a temperature
 /// sent with the benchmark's own requests instead of the server's), BB_CLICK_SHIFT (the first screenshot
 /// shows everything this many pixels higher, so the model misjudges where things are, as one deep in a
-/// long run does; later screenshots and zooms show the true screen). The report goes to
+/// long run does; later screenshots and zooms show the true screen), BB_CLICK_QUALITY (the JPEG quality screenshots
+/// are sent with; default the app's). The report goes to
 /// bb-click-TAG.txt in the temp folder, with the first screenshot of each scene next to it.
 /// </summary>
 public class ClickAccuracyTests
@@ -163,6 +164,8 @@ public class ClickAccuracyTests
                 var target = scene.EveryTarget ? targets[trial] : targets[rng.Next(targets.Count)];
                 var platform = new FakePlatform { Screens = scene.Screens.ToList(), ScreenBounds = scene.Screens[0], Desktop = desktop, DesktopOrigin = origin };
                 var settings = new AgentSettings { ScreenshotMaxWidth = resolution.Item1, ScreenshotMaxHeight = resolution.Item2 };
+                if (int.TryParse(Env("BB_CLICK_QUALITY"), out var quality))
+                    settings.ScreenshotQuality = quality;
                 var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = Path.GetTempPath(), CoordinateGrid = grid };
                 if (trial == 0)
                     File.WriteAllBytes(Path.Combine(Path.GetTempPath(), $"bb-click-{tag}-{scene.Name}.jpg"), ScreenshotTool.Take(new ToolContext
@@ -229,7 +232,7 @@ public class ClickAccuracyTests
         foreach (var line in summary)
             Log(line);
         Log($"TOTAL {allHits}/{allTrials} with {Model}, coordinates: {grid?.ToString() ?? "pixels"}, screenshots: {resolution.Item1}x{resolution.Item2}, " +
-            (zoom ? "zoom tool" : "no zoom tool"));
+            (zoom ? "zoom tool" : "no zoom tool") + $", JPEG quality {Env("BB_CLICK_QUALITY") ?? new AgentSettings().ScreenshotQuality.ToString()}");
         if (retries > 0)
             Log($"RETRY {fixedLater}/{retried} first-click misses hit within {retries} more tries (miss check {(ClickCheck.Enabled ? "on" : "off")}, {(zoom ? "zoom tool" : "no zoom tool")})");
     }
