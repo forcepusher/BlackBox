@@ -70,41 +70,41 @@
                      Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="True" AutomationProperties.Name="Frozen view" />
 
       <!-- Zoom: out, back to fit, in. -->
-      <Border IsVisible="{Binding CanZoom}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,22,14" CornerRadius="6" Padding="2"
+      <Border IsVisible="{Binding CanZoom}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,16" CornerRadius="6" Padding="4"
               Background="{StaticResource BbSurfaceRaised}" BorderBrush="{StaticResource BbBorder}" BorderThickness="1">
-        <StackPanel Orientation="Horizontal" Spacing="2">
-          <Button Classes="ghost" Width="26" Height="26" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+        <StackPanel Orientation="Horizontal" Spacing="4">
+          <Button Classes="ghost icon small"
                   Command="{Binding ZoomOutCommand}" ToolTip.Tip="Zoom out" AutomationProperties.Name="Zoom out">
-            <PathIcon Width="11" Height="11" Data="M19 13H5v-2h14v2z" />
+            <PathIcon Width="12" Height="12" Data="M19 13H5v-2h14v2z" />
           </Button>
-          <Button Classes="ghost" MinWidth="44" Height="26" Padding="6,0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                  Command="{Binding ZoomFitCommand}" Content="{Binding ZoomText}" FontSize="12" ToolTip.Tip="Fit" AutomationProperties.Name="Zoom to fit" />
-          <Button Classes="ghost" Width="26" Height="26" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+          <Button Classes="ghost small" MinWidth="48" HorizontalContentAlignment="Center"
+                  Command="{Binding ZoomFitCommand}" Content="{Binding ZoomText}" ToolTip.Tip="Fit" AutomationProperties.Name="Zoom to fit" />
+          <Button Classes="ghost icon small"
                   Command="{Binding ZoomInCommand}" ToolTip.Tip="Zoom in" AutomationProperties.Name="Zoom in">
-            <PathIcon Width="11" Height="11" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+            <PathIcon Width="12" Height="12" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
           </Button>
         </StackPanel>
       </Border>
     </Panel>
 
     <!-- An animation's player: a frame back, play, a frame on; where it is. -->
-    <Border Grid.Row="1" IsVisible="{Binding Animation, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="10,4,10,10">
+    <Border Grid.Row="1" IsVisible="{Binding Animation, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
       <DockPanel DataContext="{Binding Animation}" x:DataType="vm:InspectorAnimationViewModel">
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <Button Classes="ghost icon"
                   Command="{Binding StepBackCommand}" ToolTip.Tip="A frame back (Left)" AutomationProperties.Name="A frame back">
-            <PathIcon Width="13" Height="13" Data="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+            <PathIcon Width="14" Height="14" Data="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
           </Button>
-          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+          <Button Classes="ghost icon"
                   Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space)" AutomationProperties.Name="Play">
             <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
           </Button>
-          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+          <Button Classes="ghost icon"
                   Command="{Binding StepForwardCommand}" ToolTip.Tip="A frame on (Right)" AutomationProperties.Name="A frame on">
-            <PathIcon Width="13" Height="13" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+            <PathIcon Width="14" Height="14" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
           </Button>
         </StackPanel>
-        <Panel DockPanel.Dock="Right" Margin="10,0,6,0" VerticalAlignment="Center">
+        <Panel DockPanel.Dock="Right" Margin="12,0,4,0" VerticalAlignment="Center">
           <TextBlock Text="{Binding LongestFrameText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
           <TextBlock Classes="muted" Text="{Binding FrameText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" AutomationProperties.Name="Frame" />
         </Panel>
@@ -114,9 +114,9 @@
     </Border>
 
     <!-- A sound's player: play (the stretch picked, else from the playhead); where the playhead is; the stretch picked. -->
-    <Border Grid.Row="1" IsVisible="{Binding Sound, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="10,4,10,10">
+    <Border Grid.Row="1" IsVisible="{Binding Sound, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
       <DockPanel DataContext="{Binding Sound}" x:DataType="vm:InspectorSoundViewModel">
-        <Button DockPanel.Dock="Left" Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+        <Button DockPanel.Dock="Left" Classes="ghost icon"
                 Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space): the stretch picked, else from the playhead" AutomationProperties.Name="Play">
           <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
         </Button>
@@ -125,31 +125,31 @@
           <TextBlock Classes="muted" Text="{Binding TimeText}" FontSize="12" FontFeatures="+tnum" AutomationProperties.Name="Time" />
         </Panel>
         <TextBlock Text="{Binding RangeText}" IsVisible="{Binding HasRange}" FontSize="12" FontFeatures="+tnum" Foreground="{StaticResource BbAccent}"
-                   HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,6,0" TextTrimming="CharacterEllipsis" AutomationProperties.Name="Stretch picked" />
+                   HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,4,0" TextTrimming="CharacterEllipsis" AutomationProperties.Name="Stretch picked" />
       </DockPanel>
     </Border>
 
     <!-- A 3D model's views: from the front, a side, the back, above, or as at first; where it is seen
          from. Over them, for a model with animations, its player: a frame back, play, a frame on, its
          animations, where it is. -->
-    <Border Grid.Row="1" IsVisible="{Binding Model, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="10,4,10,10">
+    <Border Grid.Row="1" IsVisible="{Binding Model, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
       <StackPanel DataContext="{Binding Model}" x:DataType="vm:InspectorModelViewModel" Spacing="4">
       <DockPanel IsVisible="{Binding HasAnimations}">
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <Button Classes="ghost icon"
                   Command="{Binding StepBackCommand}" ToolTip.Tip="A frame back (Left)" AutomationProperties.Name="A frame back">
-            <PathIcon Width="13" Height="13" Data="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+            <PathIcon Width="14" Height="14" Data="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
           </Button>
-          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+          <Button Classes="ghost icon"
                   Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space)" AutomationProperties.Name="Play">
             <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
           </Button>
-          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+          <Button Classes="ghost icon"
                   Command="{Binding StepForwardCommand}" ToolTip.Tip="A frame on (Right)" AutomationProperties.Name="A frame on">
-            <PathIcon Width="13" Height="13" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+            <PathIcon Width="14" Height="14" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
           </Button>
-          <ComboBox ItemsSource="{Binding Animations}" SelectedItem="{Binding Animation}" IsVisible="{Binding HasSeveralAnimations}" MaxWidth="160" Margin="6,0,0,0"
-                    VerticalAlignment="Center" FontSize="12" ToolTip.Tip="Which animation" AutomationProperties.Name="Animation">
+          <ComboBox ItemsSource="{Binding Animations}" SelectedItem="{Binding Animation}" IsVisible="{Binding HasSeveralAnimations}" MaxWidth="160" Margin="8,0,0,0"
+                    VerticalAlignment="Center" ToolTip.Tip="Which animation" AutomationProperties.Name="Animation">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="core:MeshAnimation">
                 <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
@@ -157,51 +157,51 @@
             </ComboBox.ItemTemplate>
           </ComboBox>
         </StackPanel>
-        <Panel DockPanel.Dock="Right" Margin="10,0,6,0" VerticalAlignment="Center">
+        <Panel DockPanel.Dock="Right" Margin="12,0,4,0" VerticalAlignment="Center">
           <TextBlock Text="{Binding LongestTimeText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
           <TextBlock Classes="muted" Text="{Binding TimeText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" AutomationProperties.Name="Frame" />
         </Panel>
         <Slider Minimum="0" Maximum="{Binding Duration}" Value="{Binding Time}" VerticalAlignment="Center" Margin="8,0,0,0" AutomationProperties.Name="Animation slider" />
       </DockPanel>
       <DockPanel>
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-          <Button Classes="ghost" Height="28" Padding="8,0" Content="Front" FontSize="12" Command="{Binding ViewFromCommand}" CommandParameter="front" ToolTip.Tip="See it from the front" />
-          <Button Classes="ghost" Height="28" Padding="8,0" Content="Right" FontSize="12" Command="{Binding ViewFromCommand}" CommandParameter="right" ToolTip.Tip="See it from its right" />
-          <Button Classes="ghost" Height="28" Padding="8,0" Content="Back" FontSize="12" Command="{Binding ViewFromCommand}" CommandParameter="back" ToolTip.Tip="See it from the back" />
-          <Button Classes="ghost" Height="28" Padding="8,0" Content="Left" FontSize="12" Command="{Binding ViewFromCommand}" CommandParameter="left" ToolTip.Tip="See it from its left" />
-          <Button Classes="ghost" Height="28" Padding="8,0" Content="Top" FontSize="12" Command="{Binding ViewFromCommand}" CommandParameter="top" ToolTip.Tip="See it from above" />
-          <Button Classes="ghost" Height="28" Padding="8,0" Content="Reset" FontSize="12" Command="{Binding ViewFromCommand}" CommandParameter="start" ToolTip.Tip="As at first (or double-click it)" />
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <Button Classes="ghost small" Content="Front" Command="{Binding ViewFromCommand}" CommandParameter="front" ToolTip.Tip="See it from the front" />
+          <Button Classes="ghost small" Content="Right" Command="{Binding ViewFromCommand}" CommandParameter="right" ToolTip.Tip="See it from its right" />
+          <Button Classes="ghost small" Content="Back" Command="{Binding ViewFromCommand}" CommandParameter="back" ToolTip.Tip="See it from the back" />
+          <Button Classes="ghost small" Content="Left" Command="{Binding ViewFromCommand}" CommandParameter="left" ToolTip.Tip="See it from its left" />
+          <Button Classes="ghost small" Content="Top" Command="{Binding ViewFromCommand}" CommandParameter="top" ToolTip.Tip="See it from above" />
+          <Button Classes="ghost small" Content="Reset" Command="{Binding ViewFromCommand}" CommandParameter="start" ToolTip.Tip="As at first (or double-click it)" />
         </StackPanel>
-        <TextBlock Classes="muted" Text="{Binding ViewText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,6,0"
+        <TextBlock Classes="muted" Text="{Binding ViewText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,4,0"
                    TextTrimming="CharacterEllipsis" AutomationProperties.Name="Seen from" />
       </DockPanel>
       </StackPanel>
     </Border>
 
     <!-- A video's player: a frame back, play, a frame on; where it is; its sound. -->
-    <Border Grid.Row="1" IsVisible="{Binding Video, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="10,4,10,10">
+    <Border Grid.Row="1" IsVisible="{Binding Video, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
       <DockPanel DataContext="{Binding Video}" x:DataType="vm:InspectorVideoViewModel">
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <Button Classes="ghost icon"
                   Command="{Binding StepBackCommand}" ToolTip.Tip="A frame back (Left)" AutomationProperties.Name="A frame back">
-            <PathIcon Width="13" Height="13" Data="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+            <PathIcon Width="14" Height="14" Data="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
           </Button>
-          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+          <Button Classes="ghost icon"
                   Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space)" AutomationProperties.Name="Play">
             <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
           </Button>
-          <Button Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+          <Button Classes="ghost icon"
                   Command="{Binding StepForwardCommand}" ToolTip.Tip="A frame on (Right)" AutomationProperties.Name="A frame on">
-            <PathIcon Width="13" Height="13" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+            <PathIcon Width="14" Height="14" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
           </Button>
         </StackPanel>
-        <Button DockPanel.Dock="Right" Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+        <Button DockPanel.Dock="Right" Classes="ghost icon"
                 Command="{Binding ToggleSoundCommand}" ToolTip.Tip="Sound on or off" AutomationProperties.Name="Sound">
           <PathIcon Width="14" Height="14" Data="{Binding SoundIcon}" />
         </Button>
         <!-- Where it is, in a slot as wide as its longest text for this video (hidden under it), its
              figures all as wide: the slider beside it keeps still as the text changes. -->
-        <Panel DockPanel.Dock="Right" Margin="10,0,6,0" VerticalAlignment="Center">
+        <Panel DockPanel.Dock="Right" Margin="12,0,4,0" VerticalAlignment="Center">
           <TextBlock Text="{Binding LongestFrameText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
           <TextBlock Classes="muted" Text="{Binding FrameText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" AutomationProperties.Name="Frame" />
         </Panel>

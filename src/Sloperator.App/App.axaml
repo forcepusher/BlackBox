@@ -53,6 +53,8 @@
     <SolidColorBrush x:Key="BbUserBubble" Color="#2A2F36" />
     <SolidColorBrush x:Key="BbOk" Color="#5FB878" />
     <SolidColorBrush x:Key="BbError" Color="#E06C6C" />
+    <SolidColorBrush x:Key="BbErrorHover" Color="#E88787" />
+    <SolidColorBrush x:Key="BbErrorPressed" Color="#C75E5E" />
   </Application.Resources>
 
   <Application.Styles>
@@ -67,14 +69,34 @@
       <Setter Property="Background" Value="{StaticResource BbBackground}" />
     </Style>
 
-    <!-- The text in the middle of a button (Fluent's 5 over, 6 under is for Segoe UI: see
-         ComboBoxPadding). First, so a class's own padding further on wins; only the app's own
-         toggles, not the ones in Fluent's templates (an Expander's header). -->
+    <!-- One size for every button, dropdown and text box: 32 high, as Fluent's text boxes and
+         dropdowns are; a small button (in a card, under a preview, in a player, over the diff) 24.
+         Room between things goes in steps of 4, whole pixels at 100, 125, 150 and 175%. -->
+    <!-- Every button's content in its middle. Fluent sizes a button by its padding (5 over, 6 under,
+         for Segoe UI) and lays the content at its top, so a button made taller had its word high:
+         Send's was 1.5 px over its middle at 125%. In the middle, Inter's capitals are, at any
+         height (see ComboBoxPadding). First, so a class's own size further on wins; only the app's
+         own toggles, not the ones in Fluent's templates (an Expander's header). -->
     <Style Selector="Button, ToggleButton.ghost">
-      <Setter Property="Padding" Value="8,5.5" />
+      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
-    <!-- A dropdown's rows: the same room over and under them too (Fluent's is 5 over, 7 under). -->
-    <Style Selector="ComboBoxItem">
+    <Style Selector="Button.small, ToggleButton.small">
+      <Setter Property="MinHeight" Value="24" />
+    </Style>
+    <!-- Only an icon: square, the icon in its middle. -->
+    <Style Selector="Button.icon, ToggleButton.icon">
+      <Setter Property="Width" Value="32" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.icon.small, ToggleButton.icon.small">
+      <Setter Property="Width" Value="24" />
+    </Style>
+    <!-- A dropdown's rows, and a menu's: the same room over and under them too (Fluent's is 5 over,
+         7 under for a dropdown, 4 and 7 for a menu), so a menu's rows are as tall as a dropdown's. -->
+    <Style Selector="ComboBoxItem, MenuItem">
       <Setter Property="Padding" Value="11,6" />
     </Style>
 
@@ -82,8 +104,14 @@
       <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
       <Setter Property="FontSize" Value="12" />
     </Style>
-    <Style Selector="SelectableTextBlock.muted.error">
+    <Style Selector="TextBlock.muted.error, SelectableTextBlock.muted.error">
       <Setter Property="Foreground" Value="{StaticResource BbError}" />
+    </Style>
+    <!-- What a field is, left of it: in the chat's top rows, Settings and Video generator's bar. -->
+    <Style Selector="TextBlock.label">
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <!-- Without a background a text block is hit only on its glyphs, so a drag had to start exactly
          on a letter; transparent, its whole box (line gaps, the space after a short line) starts one. -->
@@ -160,12 +188,12 @@
       <Setter Property="TextWrapping" Value="Wrap" />
       <Setter Property="Padding" Value="16,8" />
     </Style>
+    <!-- Copy on a code block: a small flat button, its word as quiet as the language beside it. -->
     <Style Selector="Button.copyCode">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
       <Setter Property="FontSize" Value="12" />
-      <Setter Property="Padding" Value="8,2" />
-      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="MinHeight" Value="24" />
     </Style>
 
     <!-- The server dot in the top bar: grey until checked, then yellow, green or red. -->
@@ -188,6 +216,23 @@
       <Setter Property="Margin" Value="0,12,0,4" />
     </Style>
 
+    <!-- The bar along the top of the chat and of each side panel, and along the foot of Settings:
+         the surface, a line on its inner side, 16 in from the window's edge, its buttons and
+         dropdowns 8 from its edges, so every such bar is 49 high and those side by side line up. -->
+    <Style Selector="Border.bar">
+      <Setter Property="Background" Value="{StaticResource BbSurface}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="Padding" Value="16,8" />
+    </Style>
+    <Style Selector="Border.bar.foot">
+      <Setter Property="BorderThickness" Value="0,1,0,0" />
+    </Style>
+    <!-- The line between the chat and a side panel, and between File changes' list and its diff. -->
+    <Style Selector="GridSplitter">
+      <Setter Property="Background" Value="{StaticResource BbBorder}" />
+    </Style>
+
     <Style Selector="Button.primary">
       <Setter Property="Background" Value="{StaticResource BbAccent}" />
       <Setter Property="Foreground" Value="#111214" />
@@ -203,11 +248,59 @@
       <Setter Property="Background" Value="{StaticResource BbAccentPressed}" />
       <Setter Property="Foreground" Value="#111214" />
     </Style>
+    <!-- Stop: red, and stays red under the pointer and pressed, lighter and darker as the yellow ones
+         do (Fluent's grey took its colour away under the pointer). -->
+    <Style Selector="Button.danger">
+      <Setter Property="Background" Value="{StaticResource BbError}" />
+    </Style>
+    <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource BbErrorHover}" />
+    </Style>
+    <Style Selector="Button.danger:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource BbErrorPressed}" />
+    </Style>
 
-    <Style Selector="Button.ghost">
+    <!-- The app's usual button: its border on no fill; under the pointer and pressed it fills as
+         Fluent's buttons do. A toggle too (Wrap, Area, the API key's eye) until it is pressed in: the
+         style named only buttons, so they sat filled grey beside ghost buttons. -->
+    <Style Selector="Button.ghost, ToggleButton.ghost">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
       <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <!-- No border either, where it sits in a box of its own (the paperclip, a list's foldout, Copy). -->
+    <Style Selector="Button.flat">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <!-- No look of a button's own, in any state: a picture, a card or a clip on the timeline that a
+         click opens or picks. -->
+    <Style Selector="Button.bare">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.bare /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <!-- A ghost button that opens a list (History, the video's name): the arrow 10 from its right
+         edge, 12 from the word, as on the Side panel dropdown beside it; pressed, it doesn't shrink,
+         as no dropdown does. -->
+    <Style Selector="Button.menu">
+      <Setter Property="Padding" Value="8,0,0,0" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.menu:pressed, Button.dropdown:pressed">
+      <Setter Property="RenderTransform" Value="none" />
+    </Style>
+    <Style Selector="Button.menu PathIcon.arrow, Button.dropdown PathIcon.arrow">
+      <Setter Property="Width" Value="10" />
+      <Setter Property="Height" Value="10" />
+      <Setter Property="Margin" Value="12,0,9,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Data" Value="M7 10l5 5 5-5z" />
     </Style>
     <!-- A button that opens a list beside the top bar's dropdowns (Servers): drawn as they are, its
          word at their padding and the arrow 10 from the right; a ghost button there looked out of
@@ -218,7 +311,7 @@
       <Setter Property="Background" Value="{DynamicResource ComboBoxBackground}" />
       <Setter Property="BorderBrush" Value="{DynamicResource ComboBoxBorderBrush}" />
       <Setter Property="BorderThickness" Value="{DynamicResource ComboBoxBorderThemeThickness}" />
-      <Setter Property="Padding" Value="{StaticResource ComboBoxPadding}" />
+      <Setter Property="Padding" Value="12,0,0,0" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     </Style>
     <Style Selector="Button.dropdown:pointerover /template/ ContentPresenter#PART_ContentPresenter">
@@ -231,11 +324,24 @@
       <Setter Property="BorderBrush" Value="{DynamicResource ComboBoxBorderBrushPressed}" />
       <Setter Property="Foreground" Value="{DynamicResource ComboBoxForeground}" />
     </Style>
-    <Style Selector="Button.dropdown:pressed">
-      <Setter Property="RenderTransform" Value="none" />
-    </Style>
     <Style Selector="Button.dropdown PathIcon">
       <Setter Property="Foreground" Value="{DynamicResource ComboBoxDropDownGlyphForeground}" />
+    </Style>
+    <!-- The Side panel dropdown in the top bar: drawn as the ghost buttons beside it (History, New
+         chat), its word where theirs is, not as a field; under the pointer and pressed it fills as
+         they do (a dropdown darkens, and it went dark beside History lighting up). -->
+    <Style Selector="ComboBox.ghost">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="Padding" Value="8,0,0,0" />
+    </Style>
+    <Style Selector="ComboBox.ghost:pointerover /template/ Border#Background">
+      <Setter Property="Background" Value="{DynamicResource ButtonBackgroundPointerOver}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrushPointerOver}" />
+    </Style>
+    <Style Selector="ComboBox.ghost:pressed /template/ Border#Background">
+      <Setter Property="Background" Value="{DynamicResource ButtonBackgroundPressed}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorderBrushPressed}" />
     </Style>
     <!-- Only the app's own toggles (Wrap, Watch, Area, Show), which go yellow pressed in: an Expander's
          header is a ToggleButton too, checked while open, on the dark surface. -->
@@ -267,7 +373,7 @@
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="8" />
-      <Setter Property="Padding" Value="12,10" />
+      <Setter Property="Padding" Value="12" />
     </Style>
 
     <!-- Fluent gives an Expander a 48px minimum height and applies it to the body as well as
@@ -277,42 +383,57 @@
       <Setter Property="MinHeight" Value="0" />
     </Style>
 
-    <!-- The History dropdown: a plain list on the surface colour. A row lights up under the
-         pointer and stays lit for the chat on screen; its trash button turns red under the pointer. -->
-    <Style Selector="FlyoutPresenter.history">
-      <Setter Property="Background" Value="{StaticResource BbSurface}" />
-      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="8" />
-      <Setter Property="Padding" Value="4" />
+    <!-- History's and Servers' lists, drawn as a dropdown's list (they were a bordered list on the
+         panel's colour, with rounded rows lit grey, beside dropdowns of Fluent's: the user,
+         2026-10-29): its surface, border and corners, 4 over and under the rows. A row is a
+         dropdown's row too: as far in, lit as one under the pointer and pressed, and the chat or
+         server in use picked as a dropdown's pick is; its trash button turns red under the pointer. -->
+    <Style Selector="FlyoutPresenter.list">
+      <Setter Property="Background" Value="{DynamicResource ComboBoxDropDownBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource ComboBoxDropDownBorderBrush}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource ComboBoxDropdownBorderThickness}" />
+      <Setter Property="CornerRadius" Value="{DynamicResource OverlayCornerRadius}" />
+      <Setter Property="Padding" Value="{DynamicResource ComboBoxDropdownContentMargin}" />
       <Setter Property="MaxHeight" Value="440" />
     </Style>
-    <Style Selector="Border.pastChat">
-      <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="Background" Value="Transparent" />
+    <Style Selector="Border.listRow">
+      <Setter Property="Background" Value="{DynamicResource ComboBoxItemBackground}" />
     </Style>
-    <Style Selector="Border.pastChat:pointerover, Border.pastChat.current">
-      <Setter Property="Background" Value="{StaticResource BbSurfaceRaised}" />
+    <Style Selector="Border.listRow:pointerover">
+      <Setter Property="Background" Value="{DynamicResource ComboBoxItemBackgroundPointerOver}" />
     </Style>
-    <Style Selector="Button.pastChat">
+    <Style Selector="Border.listRow.current">
+      <Setter Property="Background" Value="{DynamicResource ComboBoxItemBackgroundSelected}" />
+    </Style>
+    <Style Selector="Border.listRow.current:pointerover">
+      <Setter Property="Background" Value="{DynamicResource ComboBoxItemBackgroundSelectedPointerOver}" />
+    </Style>
+    <Style Selector="Button.listRow">
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-      <Setter Property="Padding" Value="10,6,40,6" />
+      <Setter Property="Padding" Value="11,6,40,6" />
+      <Setter Property="CornerRadius" Value="0" />
     </Style>
-    <Style Selector="Button.pastChat /template/ ContentPresenter, Button.deleteChat /template/ ContentPresenter">
+    <Style Selector="Button.listRow /template/ ContentPresenter, Button.rowDelete /template/ ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
     </Style>
-    <!-- The icon sits as far in from the row's right edge as the title does from its left. -->
-    <Style Selector="Button.deleteChat">
-      <Setter Property="Padding" Value="6" />
-      <Setter Property="Margin" Value="0,0,4,0" />
-      <Setter Property="VerticalAlignment" Value="Center" />
+    <Style Selector="Button.listRow:pressed">
+      <Setter Property="RenderTransform" Value="none" />
     </Style>
-    <Style Selector="Button.deleteChat PathIcon">
+    <Style Selector="Button.listRow:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource ComboBoxItemBackgroundPressed}" />
+    </Style>
+    <!-- The icon sits as far in from the row's right edge as the title does from its left. -->
+    <Style Selector="Button.rowDelete">
+      <Setter Property="Margin" Value="0,0,7,0" />
+    </Style>
+    <Style Selector="Button.rowDelete PathIcon">
+      <Setter Property="Width" Value="16" />
+      <Setter Property="Height" Value="16" />
       <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
     </Style>
-    <Style Selector="Button.deleteChat:pointerover PathIcon">
+    <Style Selector="Button.rowDelete:pointerover PathIcon">
       <Setter Property="Foreground" Value="{StaticResource BbError}" />
     </Style>
 

@@ -41,6 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The single-file Sloperator.exe is 25 MB instead of 31.8: its native libraries are packed with
   Brotli, PDF pages are drawn by Windows' own PDF renderer instead of PDFium, and the window is drawn
   with OpenGL instead of Direct3D.
+- One look everywhere: every button, dropdown and text box is the same height in the chat, Settings
+  and every side panel (small buttons in cards and players share one smaller size), the top bars of
+  the chat and of each panel are alike and line up, field labels are the same grey, and spacing is
+  even throughout.
+- **History** and **Servers** open the same kind of list as the dropdowns, and right-click menus have
+  rows as tall as a dropdown's.
+- The Video generator's menu says **Show in folder**, as everywhere else.
 
 ### Fixed
 - A text box (the prompt, the server address, the API key, the context size, the boxes in Settings)
@@ -53,6 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Text sat 1-2 px over the middle of dropdowns (the model, the effort), buttons, dropdown rows, the
   lines of File changes and the tool's name on a card; it is in the middle now.
 - With the chat narrow, the server address box covered the "Server" label beside it.
+- The **Side panel** dropdown went dark under the pointer while the buttons beside it lit up, and
+  **Stop** lost its red; both now change as the buttons around them do.
+- Settings' scrollbar sat inside the page rather than at the window's edge.
+- **Area**, **Prompt** and the API key's eye were filled grey beside outlined buttons; they are
+  outlined as the others until pressed in.
 - Undoing a message from before a context reset kept only the messages before it: the handoff note
   went too, and the model had no record of the work done. The note now stays, with a word that later
   messages were undone.

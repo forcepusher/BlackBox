@@ -6,39 +6,36 @@
              x:DataType="vm:FileInspectorViewModel"
              Background="{StaticResource BbBackground}">
   <DockPanel>
-    <!-- The file's name and what it is, and where it is; the folder opens another, × closes the panel. As tall as the chat's top
-         bar beside it, whose Toolkit dropdown is 30 high. A click on it lets go of the text selected. -->
-    <Border DockPanel.Dock="Top" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="12,8"
-            PointerReleased="OnBarReleased">
-      <DockPanel MinHeight="30">
-        <views:ToolkitClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="4,0,0,0" />
+    <!-- The file's name and what it is, and where it is; the folder opens another, × closes the panel. A bar
+         as the chat's top bar beside it, its buttons 8 apart and 12 from the name. A click on it lets go
+         of the text selected. -->
+    <Border DockPanel.Dock="Top" Classes="bar" PointerReleased="OnBarReleased">
+      <DockPanel MinHeight="32">
+        <views:ToolkitClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
         <!-- Open file: a file picked from the PC, in place of the one shown. -->
-        <Button DockPanel.Dock="Right" Classes="ghost" Width="30" Height="30" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                VerticalAlignment="Center" Margin="12,0,0,0" Click="OnOpenClick"
+        <Button DockPanel.Dock="Right" Classes="ghost icon" Margin="8,0,0,0" Click="OnOpenClick"
                 ToolTip.Tip="Open a file" AutomationProperties.Name="Open file">
           <PathIcon Width="14" Height="14" Data="M19 20H4a2 2 0 0 1-2-2V6c0-1.11.89-2 2-2h6l2 2h7a2 2 0 0 1 2 2H4v10l2.14-8h17.07l-2.28 8.5c-.23.87-1.01 1.5-1.93 1.5z" />
         </Button>
         <!-- Area: what is shown frozen, to drag over a part of it (a text, whose drags select text;
              Windows' previewer, which takes the mouse itself). -->
-        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding AreaMode}" IsVisible="{Binding CanFreeze}" Height="30" Padding="8,0"
-                      VerticalAlignment="Center" VerticalContentAlignment="Center" Margin="12,0,0,0"
+        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding AreaMode}" IsVisible="{Binding CanFreeze}" Margin="8,0,0,0"
                       ToolTip.Tip="Freeze the view to drag over a part of it" AutomationProperties.Name="Area">
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <PathIcon Width="13" Height="13" Data="M3 3h4v2H5v2H3zm14 0h4v4h-2V5h-2zM3 17h2v2h2v2H3zm16 0h2v4h-4v-2h2zM9 3h6v2H9zm0 16h6v2H9zM3 9h2v6H3zm16 0h2v6h-2z" />
+            <PathIcon Width="14" Height="14" Data="M3 3h4v2H5v2H3zm14 0h4v4h-2V5h-2zM3 17h2v2h2v2H3zm16 0h2v4h-4v-2h2zM9 3h6v2H9zm0 16h6v2H9zM3 9h2v6H3zm16 0h2v6h-2z" />
             <TextBlock Text="Area" VerticalAlignment="Center" />
           </StackPanel>
         </ToggleButton>
         <!-- Prompt: for a picture, animation, video, sound or 3D model that says how it was made, its
              prompts and settings under it. -->
-        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding ShowRecipe}" IsVisible="{Binding HasRecipe}" Height="30" Padding="8,0"
-                      VerticalAlignment="Center" VerticalContentAlignment="Center" Margin="12,0,0,0"
+        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding ShowRecipe}" IsVisible="{Binding HasRecipe}" Margin="8,0,0,0"
                       ToolTip.Tip="The prompts and settings it was made with, read from the file" AutomationProperties.Name="Prompt">
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <PathIcon Width="13" Height="13" Data="M3 18h12v-2H3v2zM3 6v2h18V6H3zm0 7h18v-2H3v2z" />
+            <PathIcon Width="14" Height="14" Data="M3 18h12v-2H3v2zM3 6v2h18V6H3zm0 7h18v-2H3v2z" />
             <TextBlock Text="Prompt" VerticalAlignment="Center" />
           </StackPanel>
         </ToggleButton>
-        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" ClipToBounds="True">
+        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" ClipToBounds="True" Margin="0,0,4,0">
           <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}" />
           <TextBlock Classes="muted" Text="{Binding Details}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Details}" />
         </StackPanel>

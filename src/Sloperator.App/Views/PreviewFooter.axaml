@@ -7,9 +7,9 @@
   <!-- Under every preview: the file's name and what it is, and buttons to see it in the File inspector
        panel (with the prompt it was made with, if the file says) or find it. -->
   <DockPanel>
-    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="10,0,0,0">
-      <Button Classes="ghost" Padding="10,3" Content="Inspect" Click="OnInspect" ToolTip.Tip="See it in the File inspector panel" />
-      <Button Classes="ghost" Padding="10,3" Content="Show in folder" Command="{Binding ShowInFolderCommand}" ToolTip.Tip="{Binding Path}" />
+    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="12,0,0,0">
+      <Button Classes="ghost small" Content="Inspect" Click="OnInspect" ToolTip.Tip="See it in the File inspector panel" />
+      <Button Classes="ghost small" Content="Show in folder" Command="{Binding ShowInFolderCommand}" ToolTip.Tip="{Binding Path}" />
     </StackPanel>
     <StackPanel Spacing="1" VerticalAlignment="Center">
       <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Path}" />

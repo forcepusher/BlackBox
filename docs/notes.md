@@ -822,7 +822,7 @@ one's width to the other's: the view model sets the new tool in one change (it w
 and the window shrank to the chat and grew back), the window sets the panel's content itself (a
 binding took it after the layout), and the dropdown's list is closed first (it lingered a frame over
 the resized window). Measured after: popup closed, then one frame with all of the switch, for every
-pick of None, Video generator and File changes either way. The window's place is saved without the panel. **What a tool gives a message is a card of what was picked in it** over the box (the user, 2026-10-25, after a message sent with File changes open showed only a grey "File changes" over its words): a pick (`MainWindowViewModel.Pick`, an `AttachmentItem` with a caption). With nothing picked there is no card, and a message the user types goes as it is, with no word of the tool (`WithToolkit`; the user, 2026-10-28: until then a card of the whole item, `IToolkit.Whole`, stood there, and File changes selected its first file by itself, so a card of what they never picked went with every message, with no × to take it off). The tool's own messages (Make the video) still say what it shows. A pick has no × as the user's own files have (`AttachmentItem.CanRemove` is false for a pick; the user's call: a pick is unpicked in its panel, a click away or Esc, so box and panel can't disagree). Every panel puts what it picks in the box through `Pick`, so a new one gets this as is; `ToolCardTests` fails if a × in the box is shown for anything but `CanRemove`. Sent, the cards go with the message (`UserInput.Cards`, kept in the chat as `ChatEntry.Cards`) and show in its bubble as its files do, a pick by its caption; a chat saved before shows its grey line as it was. **The × at the right end of every tool's top bar** closes the tool, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`ToolkitClose`, 30 square as the Toolkit dropdown, 12 right of what is beside it), so it looks and sits the same in each. Video generator's frame fields are 30 high there: their own 32 made its bar 2 px taller (at 125%) than the other tools' and the chat's, and its × sat lower. **Made narrower, the panel gives way first** (`ToolkitColumns`,
+pick of None, Video generator and File changes either way. The window's place is saved without the panel. **What a tool gives a message is a card of what was picked in it** over the box (the user, 2026-10-25, after a message sent with File changes open showed only a grey "File changes" over its words): a pick (`MainWindowViewModel.Pick`, an `AttachmentItem` with a caption). With nothing picked there is no card, and a message the user types goes as it is, with no word of the tool (`WithToolkit`; the user, 2026-10-28: until then a card of the whole item, `IToolkit.Whole`, stood there, and File changes selected its first file by itself, so a card of what they never picked went with every message, with no × to take it off). The tool's own messages (Make the video) still say what it shows. A pick has no × as the user's own files have (`AttachmentItem.CanRemove` is false for a pick; the user's call: a pick is unpicked in its panel, a click away or Esc, so box and panel can't disagree). Every panel puts what it picks in the box through `Pick`, so a new one gets this as is; `ToolCardTests` fails if a × in the box is shown for anything but `CanRemove`. Sent, the cards go with the message (`UserInput.Cards`, kept in the chat as `ChatEntry.Cards`) and show in its bubble as its files do, a pick by its caption; a chat saved before shows its grey line as it was. **The × at the right end of every tool's top bar** closes the tool, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`ToolkitClose`, 32 square as the Side panel dropdown, 8 right of the button beside it), so it looks and sits the same in each. Every tool's top bar is the chat's (`Border.bar`, see One look for every control), its fields 32 high as everywhere. **Made narrower, the panel gives way first** (`ToolkitColumns`,
 `MainWindow.FitColumns` on the columns' SizeChanged): down to its least (`ToolkitOption.MinWidth`,
 splitter included: Video generator 770, where its top bar still fits in one row with the video's name cut
 short; File changes 560), then the window stops, at the panel's least plus the chat's 660 (no more than
@@ -1405,13 +1405,65 @@ paddings were made for Segoe UI, whose capitals sit low in its line: a button ha
 6 under, a dropdown 5 and 7, a dropdown's row 5 and 7. Inter's capitals sit in the middle of its line
 (ascent 0.969 em, descent 0.242, capitals 0.727), so with those every dropdown's text was 2 px (at
 125%) over its middle and a button's 1; the user noticed it on the model dropdown. App.axaml gives
-buttons 5.5 over and under, dropdowns 6 and 6 (`ComboBoxPadding`) and their rows 6 and 6; a class's
-own padding further on still wins. Consolas, the fixed-width font on PCs without Cascadia Mono, sits
+dropdowns 6 and 6 (`ComboBoxPadding`) and their rows and a menu's rows 6 and 6 (a menu's were 4 and
+7, its words 1.5 px higher than a dropdown's); a button is a height (32, or 24 small) with its
+content in its middle (`VerticalContentAlignment`: Fluent lays it at the top, so a button made taller
+than its padding had its word high, Send's by 1.5 px). Consolas, the fixed-width font on PCs without Cascadia Mono, sits
 high in its line too: the lines of File changes have 3 px over the code and -1 under (2.4 and -0.8
 logical; rows as tall as with 1 each, which other values made 22 px and 21 by turns), and the tool's
 name on a card 2 over and none under. Measured with `.dev/chat-menu-test/text-centering.ps1` (rows
 with ink, each control's capitals from their top to the baseline) and `text-layout.ps1` (each
 control's text block against its middle), on the laptop at 125%: everything within 0.5 px.
+
+## One look for every control
+Every window and side panel draws its controls from the styles in App.axaml, one a kind, not
+sizes set on each control (the user, 2026-10-30, after drift was found in turn: text boxes with
+different focus rules, popups anchored differently, Servers' brushes, text off centre, History and
+Servers' lists unlike the dropdowns'):
+- **Sizes**: a button, dropdown or text box is 32 high, as Fluent's text boxes and dropdowns are; a
+  small button (in a card, under a preview, in a player, over the diff) 24. `Button` (and the app's
+  `ToggleButton.ghost`) has `MinHeight` 32 and its content in its middle; `.small` makes it 24,
+  `.icon` square with the icon in its middle. A class that sizes a button itself sets `MinHeight`
+  too (the attachment's ×, File… and Generate on a card), or the 32 wins over its `Height`.
+- **Buttons**: `ghost` (a border on no fill: most of them, and the app's toggles until pressed in,
+  which the style had missed: Area, Prompt and the API key's eye were filled grey beside outlined
+  buttons), `flat` (no border either: the paperclip,
+  File changes' foldouts, a code block's Copy), `bare` (no look of its own in any state: a picture,
+  a card or a clip that a click opens or picks; was `picture`, `thumb` and `pick`), `primary`
+  (yellow), `danger` (Stop: red, lighter under the pointer and darker pressed as the yellow ones;
+  Fluent's grey took its colour away under the pointer).
+- **What opens a list** has its arrow, the solid triangle, 10 from its right edge and 12 from its
+  word, and doesn't shrink pressed: `Button.menu` (History, the video's name; ghost),
+  `ComboBox.ghost` (the Side panel dropdown, drawn as the ghost buttons beside it, which lit up under
+  the pointer while it went dark), `Button.dropdown` (Servers, drawn as the dropdowns around it).
+  Under the pointer and pressed, the ghost ones fill as a ghost button does, the field ones
+  (dropdowns, Servers) as a dropdown does.
+- **Lists**: a dropdown's list, a menu (right-click or a button's) and History's and Servers' lists
+  are one look, Fluent's (its popup surface, border and corners, 4 over and under the rows; rows
+  11 in, 6 over and under). History and Servers had a bordered list on the panel's colour with
+  rounded rows lit grey; now `FlyoutPresenter.list` with `listRow` rows, lit as a dropdown's rows
+  under the pointer and pressed, the chat or server in use tinted as a dropdown's pick, the trash
+  button as far in from the right as the title from the left.
+- **Bars**: the chat's top bar and server rows, each side panel's top bar and Settings' foot are one
+  `Border.bar`: the surface, a line on the inner side, 16 in from the window's edge and 8 over and
+  under 32-high controls, so every bar is 49 high (at 125%: 61 px) and the chat's top bar and a
+  panel's line up. In them buttons are 8 apart and 12 from text. The splitters are one
+  `GridSplitter` style (the border colour).
+- **Labels** left of a field are `TextBlock.label` (grey, 12, centred on the field): the chat's
+  Server, API key, Model and Context, Settings' (which were 14 and white) and Video generator's.
+- **Spacing** goes in steps of 4, whole pixels at 100, 125, 150 and 175%: bars, cards (12 all
+  round; was 12 and 10), the chat's lines and the intro's cards (12 apart; were 10 and 14), the
+  composer (8 round the box; was 6). The space between lines of text (1 to 6) and the nudges that
+  centre text (File changes' code, the tool's name on a card) are left as they are.
+- Scrollbars are the full one everywhere (see Scrollbars); Settings' sits on the window's edge, as
+  the chat's does, rather than 16 in. Every side panel opens 880 wide (`ToolkitColumns.PanelWidth`).
+  The Video generator's menu says Show in folder, as the chat's cards and File changes do (it said
+  Show in Explorer).
+Measured on the laptop at 125% with the real app off the screen (PrintWindow, UI Automation; the
+screen is shared with benchmarks): every bar control 40 px high (were 38 in the bars, 40 in the server
+rows), every small button 30 (were 25 to 35), every text block in its control's middle (0 to 0.5 px),
+a menu's words as far from their row's middle as a dropdown's (they were 1.6 px higher), and under
+the pointer and pressed the Side panel dropdown now as History and New chat beside it.
 
 ## Accent colour
 The accent is the blob logo's yellow #FCC21B (`BbAccent`, and Fluent's own through its palette).
