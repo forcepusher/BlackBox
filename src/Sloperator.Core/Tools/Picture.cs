@@ -77,27 +77,6 @@ internal static class Picture
         return new Shown(original.Width, original.Height, width, height, jpeg.ToArray(), Transparency(original));
     }
 
-    /// <summary>
-    /// A picture's bytes at <paramref name="scale"/> of its sides (sides kept multiples of the patch)
-    /// as JPEG of <paramref name="quality"/>; null when they aren't a picture this can read.
-    /// </summary>
-    public static byte[]? Smaller(byte[] data, double scale, int quality)
-    {
-        using var bytes = SKData.CreateCopy(data);
-        using var codec = SKCodec.Create(bytes);
-        if (codec is null)
-            return null;
-        using var original = SKBitmap.Decode(codec);
-        if (original is null)
-            return null;
-        using var scaled = original.Resize(new SKImageInfo(Snap(original.Width * scale), Snap(original.Height * scale), SKColorType.Bgra8888, SKAlphaType.Premul), SKFilterQuality.High);
-        if (scaled is null)
-            return null;
-        using var image = SKImage.FromBitmap(scaled);
-        using var jpeg = image.Encode(SKEncodedImageFormat.Jpeg, quality);
-        return jpeg.ToArray();
-    }
-
     /// <param name="grid">The grid the model points on (1000), or null when it points in pixels.</param>
     public static ToolResult Read(string path, int? grid = null)
     {

@@ -1794,7 +1794,7 @@ reset, so a Unity run there failed at its 9th screenshot, with 2560x1088 ones a 
 into a 1M context.
 
 Every screenshot stays in the conversation until such an error, as before; only then are they
-left out. They do get smaller, though (see "Earlier screenshots made smaller" below). Such an error (`TooManyImagesException`, told apart from "takes no pictures") doesn't
+left out. Such an error (`TooManyImagesException`, told apart from "takes no pictures") doesn't
 reset the context: every screenshot but the latest is put in words at once ("An earlier
 screenshot, left out: the server takes only so many pictures in one request.") and the step is
 sent again. The pictures tools and the user gave (a ComfyUI result, a reference) stay; only if they
@@ -1824,22 +1824,6 @@ kept every step, 20.0k, 24.9k and 29.4k (64k sent); halves at 8, 34.5k and 60.8k
 every step, 77.5k. A 2560x1088 screenshot is about 960 tokens on DeepSeek V4.1 Flash (8 were 7.7k),
 and 2.7k by Qwen's count of one per 32x32 pixels. Keeping only the latest by default was weighed
 (28 October 2026) and left out: it would cost Claude its thinking at every step.
-
-Earlier screenshots made smaller (29 October 2026, `AgentSession.ShrinkOldScreenshots`): once a
-request would carry 6 whole screenshots before the latest (`WholeScreenshots`), all 6 are made half
-their size at once, as JPEG of quality 60, and say so after the picture ("An earlier screenshot, now
-at half size. Aim only from the latest screenshot."). The latest stays whole, since clicks are aimed
-from it; zoomed pictures and pictures tools or the user gave stay as they were. Half size is a quarter
-of the pixels, so of Qwen's and Claude's image tokens (a 1728x1088 screenshot is 1,836 of Qwen's, half
-of it 459); in bytes, 60 screenshots of 1920x1216 averaged 168 KB whole and 39 KB at half and quality
-60 (23%; a third of the side was 20 KB but small text no longer read). So a long run's request grows
-by about a quarter of what it did a step, and a context fills about three times slower with
-screenshots. Every 6 steps, not every step: the server reads again only from the oldest of the 6,
-which is the steps since the last batch, the requests between batches only grow at the end, and a
-hybrid model's llama.cpp server can go back only as far as its last few saved states. Not on
-Anthropic's API: each screenshot made smaller would drop Claude's signed thinking after it (12 of 12
-thinking blocks in `Claude_keeps_its_screenshots_whole_and_its_thinking` without the check); its own
-rule leaves pictures out past 100.
 
 `MunitoImageCapTests` (BB_MUNITO_KEY) runs it against munito: nine screenshots, as in the run that
 failed, are refused once, the cap learned is 8 and the model still names the latest screen's colour;
