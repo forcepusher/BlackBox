@@ -1830,14 +1830,15 @@ latest at half size and JPEG quality 60, all at once, about a quarter of their b
 each (60 screenshots of 1920x1216: 168 KB whole, 39 KB so). On Anthropic's API it dropped Claude's
 signed thinking after each one changed (12 of 12 thinking blocks in a test run), and the user wants one
 behaviour for every provider, without what doesn't work for Claude, so it was taken out: a screenshot
-stays as it was sent. What does change is how each one is sent: as JPEG of quality 70 rather than 85
-(`AgentSettings.ScreenshotQuality`), the same pixels and image tokens in fewer bytes, 76% of them over
-those 60 screenshots and 76% to 88% of them on the click benchmark's scenes. On 8 hard scenes × 5
-(buttons, tiny, dense, faint, jpeg, similar, links, rows; qwen3.8 with zoom, 2560x1080) 85 hit 33 and
-then 32 of 40, 70 hit 31 and 60 hit 30, its extra misses a few pixels off small links and rows; 70 is
-within what two runs at 85 differ by. Repeats of the very same screen, which could be sent as words,
-never happened in 521 saved screenshots in a row (a clock, the cursor or a caret always differs).
-Zoomed pictures stay at 90: the clicks are aimed from them.
+stays as it was sent. A lower JPEG quality for every screenshot was measured instead
+(`AgentSettings.ScreenshotQuality`, the click benchmark's BB_CLICK_QUALITY): the same pixels and image
+tokens in fewer bytes, at 70 76% of 85's over those 60 screenshots and 76% to 88% on the benchmark's
+scenes. On 8 hard scenes × 5 (buttons, tiny, dense, faint, jpeg, similar, links, rows; qwen3.8 with
+zoom, 2560x1080) 85 hit 33 and then 32 of 40, 70 hit 31 and 60 hit 30, the extra misses a few pixels
+off small links and rows. Fewer bytes saves no tokens or context and matters only over a slow link or
+near a gateway's size limit, so the user kept 85, and made it the quality of zoomed pictures too
+(they were 90). Repeats of the very same screen, which could be sent as words, never happened in 521
+saved screenshots in a row (a clock, the cursor or a caret always differs).
 
 `MunitoImageCapTests` (BB_MUNITO_KEY) runs it against munito: nine screenshots, as in the run that
 failed, are refused once, the cap learned is 8 and the model still names the latest screen's colour;
