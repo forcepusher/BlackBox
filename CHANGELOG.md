@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the words typed in the message box (and its hint) a pixel under Send's, **File…** and **Generate** on
   the Video generator's cards a pixel over their middle, and Settings' "Ask me first" a pixel under its
   dropdown's words.
+- The app icon has a soft shadow, so the yellow blob keeps a clear edge on a light taskbar.
 - A text box (the prompt, the server address, the API key, the context size, the boxes in Settings)
   kept the focus and its caret after a click on empty space, a panel or a label; a click anywhere away
   from it now takes the focus off it.
