@@ -4,7 +4,7 @@
 
 .DESCRIPTION
   Default: one Sloperator.exe, trimmed to the parts of .NET and the libraries Sloperator uses and
-  compressed (about 28 MB). The native libraries (Skia, HarfBuzz, ANGLE, PDFium) are embedded,
+  compressed (about 24 MB). The native libraries (Skia, HarfBuzz) are embedded,
   packed with Brotli by pack-runtime.cs, and unpacked into Data/runtime next to the exe on first
   run. Copy just the exe anywhere and run it.
 

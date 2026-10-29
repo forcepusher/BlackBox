@@ -44,6 +44,11 @@
     <SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="#5A765B0D" />
     <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="#78765B0D" />
     <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPressed" Color="#96765B0D" />
+    <!-- Fluent's paddings put more room under the text than over it, for Segoe UI, whose capitals sit
+         low in their line. Inter's sit in its middle (ascent 0.969 em, descent 0.242, capitals 0.727),
+         so with those paddings every dropdown's text was 2 px (at 125%) over its middle, a button's 1:
+         the same room over and under it instead (the user, 2026-10-29). -->
+    <Thickness x:Key="ComboBoxPadding">12,6,0,6</Thickness>
     <SolidColorBrush x:Key="BbUserBubble" Color="#2A2F36" />
     <SolidColorBrush x:Key="BbOk" Color="#5FB878" />
     <SolidColorBrush x:Key="BbError" Color="#E06C6C" />
@@ -59,6 +64,17 @@
 
     <Style Selector="Window">
       <Setter Property="Background" Value="{StaticResource BbBackground}" />
+    </Style>
+
+    <!-- The text in the middle of a button (Fluent's 5 over, 6 under is for Segoe UI: see
+         ComboBoxPadding). First, so a class's own padding further on wins; only the app's own
+         toggles, not the ones in Fluent's templates (an Expander's header). -->
+    <Style Selector="Button, ToggleButton.ghost">
+      <Setter Property="Padding" Value="8,5.5" />
+    </Style>
+    <!-- A dropdown's rows: the same room over and under them too (Fluent's is 5 over, 7 under). -->
+    <Style Selector="ComboBoxItem">
+      <Setter Property="Padding" Value="11,6" />
     </Style>
 
     <Style Selector="TextBlock.muted, SelectableTextBlock.muted">

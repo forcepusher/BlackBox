@@ -17,8 +17,8 @@ namespace Sloperator.App.ViewModels;
 /// by frame (<see cref="InspectorVideoViewModel"/>, <see cref="InspectorAnimationViewModel"/>), draws a
 /// sound's waveform to zoom into and pick a stretch of (<see cref="InspectorSoundViewModel"/>), turns
 /// 3D models about (<see cref="InspectorModelViewModel"/>), shows any other file's bytes in hex, and PDF
-/// pages are drawn by PDFium (<see cref="PdfPages"/>); Office files and web pages
-/// (and a PDF PDFium can't open) are drawn by the previewer Windows has for them, as
+/// pages are drawn by Windows' PDF renderer (<see cref="PdfPages"/>); Office files and web pages
+/// (and a PDF it can't open) are drawn by the previewer Windows has for them, as
 /// in Explorer's preview pane, else shown as their text (<see cref="FileInspector"/>). With the
 /// panel open a message is about the file shown; text selected in the text Sloperator draws goes into
 /// the chat's box as where it is in the file ("Lines 12-20 · notes.md", "Cells B4:C4 · data.csv"),
@@ -120,13 +120,13 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
 
     public bool ShowsModel => Model is not null && Frozen is null;
 
-    /// <summary>A PDF's pages, drawn by PDFium as they come on screen; null for any other file.</summary>
+    /// <summary>A PDF's pages, drawn by Windows' PDF renderer as they come on screen; null for any other file.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanZoom))]
     private IReadOnlyList<PdfPageItem>? _pages;
 
     /// <summary>The PDF the pages are drawn from, open while it is shown.</summary>
-    private PdfPages? _pdf;
+    private IPdfDocument? _pdf;
 
     /// <summary>The file for Windows' previewer to draw (see <see cref="Views.ShellPreviewHost"/>).</summary>
     [ObservableProperty]
@@ -299,17 +299,17 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
     }
 
     /// <summary>
-    /// A PDF's pages, drawn by Sloperator with PDFium; false for any other file, and for a PDF PDFium
-    /// can't open (damaged, with a password, or pdfium.dll missing), which Windows' previewer or its
+    /// A PDF's pages, drawn by Windows' PDF renderer; false for any other file, and for a PDF it
+    /// can't open (damaged, with a password), which Windows' previewer or its
     /// text then shows.
     /// </summary>
     private bool ShowPdf(int load, string path, string size)
     {
         if (!System.IO.Path.GetExtension(path).Equals(".pdf", StringComparison.OrdinalIgnoreCase))
             return false;
-        PdfPages pdf;
+        IPdfDocument pdf;
         try { pdf = PdfPages.Open(path); }
-        catch (Exception ex) when (ex is InvalidDataException or DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or IOException)
+        catch (Exception ex) when (ex is InvalidDataException or NotSupportedException or IOException or UnauthorizedAccessException)
         {
             return false;
         }

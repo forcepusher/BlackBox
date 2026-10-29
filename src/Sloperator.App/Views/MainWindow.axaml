@@ -324,9 +324,6 @@
             </DataTemplate>
           </ComboBox.ItemTemplate>
         </ComboBox>
-        <!-- The tools are still being built: said once, quietly, beside the dropdown. -->
-        <TextBlock DockPanel.Dock="Left" Classes="muted" Text="in development" VerticalAlignment="Center" Margin="10,0,0,0"
-                   ToolTip.Tip="The Toolkit's tools are still being built and may change" />
 
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <!-- Earlier chats, newest first: a row opens one, its trash button deletes it. A chat another
@@ -431,7 +428,8 @@
               </Flyout>
             </Button.Flyout>
           </Button>
-          <TextBox Text="{Binding ServerAddress}" Watermark="http://localhost:1234/v1" MinWidth="200" />
+          <!-- No least width: one wider than the narrowest chat's column was laid out over the "Server" label. -->
+          <TextBox Text="{Binding ServerAddress}" Watermark="http://localhost:1234/v1" />
         </DockPanel>
         <TextBlock Grid.Row="0" Grid.Column="2" Classes="muted" Text="API key" VerticalAlignment="Center" Margin="16,0,8,0" />
         <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding ApiKey}" PasswordChar="•" RevealPassword="{Binding ShowApiKey}" MinWidth="120"
@@ -640,7 +638,8 @@
                     <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding StatusText}" VerticalAlignment="Top" Margin="4,0,0,0" />
                     <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText, StringFormat='{}{0} ·'}" IsVisible="{Binding HasTime}"
                                ToolTip.Tip="{Binding TimeTip}" VerticalAlignment="Top" Margin="8,0,0,0" />
-                    <Border DockPanel.Dock="Left" Background="{StaticResource BbSurfaceRaised}" CornerRadius="4" Padding="8,1" VerticalAlignment="Top" Margin="0,0,8,0">
+                    <!-- 2 over the name and none under: Consolas' capitals sit high in its line (1.5 px over the chip's middle at 125%). -->
+                    <Border DockPanel.Dock="Left" Background="{StaticResource BbSurfaceRaised}" CornerRadius="4" Padding="8,2,8,0" VerticalAlignment="Top" Margin="0,0,8,0">
                       <TextBlock Text="{Binding Name}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Foreground="{StaticResource BbAccent}" />
                     </Border>
                     <TextBlock Text="{Binding Title}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis"
@@ -965,8 +964,10 @@
               <!-- The logo blob, as tall as Send and 8 from it (with the spacing); it dances while a prompt runs.
                    Not with the intro, which has the logo already. -->
               <views:PartyBlob Dancing="{Binding IsBusy}" IsVisible="{Binding !ShowIntro}" Width="32" Height="32" Margin="0,0,2,0" VerticalAlignment="Bottom" />
-              <Button Classes="primary" Content="Send" Command="{Binding SendCommand}" MinHeight="32" />
-              <Button Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" Background="{StaticResource BbError}" MinHeight="32" />
+              <!-- 1 more over the word than under it: as tall as the box's line (32), Send's capitals sat 1.5 px
+                   (at 125%) over its middle, where other buttons' are within 0.7. -->
+              <Button Classes="primary" Content="Send" Command="{Binding SendCommand}" MinHeight="32" Padding="8,6.5,8,4.5" />
+              <Button Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" Background="{StaticResource BbError}" MinHeight="32" Padding="8,6.5,8,4.5" />
             </StackPanel>
           </Grid>
         </Border>

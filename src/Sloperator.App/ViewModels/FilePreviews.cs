@@ -275,7 +275,7 @@ public sealed partial class FileCardPreview(string path) : FilePreview(path)
             Show(() => (PeekMarkdown, PeekText) = (markdown, text));
     });
 
-    /// <summary>A PDF's first page drawn by PDFium, or the picture an Office or OpenDocument file keeps of itself; null for neither.</summary>
+    /// <summary>A PDF's first page drawn by Windows' PDF renderer, or the picture an Office or OpenDocument file keeps of itself; null for neither.</summary>
     private Bitmap? Picture()
     {
         if (System.IO.Path.GetExtension(Path).Equals(".pdf", StringComparison.OrdinalIgnoreCase))
@@ -288,7 +288,7 @@ public sealed partial class FileCardPreview(string path) : FilePreview(path)
                 if (pdf.Render(0, PeekWidth * 2) is { } page)
                     return PdfPageItem.ToBitmap(page.Bgra, page.Width, Math.Min(page.Height, page.Width * PeekHeight / PeekWidth));
             }
-            catch (Exception ex) when (ex is InvalidDataException or DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or IOException) { }
+            catch (Exception ex) when (ex is InvalidDataException or NotSupportedException or IOException or UnauthorizedAccessException) { }
             return null; // its text, as in the panel
         }
         if (FileInspector.SavedThumbnail(Path) is not { } bytes)
