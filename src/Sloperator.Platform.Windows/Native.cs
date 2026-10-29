@@ -339,9 +339,16 @@ internal static partial class Native
     public static partial nint GetLastActivePopup(nint hWnd);
 
     public const int DWMWA_CLOAKED = 14;
+    /// <summary>Dark title bar and borders: 20 from Windows 10 2004, 19 before it.</summary>
+    public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19;
+    /// <summary>The title bar's colour and its text's (COLORREF, 0x00BBGGRR): Windows 11 only.</summary>
+    public const int DWMWA_CAPTION_COLOR = 35, DWMWA_TEXT_COLOR = 36;
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(nint hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmSetWindowAttribute(nint hwnd, int dwAttribute, in int pvAttribute, int cbAttribute);
 
     // ---- keyboard hook (the stop key) --------------------------------------------------
 

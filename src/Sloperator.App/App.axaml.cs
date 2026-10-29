@@ -25,8 +25,25 @@ public partial class App : Application
         // itself; a panel, a label or empty space takes nothing, and the box kept it, caret and all.
         // Bubbling, handled or not: by then whatever the click focuses has been focused.
         InputElement.PointerPressedEvent.AddClassHandler<Window>(LeaveTextBox, RoutingStrategies.Bubble, handledEventsToo: true);
+#if WINDOWS
+        // Every window's title bar dark, as the window is: Windows draws it light whatever the app's
+        // theme (Avalonia makes it dark only on Windows 11). On its template, before it is first shown.
+        TemplatedControl.TemplateAppliedEvent.AddClassHandler<Window>((window, _) => DarkTitleBar(window));
+#endif
         AvaloniaXamlLoader.Load(this);
     }
+
+#if WINDOWS
+    /// <summary>The title bar in the frame's colour (BbFrame) with its text secondary (BbSecondary), where Windows takes colours.</summary>
+    private static void DarkTitleBar(Window window)
+    {
+        if (OperatingSystem.IsWindows() && window.TryGetPlatformHandle()?.Handle is { } hwnd && hwnd != 0)
+            Platform.Windows.WindowsPlatform.DarkTitleBar(hwnd, Rgb(window, "BbFrame"), Rgb(window, "BbSecondary"));
+    }
+
+    private static uint Rgb(Window window, string key) =>
+        window.FindResource(key) is Avalonia.Media.ISolidColorBrush brush ? brush.Color.ToUInt32() & 0xFFFFFF : 0;
+#endif
 
     private static void LeaveTextBox(Window window, PointerPressedEventArgs e)
     {

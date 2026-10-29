@@ -123,7 +123,7 @@ public sealed class MarkdownParts : StackPanel
         CornerRadius = new CornerRadius(2),
         BorderThickness = new Thickness(1),
         Classes = { ticked ? "mdTicked" : "mdBox" },
-        Child = ticked ? new TextBlock { Text = "✓", FontSize = 10, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Color.Parse("#111214")) } : null,
+        Child = ticked ? new TextBlock { Text = "✓", FontSize = 10, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = new SolidColorBrush(Color.Parse("#1A1A1A")) } : null,
     };
 
     private static T Muted<T>(T block) where T : TextBlock
