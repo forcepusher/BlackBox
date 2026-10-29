@@ -1367,6 +1367,19 @@ take it from their owner by template binding (a style setter loses to that). Ove
 `Control`, or `ScrollBar.AllowAutoHide` on `ScrollBar`, throws at startup: both already have their
 metadata there. Fluent lays the bars over the content, so a bar covers the strip it sits on.
 
+## Focus on a click away
+A click away from the text box being typed in takes the focus off it, in every window, for every box
+(the user, 2026-10-29: all of them by one rule). Avalonia's `FocusManager` focuses the first
+focusable control under a press, on its tunnel; a button, a list, a dropdown or a slider takes the
+focus that way, but a panel, a label or empty space is not focusable, so nothing changed and the box
+kept the focus and its caret. `App.Initialize` adds a class handler for `PointerPressed` on `Window`,
+bubbling and with handled events too, so it runs after that: if a `TextBox` still has the focus and
+the press wasn't on it or inside its template, `FocusManager.ClearFocus()`. The box loses the focus
+as it would to Tab, so the context size box takes what was typed (`UpdateSourceTrigger=LostFocus`).
+With nothing focused, keys go to the window. Popups (flyouts, menus) are their own top levels and not
+covered; the rename box in a flyout closes with a click outside it anyway. `TextBoxFocusTests` checks
+it headless.
+
 ## Party blob
 Left of Send and Stop, 32 px like the buttons and 8 px from Send, `PartyBlob` (Views/PartyBlob.cs)
 shows the logo (Assets/sloperator.png) still, and the blobs.gg party blob (Assets/partyblob.gif: 128 px,
