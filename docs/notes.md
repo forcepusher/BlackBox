@@ -1406,6 +1406,26 @@ With nothing focused, keys go to the window. Popups (flyouts, menus) are their o
 covered; the rename box in a flyout closes with a click outside it anyway. `TextBoxFocusTests` checks
 it headless.
 
+## Start screen
+Until the chat is used (`ShowIntro`), the cards on what Sloperator can do scroll in the chat's place,
+at the foot of the scroll so they stay by the heading in a tall window, and read from the top when
+they don't fit. The heading (the logo, "What should I do on your computer?" and the line under it) is
+a row of its own right over the chat box, out of the scroll and always in view (the user's sketch,
+2026-10-30; until then it was over the cards and scrolled with them). It is centred on the chat box,
+so it sits half the scroll bar's width right of the cards' middle. Both go with the first message.
+In a window too short for both (`MainWindow.FitIntroHeading`) the heading gives the cards its room
+when they would get less than 64: the smallest window with nine lines typed (the box grows to 200),
+or with a banner up; it comes back as the box shrinks. Whether it shows is worked out from the room
+from the top of the chat to the top of the box, which showing it doesn't change: counted as the
+chat's height plus the heading's, a heading just shown and not laid out yet counted 0 and hid itself
+again, and the window was left with a blank strip where it had been.
+
+The logo there is `LogoBlob`, drawn from docs/logo/blob.svg's shapes at the size it is shown, the
+body's top, bottom and sides on whole pixels of the screen. It was Assets/sloperator.png (256 px) in
+an `Image` 40 across, which the user found "a tad blurry" at 100% (2026-10-30): shrunk that far its
+edges smeared over two or three pixels, and its crown and base fell partway into a row (3.4 and 36.9
+of 40). Copy image on it still gives the PNG.
+
 ## Party blob
 Left of Send and Stop, 32 px like the buttons and 8 px from Send, `PartyBlob` (Views/PartyBlob.cs)
 shows the logo (Assets/sloperator.png) still, and the blobs.gg party blob (Assets/partyblob.gif: 128 px,
@@ -1435,8 +1455,8 @@ user's screenshot, 2026-10-30). Blob and shadow together fill the square side to
 top and bottom land on whole pixels. On a dark taskbar the shadow melts into the background. A
 #2F2F2F outline, the colour of the eyes (`-Edge outline`: one pixel up to 64 px, 3 at 256), was
 set beside it on white, #E8E8E8 and #202020; the user found the shadow "way better".
-`Assets/sloperator.png` (the start screen, the still party blob) is the SVG as it is, with no
-shadow: the app is always dark, and the still blob must line up with the party blob GIF.
+`Assets/sloperator.png` (the still party blob; the start screen draws the SVG itself, see Start
+screen) is the SVG as it is, with no shadow: the app is always dark, and the still blob must line up with the party blob GIF.
 
 ## Text in the middle of its box
 The font is Inter (bundled; Segoe UI was tried on 2026-10-29 and the user wanted Inter back). Fluent's
