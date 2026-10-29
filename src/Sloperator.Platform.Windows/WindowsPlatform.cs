@@ -30,6 +30,7 @@ public sealed class WindowsPlatform : IPlatformServices
     public IStopKey StopKey { get; } = new WindowsStopKey();
     public Core.Media.IMediaDecoder? Media { get; } = new MediaFoundationDecoder();
     public Core.Media.IAudioOutput? CreateAudioOutput() => new WaveOutPlayer();
+    public INotifications? Notifications { get; } = new WindowsToasts();
 
     /// <summary>
     /// Lets <paramref name="processId"/> bring its window to the front: called by the program the

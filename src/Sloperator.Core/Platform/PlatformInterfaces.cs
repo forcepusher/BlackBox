@@ -165,6 +165,26 @@ public interface IPlatformServices
 
     /// <summary>A way to play sound through the speakers, for the chat's players; null where there is none.</summary>
     Media.IAudioOutput? CreateAudioOutput() => null;
+
+    /// <summary>The OS's own notifications, for "Notify me when done"; null where there are none.</summary>
+    INotifications? Notifications => null;
+}
+
+/// <summary>The OS's own notifications (toasts on Windows): a title and a line, one at a time per tag.</summary>
+public interface INotifications
+{
+    /// <summary>
+    /// Shows a notification in place of the one shown under <paramref name="tag"/> before, with
+    /// <paramref name="iconFile"/> as the app's picture. <paramref name="clicked"/> runs on a thread
+    /// of the OS's when the user clicks it. False when the OS wouldn't show it; nothing is thrown.
+    /// </summary>
+    bool Show(string tag, string title, string text, string? iconFile, Action clicked);
+
+    /// <summary>Takes down the notification shown under <paramref name="tag"/>, if it is still there.</summary>
+    void Hide(string tag);
+
+    /// <summary>Takes away what showing them left outside Sloperator's folder: the user turned them off.</summary>
+    void Forget();
 }
 
 /// <summary>Fallback for operating systems without an implementation yet.</summary>

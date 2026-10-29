@@ -699,7 +699,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         {
             // The run itself never throws; this is the preparation (an address that isn't one, a
             // server that doesn't answer), so Continue tries the message again.
-            if (!_runDetached) AddStopNotice(ex.Message, isError: true, delivered ? null : input, ex);
+            if (!_runDetached)
+            {
+                AddStopNotice(ex.Message, isError: true, delivered ? null : input, ex);
+                NotifyUser(FirstLine($"Stopped by an error: {ex.Message}"));
+            }
         }
         finally
         {

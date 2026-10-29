@@ -15,6 +15,7 @@ https://github.com/user-attachments/assets/8a6d325e-0564-483e-95d7-42900efc6903
 3. Type what you want and press Enter.
 
 **Pause/Break** stops it at any time. It doesn't ask before it acts; to change that see Settings.
+Turn on **Notify me when done** there to get a Windows notification when a task needs you.
 
 ## Connecting a model
 - **Free, no account:** out of the box it runs on Kilo's free online models. They allow about 200

@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ask the agent to connect another model ("use my LM Studio", an API address and key, a model's
   name) and it switches Sloperator's server, key and model itself, once the server answers; your next
   message goes to the new model.
+- **Notify me when done** under Settings → Notifications (off by default): a Windows notification
+  with the chat's title when a task is done, stops on an error or waits for your OK, unless you are
+  looking at its window. Click it to bring that window to the front.
 
 ### Changed
 - A chat video's right-click Copy is now two entries: **Copy image** for the frame on screen and
