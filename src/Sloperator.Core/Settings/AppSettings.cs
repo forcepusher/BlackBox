@@ -311,6 +311,10 @@ public sealed class AgentSettings
     [JsonIgnore]
     public bool ScreenshotAfterActions { get; set; } = true;
 
+    /// <summary>Make earlier screenshots smaller every few steps (see AgentSession.WholeScreenshots). Internal (the click benchmark compares without).</summary>
+    [JsonIgnore]
+    public bool ShrinkEarlierScreenshots { get; set; } = true;
+
     /// <summary>
     /// How long each line of the log of the agent's inputs in the screen corner stays before it has
     /// faded out. The log, and the ring where it clicks, are always shown: no longer settings.

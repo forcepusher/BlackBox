@@ -81,6 +81,36 @@ public class AgentSessionTests
         }
     }
 
+    [Fact]
+    public async Task Earlier_screenshots_are_made_smaller_all_at_once_and_the_latest_stays_whole()
+    {
+        var steps = Enumerable.Range(1, AgentSession.WholeScreenshots + 3).Select(i => Sse.ToolCall($"s{i}", "screenshot", "{}")).Append(Sse.Text("Done."));
+        var server = new ScriptedServer([.. steps]);
+        var (session, observer) = CreateSession(server, Path.GetTempPath(), new FakePlatform { ScreenBounds = new(0, 0, 640, 320) });
+
+        await session.RunAsync("look", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        static List<int> Widths(JsonObject request) =>
+            [.. ImagesSent(request).Select(url => SkiaSharp.SKBitmap.Decode(Convert.FromBase64String(url[(url.IndexOf(',') + 1)..])).Width)];
+        // Whole until the request with that many before the latest...
+        var lastWhole = server.Requests[AgentSession.WholeScreenshots];
+        Assert.All(Widths(lastWhole), w => Assert.Equal(640, w));
+        // ...then all of those at half size at once, the latest whole...
+        var shrunk = server.Requests[AgentSession.WholeScreenshots + 1];
+        Assert.Equal([.. Enumerable.Repeat(320, AgentSession.WholeScreenshots), 640], Widths(shrunk));
+        Assert.Equal(AgentSession.WholeScreenshots, Regex.Count(shrunk.ToJsonString(), Regex.Escape(AgentSession.SmallerScreenshotText)));
+        // ...and the requests after start as that one did, so the server's cache holds again.
+        for (var i = AgentSession.WholeScreenshots + 2; i < server.Requests.Count; i++)
+        {
+            var before = server.Requests[i - 1]["messages"]!.AsArray();
+            var after = server.Requests[i]["messages"]!.AsArray();
+            for (var m = 0; m < before.Count; m++)
+                Assert.Equal(before[m]!.ToJsonString(), after[m]!.ToJsonString());
+        }
+        Assert.Equal([.. Enumerable.Repeat(320, AgentSession.WholeScreenshots), 640, 640, 640], Widths(server.Requests[^1]));
+    }
+
     private static int Images(JsonObject request) => request["messages"]!.AsArray()
         .SelectMany(m => m!["content"] is JsonArray parts ? parts : [])
         .Count(p => p!["type"]!.GetValue<string>() == "image_url");

@@ -405,6 +405,29 @@ public class AnthropicTests
     }
 
     /// <summary>
+    /// Past the screenshots other servers get smaller (<see cref="AgentSession.WholeScreenshots"/>),
+    /// Claude's stay whole: one made smaller would drop the signed thinking after it.
+    /// </summary>
+    [Fact]
+    public async Task Claude_keeps_its_screenshots_whole_and_its_thinking()
+    {
+        var api = new FakeAnthropic();
+        var steps = AgentSession.WholeScreenshots + 2;
+        api.Reply = (body, n) => n < steps
+            ? Message("tool_use", new Thinking($"Look number {n}."), new Call($"toolu_{n}", "screenshot", "{}"))
+            : Text("Done.");
+        var client = new OpenAiChatClient(new HttpClient(api), Address, "sk-ant-test");
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var session = new AgentSession(client, Opus, ToolRegistry.CreateDefault(true), ctx, "You are Sloperator, test prompt.", contextTokens: 200_000);
+        await session.RunAsync("Look around.", new RecordingObserver(), CancellationToken.None);
+
+        Assert.Empty(api.Violations);
+        Assert.Equal(0, api.DroppedThinking);
+        Assert.DoesNotContain(AgentSession.SmallerScreenshotText, api.Requests.Last(r => r.Path == "/v1/messages").Body!.ToJsonString());
+        Assert.Equal("Done.", session.History.Last().Content);
+    }
+
+    /// <summary>
     /// A run of several steps: every request is valid, each reply's thinking goes back unchanged
     /// (nothing dropped), and from the second step on the cache serves what came before.
     /// </summary>

@@ -24,7 +24,9 @@ namespace Sloperator.Core.Tests;
 /// (extra instructions for the system prompt, to measure a prompt rule), BB_CLICK_TEMP (a temperature
 /// sent with the benchmark's own requests instead of the server's), BB_CLICK_SHIFT (the first screenshot
 /// shows everything this many pixels higher, so the model misjudges where things are, as one deep in a
-/// long run does; later screenshots and zooms show the true screen). The report goes to
+/// long run does; later screenshots and zooms show the true screen), BB_CLICK_HISTORY (the session already holds
+/// this many screenshots of other layouts of the scene, as one deep in a long run does), BB_CLICK_SHRINK=0 (those
+/// earlier screenshots stay whole rather than made smaller, to compare). The report goes to
 /// bb-click-TAG.txt in the temp folder, with the first screenshot of each scene next to it.
 /// </summary>
 public class ClickAccuracyTests
@@ -162,7 +164,7 @@ public class ClickAccuracyTests
                 var (desktop, origin, targets) = Render(scene, rng);
                 var target = scene.EveryTarget ? targets[trial] : targets[rng.Next(targets.Count)];
                 var platform = new FakePlatform { Screens = scene.Screens.ToList(), ScreenBounds = scene.Screens[0], Desktop = desktop, DesktopOrigin = origin };
-                var settings = new AgentSettings { ScreenshotMaxWidth = resolution.Item1, ScreenshotMaxHeight = resolution.Item2 };
+                var settings = new AgentSettings { ScreenshotMaxWidth = resolution.Item1, ScreenshotMaxHeight = resolution.Item2, ShrinkEarlierScreenshots = Env("BB_CLICK_SHRINK") != "0" };
                 var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = Path.GetTempPath(), CoordinateGrid = grid };
                 if (trial == 0)
                     File.WriteAllBytes(Path.Combine(Path.GetTempPath(), $"bb-click-{tag}-{scene.Name}.jpg"), ScreenshotTool.Take(new ToolContext
@@ -175,6 +177,8 @@ public class ClickAccuracyTests
                     connection.Options.Extra!["temperature"] = double.Parse(temperature, System.Globalization.CultureInfo.InvariantCulture);
                 var prompt = SystemPrompt.Build(platform.Name, ctx.ScreenSpaces(), Path.GetTempPath(), Env("BB_CLICK_RULE") ?? "");
                 var session = new AgentSession(connection.Client, connection.Options, new ToolRegistry(ToolRegistry.CreateDefault(true).All.Where(t => zoom || t is not ZoomTool)), ctx, prompt, contextTokens: context ?? 0);
+                if (int.TryParse(Env("BB_CLICK_HISTORY"), out var looks) && looks > 0)
+                    AddEarlierLooks(session, scene, new Random(seed + 10_000 + trial), looks, settings, grid);
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
                 // The target reacts when it is hit (its pixels invert), so a click that misses leaves
@@ -229,9 +233,33 @@ public class ClickAccuracyTests
         foreach (var line in summary)
             Log(line);
         Log($"TOTAL {allHits}/{allTrials} with {Model}, coordinates: {grid?.ToString() ?? "pixels"}, screenshots: {resolution.Item1}x{resolution.Item2}, " +
-            (zoom ? "zoom tool" : "no zoom tool"));
+            (zoom ? "zoom tool" : "no zoom tool") +
+            (Env("BB_CLICK_HISTORY") is { } history ? $", {history} earlier screenshots {(Env("BB_CLICK_SHRINK") == "0" ? "kept whole" : "made smaller")}" : ""));
         if (retries > 0)
             Log($"RETRY {fixedLater}/{retried} first-click misses hit within {retries} more tries (miss check {(ClickCheck.Enabled ? "on" : "off")}, {(zoom ? "zoom tool" : "no zoom tool")})");
+    }
+
+    /// <summary>
+    /// A task before this one in the same session that looked at the screen <paramref name="looks"/>
+    /// times, each time another layout of the scene (other labels in other places), as a run some
+    /// steps in has: what it sees now is to be told apart from what it saw.
+    /// </summary>
+    private static void AddEarlierLooks(AgentSession session, Scene scene, Random rng, int looks, AgentSettings settings, int? grid)
+    {
+        session.History.Add(new ChatMessage { Role = ChatRole.User, Content = "Look at the screen a few times.", FromUser = true });
+        for (var i = 0; i < looks; i++)
+        {
+            var (desktop, origin, _) = Render(scene, rng);
+            var shot = ScreenshotTool.Take(new ToolContext
+            {
+                Platform = new FakePlatform { Screens = scene.Screens.ToList(), ScreenBounds = scene.Screens[0], Desktop = desktop, DesktopOrigin = origin },
+                Settings = settings, WorkingDirectory = "", CoordinateGrid = grid, CurrentScreen = scene.On,
+            });
+            session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "", ToolCalls = [new ToolCall { Id = $"look{i}", Name = "screenshot", Arguments = "{}" }] });
+            session.History.Add(ChatMessage.ToolResult($"look{i}", shot.Text + "\n(The screenshot is attached in the next message.)"));
+            session.History.Add(new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText(AgentSession.ScreenshotText), ContentPart.FromImage(shot.Image!, "image/jpeg")] });
+        }
+        session.History.Add(new ChatMessage { Role = ChatRole.Assistant, Content = "I looked at the screen." });
     }
 
     /// <summary>The whole desktop with the scene on its screen and plain buttons on the others; targets in desktop coordinates.</summary>

@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   message goes to the new model.
 
 ### Changed
+- Long desktop runs send much less: every few steps, the screenshots before the latest are made half
+  their size at once, about a quarter of their bytes and image tokens. The latest stays whole, as
+  clicks are aimed from it. Claude through Anthropic's API keeps them whole, which keeps its thinking.
 - File changes lists each file on one compact line, its name and its counts, so a long list fits;
   whether it was modified or renamed shows in its tooltip.
 - The model list is read from the server again each time its dropdown opens, so a model loaded there

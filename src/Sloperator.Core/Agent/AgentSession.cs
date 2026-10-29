@@ -327,7 +327,7 @@ public sealed partial class AgentSession(
             var m = history[i];
             if (m.FromUser)
                 continue;
-            var text = m.Role == ChatRole.Tool ? m.Content : m.Parts is [{ Text: { } said }, { IsImage: true }] ? said : null;
+            var text = m.Role == ChatRole.Tool ? m.Content : m.Parts is [{ Text: { } said }, { IsImage: true }, ..] ? said : null;
             if (text is not null && ScreenOf().Match(text) is { Success: true } found)
                 return (int.Parse(found.Groups[1].Value, CultureInfo.InvariantCulture) - 1, int.Parse(found.Groups[2].Value, CultureInfo.InvariantCulture));
         }
@@ -386,6 +386,7 @@ public sealed partial class AgentSession(
                 else if (contextTokens > 0 && TokensInUse() > ResetThreshold)
                     await ResetContextAsync(observer, ct).ConfigureAwait(false);
                 observer.OnStepStarted(step);
+                ShrinkOldScreenshots();
                 LeaveOutOldImages();
 
                 var request = new List<ChatMessage>(History.Count + 1) { ChatMessage.System(systemPrompt) };
@@ -733,9 +734,45 @@ public sealed partial class AgentSession(
 
     internal const string OldScreenshotText = "(An earlier screenshot, left out: the server takes only so many pictures in one request.)";
 
-    /// <summary>A screenshot Sloperator took after a step, or the screen a context reset carried; not a picture the user or a tool gave.</summary>
-    private static bool IsScreenshot(ChatMessage m) =>
-        !m.FromUser && m.Parts is [{ Text: { } said }, { IsImage: true }] && (said == ScreenshotText || said.StartsWith(CurrentScreenText, StringComparison.Ordinal));
+    /// <summary>A screenshot Sloperator took after a step, or the screen a context reset carried, whole or made smaller; not a picture the user or a tool gave.</summary>
+    private static bool IsScreenshot(ChatMessage m) => IsWholeScreenshot(m) || IsSmallerScreenshot(m);
+
+    private static bool IsWholeScreenshot(ChatMessage m) =>
+        !m.FromUser && m.Parts is [{ Text: { } said }, { IsImage: true }] && IsScreenshotCaption(said);
+
+    private static bool IsSmallerScreenshot(ChatMessage m) =>
+        !m.FromUser && m.Parts is [{ Text: { } said }, { IsImage: true }, { Text: SmallerScreenshotText }] && IsScreenshotCaption(said);
+
+    private static bool IsScreenshotCaption(string said) => said == ScreenshotText || said.StartsWith(CurrentScreenText, StringComparison.Ordinal);
+
+    internal const string SmallerScreenshotText = "(An earlier screenshot, now at half size. Aim only from the latest screenshot.)";
+
+    /// <summary>How many whole screenshots before the latest a request may carry; at this many, they are all made smaller.</summary>
+    internal const int WholeScreenshots = 6;
+
+    /// <summary>
+    /// Once <see cref="WholeScreenshots"/> screenshots before the latest are whole, each is made
+    /// half its size (a quarter of the pixels, so of the image tokens) as JPEG of quality 60: about
+    /// a quarter of the bytes too, and still readable. The latest stays whole, as the clicks are
+    /// aimed from it. All at once, every few steps, for the same reasons as <see cref="LeaveOutOldImages"/>:
+    /// the server reads again only the last few steps, and a hybrid model's server can only go back
+    /// as far as its last few saved states. Not on Anthropic's API, where each one would drop
+    /// Claude's signed thinking after it; its own rule leaves pictures out past 100.
+    /// </summary>
+    private void ShrinkOldScreenshots()
+    {
+        if (!toolContext.Settings.ShrinkEarlierScreenshots || OpenAiChatClient.IsAnthropic(client.BaseUrl))
+            return;
+        var whole = History.Where(IsWholeScreenshot).SkipLast(1).ToList();
+        if (whole.Count < WholeScreenshots)
+            return;
+        foreach (var m in whole)
+        {
+            var picture = m.Parts![1];
+            var smaller = Picture.Smaller(picture.ImageBytes!, 0.5, 60) is { } bytes ? ContentPart.FromImage(bytes, "image/jpeg") : picture;
+            m.Parts = [m.Parts[0], smaller, ContentPart.FromText(SmallerScreenshotText)];
+        }
+    }
 
     /// <summary>
     /// Over <see cref="MaxImages"/>, every screenshot but the latest is put in words at once; the
