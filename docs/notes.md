@@ -2217,7 +2217,7 @@ Once pixel prompts gave the size (see below), qwen3.8 q6_k_xl hit 21/28 in pixel
 the grid (`ClickAccuracyTests`, scenes unity, rows, dialogs, hidden, 2560x1080). Nemotron 3.5 Super
 VL still answers on its grid when asked for pixels (16/28 on the grid, 7/28 in pixels through
 OpenRouter; spelling out the pixel range or a worked example made it 5/28), and Gemma 4 12B hit 0/28
-on the grid and 3/28 in pixels. The user had the grid taken out anyway: one way of pointing for every
+on the grid and 3/28 in pixels (31B through OpenRouter: 1/28 and 0/28). The user had the grid taken out anyway: one way of pointing for every
 model, no forks by model name. Zoom's rulers, `mouse_drag` and pictures are all in pixels.
 
 Screenshots are scaled down to fit Settings → Advanced → Max screenshot size, keeping their shape
