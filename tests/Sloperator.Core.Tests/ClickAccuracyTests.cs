@@ -13,7 +13,8 @@ namespace Sloperator.Core.Tests;
 /// How often the real model hits what it is asked to click. Fake screens show labelled targets in
 /// hard conditions (tiny, dense, faint, blurry, compressed, dark, at the edges, near-identical
 /// neighbours, text links, partly covered, a second monitor on either side, ultrawide and portrait
-/// screens); the model gets the normal system prompt and tools, is asked to click one target, and
+/// screens); the model gets the normal system prompt and only the screen, mouse and keyboard tools (no
+/// shell, files or web, which would find the target another way), is asked to click one target, and
 /// the click is checked against the target's bounds.
 /// Opt-in like <see cref="ServerIntegrationTests"/>: set BB_SERVER_URL and BB_SERVER_MODEL. Optional: BB_SERVER_KEY (a server that wants one),
 /// BB_CLICK_SCENES (comma-separated, default all), BB_CLICK_TRIALS (per scene, default 5),
@@ -175,7 +176,9 @@ public class ClickAccuracyTests
                 if (Env("BB_CLICK_TEMP") is { } temperature) // Sloperator itself sends no sampling settings
                     connection.Options.Extra!["temperature"] = double.Parse(temperature, System.Globalization.CultureInfo.InvariantCulture);
                 var prompt = SystemPrompt.Build(platform.Name, ctx.ScreenSpaces(), Path.GetTempPath(), Env("BB_CLICK_RULE") ?? "");
-                var session = new AgentSession(connection.Client, connection.Options, new ToolRegistry(ToolRegistry.CreateDefault(true).All.Where(t => zoom || t is not ZoomTool)), ctx, prompt, contextTokens: context ?? 0);
+                var tools = ToolRegistry.CreateDefault(true).All.Where(t => t is ScreenshotTool or MouseClickTool or MouseMoveTool or MouseDragTool or ScrollTool
+                    or TypeTextTool or PressKeysTool or WaitTool || (zoom && t is ZoomTool));
+                var session = new AgentSession(connection.Client, connection.Options, new ToolRegistry(tools), ctx, prompt, contextTokens: context ?? 0);
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
                 // The target reacts when it is hit (its pixels invert), so a click that misses leaves
@@ -201,7 +204,9 @@ public class ClickAccuracyTests
                     retried++;
                     if (later != default) fixedLater++;
                 }
-                var retryNote = retries == 0 || landed.Count < 2 ? "" : later != default ? $"; HIT on try {later.i + 2}" : $"; still missed after {landed.Count} tries";
+                // A miss that ended after one click says why, so a try that stopped short is not a mystery.
+                var retryNote = retries == 0 ? "" : landed.Count == 1 && !target.Bounds.Contains(landed[0].X, landed[0].Y) ? $"; no retry: {observer.Ending}"
+                    : landed.Count < 2 ? "" : later != default ? $"; HIT on try {later.i + 2}" : $"; still missed after {landed.Count} tries";
 
                 var click = platform.Actions.FirstOrDefault(a => a.StartsWith("move "));
                 var label = $"{scene.Name,-9} #{trial} {target.Label,-12}";
@@ -646,21 +651,30 @@ public class ClickAccuracyTests
         public void OnFinished(AgentStopReason reason, string? detail) =>
             Ending = string.Join(" · ", new[] { reason.ToString(), detail?.ReplaceLineEndings(" ").Clip(160), _notice, _said }.Where(s => !string.IsNullOrEmpty(s)));
 
-        public void OnToolStarted(ToolCall call, string summary)
+        public void OnToolStarted(ToolCall call, string summary) => Calls += (Calls.Length > 0 ? ", " : "") + summary;
+
+        public void OnToolFinished(ToolCall call, ToolResult result)
         {
-            Calls += (Calls.Length > 0 ? ", " : "") + summary;
-            if (call.Name.Contains("click", StringComparison.OrdinalIgnoreCase))
+            // A click the tool refused (bad coordinates) never happened, so it isn't a try.
+            var clicked = call.Name.Contains("click", StringComparison.OrdinalIgnoreCase) && !result.IsError;
+            if (clicked)
             {
                 Args ??= call.Arguments;
                 _clicks++;
             }
-        }
-
-        public void OnToolFinished(ToolCall call, ToolResult result)
-        {
+            if (_clicks >= maxClicks || (_clicks > 0 && hit?.Invoke() != false))
+            {
+                cts.Cancel();
+                return;
+            }
+            // A click that missed starts a new try, which gets its own looks before it clicks again.
+            if (clicked)
+            {
+                _count = _zooms = 0;
+                return;
+            }
             // Zooms to aim count apart: a model that zooms before it clicks gets up to four of them.
-            if (_clicks >= maxClicks || (_clicks > 0 && hit?.Invoke() != false) ||
-                (call.Name == "zoom" ? ++_zooms > 4 : ++_count >= 4 + 2 * (maxClicks - 1)))
+            if (call.Name == "zoom" ? ++_zooms > 4 : ++_count >= 4)
                 cts.Cancel();
         }
     }

@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Claude through OpenRouter (and any server whose model list says it takes reasoning) gets the effort
   picked in the top bar, so its thinking shows in the chat; the thinking goes back with each reply, so
   Claude keeps it across tool calls.
+- After a click that changed nothing on screen, the agent is told to zoom in and click again, and to
+  stop only when the zoom shows the thing was already selected, so it corrects more of its misses.
 - File changes lists each file on one compact line, its name and its counts, so a long list fits;
   whether it was modified or renamed shows in its tooltip.
 - The model list is read from the server again each time its dropdown opens, so a model loaded there
