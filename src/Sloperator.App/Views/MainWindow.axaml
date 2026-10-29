@@ -964,8 +964,10 @@
               <!-- The logo blob, as tall as Send and 8 from it (with the spacing); it dances while a prompt runs.
                    Not with the intro, which has the logo already. -->
               <views:PartyBlob Dancing="{Binding IsBusy}" IsVisible="{Binding !ShowIntro}" Width="32" Height="32" Margin="0,0,2,0" VerticalAlignment="Bottom" />
-              <Button Classes="primary" Content="Send" Command="{Binding SendCommand}" MinHeight="32" />
-              <Button Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" Background="{StaticResource BbError}" MinHeight="32" />
+              <!-- 1 more over the word than under it: as tall as the box's line (32), Send's capitals sat 1.5 px
+                   (at 125%) over its middle, where other buttons' are within 0.7. -->
+              <Button Classes="primary" Content="Send" Command="{Binding SendCommand}" MinHeight="32" Padding="8,6.5,8,4.5" />
+              <Button Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" Background="{StaticResource BbError}" MinHeight="32" Padding="8,6.5,8,4.5" />
             </StackPanel>
           </Grid>
         </Border>
