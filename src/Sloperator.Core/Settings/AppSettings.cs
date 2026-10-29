@@ -298,9 +298,9 @@ public sealed class AgentSettings
         (Math.Clamp(ScreenshotMaxWidth, MinScreenshotWidth, MaxScreenshotSide), Math.Clamp(ScreenshotMaxHeight, MinScreenshotHeight, MaxScreenshotSide));
 
     /// <summary>
-    /// The JPEG quality screenshots and zoomed pictures are sent with. 70 was a tenth to a quarter fewer
-    /// bytes, for the same pixels and image tokens, and hit 31 of 40 hard targets where 85 hit 33 and 32
-    /// (ClickAccuracyTests, qwen3.8, 29 October 2026); the user kept 85, for zooms too (they were 90).
+    /// The JPEG quality screenshots are sent with (zoomed pictures go at 90). 70 was a tenth to a quarter
+    /// fewer bytes, for the same pixels and image tokens, and hit 31 of 40 hard targets where 85 hit 33
+    /// and 32 (ClickAccuracyTests, qwen3.8, 29 October 2026); the user kept 85.
     /// Internal (the benchmark compares others).
     /// </summary>
     [JsonIgnore]

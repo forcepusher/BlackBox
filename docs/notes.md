@@ -1836,8 +1836,7 @@ tokens in fewer bytes, at 70 76% of 85's over those 60 screenshots and 76% to 88
 scenes. On 8 hard scenes × 5 (buttons, tiny, dense, faint, jpeg, similar, links, rows; qwen3.8 with
 zoom, 2560x1080) 85 hit 33 and then 32 of 40, 70 hit 31 and 60 hit 30, the extra misses a few pixels
 off small links and rows. Fewer bytes saves no tokens or context and matters only over a slow link or
-near a gateway's size limit, so the user kept 85, and made it the quality of zoomed pictures too
-(they were 90). Repeats of the very same screen, which could be sent as words, never happened in 521
+near a gateway's size limit, so the user kept 85; zoomed pictures stay at 90. Repeats of the very same screen, which could be sent as words, never happened in 521
 saved screenshots in a row (a clock, the cursor or a caret always differs).
 
 `MunitoImageCapTests` (BB_MUNITO_KEY) runs it against munito: nine screenshots, as in the run that

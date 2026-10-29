@@ -49,7 +49,7 @@ public sealed class ZoomTool : Tool
         var scale = Math.Min(MaxScale, Math.Min((double)space.ImageWidth / width, (double)space.ImageHeight / height));
         var (x0, y0) = space.ToModel(region.X, region.Y);
         var (x1, y1) = space.ToModel(region.X + region.Width, region.Y + region.Height);
-        var jpeg = Render(frame, scale, space, region, ctx.Settings.ScreenshotQuality);
+        var jpeg = Render(frame, scale, space, region);
         var text = string.Create(CultureInfo.InvariantCulture,
             $"Zoomed in on ({x0}, {y0}) to ({x1}, {y1}) of the screenshot, {scale:0.#}x. The rulers are in screenshot coordinates: read the x/y to click off them.");
         return Task.FromResult(new ToolResult(text, jpeg, ImageCaption: "Zoomed-in view, rulers in screenshot coordinates:"));
@@ -63,7 +63,7 @@ public sealed class ZoomTool : Tool
     }
 
     /// <summary>The region enlarged, with a ruler along its top and left edges labelled in the model's coordinates.</summary>
-    internal static byte[] Render(RawImage frame, double scale, ScreenSpace space, ScreenRect region, int quality)
+    internal static byte[] Render(RawImage frame, double scale, ScreenSpace space, ScreenRect region)
     {
         var (w, h) = ((int)Math.Round(frame.Width * scale), (int)Math.Round(frame.Height * scale));
         var info = new SKImageInfo(frame.Width, frame.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
@@ -106,7 +106,7 @@ public sealed class ZoomTool : Tool
                 canvas.Restore();
             }
             using var snapshot = surface.Snapshot();
-            using var data = snapshot.Encode(SKEncodedImageFormat.Jpeg, quality);
+            using var data = snapshot.Encode(SKEncodedImageFormat.Jpeg, 90);
             return data.ToArray();
         }
         finally

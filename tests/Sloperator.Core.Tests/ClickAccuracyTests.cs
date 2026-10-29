@@ -24,7 +24,7 @@ namespace Sloperator.Core.Tests;
 /// (extra instructions for the system prompt, to measure a prompt rule), BB_CLICK_TEMP (a temperature
 /// sent with the benchmark's own requests instead of the server's), BB_CLICK_SHIFT (the first screenshot
 /// shows everything this many pixels higher, so the model misjudges where things are, as one deep in a
-/// long run does; later screenshots and zooms show the true screen), BB_CLICK_QUALITY (the JPEG quality screenshots and zooms
+/// long run does; later screenshots and zooms show the true screen), BB_CLICK_QUALITY (the JPEG quality screenshots
 /// are sent with; default the app's). The report goes to
 /// bb-click-TAG.txt in the temp folder, with the first screenshot of each scene next to it.
 /// </summary>
