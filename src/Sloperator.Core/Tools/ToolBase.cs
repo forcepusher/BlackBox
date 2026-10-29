@@ -30,6 +30,9 @@ public sealed class ToolContext
     /// <summary>Where relative paths and shell commands start (the user's home folder). Not a limit: tools reach the whole PC.</summary>
     public required string WorkingDirectory { get; init; }
 
+    /// <summary>The app's top bar, for model_server to switch the server, key and model Sloperator runs on; null where there is none (the CLI).</summary>
+    public IModelServerSwitch? ModelServer { get; init; }
+
     /// <summary>The relative grid the model gives x/y on (see <see cref="ScreenSpace"/>), or null for screenshot pixels. Set from the model, see <see cref="ModelCoordinates"/>.</summary>
     public int? CoordinateGrid { get; init; }
 

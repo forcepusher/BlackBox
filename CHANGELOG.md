@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enable screenshots** and **Enable keyboard and mouse control** under Settings → Safety. With
   screenshots off the agent doesn't look at the screen, and can't use the mouse and keyboard either;
   with control off it looks but doesn't click or type.
+- Ask the agent to connect another model ("use my LM Studio", an API address and key, a model's
+  name) and it switches Sloperator's server, key and model itself, once the server answers; your next
+  message goes to the new model.
 
 ### Changed
 - File changes lists each file on one compact line, its name and its counts, so a long list fits;
