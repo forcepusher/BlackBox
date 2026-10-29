@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with control off it looks but doesn't click or type.
 - **Saved** next to the server address lists every server that answered, with its API key and model:
   pick one to switch to it, or remove it with its trash button.
+- Ask the agent to connect another model ("use my LM Studio", an API address and key, a model's
+  name) and it switches Sloperator's server, key and model itself, once the server answers; your next
+  message goes to the new model.
 
 ### Changed
 - File changes lists each file on one compact line, its name and its counts, so a long list fits;

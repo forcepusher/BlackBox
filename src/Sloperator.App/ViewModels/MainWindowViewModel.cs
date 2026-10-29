@@ -636,9 +636,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             }
 
             var session = _session = AgentSetup.Create(BackendConnection.Create(_http, server), _platform, _settings.Agent, _paths, _mcp, _ssh, history,
-                _windows.UserComposing, _windows.DesktopTurn, desktopSeat: this, changes: Changes);
+                _windows.UserComposing, _windows.DesktopTurn, desktopSeat: this, changes: Changes, modelServer: this);
             // Taken now: another model can be picked at the top while the run goes on.
-            var imagesKey = session.SeesImages ? ImagesKey(server) : null;
+            var runKey = ImagesKey(server);
+            var imagesKey = session.SeesImages ? runKey : null;
             foreach (var pending in _steerPending)
                 session.Steer(pending);
             _steerPending.Clear();
@@ -650,8 +651,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             _unread = null;
             await Task.Run(() => input is null ? session.CompactAsync(this, ct) : session.RunAsync(input, this, ct), CancellationToken.None);
             // A server error may have revealed the real context size; keep it for the next run.
-            _settings.Server.LearnContextLimit(session.ContextTokens);
-            OnContextChanged();
+            // Not for another server or model picked meanwhile (by the user, or the agent's model_server).
+            if (ImagesKey(server) == runKey)
+            {
+                _settings.Server.LearnContextLimit(session.ContextTokens);
+                OnContextChanged();
+            }
             // Its server refused pictures: the next runs go without screen tools, as with a model
             // the server says can't see.
             if (imagesKey is not null && !session.SeesImages)

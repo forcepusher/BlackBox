@@ -2,12 +2,13 @@ using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using Sloperator.Core.Llm;
 using Sloperator.Core.Settings;
+using Sloperator.Core.Tools;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Sloperator.App.ViewModels;
 
-public sealed partial class MainWindowViewModel
+public sealed partial class MainWindowViewModel : IModelServerSwitch
 {
     // ---- server, API key, model and context size (top bar) ----------------------------
 
@@ -51,25 +52,8 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(HasSavedServers));
     }
 
-    /// <summary>Switches to a saved server with its key and model, as <see cref="UseKilo"/> switches to Kilo.</summary>
-    private void UseSavedServer(SavedServer saved)
-    {
-        var server = _settings.Server;
-        server.Use(saved);
-        _forgotten = null;
-        SaveSettings();
-        // In the list before the dropdown is told, as at startup: a selection the ComboBox can't find it doesn't take.
-        _refreshingModels = true;
-        if (saved.Model.Length > 0 && !Models.Contains(saved.Model))
-            Models.Insert(0, saved.Model);
-        _refreshingModels = false;
-        OnPropertyChanged(nameof(ServerAddress));
-        OnPropertyChanged(nameof(ApiKey));
-        OnPropertyChanged(nameof(SelectedModel));
-        OnPropertyChanged(nameof(ModelToolTip));
-        SetSavedServers();
-        _ = CheckServerAsync();
-    }
+    /// <summary>Switches to a saved server with its key and model.</summary>
+    private void UseSavedServer(SavedServer saved) => _ = SwitchServer(saved);
 
     private void ForgetSavedServer(SavedServer saved)
     {
@@ -524,6 +508,35 @@ public sealed partial class MainWindowViewModel
     /// <summary>The setup banner's button for Kilo's free models, while Sloperator has no server that answers.</summary>
     [ObservableProperty]
     private bool _offersKilo;
+
+    ServerSettings IModelServerSwitch.Current => _settings.Server;
+
+    /// <summary>
+    /// The agent's model_server: the server, key and model it was asked to connect, put in the top
+    /// bar as typing them there would, then checked. The run going on keeps the model it started with.
+    /// </summary>
+    Task IModelServerSwitch.SwitchAsync(string baseUrl, string apiKey, string model) => Dispatcher.UIThread.InvokeAsync(() =>
+        SwitchServer(new SavedServer { BaseUrl = baseUrl, ApiKey = apiKey, Model = model }));
+
+    /// <summary>Puts a server, its key and model in the top bar, as typing them there would, then checks it.</summary>
+    private Task SwitchServer(SavedServer saved)
+    {
+        _addressEdit?.Cancel();
+        _settings.Server.Use(saved);
+        _forgotten = null;
+        SaveSettings();
+        // In the list before the dropdown is told, as at startup: a selection the ComboBox can't find it doesn't take.
+        _refreshingModels = true;
+        if (saved.Model.Length > 0 && !Models.Contains(saved.Model))
+            Models.Insert(0, saved.Model);
+        _refreshingModels = false;
+        OnPropertyChanged(nameof(ServerAddress));
+        OnPropertyChanged(nameof(ApiKey));
+        OnPropertyChanged(nameof(SelectedModel));
+        OnPropertyChanged(nameof(ModelToolTip));
+        SetSavedServers();
+        return CheckServerAsync();
+    }
 
     /// <summary>
     /// Switches back to Kilo's free models (see <see cref="KiloGateway"/>), where Sloperator starts: its
