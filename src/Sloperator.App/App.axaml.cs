@@ -2,8 +2,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Sloperator.Core.Platform;
 
 namespace Sloperator.App;
@@ -17,7 +20,19 @@ public partial class App : Application
         // their owner (a ListBox, a TextBox) by template binding, which a style setter loses to.
         // Each ScrollViewer hands it on to its bars.
         ScrollViewer.AllowAutoHideProperty.OverrideDefaultValue<TemplatedControl>(false);
+        // A click away from the text box being typed in takes the focus off it, in every window and
+        // for every box (the user, 2026-10-29). A button, a list or a dropdown takes the focus by
+        // itself; a panel, a label or empty space takes nothing, and the box kept it, caret and all.
+        // Bubbling, handled or not: by then whatever the click focuses has been focused.
+        InputElement.PointerPressedEvent.AddClassHandler<Window>(LeaveTextBox, RoutingStrategies.Bubble, handledEventsToo: true);
         AvaloniaXamlLoader.Load(this);
+    }
+
+    private static void LeaveTextBox(Window window, PointerPressedEventArgs e)
+    {
+        if (window.FocusManager?.GetFocusedElement() is TextBox box
+            && !(e.Source is Visual source && (source == box || box.IsVisualAncestorOf(source))))
+            window.FocusManager.ClearFocus();
     }
 
     public override void OnFrameworkInitializationCompleted()
