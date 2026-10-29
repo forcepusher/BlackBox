@@ -1620,7 +1620,21 @@ before qwen3-14b; `CompareOptions.NumericOrdering`), whatever order the server l
 goes in at its place (`InsertModel`) rather than the list being re-sorted, since an entry that moves
 can lose the ComboBox's selection. Every dropdown's list opens from its left edge
 (`BottomEdgeAlignedLeft`): Fluent centres it under the box, so model names wider than the box made
-it stick out on the left (61 px at 125% with a 47-character name). The effort dropdown says only the level ("Medium"; its tooltip says
+it stick out on the left (61 px at 125% with a 47-character name).
+
+**Where lists open** (the user, 2026-10-30): every list opened by a click hangs under its button,
+flush with the button's left edge, from one place (`Views/Dropdown.cs`, `Dropdown.Placement`): the
+ComboBoxes (a style in App.axaml), History and Servers (their flyouts) and the Video generator's
+videos menu (`MenuButton`). A right-click's menu opens at the pointer. Measured at 125% before:
+the videos menu, a right-click menu opened from a click, sat where the pointer was (82 px right of
+the button's edge, over "Frame size"), and History and Servers hung from their right edge (334 and
+297 px left of the button); after, all six lists are 0 px off the button's left and bottom edges.
+History's 340-wide list still ends inside the window at its narrowest (about 15 px to spare at its 660 DIPs),
+Servers' with more. `MenuButton` builds a new `MenuFlyout` each time it opens: items added in
+`Opening` to one shown before stayed out of it (an empty 2-px popup), and as a `ContextMenu` opened
+from Click a second click on the button opened it again rather than closing it. The box Rename puts
+up (a video's name, a card, a sound) covers the thing renamed from its top left corner; centred above
+it (`PlacementMode.Top`), the video's went over the window's title bar and past its left edge. The effort dropdown says only the level ("Medium"; its tooltip says
 it is the effort), as wide as "Extra high" needs, and the context box is as wide as its size.
 
 Sloperator sends no sampling parameters: temperature, top-k/p, reply length and thinking come from

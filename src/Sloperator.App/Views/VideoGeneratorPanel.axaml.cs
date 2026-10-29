@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Primitives.PopupPositioning;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -17,6 +18,8 @@ public partial class VideoGeneratorPanel : UserControl
     public VideoGeneratorPanel()
     {
         InitializeComponent();
+        // The videos' menu, under the video's name.
+        VideoButton.Entries = () => Entries(Vm.VideoMenu());
         // A click or a drag on the seconds moves the playhead there.
         Ruler.Seeked += seconds => (DataContext as VideoGeneratorViewModel)?.SeekStrip(seconds);
         // The timeline is dragged sideways: seen before the clips' buttons, which then don't click.
@@ -139,7 +142,6 @@ public partial class VideoGeneratorPanel : UserControl
 
     // ---- menus: the videos, a row, a card, a clip, a sound, a sound line ---------------------------------------------
 
-    private void OnVideoMenu(object? sender, RoutedEventArgs e) => OpenMenu(Vm.VideoMenu(), VideoButton);
 
     /// <summary>Right-click on a row away from its cards: Create, there.</summary>
     private void OnRowMenu(object? sender, ContextRequestedEventArgs e)
@@ -203,27 +205,27 @@ public partial class VideoGeneratorPanel : UserControl
         foreach (var item in Entries(items))
             menu.Items.Add(item);
         menu.Open(at);
+    }
 
-        static IEnumerable<Control> Entries(IReadOnlyList<VideoMenuItem?> items)
+    private static IEnumerable<Control> Entries(IReadOnlyList<VideoMenuItem?> items)
+    {
+        foreach (var item in items)
         {
-            foreach (var item in items)
+            if (item is null)
             {
-                if (item is null)
-                {
-                    yield return new Separator();
-                    continue;
-                }
-                var entry = new MenuItem { Header = item.Header, IsEnabled = item.Enabled, InputGesture = item.Key is { } key ? KeyGesture.Parse(key) : null };
-                if (item.Items is { } inner)
-                    foreach (var sub in Entries(inner))
-                        entry.Items.Add(sub);
-                else
-                {
-                    var act = item.Do;
-                    entry.Click += (_, _) => act();
-                }
-                yield return entry;
+                yield return new Separator();
+                continue;
             }
+            var entry = new MenuItem { Header = item.Header, IsEnabled = item.Enabled, InputGesture = item.Key is { } key ? KeyGesture.Parse(key) : null };
+            if (item.Items is { } inner)
+                foreach (var sub in Entries(inner))
+                    entry.Items.Add(sub);
+            else
+            {
+                var act = item.Do;
+                entry.Click += (_, _) => act();
+            }
+            yield return entry;
         }
     }
 
@@ -242,7 +244,14 @@ public partial class VideoGeneratorPanel : UserControl
     {
         var box = new TextBox { Text = name, MinWidth = 220 };
         AutomationProperties.SetName(box, "New name");
-        var flyout = new Flyout { Content = box, Placement = PlacementMode.Top };
+        // Over the name, from its top left corner: centred above it, it went over the title bar and past the window's edge.
+        var flyout = new Flyout
+        {
+            Content = box,
+            Placement = PlacementMode.AnchorAndGravity,
+            PlacementAnchor = PopupAnchor.TopLeft,
+            PlacementGravity = PopupGravity.BottomRight,
+        };
         var kept = false;
         void Keep()
         {

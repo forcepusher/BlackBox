@@ -1,5 +1,6 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="using:Sloperator.App.Views"
              x:Class="Sloperator.App.App"
              RequestedThemeVariant="Dark">
 
@@ -255,9 +256,10 @@
     </Style>
     <!-- A dropdown's list hangs from its left edge. Fluent centres it under the box, so a list wider
          than the box (a model's long name) stuck out on the left (the user, 2026-10-29). Taken over
-         from the template as the arrow is, by a style that depends on a state. -->
+         from the template as the arrow is, by a style that depends on a state. Every list opened by a
+         click hangs this way (Views/Dropdown.cs). -->
     <Style Selector="ComboBox:not(:disabled) /template/ Popup#PART_Popup, ComboBox:disabled /template/ Popup#PART_Popup">
-      <Setter Property="Placement" Value="BottomEdgeAlignedLeft" />
+      <Setter Property="Placement" Value="{x:Static views:Dropdown.Placement}" />
     </Style>
 
     <Style Selector="Border.card">

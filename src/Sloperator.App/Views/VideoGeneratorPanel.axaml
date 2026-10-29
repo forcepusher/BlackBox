@@ -213,14 +213,14 @@
         <!-- Short of room (the window made narrower), the video's name is cut short rather than the
              fields going over the buttons: its column is the one that gives way. -->
         <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left" Margin="0,0,12,0">
-          <Button x:Name="VideoButton" Classes="ghost" Padding="8,4" Margin="0,0,16,0" Click="OnVideoMenu"
+          <views:MenuButton x:Name="VideoButton" Classes="ghost" Padding="8,4" Margin="0,0,16,0"
                   ToolTip.Tip="Your videos: open another, or rename or delete this one" AutomationProperties.Name="Videos">
             <!-- Not a StackPanel: across, that gives the name all the room it wants and it is never cut short. -->
             <DockPanel>
               <PathIcon DockPanel.Dock="Right" Data="M7 10l5 5 5-5z" Width="10" Height="10" Margin="8,0,0,0" VerticalAlignment="Center" />
               <TextBlock Text="{Binding VideoName}" FontWeight="SemiBold" MaxWidth="260" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
             </DockPanel>
-          </Button>
+          </views:MenuButton>
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
             <TextBlock Classes="label" Text="Frame size" VerticalAlignment="Center" />
             <NumericUpDown Value="{Binding FrameWidth}" Minimum="64" Maximum="4096" Increment="32" FormatString="0" Width="76" ShowButtonSpinner="False" AutomationProperties.Name="Frame width" />

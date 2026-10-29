@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with OpenGL instead of Direct3D.
 
 ### Fixed
+- Every list opened by a click hangs under its button, flush with its left edge: the Video generator's
+  videos menu opened where the mouse was, over "Frame size", and History and Servers hung from their
+  right edge. A second click on the video's name closes its menu, and Rename's box covers the name
+  rather than the window's title bar.
 - Text sat 1-2 px over the middle of dropdowns (the model, the effort), buttons, dropdown rows, the
   lines of File changes and the tool's name on a card; it is in the middle now.
 - With the chat narrow, the server address box covered the "Server" label beside it.
