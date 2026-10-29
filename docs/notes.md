@@ -1425,6 +1425,19 @@ License 2.0, the set the logo was traced from (docs/logo/LICENSE-blobs.txt). Its
 with SkiaSharp's `SKCodec`, as chat previews of animations are (no GIF package), and its timer runs only
 while it dances and is in a window.
 
+## App icon
+`Assets/sloperator.ico` (the exe, the taskbar, every window's title bar) is drawn by
+`scripts/make-icon.ps1` from `docs/logo/blob.svg`, each size on its own (16, 20, 24, 32, 40, 48, 64,
+128, 256), 4x oversampled. Its blob has a #2F2F2F outline, the colour of the eyes: one pixel up to
+64 px, then size/85 (3 px at 256). The bare yellow had no edge on a light taskbar and looked fuzzy
+there (the user's screenshot, 2026-10-30). Blob and outline together fill the square side to side,
+and the outline's top and bottom land on whole pixels, so the crown and base stay sharp lines. On a
+dark taskbar the outline melts into the background. A soft drop shadow (`-Edge shadow`) was tried
+too and set beside it on white, #E8E8E8 and #202020: a grey smudge at 16 to 24 px on light, where
+the outline stays one clean line. `Assets/sloperator.png` (the start screen, the still party blob)
+is the SVG as it is, with no outline: the app is always dark, and the still blob must line up with
+the party blob GIF.
+
 ## Text in the middle of its box
 The font is Inter (bundled; Segoe UI was tried on 2026-10-29 and the user wanted Inter back). Fluent's
 paddings were made for Segoe UI, whose capitals sit low in its line: a button has 5 over its text and
