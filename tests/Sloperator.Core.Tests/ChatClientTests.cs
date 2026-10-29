@@ -217,26 +217,17 @@ public class ChatClientTests
     }
 
     [Fact]
-    public void Effort_goes_as_reasoning_effort_or_as_OpenRouters_reasoning_object()
+    public void Effort_goes_as_reasoning_effort()
     {
         var options = new ChatRequestOptions { Model = "gpt-5.6", Effort = "high" };
         var plain = OpenAiChatClient.BuildRequest([ChatMessage.User("hi")], [], options);
         Assert.Equal("high", (string)plain["reasoning_effort"]!);
         Assert.Null(plain["reasoning"]);
 
-        var routed = OpenAiChatClient.BuildRequest([ChatMessage.User("hi")], [], options, effortAsObject: true);
-        Assert.Equal("high", (string)routed["reasoning"]!["effort"]!);
-        Assert.Null(routed["reasoning_effort"]);
-
         // None picked or none taken: nothing, as before.
         Assert.Null(OpenAiChatClient.BuildRequest([ChatMessage.User("hi")], [], new ChatRequestOptions { Model = "qwen" })["reasoning_effort"]);
         // A server that turned the extras down gets none of them.
         Assert.Null(OpenAiChatClient.BuildRequest([ChatMessage.User("hi")], [], options, sendExtras: false)["reasoning_effort"]);
-
-        Assert.True(OpenAiChatClient.OpenRouterStyle("https://openrouter.ai/api/v1"));
-        Assert.True(OpenAiChatClient.OpenRouterStyle(KiloGateway.Address));
-        Assert.False(OpenAiChatClient.OpenRouterStyle("https://api.openai.com/v1"));
-        Assert.False(OpenAiChatClient.OpenRouterStyle("http://forcepusher.ddns.net:1234/v1"));
     }
 
     [Theory]

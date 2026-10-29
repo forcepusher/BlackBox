@@ -1622,10 +1622,16 @@ next message. It goes only to a model whose server says it takes one, and is gre
 otherwise, saying why in its tooltip:
 - Anthropic's model list says each model's levels (`capabilities.effort`); without it, the
   version does (4.7 on: low to max; 4.6: no xhigh; Opus 4.5: low to high; Haiku 4.5: none).
-- OpenRouter and Kilo list `reasoning` among a model's `supported_parameters`; the effort goes as
-  their `reasoning: {effort}`. Not for Claude or Gemini through them: with thinking on, a tool call
-  wants the signed thinking before it back (their `reasoning_details`), which Sloperator doesn't keep,
-  so those run with thinking off as before (a review found it; not tried against OpenRouter).
+- OpenRouter and Kilo list `reasoning` among a model's `supported_parameters`; such a model takes
+  the levels its family and version do (Claude 5: low to max), else low to high. No branching by
+  provider: the effort goes as `reasoning_effort` everywhere, which OpenRouter and Kilo take as
+  their own `reasoning: {effort}` (tried 2026-10-29: Haiku 5.5 thought 283 tokens at low, 856 at
+  max). Asked for none, Haiku 5.5 through OpenRouter thinks anyway but sends only an empty, signed
+  entry, so no thinking showed. Whatever thinking a server sends (`reasoning_content`,
+  `reasoning_details` with Claude's signature) goes back with the reply as it came; without
+  `reasoning_details` OpenRouter leaves Claude's earlier thinking out of the prompt after a tool
+  call (no error). A refusal naming the signature sends the request again without it. Gemini's
+  signed thinking goes back the same way, untried.
 - LM Studio 0.4 lists `capabilities.reasoning.allowed_options` (gpt-oss: low, medium, high; a model
   that only turns thinking on and off takes none); it goes as `reasoning_effort`. The test server's
   LM Studio lists no reasoning options for qwen3.8 (its switches, `reasoning_effort` among them,

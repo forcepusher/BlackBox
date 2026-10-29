@@ -266,8 +266,7 @@ public sealed partial class OpenAiChatClient
             return await CompleteClaudeAsync(messages, tools, options, onDelta, ct, onSending).ConfigureAwait(false);
         var sendReasoning = options.SendReasoning && !_reasoningRejected;
         var sendExtras = !_extrasRejected;
-        var payload = Encoding.UTF8.GetBytes(BuildRequest(messages, tools, options, sendReasoning, sendExtras, PromptShifts.GetValueOrDefault(_baseUrl),
-            effortAsObject: OpenRouterStyle(_baseUrl)).ToJsonString());
+        var payload = Encoding.UTF8.GetBytes(BuildRequest(messages, tools, options, sendReasoning, sendExtras, PromptShifts.GetValueOrDefault(_baseUrl)).ToJsonString());
         // Cancelled when sending stalls. Once the request is out, only Stop ends the wait: a
         // server reading a long prompt sends nothing for minutes.
         using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -537,17 +536,9 @@ public sealed partial class OpenAiChatClient
         return message;
     }
 
-    /// <summary>
-    /// OpenRouter and Kilo's gateway, which take the effort as <c>reasoning: {effort}</c> for every
-    /// model they route to; other servers take OpenAI's <c>reasoning_effort</c>.
-    /// </summary>
-    internal static bool OpenRouterStyle(string baseUrl) =>
-        KiloGateway.Is(baseUrl) || Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) && uri.Host.EndsWith("openrouter.ai", StringComparison.OrdinalIgnoreCase);
-
     /// <param name="promptShift">Blank lines in front of the system prompt (see <see cref="ShiftPrompt"/>).</param>
-    /// <param name="effortAsObject"><see cref="ChatRequestOptions.Effort"/> as OpenRouter's <c>reasoning: {effort}</c> (see <see cref="OpenRouterStyle"/>).</param>
     internal static JsonObject BuildRequest(IReadOnlyList<ChatMessage> messages, IReadOnlyList<ToolDefinition> tools, ChatRequestOptions options,
-        bool sendReasoning = false, bool sendExtras = true, int promptShift = 0, bool effortAsObject = false)
+        bool sendReasoning = false, bool sendExtras = true, int promptShift = 0)
     {
         var msgs = new JsonArray();
         foreach (var m in messages)
@@ -593,14 +584,10 @@ public sealed partial class OpenAiChatClient
                 foreach (var (key, value) in options.Extra)
                     req[key] = value?.DeepClone();
             // Only for a model its server says takes it (see ServerProbe), so a strict server that
-            // turns it down anyway gets it dropped with the other extras.
+            // turns it down anyway gets it dropped with the other extras. OpenRouter and Kilo take
+            // it too, low to max, as they take their own reasoning: {effort} (tried 2026-10-29).
             if (options.Effort is { } effort)
-            {
-                if (effortAsObject)
-                    req["reasoning"] = new JsonObject { ["effort"] = effort };
-                else
-                    req["reasoning_effort"] = effort;
-            }
+                req["reasoning_effort"] = effort;
         }
 
         return req;

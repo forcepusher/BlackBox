@@ -190,16 +190,14 @@ public static partial class ServerProbe
 
         static List<string>? Strings(JsonNode? node) => node is JsonArray a ? a.Select(Str).OfType<string>().ToList() : null;
 
-        // OpenRouter routes "reasoning" to every model that thinks on request, as low to high, and
-        // to Claude as the levels its version takes (older ones get a thinking budget for low to
-        // high). Asked for none, Claude 5 thinks anyway but OpenRouter sends no word of it. Its
-        // signed thinking goes back with the reply (ChatMessage.ReasoningDetails). Not Gemini's yet:
-        // its tool calls want their own signatures back, untried through Sloperator.
+        // A model listed as taking "reasoning" takes the levels its family and version do (Claude 5:
+        // low to max), else low to high. Asked for none, Claude 5 through OpenRouter thinks anyway
+        // and sends no word of it. Signed thinking goes back with the reply as it came
+        // (ChatMessage.ReasoningDetails).
         static IReadOnlyList<string>? ListedEfforts(List<string>? parameters, string id) =>
             parameters is null ? null
-            : id.StartsWith("google/gemini", StringComparison.OrdinalIgnoreCase) ? []
             : !parameters.Contains("reasoning") && !parameters.Contains("reasoning_effort") ? []
-            : id.StartsWith("anthropic/", StringComparison.OrdinalIgnoreCase) && EffortsByName(id) is { Count: > 0 } claude ? claude
+            : EffortsByName(id) is { Count: > 0 } byName ? byName
             : OpenAiEfforts;
 
         // Prices come as text ("0", "0.0000003" per token) or as numbers.
