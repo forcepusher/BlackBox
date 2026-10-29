@@ -2252,6 +2252,16 @@ screen) 4 of 9 misses were fixed within two more clicks with the note, 0 of 8 wi
 drawn at the click added nothing to the note, nor did a prompt rule about aiming carefully or
 temperature 0.2 instead of 0.6.
 
+The note used to let the model off when what it clicked "was already selected or switched on: then
+go on". Qwen 3.8 took that way out after real misses, ending its turn with "the cursor is on it" or
+"that may be normal". The note now says to zoom in and click again, and to stop only when the zoom
+shows the thing already selected, and to say so. On the click benchmark (3 retries, 30 October 2026,
+grid coordinates) Qwen hit 92 of 114 first and 99 in the end with the old note, 96 and 104 with the
+new one (half-covered buttons 0/5 to 3/5); one run each. It still ended a few misses as done, so the
+wording alone doesn't stop that. On a slightly older develop, without any note it hit 86 first and 95
+in the end (90 and 103 with the old note): without it the
+model doesn't know a click missed, and ten misses ended with the model calling the click done.
+
 Pixel coordinates are described with the image's size ("pixels of the screenshot, which is
 2560x1088"). Told only "pixels of the screenshot", DeepSeek V4.1 Flash answered on a 0-1000 grid, the
 way it was trained to point: on a 2560x1080 Unity screenshot it put the Hierarchy tab, at x 1368, at
@@ -3332,6 +3342,11 @@ The click benchmark (all 16 scenes, 5 tries each, the unity scene's 19 targets) 
 Qwen 3.8 q6_k_xl with the zoom tool: hidden 0/5, cards 1/5, dense 1/5, ultrawide 2/5, dialogs, edges,
 links and similar 3/5, unity 15/19, the rest 4 or 5 of 5. DeepSeek on munito couldn't be measured:
 the free tier answered 503 "capacity is full" to most trials.
+Since 30 October 2026 the benchmark gives the model only the screen, mouse and keyboard tools (it had
+the shell and web tools too, and once ran Get-Process), counts the four looks before a click per try
+rather than per trial, draws the mouse pointer on screenshots as the real screen shows it, and doesn't
+count a click the tool refused (bad coordinates) as a try. Those numbers aren't comparable with the
+ones above.
 
 ## Project structure
 - `src/Sloperator.Core`: OpenAI-compatible streaming client, server probe, agent loop, tools,
