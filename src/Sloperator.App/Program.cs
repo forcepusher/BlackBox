@@ -44,5 +44,7 @@ internal static class Program
                 CompositionMode = [Win32CompositionMode.RedirectionSurface],
                 RenderingMode = [Win32RenderingMode.Wgl, Win32RenderingMode.Software],
             })
+            // Inter, bundled: tried Windows' Segoe UI on 2026-10-29 for 0.9 MB less, and the user wanted Inter back.
+            .WithInterFont()
             .LogToTrace();
 }

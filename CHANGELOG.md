@@ -29,9 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a call's output is; a screenshot the agent took to look stays open.
 - A shell command's card says **Run a command** and, in a few words, what the command does, with the
   whole command shown under it in a code box instead of in the title.
-- The single-file Sloperator.exe is 24 MB instead of 31.8: its native libraries are packed with
-  Brotli, PDF pages are drawn by Windows' own PDF renderer instead of PDFium, the window is drawn
-  with OpenGL instead of Direct3D, and the text is in Windows' Segoe UI instead of the bundled Inter.
+- The single-file Sloperator.exe is 25 MB instead of 31.8: its native libraries are packed with
+  Brotli, PDF pages are drawn by Windows' own PDF renderer instead of PDFium, and the window is drawn
+  with OpenGL instead of Direct3D.
 
 ### Fixed
 - Undoing a message from before a context reset kept only the messages before it: the handoff note

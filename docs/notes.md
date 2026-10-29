@@ -16,11 +16,11 @@ unpacks its native UI libraries into `Data/runtime` next to itself. They are emb
 the files stored as they are, packed whole with Brotli (`scripts/pack-runtime.cs`, quality 11, 16 MB
 window): 7.6 MB where the zip's own Deflate made 10.0 (Skia, PDFium, ANGLE and HarfBuzz, 23 MB
 unpacked; measured 2026-10-29), and the exe 2.4 MB smaller. Unpacking them takes about 0.4 s, once.
-The same day the exe went from 29.3 MB to 24.0 (the user: "Do all of it"): PDF pages are drawn by
-Windows (see File inspector), so PDFium is gone; Avalonia draws with OpenGL (WGL, software where
+The same day the exe went from 29.3 MB to about 25 (the user: "Do all of it"): PDF pages are drawn by
+Windows (see File inspector), so PDFium is gone; and Avalonia draws with OpenGL (WGL, software where
 there is none) instead of Direct3D through ANGLE, whose av_libglesv2.dll the publish leaves out
-(`LeaveOutAngle` in the app's project); and the text is in Windows' own Segoe UI, not the bundled
-Inter font. Skia and HarfBuzz alone are 10.7 MB, 3.5 MB packed. Measured on the laptop (Intel Iris
+(`LeaveOutAngle` in the app's project). Windows' Segoe UI in place of the bundled Inter font took
+0.9 MB more off (24.0 MB), but the user wanted Inter back. Skia and HarfBuzz alone are 10.7 MB, 3.5 MB packed. Measured on the laptop (Intel Iris
 Xe) against the build before: CPU the same (about 0.2 s a 10 s idle, 0.6-0.7 s a 12 s wait for the
 model with the blob dancing), memory about 50 MB more private bytes (214 MB against 162-166), the
 Intel OpenGL driver's. A PrintWindow capture of a window partly off the screen leaves the part off
@@ -3140,7 +3140,7 @@ Requires the .NET 10 SDK.
 ```powershell
 dotnet build                      # debug build; keeps its Data/ in .dev/
 dotnet test                       # unit tests, and the chat's layout laid out headless (Sloperator.App.Tests)
-./scripts/publish.ps1             # single-file publish/Sloperator.exe, trimmed and compressed (about 23 MB)
+./scripts/publish.ps1             # single-file publish/Sloperator.exe, trimmed and compressed (about 24 MB)
 ./scripts/publish.ps1 -Folder     # classic self-contained folder in publish/Sloperator-win-x64
 dotnet run --project src/Sloperator.Cli -- --yes "open notepad and type hello"   # headless run
 dotnet run --project src/Sloperator.Cli -- --yes --attach photo.jpg "make it a watercolor"   # with a file, as if dropped on the window

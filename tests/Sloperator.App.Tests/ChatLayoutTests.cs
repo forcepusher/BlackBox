@@ -10,13 +10,14 @@ using Xunit;
 
 namespace Sloperator.App.Tests;
 
-/// <summary>The app as the tests start it: no screen, the real fonts (the system's, as the app has).</summary>
+/// <summary>The app as the tests start it: no screen, the real fonts.</summary>
 public static class HeadlessApp
 {
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<App>()
             .UseSkia()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            .WithInterFont();
 
     private static readonly Lazy<HeadlessUnitTestSession> Session = new(() => HeadlessUnitTestSession.StartNew(typeof(HeadlessApp), AvaloniaTestIsolationLevel.PerAssembly));
 
