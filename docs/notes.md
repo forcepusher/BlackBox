@@ -1968,6 +1968,20 @@ first letter, 11 px over it, 4 px left of a code box and left of a preview's fir
 was selected before, the first letter after; a PrintWindow picture of the chat was pixel for pixel
 the same as before, apart from the times.
 
+**A tool call's card (2026-10-29).** The user: fold the pictures of clicks, waits and other actions as
+the output is; only a direct screenshot stays open. So the picture of a `screenshot` or `zoom` call
+(a look: the picture is the answer) shows open, and the screen any other call left (a click, a key,
+a wait, an MCP tool's picture) is under a **Screenshot** fold over Output (`ToolCallItem.HasOpenScreenshot`,
+`HasFoldedScreenshot`); both are the one `ToolShot` template, the bytes the model got. A run_shell
+card's line read "Run: " and the whole command (up to three lines in the title's weight, which the
+user found too much): it says **Run a command** now, with the command in full under it, open, in a
+`Border.command` as dark as the Output fold, its text 16 in, in line with Output's header. The
+command comes from the saved summary, so old chats show the same. Spacing in the card is 8, the
+tool's name chip 8 across. `ToolCardLayoutTests` lays a card out headless: the command shown whole
+under the title, the picture of a click, a wait and a key folded, a screenshot's and a zoom's open.
+Checked in the app with a stand-in model (screenshot, wait, two run_shell calls) and PrintWindow:
+the wait's picture folded, opening it by UI Automation showed it.
+
 Web addresses in the chat are links: in replies (written out, `www.` ones, in code and tables,
 and Markdown's `[text](https://...)`, which shows its text alone), in the user's messages, in the
 thinking and in notices. They are drawn in the accent colour, underlined; over one the pointer is

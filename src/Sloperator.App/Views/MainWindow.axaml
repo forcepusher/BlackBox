@@ -461,6 +461,20 @@
         <!-- Unclipped (an ItemsControl and a ContentControl clip to their bounds by default), so a
              message's text can reach past its sides: a drag in the gutter beside it starts a selection. -->
         <ItemsControl ItemsSource="{Binding Items}" ClipToBounds="False">
+          <ItemsControl.Resources>
+            <!-- A tool call's picture, as the model got it: open on the card for a look, folded for an action. -->
+            <DataTemplate x:Key="ToolShot" x:DataType="vm:ToolCallItem">
+              <Button Classes="picture" Click="OnScreenshotClick" HorizontalAlignment="Left"
+                      ToolTip.Tip="See it full screen" AutomationProperties.Name="Screenshot">
+                <Button.ContextMenu>
+                  <ContextMenu>
+                    <MenuItem Header="Copy" Click="OnCopyPicture" />
+                  </ContextMenu>
+                </Button.ContextMenu>
+                <Image Source="{Binding Screenshot}" MaxWidth="480" Stretch="Uniform" />
+              </Button>
+            </DataTemplate>
+          </ItemsControl.Resources>
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
               <StackPanel Spacing="10" />
@@ -577,8 +591,8 @@
 
             <DataTemplate DataType="vm:ToolCallItem">
               <Border Classes="card" Margin="0,0,40,0">
-                <StackPanel Spacing="6">
-                  <!-- The summary takes the width that is left, so a long command wraps inside the card
+                <StackPanel Spacing="8">
+                  <!-- The title takes the width that is left, so a long one wraps inside the card
                        (in a horizontal StackPanel it had all the width it wanted and ran past the
                        card's edge); past three lines it ends in "…", the whole of it in the tooltip.
                        On the right: when the call began to run, and how it ended in how long. -->
@@ -586,27 +600,24 @@
                     <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding StatusText}" VerticalAlignment="Top" Margin="4,0,0,0" />
                     <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText, StringFormat='{}{0} ·'}" IsVisible="{Binding HasTime}"
                                ToolTip.Tip="{Binding TimeTip}" VerticalAlignment="Top" Margin="8,0,0,0" />
-                    <Border DockPanel.Dock="Left" Background="{StaticResource BbSurfaceRaised}" CornerRadius="4" Padding="6,1" VerticalAlignment="Top" Margin="0,0,8,0">
+                    <Border DockPanel.Dock="Left" Background="{StaticResource BbSurfaceRaised}" CornerRadius="4" Padding="8,1" VerticalAlignment="Top" Margin="0,0,8,0">
                       <TextBlock Text="{Binding Name}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Foreground="{StaticResource BbAccent}" />
                     </Border>
-                    <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis"
-                               VerticalAlignment="Center" ToolTip.Tip="{Binding Summary}" />
+                    <TextBlock Text="{Binding Title}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" ToolTip.Tip="{Binding Title}" />
                   </DockPanel>
+
+                  <!-- A shell command in full, open: what ran matters more than its output. -->
+                  <Border Classes="command" IsVisible="{Binding HasCommand}">
+                    <SelectableTextBlock Classes="command" Text="{Binding Command}" />
+                  </Border>
 
                   <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsAwaitingApproval}">
                     <Button Classes="primary" Content="Allow" Command="{Binding ApproveCommand}" />
                     <Button Classes="ghost" Content="Deny" Command="{Binding DenyCommand}" />
                   </StackPanel>
 
-                  <Button Classes="picture" Click="OnScreenshotClick" IsVisible="{Binding HasScreenshot}" HorizontalAlignment="Left"
-                          ToolTip.Tip="See it full screen" AutomationProperties.Name="Screenshot">
-                    <Button.ContextMenu>
-                      <ContextMenu>
-                        <MenuItem Header="Copy" Click="OnCopyPicture" />
-                      </ContextMenu>
-                    </Button.ContextMenu>
-                    <Image Source="{Binding Screenshot}" MaxWidth="480" Stretch="Uniform" />
-                  </Button>
+                  <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ToolShot}" IsVisible="{Binding HasOpenScreenshot}" />
 
                   <ItemsControl ItemsSource="{Binding Previews}" IsVisible="{Binding HasPreviews}">
                     <ItemsControl.ItemsPanel>
@@ -615,6 +626,11 @@
                       </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                   </ItemsControl>
+
+                  <!-- The screen an action left, folded as its output (see ToolCallItem.HasFoldedScreenshot). -->
+                  <Expander IsVisible="{Binding HasFoldedScreenshot}" Header="Screenshot" Padding="8" HorizontalAlignment="Stretch">
+                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource ToolShot}" />
+                  </Expander>
 
                   <Expander IsVisible="{Binding HasResult}" Header="Output" Padding="8,4" HorizontalAlignment="Stretch">
                     <SelectableTextBlock Text="{Binding ResultText}" TextWrapping="Wrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Margin="-8,-4" Padding="8,4" />

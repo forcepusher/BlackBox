@@ -127,6 +127,22 @@
       <Setter Property="Margin" Value="-12,0,-12,-4" />
       <Setter Property="Padding" Value="24,2,24,14" />
     </Style>
+    <!-- The command on a run_shell card, open under its title: a well as dark as the Output under it,
+         its text in line with Output's. The text block reaches the box's edges, so a drag from its
+         padding selects. -->
+    <Style Selector="Border.command">
+      <Setter Property="Background" Value="{StaticResource BbBackground}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="SelectableTextBlock.command">
+      <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,monospace" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="LineHeight" Value="16" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Padding" Value="16,8" />
+    </Style>
     <Style Selector="Button.copyCode">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{StaticResource BbMuted}" />

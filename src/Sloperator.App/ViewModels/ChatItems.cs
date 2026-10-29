@@ -302,7 +302,19 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
     public string Arguments { get; init; } = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Title), nameof(Command), nameof(HasCommand))]
     private string _summary = summary;
+
+    /// <summary>
+    /// The card's line beside the tool's name: the summary, or for a shell command a short title, the
+    /// command itself under it in a block of its own (a whole command in bold was too much, the user, 2026-10-29).
+    /// </summary>
+    public string Title => HasCommand ? "Run a command" : Summary;
+
+    /// <summary>The command a run_shell call ran, from its summary ("Run: …"), so a saved chat shows it too; null for any other call.</summary>
+    public string? Command => Name == "run_shell" && Summary.StartsWith("Run: ", StringComparison.Ordinal) ? Summary[5..] : null;
+
+    public bool HasCommand => Command is { Length: > 0 };
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsAwaitingApproval), nameof(StatusText), nameof(IsError))]
@@ -313,8 +325,19 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
     private string _resultText = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasScreenshot))]
+    [NotifyPropertyChangedFor(nameof(HasScreenshot), nameof(HasOpenScreenshot), nameof(HasFoldedScreenshot))]
     private Bitmap? _screenshot;
+
+    /// <summary>The tools called to look: their picture is the answer, shown open on the card.</summary>
+    private static readonly HashSet<string> Looks = ["screenshot", "zoom"];
+
+    /// <summary>
+    /// A picture a look gave stays open. The screen an action left (a click, a wait, a key) is folded
+    /// as the output is: a chat of clicks was mostly screenshots. It is the same picture the model got.
+    /// </summary>
+    public bool HasOpenScreenshot => HasScreenshot && Looks.Contains(Name);
+
+    public bool HasFoldedScreenshot => HasScreenshot && !Looks.Contains(Name);
 
     /// <summary>The screenshot as the model got it, at its full size, for Copy; it goes when the thumbnail does.</summary>
     public byte[]? ScreenshotData { get; set; }
