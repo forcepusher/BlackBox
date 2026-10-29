@@ -259,8 +259,9 @@ public partial class FileChangesPanel : UserControl
     }
 
     /// <summary>
-    /// A right-click on a file: Show in folder, in the look of the Video generator's menus. A deleted
-    /// file has nothing to show, so the entry is greyed out.
+    /// A right-click on a file: Show in folder, in the look of the Video generator's menus, then Copy file
+    /// (Copy image for a picture, see <see cref="CopyMenu"/>). A deleted file has nothing to show or copy,
+    /// so both are greyed out.
     /// </summary>
     private void OnFileMenu(object? sender, ContextRequestedEventArgs e)
     {
@@ -271,6 +272,11 @@ public partial class FileChangesPanel : UserControl
         show.Click += (_, _) => FilePreview.ShowInFolder(file.FullPath);
         var menu = new ContextMenu();
         menu.Items.Add(show);
+        foreach (var copy in CopyMenu.Items(item, null, null, file.FullPath))
+        {
+            copy.IsEnabled = show.IsEnabled;
+            menu.Items.Add(copy);
+        }
         menu.Open(item);
     }
 }

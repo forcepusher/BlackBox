@@ -156,7 +156,7 @@ public partial class VideoGeneratorPanel : UserControl
     {
         if ((sender as Control)?.DataContext is ReferenceCard card)
         {
-            OpenMenu(Vm.MenuFor(card), sender as Control);
+            OpenMenu(Vm.MenuFor(card), sender as Control, card.Thumbnail, Vm.FileOf(card));
             e.Handled = true;
         }
     }
@@ -165,7 +165,7 @@ public partial class VideoGeneratorPanel : UserControl
     {
         if ((sender as Control)?.DataContext is ShotItem shot)
         {
-            OpenMenu(Vm.MenuFor(shot), sender as Control);
+            OpenMenu(Vm.MenuFor(shot), sender as Control, shot.Strip, Vm.FileOf(shot));
             e.Handled = true;
         }
     }
@@ -174,7 +174,7 @@ public partial class VideoGeneratorPanel : UserControl
     {
         if ((sender as Control)?.DataContext is FrameSlot slot)
         {
-            OpenMenu(Vm.MenuFor(slot), sender as Control);
+            OpenMenu(Vm.MenuFor(slot), sender as Control, slot.Frame?.Thumbnail, Vm.FileOf(slot.Frame));
             e.Handled = true;
         }
     }
@@ -183,7 +183,7 @@ public partial class VideoGeneratorPanel : UserControl
     {
         if ((sender as Control)?.DataContext is SoundItem sound)
         {
-            OpenMenu(Vm.MenuFor(sound), sender as Control);
+            OpenMenu(Vm.MenuFor(sound), sender as Control, null, Vm.FileOf(sound));
             e.Handled = true;
         }
     }
@@ -197,12 +197,18 @@ public partial class VideoGeneratorPanel : UserControl
         }
     }
 
-    private static void OpenMenu(IReadOnlyList<VideoMenuItem?> items, Control? at)
+    /// <summary>A menu of the panel's; for a card, clip, frame or sound, Copy image or Copy file at its end (see <see cref="CopyMenu"/>).</summary>
+    private static void OpenMenu(IReadOnlyList<VideoMenuItem?> items, Control? at, Avalonia.Media.IImage? picture = null, string? file = null)
     {
-        if (items.Count == 0)
+        var copy = at is null ? [] : CopyMenu.Items(at, picture, null, file);
+        if (items.Count == 0 && copy.Count == 0)
             return;
         var menu = new ContextMenu();
         foreach (var item in Entries(items))
+            menu.Items.Add(item);
+        if (items.Count > 0 && copy.Count > 0)
+            menu.Items.Add(new Separator());
+        foreach (var item in copy)
             menu.Items.Add(item);
         menu.Open(at);
     }

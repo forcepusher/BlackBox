@@ -337,7 +337,7 @@ public sealed class VideoPick(string path, string caption)
 }
 
 /// <summary>What the viewer shows for something with no picture to play: a piece not made yet, the video not joined.</summary>
-public sealed record PictureView(Bitmap? Picture, string Caption, string? Missing);
+public sealed record PictureView(Bitmap? Picture, string Caption, string? Missing, string? Path = null);
 
 /// <summary>An entry of a right-click menu in the panel: what it says, whether it can be done now, and what it does; with <see cref="Items"/>, a submenu.</summary>
 public sealed record VideoMenuItem(string Header, bool Enabled, Action Do, string? Key = null)

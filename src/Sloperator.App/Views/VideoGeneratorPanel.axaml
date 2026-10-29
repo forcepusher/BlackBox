@@ -107,7 +107,8 @@
         </Panel>
       </Button>
     </DataTemplate>
-    <!-- What the viewer shows: a clip or the video playing, a sound, a picture, a card for what has none. -->
+    <!-- What the viewer shows: a clip or the video playing, a sound, a picture, a card for what has none.
+         A right-click on it: Copy image or Copy file (see CopyMenu). -->
     <DataTemplate DataType="vm:VideoPreview">
       <DockPanel>
         <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
@@ -117,7 +118,8 @@
           <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
           <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" Margin="8,-8,0,-8" VerticalAlignment="Center" />
         </DockPanel>
-        <Button Classes="bare" Click="OnMediaClick" ToolTip.Tip="Full screen" AutomationProperties.Name="Video full screen" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <Button Classes="bare" Click="OnMediaClick" ToolTip.Tip="Full screen" AutomationProperties.Name="Video full screen" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                views:CopyMenu.Image="{Binding Frame}" views:CopyMenu.File="{Binding Path}">
           <Panel Background="#000000">
             <Image Source="{Binding Frame}" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
             <Border Width="56" Height="56" CornerRadius="28" Background="#B0000000" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !IsPlaying}">
@@ -129,13 +131,14 @@
     </DataTemplate>
 
     <DataTemplate DataType="vm:AnimationPreview">
-      <Button Classes="bare" Click="OnMediaClick" ToolTip.Tip="Full screen" AutomationProperties.Name="Animation full screen" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+      <Button Classes="bare" Click="OnMediaClick" ToolTip.Tip="Full screen" AutomationProperties.Name="Animation full screen" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+              views:CopyMenu.Image="{Binding Image}" views:CopyMenu.File="{Binding Path}">
         <Image Source="{Binding Image}" Stretch="Uniform" />
       </Button>
     </DataTemplate>
 
     <DataTemplate DataType="vm:AudioPreview">
-      <DockPanel VerticalAlignment="Center" MaxWidth="640">
+      <DockPanel VerticalAlignment="Center" MaxWidth="640" Background="Transparent" views:CopyMenu.File="{Binding Path}">
         <Button DockPanel.Dock="Left" Classes="accent" Width="40" Height="40" CornerRadius="20" Padding="0" Background="{StaticResource BbAccent}"
                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                 Command="{Binding PlayCommand}" VerticalAlignment="Center" AutomationProperties.Name="Play or pause sound">
@@ -150,7 +153,7 @@
     </DataTemplate>
 
     <DataTemplate DataType="vm:PictureView">
-      <Border Classes="thumb" Background="{StaticResource BbBar}">
+      <Border Classes="thumb" Background="{StaticResource BbBar}" views:CopyMenu.Image="{Binding Picture}" views:CopyMenu.File="{Binding Path}">
         <Panel>
           <Button Classes="bare" Click="OnMediaClick" IsVisible="{Binding Picture, Converter={x:Static ObjectConverters.IsNotNull}}" ToolTip.Tip="Full screen"
                   AutomationProperties.Name="Picture full screen" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
@@ -452,7 +455,7 @@
       <Panel Background="Transparent" PointerPressed="OnAwayPressed">
         <Panel x:Name="ViewerBox" Margin="16,12">
           <ContentControl Content="{Binding Viewer}" IsVisible="{Binding !IsPlaying}" />
-          <Border Classes="thumb" Background="#000000" IsVisible="{Binding IsPlaying}">
+          <Border Classes="thumb" Background="#000000" IsVisible="{Binding IsPlaying}" views:CopyMenu.Image="{Binding PlayFrame}">
             <Panel>
               <Image Source="{Binding PlayFrame}" Stretch="Uniform" />
               <Border Background="#B0000000" VerticalAlignment="Bottom" HorizontalAlignment="Left" Padding="8,3" Margin="10" CornerRadius="4">

@@ -161,6 +161,10 @@ public sealed class ZoomBox : Control
 
     private Point? _panFrom, _markFrom;
 
+    /// <summary>Where a right or middle drag began, and whether it has moved: a right-click that moved nothing opens the menu (Copy image).</summary>
+    private Point _panStart;
+    private bool _panned;
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
@@ -169,7 +173,8 @@ public sealed class ZoomBox : Control
             return;
         if (point.Properties.IsRightButtonPressed || point.Properties.IsMiddleButtonPressed)
         {
-            _panFrom = point.Position;
+            _panFrom = _panStart = point.Position;
+            _panned = false;
             Cursor = new Cursor(StandardCursorType.SizeAll);
         }
         else if (point.Properties.IsLeftButtonPressed && CanMark)
@@ -187,6 +192,7 @@ public sealed class ZoomBox : Control
         var at = e.GetPosition(this);
         if (_panFrom is { } from)
         {
+            _panned |= Math.Abs(at.X - _panStart.X) + Math.Abs(at.Y - _panStart.Y) >= 4;
             _center -= (at - from) / Scale;
             _panFrom = at;
             Hold();
@@ -201,6 +207,9 @@ public sealed class ZoomBox : Control
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
+        // Handled before the base sees it: a drag that panned opens no right-click menu.
+        if (_panFrom is not null && _panned)
+            e.Handled = true;
         base.OnPointerReleased(e);
         if (_panFrom is not null)
         {
