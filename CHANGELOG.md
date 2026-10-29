@@ -63,6 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The **Side panel** dropdown went dark under the pointer while the buttons beside it lit up, and
   **Stop** lost its red; both now change as the buttons around them do.
 - Settings' scrollbar sat inside the page rather than at the window's edge.
+- **Area**, **Prompt** and the API key's eye were filled grey beside outlined buttons; they are
+  outlined as the others until pressed in.
 - Undoing a message from before a context reset kept only the messages before it: the handoff note
   went too, and the model had no record of the work done. The note now stays, with a word that later
   messages were undone.

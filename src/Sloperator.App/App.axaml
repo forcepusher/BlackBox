@@ -261,8 +261,9 @@
     </Style>
 
     <!-- The app's usual button: its border on no fill; under the pointer and pressed it fills as
-         Fluent's buttons do. -->
-    <Style Selector="Button.ghost">
+         Fluent's buttons do. A toggle too (Wrap, Area, the API key's eye) until it is pressed in: the
+         style named only buttons, so they sat filled grey beside ghost buttons. -->
+    <Style Selector="Button.ghost, ToggleButton.ghost">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
       <Setter Property="BorderThickness" Value="1" />

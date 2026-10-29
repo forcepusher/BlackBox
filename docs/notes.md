@@ -1425,7 +1425,9 @@ Servers' lists unlike the dropdowns'):
   `ToggleButton.ghost`) has `MinHeight` 32 and its content in its middle; `.small` makes it 24,
   `.icon` square with the icon in its middle. A class that sizes a button itself sets `MinHeight`
   too (the attachment's ×, File… and Generate on a card), or the 32 wins over its `Height`.
-- **Buttons**: `ghost` (a border on no fill: most of them), `flat` (no border either: the paperclip,
+- **Buttons**: `ghost` (a border on no fill: most of them, and the app's toggles until pressed in,
+  which the style had missed: Area, Prompt and the API key's eye were filled grey beside outlined
+  buttons), `flat` (no border either: the paperclip,
   File changes' foldouts, a code block's Copy), `bare` (no look of its own in any state: a picture,
   a card or a clip that a click opens or picks; was `picture`, `thumb` and `pick`), `primary`
   (yellow), `danger` (Stop: red, lighter under the pointer and darker pressed as the yellow ones;
