@@ -54,6 +54,9 @@ public sealed class ChatMessage
     /// <summary>Typed by the user, as opposed to Sloperator's notes, nudges and screenshots. Kept verbatim when the context is reset.</summary>
     public bool FromUser { get; set; }
 
+    /// <summary>For a message of the user's: the ids of the chat's messages it carries (<see cref="Agent.UserInput.Ids"/>); never sent to the model.</summary>
+    public List<string>? Sent { get; set; }
+
     /// <summary>For replies: the prompt and reply size the server reported, when it reports usage.</summary>
     public int? PromptTokens { get; set; }
     public int? CompletionTokens { get; set; }

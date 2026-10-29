@@ -40,6 +40,9 @@ public sealed class ChatEntry
     /// <summary>For a message of the user's: the File changes turn it started (see <see cref="Diffs.FileChanges.NewTurn"/>), to undo the files back to. Chats saved before turns were kept have none.</summary>
     public int? Turn { get; set; }
 
+    /// <summary>For a message of the user's: which message it is in the conversation (see <see cref="UserInput.Ids"/>). Chats saved before have none.</summary>
+    public List<string>? Ids { get; set; }
+
     /// <summary>For a notice: a run ended here before its task was done (stopped, or an error), so the chat offers to carry on.</summary>
     public bool Stopped { get; set; }
 
@@ -306,6 +309,7 @@ public sealed class ChatStore(string dir)
             ToolCalls = m.ToolCalls?.Select(c => new ToolCall { Id = c.Id, Name = c.Name, Arguments = c.Arguments }).ToList(),
             ToolCallId = m.ToolCallId,
             FromUser = m.FromUser,
+            Sent = m.Sent?.ToList(),
         }).ToList();
         AgentSession.RepairDanglingToolCalls(copy);
         return copy;

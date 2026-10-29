@@ -33,6 +33,15 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
     public IReadOnlyList<ToolCard>? Cards { get; init; }
 
     /// <summary>
+    /// Which message of the user's this is, the same in the chat and in the model's conversation
+    /// (<see cref="ChatMessage.Sent"/>), so Undo finds where the model had it (see <see cref="ChatCut"/>);
+    /// several for messages sent together. Empty for one from a chat saved before messages had them.
+    /// </summary>
+    public IReadOnlyList<string> Ids { get; init; } = [NewId()];
+
+    internal static string NewId() => Guid.NewGuid().ToString("N")[..12];
+
+    /// <summary>
     /// Typed text as it is sent: without the empty lines and spaces around it, and nothing else
     /// changed. The empty lines inside stay, and so does the first line's indentation (code pasted
     /// in, a list), which a plain Trim took off.
@@ -63,7 +72,7 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
     public ChatMessage ToMessage(bool seesImages, int? grid = null)
     {
         if (Files.Count == 0)
-            return new ChatMessage { Role = ChatRole.User, Content = ModelText, FromUser = true };
+            return new ChatMessage { Role = ChatRole.User, Content = ModelText, FromUser = true, Sent = [.. Ids] };
         var list = new StringBuilder(Tidy(ModelText));
         if (list.Length > 0)
             list.Append("\n\n");
@@ -91,8 +100,8 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
             list.Append(')');
         }
         return pictures.Count == 0
-            ? new ChatMessage { Role = ChatRole.User, Content = list.ToString(), FromUser = true }
-            : new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText(list.ToString()), .. pictures], FromUser = true };
+            ? new ChatMessage { Role = ChatRole.User, Content = list.ToString(), FromUser = true, Sent = [.. Ids] }
+            : new ChatMessage { Role = ChatRole.User, Parts = [ContentPart.FromText(list.ToString()), .. pictures], FromUser = true, Sent = [.. Ids] };
     }
 
     /// <summary>What a file is, for the list: "picture 1920x1080, 1.2 MB", "video, 14.0 MB", "a .pdf file, 220 KB".</summary>
@@ -149,7 +158,7 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
         if (all.Count == 1)
             return all[0];
         return new UserInput(string.Join("\n\n", all.Select(i => i.ModelText).Where(t => t.Length > 0)),
-            all.SelectMany(i => i.Files).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+            all.SelectMany(i => i.Files).Distinct(StringComparer.OrdinalIgnoreCase).ToList()) { Ids = [.. all.SelectMany(i => i.Ids)] };
     }
 }
 

@@ -80,8 +80,11 @@ public sealed class UserMessageItem(string text, IReadOnlyList<string>? files = 
     /// <summary>The File changes turn it started, for Undo message and everything below to put the files back to; null in a chat saved before there were turns.</summary>
     public int? Turn { get; init; }
 
+    /// <summary>Which message it is in the model's conversation (see <see cref="UserInput.Ids"/>); none in a chat saved before messages had them.</summary>
+    public IReadOnlyList<string> Ids { get; init; } = [];
+
     /// <summary>The message as sent, to send again.</summary>
-    public UserInput Input => new(Text, Files) { Via = Via, Context = Context, Cards = Cards };
+    public UserInput Input => new(Text, Files) { Via = Via, Context = Context, Cards = Cards, Ids = Ids };
 
     /// <summary>
     /// The files as their cards, the tool's first as over the box (the user, 2026-10-26): a pick by what
