@@ -1378,6 +1378,20 @@ License 2.0, the set the logo was traced from (docs/logo/LICENSE-blobs.txt). Its
 with SkiaSharp's `SKCodec`, as chat previews of animations are (no GIF package), and its timer runs only
 while it dances and is in a window.
 
+## Text in the middle of its box
+The font is Inter (bundled; Segoe UI was tried on 2026-10-29 and the user wanted Inter back). Fluent's
+paddings were made for Segoe UI, whose capitals sit low in its line: a button has 5 over its text and
+6 under, a dropdown 5 and 7, a dropdown's row 5 and 7. Inter's capitals sit in the middle of its line
+(ascent 0.969 em, descent 0.242, capitals 0.727), so with those every dropdown's text was 2 px (at
+125%) over its middle and a button's 1; the user noticed it on the model dropdown. App.axaml gives
+buttons 5.5 over and under, dropdowns 6 and 6 (`ComboBoxPadding`) and their rows 6 and 6; a class's
+own padding further on still wins. Consolas, the fixed-width font on PCs without Cascadia Mono, sits
+high in its line too: the lines of File changes have 3 px over the code and -1 under (2.4 and -0.8
+logical; rows as tall as with 1 each, which other values made 22 px and 21 by turns), and the tool's
+name on a card 2 over and none under. Measured with `.dev/chat-menu-test/text-centering.ps1` (rows
+with ink, each control's capitals from their top to the baseline) and `text-layout.ps1` (each
+control's text block against its middle), on the laptop at 125%: everything within 0.5 px.
+
 ## Accent colour
 The accent is the blob logo's yellow #FCC21B (`BbAccent`, and Fluent's own through its palette).
 Fluent was made for dark accents: it puts white on them, and a picked list row is the accent at 60%.

@@ -428,7 +428,8 @@
               </Flyout>
             </Button.Flyout>
           </Button>
-          <TextBox Text="{Binding ServerAddress}" Watermark="http://localhost:1234/v1" MinWidth="200" />
+          <!-- No least width: one wider than the narrowest chat's column was laid out over the "Server" label. -->
+          <TextBox Text="{Binding ServerAddress}" Watermark="http://localhost:1234/v1" />
         </DockPanel>
         <TextBlock Grid.Row="0" Grid.Column="2" Classes="muted" Text="API key" VerticalAlignment="Center" Margin="16,0,8,0" />
         <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding ApiKey}" PasswordChar="•" RevealPassword="{Binding ShowApiKey}" MinWidth="120"
@@ -637,7 +638,8 @@
                     <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding StatusText}" VerticalAlignment="Top" Margin="4,0,0,0" />
                     <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText, StringFormat='{}{0} ·'}" IsVisible="{Binding HasTime}"
                                ToolTip.Tip="{Binding TimeTip}" VerticalAlignment="Top" Margin="8,0,0,0" />
-                    <Border DockPanel.Dock="Left" Background="{StaticResource BbSurfaceRaised}" CornerRadius="4" Padding="8,1" VerticalAlignment="Top" Margin="0,0,8,0">
+                    <!-- 2 over the name and none under: Consolas' capitals sit high in its line (1.5 px over the chip's middle at 125%). -->
+                    <Border DockPanel.Dock="Left" Background="{StaticResource BbSurfaceRaised}" CornerRadius="4" Padding="8,2,8,0" VerticalAlignment="Top" Margin="0,0,8,0">
                       <TextBlock Text="{Binding Name}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Foreground="{StaticResource BbAccent}" />
                     </Border>
                     <TextBlock Text="{Binding Title}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis"

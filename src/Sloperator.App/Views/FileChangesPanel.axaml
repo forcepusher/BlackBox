@@ -97,7 +97,8 @@
     <Style Selector="TextBlock.divider">
       <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
       <Setter Property="FontSize" Value="11" />
-      <Setter Property="Margin" Value="4,0" />
+      <!-- 1 lower than its line, which held it 1 px (at 125%) over its row's middle; as tall. -->
+      <Setter Property="Margin" Value="4,1,4,-1" />
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
     <Style Selector="ListBox.files">
@@ -280,7 +281,10 @@
                     <!-- A hunk: a slim divider saying which lines follow ("Lines 96-104"), not git's @@ line, whose numbers
                          the gutter already shows. A click here picks the hunk. -->
                     <TextBlock Classes="divider" IsVisible="{Binding IsHunk}" Text="{Binding Divider}" />
-                    <Grid ColumnDefinitions="Auto,Auto,*" IsVisible="{Binding IsCode}" Margin="0,1" TextElement.FontFamily="Cascadia Mono,Consolas,monospace">
+                    <!-- More room over the code than under it (3 px and -1 at 125%, the row as tall as with 1
+                         each): Consolas' capitals sit high in its line, and a line's text was 2.5 px over the
+                         middle of its row. -->
+                    <Grid ColumnDefinitions="Auto,Auto,*" IsVisible="{Binding IsCode}" Margin="0,2.4,0,-0.8" TextElement.FontFamily="Cascadia Mono,Consolas,monospace">
                       <Panel Grid.Column="0" Margin="4,0,0,0" VerticalAlignment="Top">
                         <TextBlock Text="{Binding File.NumberSizer}" Opacity="0" />
                         <TextBlock Classes="number" Classes.removed="{Binding IsRemoved}" Text="{Binding Number}" />

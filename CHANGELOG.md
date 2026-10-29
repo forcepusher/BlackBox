@@ -34,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with OpenGL instead of Direct3D.
 
 ### Fixed
+- Text sat 1-2 px over the middle of dropdowns (the model, the effort), buttons, dropdown rows, the
+  lines of File changes and the tool's name on a card; it is in the middle now.
+- With the chat narrow, the server address box covered the "Server" label beside it.
 - Undoing a message from before a context reset kept only the messages before it: the handoff note
   went too, and the model had no record of the work done. The note now stays, with a word that later
   messages were undone.
