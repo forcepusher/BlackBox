@@ -306,13 +306,24 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
     private string _summary = summary;
 
     /// <summary>
-    /// The card's line beside the tool's name: the summary, or for a shell command a short title, the
-    /// command itself under it in a block of its own (a whole command in bold was too much, the user, 2026-10-29).
+    /// The card's line beside the tool's name: the summary, or for a shell command a short title with
+    /// what the model said it does ("Run a command · List the newest log files"), the command itself
+    /// under it in a block of its own (a whole command in bold was too much, the user, 2026-10-29).
     /// </summary>
-    public string Title => HasCommand ? "Run a command" : Summary;
+    public string Title => !HasCommand ? Summary : CommandParts().Description is { } d ? $"Run a command · {d}" : "Run a command";
 
-    /// <summary>The command a run_shell call ran, from its summary ("Run: …"), so a saved chat shows it too; null for any other call.</summary>
-    public string? Command => Name == "run_shell" && Summary.StartsWith("Run: ", StringComparison.Ordinal) ? Summary[5..] : null;
+    /// <summary>The command a run_shell call ran, from its summary, so a saved chat shows it too; null for any other call.</summary>
+    public string? Command => CommandParts().Command;
+
+    /// <summary>A run_shell summary: "Run: " and the command, with the model's description on a line over it if it gave one (ShellTool.Describe).</summary>
+    private (string? Description, string? Command) CommandParts()
+    {
+        if (Name != "run_shell")
+            return (null, null);
+        if (Summary.StartsWith("Run: ", StringComparison.Ordinal))
+            return (null, Summary[5..]);
+        return Summary.IndexOf("\nRun: ", StringComparison.Ordinal) is var at and > 0 ? (Summary[..at], Summary[(at + 6)..]) : (null, null);
+    }
 
     public bool HasCommand => Command is { Length: > 0 };
 

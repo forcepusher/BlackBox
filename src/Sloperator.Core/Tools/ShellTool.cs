@@ -21,9 +21,15 @@ public sealed partial class ShellTool : Tool
     public override ToolRisk Risk => ToolRisk.Risky;
     public override JsonObject Parameters => Schema(
         ("command", Str("Command to run"), true),
+        ("description", Str("What the command does in a few words, shown to the user over it (e.g. \"List the newest log files\")"), false),
         ("timeout_seconds", Int("Kill the command after this many seconds (default 60, max 600)"), false),
         ("working_directory", Str("Directory to run in (default: working directory)"), false));
-    public override string Describe(JsonObject args) => $"Run: {GetString(args, "command")}";
+
+    /// <summary>"Run: " and the command, with the model's description of it on a line over that when it gave one (the chat card's title, see ToolCallItem).</summary>
+    public override string Describe(JsonObject args) =>
+        GetString(args, "description") is { } d && string.Join(' ', d.Split((char[])['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)).Trim() is { Length: > 0 } line
+            ? $"{line}\nRun: {GetString(args, "command")}"
+            : $"Run: {GetString(args, "command")}";
 
     public override async Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {

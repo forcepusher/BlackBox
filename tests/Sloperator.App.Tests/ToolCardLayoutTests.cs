@@ -27,6 +27,21 @@ public sealed class ToolCardLayoutTests
     }
 
     [Fact]
+    public void A_shell_card_says_what_the_command_does_when_the_model_said_it()
+    {
+        var summary = new Sloperator.Core.Tools.ShellTool().Describe(new System.Text.Json.Nodes.JsonObject
+        {
+            ["command"] = "Get-ChildItem $env:TEMP\n| Select-Object -First 3",
+            ["description"] = "List the newest\nlog files ",
+        });
+        var item = new ToolCallItem("1", "run_shell", summary);
+        Assert.Equal("Run a command · List the newest log files", item.Title);
+        Assert.Equal("Get-ChildItem $env:TEMP\n| Select-Object -First 3", item.Command);
+        var bare = new ToolCallItem("1", "run_shell", new Sloperator.Core.Tools.ShellTool().Describe(new System.Text.Json.Nodes.JsonObject { ["command"] = "dir", ["description"] = " " }));
+        Assert.Equal(("Run a command", "dir"), (bare.Title, bare.Command));
+    }
+
+    [Fact]
     public void Any_other_card_keeps_its_summary_as_the_title_and_has_no_command()
     {
         var item = new ToolCallItem("1", "read_file", "Read C:\\notes.txt");

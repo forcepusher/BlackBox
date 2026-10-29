@@ -1974,9 +1974,12 @@ the output is; only a direct screenshot stays open. So the picture of a `screens
 a wait, an MCP tool's picture) is under a **Screenshot** fold over Output (`ToolCallItem.HasOpenScreenshot`,
 `HasFoldedScreenshot`); both are the one `ToolShot` template, the bytes the model got. A run_shell
 card's line read "Run: " and the whole command (up to three lines in the title's weight, which the
-user found too much): it says **Run a command** now, with the command in full under it, open, in a
+user found too much): it says **Run a command** now, and what the command does when the model said it
+(run_shell's optional `description`, "Run a command · List the newest log files": the user wanted
+to know what is going on), with the command in full under it, open, in a
 `Border.command` as dark as the Output fold, its text 16 in, in line with Output's header. The
-command comes from the saved summary, so old chats show the same. Spacing in the card is 8, the
+command and description come from the saved summary (`ShellTool.Describe`: the description on a
+line of its own over "Run: " and the command), so old chats show the same, without a description. Spacing in the card is 8, the
 tool's name chip 8 across. `ToolCardLayoutTests` lays a card out headless: the command shown whole
 under the title, the picture of a click, a wait and a key folded, a screenshot's and a zoom's open.
 Checked in the app with a stand-in model (screenshot, wait, two run_shell calls) and PrintWindow:

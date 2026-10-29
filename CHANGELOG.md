@@ -19,8 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whether it was modified or renamed shows in its tooltip.
 - In the chat, the screen a click, a wait or another action left is folded under **Screenshot**, as
   a call's output is; a screenshot the agent took to look stays open.
-- A shell command's card says **Run a command**, with the whole command shown under it in a code box
-  instead of in the title.
+- A shell command's card says **Run a command** and, in a few words, what the command does, with the
+  whole command shown under it in a code box instead of in the title.
 
 ## [1.1.0] - 2026-10-29
 ### Added
