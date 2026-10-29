@@ -1590,6 +1590,23 @@ High); the picked one stays saved for the next model. The command-line runner ta
 Thinking models get their earlier reasoning sent back each step (`reasoning_content`,
 `preserve_thinking`), as the Qwen3.5+ and Gemma 4 templates expect.
 
+**The agent connects it too**: asked to connect, switch to or use another model (LM Studio on this PC,
+Claude, OpenRouter, a server the user names), the agent uses its `model_server` tool. `connect` takes
+the address, the key the user gave (an address already in use keeps its own; another server gets
+none) and a model as the server lists it or a unique part of its name (none: Sloperator's pick). The
+server is checked first, as the top bar checks it, and nothing changes if it doesn't answer, turns
+the key down or has no such model; the result says why (on LM Studio's port, that its server has to
+be switched on). Otherwise the top bar takes the server, key and model as if typed there, and is
+checked again. The run going on keeps the model it started with (the connection is made when a
+message is sent), so the agent says it is done and the next message goes to the new model; a
+context size learnt during that run isn't carried to the new server. The key never shows on the tool
+card or in the result; it is in the chat as the user typed it, and in `Data/settings.json`, as one
+typed in the top bar. The CLI has no top bar and no such tool. Before, free Nemotron asked to
+"connect Sloperator to my LM Studio at http://localhost:5311/v1" clicked through other apps for five
+minutes looking for a settings screen, since Sloperator's window is left out of its screenshots, and
+switched nothing; with the tool it connected in one call, 6 seconds, and the next message was
+answered by that server (29 October 2026, the real app against a stand-in server, with and without a key).
+
 ### Claude through Anthropic's API
 With `api.anthropic.com` as the address (or `anthropic.com`, `claude.com`, `platform.claude.com`,
 `console.anthropic.com`, `claude.ai`, or just `claude`) and an Anthropic API key, Sloperator speaks Anthropic's own
@@ -2042,6 +2059,7 @@ prints the traceback and exits with 0.
 | `web_search` | Searches the web: titles, links and snippets (see below) |
 | `fetch_page` | Reads a web page as plain text; `find` returns only the passages that mention some words, `start` reads on in a long page |
 | `mcp_servers` | Adds, removes and lists MCP servers: a server the agent adds starts at once, its tools join the run, and it is kept in `Data/mcp.json` for later tasks (see below) |
+| `model_server` | The model Sloperator itself runs on: `show` says the server, model and the models it offers; `connect` switches the top bar to another server, key and model, after checking the server answers (see Connecting to a model) |
 | `<server>__<tool>` | Any tool of the MCP servers you or the agent added (see below) |
 
 Settings → Safety has **Enable screenshots** and **Enable keyboard and mouse control**, both on by
