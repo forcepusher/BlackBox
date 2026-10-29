@@ -203,7 +203,9 @@ public class ClickAccuracyTests
                     retried++;
                     if (later != default) fixedLater++;
                 }
-                var retryNote = retries == 0 || landed.Count < 2 ? "" : later != default ? $"; HIT on try {later.i + 2}" : $"; still missed after {landed.Count} tries";
+                // A miss that ended after one click says why, so a try that stopped short is not a mystery.
+                var retryNote = retries == 0 ? "" : landed.Count == 1 && !target.Bounds.Contains(landed[0].X, landed[0].Y) ? $"; no retry: {observer.Ending}"
+                    : landed.Count < 2 ? "" : later != default ? $"; HIT on try {later.i + 2}" : $"; still missed after {landed.Count} tries";
 
                 var click = platform.Actions.FirstOrDefault(a => a.StartsWith("move "));
                 var label = $"{scene.Name,-9} #{trial} {target.Label,-12}";
@@ -648,25 +650,24 @@ public class ClickAccuracyTests
         public void OnFinished(AgentStopReason reason, string? detail) =>
             Ending = string.Join(" · ", new[] { reason.ToString(), detail?.ReplaceLineEndings(" ").Clip(160), _notice, _said }.Where(s => !string.IsNullOrEmpty(s)));
 
-        public void OnToolStarted(ToolCall call, string summary)
+        public void OnToolStarted(ToolCall call, string summary) => Calls += (Calls.Length > 0 ? ", " : "") + summary;
+
+        public void OnToolFinished(ToolCall call, ToolResult result)
         {
-            Calls += (Calls.Length > 0 ? ", " : "") + summary;
-            if (call.Name.Contains("click", StringComparison.OrdinalIgnoreCase))
+            // A click the tool refused (bad coordinates) never happened, so it isn't a try.
+            var clicked = call.Name.Contains("click", StringComparison.OrdinalIgnoreCase) && !result.IsError;
+            if (clicked)
             {
                 Args ??= call.Arguments;
                 _clicks++;
             }
-        }
-
-        public void OnToolFinished(ToolCall call, ToolResult result)
-        {
             if (_clicks >= maxClicks || (_clicks > 0 && hit?.Invoke() != false))
             {
                 cts.Cancel();
                 return;
             }
             // A click that missed starts a new try, which gets its own looks before it clicks again.
-            if (call.Name.Contains("click", StringComparison.OrdinalIgnoreCase))
+            if (clicked)
             {
                 _count = _zooms = 0;
                 return;
