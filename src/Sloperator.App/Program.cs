@@ -37,7 +37,12 @@ internal static class Program
             // Classic redirection surface instead of DirectComposition: windows excluded from
             // screen capture (WDA_EXCLUDEFROMCAPTURE) render reliably with it, while partial
             // DirectComposition updates could leave regions unpainted.
-            .With(new Win32PlatformOptions { CompositionMode = [Win32CompositionMode.RedirectionSurface] })
-            .WithInterFont()
+            // Drawn with OpenGL (WGL), not Direct3D through ANGLE, whose library was 2 MB of the
+            // single-file exe; in software where OpenGL isn't there.
+            .With(new Win32PlatformOptions
+            {
+                CompositionMode = [Win32CompositionMode.RedirectionSurface],
+                RenderingMode = [Win32RenderingMode.Wgl, Win32RenderingMode.Software],
+            })
             .LogToTrace();
 }

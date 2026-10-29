@@ -16,6 +16,15 @@ unpacks its native UI libraries into `Data/runtime` next to itself. They are emb
 the files stored as they are, packed whole with Brotli (`scripts/pack-runtime.cs`, quality 11, 16 MB
 window): 7.6 MB where the zip's own Deflate made 10.0 (Skia, PDFium, ANGLE and HarfBuzz, 23 MB
 unpacked; measured 2026-10-29), and the exe 2.4 MB smaller. Unpacking them takes about 0.4 s, once.
+The same day the exe went from 29.3 MB to 24.0 (the user: "Do all of it"): PDF pages are drawn by
+Windows (see File inspector), so PDFium is gone; Avalonia draws with OpenGL (WGL, software where
+there is none) instead of Direct3D through ANGLE, whose av_libglesv2.dll the publish leaves out
+(`LeaveOutAngle` in the app's project); and the text is in Windows' own Segoe UI, not the bundled
+Inter font. Skia and HarfBuzz alone are 10.7 MB, 3.5 MB packed. Measured on the laptop (Intel Iris
+Xe) against the build before: CPU the same (about 0.2 s a 10 s idle, 0.6-0.7 s a 12 s wait for the
+model with the blob dancing), memory about 50 MB more private bytes (214 MB against 162-166), the
+Intel OpenGL driver's. A PrintWindow capture of a window partly off the screen leaves the part off
+it white under WGL; GDI screenshots and their leaving Sloperator out work as before.
 
 ```
 Sloperator/
@@ -324,14 +333,14 @@ experience" for every file: in the box of a picture's thumbnail in a message (at
 1-pixel frame, `Border.attachment`), cut off beyond it (`FileCardPreview`, `FileInspector.Peek`). It was
 480 wide and up to 240 tall until the user found it too big beside pictures (2026-10-26, "as small as
 image preview"); a picture under a reply is still up to 480x480. A PDF shows its first page, drawn by
-PDFium at twice the peek's width and kept to its top 5:3; an Office or OpenDocument file the picture it keeps of itself (`FileInspector.SavedThumbnail`:
+Windows' PDF renderer at twice the peek's width and kept to its top 5:3; an Office or OpenDocument file the picture it keeps of itself (`FileInspector.SavedThumbnail`:
 docProps/thumbnail.jpeg, Thumbnails/thumbnail.png, which PowerPoint saves by default, Word and Excel only
 with "Save thumbnail", OpenDocument always: what Explorer's thumbnail is); else the start of its text
 as the panel draws it, 14 lines from the first that isn't blank: a .md or a Word or PowerPoint file's
 text formatted, a CSV's first 8 rows and 8 columns as a table, an Excel file's first sheet as a table
 of its cells' values (`SheetTable`, from read_file's text; a table is laid out 600 wide, so its rows
 are cut off on the right rather than wrapped in the 300 of the peek), a web page's text as fetch_page reads it,
-code and a PDF's text (PDFium failing) in a fixed-width font. A file with nothing to show keeps the bare
+code and a PDF's text (its renderer failing) in a fixed-width font. A file with nothing to show keeps the bare
 card. A click on the peek opens the full-screen viewer on the file, shown by the panel's own view
 (`FileInspectorView`, also the panel's body) in a column at most 1100 wide, kept 96 from the sides and 56
 from the top so Windows' previewers (a window of their own, drawn over anything laid on them) don't
@@ -2707,17 +2716,22 @@ under the panel's bar here and in the full-screen viewer for a card's peek, see 
 - Any other file whose start reads as text: its text in a fixed-width font. Anything else: its first
   64 KB as a hex dump (`FileInspector.Hex`: offset, 16 bytes in hex, the same as text), until
   2026-10-26 "There is no preview for this kind of file".
-- PDF: drawn page by page by Sloperator with PDFium, Chrome's PDF engine (`PdfPages`, pdfium.dll from
-  the `bblanchon.PDFium.Win32` package, Apache-2.0/BSD, 7.5 MB; unpacked into Data/runtime with
-  the other native libraries in the single-file build). The pages are a virtualized list
-  (`PdfPageItem`, `PdfPageView`): a page is drawn 1400 pixels wide when it comes into the list and let
-  go of when it leaves, so a 300-page PDF scrolled end to end kept Sloperator at 295-400 MB. PDFium is
-  called under one lock (it isn't thread-safe) and reads the file from memory (its paths are in the
-  ANSI code page, and the file stays free to be written over). A PDF it can't open (damaged, a
-  password) goes to Windows' previewer below, then to its text. The user asked for an open-source
-  engine as PDF preview is "quite critical" (2026-10-25): Windows' PDF previewer is whatever the PDF
-  program registered, and Acrobat's failed on every PDF on the laptop. MuPDF (AGPL) and Poppler (GPL)
-  were ruled out by their licences, pdf.js by needing a browser view.
+- PDF: drawn page by page by Windows' own PDF renderer, Windows.Data.Pdf (`PdfPages.Open`, which the
+  platform sets: `WindowsPdf`), in every Windows 10 and 11. It is called through WinRT's ABI with
+  function pointers, as Media Foundation is through COM, not through the .NET projection, which
+  would have changed every project's target framework (and the bin paths scripts use) and added its
+  own assemblies; the ids and vtable order come from System32\WinMetadata. The file is read into
+  memory (it stays free to be written over), a page is rendered as a BMP of the size wanted (an area
+  of it through the render options' source rectangle) and Skia decodes it; the async calls are short
+  and waited out by polling. The pages are a virtualized list (`PdfPageItem`, `PdfPageView`): a page
+  is drawn 1400 pixels wide when it comes into the list and let go of when it leaves. A PDF it can't
+  open (damaged, a password) goes to Windows' previewer below, then to its text. Until 2026-10-29
+  PDFium drew them (pdfium.dll from `bblanchon.PDFium.Win32`, 7.3 MB, 2.9 MB of the single-file exe
+  even packed with Brotli); the user chose Windows' renderer to make the exe smaller (2026-10-29), and
+  the same 3-page Intel overview came out as sharp in the panel and its chat card. Before PDFium, the
+  user had asked for an engine of Sloperator's own as PDF preview is "quite critical" (2026-10-25):
+  Windows' PDF previewer is whatever the PDF program registered, and Acrobat's failed on every PDF
+  on the laptop; Windows.Data.Pdf is not that previewer and needs no PDF program.
 - Word, Excel, PowerPoint (and .doc/.xls/.ppt, OpenDocument, HTML, RTF): drawn by the previewer
   Windows has for the kind, as in Explorer's preview pane (`ShellPreview`, `ShellPreviewHost`): a
   native window of the panel's in which Word's, Excel's, PowerPoint's (Office installed), the PDF
@@ -2770,7 +2784,7 @@ a faint fill of it (`ZoomBox.DrawMark`, also drawn by `PdfPageView` on its page)
 A picture of the area is then cut and saved as Data/pasted/Area <time>.png (deleted with the chat, as
 pasted pictures are; one unpicked before it is sent is deleted at once) and picked into the box as
 "Area on page 2 · report.pdf", "Area of frame 38 · clip.mp4", "Area · chart.png", with no × as every
-tool's pick. It is cut from the best source: the PDF page drawn again by PDFium for the area alone
+tool's pick. It is cut from the best source: the PDF page drawn again by Windows' PDF renderer for the area alone
 (`PdfPages.RenderArea`: 1600 pixels along its longer side, between the panel's sharpness and 600
 dpi; the page drawn at that scale into a bitmap of the area's size), the picture file decoded whole,
 the frame decoded again at the video's own size, the frozen view's pixels. A stretch of a sound goes the
@@ -3127,7 +3141,7 @@ Requires the .NET 10 SDK.
 ```powershell
 dotnet build                      # debug build; keeps its Data/ in .dev/
 dotnet test                       # unit tests, and the chat's layout laid out headless (Sloperator.App.Tests)
-./scripts/publish.ps1             # single-file publish/Sloperator.exe, trimmed and compressed (about 28 MB)
+./scripts/publish.ps1             # single-file publish/Sloperator.exe, trimmed and compressed (about 23 MB)
 ./scripts/publish.ps1 -Folder     # classic self-contained folder in publish/Sloperator-win-x64
 dotnet run --project src/Sloperator.Cli -- --yes "open notepad and type hello"   # headless run
 dotnet run --project src/Sloperator.Cli -- --yes --attach photo.jpg "make it a watercolor"   # with a file, as if dropped on the window

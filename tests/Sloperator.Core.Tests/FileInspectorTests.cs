@@ -144,10 +144,14 @@ public class FileInspectorTests : IDisposable
     }
 }
 
-// PDF pages drawn by PDFium for the panel.
+// PDF pages drawn for the panel, by Windows' own renderer.
 public class PdfPagesTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("bb-pdfpages-").FullName;
+
+#if WINDOWS
+    public PdfPagesTests() => PdfPages.Opener ??= Sloperator.Platform.Windows.WindowsPdf.Open;
+#endif
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 

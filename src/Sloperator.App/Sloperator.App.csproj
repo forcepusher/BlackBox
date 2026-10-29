@@ -25,6 +25,14 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
+  <!-- ANGLE (Direct3D under OpenGL ES) isn't used: the app draws with WGL (see Program). Its library,
+       which Avalonia.Desktop brings along, stays out of what is published. -->
+  <Target Name="LeaveOutAngle" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Filename)%(Extension)' == 'av_libglesv2.dll'" />
+    </ItemGroup>
+  </Target>
+
   <!-- Single-file builds: publish.ps1 passes the native libraries, a zip packed with Brotli
        (pack-runtime.cs), which PortableRuntime unpacks into Data/runtime on first run. -->
   <ItemGroup Condition="'$(RuntimePayload)' != ''">
@@ -35,7 +43,6 @@
     <PackageReference Include="Avalonia" Version="11.3.22" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.22" />
     <PackageReference Include="Avalonia.Diagnostics" Version="11.3.22" Condition="'$(Configuration)' == 'Debug'" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
   </ItemGroup>

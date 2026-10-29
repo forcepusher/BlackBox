@@ -13,7 +13,7 @@ namespace Sloperator.App.ViewModels;
 /// into the panel's list and let go of when it leaves it, so a PDF of hundreds of pages holds only the
 /// few on screen (<see cref="Views.PdfPageView"/>).
 /// </summary>
-public sealed partial class PdfPageItem(PdfPages pdf, int index) : ObservableObject
+public sealed partial class PdfPageItem(IPdfDocument pdf, int index) : ObservableObject
 {
     /// <summary>How wide pages are drawn, in pixels: sharp across the widest panel on a 125% screen.</summary>
     public const int RenderWidth = 1400;
@@ -72,7 +72,7 @@ public sealed partial class PdfPageItem(PdfPages pdf, int index) : ObservableObj
                 if (pdf.Render(Index, width) is { } page)
                     bitmap = ToBitmap(page.Bgra, page.Width, page.Height);
             }
-            catch (Exception ex) when (ex is not OutOfMemoryException) { /* a page PDFium can't draw stays white */ }
+            catch (Exception ex) when (ex is not OutOfMemoryException) { /* a page that can't be drawn stays white */ }
             Dispatcher.UIThread.Post(() =>
             {
                 _drawing = false;
@@ -100,7 +100,7 @@ public sealed partial class PdfPageItem(PdfPages pdf, int index) : ObservableObj
         image?.Dispose();
     }
 
-    /// <summary>A page drawn by PDFium as a bitmap; with <paramref name="height"/> less than its own, its top only.</summary>
+    /// <summary>A drawn page as a bitmap; with <paramref name="height"/> less than its own, its top only.</summary>
     internal static Bitmap ToBitmap(byte[] bgra, int width, int height)
     {
         var pinned = GCHandle.Alloc(bgra, GCHandleType.Pinned);

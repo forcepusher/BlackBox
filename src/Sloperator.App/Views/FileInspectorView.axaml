@@ -45,7 +45,7 @@
                          Animation="{Binding Model.Animation}" Time="{Binding Model.Time, FallbackValue=0}"
                          AutomationProperties.Name="3D model" />
 
-      <!-- A PDF's pages, drawn by PDFium as they come on screen: the list makes only the pages in view.
+      <!-- A PDF's pages, drawn by Windows' PDF renderer as they come on screen: the list makes only the pages in view.
            Its width is set in code: the panel's, times the zoom (Ctrl+wheel or the buttons). -->
       <ScrollViewer x:Name="PdfScroll" IsVisible="{Binding Pages, Converter={x:Static ObjectConverters.IsNotNull}}" HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="PDF pages">
         <ItemsControl x:Name="PagesList" ItemsSource="{Binding Pages}" Margin="16,12,16,16" HorizontalAlignment="Left">
@@ -62,7 +62,7 @@
         </ItemsControl>
       </ScrollViewer>
 
-      <!-- Office files and web pages (and a PDF PDFium can't open), drawn by Windows' previewer for them. -->
+      <!-- Office files and web pages (and a PDF Windows' renderer can't open), drawn by Windows' previewer for them. -->
       <views:ShellPreviewHost x:Name="Shell" Path="{Binding ShellPath}" IsVisible="{Binding ShowsShell}" />
 
       <!-- With Area on: the view frozen, to drag an area over. -->

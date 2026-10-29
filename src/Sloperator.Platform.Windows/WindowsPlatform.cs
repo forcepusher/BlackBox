@@ -18,6 +18,8 @@ public sealed class WindowsPlatform : IPlatformServices
         // calling it again is harmless and covers hosts without the manifest (tests, tools).
         SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         Input = new OverlayInputController(_input, _overlay);
+        // PDF pages are drawn by Windows' own renderer.
+        Core.Documents.PdfPages.Opener ??= WindowsPdf.Open;
     }
 
     public string Name => $"Windows {Environment.OSVersion.Version}";
