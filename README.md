@@ -27,7 +27,7 @@ https://github.com/user-attachments/assets/8a6d325e-0564-483e-95d7-42900efc6903
 - **Other online APIs:** any OpenAI-compatible server, such as [OpenRouter](https://openrouter.ai): its address and your key.
 
 Sloperator picks the strongest model the server has, or you pick one from the list. Every server
-that answered is under **Saved**, with its key and model, to switch back to.
+that answered is under **Servers**, with its key and model, to switch back to.
 
 If you still have no idea what to do, you can ask the free model to connect another model for you.\
 Same with MCPs, tell Sloperator what you want to be connected and it'll be done.

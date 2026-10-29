@@ -791,8 +791,8 @@ camera should go on.
 window to the left side instead of opening a new separate window... Use the main chat for film
 making... Put filmmaking button under Toolkit dropdown menu with None and Filmmaking options. There
 will be more tools extending to the left side of the screen later."). The **Toolkit** dropdown
-takes the place of the second Sloperator logo and name under the title bar, an arrow on it pointing
-left, where its tools open: None or Video generator (`ToolkitOption`, `IToolkit`, more to come); it
+takes the place of the second Sloperator logo and name under the title bar, an arrow pointing
+left beside it (outside the button since 2026-10-29, at the user's word), where its tools open: None or Video generator (`ToolkitOption`, `IToolkit`, more to come); it
 now reads None, File changes, File inspector, Video generator (the user, 2026-10-26). A muted "in
 development" beside it (the user, 2026-10-24) went on 2026-10-29, at the user's word. Its
 arrows are solid triangles, the left one and the dropdown's, as History's and every dropdown's are
@@ -1605,12 +1605,21 @@ The command-line runner picks the same way for the saved model or `--model`.
 
 **Saved servers**: every server that answers is kept in `server.saved` in settings.json with its key
 and the model picked there (empty when Sloperator picks), in the order they first answered
-(`ServerSettings.Remember`, at each check that finds a model). **Saved** beside the address lists
+(`ServerSettings.Remember`, at each check that finds a model). **Servers** beside the address lists
 them as History lists chats: the one in use highlighted, a row switches to that server with its key
 and model (`Use`; the context's Auto and size stay), its trash button removes it. Removing the one in
 use keeps it out until the address is typed again or another is picked: the check before every task
 had put it straight back. The button is as wide as the effort dropdown under it, so the address and
-the model box end on one line. The effort dropdown says only the level ("Medium"; its tooltip says
+the model box end on one line, and drawn as a dropdown (`Button.dropdown`: the ComboBox's fill,
+border, padding and arrow 10 from the right); as a ghost button captioned "Saved" it looked out of
+place among them (the user, 2026-10-29).
+
+The model dropdown lists the models by name, ignoring case and with numbers by value (qwen3-8b
+before qwen3-14b; `CompareOptions.NumericOrdering`), whatever order the server lists them in. Each
+goes in at its place (`InsertModel`) rather than the list being re-sorted, since an entry that moves
+can lose the ComboBox's selection. Every dropdown's list opens from its left edge
+(`BottomEdgeAlignedLeft`): Fluent centres it under the box, so model names wider than the box made
+it stick out on the left (61 px at 125% with a 47-character name). The effort dropdown says only the level ("Medium"; its tooltip says
 it is the effort), as wide as "Extra high" needs, and the context box is as wide as its size.
 
 Sloperator sends no sampling parameters: temperature, top-k/p, reply length and thinking come from

@@ -302,17 +302,16 @@
     <!-- Header -->
     <Border Grid.Row="0" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,8">
       <DockPanel>
-        <!-- Tools that open on the left of the chat and work through it; the arrow says where.
-             Where the window's name stood a second time, under the title bar's. -->
+        <!-- Tools that open on the left of the chat and work through it; the arrow beside the
+             dropdown, outside it (the user, 2026-10-29), says where. Where the window's name stood
+             a second time, under the title bar's. -->
+        <PathIcon DockPanel.Dock="Left" Width="10" Height="10" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="{StaticResource BbAccent}" Data="M14 7l-5 5 5 5z" />
         <ComboBox x:Name="ToolkitBox" DockPanel.Dock="Left" Classes="toolkit" ItemsSource="{Binding ToolkitOptions}" SelectedItem="{Binding SelectedToolkit}"
                   VerticalAlignment="Center" AutomationProperties.Name="Toolkit"
                   ToolTip.Tip="Tools that open on the left of the chat: what you pick in them goes into your message">
           <ComboBox.SelectionBoxItemTemplate>
             <DataTemplate x:DataType="vm:ToolkitOption">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <PathIcon Width="10" Height="10" VerticalAlignment="Center" Foreground="{StaticResource BbAccent}" Data="M14 7l-5 5 5 5z" />
-                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
-              </StackPanel>
+              <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
             </DataTemplate>
           </ComboBox.SelectionBoxItemTemplate>
           <ComboBox.ItemTemplate>
@@ -391,14 +390,15 @@
         <TextBlock Grid.Row="0" Grid.Column="0" Classes="muted" Text="Server" VerticalAlignment="Center" Margin="0,0,8,0" />
         <DockPanel Grid.Row="0" Grid.Column="1">
           <!-- The servers that answered before, each with its key and model: a row switches to it,
-               its trash button forgets it. Looks and works as History does; as wide as the effort
-               dropdown under it, so the address and the model end on one line. -->
-          <Button x:Name="SavedServersButton" DockPanel.Dock="Right" Classes="ghost" Width="112" Margin="8,0,0,0" VerticalAlignment="Stretch" HorizontalContentAlignment="Center"
+               its trash button forgets it. Its list works as History's does, the button looks like
+               the dropdowns around it; as wide as the effort dropdown under it, so the address and
+               the model end on one line. -->
+          <Button x:Name="SavedServersButton" DockPanel.Dock="Right" Classes="dropdown" Width="112" Margin="8,0,0,0" VerticalAlignment="Stretch"
                   ToolTip.Tip="Servers that answered before, each with its API key and model" AutomationProperties.Name="Saved servers">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="Saved" VerticalAlignment="Center" />
-              <PathIcon Width="10" Height="10" VerticalAlignment="Center" Data="M7 10l5 5 5-5z" />
-            </StackPanel>
+            <DockPanel>
+              <PathIcon DockPanel.Dock="Right" Width="10" Height="10" Margin="0,0,9,0" VerticalAlignment="Center" Data="M7 10l5 5 5-5z" />
+              <TextBlock Text="Servers" VerticalAlignment="Center" />
+            </DockPanel>
             <Button.Flyout>
               <Flyout Placement="BottomEdgeAlignedRight" FlyoutPresenterClasses="history">
                 <Panel Width="340">

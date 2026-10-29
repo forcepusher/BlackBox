@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using Avalonia.Threading;
 using Sloperator.Core.Llm;
 using Sloperator.Core.Settings;
@@ -453,16 +454,32 @@ public sealed partial class MainWindowViewModel : IModelServerSwitch
     {
         var wanted = fromServer.ToList();
         if (SelectedModel is { } shown && !wanted.Contains(shown))
-            wanted.Insert(0, shown);
+            wanted.Add(shown);
         _refreshingModels = true;
-        for (var i = 0; i < wanted.Count; i++)
-            if (!Models.Contains(wanted[i]))
-                Models.Insert(Math.Min(i, Models.Count), wanted[i]);
+        foreach (var model in wanted)
+            if (!Models.Contains(model))
+                InsertModel(Models, model);
         OnPropertyChanged(nameof(SelectedModel));
         for (var i = Models.Count - 1; i >= 0; i--)
             if (!wanted.Contains(Models[i]))
                 Models.RemoveAt(i);
         _refreshingModels = false;
+    }
+
+    /// <summary>The dropdown's order: by name, ignoring case, numbers by their value (qwen3-8b before qwen3-14b).</summary>
+    private static readonly StringComparer ModelOrder =
+        StringComparer.Create(CultureInfo.InvariantCulture, CompareOptions.IgnoreCase | CompareOptions.NumericOrdering);
+
+    /// <summary>
+    /// Puts a model in its place in the dropdown's list, which stays sorted. Inserted, never moved:
+    /// the ComboBox can lose a selection that moves (see <see cref="SetModels"/>).
+    /// </summary>
+    public static void InsertModel(IList<string> models, string model)
+    {
+        var i = 0;
+        while (i < models.Count && ModelOrder.Compare(models[i], model) <= 0)
+            i++;
+        models.Insert(i, model);
     }
 
     /// <summary>
@@ -528,7 +545,7 @@ public sealed partial class MainWindowViewModel : IModelServerSwitch
         // In the list before the dropdown is told, as at startup: a selection the ComboBox can't find it doesn't take.
         _refreshingModels = true;
         if (saved.Model.Length > 0 && !Models.Contains(saved.Model))
-            Models.Insert(0, saved.Model);
+            InsertModel(Models, saved.Model);
         _refreshingModels = false;
         OnPropertyChanged(nameof(ServerAddress));
         OnPropertyChanged(nameof(ApiKey));
@@ -559,7 +576,7 @@ public sealed partial class MainWindowViewModel : IModelServerSwitch
         // In the list before the dropdown is told, as at startup: a selection the ComboBox can't find it doesn't take.
         _refreshingModels = true;
         if (!Models.Contains(KiloGateway.Model))
-            Models.Insert(0, KiloGateway.Model);
+            InsertModel(Models, KiloGateway.Model);
         _refreshingModels = false;
         OnPropertyChanged(nameof(ServerAddress));
         OnPropertyChanged(nameof(ApiKey));
