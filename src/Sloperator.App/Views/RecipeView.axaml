@@ -15,7 +15,7 @@
         <DataTemplate x:DataType="media:RecipeText">
           <StackPanel Spacing="4">
             <DockPanel>
-              <Button DockPanel.Dock="Right" Classes="ghost" Padding="10,2" Content="Copy" Click="OnCopyText"
+              <Button DockPanel.Dock="Right" Classes="ghost small" Content="Copy" Click="OnCopyText"
                       ToolTip.Tip="Put it on the clipboard" AutomationProperties.Name="{Binding Label, StringFormat='Copy {0}'}" />
               <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
             </DockPanel>
@@ -40,7 +40,7 @@
       </ItemsControl.ItemTemplate>
     </ItemsControl>
     <DockPanel>
-      <Button DockPanel.Dock="Right" Classes="ghost" Padding="10,3" Content="Copy all" Click="OnCopyAll"
+      <Button DockPanel.Dock="Right" Classes="ghost small" Content="Copy all" Click="OnCopyAll"
               ToolTip.Tip="The prompts and settings as text" />
       <TextBlock Classes="muted" Text="{Binding MadeWith, StringFormat='Read from the file, as {0} saved it.'}" VerticalAlignment="Center" TextWrapping="Wrap" />
     </DockPanel>

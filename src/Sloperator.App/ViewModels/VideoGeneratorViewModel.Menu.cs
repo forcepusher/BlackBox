@@ -106,7 +106,7 @@ public sealed partial class VideoGeneratorViewModel
         items.Add(new("New video", true, () => NewVideoCommand.Execute(null)));
         items.Add(new("Rename", idle, () => RenameVideoAsked?.Invoke()));
         items.Add(new("Delete", idle, DeleteVideo));
-        items.Add(new("Show in Explorer", true, () => ShowInExplorer(_board.Folder)));
+        items.Add(new("Show in folder", true, () => ShowInExplorer(_board.Folder)));
         return items;
     }
 

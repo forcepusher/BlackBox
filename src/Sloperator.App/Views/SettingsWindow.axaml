@@ -9,10 +9,6 @@
         WindowStartupLocation="CenterOwner">
 
   <Window.Styles>
-    <Style Selector="TextBlock.label">
-      <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="Margin" Value="0,0,12,0" />
-    </Style>
     <Style Selector="Grid.form > ComboBox">
       <Setter Property="Margin" Value="0,4" />
     </Style>
@@ -23,7 +19,7 @@
   </Window.Styles>
 
   <DockPanel>
-    <Border DockPanel.Dock="Bottom" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0" Padding="16,10">
+    <Border DockPanel.Dock="Bottom" Classes="bar foot">
       <!-- The buttons first: a long folder path is cut short instead of pushing them out of the window. -->
       <DockPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0">
@@ -35,8 +31,8 @@
       </DockPanel>
     </Border>
 
-    <ScrollViewer Margin="16,8">
-      <StackPanel Spacing="4" Margin="0,0,12,16">
+    <ScrollViewer>
+      <StackPanel Spacing="4" Margin="16,8,28,24">
         <TextBlock Classes="h2" Text="Side panel" />
         <CheckBox IsChecked="{Binding Panels.OpenFileChanges}" Content="Open File changes when the agent first changes a file in a chat" />
 

@@ -18,7 +18,7 @@
       <Setter Property="Width" Value="18" />
       <Setter Property="Height" Value="18" />
       <Setter Property="VerticalAlignment" Value="Top" />
-      <Setter Property="Margin" Value="0,1,10,0" />
+      <Setter Property="Margin" Value="0,1,8,0" />
       <Setter Property="Foreground" Value="{StaticResource BbAccent}" />
     </Style>
     <Style Selector="TextBlock.capability">
@@ -48,15 +48,6 @@
       <Setter Property="Padding" Value="8" />
       <Setter Property="MaxWidth" Value="498" />
       <Setter Property="HorizontalAlignment" Value="Left" />
-    </Style>
-    <Style Selector="Button.picture">
-      <Setter Property="Padding" Value="0" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Cursor" Value="Hand" />
-    </Style>
-    <Style Selector="Button.picture /template/ ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
     </Style>
     <Style Selector="Button.bigPlay">
       <Setter Property="Width" Value="56" />
@@ -107,6 +98,7 @@
     <Style Selector="Button.removeAttachment">
       <Setter Property="Width" Value="20" />
       <Setter Property="Height" Value="20" />
+      <Setter Property="MinHeight" Value="0" />
       <Setter Property="CornerRadius" Value="10" />
       <Setter Property="Padding" Value="0" />
       <Setter Property="Margin" Value="0,-6,-6,0" />
@@ -126,15 +118,10 @@
     <Style Selector="Button.removeAttachment:pointerover PathIcon">
       <Setter Property="Foreground" Value="{StaticResource BbError}" />
     </Style>
-    <!-- × on a message waiting for the model's next step. -->
+    <!-- × on a message waiting for the model's next step: a small icon button, round. -->
     <Style Selector="Button.cancelQueued">
-      <Setter Property="Width" Value="22" />
-      <Setter Property="Height" Value="22" />
-      <Setter Property="CornerRadius" Value="11" />
-      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="12" />
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="HorizontalContentAlignment" Value="Center" />
-      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.cancelQueued PathIcon">
       <Setter Property="Width" Value="10" />
@@ -142,13 +129,6 @@
     </Style>
     <Style Selector="Button.cancelQueued:pointerover PathIcon">
       <Setter Property="Foreground" Value="{StaticResource BbError}" />
-    </Style>
-    <!-- The Side panel dropdown in the top bar ("Toolkit" until 2026-10-29): flat, as the buttons beside it. -->
-    <Style Selector="ComboBox.toolkit">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="{StaticResource BbBorder}" />
-      <Setter Property="MinHeight" Value="30" />
-      <Setter Property="Padding" Value="10,4,6,4" />
     </Style>
   </Window.Styles>
 
@@ -159,7 +139,7 @@
     <DataTemplate DataType="vm:ImagePreview">
       <Border Classes="preview">
         <StackPanel Spacing="8">
-          <Button Classes="picture" Click="OnPictureClick" ToolTip.Tip="See it full screen" HorizontalAlignment="Left" AutomationProperties.Name="{Binding FileName}">
+          <Button Classes="bare" Click="OnPictureClick" ToolTip.Tip="See it full screen" HorizontalAlignment="Left" AutomationProperties.Name="{Binding FileName}">
             <Button.ContextMenu>
               <ContextMenu>
                 <MenuItem Header="Copy" Click="OnCopyPicture" />
@@ -175,7 +155,7 @@
     <DataTemplate DataType="vm:AnimationPreview">
       <Border Classes="preview">
         <StackPanel Spacing="8">
-          <Button Classes="picture" Click="OnPictureClick" ToolTip.Tip="See it full screen" HorizontalAlignment="Left" AutomationProperties.Name="{Binding FileName}">
+          <Button Classes="bare" Click="OnPictureClick" ToolTip.Tip="See it full screen" HorizontalAlignment="Left" AutomationProperties.Name="{Binding FileName}">
             <Button.ContextMenu>
               <ContextMenu>
                 <MenuItem Header="Copy" Click="OnCopyPicture" />
@@ -190,7 +170,7 @@
 
     <DataTemplate DataType="vm:VideoPreview">
       <Border Classes="preview">
-        <StackPanel Spacing="6">
+        <StackPanel Spacing="8">
           <!-- The menu is the panel's, so the play button over the middle of the picture has it too. -->
           <Panel HorizontalAlignment="Left" MaxWidth="480" views:InView.Video="True">
             <Panel.ContextMenu>
@@ -198,7 +178,7 @@
                 <MenuItem Header="Copy" Click="OnCopyPicture" ToolTip.Tip="The frame on screen, with the video's file" />
               </ContextMenu>
             </Panel.ContextMenu>
-            <Button Classes="picture" Click="OnPictureClick" ToolTip.Tip="Watch it full screen, with its sound" AutomationProperties.Name="Watch full screen">
+            <Button Classes="bare" Click="OnPictureClick" ToolTip.Tip="Watch it full screen, with its sound" AutomationProperties.Name="Watch full screen">
               <Image Source="{Binding Frame}" MaxWidth="480" MaxHeight="480" MinHeight="120" MinWidth="200" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
             </Button>
             <Button Classes="bigPlay" Command="{Binding PlayCommand}" IsVisible="{Binding !IsPlaying}" ToolTip.Tip="Play" AutomationProperties.Name="Play video">
@@ -206,11 +186,11 @@
             </Button>
           </Panel>
           <DockPanel>
-            <Button DockPanel.Dock="Left" Classes="ghost" Padding="8,4" Command="{Binding PlayCommand}" VerticalAlignment="Center" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause">
+            <Button DockPanel.Dock="Left" Classes="ghost icon small" Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause">
               <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" />
             </Button>
             <!-- In the chat a video plays without its sound; full screen it has it. -->
-            <PathIcon DockPanel.Dock="Right" Data="{Binding SoundIcon}" Width="14" Height="14" Margin="10,0,2,0" Foreground="{StaticResource BbMuted}" VerticalAlignment="Center"
+            <PathIcon DockPanel.Dock="Right" Data="{Binding SoundIcon}" Width="14" Height="14" Margin="8,0,0,0" Foreground="{StaticResource BbMuted}" VerticalAlignment="Center"
                       ToolTip.Tip="It plays here without its sound. Click the picture to watch it full screen, with its sound." />
             <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
             <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" Margin="8,-8,0,-8" VerticalAlignment="Center" />
@@ -222,13 +202,13 @@
 
     <DataTemplate DataType="vm:AudioPreview">
       <Border Classes="preview" Width="498">
-        <StackPanel Spacing="6">
+        <StackPanel Spacing="8">
           <DockPanel>
             <Button DockPanel.Dock="Left" Classes="roundPlay accent" Command="{Binding PlayCommand}" VerticalAlignment="Center" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause sound">
               <PathIcon Data="{Binding PlayIcon}" Width="14" Height="14" Foreground="#111214" />
             </Button>
             <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
-            <Panel Height="56" Margin="10,0,0,0">
+            <Panel Height="56" Margin="12,0,0,0">
               <Image Source="{Binding Waveform}" Stretch="Fill" RenderOptions.BitmapInterpolationMode="MediumQuality" />
               <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" VerticalAlignment="Center" Opacity="0.85" />
             </Panel>
@@ -240,7 +220,7 @@
 
     <DataTemplate DataType="vm:ModelPreview">
       <Border Classes="preview">
-        <StackPanel Spacing="6">
+        <StackPanel Spacing="8">
           <views:ModelViewer Mesh="{Binding Mesh}" Width="480" Height="360" HorizontalAlignment="Left" ToolTip.Tip="Drag to turn it, scroll to come closer, double-click to see it as at first" />
           <views:PreviewFooter />
         </StackPanel>
@@ -264,7 +244,7 @@
     <DataTemplate DataType="vm:FileCardPreview">
       <Border Classes="preview" Width="498">
         <StackPanel Spacing="8">
-          <Button Classes="picture" Click="OnPictureClick" IsVisible="{Binding HasPeek}" HorizontalAlignment="Left"
+          <Button Classes="bare" Click="OnPictureClick" IsVisible="{Binding HasPeek}" HorizontalAlignment="Left"
                   ToolTip.Tip="See it full screen" AutomationProperties.Name="{Binding FileName}">
             <Border Classes="attachment" Background="{StaticResource BbBackground}">
               <Panel>
@@ -295,18 +275,18 @@
     <Border x:Name="ToolkitHost" Grid.Column="0" IsVisible="False">
       <ContentControl x:Name="ToolkitContent" />
     </Border>
-    <GridSplitter x:Name="ToolkitSplitter" Grid.Column="1" IsVisible="False" Background="{StaticResource BbBorder}" ResizeDirection="Columns" />
+    <GridSplitter x:Name="ToolkitSplitter" Grid.Column="1" IsVisible="False" ResizeDirection="Columns" />
 
   <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*,Auto">
 
     <!-- Header -->
-    <Border Grid.Row="0" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="14,8">
+    <Border Grid.Row="0" Classes="bar">
       <DockPanel>
         <!-- Tools that open on the left of the chat and work through it; the arrow beside the
              dropdown, outside it (the user, 2026-10-29), says where. Where the window's name stood
              a second time, under the title bar's. -->
-        <PathIcon DockPanel.Dock="Left" Width="10" Height="10" Margin="0,0,6,0" VerticalAlignment="Center" Foreground="{StaticResource BbAccent}" Data="M14 7l-5 5 5 5z" />
-        <ComboBox x:Name="ToolkitBox" DockPanel.Dock="Left" Classes="toolkit" ItemsSource="{Binding ToolkitOptions}" SelectedItem="{Binding SelectedToolkit}"
+        <PathIcon DockPanel.Dock="Left" Width="10" Height="10" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{StaticResource BbAccent}" Data="M14 7l-5 5 5 5z" />
+        <ComboBox x:Name="ToolkitBox" DockPanel.Dock="Left" Classes="ghost" ItemsSource="{Binding ToolkitOptions}" SelectedItem="{Binding SelectedToolkit}"
                   VerticalAlignment="Center" AutomationProperties.Name="Side panel"
                   ToolTip.Tip="Panels that open on the left of the chat: what you pick in them goes into your message">
           <ComboBox.SelectionBoxItemTemplate>
@@ -324,33 +304,33 @@
           </ComboBox.ItemTemplate>
         </ComboBox>
 
-        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <!-- Earlier chats, newest first: a row opens one, its trash button deletes it. A chat another
                Sloperator window has open says so, and its row brings that window forward. -->
-          <Button x:Name="HistoryButton" Classes="ghost" ToolTip.Tip="Earlier chats" AutomationProperties.Name="History">
-            <StackPanel Orientation="Horizontal" Spacing="6">
+          <Button x:Name="HistoryButton" Classes="ghost menu" ToolTip.Tip="Earlier chats" AutomationProperties.Name="History">
+            <DockPanel>
+              <PathIcon DockPanel.Dock="Right" Classes="arrow" />
               <TextBlock Text="History" VerticalAlignment="Center" />
-              <PathIcon Width="10" Height="10" VerticalAlignment="Center" Data="M7 10l5 5 5-5z" />
-            </StackPanel>
+            </DockPanel>
             <Button.Flyout>
-              <Flyout Placement="{x:Static views:Dropdown.Placement}" FlyoutPresenterClasses="history">
+              <Flyout Placement="{x:Static views:Dropdown.Placement}" FlyoutPresenterClasses="list">
                 <Panel Width="340">
-                  <TextBlock Classes="muted" IsVisible="{Binding !HasPastChats}" TextWrapping="Wrap" Margin="10,8"
+                  <TextBlock Classes="muted" IsVisible="{Binding !HasPastChats}" TextWrapping="Wrap" Margin="11,6"
                              Text="No chats yet. Every chat is kept here from its first message on." />
                   <ItemsControl ItemsSource="{Binding PastChats}" IsVisible="{Binding HasPastChats}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:PastChat">
-                        <Border Classes="pastChat" Classes.current="{Binding IsCurrent}">
+                        <Border Classes="listRow" Classes.current="{Binding IsCurrent}">
                           <Grid ColumnDefinitions="*,Auto">
-                            <Button Grid.ColumnSpan="2" Classes="pastChat" Command="{Binding OpenCommand}" Click="OnPastChatClick" AutomationProperties.Name="{Binding Title}">
+                            <Button Grid.ColumnSpan="2" Classes="listRow" Command="{Binding OpenCommand}" Click="OnPastChatClick" AutomationProperties.Name="{Binding Title}">
                               <StackPanel Spacing="2">
                                 <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
                                 <TextBlock Classes="muted" Text="{Binding When}" />
                               </StackPanel>
                             </Button>
-                            <Button Grid.Column="1" Classes="deleteChat" Command="{Binding DeleteCommand}" ToolTip.Tip="Delete this chat" AutomationProperties.Name="Delete chat"
+                            <Button Grid.Column="1" Classes="icon small rowDelete" Command="{Binding DeleteCommand}" ToolTip.Tip="Delete this chat" AutomationProperties.Name="Delete chat"
                                     IsVisible="{Binding !IsElsewhere}">
-                              <PathIcon Width="16" Height="16" Data="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
+                              <PathIcon Data="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
                             </Button>
                           </Grid>
                         </Border>
@@ -371,9 +351,9 @@
         <!-- The server's state, between the name and the buttons: what gets shorter in a narrow window,
              so the buttons keep their names. With no room at all it is clipped away rather than drawn
              over History (Video generator's panel at its default width). -->
-        <DockPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0" ClipToBounds="True">
+        <DockPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0" ClipToBounds="True">
           <Ellipse DockPanel.Dock="Left" Classes="status" Classes.checking="{Binding IsChecking}" Classes.connected="{Binding IsConnected}" Classes.failed="{Binding IsFailed}"
-                   Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,6,0" />
+                   Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,8,0" />
           <TextBlock DockPanel.Dock="Left" Classes="muted" Text="{Binding ServerStatusText}" TextTrimming="CharacterEllipsis"
                      ToolTip.Tip="{Binding ServerStatusText}" VerticalAlignment="Center" />
           <TextBlock Classes="muted" Text="{Binding ContextUsage, StringFormat='· {0}'}" IsVisible="{Binding HasContextUsage}" TextTrimming="CharacterEllipsis"
@@ -385,9 +365,9 @@
     <!-- What the agent talks to: server and key, then model and how much context to use.
          The labels share a column so both rows line up, and both rows are exactly as tall as a text
          box so every field and button in a row shares its top and bottom edges. -->
-    <Border Grid.Row="1" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,0,1" Padding="16,8">
+    <Border Grid.Row="1" Classes="bar">
       <Grid ColumnDefinitions="Auto,3*,Auto,2*,Auto" RowDefinitions="32,32" RowSpacing="8" VerticalAlignment="Center">
-        <TextBlock Grid.Row="0" Grid.Column="0" Classes="muted" Text="Server" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <TextBlock Grid.Row="0" Grid.Column="0" Classes="label" Text="Server" Margin="0,0,8,0" />
         <DockPanel Grid.Row="0" Grid.Column="1">
           <!-- The servers that answered before, each with its key and model: a row switches to it,
                its trash button forgets it. Its list works as History's does, the button looks like
@@ -396,28 +376,28 @@
           <Button x:Name="SavedServersButton" DockPanel.Dock="Right" Classes="dropdown" Width="112" Margin="8,0,0,0" VerticalAlignment="Stretch"
                   ToolTip.Tip="Servers that answered before, each with its API key and model" AutomationProperties.Name="Saved servers">
             <DockPanel>
-              <PathIcon DockPanel.Dock="Right" Width="10" Height="10" Margin="0,0,9,0" VerticalAlignment="Center" Data="M7 10l5 5 5-5z" />
+              <PathIcon DockPanel.Dock="Right" Classes="arrow" />
               <TextBlock Text="Servers" VerticalAlignment="Center" />
             </DockPanel>
             <Button.Flyout>
-              <Flyout Placement="{x:Static views:Dropdown.Placement}" FlyoutPresenterClasses="history">
+              <Flyout Placement="{x:Static views:Dropdown.Placement}" FlyoutPresenterClasses="list">
                 <Panel Width="340">
-                  <TextBlock Classes="muted" IsVisible="{Binding !HasSavedServers}" TextWrapping="Wrap" Margin="10,8"
+                  <TextBlock Classes="muted" IsVisible="{Binding !HasSavedServers}" TextWrapping="Wrap" Margin="11,6"
                              Text="No servers yet. Every server that answers is kept here with its API key and model." />
                   <ItemsControl ItemsSource="{Binding SavedServers}" IsVisible="{Binding HasSavedServers}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:SavedServerRow">
-                        <Border Classes="pastChat" Classes.current="{Binding IsCurrent}">
+                        <Border Classes="listRow" Classes.current="{Binding IsCurrent}">
                           <Grid ColumnDefinitions="*,Auto">
-                            <Button Grid.ColumnSpan="2" Classes="pastChat" Command="{Binding UseCommand}" Click="OnSavedServerClick"
+                            <Button Grid.ColumnSpan="2" Classes="listRow" Command="{Binding UseCommand}" Click="OnSavedServerClick"
                                     AutomationProperties.Name="{Binding Address}" ToolTip.Tip="{Binding Address}">
                               <StackPanel Spacing="2">
                                 <TextBlock Text="{Binding Address}" TextTrimming="CharacterEllipsis" />
                                 <TextBlock Classes="muted" Text="{Binding Details}" TextTrimming="CharacterEllipsis" />
                               </StackPanel>
                             </Button>
-                            <Button Grid.Column="1" Classes="deleteChat" Command="{Binding ForgetCommand}" ToolTip.Tip="Remove this server" AutomationProperties.Name="Remove server">
-                              <PathIcon Width="16" Height="16" Data="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
+                            <Button Grid.Column="1" Classes="icon small rowDelete" Command="{Binding ForgetCommand}" ToolTip.Tip="Remove this server" AutomationProperties.Name="Remove server">
+                              <PathIcon Data="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4h-3.5z" />
                             </Button>
                           </Grid>
                         </Border>
@@ -431,11 +411,11 @@
           <!-- No least width: one wider than the narrowest chat's column was laid out over the "Server" label. -->
           <TextBox Text="{Binding ServerAddress}" Watermark="http://localhost:1234/v1" />
         </DockPanel>
-        <TextBlock Grid.Row="0" Grid.Column="2" Classes="muted" Text="API key" VerticalAlignment="Center" Margin="16,0,8,0" />
+        <TextBlock Grid.Row="0" Grid.Column="2" Classes="label" Text="API key" Margin="16,0,8,0" />
         <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding ApiKey}" PasswordChar="•" RevealPassword="{Binding ShowApiKey}" MinWidth="120"
                  Watermark="Optional"
                  ToolTip.Tip="Sent to the server with every request. Saved in plain text in the Data folder next to Sloperator, so keep that folder private." />
-        <ToggleButton Grid.Row="0" Grid.Column="4" Classes="ghost" IsChecked="{Binding ShowApiKey}" Margin="8,0,0,0" Padding="8,6"
+        <ToggleButton Grid.Row="0" Grid.Column="4" Classes="ghost icon" IsChecked="{Binding ShowApiKey}" Margin="8,0,0,0"
                       VerticalAlignment="Stretch" ToolTip.Tip="Show or hide the API key" AutomationProperties.Name="Show API key">
           <Panel>
             <PathIcon Width="16" Height="16" IsVisible="{Binding !ShowApiKey}"
@@ -445,7 +425,7 @@
           </Panel>
         </ToggleButton>
 
-        <TextBlock Grid.Row="1" Grid.Column="0" Classes="muted" Text="Model" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <TextBlock Grid.Row="1" Grid.Column="0" Classes="label" Text="Model" Margin="0,0,8,0" />
         <DockPanel Grid.Row="1" Grid.Column="1">
           <!-- How hard the model thinks ("Medium"; its tooltip says it is the effort), as wide as
                "Extra high" needs; greyed out for a model whose server lists no effort for it. -->
@@ -455,7 +435,7 @@
           <ComboBox x:Name="ModelBox" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                     PlaceholderText="No models: check the server address" ToolTip.Tip="{Binding ModelToolTip}" AutomationProperties.Name="Model" />
         </DockPanel>
-        <TextBlock Grid.Row="1" Grid.Column="2" Classes="muted" Text="Context" VerticalAlignment="Center" Margin="16,0,8,0" />
+        <TextBlock Grid.Row="1" Grid.Column="2" Classes="label" Text="Context" Margin="16,0,8,0" />
         <DockPanel Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="2" ToolTip.Tip="{Binding ContextToolTip}">
           <CheckBox DockPanel.Dock="Right" Content="Auto" IsChecked="{Binding AutoContext}" Margin="8,0,0,0" MinWidth="0" />
           <!-- As wide as the size in it ("64k", "not loaded"). -->
@@ -477,7 +457,7 @@
           <TextBlock Text="{Binding SetupTitle}" FontWeight="SemiBold" />
           <TextBlock Classes="muted" Text="{Binding SetupText}" TextWrapping="Wrap" />
         </StackPanel>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="12,0,0,0">
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="12,0,0,0">
           <Button Classes="ghost" Content="Use Kilo's free models" Command="{Binding UseKiloCommand}" IsVisible="{Binding OffersKilo}"
                   ToolTip.Tip="Connects to Kilo's AI gateway (ai-gateway.kilo.ai), whose free models answer without an account or a key: up to 200 requests an hour" />
           <Button Classes="ghost" Content="Check again" Command="{Binding CheckServerCommand}" />
@@ -491,18 +471,18 @@
          padding is not part of the scroll extent, so the last lines ended up clipped. -->
     <!-- Focus brings an item into view only from the keyboard (see MainWindow): a click on a picture
          partly out of view focused its button and scrolled the whole picture in, a jump under the mouse. -->
-    <!-- Its bar always shows (the user, 2026-10-24: waiting for it to show up to grab it was annoying). -->
+    <!-- Its bar always shows (the user, 2026-10-24: waiting for it to show up to grab it was annoying), as every one does (see App.Initialize). -->
     <!-- Transparent, so a right-click between messages opens the chat's menu too (see MainWindow.OnChatMenu). -->
-    <ScrollViewer x:Name="ChatScroll" Grid.Row="3" HorizontalScrollBarVisibility="Disabled" BringIntoViewOnFocusChange="False" AllowAutoHide="False"
+    <ScrollViewer x:Name="ChatScroll" Grid.Row="3" HorizontalScrollBarVisibility="Disabled" BringIntoViewOnFocusChange="False"
                   Background="Transparent">
-      <StackPanel Classes="conversation" Classes.unused="{Binding ShowIntro}" MaxWidth="860" Margin="16,12,16,16" Spacing="10">
+      <StackPanel Classes="conversation" Classes.unused="{Binding ShowIntro}" MaxWidth="860" Margin="16,12,16,16" Spacing="12">
         <!-- Unclipped (an ItemsControl and a ContentControl clip to their bounds by default), so a
              message's text can reach past its sides: a drag in the gutter beside it starts a selection. -->
         <ItemsControl ItemsSource="{Binding Items}" ClipToBounds="False">
           <ItemsControl.Resources>
             <!-- A tool call's picture, as the model got it: open on the card for a look, folded for an action. -->
             <DataTemplate x:Key="ToolShot" x:DataType="vm:ToolCallItem">
-              <Button Classes="picture" Click="OnScreenshotClick" HorizontalAlignment="Left"
+              <Button Classes="bare" Click="OnScreenshotClick" HorizontalAlignment="Left"
                       ToolTip.Tip="See it full screen" AutomationProperties.Name="Screenshot">
                 <Button.ContextMenu>
                   <ContextMenu>
@@ -515,7 +495,7 @@
           </ItemsControl.Resources>
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
-              <StackPanel Spacing="10" />
+              <StackPanel Spacing="12" />
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
 
@@ -567,7 +547,7 @@
                       </ItemsControl.ItemsPanel>
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:AttachmentItem">
-                          <Button Classes="picture" Click="OnAttachmentClick" ToolTip.Tip="{Binding Tip}" Margin="0,0,0,6"
+                          <Button Classes="bare" Click="OnAttachmentClick" ToolTip.Tip="{Binding Tip}" Margin="0,0,0,6"
                                   AutomationProperties.Name="{Binding FileName}">
                             <Button.ContextMenu>
                               <ContextMenu>
@@ -612,7 +592,7 @@
               <StackPanel Spacing="6" Margin="0,0,40,0">
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Left" />
                 <Expander IsVisible="{Binding HasReasoning}" Header="{Binding ThinkingLabel}" HorizontalAlignment="Stretch" IsExpanded="True"
-                          Padding="10,6">
+                          Padding="8,4">
                   <SelectableTextBlock Classes="muted" views:MarkdownText.Plain="{Binding ShownReasoning}" TextWrapping="Wrap" Margin="-8,-4" Padding="8,4" />
                 </Expander>
                 <views:MarkdownView Source="{Binding ShownText}" IsVisible="{Binding HasText}" />
@@ -683,7 +663,7 @@
               <Border Padding="2,6" CornerRadius="6" Background="{StaticResource BbSurface}" HorizontalAlignment="Center">
                 <!-- After a stop (Pause/Break, Stop, an error), Continue carries on with the task where it stopped. -->
                 <DockPanel>
-                  <Button DockPanel.Dock="Right" Classes="primary" Content="Continue" Padding="12,3" Margin="4,-2,8,-2" VerticalAlignment="Center"
+                  <Button DockPanel.Dock="Right" Classes="primary small" Content="Continue" Margin="4,-2,8,-2" VerticalAlignment="Center"
                           IsVisible="{Binding CanContinue}" Command="{Binding ContinueCommand}"
                           ToolTip.Tip="Carry on with the task where I stopped" />
                   <TextBlock DockPanel.Dock="Left" Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}"
@@ -702,7 +682,7 @@
              keeps to one line and every card's text to two. The details show where they come up
              instead: the pause line while the user types, Continue after a stop, the paperclip's
              tooltip. -->
-        <StackPanel IsVisible="{Binding ShowIntro}" MaxWidth="640" Spacing="14">
+        <StackPanel IsVisible="{Binding ShowIntro}" MaxWidth="640" Spacing="12">
           <StackPanel Spacing="6">
             <Image Source="/Assets/sloperator.png" Width="40" Height="40" RenderOptions.BitmapInterpolationMode="HighQuality" />
             <TextBlock Text="What should I do on your computer?" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
@@ -755,7 +735,7 @@
             </DockPanel>
           </Border>
 
-          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
+          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="12">
             <Border Grid.Row="0" Grid.Column="0" Classes="card">
               <DockPanel>
                 <PathIcon Classes="capability" Data="M13 1.07V9h7c0-4.08-3.05-7.44-7-7.93zM4 15c0 4.42 3.58 8 8 8s8-3.58 8-8v-4H4v4zm7-13.93C7.05 1.56 4 4.92 4 9h7V1.07z" />
@@ -854,14 +834,14 @@
     </ScrollViewer>
 
     <!-- Input -->
-    <Border Grid.Row="4" Padding="16,8,16,14">
-      <StackPanel MaxWidth="860" Spacing="6">
+    <Border Grid.Row="4" Padding="16,8,16,16">
+      <StackPanel MaxWidth="860" Spacing="8">
         <!-- Messages sent during the run that the model hasn't read yet, as their bubbles will be: each
              joins the chat when it is read; × takes one back, "Interrupt the model" has them read now. -->
-        <Border Classes="queued" IsVisible="{Binding HasQueued}">
-          <StackPanel Spacing="6">
+        <Border IsVisible="{Binding HasQueued}">
+          <StackPanel Spacing="8">
             <DockPanel>
-              <Button DockPanel.Dock="Right" Classes="ghost" Content="Interrupt the model" Command="{Binding InterruptCommand}" Padding="10,2" VerticalAlignment="Center"
+              <Button DockPanel.Dock="Right" Classes="ghost small" Content="Interrupt the model" Command="{Binding InterruptCommand}" VerticalAlignment="Center"
                       ToolTip.Tip="Read them now: I stop thinking, writing or running a tool, and go on from your messages. Ctrl+Enter sends a message this way." />
               <TextBlock Classes="muted" Text="{Binding QueuedTitle}" VerticalAlignment="Center" />
             </DockPanel>
@@ -873,9 +853,10 @@
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:QueuedMessageItem">
-                  <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="12,6,6,6" HorizontalAlignment="Right" MaxWidth="640" Opacity="0.8">
+                  <!-- The text as far in as in a bubble of the chat; the × over its padding, so it doesn't make the bubble taller. -->
+                  <Border Background="{StaticResource BbUserBubble}" CornerRadius="10" Padding="12,8,4,8" HorizontalAlignment="Right" MaxWidth="640" Opacity="0.8">
                     <DockPanel>
-                      <Button DockPanel.Dock="Right" Classes="cancelQueued" Command="{Binding CancelCommand}" Margin="8,0,0,0" VerticalAlignment="Top"
+                      <Button DockPanel.Dock="Right" Classes="icon small cancelQueued" Command="{Binding CancelCommand}" Margin="8,-4,0,-4" VerticalAlignment="Top"
                               ToolTip.Tip="Cancel: take it back unsent" AutomationProperties.Name="Cancel queued message">
                         <PathIcon Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
                       </Button>
@@ -897,14 +878,14 @@
           <PathIcon DockPanel.Dock="Left" Width="12" Height="12" Margin="0,0,8,0" Foreground="{StaticResource BbAccent}"
                     VerticalAlignment="Center" Data="M3,2 H6 V14 H3 Z M10,2 H13 V14 H10 Z" />
           <!-- Resume lets the agent go on at once and keeps the draft, for someone who started typing and changed their mind. -->
-          <Button DockPanel.Dock="Right" Classes="ghost" Content="Resume" Command="{Binding ResumeCommand}" Margin="8,0,0,0" Padding="10,2"
+          <Button DockPanel.Dock="Right" Classes="ghost small" Content="Resume" Command="{Binding ResumeCommand}" Margin="8,0,0,0"
                   IsVisible="{Binding TypingPauseHere}"
                   VerticalAlignment="Center" ToolTip.Tip="Let me carry on now; what you typed stays in the box." />
           <TextBlock TextWrapping="Wrap" Foreground="{StaticResource BbAccent}" VerticalAlignment="Center" Text="{Binding TypingPauseText}" />
         </DockPanel>
         <!-- One line of text is exactly as tall as the Send button, and both sit on the same
              bottom edge, so they line up; longer text grows the box upwards with Send staying put. -->
-        <Border Classes="card composer" Padding="6">
+        <Border Classes="card composer" Padding="8">
           <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
             <!-- The files going with the message (dropped, pasted or picked); × takes one off. Each
                  item keeps room above and to its right for the × that sits over its corner: the
@@ -950,7 +931,7 @@
               </ItemsControl>
             </WrapPanel>
             <!-- Files go with a message from here too, besides dropping them on the window or pasting them. -->
-            <Button x:Name="AttachButton" Grid.Row="1" Grid.Column="0" Classes="ghost" BorderThickness="0" Padding="6" Margin="0,0,4,0" VerticalAlignment="Bottom" MinHeight="32"
+            <Button x:Name="AttachButton" Grid.Row="1" Grid.Column="0" Classes="flat icon" Margin="0,0,4,0" VerticalAlignment="Bottom"
                     Click="OnAttachClick" AutomationProperties.Name="Attach files"
                     ToolTip.Tip="Attach files or pictures to your message. You can also drop them on this window, or paste a screenshot or copied files with Ctrl+V.">
               <PathIcon Width="18" Height="18" Foreground="{StaticResource BbMuted}"
@@ -960,14 +941,12 @@
             <TextBox x:Name="InputBox" Grid.Row="1" Grid.Column="1" Classes="composer" Text="{Binding Input}" AcceptsReturn="True" TextWrapping="Wrap"
                      MaxHeight="200" VerticalContentAlignment="Center"
                      Watermark="{Binding InputHint}" />
-            <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Bottom" Margin="8,0,0,0">
-              <!-- The logo blob, as tall as Send and 8 from it (with the spacing); it dances while a prompt runs.
+            <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom" Margin="8,0,0,0">
+              <!-- The logo blob, as tall as Send and 8 from it; it dances while a prompt runs.
                    Not with the intro, which has the logo already. -->
-              <views:PartyBlob Dancing="{Binding IsBusy}" IsVisible="{Binding !ShowIntro}" Width="32" Height="32" Margin="0,0,2,0" VerticalAlignment="Bottom" />
-              <!-- 1 more over the word than under it: as tall as the box's line (32), Send's capitals sat 1.5 px
-                   (at 125%) over its middle, where other buttons' are within 0.7. -->
-              <Button Classes="primary" Content="Send" Command="{Binding SendCommand}" MinHeight="32" Padding="8,6.5,8,4.5" />
-              <Button Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" Background="{StaticResource BbError}" MinHeight="32" Padding="8,6.5,8,4.5" />
+              <views:PartyBlob Dancing="{Binding IsBusy}" IsVisible="{Binding !ShowIntro}" Width="32" Height="32" VerticalAlignment="Bottom" />
+              <Button Classes="primary" Content="Send" Command="{Binding SendCommand}" />
+              <Button Classes="danger" Content="Stop" Command="{Binding StopCommand}" IsVisible="{Binding IsBusy}" />
             </StackPanel>
           </Grid>
         </Border>
