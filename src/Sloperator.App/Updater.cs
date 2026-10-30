@@ -13,16 +13,21 @@ namespace Sloperator.App;
 public sealed partial class Updater : ObservableObject
 {
     private readonly Func<bool> _busy;
-    private readonly string _checkFile;
+    private readonly string _checkFile, _rejectedFile;
+    private readonly Func<string, Signature> _signature;
     private readonly DispatcherTimer _hourly;
     private bool _due, _checking;
 
     /// <param name="busy">Whether a run is going in any window.</param>
     /// <param name="checkFile">Where the time of the last check is kept, across starts (Data/update-check.txt).</param>
-    internal Updater(Func<bool> busy, string checkFile)
+    /// <param name="rejectedFile">The version whose download wasn't kept, signed by another publisher (Data/update-rejected.txt).</param>
+    /// <param name="signature">A file's Authenticode signature, as Windows checks it.</param>
+    internal Updater(Func<bool> busy, string checkFile, string rejectedFile, Func<string, Signature> signature)
     {
         _busy = busy;
         _checkFile = checkFile;
+        _rejectedFile = rejectedFile;
+        _signature = signature;
         _hourly = new DispatcherTimer(SelfUpdate.Every, DispatcherPriority.Background, (_, _) => Due());
     }
 
@@ -135,10 +140,17 @@ public sealed partial class Updater : ObservableObject
                 Status = HasNews ? News : "Up to date";
                 return;
             }
-            var name = $"Sloperator {GitHubReleases.VersionOf(release.Tag)!.ToString(3)}";
+            var version = GitHubReleases.VersionOf(release.Tag)!;
+            var name = $"Sloperator {version.ToString(3)}";
             if (IsReady && News == $"{name} is ready")
             {
                 Status = News;
+                return;
+            }
+            // Its download was signed by another publisher than this exe: not downloaded again. A later version is.
+            if (SelfUpdate.Rejected(_rejectedFile) == version)
+            {
+                Status = $"{name} couldn't be verified";
                 return;
             }
             if (!SelfUpdate.CanWrite(Path.GetDirectoryName(exe)!))
@@ -149,9 +161,20 @@ public sealed partial class Updater : ObservableObject
             Status = $"Downloading {name}…";
             var fresh = SelfUpdate.NewFile(exe);
             await Downloader.DownloadAsync(release.Asset!, fresh, release.Sha256, null, CancellationToken.None);
+            // A signed Sloperator takes only an exe signed by its own publisher (Windows' check can go online, for revocation).
+            var (verdict, why) = await Task.Run(() => SelfUpdate.Verify(exe, fresh, _signature));
+            if (verdict != Verdict.Keep)
+            {
+                Discard(fresh);
+                if (verdict == Verdict.Reject)
+                    SelfUpdate.Reject(_rejectedFile, version);
+                Status = $"{name} couldn't be verified";
+                Core.ErrorLog.Write("Updates", $"The download of {name} wasn't kept{(verdict == Verdict.Reject ? "" : "; the next check tries again")}: {why}.");
+                return;
+            }
             if (SelfUpdate.FileVersion(fresh) is not { } got || got <= GitHubReleases.Normal(running))
             {
-                File.Delete(fresh);
+                Discard(fresh);
                 Status = $"The download of {name} isn't a newer Sloperator";
                 return;
             }
@@ -164,6 +187,17 @@ public sealed partial class Updater : ObservableObject
         finally
         {
             _checking = false;
+        }
+    }
+
+    /// <summary>A download that isn't kept goes; it was written over the one a restart would have put in place, if any.</summary>
+    private void Discard(string fresh)
+    {
+        File.Delete(fresh);
+        if (IsReady)
+        {
+            IsReady = false;
+            News = "";
         }
     }
 

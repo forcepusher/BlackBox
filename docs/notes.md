@@ -3557,11 +3557,37 @@ The tag ("1.2.0", "v1.2.0"; a "-beta" suffix is dropped) against the running exe
 (Directory.Build.props `Version`): newer, and with `Sloperator.exe` among its files, it is downloaded
 by `Downloader` (resumed after a cut, checked against GitHub's SHA-256) into the exe's own folder as
 `<exe>.new`, under the running exe's own name (`Sloperator (1).exe` gets `Sloperator (1).exe.new`),
-and only once it is whole and its file version is higher than the running one. A release published
-before its build attached the exe (the release workflow runs a few minutes, longer while SignPath
-waits for the approver) is no update until the exe is there. No signature check of Sloperator's
-own: the user's call (2026-10-30), as GitHub's checksum and the release being the repository's own
-cover what a check would.
+and only once it is whole, signed as below, and its file version is higher than the running one. A
+release published before its build attached the exe (the release workflow runs a few minutes, longer
+while SignPath waits for the approver) is no update until the exe is there.
+
+Signature (2026-10-30, the user's call, reversing the earlier "no check"): GitHub's checksum only
+says the file is the one the release holds, so whoever can publish a release (a stolen token) could
+ship any exe. A **signed** running exe keeps a download only if it has a valid Authenticode signature
+from the **same publisher** (`SelfUpdate.Verify`); an **unsigned** one (every build before signing,
+debug builds, forks) keeps any download, as before. `WindowsSignature.Of` (Platform.Windows) asks
+`WinVerifyTrust` (WINTRUST_ACTION_GENERIC_VERIFY_V2, the policy Explorer and SmartScreen use; no UI;
+`WTD_REVOKE_NONE` with no provider flags, which is Windows' own revocation policy, offline-tolerant by
+default): the file unaltered since signing, the chain to a root Windows trusts, the certificate's time
+or the signature's timestamp valid. The publisher is the signer certificate's subject (whole DN,
+compared exactly), read from the same WinVerifyTrust state through `WTHelperGetProvSignerFromChain`,
+not the thumbprint: a renewed certificate keeps the subject. Plain P/Invoke (LibraryImport) and
+`X509Certificate2` over the CERT_CONTEXT, which HTTPS already brings in: no package, trim-safe.
+- Rejected (unsigned, invalid, another publisher): `<exe>.new` is deleted, the version goes to
+  `Data/update-rejected.txt`, and that version isn't downloaded again; a later one is. The
+  windows' line shows nothing; Settings → Updates says "Sloperator 1.2.0 couldn't be verified",
+  and `Data/errors.log` has why ("it is not validly signed (0x800B0100), the running exe is signed
+  by CN=…").
+- Couldn't be checked (no revocation answer, the file couldn't be read: 0x8007xxxx): the download is
+  deleted too, nothing is written down, and the next hourly check tries again. A running exe whose
+  own signature can't be checked keeps nothing either, so blocking the revocation server doesn't
+  turn the check off.
+- A download that replaced one already waiting for a restart (1.3.0 over a ready 1.2.0, same
+  `<exe>.new`) and is then not kept also takes the ready line away: there is nothing left to swap.
+The check runs off the windows' thread (it can go online for revocation). Tests: the decision with a
+stand-in verifier, and WinVerifyTrust on the SDK's own dotnet.exe (embedded Microsoft signature;
+.dev\dotnet, DOTNET_ROOT or Program Files), a copy of it with one byte changed, this repository's
+unsigned test assembly and a text file.
 
 Then each chat window shows one line under the server rows (`Border.bar.slim`, 33 high):
 "Sloperator 1.2.0 is ready", **What's new** (the release's page) and **Restart**, which waits while a

@@ -60,6 +60,44 @@ public static class SelfUpdate
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
+    /// <summary>
+    /// Whether a downloaded exe may be kept, by its Authenticode signature against the running one's
+    /// (<paramref name="signature"/> asks Windows): a running exe that isn't signed takes any download,
+    /// as before signing; a signed one only a download validly signed by the same publisher (the
+    /// certificate's subject, which stays when the certificate is renewed). A signature that couldn't
+    /// be checked (no revocation answer, the file held) is neither: the download goes, and the next check tries again.
+    /// </summary>
+    /// <returns>The verdict, and why, for the log.</returns>
+    public static (Verdict Verdict, string Why) Verify(string running, string fresh, Func<string, Signature> signature)
+    {
+        var mine = signature(running);
+        if (mine.Signed == Signed.No)
+            return (Verdict.Keep, "the running exe isn't signed");
+        if (mine.Signed == Signed.Unknown)
+            return (Verdict.TryAgain, $"the running exe's signature {mine}");
+        var theirs = signature(fresh);
+        return theirs switch
+        {
+            { Signed: Signed.Yes } when string.Equals(theirs.Publisher, mine.Publisher, StringComparison.Ordinal) => (Verdict.Keep, $"{theirs}, as the running exe"),
+            { Signed: Signed.Unknown } => (Verdict.TryAgain, $"its signature {theirs}"),
+            _ => (Verdict.Reject, $"it is {theirs}, the running exe is {mine}"),
+        };
+    }
+
+    /// <summary>The version whose download <see cref="Verify"/> rejected, from <paramref name="file"/>; null when there is none or it can't be read.</summary>
+    public static Version? Rejected(string file)
+    {
+        try { return Version.TryParse(File.ReadAllText(file).Trim(), out var version) ? version : null; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>Writes down that <paramref name="version"/>'s download was rejected, so it isn't downloaded again; a later version is.</summary>
+    public static void Reject(string file, Version version)
+    {
+        try { File.WriteAllText(file, version.ToString()); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
     /// <summary>An exe's file version, as Explorer shows it; null when it has none or can't be read.</summary>
     public static Version? FileVersion(string path)
     {
@@ -138,3 +176,29 @@ public static class SelfUpdate
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
     }
 }
+
+/// <summary>Whether a file has a valid Authenticode signature.</summary>
+public enum Signed
+{
+    /// <summary>None, or one that isn't valid: the file altered since, or a certificate Windows doesn't trust.</summary>
+    No,
+    Yes,
+    /// <summary>Windows couldn't tell: no answer on the certificate's revocation, or the file couldn't be read.</summary>
+    Unknown,
+}
+
+/// <summary>What Windows tells of a file's Authenticode signature: whether it is valid, whose (the signer certificate's subject), and Windows' code when it isn't.</summary>
+public readonly record struct Signature(Signed Signed, string? Publisher = null, int Code = 0)
+{
+    public static readonly Signature None = new(Signed.No);
+
+    public override string ToString() => Signed switch
+    {
+        Signed.Yes => $"signed by {Publisher}",
+        Signed.No => $"not validly signed (0x{Code:X8})",
+        _ => $"couldn't be checked (0x{Code:X8})",
+    };
+}
+
+/// <summary>What <see cref="SelfUpdate.Verify"/> makes of a download.</summary>
+public enum Verdict { Keep, Reject, TryAgain }
