@@ -213,54 +213,14 @@ public static partial class ComfyInstaller
     }
 
     /// <summary>
-    /// The latest release's link for <paramref name="asset"/>, with its SHA-256 when GitHub says it:
-    /// from GitHub's API, or, when that refuses (its hourly limit, often reached behind a VPN), from
-    /// the release's own page.
+    /// The latest release's link for <paramref name="asset"/>, with its SHA-256 when GitHub says it
+    /// (see <see cref="GitHubReleases"/>); when GitHub can't be asked, the link GitHub keeps to every
+    /// release's newest file, without a checksum.
     /// </summary>
-    internal static async Task<(Uri Url, string? Sha256, string Tag)> LatestAsync(string asset, CancellationToken ct)
-    {
-        try
-        {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(30));
-            using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/Comfy-Org/ComfyUI/releases/latest");
-            request.Headers.Accept.ParseAdd("application/vnd.github+json");
-            using var response = await Downloader.Http.SendAsync(request, timeout.Token).ConfigureAwait(false);
-            if (response.IsSuccessStatusCode && JsonNode.Parse(await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false)) is JsonObject release)
-            {
-                var tag = (string?)release["tag_name"] ?? "latest";
-                foreach (var a in (release["assets"] as JsonArray ?? []).OfType<JsonObject>())
-                    if ((string?)a["name"] == asset && (string?)a["browser_download_url"] is { } link)
-                        return (new Uri(link), Digest((string?)a["digest"]), tag);
-            }
-        }
-        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or OperationCanceledException && !ct.IsCancellationRequested) { }
-
-        try
-        {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(30));
-            using var latest = await Downloader.Http.GetAsync(Releases + "/latest", timeout.Token).ConfigureAwait(false);
-            var tag = latest.RequestMessage?.RequestUri?.AbsolutePath.Split('/').LastOrDefault() ?? "";
-            if (latest.IsSuccessStatusCode && tag.Length > 0 && tag != "latest")
-            {
-                var page = await Downloader.Http.GetStringAsync($"{Releases}/expanded_assets/{tag}", timeout.Token).ConfigureAwait(false);
-                var at = page.IndexOf("/download/" + tag + "/" + asset + "\"", StringComparison.Ordinal);
-                var sha = at < 0 ? null : AssetDigest().Match(page, at) is { Success: true } m && m.Index - at < 4000 ? m.Groups[1].Value : null;
-                if (at >= 0)
-                    return (new Uri($"{Releases}/download/{tag}/{asset}"), sha, tag);
-            }
-        }
-        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException && !ct.IsCancellationRequested) { }
-
-        // The link GitHub keeps to every release's newest file, without a checksum.
-        return (new Uri($"{Releases}/latest/download/{asset}"), null, "latest");
-
-        static string? Digest(string? digest) => digest is { } d && d.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ? d[7..] : null;
-    }
-
-    [GeneratedRegex(@"sha256:([0-9a-f]{64})")]
-    private static partial Regex AssetDigest();
+    internal static async Task<(Uri Url, string? Sha256, string Tag)> LatestAsync(string asset, CancellationToken ct) =>
+        await GitHubReleases.LatestAsync("Comfy-Org/ComfyUI", asset, ct).ConfigureAwait(false) is { Asset: { } url } release
+            ? (url, release.Sha256, release.Tag)
+            : (new Uri($"{Releases}/latest/download/{asset}"), null, "latest");
 
     /// <summary>A 7-Zip that unpacks .7z: the PC's own, one fetched for an earlier task, or 7zr.exe fetched now into Data/tools/7-Zip.</summary>
     internal static async Task<string> SevenZipAsync(string toolsDir, Action<string>? progress, CancellationToken ct)

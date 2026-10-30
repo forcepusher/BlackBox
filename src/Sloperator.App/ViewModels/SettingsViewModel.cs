@@ -1,6 +1,7 @@
 using Sloperator.Core.Mcp;
 using Sloperator.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace Sloperator.App.ViewModels;
 
@@ -19,6 +20,14 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
     public PanelSettings Panels => Settings.Panels;
 
     public NotifySettings Notify => Settings.Notify;
+
+    public UpdateSettings Updates => Settings.Updates;
+
+    /// <summary>Sloperator updating itself: Check for updates asks it now, and the line beside the button says what it found.</summary>
+    public required Updater Updater { get; init; }
+
+    [RelayCommand]
+    private Task CheckForUpdatesAsync() => Updater.CheckAsync();
 
     public string[] ApprovalModes { get; } =
     [

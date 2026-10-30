@@ -69,6 +69,14 @@
         <views:SelectableText Classes="muted error" TextWrapping="Wrap" Text="{Binding McpError}" IsVisible="{Binding HasMcpError}" />
         <views:SelectableText Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
 
+        <TextBlock Classes="h2" Text="Updates" />
+        <CheckBox IsChecked="{Binding Updates.Automatic}" Content="Check automatically"
+                  ToolTip.Tip="At start and once an hour Sloperator asks GitHub for a new version and downloads it. Off, it never contacts GitHub by itself." />
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Button Classes="ghost" Content="Check for updates" Command="{Binding CheckForUpdatesCommand}" />
+          <TextBlock Classes="muted" VerticalAlignment="Center" Text="{Binding Updater.Status}" />
+        </StackPanel>
+
         <TextBlock Classes="h2" Text="Advanced" />
         <Grid Classes="form" ColumnDefinitions="160,*">
           <TextBlock Classes="label" Text="Screenshot size" />

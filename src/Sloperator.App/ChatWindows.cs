@@ -37,6 +37,7 @@ public sealed class ChatWindows
         // A ComfyUI an earlier Sloperator started and left at work is closed once its jobs are done.
         Core.Comfy.ComfyHub.For(paths.ComfyDir).CloseLeftover();
         Core.Media.MediaRelease.Releasing += LetGo;
+        Updater = new Updater(AnyBusy);
     }
 
     /// <summary>
@@ -68,11 +69,15 @@ public sealed class ChatWindows
     /// <summary>Writes every window's chats, so one opening a chat another just left waits for its last version.</summary>
     public ChatSaver Saver { get; }
 
+    /// <summary>Sloperator updating itself, for every window.</summary>
+    public Updater Updater { get; }
+
     /// <summary>
     /// Opens another chat window: where Sloperator was last closed for the first one, a step down and
-    /// to the right of the window in front for the next.
+    /// to the right of the window in front for the next. With <paramref name="chatId"/>, that saved
+    /// chat opens in it.
     /// </summary>
-    public MainWindow Open()
+    public MainWindow Open(string? chatId = null)
     {
         // Settings as they are now: a model another window picked meanwhile.
         var store = new SettingsStore(_paths);
@@ -88,6 +93,8 @@ public sealed class ChatWindows
         window.Show();
         window.Activate();
         vm.OnStartup();
+        if (chatId is { Length: > 0 })
+            vm.OpenSaved(chatId);
         return window;
     }
 
@@ -179,6 +186,7 @@ public sealed class ChatWindows
     /// <summary>Settings saved in <paramref name="from"/>'s Settings dialog: the other windows take them too.</summary>
     public void SettingsApplied(MainWindowViewModel from, AppSettings settings, bool mcpChanged)
     {
+        Updater.Automatic = settings.Updates.Automatic;
         foreach (var (vm, _) in _open)
             if (vm != from)
                 vm.TakeSettings(settings, mcpChanged);
@@ -186,6 +194,63 @@ public sealed class ChatWindows
 
     /// <summary>The user is writing a message to one of the agents, in any window: every agent's clicks and key presses wait.</summary>
     public bool UserComposing() => _open.Any(o => o.Vm.TypingHere());
+
+    // ---- Updates ----------------------------------------------------------------------
+
+    /// <summary>The argument a restart into an update gives the new exe: the chats the windows had open, in the order they opened.</summary>
+    private const string ReopenArgument = "--reopen";
+
+    /// <summary>A run is going in one of the windows.</summary>
+    public bool AnyBusy() => _open.Any(o => o.Vm.IsBusy);
+
+    /// <summary>A window's run started or ended: Restart is for when none runs, and a check that came due waits for that.</summary>
+    public void BusyChanged()
+    {
+        foreach (var (vm, _) in _open)
+            vm.RestartCommand.NotifyCanExecuteChanged();
+        if (!AnyBusy())
+            Updater.Idle();
+    }
+
+    /// <summary>
+    /// The chats a restart into an update asked to open again, one window each, in its arguments
+    /// (empty for a window that had none); empty for any other start.
+    /// </summary>
+    public static IReadOnlyList<string> ChatsToReopen(string[]? args) =>
+        args is [ReopenArgument, var chats, ..] ? chats.Split(',') : [];
+
+    /// <summary>
+    /// Restarts into the version the update downloaded: it goes in place of this exe, starts with
+    /// the windows' chats to open again, and this Sloperator ends. The two never talk: the new build
+    /// isn't this one, so it doesn't hand its start to this one (see <see cref="SingleInstance"/>).
+    /// </summary>
+    public void Restart(MainWindowViewModel from)
+    {
+        if (AnyBusy() || Environment.ProcessPath is not { } exe)
+            return;
+        var chats = string.Join(",", _open.Select(o => o.Vm.ChatId ?? ""));
+        // The new one reads the chats as this one last saved them.
+        Saver.Flush(TimeSpan.FromSeconds(10));
+        if (Updater.Swap() is { } failed)
+        {
+            from.AddNotice($"The update couldn't be put in place, so Sloperator goes on as it is: {failed}", isError: true);
+            return;
+        }
+        try
+        {
+            var start = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe)! };
+            start.ArgumentList.Add(ReopenArgument);
+            start.ArgumentList.Add(chats);
+            System.Diagnostics.Process.Start(start)?.Dispose();
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
+        {
+            Updater.Unswap();
+            from.AddNotice($"The new version didn't start, so Sloperator goes on as it is: {ex.Message}", isError: true, ex);
+            return;
+        }
+        _desktop.Shutdown();
+    }
 
     /// <summary>Pause/Break, from the hook's thread: stops every run; false when none was going.</summary>
     private bool StopAll()
@@ -226,6 +291,8 @@ public sealed class ChatWindows
         }
         _ending.Add(_notifying);
         Saver.Flush(TimeSpan.FromSeconds(10));
+        // Not restarted into the version an update downloaded: it is in place for the next start.
+        Updater.SwapOnExit();
         // A server that would not stop doesn't keep the process; it ends anyway.
         try { Task.WaitAll([.. _ending], TimeSpan.FromSeconds(5)); }
         catch (AggregateException) { }
