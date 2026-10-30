@@ -21,7 +21,8 @@ namespace Sloperator.Core.Tests;
 /// BB_CLICK_RES (the box screenshots
 /// fit, as 1920x1080; default the setting's), BB_CLICK_SEED (first layout, default 1000), BB_CLICK_TAG (report name),
 /// BB_CLICK_RETRY (extra clicks allowed after a miss, default 0: the target reacts when hit, so a
-/// miss gets Sloperator's miss note), BB_CLICK_CHECK=0 (no miss note), BB_CLICK_ZOOM=0 (no zoom tool), BB_CLICK_RULE
+/// miss gets Sloperator's miss note), BB_CLICK_LOOKS (zooms, and other calls, a try may make before its click; default 4,
+/// the real app has no such limit), BB_CLICK_CHECK=0 (no miss note), BB_CLICK_ZOOM=0 (no zoom tool), BB_CLICK_RULE
 /// (extra instructions for the system prompt, to measure a prompt rule), BB_CLICK_TEMP (a temperature
 /// sent with the benchmark's own requests instead of the server's), BB_CLICK_SHIFT (the first screenshot
 /// shows everything this many pixels higher, so the model misjudges where things are, as one deep in a
@@ -149,6 +150,7 @@ public class ClickAccuracyTests
         var retries = int.TryParse(Env("BB_CLICK_RETRY"), out var rt) ? rt : 0;
         ClickCheck.Enabled = Env("BB_CLICK_CHECK") != "0";
         var zoom = Env("BB_CLICK_ZOOM") != "0";
+        var looks = int.TryParse(Env("BB_CLICK_LOOKS"), out var lk) ? lk : 4;
         var (retried, fixedLater) = (0, 0);
         var shift = int.TryParse(Env("BB_CLICK_SHIFT"), out var sh) ? sh : 0;
         foreach (var scene in Scenes.Where(s => only is null || only.Contains(s.Name)))
@@ -180,7 +182,7 @@ public class ClickAccuracyTests
                     or TypeTextTool or PressKeysTool or WaitTool || (zoom && t is ZoomTool));
                 var session = new AgentSession(connection.Client, connection.Options, new ToolRegistry(tools), ctx, prompt, contextTokens: context ?? 0);
 
-                using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5 * Math.Max(1, looks / 4.0)));
                 // The target reacts when it is hit (its pixels invert), so a click that misses leaves
                 // the screen as it was, which Sloperator reports as a miss.
                 var landed = new List<(int X, int Y)>();
@@ -194,7 +196,7 @@ public class ClickAccuracyTests
                             for (var c = 0; c < 3; c++)
                                 p.Desktop!.Bgra[(y - origin.Y) * p.Desktop.Stride + (x - origin.X) * 4 + c] ^= 0xFF;
                 };
-                var observer = new FirstClickObserver(cts, retries + 1, () => landed.Count > 0 && target.Bounds.Contains(landed[^1].X, landed[^1].Y));
+                var observer = new FirstClickObserver(cts, retries + 1, looks, () => landed.Count > 0 && target.Bounds.Contains(landed[^1].X, landed[^1].Y));
                 var where = scene.On > 0 ? $" It is on screen {scene.On + 1}." : "";
                 var clock = System.Diagnostics.Stopwatch.StartNew();
                 await session.RunAsync((target.Ask ?? $"Click the \"{target.Label}\" {target.Noun ?? scene.Noun}.") + where, observer, cts.Token);
@@ -632,7 +634,7 @@ public class ClickAccuracyTests
     }
 
     /// <summary>Stops the run at the first click, or with retries, at a hit or after <paramref name="maxClicks"/> clicks.</summary>
-    private sealed class FirstClickObserver(CancellationTokenSource cts, int maxClicks = 1, Func<bool>? hit = null) : IAgentObserver
+    private sealed class FirstClickObserver(CancellationTokenSource cts, int maxClicks = 1, int looks = 4, Func<bool>? hit = null) : IAgentObserver
     {
         private int _clicks;
         public string? Args { get; private set; }
@@ -673,8 +675,8 @@ public class ClickAccuracyTests
                 _count = _zooms = 0;
                 return;
             }
-            // Zooms to aim count apart: a model that zooms before it clicks gets up to four of them.
-            if (call.Name == "zoom" ? ++_zooms > 4 : ++_count >= 4)
+            // Zooms to aim count apart: a model that zooms before it clicks gets up to `looks` of them.
+            if (call.Name == "zoom" ? ++_zooms > looks : ++_count >= looks)
                 cts.Cancel();
         }
     }
