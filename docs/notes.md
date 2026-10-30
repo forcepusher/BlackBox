@@ -1623,8 +1623,8 @@ Servers' lists unlike the dropdowns'):
   panel's line up; the chat's server rows (`Border.bar.fields`) a shade lighter. In them buttons are
   8 apart and 12 from text. The splitters are one `GridSplitter` style (the title bar's colour).
 - **Settings' tabs** (the user, 2026-10-30; it had General and Advanced tabs before 17 October too):
-  General (Side panel, Notifications, the instructions, Text recognition) and Advanced (Safety,
-  Screenshot size, MCP servers, Updates). One shared `TabControl` style: headers 20 SemiBold, the
+  General (Side panel, Notifications, Safety, the instructions, Text recognition) and Advanced
+  (Screenshot size, MCP servers, Updates). One shared `TabControl` style: headers 20 SemiBold, the
   first one's word 16 in from the window's edge, where each tab's text starts; the Fluent yellow line
   under the picked one. Save with a broken MCP list turns to Advanced. Fluent sets the strip's margin
   in a `[TabStripPlacement=Top]` style, which outranks a selector without a condition (the header sat
@@ -2514,7 +2514,7 @@ prints the traceback and exits with 0.
 | `model_server` | The model Sloperator itself runs on: `show` says the server, model and the models it offers; `connect` switches the top bar to another server, key and model, after checking the server answers (see Connecting to a model) |
 | `<server>__<tool>` | Any tool of the MCP servers you or the agent added (see below) |
 
-Settings → Advanced → Safety has **Enable screenshots** and **Enable keyboard and mouse control**, both on by
+Settings → Safety has **Enable screenshots** and **Enable keyboard and mouse control**, both on by
 default (`agent.enableScreenshots`, `agent.enableControl`). Screenshots off takes away `screenshot`,
 `zoom` and `wait`, and with them the mouse and keyboard tools, whatever the second box says: the
 user's rule is no clicking blind, so that box is greyed out then. Control off keeps the three that

@@ -49,6 +49,15 @@
             <CheckBox IsChecked="{Binding Notify.WhenDone}" Content="Notify me when done"
                       ToolTip.Tip="A Windows notification when a task is done, stops on an error or waits for your OK, unless you are looking at its window." />
 
+            <TextBlock Classes="h2" Text="Safety" />
+            <Grid Classes="form" ColumnDefinitions="160,*">
+              <TextBlock Classes="label" Text="Ask me first" />
+              <ComboBox Grid.Column="1" ItemsSource="{Binding ApprovalModes}" SelectedIndex="{Binding ApprovalIndex}" HorizontalAlignment="Stretch" />
+            </Grid>
+            <CheckBox x:Name="ScreenshotsBox" IsChecked="{Binding Agent.EnableScreenshots}" Content="Enable screenshots" />
+            <!-- No clicking blind: the mouse and keyboard only go with screenshots. -->
+            <CheckBox IsChecked="{Binding Agent.EnableControl}" IsEnabled="{Binding #ScreenshotsBox.IsChecked}" Content="Enable keyboard and mouse control" />
+
             <TextBlock Classes="h2" Text="Things Sloperator should always know" />
             <TextBox Text="{Binding Agent.CustomInstructions}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100"
                      Watermark="For example: my documents are in D:\Docs. Use Firefox for browsing. Answer in German." />
@@ -74,15 +83,6 @@
       <TabItem Header="Advanced">
         <ScrollViewer>
           <StackPanel Spacing="4" Margin="16,8,28,24">
-            <TextBlock Classes="h2" Text="Safety" />
-            <Grid Classes="form" ColumnDefinitions="160,*">
-              <TextBlock Classes="label" Text="Ask me first" />
-              <ComboBox Grid.Column="1" ItemsSource="{Binding ApprovalModes}" SelectedIndex="{Binding ApprovalIndex}" HorizontalAlignment="Stretch" />
-            </Grid>
-            <CheckBox x:Name="ScreenshotsBox" IsChecked="{Binding Agent.EnableScreenshots}" Content="Enable screenshots" />
-            <!-- No clicking blind: the mouse and keyboard only go with screenshots. -->
-            <CheckBox IsChecked="{Binding Agent.EnableControl}" IsEnabled="{Binding #ScreenshotsBox.IsChecked}" Content="Enable keyboard and mouse control" />
-
             <TextBlock Classes="h2" Text="Screenshots" />
             <Grid Classes="form" ColumnDefinitions="160,*">
               <TextBlock Classes="label" Text="Screenshot size" />

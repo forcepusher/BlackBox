@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   later line leave the chat and the saved chat, the files the agent wrote or edited from then on go back
   to how they were, and the message goes back into the box. What commands, copies and clicks in other
   programs changed isn't undone; the chat says which of those ran.
-- **Enable screenshots** and **Enable keyboard and mouse control** under Settings → Advanced → Safety. With
+- **Enable screenshots** and **Enable keyboard and mouse control** under Settings → Safety. With
   screenshots off the agent doesn't look at the screen, and can't use the mouse and keyboard either;
   with control off it looks but doesn't click or type.
 - **Servers** next to the server address lists every server that answered, with its API key and model:
@@ -44,8 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   looking at its window. Click it to bring that window to the front.
 
 ### Changed
-- Settings has two tabs: **General** (side panel, notifications, what Sloperator should always
-  know, text recognition) and **Advanced** (safety, screenshot size, MCP servers, updates).
+- Settings has two tabs: **General** (side panel, notifications, safety, what Sloperator should
+  always know, text recognition) and **Advanced** (screenshot size, MCP servers, updates).
 - Every button, dropdown and text field keeps its words the same distance from its left edge, as the
   Servers button does; buttons are a little wider.
 - Before clicking a named button, menu, tab, link or setting, the agent looks it up with text
