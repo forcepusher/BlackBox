@@ -54,9 +54,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The title bar is Sloperator's own dark one, in the chat windows and Settings, instead of Windows'
   grey bar on Windows 10. It drags, snaps, maximizes on a double-click and opens the window menu on
   a right-click or Alt+Space as before; on Windows 11 the maximize button still shows snap layouts.
-- The title bar's buttons say what they do when you hold the mouse on them, a thin line runs along
-  the window's top on Windows 10 as on its other sides, and windows are as tall inside as they
-  were under Windows' title bar, your own saved size too.
+- The title bar's buttons say what they do when you hold the mouse on them (by the pointer, as
+  every other tooltip and Windows' own buttons do), a thin line runs along the window's top on
+  Windows 10 as on its other sides, and windows are as tall inside as they were under Windows'
+  title bar, your own saved size too.
 - Every button, dropdown and text field keeps its words the same distance from its left edge, as the
   Servers button does; buttons are a little wider.
 - Before clicking a named button, menu, tab, link or setting, the agent looks it up with text

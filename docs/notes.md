@@ -1723,9 +1723,15 @@ in a 16 box (`CaptionGlyph`, drawn on whole screen pixels: a path's 1 px stroke 
 and blurs). Under the pointer #2C2C2C, pressed #333333, close #C42B1C with a white sign; text and
 signs #808080 while the window isn't active. Windows 10 drew its own grey bar whatever DWM was asked
 (the caption colours are Windows 11's). The full-screen viewer has no title bar, as before.
-The buttons' tooltips (Minimize, Maximize or Restore Down, Close) are under them, as every button's
-in the app; maximize's is shown by the TitleBar after the tooltip delay, as the window gets no
-pointer events there. On Windows 10 a 1-pixel line runs along the top, over the strip's top row:
+The buttons' tooltips (Minimize, Maximize or Restore Down, Close) are at the pointer, as every
+tooltip in the app and Windows' own caption tooltips: Avalonia's `Pointer` placement, the tip's
+corner 20 under the pointer, flipped to its left when it would run off the screen (Restore Down and
+Close while maximized). Centred under the buttons (`Bottom`, before) they came up over Settings,
+well away from the pointer. Maximize's is shown by the TitleBar after the tooltip delay, as the
+window gets no pointer events there, and Avalonia's `Pointer` would take the last client position
+(the button the pointer came from): it is `Custom`, anchored at the last WM_NCMOUSEMOVE point in
+the window's coordinates, which lands the same as the others (measured +0,+25 px at 125%, all six).
+On Windows 10 a 1-pixel line runs along the top, over the strip's top row:
 Windows draws one round a window on its frame, which has no top now. It is drawn as Windows draws
 the sides, measured over black, white and #161616 (#262626, #7D7D7D, #2E2E2E active; #2B2B2B,
 #AAAAAA, #363636 not): #3A3A3A at 66%, #565656 at 50% while the window isn't active, so over the
@@ -1774,7 +1780,8 @@ and the maximize and close signs centred to the pixel, minimize's line half a pi
 drawn over the window's own colour, Windows' over what is behind the window (the sides still show
 the desktop through it), and in grey even where Windows shows the accent colour on window borders;
 the icon is part of the caption (Windows' opens the system menu, and closes on a double-click); the
-tooltips are the app's, under the buttons; shake wasn't tried (it would minimize every other window).
+tooltips are the app's, at the pointer as Windows' are; shake wasn't tried (it would minimize every
+other window).
 
 ## Several windows
 **New window** in the top bar opens another chat window, with its own chat, agent
