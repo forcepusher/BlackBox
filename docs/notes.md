@@ -2646,8 +2646,8 @@ closest to it (within a third of its letters, with O/0 and l/I/1 taken as one), 
 readings kept: on six 12 px Segoe UI codes 1.5x read all six, 2x to 5x read "VY" as "w", 1x missed
 two. Each call takes 100 to 300 ms. Settings → Advanced → Use text recognition (on by default,
 `AgentSettings.EnableTextRecognition`) takes find_text and its prompt line away when off. Where no
-OCR language is installed the tool has the model offer the user, once a chat, to install the pack of
-their own language, skip it for now (it may be offered again in another chat), or turn text
+OCR language is installed the tool has the model offer the user, every time it comes up (the user's
+choice, not once a chat), to install the pack of their own language, skip it for now, or turn text
 recognition off in Settings, which ends the offers; on an install, it runs `Add-WindowsCapability
 -Online -Name Language.OCR~~~<culture>~0.0.1.0` in an elevated PowerShell (`Start-Process -Verb
 RunAs`: adding a capability needs an administrator, and Windows asks); the reader looks for an engine

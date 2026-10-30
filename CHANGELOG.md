@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **Use text recognition** under Settings → Advanced (on by default) turns it on or off, and shows the
   languages Windows reads; where there is none, **Add a language** opens Windows' language settings.
   Without one, the agent offers to install it for your language (Windows asks you to allow it): you can
-  install it, skip it for now, or turn text recognition off.
+  install it, skip it for now (it's offered again next time), or turn text recognition off.
 - Sloperator updates itself: it checks GitHub for a new version once an hour, across starts too
   (never during a task), downloads it beside itself, and a line under the top bar says **Sloperator
   1.2.0 is ready**, with **Restart** and **What's new**. Restart opens the new version with the same

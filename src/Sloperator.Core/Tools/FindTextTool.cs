@@ -40,15 +40,16 @@ public sealed class FindTextTool : Tool
 
     /// <summary>
     /// Where Windows reads no language: the agent offers to install the pack of the user's own (the
-    /// user: "let the agent offer installation of the packs"), to skip it for now (it may be offered
-    /// again), or to turn text recognition off in Settings, which takes find_text away and so the offer.
+    /// user: "let the agent offer installation of the packs"), to skip it for now, or to turn text
+    /// recognition off in Settings, which takes find_text away and so the offer. Skipped, it is offered
+    /// again each time (the user: "always triggered, not only once, unless recognition is disabled").
     /// Adding a Windows capability needs an administrator, so it runs elevated and Windows asks; the
     /// reader tries again on the next call.
     /// </summary>
     internal const string NoLanguage =
         "Windows has no text recognition language installed, so the screen's text can't be read; look with screenshot and zoom for now. " +
-        "Once in this chat, offer the user to install it: it improves how you use apps on screen, finding and clicking buttons, menus, links and values " +
-        "quicker and more surely (a download of a few MB). Tell them they can install it now, skip it for now (you may ask again another time), " +
+        "Offer the user to install it: it improves how you use apps on screen, finding and clicking buttons, menus, links and values " +
+        "quicker and more surely (a download of a few MB). Tell them they can install it now, skip it for now (you will offer it again each time this comes up), " +
         "or turn text recognition off for good in Sloperator's Settings → Advanced → Use text recognition. Only if they choose to install, run in the shell: " +
         "$name = \"Language.OCR~~~$((Get-Culture).Name)~0.0.1.0\"; Start-Process powershell -Verb RunAs -Wait -ArgumentList \"-NoProfile -Command Add-WindowsCapability -Online -Name $name\" " +
         "(Windows asks the user to allow it; for English use Language.OCR~~~en-US~0.0.1.0). Then use find_text again.";
