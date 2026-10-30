@@ -1578,6 +1578,20 @@ Every window and side panel draws its controls from the styles in App.axaml, one
 sizes set on each control (the user, 2026-10-30, after drift was found in turn: text boxes with
 different focus rules, popups anchored differently, Servers' brushes, text off centre, History and
 Servers' lists unlike the dropdowns'):
+- **One inset**: every word in a button, dropdown or text field is 12 inside its border, where the
+  Servers button's is (the user, 2026-10-30, who liked Servers' and found the Side panel's, Medium's
+  and the fields' inconsistent): `Button` and `ToggleButton.ghost` 12 at the sides (a centred word
+  has at least that), `Button.menu` 12 left, `TextControlThemePadding` 12 left, the context box 12
+  right (its number is right-aligned). A dropdown lays its word over its border, so
+  `ComboBoxPadding` is 13.4 from the left: 13 at 100%, and 17 px at 125% where 13 rounded to 16 and
+  its word sat 1-2 px left of Servers'. Measured from the box's edge to the first ink, Servers is 14
+  at 100% and 18 at 125%; every dropdown, field and button is within a pixel of it, the pixel being
+  the letter's own side (N, M, O, q and semibold S start closer to their box than S). The chat box's
+  words keep Fluent's 10: they follow the paperclip, not a border. Before, the Side panel's word
+  was 9 in (8 at 100%), History's and the buttons' 9, the fields' 11 and the dropdowns' 12. Wider
+  buttons leave the top bar's server status less room at the window's MinWidth, where it was cut
+  short already ("Conne…", and with a side panel open only its dot); Video generator's names column
+  is 120 (was 112) for "+ Sound line" with a button's 12.
 - **Sizes**: a button, dropdown or text box is 32 high, as Fluent's text boxes and dropdowns are; a
   small button (in a card, under a preview, in a player, over the diff) 24. `Button` (and the app's
   `ToggleButton.ghost`) has `MinHeight` 32 and its content in its middle; `.small` makes it 24,
@@ -1599,7 +1613,7 @@ Servers' lists unlike the dropdowns'):
   dropdown that holds a value (the model, the effort) is a field, whose border lightens.
 - **Lists**: a dropdown's list, a menu (right-click or a button's) and History's and Servers' lists
   are one look, Fluent's (its popup surface, border and corners, 4 over and under the rows; rows
-  11 in, 6 over and under). History and Servers had a bordered list on the panel's colour with
+  12 in, 6 over and under, under the box's word). History and Servers had a bordered list on the panel's colour with
   rounded rows lit grey; now `FlyoutPresenter.list` with `listRow` rows, lit as a dropdown's rows
   under the pointer and pressed, the chat or server in use tinted as a dropdown's pick, the trash
   button as far in from the right as the title from the left.

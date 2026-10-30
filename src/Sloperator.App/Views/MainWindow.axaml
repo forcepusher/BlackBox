@@ -323,7 +323,7 @@
             <Button.Flyout>
               <Flyout Placement="{x:Static views:Dropdown.Placement}" FlyoutPresenterClasses="list">
                 <Panel Width="340">
-                  <TextBlock Classes="muted" IsVisible="{Binding !HasPastChats}" TextWrapping="Wrap" Margin="11,6"
+                  <TextBlock Classes="muted" IsVisible="{Binding !HasPastChats}" TextWrapping="Wrap" Margin="12,6"
                              Text="No chats yet." />
                   <ItemsControl ItemsSource="{Binding PastChats}" IsVisible="{Binding HasPastChats}">
                     <ItemsControl.ItemTemplate>
@@ -388,7 +388,7 @@
             <Button.Flyout>
               <Flyout Placement="{x:Static views:Dropdown.Placement}" FlyoutPresenterClasses="list">
                 <Panel Width="340">
-                  <TextBlock Classes="muted" IsVisible="{Binding !HasSavedServers}" TextWrapping="Wrap" Margin="11,6"
+                  <TextBlock Classes="muted" IsVisible="{Binding !HasSavedServers}" TextWrapping="Wrap" Margin="12,6"
                              Text="No servers yet." />
                   <ItemsControl ItemsSource="{Binding SavedServers}" IsVisible="{Binding HasSavedServers}">
                     <ItemsControl.ItemTemplate>
@@ -447,7 +447,7 @@
           <!-- As wide as the size in it ("64k", "not loaded"); its number in the middle as a button's
                word (with 5 over and under it was a pixel low at 100%). -->
           <TextBox x:Name="ContextBox" DockPanel.Dock="Right" Text="{Binding ContextInput, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding !AutoContext}"
-                   MinWidth="48" Padding="8,0" TextAlignment="Right" VerticalAlignment="Stretch" VerticalContentAlignment="Center" />
+                   MinWidth="48" Padding="12,0" TextAlignment="Right" VerticalAlignment="Stretch" VerticalContentAlignment="Center" />
           <!-- Fluent's slider is 50px tall with the track in its middle: stretched over the 32px row
                plus these margins, the track sits on the row's centre line. -->
           <Slider Minimum="0" Maximum="{Binding ContextMaxIndex}" Value="{Binding ContextIndex}" TickFrequency="1" IsSnapToTickEnabled="True"
