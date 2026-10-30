@@ -437,7 +437,7 @@ public sealed partial class TextRecognitionOffer(ITextReader reader, Action turn
 
     /// <summary>What the card says under its title: the offer, then how the install went.</summary>
     [ObservableProperty]
-    private string _status = "Makes the agent's clicks more accurate: it reads the words on screen. Part of Windows, a few MB.";
+    private string _status = "Makes model's clicks more accurate by reading the words on screen. Part of Windows, a few MB.";
 
     /// <summary>The buttons show until one is chosen.</summary>
     [ObservableProperty]
