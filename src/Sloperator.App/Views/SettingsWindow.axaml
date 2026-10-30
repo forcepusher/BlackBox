@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Sloperator.App.ViewModels"
+        xmlns:views="using:Sloperator.App.Views"
         x:Class="Sloperator.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Sloperator settings"
@@ -11,6 +12,11 @@
   <Window.Styles>
     <Style Selector="Grid.form > ComboBox">
       <Setter Property="Margin" Value="0,4" />
+    </Style>
+    <!-- A label sat a pixel under the words of the field beside it at 125%, where every label of the
+         chat's bars is level with its field's: 0.8 more under it lifts it that pixel. -->
+    <Style Selector="Grid.form > TextBlock.label">
+      <Setter Property="Margin" Value="0,0,0,0.8" />
     </Style>
     <!-- NumericUpDown isn't in the UI Automation tree, only its text box: give that the field's name. -->
     <Style Selector="NumericUpDown /template/ TextBox#PART_TextBox">
@@ -56,8 +62,8 @@
                  FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12" MinHeight="200" Margin="0,8,0,0"
                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
                  ToolTip.Tip="Same format as Claude Desktop, LM Studio and Cursor" />
-        <SelectableTextBlock Classes="muted error" TextWrapping="Wrap" Text="{Binding McpError}" IsVisible="{Binding HasMcpError}" />
-        <SelectableTextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
+        <views:SelectableText Classes="muted error" TextWrapping="Wrap" Text="{Binding McpError}" IsVisible="{Binding HasMcpError}" />
+        <views:SelectableText Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
 
         <TextBlock Classes="h2" Text="Advanced" />
         <Grid Classes="form" ColumnDefinitions="160,*">

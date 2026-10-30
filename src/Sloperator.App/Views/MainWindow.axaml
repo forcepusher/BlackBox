@@ -269,8 +269,10 @@
       <DockPanel>
         <!-- Tools that open on the left of the chat and work through it; the arrow beside the
              dropdown, outside it (the user, 2026-10-29), says where. Where the window's name stood
-             a second time, under the title bar's. -->
-        <PathIcon DockPanel.Dock="Left" Width="10" Height="10" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{StaticResource BbAccent}" Data="M14 7l-5 5 5 5z" />
+             a second time, under the title bar's. 0.5 under it, which rounds to nothing at 100% and a
+             pixel at 125%, where it sat a pixel under the dropdown's word (docs/notes.md, Text in the
+             middle of its box). -->
+        <PathIcon DockPanel.Dock="Left" Width="10" Height="10" Margin="0,0,8,0.5" VerticalAlignment="Center" Foreground="{StaticResource BbAccent}" Data="M14 7l-5 5 5 5z" />
         <ComboBox x:Name="ToolkitBox" DockPanel.Dock="Left" Classes="ghost" ItemsSource="{Binding ToolkitOptions}" SelectedItem="{Binding SelectedToolkit}"
                   VerticalAlignment="Center" AutomationProperties.Name="Side panel">
           <ComboBox.SelectionBoxItemTemplate>
@@ -421,9 +423,10 @@
         <TextBlock Grid.Row="1" Grid.Column="2" Classes="label" Text="Context" Margin="16,0,8,0" />
         <DockPanel Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="2" ToolTip.Tip="{Binding ContextToolTip}">
           <CheckBox DockPanel.Dock="Right" Content="Auto" IsChecked="{Binding AutoContext}" Margin="8,0,0,0" MinWidth="0" />
-          <!-- As wide as the size in it ("64k", "not loaded"). -->
+          <!-- As wide as the size in it ("64k", "not loaded"); its number in the middle as a button's
+               word (with 5 over and under it was a pixel low at 100%). -->
           <TextBox x:Name="ContextBox" DockPanel.Dock="Right" Text="{Binding ContextInput, UpdateSourceTrigger=LostFocus}" IsEnabled="{Binding !AutoContext}"
-                   MinWidth="48" Padding="8,5" TextAlignment="Right" VerticalAlignment="Stretch" VerticalContentAlignment="Center" />
+                   MinWidth="48" Padding="8,0" TextAlignment="Right" VerticalAlignment="Stretch" VerticalContentAlignment="Center" />
           <!-- Fluent's slider is 50px tall with the track in its middle: stretched over the 32px row
                plus these margins, the track sits on the row's centre line. -->
           <Slider Minimum="0" Maximum="{Binding ContextMaxIndex}" Value="{Binding ContextIndex}" TickFrequency="1" IsSnapToTickEnabled="True"
@@ -554,7 +557,7 @@
                          margin off, so a long line came back narrower than measured, wrapped once more and
                          lost the last line of the message under the bubble's edge. -->
                     <!-- Its right-click menu is the chat's (MainWindow.OnChatMenu): Copy, Undo message and everything below, Compact context. -->
-                    <SelectableTextBlock views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" Margin="0,-8" Padding="12,8" />
+                    <views:SelectableText views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" IsVisible="{Binding HasText}" Margin="0,-8" Padding="12,8" />
                   </StackPanel>
                 </Border>
               </StackPanel>
@@ -567,7 +570,7 @@
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Left" />
                 <Expander Classes="thoughts" IsVisible="{Binding HasReasoning}" Header="{Binding ThinkingLabel}" HorizontalAlignment="Stretch" IsExpanded="True"
                           Padding="16,12">
-                  <SelectableTextBlock Classes="muted" views:MarkdownText.Plain="{Binding ShownReasoning}" TextWrapping="Wrap" Margin="-16,-12" Padding="16,12" />
+                  <views:SelectableText Classes="muted" views:MarkdownText.Plain="{Binding ShownReasoning}" TextWrapping="Wrap" Margin="-16,-12" Padding="16,12" />
                 </Expander>
                 <views:MarkdownView Source="{Binding ShownText}" IsVisible="{Binding HasText}" />
                 <TextBlock Classes="muted" Text="{Binding TypingText}" IsVisible="{Binding ShowTypingDots}" />
@@ -602,7 +605,7 @@
 
                   <!-- A shell command in full, open: what ran matters more than its output. -->
                   <Border Classes="command" IsVisible="{Binding HasCommand}">
-                    <SelectableTextBlock Classes="command" Text="{Binding Command}" />
+                    <views:SelectableText Classes="command" Text="{Binding Command}" />
                   </Border>
 
                   <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsAwaitingApproval}">
@@ -626,7 +629,7 @@
                   </Expander>
 
                   <Expander IsVisible="{Binding HasResult}" Header="Output" Padding="8,4" HorizontalAlignment="Stretch">
-                    <SelectableTextBlock Text="{Binding ResultText}" TextWrapping="Wrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Margin="-8,-4" Padding="8,4" />
+                    <views:SelectableText Text="{Binding ResultText}" TextWrapping="Wrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Margin="-8,-4" Padding="8,4" />
                   </Expander>
                 </StackPanel>
               </Border>
@@ -641,7 +644,7 @@
                           IsVisible="{Binding CanContinue}" Command="{Binding ContinueCommand}" />
                   <TextBlock DockPanel.Dock="Left" Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}"
                              VerticalAlignment="Center" Margin="8,0,0,0" />
-                  <SelectableTextBlock Classes="muted" Classes.error="{Binding IsError}" views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center"
+                  <views:SelectableText Classes="muted" Classes.error="{Binding IsError}" views:MarkdownText.Plain="{Binding Text}" TextWrapping="Wrap" VerticalAlignment="Center"
                                        Margin="0,-4" Padding="8,4" />
                 </DockPanel>
               </Border>

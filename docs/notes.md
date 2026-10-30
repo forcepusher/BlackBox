@@ -1454,6 +1454,44 @@ name on a card 2 over and none under. Measured with `.dev/chat-menu-test/text-ce
 with ink, each control's capitals from their top to the baseline) and `text-layout.ps1` (each
 control's text block against its middle), on the laptop at 125%: everything within 0.5 px.
 
+Windows hints Inter's capitals to whole pixels (sharp at top and bottom) and puts the baseline on a
+whole row. At 100%, where the user works every day (a 2560x1080 screen; the laptop is at 125%), 14's
+capitals are 10 or 11 rows in a 32-px control and can sit exactly in its middle; at 125% they are 13
+rows in 40, so 13 over and 14 under is as close as it gets, and what matters there is that things side
+by side agree. A sweep after the restyle (the user, 2026-10-30: "Side panel text vertical centering
+looks off", a screenshot at 100%) measured both scales with `.dev/centre-test/` (`texts.ps1` finds
+every word UI Automation knows, the box it sits in and where its capitals' line is, to a tenth of a
+pixel; `check100.ps1` and friends measure 100% on the 125% laptop with a DPI-unaware build, never
+committed). Found and fixed:
+- Every dropdown's word (Side panel, the model, the effort, Settings' "Ask me first") was a pixel
+  under the buttons' at 100%: Fluent's dropdown lays its content over its whole height, border and
+  all, a button inside its border. `ComboBoxPadding` (and `ComboBox.ghost`) 1 over and under stands
+  for the border; with 6 and 6 the word rounded a pixel low.
+- The context size's box (5 over and under) was a pixel low at 100%; 0 now, centred as a button.
+- The message box's words and hint were a pixel under Send's at both scales (Fluent's text box has 6
+  over and 5 under); `TextBox.composer` sits 0.6 higher, a pixel at both, its height the same.
+- The arrow left of Side panel, 12.5 px at 125%, rounded a pixel under the dropdown's word there:
+  0.5 under it rounds to nothing at 100% and a pixel at 125%. A nudge that is a pixel at one scale and
+  none at the other has to round that way (Avalonia rounds each margin to whole pixels, half to even).
+- File… and Generate on the Video generator's cards were a pixel high at 125%: they have a height of
+  their own (17.6) and half a pixel over the word; paddings that lowered them at 125% lowered them at
+  100% too, or made them a pixel taller.
+- Settings' labels sat a pixel under their dropdowns' words at 125% (`Grid.form > TextBlock.label`,
+  0.8 under; nothing at 100%). A label's smaller capitals are in the middle of the field's, as in the
+  chat's bars, its baseline a pixel higher.
+Everything else (buttons, fields, list and menu rows, chips, notices, the Thoughts header, table
+cells, History, Servers and Side panel rows, Copy, Discard) was centred at 100% and within half a
+pixel, level with its neighbours, at 125%.
+
+## Selected text
+Avalonia (11.3.22, and its master) draws a selection in a text block made of runs (a reply: bold,
+code, headings, links) with properties of its own for the selected part, built from the block's size
+and one run's font: the whole selection turned into the code font a size up and the rest of the line
+moved along (the user's recording, 2026-10-30). `SelectableText` (Views) builds the selected part
+from each run's own properties with only the colour changed; every selectable text in the app is one
+(`KeptSelectionTextBlock` too), styled as a `SelectableTextBlock`. A text box has one font, so its
+selection was right.
+
 ## One look for every control
 Every window and side panel draws its controls from the styles in App.axaml, one a kind, not
 sizes set on each control (the user, 2026-10-30, after drift was found in turn: text boxes with

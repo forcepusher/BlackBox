@@ -90,7 +90,7 @@ public sealed class MarkdownTable : Border
             while (Children.Count > count)
                 Children.RemoveAt(Children.Count - 1);
             while (Children.Count < count)
-                Children.Add(new SelectableTextBlock { TextWrapping = TextWrapping.Wrap, LineHeight = 20, Padding = CellPadding });
+                Children.Add(new SelectableText { TextWrapping = TextWrapping.Wrap, LineHeight = 20, Padding = CellPadding });
             for (var r = 0; r < table.Rows.Count; r++)
                 for (var c = 0; c < table.Columns; c++)
                 {
