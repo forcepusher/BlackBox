@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.3.0] - 2026-10-31
+## [1.2.0] - 2026-10-31
 ### Added
 - The agent can find text on the screen with Windows' own text recognition, so it finds a label, a
   link or a value in a big table or a page of text in one step instead of zooming around for it.
@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recognition off.
 - Sloperator updates itself: it checks GitHub for a new version once an hour, across starts too
   (never during a task), downloads it beside itself, and a line under the top bar says **Sloperator
-  1.4.0 is ready**, with **Restart** and **What's new**. Restart opens the new version with the same
+  1.3.0 is ready**, with **Restart** and **What's new**. Restart opens the new version with the same
   chats; closing Sloperator instead puts it in place for the next start. In a folder Sloperator can't
   write to (Program Files) the line says the new version is out, with a link to download it.
 - **Check for updates** and **Check automatically** (on by default) under Settings → Advanced → Updates. Off,
@@ -573,7 +573,7 @@ The first release.
 - A command-line runner, and benchmarks: desktop tasks, 2048 and Unity 2048, clicks, a sysadmin
   lab, a chat stand-in lab and ComfyUI requests.
 
-[unreleased]: https://github.com/forcepusher/Sloperator/compare/1.3.0...HEAD
-[1.3.0]: https://github.com/forcepusher/Sloperator/compare/1.1.0...1.3.0
+[unreleased]: https://github.com/forcepusher/Sloperator/compare/1.2.0...HEAD
+[1.2.0]: https://github.com/forcepusher/Sloperator/compare/1.1.0...1.2.0
 [1.1.0]: https://github.com/forcepusher/Sloperator/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/forcepusher/Sloperator/releases/tag/1.0.0

@@ -1,6 +1,6 @@
 # Release check, 30 October 2026
 
-A last pass before 1.3.0, on the laptop, branch `release-1.3.0` off develop: a clean-up, real agent
+A last pass before 1.2.0, on the laptop, branch `release-1.3.0` off develop: a clean-up, real agent
 tasks on three models with the clicks in real programs rather than the click benchmark's fake screens,
 and the long tests of `scripts/`. The workstation's tests (ComfyUI and video, second-monitor tasks,
 the opt-in tests that need its programs) are in their own section.
@@ -187,7 +187,7 @@ The workstation thread's runs, on develop f80fef2 and then on release-1.3.0 (fro
   notification (`BB_TOAST_TESTS=1`).
 - The changelog no longer lists steps between unreleased versions (the right-click Copy split, a
   second entry on the box's hint, History and Servers "fixed" to the left edge and then moved back).
-- `Directory.Build.props` says 1.3.0 and the changelog's section is dated (there was no 1.2.0).
+- `Directory.Build.props` says 1.2.0 and the changelog's section is dated.
 
 Also checked on the release build: the real-screen unit tests and the real-mouse click test on the
 laptop, the published single-file exe (24 MB) starting on an empty folder with nothing in
