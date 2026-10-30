@@ -1429,6 +1429,13 @@ it was "a pure OCD trigger"); `FitIntroHeading` gives its content presenter a bo
 as the heading while the heading shows, so what scrolls still stops at the heading's top and the
 cards never go under it. Measured at 100% and 125%: the bar's box is the same on the start screen and
 in a chat, and the cards and heading are where they were to the pixel.
+Under the heading (and the offer of text recognition, in its row) nothing scrolls, and the presenter's
+margin isn't drawn, so the wheel there reached the window and did nothing (the user, 2026-10-30).
+`MainWindow.OnWheelOutsideChat` hands a wheel the window gets inside the chat's box to the content
+presenter, which scrolls by its own step and passes through the chat's tunnel handler for
+stick-to-bottom. Measured at 125% in the default window: one notch over the logo, the heading, the
+line under it or a card moves the cards 62 px (31.9%), and every point from the heading's top margin
+down to the chat box scrolls; in a chat the wheel just over the box and mid-chat move it as before.
 The heading has 20 over the logo, not 12, so in the default window (900x760 under the title bar) the scroll ends in the
 gap under the third row of cards: at 12 the fourth row's top edge peeked out over the logo as a line,
 3.2 px at 125% and 1.6 at 100% (the user, 2026-10-30, "ugly"). The heading's row grows upward, so

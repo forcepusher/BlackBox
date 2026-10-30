@@ -125,6 +125,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   files to ask about them, stage or discard them."
 
 ### Fixed
+- On the start screen, the mouse wheel over the logo, "What should I do on your computer?" and the
+  line under it (or the offer of text recognition) scrolls the cards, as it does over them.
 - The server's status in the top bar was cut short ("Conne…", or the dot and "…" beside a long Side
   panel name such as Video generator). Now it says the whole word, or shows the dot alone where the
   word doesn't fit, its tooltip saying it.
