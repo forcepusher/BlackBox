@@ -823,7 +823,7 @@ will be more tools extending to the left side of the screen later."). The **Side
 tools are something else; code names such as `IToolkit` stay)
 takes the place of the second Sloperator logo and name under the title bar, an arrow pointing
 left beside it (outside the button since 2026-10-29, at the user's word), where its tools open: None or Video generator (`ToolkitOption`, `IToolkit`, more to come); it
-now reads None, File changes, File inspector, Video generator (the user, 2026-10-26). A muted "in
+now reads None, File changes, File inspector, Video generator (the user, 2026-10-26), each with a grey line of what it is. The list is as wide as its longest line, 12 from its border on both sides as every dropdown row (`ComboBoxItem` Padding 12,6): rows were a fixed 300 wide, wrapping, until 2026-10-30, and left about 110 px empty right of the longest line. A muted "in
 development" beside it (the user, 2026-10-24) went on 2026-10-29, at the user's word. Its
 arrows are solid triangles, the left one and the dropdown's, as History's and every dropdown's are
 (the user: "Arrows need consistency"; Fluent's thin chevron is replaced in App.axaml by a style
