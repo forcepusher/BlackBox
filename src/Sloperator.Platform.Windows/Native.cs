@@ -338,11 +338,48 @@ internal static partial class Native
     [LibraryImport("user32.dll")]
     public static partial nint GetLastActivePopup(nint hWnd);
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct TRACKMOUSEEVENT { public int cbSize; public uint dwFlags; public nint hwndTrack; public uint dwHoverTime; }
+
+    /// <summary>WM_NCMOUSELEAVE once the pointer leaves the window's non-client part.</summary>
+    public const uint TME_LEAVE = 0x2, TME_NONCLIENT = 0x10;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool TrackMouseEvent(ref TRACKMOUSEEVENT lpEventTrack);
+
+    public const uint WM_NCCALCSIZE = 0x0083, WM_NCHITTEST = 0x0084;
+    public const int HTCLIENT = 1, HTTOP = 12, HTTOPLEFT = 13, HTTOPRIGHT = 14;
+    public const uint SWP_FRAMECHANGED = 0x0020;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool IsZoomed(nint hWnd);
+
+    public const uint WM_SYSCOMMAND = 0x0112;
+    public const uint SC_SIZE = 0xF000, SC_MOVE = 0xF010, SC_MINIMIZE = 0xF020, SC_MAXIMIZE = 0xF030, SC_CLOSE = 0xF060, SC_RESTORE = 0xF120;
+    public const uint MF_ENABLED = 0, MF_GRAYED = 1, TPM_RETURNCMD = 0x100;
+
+    [LibraryImport("user32.dll")]
+    public static partial nint GetSystemMenu(nint hWnd, [MarshalAs(UnmanagedType.Bool)] bool bRevert);
+
+    [LibraryImport("user32.dll")]
+    public static partial int EnableMenuItem(nint hMenu, uint uIDEnableItem, uint uEnable);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetMenuDefaultItem(nint hMenu, uint uItem, uint fByPos);
+
+    [LibraryImport("user32.dll")]
+    public static partial int TrackPopupMenu(nint hMenu, uint uFlags, int x, int y, int nReserved, nint hWnd, nint prcRect);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool PostMessage(nint hWnd, uint msg, nint wParam, nint lParam);
+
     public const int DWMWA_CLOAKED = 14;
     /// <summary>Dark title bar and borders: 20 from Windows 10 2004, 19 before it.</summary>
     public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19;
-    /// <summary>The title bar's colour and its text's (COLORREF, 0x00BBGGRR): Windows 11 only.</summary>
-    public const int DWMWA_CAPTION_COLOR = 35, DWMWA_TEXT_COLOR = 36;
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(nint hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);

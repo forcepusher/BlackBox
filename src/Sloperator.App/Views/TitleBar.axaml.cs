@@ -1,0 +1,153 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+
+namespace Sloperator.App.Views;
+
+/// <summary>
+/// The title bar on top of a window, in the app's colours: Windows 10 draws its own grey whatever
+/// the window asks. Windows is told the window has no caption (its frame stays on the sides and at
+/// the bottom) and that the strip is its caption, so it drags, snaps, maximizes on a double-click
+/// and opens the system menu on a right-click as a native one; the maximize button is Windows' too
+/// (HTMAXBUTTON), so Windows 11 shows its snap layouts over it. Elsewhere (no Windows) it is hidden
+/// and the system's own title bar stays.
+/// </summary>
+public partial class TitleBar : UserControl
+{
+    private Window? _window;
+
+    public TitleBar()
+    {
+        InitializeComponent();
+        IsVisible = false;
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        if (TopLevel.GetTopLevel(this) is not Window window || window == _window)
+            return;
+        _window = window;
+        TitleText[!TextBlock.TextProperty] = window[!Window.TitleProperty];
+        window.PropertyChanged += OnWindowChanged;
+        Show(window);
+#if WINDOWS
+        if (OperatingSystem.IsWindows() && window.TryGetPlatformHandle()?.Handle is { } hwnd && hwnd != 0)
+        {
+            Win32Properties.AddWndProcHookCallback(window, WndProc);
+            Platform.Windows.WindowsPlatform.RefreshFrame(hwnd);
+            IsVisible = true;
+        }
+#endif
+    }
+
+    private void OnWindowChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == WindowBase.IsActiveProperty || e.Property == Window.WindowStateProperty)
+            Show(_window!);
+    }
+
+    /// <summary>Dim while another window is active, as Windows' own bars are; the restore sign while maximized.</summary>
+    private void Show(Window window)
+    {
+        Classes.Set("inactive", !window.IsActive);
+        Classes.Set("maximized", window.WindowState == WindowState.Maximized);
+    }
+
+    private void OnMinimize(object? sender, RoutedEventArgs e) => _window!.WindowState = WindowState.Minimized;
+
+    private void OnMaximize(object? sender, RoutedEventArgs e) => ToggleMaximized();
+
+    private void OnClose(object? sender, RoutedEventArgs e) => _window!.Close();
+
+    private void ToggleMaximized() =>
+        _window!.WindowState = _window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+#if WINDOWS
+    private const uint WM_NCCALCSIZE = 0x0083, WM_NCHITTEST = 0x0084, WM_NCMOUSEMOVE = 0x00A0, WM_NCLBUTTONDOWN = 0x00A1,
+        WM_NCLBUTTONUP = 0x00A2, WM_NCLBUTTONDBLCLK = 0x00A3, WM_NCRBUTTONDOWN = 0x00A4, WM_NCRBUTTONUP = 0x00A5, WM_SYSCOMMAND = 0x0112, WM_NCMOUSELEAVE = 0x02A2;
+    private const int HTCLIENT = 1, HTCAPTION = 2, HTMAXBUTTON = 9, SC_KEYMENU = 0xF100;
+
+    /// <summary>Pressed on the maximize button and not yet let go.</summary>
+    private bool _pressed;
+
+    /// <summary>
+    /// The frame without a caption, and what each point of the strip is: a button, or the caption.
+    /// Over the maximize button the window gets no pointer events, only non-client ones, so its look
+    /// under the pointer and pressed and its click are done here.
+    /// </summary>
+    private nint WndProc(nint hwnd, uint msg, nint wParam, nint lParam, ref bool handled)
+    {
+        switch (msg)
+        {
+            case WM_NCCALCSIZE when wParam != 0:
+                Platform.Windows.WindowsPlatform.CaptionlessFrame(hwnd, wParam, lParam);
+                handled = true;
+                return 0;
+            case WM_NCHITTEST:
+                handled = true;
+                var hit = Platform.Windows.WindowsPlatform.FrameHitTest(hwnd, lParam);
+                return hit != HTCLIENT ? hit : Over(MaximizeButton, lParam) ? HTMAXBUTTON
+                    : Over(this, lParam) && !Over(MinimizeButton, lParam) && !Over(CloseButton, lParam) ? HTCAPTION : HTCLIENT;
+            case WM_NCMOUSEMOVE:
+                Hover(wParam == HTMAXBUTTON);
+                if (wParam == HTMAXBUTTON)
+                    Platform.Windows.WindowsPlatform.TrackNonClientLeave(hwnd);
+                break;
+            case WM_NCMOUSELEAVE:
+                Hover(false);
+                break;
+            case WM_NCLBUTTONDOWN or WM_NCLBUTTONDBLCLK when wParam == HTMAXBUTTON:
+                Press(true);
+                handled = true;
+                break;
+            case WM_NCLBUTTONUP when wParam == HTMAXBUTTON:
+                var click = _pressed;
+                Press(false);
+                if (click)
+                    ToggleMaximized();
+                handled = true;
+                break;
+            // The system menu where the pointer is, or under the bar's left end for Alt+Space. Windows'
+            // own handling of the press keeps the letting go to itself.
+            case WM_NCRBUTTONDOWN when wParam == HTCAPTION:
+                handled = true;
+                break;
+            case WM_NCRBUTTONUP when wParam == HTCAPTION:
+                Platform.Windows.WindowsPlatform.ShowSystemMenu(hwnd, (short)(lParam & 0xFFFF), (short)((lParam >> 16) & 0xFFFF));
+                handled = true;
+                break;
+            case WM_SYSCOMMAND when (wParam & 0xFFF0) == SC_KEYMENU && lParam == ' ':
+                var corner = this.PointToScreen(new Point(0, this.FindResource("TitleBarHeight") is double strip ? strip : Bounds.Height));
+                Platform.Windows.WindowsPlatform.ShowSystemMenu(hwnd, corner.X, corner.Y);
+                handled = true;
+                break;
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// Whether the screen point in <paramref name="lParam"/> (pixels, each half signed: a screen left
+    /// of the first is negative) is on <paramref name="control"/>; on the bar, its strip (without the line under it).
+    /// </summary>
+    private bool Over(Control control, nint lParam)
+    {
+        var at = control.PointToClient(new PixelPoint((short)(lParam & 0xFFFF), (short)((lParam >> 16) & 0xFFFF)));
+        var height = control == this && this.FindResource("TitleBarHeight") is double strip ? strip : control.Bounds.Height;
+        return control.IsEffectivelyVisible && new Rect(0, 0, control.Bounds.Width, height).Contains(at);
+    }
+
+    private void Hover(bool over)
+    {
+        MaximizeButton.Classes.Set("hover", over);
+        if (!over)
+            Press(false);
+    }
+
+    private void Press(bool pressed)
+    {
+        _pressed = pressed;
+        MaximizeButton.Classes.Set("pressed", pressed);
+    }
+#endif
+}

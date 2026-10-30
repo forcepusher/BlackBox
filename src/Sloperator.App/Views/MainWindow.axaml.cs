@@ -221,7 +221,8 @@ public partial class MainWindow : Window
     private void FitTo(Avalonia.Platform.Screen screen)
     {
         var area = screen.WorkingArea.Size.ToSize(screen.Scaling);
-        // Width and Height are the client area; the title bar and borders take about 40 more.
+        // Width and Height are the client area, the title bar in it; Windows' frame takes a few pixels
+        // more (40 was Windows' title bar and borders, kept as room to spare).
         Width = Math.Max(MinWidth, Math.Min(Width, area.Width - 16));
         Height = Math.Max(MinHeight, Math.Min(Height, area.Height - 40));
     }
@@ -682,13 +683,13 @@ public partial class MainWindow : Window
     /// </summary>
     private void LayOut(double width)
     {
-        foreach (var changed in Columns.GetVisualDescendants().OfType<Layoutable>().Where(c => !c.IsMeasureValid || !c.IsArrangeValid).ToList())
-            for (Visual? v = changed; v is not null && v != Columns; v = v.GetVisualParent())
+        foreach (var changed in Root.GetVisualDescendants().OfType<Layoutable>().Where(c => !c.IsMeasureValid || !c.IsArrangeValid).ToList())
+            for (Visual? v = changed; v is not null && v != Root; v = v.GetVisualParent())
                 (v as Layoutable)?.InvalidateMeasure();
-        Columns.InvalidateMeasure();
-        var bounds = Columns.Bounds.WithWidth(width);
-        Columns.Measure(bounds.Size);
-        Columns.Arrange(bounds);
+        Root.InvalidateMeasure();
+        var bounds = Root.Bounds.WithWidth(width);
+        Root.Measure(bounds.Size);
+        Root.Arrange(bounds);
     }
 
     /// <summary>
@@ -741,13 +742,14 @@ public partial class MainWindow : Window
     {
         across = 0;
         var scaling = RenderScaling;
-        var size = new PixelSize((int)Math.Ceiling(Columns.Bounds.Width * scaling), (int)Math.Ceiling(Columns.Bounds.Height * scaling));
+        // The title bar too: it is in the client area, which the cover goes over.
+        var size = new PixelSize((int)Math.Ceiling(Root.Bounds.Width * scaling), (int)Math.Ceiling(Root.Bounds.Height * scaling));
         if (size.Width <= 0 || size.Height <= 0)
             return null;
         try
         {
             using var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(size, new Vector(96 * scaling, 96 * scaling));
-            bitmap.Render(Columns);
+            bitmap.Render(Root);
             var pixels = new byte[size.Width * size.Height * 4];
             var handle = System.Runtime.InteropServices.GCHandle.Alloc(pixels, System.Runtime.InteropServices.GCHandleType.Pinned);
             try { bitmap.CopyPixels(new PixelRect(size), handle.AddrOfPinnedObject(), pixels.Length, size.Width * 4); }
