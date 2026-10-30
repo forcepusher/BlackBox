@@ -686,7 +686,7 @@
                   </DockPanel>
                   <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
                   <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding ShowsWarning}"
-                             Text="On Install, Windows asks whether Windows PowerShell may make changes to your device. That's this install: click Yes." />
+                             Text="Windows will ask to allow PowerShell: click Yes." />
                   <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsOpen}">
                     <Button Classes="primary" Content="Install" Command="{Binding InstallCommand}" />
                     <Button Classes="ghost" Content="Not now" Command="{Binding NotNowCommand}" />

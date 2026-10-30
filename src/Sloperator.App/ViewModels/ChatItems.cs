@@ -432,7 +432,7 @@ public sealed partial class TextRecognitionItem(ITextReader reader, Action turnO
 {
     /// <summary>What the card says under its title: the offer, then how the install went.</summary>
     [ObservableProperty]
-    private string _status = "With it, the agent finds buttons, menus and text on your screen in one step and clicks them more surely. It's part of Windows, a download of a few MB.";
+    private string _status = "Helps the agent find and click things on screen. Part of Windows, a few MB.";
 
     /// <summary>The buttons show until one is chosen.</summary>
     [ObservableProperty]
@@ -450,14 +450,14 @@ public sealed partial class TextRecognitionItem(ITextReader reader, Action turnO
     {
         IsOpen = false;
         IsInstalling = true;
-        Status = "Installing… Windows now asks whether Windows PowerShell may make changes to your device: click Yes.";
+        Status = "Installing… When Windows asks about PowerShell, click Yes.";
         var result = await reader.InstallAsync(CancellationToken.None);
         IsInstalling = false;
         Status = result switch
         {
-            TextInstall.Installed => $"Installed: {string.Join(", ", reader.Languages())}. The agent reads the screen's text from its next look.",
-            TextInstall.Declined => "Not installed: Windows' permission prompt was declined. It's offered again the next time it's needed.",
-            _ => "Not installed: Windows couldn't add it (is the PC online?). You can add a language in Settings → Advanced → Text recognition.",
+            TextInstall.Installed => $"Installed: {string.Join(", ", reader.Languages())}.",
+            TextInstall.Declined => "Not installed: Windows' prompt was declined. Offered again next time.",
+            _ => "Not installed: Windows couldn't add it. Try Settings → Advanced.",
         };
     }
 
@@ -465,7 +465,7 @@ public sealed partial class TextRecognitionItem(ITextReader reader, Action turnO
     private void NotNow()
     {
         IsOpen = false;
-        Status = "Not installed for now. It's offered again the next time it's needed.";
+        Status = "Skipped. Offered again next time.";
     }
 
     [RelayCommand]
@@ -473,7 +473,7 @@ public sealed partial class TextRecognitionItem(ITextReader reader, Action turnO
     {
         IsOpen = false;
         turnOff();
-        Status = "Text recognition is off: the agent won't read the screen's text or offer it again. Turn it back on in Settings → Advanced.";
+        Status = "Turned off. Back on in Settings → Advanced.";
     }
 }
 

@@ -37,7 +37,7 @@ public sealed class TextRecognitionCardTests
         var card = new TextRecognitionItem(new Reader(TextInstall.Declined), () => { });
         await card.InstallCommand.ExecuteAsync(null);
         Assert.Contains("declined", card.Status);
-        Assert.Contains("offered again", card.Status);
+        Assert.Contains("Offered again", card.Status);
     }
 
     [Fact]
