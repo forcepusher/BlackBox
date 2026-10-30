@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.3.0] - 2026-10-31
 ### Added
 - The agent can find text on the screen with Windows' own text recognition, so it finds a label, a
   link or a value in a big table or a page of text in one step instead of zooming around for it.
@@ -571,6 +573,7 @@ The first release.
 - A command-line runner, and benchmarks: desktop tasks, 2048 and Unity 2048, clicks, a sysadmin
   lab, a chat stand-in lab and ComfyUI requests.
 
-[unreleased]: https://github.com/forcepusher/Sloperator/compare/1.1.0...HEAD
+[unreleased]: https://github.com/forcepusher/Sloperator/compare/1.3.0...HEAD
+[1.3.0]: https://github.com/forcepusher/Sloperator/compare/1.1.0...1.3.0
 [1.1.0]: https://github.com/forcepusher/Sloperator/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/forcepusher/Sloperator/releases/tag/1.0.0
