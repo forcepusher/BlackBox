@@ -1425,6 +1425,11 @@ it was "a pure OCD trigger"); `FitIntroHeading` gives its content presenter a bo
 as the heading while the heading shows, so what scrolls still stops at the heading's top and the
 cards never go under it. Measured at 100% and 125%: the bar's box is the same on the start screen and
 in a chat, and the cards and heading are where they were to the pixel.
+The heading has 20 over the logo, not 12, so in the default window (900x760) the scroll ends in the
+gap under the third row of cards: at 12 the fourth row's top edge peeked out over the logo as a line,
+3.2 px at 125% and 1.6 at 100% (the user, 2026-10-30, "ugly"). The heading's row grows upward, so
+the logo and the cards stay where they were and only the scroll ends 8 sooner; 4 would have hidden
+the line by a single pixel at 125%. In a tall window the cards sit 8 further over the logo.
 
 The line under the heading is `ScreenNote`: what the agent may do on the screen, after Settings'
 "Enable screenshots" and "Enable keyboard and mouse control" and whether the model takes images

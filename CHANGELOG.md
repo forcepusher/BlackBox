@@ -115,6 +115,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The server's status in the top bar was cut short ("Conne…", or the dot and "…" beside a long Side
   panel name such as Video generator). Now it says the whole word, or shows the dot alone where the
   word doesn't fit, its tooltip saying it.
+- On the start screen, the top edge of a row of cards peeked out as a thin line over the logo in a
+  window of the default size.
 - A newer Sloperator started from the folder of one still closing could fail with "Access to the path
   'libHarfBuzzSharp.dll' is denied".
 - Code in a reply's line (`like this`) was much smaller than the words around it (11 beside 14);
