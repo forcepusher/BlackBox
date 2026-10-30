@@ -44,9 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   looking at its window. Click it to bring that window to the front.
 
 ### Changed
-- New lines on the start screen's cards: "I can use keyboard and mouse." (Use any app), "Word,
-  Excel, PDF, etc. No office required." (Documents), "I can reply for you in any chat app." (Chat for
-  you) and "I can keep going for hours if needed." (Long jobs).
+- New lines on the start screen's cards: "I can see screen, use keyboard and mouse." (Use any
+  app), "Word, Excel, PDF, etc. No Office needed." (Documents), "I can reply for you in any chat
+  app." (Chat for you) and "I can keep going for hours if needed." (Long jobs).
 - The History and Servers lists open under their button's right edge and grow to the left.
 - The File inspector in the Side panel menu says "Look inside any file" (it said "Any file from the
   chat", but it opens any file).
