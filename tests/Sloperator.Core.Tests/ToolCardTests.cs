@@ -6,7 +6,7 @@ using Xunit;
 namespace Sloperator.Core.Tests;
 
 /// <summary>
-/// What a toolkit panel gives a message shows as cards like its files', over the box and in the sent
+/// What a side panel gives a message shows as cards like its files', over the box and in the sent
 /// bubble, and a tool's card never has the × a file of the user's has (the user, 2026-10-25).
 /// </summary>
 public class ToolCardTests : IDisposable

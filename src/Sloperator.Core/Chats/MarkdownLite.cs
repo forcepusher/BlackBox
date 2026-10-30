@@ -614,17 +614,26 @@ public static partial class MarkdownLite
     // ---- tables ------------------------------------------------------------------------------
 
     /// <summary>
+    /// A table's cells by row, which row is its |---| line (-1: none), each column's alignment from
+    /// that line (-1 left, 0 centre, 1 right) and the other rows.
+    /// </summary>
+    private static (List<List<string>> Cells, int Separator, List<int> Align, List<int> Body) Grid(List<string> rows)
+    {
+        var cells = rows.Select(r => Cells(r)).ToList();
+        var separator = SeparatorRow(cells);
+        List<int> align = separator >= 0
+            ? cells[separator].Select(c => c.EndsWith(':') ? (c.StartsWith(':') ? 0 : 1) : -1).ToList()
+            : [];
+        return (cells, separator, align, Enumerable.Range(0, cells.Count).Where(i => i != separator).ToList());
+    }
+
+    /// <summary>
     /// A table's rows as a grid: the |---| line gives the alignment and makes the row over it the
     /// header. Null when there are no rows but |---| lines.
     /// </summary>
     private static MdTable? ParseTable(List<string> rows)
     {
-        var cells = rows.Select(Cells).ToList();
-        var separator = cells.FindIndex(r => r.Count > 0 && r.All(c => Separator().IsMatch(c)));
-        var align = separator >= 0
-            ? cells[separator].Select(c => c.EndsWith(':') ? (c.StartsWith(':') ? 0 : 1) : -1).ToList()
-            : [];
-        var body = Enumerable.Range(0, cells.Count).Where(i => i != separator).ToList();
+        var (cells, separator, align, body) = Grid(rows);
         if (body.Count == 0)
             return null;
         var header = separator > 0 ? 1 : 0;
@@ -642,12 +651,7 @@ public static partial class MarkdownLite
     /// </summary>
     private static IEnumerable<(List<MdSpan> Line, int Row, IReadOnlyList<int>? Cells)> Table(List<string> rows)
     {
-        var cells = rows.Select(Cells).ToList();
-        var separator = cells.FindIndex(r => r.Count > 0 && r.All(c => Separator().IsMatch(c)));
-        var align = separator >= 0
-            ? cells[separator].Select(c => c.EndsWith(':') ? (c.StartsWith(':') ? 0 : 1) : -1).ToList()
-            : [];
-        var body = Enumerable.Range(0, cells.Count).Where(i => i != separator).ToList();
+        var (cells, separator, align, body) = Grid(rows);
         if (body.Count == 0)
         {
             // Nothing but a |---| line: a scale drawn in text, or a table whose first line is still
@@ -684,26 +688,6 @@ public static partial class MarkdownLite
         }
     }
 
-    private static List<string> Cells(string row)
-    {
-        var t = row.Trim();
-        if (t.StartsWith('|')) t = t[1..];
-        if (t.EndsWith('|') && !t.EndsWith("\\|")) t = t[..^1];
-        // Split on | that isn't escaped or inside `code`.
-        var cells = new List<string>();
-        var cell = new StringBuilder();
-        var inCode = false;
-        for (var i = 0; i < t.Length; i++)
-        {
-            if (t[i] == '\\' && i + 1 < t.Length && t[i + 1] == '|') { cell.Append('|'); i++; continue; }
-            if (t[i] == '`') inCode = !inCode;
-            if (t[i] == '|' && !inCode) { cells.Add(cell.ToString().Trim()); cell.Clear(); continue; }
-            cell.Append(t[i]);
-        }
-        cells.Add(cell.ToString().Trim());
-        return cells;
-    }
-
     // An opening or closing fence: its indent, its backticks, and the language after them.
     [GeneratedRegex(@"^( *)(`{3,})\s*([^`\s]*)[^`]*$")]
     private static partial Regex Fence();
@@ -724,9 +708,6 @@ public static partial class MarkdownLite
     private static partial Regex Numbered();
 
     // A |---| line's cell: dashes, a colon at either end for the alignment (":-:" is one too); a lone "-" is a cell.
-    [GeneratedRegex(@"^(:-+:?|-+:|-{2,})$")]
-    private static partial Regex Separator();
-
     [GeneratedRegex(@"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")]
     private static partial Regex HeadingLevel();
 

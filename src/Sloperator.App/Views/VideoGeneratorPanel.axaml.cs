@@ -578,10 +578,7 @@ public partial class VideoGeneratorPanel : UserControl
         if (clicked is PlayerPreview { IsPlaying: true } playing)
             playing.Stop();
         _viewer?.Close();
-        var viewer = _viewer = new MediaViewer { DataContext = new MediaViewerViewModel(entries, index, Vm.Previews, screen.Bounds.Width) };
-        viewer.Position = screen.Bounds.Position;
-        viewer.Width = screen.Bounds.Width / screen.Scaling;
-        viewer.Height = screen.Bounds.Height / screen.Scaling;
+        var viewer = _viewer = MediaViewer.On(screen, entries, index, Vm.Previews);
         viewer.Closed += (_, _) =>
         {
             if (ReferenceEquals(_viewer, viewer))

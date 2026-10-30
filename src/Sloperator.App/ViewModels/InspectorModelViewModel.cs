@@ -72,10 +72,7 @@ public sealed partial class InspectorModelViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(PlayIcon))]
     private bool _isPlaying;
 
-    private static readonly Avalonia.Media.Geometry PlayShape = Avalonia.Media.StreamGeometry.Parse("M8 5v14l11-7z");
-    private static readonly Avalonia.Media.Geometry PauseShape = Avalonia.Media.StreamGeometry.Parse("M6 4h4v16H6zM14 4h4v16h-4z");
-
-    public Avalonia.Media.Geometry PlayIcon => IsPlaying ? PauseShape : PlayShape;
+    public Avalonia.Media.Geometry PlayIcon => PlayerIcons.Play(IsPlaying);
 
     [RelayCommand]
     private void Play()

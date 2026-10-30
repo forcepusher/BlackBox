@@ -20,6 +20,9 @@ public static class MediaPreview
     /// <summary>The widest a look at one file is, and the most pixels the whole picture has (about 3,000 image tokens).</summary>
     private const int TileWidth = 1024, MaxPixels = 2048 * 1536;
 
+    /// <summary>"mono", "stereo" or "6 channels".</summary>
+    public static string Channels(int count) => count == 1 ? "mono" : count == 2 ? "stereo" : $"{count} channels";
+
     public static MediaLook ForFiles(IReadOnlyList<string> paths, IMediaDecoder? decoder, bool seesImages)
     {
         var lines = new List<string>();
@@ -229,7 +232,7 @@ public static class MediaPreview
         var (mono, rate) = ReadMono(reader, TimeSpan.FromMinutes(10));
         var seconds = mono.Length / (double)rate;
         var stats = SoundStats.Of(mono, rate);
-        var channels = reader.Channels == 1 ? "mono" : reader.Channels == 2 ? "stereo" : $"{reader.Channels} channels";
+        var channels = Channels(reader.Channels);
         var line = $"sound {Math.Max(seconds, reader.Duration.TotalSeconds):0.0} s, {rate / 1000.0:0.#} kHz {channels}, {stats.Describe()}, {size}";
         if (!makeTile || mono.Length == 0)
             return (line, null, "");

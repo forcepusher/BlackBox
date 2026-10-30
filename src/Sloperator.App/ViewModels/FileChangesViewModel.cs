@@ -153,14 +153,14 @@ public sealed partial class DiffRow(DiffFileItem file, DiffLine? line) : Observa
 }
 
 /// <summary>
-/// The File changes panel, a tool of the chat window's toolkit on the left of the chat: the files the
+/// The File changes panel, one of the chat window's side panels on the left of the chat: the files the
 /// agent changed in this chat (write_file, edit_file, and what its commands changed), each against
 /// what it held before the agent first changed it, updated as the agent works. Lines picked in it
 /// (click, drag, Shift+click, Ctrl+click) go into the chat's box as the files they are in, and the message
 /// sent from there carries them for the model: the user asks about them, has them explained,
 /// reviewed or changed (the user's request, 2026-10-24).
 /// </summary>
-public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
+public sealed partial class FileChangesViewModel : ObservableObject, ISidePanel
 {
     private readonly MainWindowViewModel _chat;
     private readonly DispatcherTimer _refreshTimer;

@@ -2,13 +2,14 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Sloperator.Core.Media;
 using Sloperator.Core.Platform;
+using static Sloperator.Platform.Windows.ComAbi;
 
 namespace Sloperator.Platform.Windows;
 
 /// <summary>
 /// Video frames and sound through Windows' own Media Foundation (its Source Reader): MP4/H.264,
 /// MOV, WMV, MP3, AAC, FLAC and WAV play on every Windows 10 and 11 without anything installed.
-/// The COM interfaces are called through their vtables, only the few methods used.
+/// The COM interfaces are called through their vtables (<see cref="ComAbi"/>).
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed unsafe class MediaFoundationDecoder : IMediaDecoder
@@ -82,21 +83,8 @@ public sealed unsafe class MediaFoundationDecoder : IMediaDecoder
     [DllImport("mfplat.dll")] private static extern int MFCreateAttributes(out nint attributes, uint size);
     [DllImport("mfplat.dll")] private static extern int MFCreateMediaType(out nint type);
     [DllImport("mfreadwrite.dll", CharSet = CharSet.Unicode)] private static extern int MFCreateSourceReaderFromURL(string url, nint attributes, out nint reader);
-    [DllImport("ole32.dll")] private static extern int CoInitializeEx(nint reserved, uint coInit);
 
     private static readonly Lazy<bool> Started = new(() => MFStartup(MF_VERSION, 0) >= 0);
-
-    private static void Check(int hr)
-    {
-        if (hr < 0) Marshal.ThrowExceptionForHR(hr);
-    }
-
-    private static void* Slot(nint obj, int index) => (*(void***)obj)[index];
-
-    private static void Release(nint obj)
-    {
-        if (obj != 0) ((delegate* unmanaged[Stdcall]<nint, uint>)Slot(obj, 2))(obj);
-    }
 
     // IMFAttributes: GetUINT32 7, GetUINT64 8, SetUINT32 21, SetUINT64 22, SetGUID 24.
     private static int GetUInt32(nint attrs, Guid key, out uint value)
@@ -141,7 +129,7 @@ public sealed unsafe class MediaFoundationDecoder : IMediaDecoder
 
         public Reader(string path, bool video, int maxSide)
         {
-            _ = CoInitializeEx(0, 0); // MTA where nothing else has been set up; an STA thread works too
+            Start();
             if (!Started.Value)
                 throw new COMException("Media Foundation is not available (an N edition of Windows without its Media Feature Pack?).");
             _video = video;

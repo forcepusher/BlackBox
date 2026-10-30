@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using Sloperator.Core.Agent;
 using Sloperator.Core.Chats;
 using Sloperator.Core.Diffs;
-using Sloperator.Core.Llm;
 
 namespace Sloperator.App.ViewModels;
 

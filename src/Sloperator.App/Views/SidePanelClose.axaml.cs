@@ -4,14 +4,14 @@ using Sloperator.App.ViewModels;
 
 namespace Sloperator.App.Views;
 
-public partial class ToolkitClose : UserControl
+public partial class SidePanelClose : UserControl
 {
-    public ToolkitClose() => InitializeComponent();
+    public SidePanelClose() => InitializeComponent();
 
     /// <summary>The tool closes in the chat window it is in.</summary>
     private void OnClose(object? sender, RoutedEventArgs e)
     {
         if (TopLevel.GetTopLevel(this)?.DataContext is MainWindowViewModel chat)
-            chat.CloseToolkit();
+            chat.CloseSidePanel();
     }
 }

@@ -10,7 +10,7 @@ using static Sloperator.Core.Strings;
 namespace Sloperator.App.ViewModels;
 
 /// <summary>
-/// The File inspector panel, a tool of the chat window's toolkit on the left of the chat: one file
+/// The File inspector panel, one of the chat window's side panels on the left of the chat: one file
 /// shown whole, opened by the Inspect button of its card in the chat, picked with the panel's Open
 /// file button, or dropped on the panel. Sloperator
 /// draws Markdown (as a reply), tables, text and pictures itself, plays videos and animations frame
@@ -29,7 +29,7 @@ namespace Sloperator.App.ViewModels;
 /// selection Sloperator can't read. A stretch dragged over a sound goes in as "0.80-1.45 s · song.mp3",
 /// with a picture of it. Pictures, frames, pages and sounds zoom and pan.
 /// </summary>
-public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
+public sealed partial class FileInspectorViewModel : ObservableObject, ISidePanel
 {
     private readonly PreviewServices _previews;
     private readonly MainWindowViewModel? _chat;

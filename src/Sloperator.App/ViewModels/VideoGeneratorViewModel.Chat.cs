@@ -136,7 +136,7 @@ public sealed partial class VideoGeneratorViewModel
             Status = _board.Shots.Count == 0 ? "The video has no clips yet: say in the chat what video you want first." : "Some clips don't say what happens in them yet: click them and say it in the chat.";
             return;
         }
-        _chat.SendFromToolkit("Make the video.");
+        _chat.SendFromSidePanel("Make the video.");
     }
 
     // ---- what the chat is doing -------------------------------------------------------------------------

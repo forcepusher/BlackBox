@@ -102,7 +102,7 @@ public class FileChangesTests : IDisposable
         {
             await Task.Delay(300);
             File.WriteAllText(settings, "{\"at\": 2}\n");
-        });
+        }, TestContext.Current.CancellationToken);
 
         var shell = new ShellTool();
         var args = new JsonObject { ["command"] = "echo named> notes.txt & ping -n 2 127.0.0.1 >nul" };

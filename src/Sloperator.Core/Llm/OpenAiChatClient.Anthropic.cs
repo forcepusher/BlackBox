@@ -121,35 +121,12 @@ public sealed partial class OpenAiChatClient
             req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
             ClaudeHeaders(req, betas);
 
-            HttpResponseMessage resp;
-            try
-            {
-                resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, stall.Token).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (!ct.IsCancellationRequested && stall.IsCancellationRequested && ex is HttpRequestException or OperationCanceledException)
-            {
-                throw new ConnectionLostException($"Sending the request to {_baseUrl} stalled: nothing got through for {UploadStallLimit.TotalSeconds:0} s.", false, ex);
-            }
-            catch (HttpRequestException ex)
-            {
-                throw new ConnectionLostException($"Could not reach {_baseUrl}: {ex.Message}", false, ex) { Unreachable = !upload.Started };
-            }
-            catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
-            {
-                throw new ConnectionLostException($"{_baseUrl} did not answer in time.", false, ex);
-            }
-
-            using (resp)
+            using (var resp = await SendAsync(req, upload, stall, ct).ConfigureAwait(false))
             {
                 if (!resp.IsSuccessStatusCode)
                 {
                     var status = (int)resp.StatusCode;
-                    string err;
-                    try { err = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false); }
-                    catch (Exception ex) when (!ct.IsCancellationRequested && ex is IOException or HttpRequestException or TaskCanceledException)
-                    {
-                        throw new ConnectionLostException($"The connection to {_baseUrl} dropped while it answered {status}: {ex.Message}", false, ex);
-                    }
+                    var err = await ErrorBodyAsync(resp, ct).ConfigureAwait(false);
                     var said = ErrorText(err);
                     // A part of the request this account, model or API version doesn't take: left
                     // out, and the request sent again.

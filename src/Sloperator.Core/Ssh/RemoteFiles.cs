@@ -126,12 +126,12 @@ public static class RemoteFiles
         if (text.Contains('�'))
             return ($"{path} on {host.Target} isn't plain UTF-8 (it is Latin-1, say, or holds \"�\" already), and edit_file would turn each character " +
                     "in it that isn't into \"�\". Edit it with sed through ssh instead, which leaves the rest of the file as it is.", true);
-        var count = Count(text, oldText);
+        var count = Strings.Occurrences(text, oldText);
         if (count == 0 && text.Contains("\r\n") && oldText.Contains('\n') && !oldText.Contains('\r'))
         {
             oldText = oldText.Replace("\n", "\r\n");
             newText = newText.ReplaceLineEndings("\r\n");
-            count = Count(text, oldText);
+            count = Strings.Occurrences(text, oldText);
         }
         if (count == 0)
             return ("old_text was not found in the file. Read the file again and copy the text exactly.", true);
@@ -197,12 +197,4 @@ public static class RemoteFiles
         host.SudoNeedsPassword == true && host.Password is null
             ? $"Permission denied to {what} {path} on {host.Target}, and sudo there asks for a password. If the user gave you one, pass it to ssh as password once; then this works with sudo."
             : $"Permission denied to {what} {path} on {host.Target}, even with sudo.";
-
-    private static int Count(string text, string part)
-    {
-        var count = 0;
-        for (var i = text.IndexOf(part, StringComparison.Ordinal); i >= 0; i = text.IndexOf(part, i + part.Length, StringComparison.Ordinal))
-            count++;
-        return count;
-    }
 }

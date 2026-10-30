@@ -179,7 +179,7 @@
     <!-- The video (its name opens the videos' menu), its size and frame rate, changed here and saved at once, and what to do with all of it; × closes the panel. -->
     <Border DockPanel.Dock="Top" Classes="bar">
       <DockPanel MinHeight="32">
-        <views:ToolkitClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
+        <views:SidePanelClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
         <Button DockPanel.Dock="Right" Classes="primary" Content="Make the video" Command="{Binding MakeVideoCommand}"
                 ToolTip.Tip="Makes what's missing or changed, checks it and joins the video" />
         <!-- Short of room (the window made narrower), the video's name is cut short rather than the

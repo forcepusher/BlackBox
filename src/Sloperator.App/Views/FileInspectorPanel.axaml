@@ -11,7 +11,7 @@
          of the text selected. -->
     <Border DockPanel.Dock="Top" Classes="bar" PointerReleased="OnBarReleased">
       <DockPanel MinHeight="32">
-        <views:ToolkitClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
+        <views:SidePanelClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
         <!-- Open file: a file picked from the PC, in place of the one shown. -->
         <Button DockPanel.Dock="Right" Classes="ghost icon" Margin="8,0,0,0" Click="OnOpenClick"
                 ToolTip.Tip="Open a file" AutomationProperties.Name="Open file">

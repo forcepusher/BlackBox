@@ -275,37 +275,12 @@ public sealed partial class OpenAiChatClient
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
         Authorize(req);
 
-        HttpResponseMessage resp;
-        try
-        {
-            resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, stall.Token).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (!ct.IsCancellationRequested && stall.IsCancellationRequested && ex is HttpRequestException or OperationCanceledException)
-        {
-            throw new ConnectionLostException($"Sending the request to {_baseUrl} stalled: nothing got through for {UploadStallLimit.TotalSeconds:0} s.", false, ex);
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new ConnectionLostException($"Could not reach {_baseUrl}: {ex.Message}", false, ex) { Unreachable = !upload.Started };
-        }
-        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
-        {
-            throw new ConnectionLostException($"{_baseUrl} did not answer in time.", false, ex);
-        }
-
-        using (resp)
+        using (var resp = await SendAsync(req, upload, stall, ct).ConfigureAwait(false))
         {
             if (!resp.IsSuccessStatusCode)
             {
                 var status = (int)resp.StatusCode;
-                string err;
-                try { err = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false); }
-                // The link broke while the error came in ("Error while copying content to a
-                // stream."): what it said is lost, so it is a drop like any other.
-                catch (Exception ex) when (!ct.IsCancellationRequested && ex is IOException or HttpRequestException or TaskCanceledException)
-                {
-                    throw new ConnectionLostException($"The connection to {_baseUrl} dropped while it answered {status}: {ex.Message}", false, ex);
-                }
+                var err = await ErrorBodyAsync(resp, ct).ConfigureAwait(false);
                 if (status is 400 or 413 or 422 && HasImages(messages) && LooksLikeTooManyImages(err))
                     throw new TooManyImagesException(ErrorText(err).Clip(300), ImageCount(messages));
                 if (LooksLikeContextOverflow(err))
@@ -366,6 +341,43 @@ public sealed partial class OpenAiChatClient
             {
                 throw new ConnectionLostException($"The connection to {_baseUrl} dropped: {ex.Message}", received, ex, toolCall);
             }
+        }
+    }
+
+    /// <summary>
+    /// Sends a request whose answer streams. <paramref name="stall"/> is cancelled when sending stalls;
+    /// once the request is out only <paramref name="ct"/> ends the wait. A stall, a server out of
+    /// reach or one that doesn't answer is a <see cref="ConnectionLostException"/>.
+    /// </summary>
+    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, UploadContent upload, CancellationTokenSource stall, CancellationToken ct)
+    {
+        try
+        {
+            return await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, stall.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested && stall.IsCancellationRequested && ex is HttpRequestException or OperationCanceledException)
+        {
+            throw new ConnectionLostException($"Sending the request to {_baseUrl} stalled: nothing got through for {UploadStallLimit.TotalSeconds:0} s.", false, ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ConnectionLostException($"Could not reach {_baseUrl}: {ex.Message}", false, ex) { Unreachable = !upload.Started };
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new ConnectionLostException($"{_baseUrl} did not answer in time.", false, ex);
+        }
+    }
+
+    /// <summary>What a server said with an error status.</summary>
+    private async Task<string> ErrorBodyAsync(HttpResponseMessage resp, CancellationToken ct)
+    {
+        try { return await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false); }
+        // The link broke while the error came in ("Error while copying content to a
+        // stream."): what it said is lost, so it is a drop like any other.
+        catch (Exception ex) when (!ct.IsCancellationRequested && ex is IOException or HttpRequestException or TaskCanceledException)
+        {
+            throw new ConnectionLostException($"The connection to {_baseUrl} dropped while it answered {(int)resp.StatusCode}: {ex.Message}", false, ex);
         }
     }
 

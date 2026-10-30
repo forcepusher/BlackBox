@@ -1,10 +1,13 @@
+using System.Text;
+using System.Text.RegularExpressions;
+
 namespace Sloperator.Core.Chats;
 
 /// <summary>
 /// What the chat's Markdown (<see cref="MarkdownLite"/>) and documents written from Markdown
-/// (<see cref="Documents.MarkdownDocument"/>) read alike: emphasis markers and table rows.
+/// (<see cref="Documents.MarkdownDocument"/>) read alike: emphasis markers and tables.
 /// </summary>
-internal static class MarkdownSyntax
+internal static partial class MarkdownSyntax
 {
     public static char At(string s, int i) => i < s.Length ? s[i] : ' ';
 
@@ -31,4 +34,35 @@ internal static class MarkdownSyntax
     }
 
     public static bool IsTableRow(string line) => line.TrimStart().StartsWith('|') && line.Trim().Length > 1;
+
+    /// <summary>
+    /// A table row's cells, split on the | that aren't escaped or inside `code`. An escaped \| becomes
+    /// a | in its cell, or stays \| with <paramref name="keepEscapes"/> for an inline reader that
+    /// unescapes it itself.
+    /// </summary>
+    public static List<string> Cells(string row, bool keepEscapes = false)
+    {
+        var t = row.Trim();
+        if (t.StartsWith('|')) t = t[1..];
+        if (t.EndsWith('|') && !t.EndsWith("\\|")) t = t[..^1];
+        var cells = new List<string>();
+        var cell = new StringBuilder();
+        var inCode = false;
+        for (var i = 0; i < t.Length; i++)
+        {
+            if (t[i] == '\\' && i + 1 < t.Length && t[i + 1] == '|') { cell.Append(keepEscapes ? "\\|" : "|"); i++; continue; }
+            if (t[i] == '`') inCode = !inCode;
+            if (t[i] == '|' && !inCode) { cells.Add(cell.ToString().Trim()); cell.Clear(); continue; }
+            cell.Append(t[i]);
+        }
+        cells.Add(cell.ToString().Trim());
+        return cells;
+    }
+
+    /// <summary>Which of a table's rows is its |---| line; -1 when it has none.</summary>
+    public static int SeparatorRow(List<List<string>> cells) => cells.FindIndex(r => r.Count > 0 && r.All(c => Separator().IsMatch(c)));
+
+    // A |---| line's cell: dashes, a colon at either end for the alignment (":-:" is one too); a lone "-" is a cell.
+    [GeneratedRegex(@"^(:-+:?|-+:|-{2,})$")]
+    private static partial Regex Separator();
 }

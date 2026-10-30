@@ -10,7 +10,7 @@ using CommunityToolkit.Mvvm.Input;
 namespace Sloperator.App.ViewModels;
 
 /// <summary>
-/// Video generator, a tool of the chat window's toolkit, in a panel on the left of the chat: a viewer,
+/// Video generator, one of the chat window's side panels, in a panel on the left of the chat: a viewer,
 /// and the video on one timeline under one horizontal scroll, where all work on it is done (the
 /// user's call, 2026-10-24: "work on the film should be done entirely in the timeline"): the
 /// References row (image files and generated images), the clips on the Video clips row, the lines, and the
@@ -19,7 +19,7 @@ namespace Sloperator.App.ViewModels;
 /// chat, in view. The video is its folder (References and Generated, each file with its .json), and
 /// what the agent changes and makes there shows here as it happens.
 /// </summary>
-public sealed partial class VideoGeneratorViewModel : ObservableObject, IToolkit
+public sealed partial class VideoGeneratorViewModel : ObservableObject, ISidePanel
 {
     private readonly PreviewServices _previews;
     private readonly MainWindowViewModel _chat;
@@ -357,10 +357,7 @@ public sealed partial class VideoGeneratorViewModel : ObservableObject, IToolkit
     [NotifyPropertyChangedFor(nameof(PlayIcon))]
     private bool _isPlaying;
 
-    private static readonly Avalonia.Media.Geometry PlayShape = Avalonia.Media.StreamGeometry.Parse("M8 5v14l11-7z");
-    private static readonly Avalonia.Media.Geometry PauseShape = Avalonia.Media.StreamGeometry.Parse("M6 4h4v16H6zM14 4h4v16h-4z");
-
-    public Avalonia.Media.Geometry PlayIcon => IsPlaying ? PauseShape : PlayShape;
+    public Avalonia.Media.Geometry PlayIcon => PlayerIcons.Play(IsPlaying);
 
     private IAudioOutput? _playOutput;
     private DispatcherTimer? _playTimer;

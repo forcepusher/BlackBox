@@ -98,7 +98,7 @@ public static class FolderDiff
             int read;
             await using (var stream = TextFiles.OpenRead(path))
                 read = await stream.ReadAtLeastAsync(head, head.Length, throwOnEndOfStream: false, ct).ConfigureAwait(false);
-            if (IsBinary(head.AsSpan(0, read)))
+            if (TextFiles.IsBinary(head.AsSpan(0, read)))
                 return null;
             var (text, _) = await TextFiles.ReadAllAsync(path, ct).ConfigureAwait(false);
             return LineDiff.Lines(text);
@@ -107,14 +107,6 @@ public static class FolderDiff
         {
             return null;
         }
-    }
-
-    /// <summary>A zero byte near the start, outside UTF-16 text: an image, an exe, an archive.</summary>
-    internal static bool IsBinary(ReadOnlySpan<byte> head)
-    {
-        if (head.Length > 8000)
-            head = head[..8000];
-        return !head.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xFE]) && !head.StartsWith((ReadOnlySpan<byte>)[0xFE, 0xFF]) && head.Contains((byte)0);
     }
 
     private static async Task<bool> SameBytesAsync(string a, string b, CancellationToken ct)

@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Win32;
+using static Sloperator.Platform.Windows.ComAbi;
 
 namespace Sloperator.Platform.Windows;
 
@@ -10,8 +11,7 @@ namespace Sloperator.Platform.Windows;
 /// Windows' own notifications (toasts) for an exe that isn't installed: Sloperator's name and icon
 /// are registered for its app id under HKCU\Software\Classes\AppUserModelId, which Windows 10 and
 /// 11 take in place of a Start menu shortcut, and a click is heard in the process while it runs.
-/// The WinRT interfaces are called through their vtables, only the few methods used, as
-/// <see cref="MediaFoundationDecoder"/> does: the Windows SDK's projection would add megabytes.
+/// The WinRT interfaces are called through their vtables (<see cref="ComAbi"/>).
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed unsafe class WindowsToasts : Core.Platform.INotifications
@@ -42,6 +42,7 @@ public sealed unsafe class WindowsToasts : Core.Platform.INotifications
         {
             try
             {
+                // In the multithreaded apartment: the click comes on a thread of Windows' then, with no window's messages to wait for.
                 Start();
                 Register(iconPath);
                 Take(tag);
@@ -147,9 +148,6 @@ public sealed unsafe class WindowsToasts : Core.Platform.INotifications
     private static readonly Guid IXmlDocument = new("f7f3a506-1e87-42d6-bcfb-b8c809fa5494");
     private static readonly Guid IXmlDocumentIO = new("6cd0e74e-ee65-4489-9ebf-ca43e87ba637");
 
-    /// <summary>The thread's COM, in the multithreaded apartment: the click comes on a thread of Windows' then, with no window's messages to wait for.</summary>
-    private static void Start() => _ = CoInitializeEx(0, 0 /* COINIT_MULTITHREADED */);
-
     private static nint CreateNotifier()
     {
         var statics = Factory("Windows.UI.Notifications.ToastNotificationManager", IToastNotificationManagerStatics);
@@ -169,8 +167,7 @@ public sealed unsafe class WindowsToasts : Core.Platform.INotifications
         nint inspectable = 0, io = 0, document = 0, factory = 0;
         try
         {
-            using (var name = new HString("Windows.Data.Xml.Dom.XmlDocument"))
-                Check(RoActivateInstance(name.Handle, &inspectable));
+            inspectable = Activate("Windows.Data.Xml.Dom.XmlDocument");
             io = Query(inspectable, IXmlDocumentIO);
             using (var text = new HString(xml))
                 // IXmlDocumentIO: LoadXml 6.
@@ -202,48 +199,6 @@ public sealed unsafe class WindowsToasts : Core.Platform.INotifications
             Check(((delegate* unmanaged[Stdcall]<nint, nint, int>)Slot(second, 6))(second, text.Handle));
         }
         finally { Release(second); }
-    }
-
-    private static nint Factory(string className, Guid iid)
-    {
-        using var name = new HString(className);
-        nint factory;
-        Check(RoGetActivationFactory(name.Handle, &iid, &factory));
-        return factory;
-    }
-
-    private static nint Query(nint obj, Guid iid)
-    {
-        nint result;
-        Check(((delegate* unmanaged[Stdcall]<nint, Guid*, nint*, int>)Slot(obj, 0))(obj, &iid, &result));
-        return result;
-    }
-
-    private static void Check(int hr)
-    {
-        if (hr < 0) Marshal.ThrowExceptionForHR(hr);
-    }
-
-    private static void* Slot(nint obj, int index) => (*(void***)obj)[index];
-
-    private static void Release(nint obj)
-    {
-        if (obj != 0) ((delegate* unmanaged[Stdcall]<nint, uint>)Slot(obj, 2))(obj);
-    }
-
-    private readonly struct HString : IDisposable
-    {
-        public nint Handle { get; }
-
-        public HString(string text)
-        {
-            nint handle;
-            fixed (char* chars = text)
-                Check(WindowsCreateString(chars, (uint)text.Length, &handle));
-            Handle = handle;
-        }
-
-        public void Dispose() => WindowsDeleteString(Handle);
     }
 
     /// <summary>
@@ -323,10 +278,4 @@ public sealed unsafe class WindowsToasts : Core.Platform.INotifications
             return 0;
         }
     }
-
-    [DllImport("ole32.dll")] private static extern int CoInitializeEx(nint reserved, uint coInit);
-    [DllImport("combase.dll")] private static extern int RoGetActivationFactory(nint classId, Guid* iid, nint* factory);
-    [DllImport("combase.dll")] private static extern int RoActivateInstance(nint classId, nint* instance);
-    [DllImport("combase.dll")] private static extern int WindowsCreateString(char* source, uint length, nint* result);
-    [DllImport("combase.dll")] private static extern int WindowsDeleteString(nint text);
 }

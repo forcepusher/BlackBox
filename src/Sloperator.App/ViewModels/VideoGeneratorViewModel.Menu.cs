@@ -325,7 +325,7 @@ public sealed partial class VideoGeneratorViewModel
         if (Sounds.FirstOrDefault(s => s.Id == item.Id) is not { } sound)
             return;
         Show(sound);
-        _chat.SendFromToolkit("Make it.", withPicks: true);
+        _chat.SendFromSidePanel("Make it.", withPicks: true);
     }
 
     /// <summary>Music on a sound: a song, made once the chat is told its style (else at once, its style said).</summary>
@@ -357,7 +357,7 @@ public sealed partial class VideoGeneratorViewModel
             _ => false,
         };
         if (said)
-            _chat.SendFromToolkit("Make it.", withPicks: true);
+            _chat.SendFromSidePanel("Make it.", withPicks: true);
         else
             Status = $"Say in the chat what {Lower(piece.Title)} should be, and Sloperator makes it.";
     }

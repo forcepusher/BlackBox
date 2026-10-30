@@ -231,7 +231,7 @@ internal sealed class FolderIndex
                 return Plain(f, FileKind.Large, language);
             else
             {
-                if (LooksBinary(full))
+                if (TextFiles.IsBinary(full))
                     return Plain(f, FileKind.Binary, language);
                 using var reader = TextFiles.OpenText(full);
                 var all = new List<string>();
@@ -345,17 +345,6 @@ internal sealed class FolderIndex
         or ".ttf" or ".otf" or ".woff" or ".woff2" or ".eot" or ".fbx" or ".blend" or ".glb" or ".gltf" or ".stl" or ".ply" or ".3ds" or ".max" or ".ma" or ".mb"
         or ".safetensors" or ".ckpt" or ".pt" or ".pth" or ".onnx" or ".gguf" or ".db" or ".sqlite" or ".mdb" or ".accdb" or ".doc" or ".xls" or ".ppt"
         or ".msi" or ".iso" or ".img" or ".cab" or ".apk" or ".ipa" or ".pck" or ".res" or ".resources";
-
-    /// <summary>A zero byte in the first 8 KB, outside UTF-16 text.</summary>
-    private static bool LooksBinary(string path)
-    {
-        Span<byte> head = stackalloc byte[8000];
-        int n;
-        using (var stream = TextFiles.OpenRead(path))
-            n = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
-        head = head[..n];
-        return !head.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xFE]) && !head.StartsWith((ReadOnlySpan<byte>)[0xFE, 0xFF]) && head.Contains((byte)0);
-    }
 
     // --- the indexes in use ------------------------------------------------------------------
 
