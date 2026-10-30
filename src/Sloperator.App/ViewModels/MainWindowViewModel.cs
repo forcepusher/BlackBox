@@ -543,7 +543,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>The hint in the empty box: how to start a new line (Enter sending goes without saying), that the agent waits while the user types, and that pictures and files can go in too.</summary>
     public string InputHint => IsBusy
         ? "Tell me something while I work (I pause while you type)"
-        : "Describe a task, paste a screenshot or drop files (Shift+Enter: new line)";
+        : "Type a task, paste a screenshot or drop files (Shift+Enter: new line)";
 
     /// <summary>When the run in progress started: from the message that started it, for how long the run took.</summary>
     private DateTime _runStarted;

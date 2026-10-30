@@ -1465,6 +1465,12 @@ edges smeared over two or three pixels, and its crown and base fell partway into
 of 40). Copy image on it still gives the PNG.
 
 ## Party blob
+The chat box's hint (`MainWindowViewModel.InputHint`) keeps to one line at MinWidth with the blob
+beside Send, which takes 40 of its width in every chat after the first message: "Type a task, paste
+a screenshot or drop files (Shift+Enter: new line)" has 15 px to spare at 100% and 13 at 125% (the
+user, 2026-10-30: "Describe a task, … drop files… (Shift+Enter for a new line)" wrapped "new line)",
+measured without the blob on the start screen); the busy one, with Stop too, about 36.
+
 Left of Send and Stop, 32 px like the buttons and 8 px from Send, `PartyBlob` (Views/PartyBlob.cs)
 shows the logo (Assets/sloperator.png) still, and the blobs.gg party blob (Assets/partyblob.gif: 128 px,
 20 frames, 16 KB) dancing while `IsBusy`, the whole run, so it dances until Stop or the reply ends.

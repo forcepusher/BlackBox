@@ -43,8 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - On the start screen the scrollbar runs down to the chat box, as it does in a chat, instead of
   stopping above "What should I do on your computer?".
-- The chat box's hints end without "…", and say "(Shift+Enter: new line)", so the hint keeps to one
-  line in the narrowest window.
+- The chat box's hint reads "Type a task, paste a screenshot or drop files (Shift+Enter: new line)",
+  so it keeps to one line in the narrowest window, beside the logo in a chat too; the hints end
+  without "…".
 - The line under "What should I do on your computer?" follows Settings and the model: it says when
   screenshots or keyboard and mouse control are off, or when the model can't see the screen.
 - The start screen's cards have a little more room left and right of their keys and icons.
