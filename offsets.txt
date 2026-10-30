@@ -1,0 +1,5 @@
+Start screen, default window (125%, 1143x1000 incl. frame), 3 notches of wheel down posted over the heading text.
+before (develop 38072ec): chat scroll 0% -> 0%, first card top 301 -> 301 px (nothing moved).
+after (fix/heading-wheel): chat scroll 0% -> 95.663%, first card top 301 -> 112 px.
+One notch: over logo/heading/note/cards = 31.888% (62 px) on the branch; on develop only over cards.
+In a chat: one notch up just over the chat box 100 -> 96.856%, mid chat -> 93.712%, same on both builds.
