@@ -9,7 +9,7 @@ the opt-in tests that need its programs) are in their own section.
 
 | Model | Laptop tasks passed | Second-monitor tasks (workstation) | Long runs |
 |---|---|---|---|
-| Qwen 3.8 27B | 12 of 12 | 3 of 4 | 2048 in the browser: pass, 10 of 10 checks; 2048 in Unity: pass, 1 h 55 min; ComfyUI 8 of 9 |
+| Qwen 3.8 27B | 12 of 12 | 3 of 4 | 2048 in the browser: pass, 10 of 10 checks; 2048 in Unity: pass, 1 h 55 min; ComfyUI 8 of 9; chat-test 64 of 65 checks so far; sysadmin 2 of 2 tickets run |
 | Claude Haiku 5.5 | 12 of 12 | 4 of 4 | chat-test: every check of 4 scenarios |
 | Nemotron 3.5 Super VL | 10 of 12 | 4 of 4 (Kilo) | – |
 
@@ -148,6 +148,8 @@ The workstation thread's runs, on develop f80fef2 and then on release-1.3.0 (fro
 | Second-monitor tasks (`agent-tasks.ps1` mm-*) | Haiku 4 of 4 (10-22 s each), Nemotron on Kilo 4 of 4 (19-89 s), Qwen 3 of 4 |
 | `chat-test.ps1` on Haiku | self-test 6 of 6; inbox 19/19, support 12/12, haggle 13/13, social 11/11, 0 tool errors |
 | `comfy-test.ps1` on Qwen (RTX 5070 Ti) | 8 of 9 |
+| `chat-test.ps1` on Qwen | inbox 19/19, support 12/12, haggle 13/13, away 20/21; social stopped, evening not run |
+| `sysadmin-test.ps1` on Qwen | game-server 10/10 (61.7 min), fix-website 9/9 (4.5 min); ssh-hardening stopped, three tickets not run |
 
 - comfy-test: picture (3 min 50 s), img2img (layout kept, 0.77), named (DreamShaper), sound
   (3 min 12 s, 10 s), music (3 min 59 s, 30 s), speech (4 min 45 s, 3.8 s), a 3D model (10 min 13 s,
@@ -162,6 +164,10 @@ The workstation thread's runs, on develop f80fef2 and then on release-1.3.0 (fro
 - Qwen's mm-move timed out: Win+Up and then Win+Right snapped Notepad to the right half of screen 1,
   Snap Assist filled the left half, and Qwen thought for minutes over each step.
 - Nemotron's first click on screen 2 landed at about 0.55 of the target's x; its zoom corrected it.
+- Qwen's chat-test and sysadmin runs went at the same time on the shared Qwen server, so their
+  times are slow, and the user had both wrapped up before they finished. Its one chat miss (away):
+  it posted "I'm stuck in meetings until 04:25" in the hiking group before anyone there asked.
+  The finished runs had 0 tool errors in chat and one each in the two sysadmin tickets.
 - chat-test social: a click into a message box changed nothing visible, so the agent got the
   "nothing changed" note and the end-of-task check cost one step; Haiku confirmed from the
   screenshot and finished.
