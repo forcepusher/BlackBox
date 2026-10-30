@@ -2692,7 +2692,12 @@ choice, not once a chat), to install the pack of their own language, skip it for
 recognition off in Settings, which ends the offers; on an install, it runs `Add-WindowsCapability
 -Online -Name Language.OCR~~~<culture>~0.0.1.0` in an elevated PowerShell (`Start-Process -Verb
 RunAs`: adding a capability needs an administrator, and Windows asks); the reader looks for an engine
-again on every call while it has none, so find_text works right after; Settings → Advanced → Text recognition lists the languages Windows reads
+again on every call while it has none, so find_text works right after. Windows' prompt for an
+elevated PowerShell looks alarming, so the model first tells the user it is coming and to click Yes.
+It is one inline command (`-Command`), which an execution policy never stops (only script files);
+`-ExecutionPolicy Bypass` is passed all the same. Tried on the laptop (30 October 2026) with its OCR
+packs removed: the offer came, the install ran once the user allowed it, and find_text read 139 lines
+in the same run; Settings → Advanced → Text recognition lists the languages Windows reads
 (`ITextReader.Languages`, from `OcrEngine.AvailableRecognizerLanguages`), or "Not installed" with
 Add a language, which opens `ms-settings:regionlanguage`: each language added there brings its OCR. On the click
 benchmark (pixels, 3 retries, 30 October 2026) Qwen hit 97 of 114 first and 113 in the end, against

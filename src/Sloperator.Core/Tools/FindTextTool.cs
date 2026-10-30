@@ -44,15 +44,21 @@ public sealed class FindTextTool : Tool
     /// recognition off in Settings, which takes find_text away and so the offer. Skipped, it is offered
     /// again each time (the user: "always triggered, not only once, unless recognition is disabled").
     /// Adding a Windows capability needs an administrator, so it runs elevated and Windows asks; the
-    /// reader tries again on the next call.
+    /// reader tries again on the next call. Windows' prompt for an elevated PowerShell looks alarming
+    /// (the user: "make sure the user is ready for it"), so the model says it is coming before it runs.
+    /// It runs one command, not a script, which a "running scripts is disabled" execution policy
+    /// doesn't stop; -ExecutionPolicy Bypass makes sure of it.
     /// </summary>
     internal const string NoLanguage =
         "Windows has no text recognition language installed, so the screen's text can't be read; look with screenshot and zoom for now. " +
         "Offer the user to install it: it improves how you use apps on screen, finding and clicking buttons, menus, links and values " +
         "quicker and more surely (a download of a few MB). Tell them they can install it now, skip it for now (you will offer it again each time this comes up), " +
-        "or turn text recognition off for good in Sloperator's Settings → Advanced → Use text recognition. Only if they choose to install, run in the shell: " +
-        "$name = \"Language.OCR~~~$((Get-Culture).Name)~0.0.1.0\"; Start-Process powershell -Verb RunAs -Wait -ArgumentList \"-NoProfile -Command Add-WindowsCapability -Online -Name $name\" " +
-        "(Windows asks the user to allow it; for English use Language.OCR~~~en-US~0.0.1.0). Then use find_text again.";
+        "or turn text recognition off for good in Sloperator's Settings → Advanced → Use text recognition. " +
+        "Only if they choose to install: first tell them that Windows will now show an administrator prompt asking whether Windows PowerShell may make " +
+        "changes to the device, that this is the install and expected, and that they click Yes; then run in the shell: " +
+        "$name = \"Language.OCR~~~$((Get-Culture).Name)~0.0.1.0\"; Start-Process powershell -Verb RunAs -Wait -ArgumentList " +
+        "\"-NoProfile -ExecutionPolicy Bypass -Command Add-WindowsCapability -Online -Name $name\" " +
+        "(for English use Language.OCR~~~en-US~0.0.1.0). If they click No, the install is cancelled; say so and go on without it. Then use find_text again.";
 
     /// <summary>What the model is told: each place the text is, or the closest readings when it isn't there as written.</summary>
     internal static string Report(string query, IReadOnlyList<TextLine> lines, ScreenSpace space)
