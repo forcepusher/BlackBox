@@ -184,7 +184,7 @@ public class ClickAccuracyTests
                 var connection = BackendConnection.Create(http, server);
                 if (Env("BB_CLICK_TEMP") is { } temperature) // Sloperator itself sends no sampling settings
                     connection.Options.Extra!["temperature"] = double.Parse(temperature, System.Globalization.CultureInfo.InvariantCulture);
-                var prompt = SystemPrompt.Build(platform.Name, ctx.ScreenSpaces(), Path.GetTempPath(), Env("BB_CLICK_RULE") ?? "");
+                var prompt = SystemPrompt.Build(platform.Name, ctx.ScreenSpaces(), Path.GetTempPath(), Env("BB_CLICK_RULE") ?? "", findText: findText);
                 var tools = ToolRegistry.CreateDefault(true).All.Where(t => t is ScreenshotTool or MouseClickTool or MouseMoveTool or MouseDragTool or ScrollTool
                     or TypeTextTool or PressKeysTool or WaitTool || (zoom && t is ZoomTool) || (findText && t is FindTextTool));
                 var session = new AgentSession(connection.Client, connection.Options, new ToolRegistry(tools), ctx, prompt, contextTokens: context ?? 0);
