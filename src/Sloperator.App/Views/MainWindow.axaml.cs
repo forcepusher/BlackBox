@@ -71,6 +71,11 @@ public partial class MainWindow : Window
             if (e.Delta.Y > 0) _stickToBottom = false; // wheel up: the user wants to read back
             else Dispatcher.UIThread.Post(UpdateStickiness, DispatcherPriority.Background);
         }, RoutingStrategies.Tunnel);
+        // The heading and the offer of text recognition lie over the chat's bottom, outside what
+        // scrolls, and so do the gaps around them (they reach the window): the wheel anywhere over
+        // the chat scrolls it as over the cards (the user, 2026-10-30: it did nothing over the
+        // heading), handed to what scrolls so the step is the same.
+        PointerWheelChanged += OnWheelOutsideChat;
         ChatScroll.ScrollChanged += (_, e) =>
         {
             // Scrollbar drags and keyboard paging: re-evaluate once the user stops at a position.
@@ -149,6 +154,17 @@ public partial class MainWindow : Window
 
     /// <summary>What scrolls in the chat, inside its bar (see FitIntroHeading).</summary>
     private ScrollContentPresenter? _chatPresenter;
+
+    private void OnWheelOutsideChat(object? sender, PointerWheelEventArgs e)
+    {
+        // What scrolls had the wheel already (this one handed on included), even if it was at the end.
+        if (e.Handled || _chatPresenter is null || e.Source is Visual source && _chatPresenter.IsVisualAncestorOf(source)
+            || ReferenceEquals(e.Source, _chatPresenter) || !new Rect(ChatScroll.Bounds.Size).Contains(e.GetPosition(ChatScroll)))
+            return;
+        e.Handled = true;
+        _chatPresenter.RaiseEvent(new PointerWheelEventArgs(_chatPresenter, e.Pointer, this, e.GetPosition(this),
+            e.Timestamp, e.GetCurrentPoint(this).Properties, e.KeyModifiers, e.Delta) { RoutedEvent = PointerWheelChangedEvent });
+    }
 
     private MainWindowViewModel Vm => (MainWindowViewModel)DataContext!;
 
