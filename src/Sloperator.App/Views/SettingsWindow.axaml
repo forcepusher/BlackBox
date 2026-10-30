@@ -104,6 +104,7 @@
             <views:SelectableText Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
 
             <TextBlock Classes="h2" Text="Updates" />
+            <TextBlock Classes="muted" Text="{Binding Updater.VersionText}" />
             <CheckBox IsChecked="{Binding Updates.Automatic}" Content="Check automatically"
                       ToolTip.Tip="At start and once an hour Sloperator asks GitHub for a new version and downloads it. Off, it never contacts GitHub by itself." />
             <StackPanel Orientation="Horizontal" Spacing="12">
