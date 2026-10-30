@@ -168,6 +168,9 @@ public interface IPlatformServices
 
     /// <summary>The OS's own notifications, for "Notify me when done"; null where there are none.</summary>
     INotifications? Notifications => null;
+
+    /// <summary>The OS's own text recognition, for find_text; null where there is none.</summary>
+    ITextReader? Text => null;
 }
 
 /// <summary>The OS's own notifications (toasts on Windows): a title and a line, one at a time per tag.</summary>

@@ -21,7 +21,7 @@ namespace Sloperator.Core.Tests;
 /// BB_CLICK_RES (how tall screenshots
 /// may be, as 720; default the setting's), BB_CLICK_SEED (first layout, default 1000), BB_CLICK_TAG (report name),
 /// BB_CLICK_RETRY (extra clicks allowed after a miss, default 0: the target reacts when hit, so a
-/// miss gets Sloperator's miss note), BB_CLICK_LOOKS (zooms, and other calls, a try may make before its click; default 4,
+/// miss gets Sloperator's miss note), BB_CLICK_FINDTEXT=0 (no find_text), BB_CLICK_LOOKS (zooms, and other calls, a try may make before its click; default 4,
 /// the real app has no such limit), BB_CLICK_CHECK=0 (no miss note), BB_CLICK_ZOOM=0 (no zoom tool), BB_CLICK_RULE
 /// (extra instructions for the system prompt, to measure a prompt rule), BB_CLICK_TEMP (a temperature
 /// sent with the benchmark's own requests instead of the server's), BB_CLICK_SHIFT (the first screenshot
@@ -151,6 +151,13 @@ public class ClickAccuracyTests
         ClickCheck.Enabled = Env("BB_CLICK_CHECK") != "0";
         var zoom = Env("BB_CLICK_ZOOM") != "0";
         var looks = int.TryParse(Env("BB_CLICK_LOOKS"), out var lk) ? lk : 4;
+        // Windows' own text recognition reads the fake screens, as it reads the real one.
+        var findText = Env("BB_CLICK_FINDTEXT") != "0";
+#if WINDOWS
+        ITextReader? reader = findText ? new Sloperator.Platform.Windows.WindowsTextReader() : null;
+#else
+        ITextReader? reader = null;
+#endif
         var (retried, fixedLater) = (0, 0);
         var shift = int.TryParse(Env("BB_CLICK_SHIFT"), out var sh) ? sh : 0;
         foreach (var scene in Scenes.Where(s => only is null || only.Contains(s.Name)))
@@ -163,7 +170,7 @@ public class ClickAccuracyTests
                 var rng = new Random(seed + trial);
                 var (desktop, origin, targets) = Render(scene, rng);
                 var target = scene.EveryTarget ? targets[trial] : targets[rng.Next(targets.Count)];
-                var platform = new FakePlatform { Screens = scene.Screens.ToList(), ScreenBounds = scene.Screens[0], Desktop = desktop, DesktopOrigin = origin };
+                var platform = new FakePlatform { Screens = scene.Screens.ToList(), ScreenBounds = scene.Screens[0], Desktop = desktop, DesktopOrigin = origin, Text = reader };
                 var settings = new AgentSettings { ScreenshotMaxHeight = height };
                 if (int.TryParse(Env("BB_CLICK_QUALITY"), out var quality))
                     settings.ScreenshotQuality = quality;
@@ -179,7 +186,7 @@ public class ClickAccuracyTests
                     connection.Options.Extra!["temperature"] = double.Parse(temperature, System.Globalization.CultureInfo.InvariantCulture);
                 var prompt = SystemPrompt.Build(platform.Name, ctx.ScreenSpaces(), Path.GetTempPath(), Env("BB_CLICK_RULE") ?? "");
                 var tools = ToolRegistry.CreateDefault(true).All.Where(t => t is ScreenshotTool or MouseClickTool or MouseMoveTool or MouseDragTool or ScrollTool
-                    or TypeTextTool or PressKeysTool or WaitTool || (zoom && t is ZoomTool));
+                    or TypeTextTool or PressKeysTool or WaitTool || (zoom && t is ZoomTool) || (findText && t is FindTextTool));
                 var session = new AgentSession(connection.Client, connection.Options, new ToolRegistry(tools), ctx, prompt, contextTokens: context ?? 0);
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5 * Math.Max(1, looks / 4.0)));

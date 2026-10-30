@@ -286,7 +286,7 @@ public class ToolTests
     [Fact]
     public void Settings_take_away_the_screen_or_only_the_mouse_and_keyboard()
     {
-        string[] look = ["screenshot", "zoom", "wait"], act = ["mouse_click", "mouse_move", "mouse_drag", "scroll", "type_text", "press_keys"];
+        string[] look = ["screenshot", "zoom", "find_text", "wait"], act = ["mouse_click", "mouse_move", "mouse_drag", "scroll", "type_text", "press_keys"];
         bool Has(ToolRegistry r, string name) => r.Find(name) is not null;
 
         var all = ToolRegistry.CreateDefault(includeScreenTools: true);

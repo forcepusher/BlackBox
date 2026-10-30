@@ -263,6 +263,9 @@ internal sealed class FakePlatform : IPlatformServices, IScreenCapture, IInputCo
     public IInputController Input => this;
     public ProcessStartInfo CreateShellStartInfo(string command) => new("cmd.exe") { ArgumentList = { "/c", command } };
 
+    /// <summary>Text recognition for find_text: none unless a test gives one (the click benchmark gives Windows' own).</summary>
+    public ITextReader? Text { get; set; }
+
     public ScreenRect ScreenBounds { get; set; } = new(0, 0, 200, 100);
 
     /// <summary>All monitors; by default just <see cref="ScreenBounds"/>.</summary>

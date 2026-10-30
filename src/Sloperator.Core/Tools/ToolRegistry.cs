@@ -26,6 +26,7 @@ public sealed class ToolRegistry
         {
             yield return new ScreenshotTool();
             yield return new ZoomTool();
+            yield return new FindTextTool();
         }
         if (includeControl)
         {

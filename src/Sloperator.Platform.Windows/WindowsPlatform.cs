@@ -31,6 +31,8 @@ public sealed class WindowsPlatform : IPlatformServices
     public Core.Media.IMediaDecoder? Media { get; } = new MediaFoundationDecoder();
     public Core.Media.IAudioOutput? CreateAudioOutput() => new WaveOutPlayer();
     public INotifications? Notifications { get; } = new WindowsToasts();
+    public ITextReader? Text { get; } = new WindowsTextReader();
+
 
     /// <summary>
     /// Lets <paramref name="processId"/> bring its window to the front: called by the program the
