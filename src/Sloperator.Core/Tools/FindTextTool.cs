@@ -45,7 +45,8 @@ public sealed class FindTextTool : Tool
     /// </summary>
     internal const string NoLanguage =
         "Windows has no text recognition language installed, so the screen's text can't be read; look with screenshot and zoom for now. " +
-        "Offer the user, once, to install it (it makes finding things on screen much quicker, a download of a few MB), and only if they agree, run in the shell: " +
+        "Offer the user, once, to install it: it improves how you use apps on screen, finding and clicking buttons, menus, links and values quicker " +
+        "and more surely (a download of a few MB). Only if they agree, run in the shell: " +
         "$name = \"Language.OCR~~~$((Get-Culture).Name)~0.0.1.0\"; Start-Process powershell -Verb RunAs -Wait -ArgumentList \"-NoProfile -Command Add-WindowsCapability -Online -Name $name\" " +
         "(Windows asks the user to allow it; for English use Language.OCR~~~en-US~0.0.1.0). Then use find_text again. " +
         "They can also add a language in Sloperator's Settings → Advanced → Text recognition.";

@@ -79,7 +79,7 @@ public class FindTextTests
         var ctx = new ToolContext { Platform = new FakePlatform { Text = new NoLanguageReader() }, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
         var result = await new FindTextTool().ExecuteAsync(new JsonObject { ["text"] = "OK" }, ctx, CancellationToken.None);
         Assert.True(result.IsError);
-        Assert.Contains("only if they agree", result.Text);
+        Assert.Contains("Only if they agree", result.Text);
         Assert.Contains("-Verb RunAs", result.Text); // installing a capability needs an administrator
         Assert.Contains("Add-WindowsCapability -Online -Name", result.Text);
     }
