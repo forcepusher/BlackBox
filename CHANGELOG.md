@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recognition off.
 - Sloperator updates itself: it checks GitHub for a new version once an hour, across starts too
   (never during a task), downloads it beside itself, and a line under the top bar says **Sloperator
-  1.2.0 is ready**, with **Restart** and **What's new**. Restart opens the new version with the same
+  1.4.0 is ready**, with **Restart** and **What's new**. Restart opens the new version with the same
   chats; closing Sloperator instead puts it in place for the next start. In a folder Sloperator can't
   write to (Program Files) the line says the new version is out, with a link to download it.
 - **Check for updates** and **Check automatically** (on by default) under Settings → Advanced → Updates. Off,
@@ -69,8 +69,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On the start screen the scrollbar runs down to the chat box, as it does in a chat, instead of
   stopping above "What should I do on your computer?".
 - The chat box's hint reads "Type a task, paste a screenshot or drop files (Shift+Enter: new line)",
-  so it keeps to one line in the narrowest window, beside the logo in a chat too; the hints end
-  without "…".
+  and while a run goes on "Tell me something while I work (I pause while you type)": no "Enter to
+  send" and no "…", so it keeps to one line in the narrowest window, beside the logo in a chat too.
+  File changes' help line is shorter: "Pick lines or files to ask about them, stage or discard them."
 - The line under "What should I do on your computer?" follows Settings and the model: it says when
   screenshots or keyboard and mouse control are off, or when the model can't see the screen.
 - The start screen's cards have a little more room left and right of their keys and icons.
@@ -88,8 +89,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   line on the key and one on correcting and asking first;
   the Ctrl V and New window lines say a little more; under the heading, "I may use your keyboard and
   mouse when needed."
-- A chat video's right-click Copy is now two entries: **Copy image** for the frame on screen and
-  **Copy file** for the video.
 - A new look in neutral greys: a darker background, filled buttons, fields darker than the window,
   rounder cards and controls, softer diff colours, and every title bar dark. Nothing moved: every
   control is where it was and as big. The thoughts over a reply have a header of their own and
@@ -125,9 +124,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **History** and **Servers** open the same kind of list as the dropdowns, and right-click menus have
   rows as tall as a dropdown's.
 - The Video generator's menu says **Show in folder**, as everywhere else.
-- The message box's hint no longer says "Enter to send" (it says how to start a new line, and while a
-  run goes on that it pauses while you type), and File changes' help line is shorter: "Pick lines or
-  files to ask about them, stage or discard them."
 
 ### Fixed
 - The Side panel list is as wide as its longest line, with no empty space on the right of it.
@@ -156,9 +152,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A text box (the prompt, the server address, the API key, the context size, the boxes in Settings)
   kept the focus and its caret after a click on empty space, a panel or a label; a click anywhere away
   from it now takes the focus off it.
-- Every list opened by a click hangs under its button, flush with its left edge: the Video generator's
-  videos menu opened where the mouse was, over "Frame size", and History and Servers hung from their
-  right edge. A second click on the video's name closes its menu, and Rename's box covers the name
+- The Video generator's videos menu opened where the mouse was, over "Frame size"; it hangs under its
+  button now. A second click on the video's name closes its menu, and Rename's box covers the name
   rather than the window's title bar.
 - Text sat 1-2 px over the middle of dropdowns (the model, the effort), buttons, dropdown rows, the
   lines of File changes and the tool's name on a card; it is in the middle now.
