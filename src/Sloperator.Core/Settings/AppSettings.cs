@@ -7,9 +7,9 @@ namespace Sloperator.Core.Settings;
 /// <summary>How tall screenshots may be; they keep the screen's shape and are never scaled up.</summary>
 public enum ScreenshotSize
 {
-    UpTo1080,
-    Full,
     UpTo720,
+    UpTo1080,
+    Native,
 }
 
 public enum ApprovalMode
@@ -294,25 +294,21 @@ public sealed class AgentSettings
     /// </summary>
     public ScreenshotSize ScreenshotSize { get; set; } = ScreenshotSize.UpTo1080;
 
-    /// <summary>A box of their own for tests and the click benchmark, in place of <see cref="ScreenshotSize"/>'s.</summary>
-    [JsonIgnore]
-    public int? ScreenshotMaxWidth { get; set; }
-
+    /// <summary>A height of their own for tests and the click benchmark, in place of <see cref="ScreenshotSize"/>'s.</summary>
     [JsonIgnore]
     public int? ScreenshotMaxHeight { get; set; }
 
-    /// <summary>The smallest box (a smaller one is too blurry to read a button by) and the largest side.</summary>
-    public const int MinScreenshotWidth = 640, MinScreenshotHeight = 360, MaxScreenshotSide = 16384;
+    /// <summary>The lowest height (lower is too blurry to read a button by) and the largest side.</summary>
+    public const int MinScreenshotHeight = 360, MaxScreenshotSide = 16384;
 
-    /// <summary>The box screenshots fit, its sides kept in range.</summary>
+    /// <summary>The box screenshots fit: any width, the height kept in range.</summary>
     [JsonIgnore]
     public (int Width, int Height) ScreenshotBox =>
-        (Math.Clamp(ScreenshotMaxWidth ?? MaxScreenshotSide, MinScreenshotWidth, MaxScreenshotSide),
-         Math.Clamp(ScreenshotMaxHeight ?? TallestFor(ScreenshotSize), MinScreenshotHeight, MaxScreenshotSide));
+        (MaxScreenshotSide, Math.Clamp(ScreenshotMaxHeight ?? TallestFor(ScreenshotSize), MinScreenshotHeight, MaxScreenshotSide));
 
     private static int TallestFor(ScreenshotSize size) => size switch
     {
-        ScreenshotSize.Full => MaxScreenshotSide,
+        ScreenshotSize.Native => MaxScreenshotSide,
         ScreenshotSize.UpTo720 => 720,
         _ => 1080,
     };
@@ -471,8 +467,10 @@ public sealed class SettingsStore(AppPaths paths)
             if (height <= 720)
                 agent["screenshotSize"] = "upTo720";
             else if (height > 1080)
-                agent["screenshotSize"] = "full";
+                agent["screenshotSize"] = "native";
         }
+        if (root["agent"] is JsonObject chosen && chosen["screenshotSize"]?.ToString() == "full") // its first name, for a few hours
+            chosen["screenshotSize"] = "native";
         return root.ToJsonString();
     }
 

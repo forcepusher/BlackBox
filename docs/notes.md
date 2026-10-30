@@ -2417,14 +2417,14 @@ on the grid and 3/28 in pixels (31B through OpenRouter: 1/28 and 0/28). The user
 model, no forks by model name. Zoom's rulers, `mouse_drag` and pictures are all in pixels.
 
 Screenshots are scaled down to Settings → Advanced → Screenshot size, keeping their shape and never
-scaled up (`AgentSettings.ScreenshotSize`: up to 1080 tall, full resolution, or up to 720 tall; each
-entry shows what the primary screen comes out at). A width × height box before it was dropped on
-2026-10-16 for always-native, and came back because a 4K screen at full resolution takes four times
-the context of Full HD; on 30 October 2026 the user replaced the box, which they found misleading,
-with this choice ("native, scaled down to 1080p vertically" by default). A saved box becomes the
-choice closest to its height. A screen 1080 high of any width goes as it is, 4K goes at 1920×1080,
-5120×1440 at 3840×1080 rather than the old box's 2560×720. Tests and the click benchmark still set a
-box of their own (`ScreenshotMaxWidth`/`ScreenshotMaxHeight`, not saved). On the click benchmark (Qwen
+scaled up (`AgentSettings.ScreenshotSize`: Up to 720p, Up to 1080p, Native). Only the height counts;
+width is left alone entirely. A width × height box before it was dropped on 2026-10-16 for
+always-native, and came back because a 4K screen at full resolution takes four times the context of
+Full HD; on 30 October 2026 the user replaced the box, which they found misleading, with these three
+("native, scaled down to 1080p vertically" by default). A saved box becomes the choice closest to its
+height. A screen 1080 high of any width goes as it is, 4K goes at 1920×1080, 5120×1440 at 3840×1080
+rather than the old box's 2560×720. Tests and the click benchmark (`BB_CLICK_RES=720`) set a height of
+their own (`ScreenshotMaxHeight`, not saved). On the click benchmark (Qwen
 3.8, 3 retries, grid base) full size hit 92 of 114 first and 99 in the end, 1920×1080 88 and 99
 (ultrawide buttons 4/5 to 1/5), 1280×720 55 and 70, with 19 trials never finding the target. Clicks map
 back through `ScreenSpace` per monitor, in physical pixels, so each screen's own scaling and its
@@ -2443,7 +2443,7 @@ guard taken out the DPI-unaware thread's did. Scripts that drive Sloperator must
 is DPI aware in some hosts and not in others, and click targets read off a 1536×960 screenshot of
 that screen landed every click 25% too far right and down.
 Claude's own limit (`ToolContext.MaxScreenshotSide`) still applies over the setting.
-The click benchmark takes another box with `BB_CLICK_RES=1920x1080`.
+The click benchmark takes another height with `BB_CLICK_RES=720`.
 
 The measurements that made native the default: in LM Studio, turn off the model's
 "Image Input: Never exceed 2048 px" option, or it shrinks them back to about 2048×864 (qwen3.8 hit

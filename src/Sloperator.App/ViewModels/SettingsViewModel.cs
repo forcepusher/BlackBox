@@ -1,14 +1,11 @@
 using Sloperator.Core.Mcp;
-using Sloperator.Core.Platform;
 using Sloperator.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Sloperator.App.ViewModels;
 
 /// <summary>Edits a copy of the settings; the window hands it back to the main view model on Save.</summary>
-/// <param name="screen">The primary screen, to show what each screenshot size makes of it; null when it can't be read.</param>
-public sealed partial class SettingsViewModel(AppSettings settings, AppPaths paths, string mcpConfigText, IReadOnlyList<McpServerStatus> mcpStatuses,
-    ScreenRect? screen = null) : ObservableObject
+public sealed partial class SettingsViewModel(AppSettings settings, AppPaths paths, string mcpConfigText, IReadOnlyList<McpServerStatus> mcpStatuses) : ObservableObject
 {
     public AppSettings Settings { get; } = settings;
 
@@ -36,28 +33,13 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
 
     // ---- Screenshot size ---------------------------------------------------------------
 
-    /// <summary>The choices in the order the dropdown lists them.</summary>
-    private static readonly ScreenshotSize[] Sizes = [ScreenshotSize.UpTo1080, ScreenshotSize.Full, ScreenshotSize.UpTo720];
-
-    /// <summary>Each choice with the size its screenshots of the primary screen come out at, so it's never a guess.</summary>
-    public string[] ScreenshotSizes { get; } = Sizes.Select(size =>
-    {
-        var name = size switch
-        {
-            ScreenshotSize.Full => "Full resolution, more context per screenshot",
-            ScreenshotSize.UpTo720 => "720p tall, fewer tokens but clicks miss more",
-            _ => "Up to 1080p tall (recommended)",
-        };
-        if (screen is not { } s)
-            return name;
-        var space = new ScreenSpace(s, new AgentSettings { ScreenshotSize = size }.ScreenshotBox);
-        return $"{name}: {space.ImageWidth} × {space.ImageHeight}";
-    }).ToArray();
+    /// <summary>In <see cref="ScreenshotSize"/> order.</summary>
+    public string[] ScreenshotSizes { get; } = ["Up to 720p", "Up to 1080p", "Native"];
 
     public int ScreenshotSizeIndex
     {
-        get => Math.Max(0, Array.IndexOf(Sizes, Agent.ScreenshotSize));
-        set => Agent.ScreenshotSize = Sizes[Math.Clamp(value, 0, Sizes.Length - 1)];
+        get => (int)Agent.ScreenshotSize;
+        set => Agent.ScreenshotSize = (ScreenshotSize)Math.Clamp(value, 0, ScreenshotSizes.Length - 1);
     }
 
     // ---- MCP servers -------------------------------------------------------------------

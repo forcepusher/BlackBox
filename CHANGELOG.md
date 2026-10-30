@@ -23,10 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   message goes to the new model.
 
 ### Changed
-- **Screenshot size** under Settings → Advanced replaces the width × height box: **Up to 1080p tall**
-  (the default: your screen's own resolution, scaled down only when it's taller than 1080 pixels, so
-  ultrawide screens keep their detail), **Full resolution**, or **720p tall** (fewer tokens, but clicks
-  miss more). Each shows the size its screenshots of your screen come out at.
+- **Screenshot size** under Settings → Advanced replaces the width × height box: **Up to 720p**,
+  **Up to 1080p** (the default) or **Native**. Screenshots keep your screen's width and shape and are
+  only scaled down when the screen is taller, so ultrawide screens keep their detail.
 - A chat video's right-click Copy is now two entries: **Copy image** for the frame on screen and
   **Copy file** for the video.
 - A new look in neutral greys: a darker background, filled buttons, fields darker than the window,

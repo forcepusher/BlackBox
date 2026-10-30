@@ -54,7 +54,7 @@ public class ToolTests
         // Told the size, qwen3.8 (q6_k_xl) clicked better in pixels than on its 0-1000 grid: 21/28
         // against 19/28 (2026-10-29), so no model gets the grid.
         var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1080) };
-        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false, ScreenshotMaxWidth = 1920, ScreenshotMaxHeight = 1080 }, WorkingDirectory = Path.GetTempPath() };
+        var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings { ScreenshotAfterActions = false, ScreenshotMaxHeight = 810 }, WorkingDirectory = Path.GetTempPath() };
         await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 960, ["y"] = 400 }, ctx, CancellationToken.None);
         Assert.Equal("move 1280,540", platform.Actions[0]);
         var shot = await new ScreenshotTool().ExecuteAsync([], ctx, CancellationToken.None);
@@ -83,7 +83,7 @@ public class ToolTests
         // The model's own coordinates, nothing else: a fresh look that re-aimed clicks moved
         // DeepSeek's measured aims one Hierarchy row off, or into the Scene view.
         var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1440) };
-        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotMaxWidth = 1280, ScreenshotMaxHeight = 720, ScreenshotAfterActions = false });
+        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotMaxHeight = 720, ScreenshotAfterActions = false });
         var click = new MouseClickTool();
         var result = await click.ExecuteAsync(new JsonObject { ["x"] = 10, ["y"] = 20 }, ctx, CancellationToken.None);
         Assert.Equal("move 20,41", platform.Actions[0]);
@@ -98,7 +98,7 @@ public class ToolTests
     {
         // A 2560x1440 screen sent at 1280x704: a 640x352 region around (640, 352) is 1280x704 screen pixels.
         var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1440) };
-        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotMaxWidth = 1280, ScreenshotMaxHeight = 720 });
+        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotMaxHeight = 720 });
         var zoom = new ZoomTool();
         var result = await zoom.ExecuteAsync(new JsonObject { ["x"] = 640, ["y"] = 352, ["width"] = 320, ["height"] = 176 }, ctx, CancellationToken.None);
         Assert.Equal(new ScreenRect(960, 540, 640, 360), platform.Captures[^1]);
@@ -153,7 +153,7 @@ public class ToolTests
     {
         var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 2560, 1440) };
         // 2560x1440 screen sent at 1280x720 (704 after snapping to the 32px grid)
-        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotMaxWidth = 1280, ScreenshotMaxHeight = 720, ScreenshotAfterActions = false });
+        var ctx = Ctx(platform, settings: new AgentSettings { ScreenshotMaxHeight = 720, ScreenshotAfterActions = false });
 
         await new MouseClickTool().ExecuteAsync(new JsonObject { ["x"] = 10, ["y"] = "20", ["clicks"] = 2 }, ctx, CancellationToken.None);
 
@@ -210,20 +210,18 @@ public class ToolTests
         Assert.Contains("2560x1088", await Look(3));
         Assert.Equal("move 4940,496", await Click(1100, 500));
 
-        // A smaller box: 4K fits 1280x720, and a click still lands where it was aimed.
-        ctx.Settings.ScreenshotMaxWidth = 1280;
-        ctx.Settings.ScreenshotMaxHeight = 720;
+        // Up to 720p: 4K goes at 1280x720, and a click still lands where it was aimed. Only the height
+        // counts, so the ultrawide keeps its shape.
+        ctx.Settings.ScreenshotSize = ScreenshotSize.UpTo720;
         Assert.Contains("1280x704", await Look(1));
         Assert.Equal("move 1920,1080", await Click(640, 352));
-        Assert.Equal((1280, 544), (ctx.ScreenSpaces()[2].ImageWidth, ctx.ScreenSpaces()[2].ImageHeight));
+        Assert.Equal((1696, 704), (ctx.ScreenSpaces()[2].ImageWidth, ctx.ScreenSpaces()[2].ImageHeight));
 
-        // A box larger than the screen never scales it up, and a hand-edited tiny or huge box is kept in range.
-        ctx.Settings.ScreenshotMaxWidth = 99_999;
-        ctx.Settings.ScreenshotMaxHeight = 99_999;
+        // Native never scales, and a height set by hand is kept in range.
+        ctx.Settings.ScreenshotSize = ScreenshotSize.Native;
         Assert.Equal((3840, 2176), (ctx.ScreenSpaces()[0].ImageWidth, ctx.ScreenSpaces()[0].ImageHeight));
-        ctx.Settings.ScreenshotMaxWidth = 0;
         ctx.Settings.ScreenshotMaxHeight = -5;
-        Assert.Equal((640, 360), ctx.Settings.ScreenshotBox);
+        Assert.Equal((AgentSettings.MaxScreenshotSide, 360), ctx.Settings.ScreenshotBox);
     }
 
     [Fact]
@@ -688,8 +686,9 @@ public class ToolTests
 
         Assert.Equal(ScreenshotSize.UpTo1080, Size("""{ "screenshotMaxWidth": 2560, "screenshotMaxHeight": 1080 }"""));
         Assert.Equal(ScreenshotSize.UpTo720, Size("""{ "screenshotMaxWidth": 1280, "screenshotMaxHeight": 720 }"""));
-        Assert.Equal(ScreenshotSize.Full, Size("""{ "screenshotMaxWidth": 3840, "screenshotMaxHeight": 2160 }"""));
-        Assert.Equal(ScreenshotSize.Full, Size("""{ "screenshotMaxHeight": 720, "screenshotSize": "full" }""")); // already chosen
+        Assert.Equal(ScreenshotSize.Native, Size("""{ "screenshotMaxWidth": 3840, "screenshotMaxHeight": 2160 }"""));
+        Assert.Equal(ScreenshotSize.Native, Size("""{ "screenshotMaxHeight": 720, "screenshotSize": "native" }""")); // already chosen
+        Assert.Equal(ScreenshotSize.Native, Size("""{ "screenshotSize": "full" }""")); // its first name
         // Up to 1080 tall: a 5120x1440 screen keeps its width (3840x1080, not the old box's 2560x720).
         var space = new ScreenSpace(new ScreenRect(0, 0, 5120, 1440), new AgentSettings().ScreenshotBox);
         Assert.Equal((3840, 1088), (space.ImageWidth, space.ImageHeight));

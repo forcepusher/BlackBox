@@ -34,7 +34,7 @@ public class ClickLandsTests
         {
             Platform = platform,
             // Smaller than any screen, so the screenshot is scaled down too.
-            Settings = new AgentSettings { ScreenshotAfterActions = false, ScreenshotMaxWidth = 1024, ScreenshotMaxHeight = 640 },
+            Settings = new AgentSettings { ScreenshotAfterActions = false, ScreenshotMaxHeight = 640 },
             WorkingDirectory = Path.GetTempPath(),
         };
         var cursorBefore = platform.Input.GetCursorPosition();
