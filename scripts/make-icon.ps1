@@ -24,9 +24,45 @@ Add-Type -AssemblyName System.Drawing
 
 $root = Split-Path $PSScriptRoot
 $assets = if ($Out) { New-Item -ItemType Directory -Force $Out | Select-Object -ExpandProperty FullName } else { Join-Path $root "src/Sloperator.App/Assets" }
-$sizes = 256, 128, 64, 48, 40, 32, 24, 20, 16
+# Every size Windows asks for at 100, 125, 150, 175 and 200%: the title bar 16 x scale, the taskbar 24 x
+# scale (Avalonia picks the nearest entry, and Windows blurs it to fit when it isn't exact), Explorer
+# 16, 32, 48 and 96 x scale. Missing sizes are shrunk from the next one up.
+$sizes = 256, 128, 96, 80, 72, 64, 60, 48, 42, 40, 36, 32, 30, 28, 24, 20, 16
 $svg = [xml][IO.File]::ReadAllText((Join-Path $root "docs/logo/blob.svg"))
 $view = 128.0   # the SVG's viewBox is 0 0 128 128
+
+# Each output pixel is the average of the 4x4 drawn under it (premultiplied), so an edge pixel
+# shows exactly how much of it the shape covers. A bicubic shrink spread every edge over two pixels.
+Add-Type -ReferencedAssemblies System.Drawing @"
+using System.Drawing; using System.Drawing.Imaging;
+public static class Box {
+    public static Bitmap Down(Bitmap big, int ss) {
+        int n = big.Width / ss;
+        var src = big.LockBits(new Rectangle(0, 0, big.Width, big.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        var px = new int[big.Width * big.Height];
+        System.Runtime.InteropServices.Marshal.Copy(src.Scan0, px, 0, px.Length);
+        big.UnlockBits(src);
+        var outPx = new int[n * n];
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++) {
+                long a = 0, r = 0, g = 0, b = 0;
+                for (int j = 0; j < ss; j++)
+                    for (int i = 0; i < ss; i++) {
+                        uint p = (uint)px[(y * ss + j) * big.Width + x * ss + i];
+                        uint pa = p >> 24;
+                        a += pa; r += ((p >> 16) & 255) * pa; g += ((p >> 8) & 255) * pa; b += (p & 255) * pa;
+                    }
+                int A = (int)((a + ss * ss / 2) / (ss * ss));
+                outPx[y * n + x] = a == 0 ? 0 : (A << 24) | (int)((r + a / 2) / a) << 16 | (int)((g + a / 2) / a) << 8 | (int)((b + a / 2) / a);
+            }
+        var bmp = new Bitmap(n, n, PixelFormat.Format32bppArgb);
+        var dst = bmp.LockBits(new Rectangle(0, 0, n, n), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+        System.Runtime.InteropServices.Marshal.Copy(outPx, 0, dst.Scan0, outPx.Length);
+        bmp.UnlockBits(dst);
+        return bmp;
+    }
+}
+"@
 
 function Color([string]$hex, [int]$alpha = 255) { [System.Drawing.Color]::FromArgb($alpha, [System.Drawing.ColorTranslator]::FromHtml($hex)) }
 
@@ -124,13 +160,8 @@ function Draw-Blob([int]$size, [string]$edge) {
     }
 
     $g.Dispose()
-    $out = [System.Drawing.Bitmap]::new($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    $g2 = [System.Drawing.Graphics]::FromImage($out)
-    $g2.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-    $g2.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-    $g2.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
-    $g2.DrawImage($big, [System.Drawing.Rectangle]::new(0, 0, $size, $size))
-    $g2.Dispose(); $big.Dispose()
+    $out = [Box]::Down($big, $ss)
+    $big.Dispose()
     $out
 }
 

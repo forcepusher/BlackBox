@@ -42,6 +42,27 @@ public class SeveralWindowsTests : IDisposable
     }
 
     [Fact]
+    public void Notify_me_when_done_is_off_until_turned_on_and_another_windows_save_keeps_it()
+    {
+        var paths = new AppPaths(_root);
+        paths.EnsureCreated();
+        // A settings.json from before the setting, or one with "notify": null typed in by hand.
+        File.WriteAllText(paths.SettingsFile, """{"server":{"model":"qwen"},"notify":null}""");
+        var (one, two) = (new SettingsStore(paths), new SettingsStore(paths));
+        var inOne = one.Load();
+        var inTwo = two.Load();
+        Assert.False(inOne.Notify.WhenDone);
+
+        inOne.Notify.WhenDone = true;
+        one.Save(inOne);
+        // The other window, which still has it off, saves its place.
+        inTwo.Window = new WindowPlacement { X = 10, Y = 20, Width = 900, Height = 700 };
+        two.Save(inTwo);
+
+        Assert.True(new SettingsStore(paths).Load().Notify.WhenDone);
+    }
+
+    [Fact]
     public void Each_window_saves_only_what_it_changed()
     {
         var paths = new AppPaths(_root);

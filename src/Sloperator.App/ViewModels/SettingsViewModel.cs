@@ -21,6 +21,8 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
 
     public PanelSettings Panels => Settings.Panels;
 
+    public NotifySettings Notify => Settings.Notify;
+
     public string[] ApprovalModes { get; } =
     [
         "Ask before every action",
@@ -44,8 +46,8 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
     {
         var name = size switch
         {
-            ScreenshotSize.Full => "Full resolution, more context per screenshot",
-            ScreenshotSize.UpTo720 => "720p tall, fewer tokens but clicks miss more",
+            ScreenshotSize.Full => "Full resolution",
+            ScreenshotSize.UpTo720 => "720p tall (clicks miss more)",
             _ => "Up to 1080p tall (recommended)",
         };
         if (screen is not { } s)

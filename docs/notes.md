@@ -11,7 +11,8 @@ done. The model runs on any OpenAI-compatible server: LM Studio (on this PC or a
 your network), llama.cpp's llama-server, vLLM, or a hosted API.
 
 ## Portable layout
-No installer, no registry, nothing in AppData or %TEMP%. Ship just `Sloperator.exe`: on first run it
+No installer, no registry (but for one key while Notify me when done is on, see there), nothing in
+AppData or %TEMP%. Ship just `Sloperator.exe`: on first run it
 unpacks its native UI libraries into `Data/runtime` next to itself. They are embedded as a zip of
 the files stored as they are, packed whole with Brotli (`scripts/pack-runtime.cs`, quality 11, 16 MB
 window): 7.6 MB where the zip's own Deflate made 10.0 (Skia, PDFium, ANGLE and HarfBuzz, 23 MB
@@ -35,7 +36,8 @@ Sloperator/
                pasted/ (pictures pasted into the chat, see Files in a message),
                videos/ (a folder per video: storyboard, frames, shots, song and the video, see Videos),
                index/ (the indexes of the folders the agent indexed, a file each, see Folder index),
-               crash.log (errors no code caught, see below), errors.log (every error shown, see below)
+               crash.log (errors no code caught, see below), errors.log (every error shown, see below),
+               sloperator.png (the notifications' icon, see Notify me when done)
 ```
 
 Set `SLOPERATOR_HOME` to use a different root. Debug builds use `.dev/` in the repository.
@@ -1406,6 +1408,26 @@ With nothing focused, keys go to the window. Popups (flyouts, menus) are their o
 covered; the rename box in a flyout closes with a click outside it anyway. `TextBoxFocusTests` checks
 it headless.
 
+## Start screen
+Until the chat is used (`ShowIntro`), the cards on what Sloperator can do scroll in the chat's place,
+at the foot of the scroll so they stay by the heading in a tall window, and read from the top when
+they don't fit. The heading (the logo, "What should I do on your computer?" and the line under it) is
+a row of its own right over the chat box, out of the scroll and always in view (the user's sketch,
+2026-10-30; until then it was over the cards and scrolled with them). It is centred on the chat box,
+so it sits half the scroll bar's width right of the cards' middle. Both go with the first message.
+In a window too short for both (`MainWindow.FitIntroHeading`) the heading gives the cards its room
+when they would get less than 64: the smallest window with nine lines typed (the box grows to 200),
+or with a banner up; it comes back as the box shrinks. Whether it shows is worked out from the room
+from the top of the chat to the top of the box, which showing it doesn't change: counted as the
+chat's height plus the heading's, a heading just shown and not laid out yet counted 0 and hid itself
+again, and the window was left with a blank strip where it had been.
+
+The logo there is `LogoBlob`, drawn from docs/logo/blob.svg's shapes at the size it is shown, the
+body's top, bottom and sides on whole pixels of the screen. It was Assets/sloperator.png (256 px) in
+an `Image` 40 across, which the user found "a tad blurry" at 100% (2026-10-30): shrunk that far its
+edges smeared over two or three pixels, and its crown and base fell partway into a row (3.4 and 36.9
+of 40). Copy image on it still gives the PNG.
+
 ## Party blob
 Left of Send and Stop, 32 px like the buttons and 8 px from Send, `PartyBlob` (Views/PartyBlob.cs)
 shows the logo (Assets/sloperator.png) still, and the blobs.gg party blob (Assets/partyblob.gif: 128 px,
@@ -1427,16 +1449,22 @@ while it dances and is in a window.
 
 ## App icon
 `Assets/sloperator.ico` (the exe, the taskbar, every window's title bar) is drawn by
-`scripts/make-icon.ps1` from `docs/logo/blob.svg`, each size on its own (16, 20, 24, 32, 40, 48, 64,
-128, 256), 4x oversampled. Its blob has a soft drop shadow: rings of 9% black, eight of them from
-the edge out to size/24 (one pixel at 16 and 24 px, 11 at 256), so it fades out, set half that
+`scripts/make-icon.ps1` from `docs/logo/blob.svg`, each size on its own, 4x oversampled and shrunk
+by averaging each 4x4 block, so an edge pixel holds just how much of it the shape covers (a
+bicubic shrink, until 2026-10-30, left a pale ring inside every edge and a soft grey one outside).
+It has every size Windows asks for at 100 to 200%: 16, 20, 24, 28, 30, 32, 36, 40, 42, 48, 60, 64,
+72, 80, 96, 128 and 256. Avalonia hands the title bar 16 x scale and the taskbar 24 x scale, the
+nearest entry (`IconImpl.LoadBigIcon`); at 125% that was 32 for a 30 px button, which Windows shrank
+and blurred. Checked on the taskbar at 125% on 2026-10-30: the window's icon is 30 x 30 and the
+button shows it pixel for pixel; before, it was the 32 resampled.
+Its blob has a soft drop shadow: rings of 9% black, eight of them from the edge out to size/24 (one pixel at 16 and 24 px, 11 at 256), so it fades out, set half that
 lower than the blob. The bare yellow had no edge on a light taskbar and looked fuzzy there (the
 user's screenshot, 2026-10-30). Blob and shadow together fill the square side to side, and their
 top and bottom land on whole pixels. On a dark taskbar the shadow melts into the background. A
 #2F2F2F outline, the colour of the eyes (`-Edge outline`: one pixel up to 64 px, 3 at 256), was
 set beside it on white, #E8E8E8 and #202020; the user found the shadow "way better".
-`Assets/sloperator.png` (the start screen, the still party blob) is the SVG as it is, with no
-shadow: the app is always dark, and the still blob must line up with the party blob GIF.
+`Assets/sloperator.png` (the still party blob; the start screen draws the SVG itself, see Start
+screen) is the SVG as it is, with no shadow: the app is always dark, and the still blob must line up with the party blob GIF.
 
 ## Text in the middle of its box
 The font is Inter (bundled; Segoe UI was tried on 2026-10-29 and the user wanted Inter back). Fluent's
@@ -1717,6 +1745,51 @@ A soak of 20 minutes on the stand-in (2026-10-23): two windows each sending "key
 as soon as the last one ended, 45 tasks each and 91 chats saved, taking turns with the keyboard
 all along. The process stayed at 340-510 MB (up and down with the screenshots it collects), about
 940 handles and 107 threads from the fourth minute to the end, and nothing went to the crash log.
+
+## Notify me when done
+Settings → Notifications → **Notify me when done** (off by default) shows a Windows notification
+when a window's run ends or waits: done (the chat's title over the first line of the last reply, its
+Markdown marks taken out, cut at a word past 140 characters), stopped by an error ("Stopped by an
+error: " and the chat's red line), or waiting for the user's OK under "Ask me first" ("Waiting for
+your OK: " and the call's summary). None for a run the user stopped, for one whose messages sent
+too late start the next run at once, or for a Compact context; none while that window is the active
+one and not minimized, as the user is looking at it. The research behind it: done or needs-input
+notifications were among the most asked-for features in comparable agents.
+
+Each window has a tag of its own (`window-N`), so its next notification replaces the last one in
+the action centre too, and two windows' notifications stand side by side. A click on one brings its
+window forward (`ChatWindows.BringForward`); Windows lets the clicked app take the foreground, so the
+window comes to the front rather than flashing on the taskbar. A window's notification goes when the
+window is activated (it says what the notification said), when it closes, and when Sloperator ends:
+no COM activator is registered, so a click after the process ended would do nothing. The setting is
+Sloperator's, not the window's: saved in one window's Settings, it holds for every window.
+
+How (`WindowsToasts`): Windows' own toasts through WinRT (`ToastNotificationManager`), called
+through the interfaces' vtables, as Media Foundation is (see Pictures, video and sound), with the
+Activated event's handler a hand-made COM object of four slots (its IID, that of
+`TypedEventHandler<ToastNotification, Object>`, computed from WinRT's parameterized-interface
+rule: ab54de2d-…). No package: the Windows SDK projection (`net10.0-windows10.0.x` and CsWinRT) adds
+megabytes to the exe, and the Community Toolkit's notifications package needs it. An exe that isn't
+installed needs its app id registered for Windows 10 to show its toasts: Sloperator writes
+`HKCU\Software\Classes\AppUserModelId\Sloperator` (DisplayName, IconUri) at the first notification of
+each start, with the icon as `Data\sloperator.png`, which Windows reads the picture from. That key is
+the one thing Sloperator writes outside its folder, and only with the setting on: turning it off
+deletes the key and takes down the notifications still up. Windows keeps a key of its own per app
+under `Notifications\Settings` (whether the user allowed it in Windows' settings), which is left be.
+All of it runs off the windows' thread, one call after another.
+
+Checked on the laptop (Windows 10 LTSC 21H2, 2026-10-30) with a stand-in server (`.dev/notify-test`:
+server.ps1 keyed by the message's words, drive.ps1, catch.ps1 which waits for a Sloperator banner by
+its icon's colour and clicks it, drain.ps1): a reply in a window behind Notepad showed the banner
+with the chat's title and "I wrote the poem into Notepad and saved it as poem.txt on your desktop."
+(bold and code marks gone); clicking it put that window in front. A 400 from the server showed
+"Stopped by an error: Chat request failed (400): …"; a `run_shell` under "Ask before shell commands
+and file changes" showed "Waiting for your OK: Delete the old logs", and with two windows open its
+click brought the second window forward, the first one's the first. With the window in front, nothing
+was shown or left in the action centre; after a click the window's notification was gone from it.
+Turned off in Settings, the registry key went, and a run in the other window showed nothing.
+Pitfall for such tests: banners wait on the screen while the user is away, one at a time, so a
+Sloperator banner queued behind another app's waits until those are moved to the action centre.
 
 ## Files in a message
 Drop files or folders anywhere on the window, paste them with Ctrl+V (a screenshot, a picture
