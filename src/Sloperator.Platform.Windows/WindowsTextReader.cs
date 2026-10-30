@@ -345,7 +345,9 @@ internal static class TextRecognitionInstall
         };
         try
         {
-            using var process = System.Diagnostics.Process.Start(start);
+            // Off the caller's thread: starting an elevated process waits until the user answers
+            // Windows' prompt, and on the UI thread that froze Sloperator's window meanwhile.
+            using var process = await Task.Run(() => System.Diagnostics.Process.Start(start), ct).ConfigureAwait(false);
             if (process is null)
                 return TextInstall.Failed;
             await process.WaitForExitAsync(ct).ConfigureAwait(false);

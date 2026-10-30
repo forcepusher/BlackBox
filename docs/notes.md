@@ -2694,6 +2694,14 @@ recognition off in Settings, which ends the offers; on an install, it runs `Add-
 RunAs`: adding a capability needs an administrator, and Windows asks); the reader looks for an engine
 again on every call while it has none, so find_text works right after. Windows' prompt for an
 elevated PowerShell looks alarming, so the model first tells the user it is coming and to click Yes.
+That is the CLI. In the app the model's words offering it went unread (the user: "only about 5-10%
+of that is being read"), and so did a card in the chat, scrolled away by the run, so the offer is a
+card on the chat bar above the message box (`TextRecognitionOffer`, through
+`IAgentObserver.OfferTextRecognition`): Install (it says Windows will ask about PowerShell), Not now,
+Turn off. The model is told the user has been offered it and not to ask or install it itself. Not now
+takes the card away at once; after an install or Turn off what happened shows for 6 s first. The
+install starts its elevated process off the UI thread, which otherwise froze until Windows' prompt
+was answered. Clicking No on that prompt (error 1223) leaves it uninstalled and offered again next time.
 It is one inline command (`-Command`), which an execution policy never stops (only script files);
 `-ExecutionPolicy Bypass` is passed all the same. Tried on the laptop (30 October 2026) with its OCR
 packs removed: the offer came, the install ran once the user allowed it, and find_text read 139 lines

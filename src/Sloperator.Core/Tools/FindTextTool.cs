@@ -60,7 +60,7 @@ public sealed class FindTextTool : Tool
     /// </summary>
     internal const string Offered =
         "Windows has no text recognition language installed, so the screen's text can't be read; look with screenshot and zoom instead. " +
-        "Sloperator has shown the user a card in the chat to install it, skip it, or turn it off: don't ask them about it yourself, and don't install it. " +
+        "Sloperator offers it to the user above the message box (install, skip or turn off): don't ask them about it yourself, and don't install it. " +
         "Once they install it, find_text works again.";
 
     /// <summary>Where there is no app to show a card (the CLI): the model offers it and installs it on a yes.</summary>
