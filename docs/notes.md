@@ -1422,6 +1422,10 @@ from the top of the chat to the top of the box, which showing it doesn't change:
 chat's height plus the heading's, a heading just shown and not laid out yet counted 0 and hid itself
 again, and the window was left with a blank strip where it had been.
 
+Each card's line under its name (`TextBlock.capabilityNote`, 11 px, a step under other grey text)
+keeps to one line down to the window's MinWidth (the user, 2026-10-30: the two-line cards were too
+big), so the wording is cut to fit rather than wrapped; the cards are as tall as that one line.
+
 The logo there is `LogoBlob`, drawn from docs/logo/blob.svg's shapes at the size it is shown, the
 body's top, bottom and sides on whole pixels of the screen. It was Assets/sloperator.png (256 px) in
 an `Image` 40 across, which the user found "a tad blurry" at 100% (2026-10-30): shrunk that far its
