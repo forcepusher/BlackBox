@@ -378,12 +378,20 @@ public sealed class NotifySettings
     public bool WhenDone { get; set; }
 }
 
+/// <summary>Sloperator updating itself (see Updater in the app).</summary>
+public sealed class UpdateSettings
+{
+    /// <summary>Ask GitHub for a new version at start and once an hour, and download it. Off, Sloperator never contacts GitHub by itself.</summary>
+    public bool Automatic { get; set; } = true;
+}
+
 public sealed class AppSettings
 {
     public ServerSettings Server { get; set; } = new();
     public AgentSettings Agent { get; set; } = new();
     public PanelSettings Panels { get; set; } = new();
     public NotifySettings Notify { get; set; } = new();
+    public UpdateSettings Updates { get; set; } = new();
 
     /// <summary>The main window's last size and place; null until it was first closed.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

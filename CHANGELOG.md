@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - The agent can find text on the screen with Windows' own text recognition, so it finds a label, a
   link or a value in a big table or a page of text in one step instead of zooming around for it.
+- Sloperator updates itself: it checks GitHub for a new version once an hour, across starts too
+  (never during a task), downloads it beside itself, and a line under the top bar says **Sloperator
+  1.2.0 is ready**, with **Restart** and **What's new**. Restart opens the new version with the same
+  chats; closing Sloperator instead puts it in place for the next start. In a folder Sloperator can't
+  write to (Program Files) the line says the new version is out, with a link to download it.
+- **Check for updates** and **Check automatically** (on by default) under Settings → Updates. Off,
+  Sloperator never contacts GitHub by itself.
+- Releases are built by GitHub Actions and signed through SignPath, so Windows shows Sloperator's
+  publisher instead of an unknown app once the signature has built up trust.
 - Right-click any picture in Sloperator for **Copy image**, and any other file (a video, a sound, a
   document) for **Copy file**: in the chat, the full-screen viewer, the File inspector, the Video
   generator and File changes.
@@ -36,6 +45,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   button's name are gone.
 - On the start screen, "What should I do on your computer?" sits right over the chat box and stays in
   view, with the cards scrolling above it. In a very short window it makes room for a long message.
+- The start screen is tidier: each card says what it does in one line, in smaller text, so the cards
+  are shorter, with a bigger icon centred beside the name and that line; the Pause/Break card has one
+  line on the key and one on correcting and asking first;
+  the Ctrl V and New window lines say a little more; under the heading, "I may use your keyboard and
+  mouse when needed."
 - A chat video's right-click Copy is now two entries: **Copy image** for the frame on screen and
   **Copy file** for the video.
 - A new look in neutral greys: a darker background, filled buttons, fields darker than the window,
@@ -78,6 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   files to ask about them, stage or discard them."
 
 ### Fixed
+- A newer Sloperator started from the folder of one still closing could fail with "Access to the path
+  'libHarfBuzzSharp.dll' is denied".
 - Code in a reply's line (`like this`) was much smaller than the words around it (11 beside 14);
   it is the same size now, in a table too.
 - Selecting part of a reply redrew the selected words in the code font a size larger, and the rest of

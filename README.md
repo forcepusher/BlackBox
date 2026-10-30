@@ -16,6 +16,8 @@ https://github.com/user-attachments/assets/8a6d325e-0564-483e-95d7-42900efc6903
 
 **Pause/Break** stops it at any time. It doesn't ask before it acts; to change that see Settings.
 Turn on **Notify me when done** there to get a Windows notification when a task needs you.
+Sloperator updates itself: when a new version is ready, a line under the top bar says so, with
+**Restart**.
 
 ## Connecting a model
 - **Free, no account:** out of the box it runs on Kilo's free online models. They allow about 200
@@ -43,3 +45,18 @@ dotnet test              # unit tests
 ```
 
 Details are in [docs/notes.md](docs/notes.md), which is meant to be read by LLMs, not people.
+
+## Code signing policy
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [forcepusher](https://github.com/forcepusher)
+- Approvers: [forcepusher](https://github.com/forcepusher)
+
+Every release is built from this repository by GitHub Actions and signed only after an approver
+accepts it.
+
+Privacy: Sloperator sends your messages, files and screenshots only to the model server you pick
+(out of the box, Kilo's free online models), and reaches other servers only when you or a task
+ask for it. It also checks GitHub for a new version once an hour, unless you turn that off in
+Settings. To remove it, delete `Sloperator.exe` and its `Data` folder.

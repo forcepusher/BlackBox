@@ -37,7 +37,8 @@ Sloperator/
                videos/ (a folder per video: storyboard, frames, shots, song and the video, see Videos),
                index/ (the indexes of the folders the agent indexed, a file each, see Folder index),
                crash.log (errors no code caught, see below), errors.log (every error shown, see below),
-               sloperator.png (the notifications' icon, see Notify me when done)
+               sloperator.png (the notifications' icon, see Notify me when done),
+               update-check.txt (when Sloperator last asked GitHub for a new version, see Updates)
 ```
 
 Set `SLOPERATOR_HOME` to use a different root. Debug builds use `.dev/` in the repository.
@@ -70,7 +71,10 @@ in (Program Files), it says to move `Sloperator.exe` to a folder of your own, ra
 "Access to the path '…\Data\runtime' is denied". A newer version started from the folder where an
 older one is still open (`Sloperator (1).exe` downloaded next to `Sloperator.exe`) unpacks its
 libraries into `Data/runtime-<id>` beside the ones the old one holds; that failed to start before,
-and the folder goes once nothing uses it.
+and the folder goes once nothing uses it. Any of `Data/runtime` left after a failed delete counts as
+held: it went by `libSkiaSharp.dll` alone, and a restart into an update (see Updates), with the old
+version still ending, had let go of that one but not of HarfBuzz, so the delete took Skia away and
+the new version didn't start (2026-10-30, 1 of 4 restarts).
 
 ## Documents
 `read_file` reads more than text: PDFs (their text layer, page by page), Word, Excel and PowerPoint
@@ -1421,6 +1425,17 @@ or with a banner up; it comes back as the box shrinks. Whether it shows is worke
 from the top of the chat to the top of the box, which showing it doesn't change: counted as the
 chat's height plus the heading's, a heading just shown and not laid out yet counted 0 and hid itself
 again, and the window was left with a blank strip where it had been.
+
+Each card's line under its name (`TextBlock.capabilityNote`, 11 px, a step under other grey text)
+keeps to one line down to the window's MinWidth (the user, 2026-10-30: the two-line cards were too
+big), so the wording is cut to fit rather than wrapped; the cards are as tall as that one line.
+The icon (`PathIcon.capability`, 24 px, 12 from the words) is centred on the name and that line
+together, not level with the name (with one short line under it, an 18 px icon at the top sat high,
+the user said). Measured on captures, the words' capitals-to-baseline against the card's inside
+and the icon's ink against the words: centred on the lines' boxes the icon sat 1-1.5 px low at 125%
+(the last box runs on under the baseline), and the words a pixel high; a bottom margin of 1 on the
+icon and a top margin of 1 on `StackPanel.capability` put both within half a pixel at 125% and
+at 100% (a DPI-unaware build). A bottom margin of 2 overshot to 0.5-1 px high.
 
 The logo there is `LogoBlob`, drawn from docs/logo/blob.svg's shapes at the size it is shown, the
 body's top, bottom and sides on whole pixels of the screen. It was Assets/sloperator.png (256 px) in
@@ -3510,6 +3525,57 @@ reply at the end of the run that nobody had asked for. A message that comes whil
 its final answer isn't marked: the task is done by then, so it is the next request, as if sent after
 the run.
 
+## Updates
+Sloperator updates itself (`Updater` in the app, `SelfUpdate` and `GitHubReleases` in Core). Once
+the first window is up (5 s on, after its own server check and MCP servers) and then once an hour, it
+asks GitHub for the newest release of forcepusher/Sloperator: `GitHubReleases.LatestAsync`, shared
+with ComfyUI's install, reads the API's `releases/latest` (tag, page, the `Sloperator.exe` asset and
+its `digest`), and past the API's 60 requests an hour (often reached behind a VPN) the
+`/releases/latest` redirect and the release's `expanded_assets` page. A check that comes due while a
+run is going in any window waits for the last run to end (`ChatWindows.BusyChanged`): no download
+competes with a task for the connection, and the line doesn't show up mid-task.
+
+Once an hour holds across starts too: every check (the button's as well) writes its time to
+`Data/update-check.txt`, and a start checks 5 s on only when the last check was an hour or more ago
+(or there is none, or it can't be read); otherwise its first check waits until an hour after the
+last (`SelfUpdate.FirstCheckIn`), and the hourly ones go on from there. Before (2026-10-30), every
+start checked, so opening and closing Sloperator a few times an hour asked GitHub each time, and
+without an account it allows 60 an hour per address. A time later than now (the clock set back) counts
+as long ago, so a wrong clock doesn't hold checks off. **Check for updates** in Settings checks
+right away, whenever the last check was.
+
+The tag ("1.2.0", "v1.2.0"; a "-beta" suffix is dropped) against the running exe's file version
+(Directory.Build.props `Version`): newer, and with `Sloperator.exe` among its files, it is downloaded
+by `Downloader` (resumed after a cut, checked against GitHub's SHA-256) into the exe's own folder as
+`<exe>.new`, under the running exe's own name (`Sloperator (1).exe` gets `Sloperator (1).exe.new`),
+and only once it is whole and its file version is higher than the running one. A release published
+before its build attached the exe (the release workflow runs a few minutes, longer while SignPath
+waits for the approver) is no update until the exe is there. No signature check of Sloperator's
+own: the user's call (2026-10-30), as GitHub's checksum and the release being the repository's own
+cover what a check would.
+
+Then each chat window shows one line under the server rows (`Border.bar.slim`, 33 high):
+"Sloperator 1.2.0 is ready", **What's new** (the release's page) and **Restart**, which waits while a
+run is going in any window. Restart flushes the chats, swaps the files (`SelfUpdate.Swap`: the
+running exe to `<exe>.old`, which Windows allows for a running exe, then `<exe>.new` to `<exe>`;
+when the second rename fails the first is undone), starts the new exe with `--reopen <id>,<id>`
+(the windows' chats in the order they opened, empty for a window without one) and ends. The new
+build opens a window for each and opens its chat, as History would. The two never talk: the new
+build's `SingleInstance` name is its own, so it doesn't hand its start to the old one still ending,
+and `PortableRuntime` unpacks beside the old one's `Data/runtime` while that holds it. A new exe
+that doesn't start goes back to `<exe>.new` and the old one stays in place. Not restarted, the swap
+is made when the last window closes, without starting again. Each start deletes `<exe>.old` and a
+leftover `<exe>.new` or `<exe>.new.part`, quietly, unless they are still held.
+
+A folder Sloperator can't write to (Program Files, a locked folder; a file made and deleted at once
+tells) gets no download: the line says "Sloperator 1.2.0 is out" with **Download**, the release's
+page. Only the single-file exe publish.ps1 makes (the one with the embedded runtime) updates itself:
+a debug or folder build would be replaced by a lone exe; there, **Check for updates** says so and
+nothing checks by itself. Settings → Updates: **Check for updates** (checks now: "Checking…", then
+"Up to date", the ready or out version, or what went wrong) and **Check automatically**, on by
+default; off, Sloperator never contacts GitHub by itself. `SLOPERATOR_RELEASES_SERVER` points the
+lookup at a stand-in for GitHub's API and pages, for tests only.
+
 ## Build
 Requires the .NET 10 SDK.
 
@@ -3726,6 +3792,22 @@ the shell and web tools too, and once ran Get-Process), counts the four looks be
 rather than per trial, draws the mouse pointer on screenshots as the real screen shows it, and doesn't
 count a click the tool refused (bad coordinates) as a try. Those numbers aren't comparable with the
 ones above.
+
+### Releases
+`.github/workflows/release.yml` builds `Sloperator.exe` with `publish.ps1` on GitHub's
+`windows-latest`. A published GitHub release (tag and notes, no exe) starts it: the unsigned exe is
+uploaded as an artifact, sent to SignPath (free signing for open source from SignPath Foundation,
+whose certificate signs it), the run waits up to an hour for the approver to accept the request on
+signpath.io, checks the returned exe's Authenticode signature, and attaches it to the release.
+Settings it reads: secret `SIGNPATH_API_TOKEN` (no token: nothing is signed, the unsigned exe is
+attached), variables `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG` (default `Sloperator`) and
+`SIGNPATH_SIGNING_POLICY_SLUG` (default `release-signing`). The SignPath project's artifact
+configuration is a zip (upload-artifact's) holding one PE file, `Sloperator.exe`. A push that
+changes the build (the workflow, publish.ps1, pack-runtime.cs, the project files) builds without
+signing. SignPath Foundation asks for the code signing policy in the README.
+Why: unsigned, every new version starts with no SmartScreen reputation, so every download shows
+"Windows protected your PC"; signed, reputation builds on the certificate and carries to later
+versions (EV certificates no longer skip it, Microsoft, 2026).
 
 ## Project structure
 - `src/Sloperator.Core`: OpenAI-compatible streaming client, server probe, agent loop, tools,
