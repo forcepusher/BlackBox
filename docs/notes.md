@@ -1425,6 +1425,19 @@ it was "a pure OCD trigger"); `FitIntroHeading` gives its content presenter a bo
 as the heading while the heading shows, so what scrolls still stops at the heading's top and the
 cards never go under it. Measured at 100% and 125%: the bar's box is the same on the start screen and
 in a chat, and the cards and heading are where they were to the pixel.
+
+The line under the heading is `ScreenNote`: what the agent may do on the screen, after Settings'
+"Enable screenshots" and "Enable keyboard and mouse control" and whether the model takes images
+(the user, 2026-10-30: it said keyboard and mouse whatever Settings said). Four lines, each one line
+down to MinWidth: "I may use your keyboard and mouse when needed.", "I can see your screen but won't
+touch the keyboard or mouse.", "I can't see your screen or use the keyboard and mouse." and, in the
+warning colour as something to fix, "This model can't see your screen: pick another one." It changes
+as Settings is saved (here or in another window) and as the model's image support is found out; the
+same words were a warning line on the "Use any app" card before, said twice.
+
+The cards are 16 in from their sides (`StackPanel.intro Border.card`, 12 above and below), a step more
+than other cards' 12: at 12 the keys and icons sat a tiny bit close to the edge, the user said. Every
+card's line still keeps to one line at MinWidth at 100% and 125%.
 In a window too short for both (`MainWindow.FitIntroHeading`) the heading gives the cards its room
 when they would get less than 64: the smallest window with nine lines typed (the box grows to 200),
 or with a banner up; it comes back as the box shrinks. Whether it shows is worked out from the room
@@ -3060,7 +3073,9 @@ do?" got an answer about exactly those lines, with no tool call.
 420) shows one file whole on the left of the chat. A card's **Inspect** opens it on that file
 (`MainWindowViewModel.Inspect`: the dropdown switches to it through the same path as a pick, so
 the window lays the panel out before it grows); picked from the dropdown it waits for an Inspect, a
-file dropped on it, or one picked with the folder button. Its top bar has the file's name, what it is, the folder (Open
+file dropped on it, or one picked with the folder button. With no file, its top bar says how it is
+used, "Select text, cells or an area to ask about it." (muted, cut short with "…" as File changes'
+line is; the user, 2026-10-30: the bar was empty but for the buttons). Its top bar has the file's name, what it is, the folder (Open
 file: a picker in the shown file's folder, listing "Files it shows" first, then each kind from
 `FileInspector.PickerTypes`, then All files, since anything else opens in hex; the user's request,
 2026-10-26, not Open in the default program, which the cards no longer have) and the × that closes it; Show in folder was there too until the user had it taken off (2026-10-25), as the file's card in the chat has it. For a picture, animation, video, sound or 3D model that says

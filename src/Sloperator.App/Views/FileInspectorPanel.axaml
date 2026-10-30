@@ -35,11 +35,17 @@
             <TextBlock Text="Prompt" VerticalAlignment="Center" />
           </StackPanel>
         </ToggleButton>
-        <!-- Copy file (or Copy image) on a right-click, as on the file under it. -->
-        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" ClipToBounds="True" Margin="0,0,4,0" Background="Transparent" views:CopyMenu.File="{Binding Path}">
-          <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}" />
-          <TextBlock Classes="muted" Text="{Binding Details}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Details}" />
-        </StackPanel>
+        <Panel>
+          <!-- Copy file (or Copy image) on a right-click, as on the file under it. -->
+          <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" ClipToBounds="True" Margin="0,0,4,0" Background="Transparent" views:CopyMenu.File="{Binding Path}"
+                      IsVisible="{Binding HasFile}">
+            <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}" />
+            <TextBlock Classes="muted" Text="{Binding Details}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Details}" />
+          </StackPanel>
+          <!-- With no file: how the panel is used, as File changes says it in its bar (the user, 2026-10-30). -->
+          <TextBlock Classes="muted" IsVisible="{Binding !HasFile}" Text="Select text, cells or an area to ask about it."
+                     TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="Select text, cells or an area to ask about it." />
+        </Panel>
       </DockPanel>
     </Border>
 

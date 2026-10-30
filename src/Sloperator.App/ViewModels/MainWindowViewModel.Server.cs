@@ -418,7 +418,7 @@ public sealed partial class MainWindowViewModel : IModelServerSwitch
             OnContextChanged();
         }
         server.SupportsVision = (probe.Vision ?? true) && _imagesRefused != ImagesKey(server);
-        OnPropertyChanged(nameof(ScreenNote));
+        OnScreenNoteChanged();
         server.EffortLevels = probe.Efforts ?? [];
         OnEffortsChanged();
         if (server.BaseUrl != _forgotten && server.Remember())

@@ -15,6 +15,11 @@
     <Style Selector="StackPanel.conversation.unused">
       <Setter Property="VerticalAlignment" Value="Bottom" />
     </Style>
+    <!-- The start screen's cards: 16 in from their sides, a step more than a card's 12 (the user,
+         2026-10-30: the key or icon sat a tiny bit too close to the edge); as tall as before. -->
+    <Style Selector="StackPanel.intro Border.card">
+      <Setter Property="Padding" Value="16,12" />
+    </Style>
     <!-- A card's icon spans its name and the line under it, centred on the two (the user, 2026-10-30:
          level with the name alone it sat high once the line under it was one short line). Centred on
          the lines' boxes it sat 1-1.5 px under the words, as the last box runs on under the baseline:
@@ -692,7 +697,7 @@
              to take in at a glance: down to the window's MinWidth every sentence of the two notes
              keeps to one line, and so does every card's line under its name. Its heading is over the chat box, out of
              the scroll (see the row under it). -->
-        <StackPanel IsVisible="{Binding ShowIntro}" MaxWidth="640" Spacing="12">
+        <StackPanel Classes="intro" IsVisible="{Binding ShowIntro}" MaxWidth="640" Spacing="12">
           <!-- How to stop it comes first: it is what someone needs once Sloperator has the mouse. Under
                it, in one line as the cards' lines are, how to set it straight without stopping it (the
                user counts it among the things that make Sloperator special) and what it asks before
@@ -747,8 +752,6 @@
                 <StackPanel Classes="capability">
                   <TextBlock Classes="capability" Text="Use any app" />
                   <TextBlock Classes="muted capabilityNote" TextWrapping="Wrap" Text="I see the screen and work in any program." />
-                  <TextBlock Classes="muted warning capabilityNote" TextWrapping="Wrap" IsVisible="{Binding ScreenNote, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                             Text="{Binding ScreenNote}" />
                 </StackPanel>
               </DockPanel>
             </Border>
@@ -846,8 +849,9 @@
       <StackPanel IsVisible="{Binding ShowIntro}" Margin="16,12,16,8" Spacing="4">
         <views:LogoBlob Width="40" Height="40" Margin="0,0,0,4" />
         <TextBlock Text="What should I do on your computer?" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
-        <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460"
-                   Text="I may use your keyboard and mouse when needed." />
+        <!-- What it may do on the screen, after Settings and the model (MainWindowViewModel.ScreenNote). -->
+        <TextBlock Classes="muted" Classes.warning="{Binding ScreenNoteWarns}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460"
+                   Text="{Binding ScreenNote}" />
       </StackPanel>
     </Panel>
 
