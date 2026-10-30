@@ -107,8 +107,9 @@ foreach ($name in $Tasks) {
         $line = [regex]::Matches($text, '(?:' + [regex]::Escape($best) + '|\(' + [regex]::Escape((Split-Path $best -Leaf)) + '\)): ([^\r\n]+)') | Select-Object -Last 1
         $about = if ($line) { $line.Groups[1].Value } else { '' }
         $seconds = if ($about -match '\(([\d.]+) s\)') { [double]$Matches[1] } elseif ($about -match 'sound ([\d.]+) s') { [double]$Matches[1] } else { $null }
-        # A file the tool didn't describe (renamed or copied since): its length from ffprobe.
-        if ($null -eq $seconds -and (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+        # A file the tool didn't describe (renamed or copied since): its length from ffprobe. Only for a
+        # task that wants a length: ffprobe can't read a 3D model, and its error stops the script.
+        if ($null -eq $seconds -and $t.Min -and (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
             $probed = & ffprobe -v error -show_entries format=duration -of csv=p=0 $best 2>$null
             if ($probed -as [double]) { $seconds = [math]::Round([double]$probed, 1) }
         }
