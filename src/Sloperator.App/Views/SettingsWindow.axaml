@@ -95,7 +95,7 @@
           </StackPanel>
         </Grid>
         <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding ShowsTextRecognition}"
-                   Text="Makes model's clicks more accurate by reading the words on screen. Not used or offered when disabled." />
+                   Text="Makes model's clicks more accurate. Not used or offered when disabled." />
       </StackPanel>
     </ScrollViewer>
   </DockPanel>
