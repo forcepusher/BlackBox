@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   looking at its window. Click it to bring that window to the front.
 
 ### Changed
+- Every button, dropdown and text field keeps its words the same distance from its left edge, as the
+  Servers button does; buttons are a little wider.
 - Before clicking a named button, menu, tab, link or setting, the agent looks it up with text
   recognition, so its first click lands more often.
 - **Screenshot size** under Settings → Advanced replaces the width × height box: **Up to 720p tall**,
