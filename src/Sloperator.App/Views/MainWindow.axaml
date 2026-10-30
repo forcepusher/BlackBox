@@ -844,9 +844,11 @@
     <!-- The intro's heading, right over the chat box and always in view, the cards scrolling above it;
          it goes with them once the chat is used. In a window too short to show the cards beside it
          (a long message typed, a banner up) it gives them its room (MainWindow.FitIntroHeading).
-         The logo is drawn at whole pixels (LogoBlob). -->
+         The logo is drawn at whole pixels (LogoBlob). 20 over it, not 12: in the default window the
+         scroll then ends in the gap under the third row of cards, where at 12 the next row's top edge
+         peeked out as a thin line (the user, 2026-10-30); the logo stays where it was. -->
     <Panel x:Name="IntroHeading" Grid.Row="4">
-      <StackPanel IsVisible="{Binding ShowIntro}" Margin="16,12,16,8" Spacing="4">
+      <StackPanel IsVisible="{Binding ShowIntro}" Margin="16,20,16,8" Spacing="4">
         <views:LogoBlob Width="40" Height="40" Margin="0,0,0,4" />
         <TextBlock Text="What should I do on your computer?" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
         <!-- What it may do on the screen, after Settings and the model (MainWindowViewModel.ScreenNote). -->
