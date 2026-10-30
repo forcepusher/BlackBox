@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   looking at its window. Click it to bring that window to the front.
 
 ### Changed
+- Before clicking a named button, menu, tab, link or setting, the agent looks it up with text
+  recognition, so its first click lands more often.
 - **Screenshot size** under Settings → Advanced replaces the width × height box: **Up to 720p tall**,
   **Up to 1080p tall** (the default) or **Native**. Screenshots keep your screen's width and shape and are
   only scaled down when the screen is taller, so ultrawide screens keep their detail.

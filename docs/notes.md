@@ -2658,6 +2658,11 @@ benchmark (pixels, 3 retries, 30 October 2026) Qwen hit 97 of 114 first and 113 
 92/102 and 89/101 in two runs without it (two runs of the same thing differ by about 3 first, and 27
 of 114 trials flip): tables 5/5 (from 2/5), half-covered buttons 5/5 (from 2/5 and 1/5), every
 scene but one 5/5 in the end, all 16 first-click misses fixed. It called find_text 40 times.
+Offered, find_text was used mostly to search. Told in the prompt to find whatever has a name or label
+with it before clicking it (and to take a row's label's y for the switch on that row), Qwen hit 106 of
+114 first and 112 in the end, against 97 and 113: Unity's toolbar and menus 19/19 (from 13/19), the
+settings switches and the product cards 5/5 (from 3/5); half-covered buttons fell from 5/5 to 3/5, where
+the label's middle is under the cover. It called find_text 116 times, and a try took 31 s, not 27.
 
 Pixel coordinates are described with the image's size ("pixels of the screenshot, which is
 2560x1088"). Told only "pixels of the screenshot", DeepSeek V4.1 Flash answered on a 0-1000 grid, the

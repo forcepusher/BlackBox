@@ -75,8 +75,14 @@ public static class SystemPrompt
         {
             sb.AppendLine("- Start GUI tasks with a screenshot. Look before you click; never guess coordinates.");
             sb.AppendLine("- Aim for the center of buttons, fields and icons. After each action, check the new screenshot to confirm it worked before moving on.");
+            // Qwen 3.8 on the click benchmark: 97 of 114 first clicks with find_text offered, 106 when
+            // told to find named targets with it first (Unity's toolbar 13/19 to 19/19); 4 s more a try.
             if (findText)
+            {
                 sb.AppendLine("- To find a label, a link or a value among many (a table, a long list, a page of text), use find_text rather than searching by zooming.");
+                sb.AppendLine("- Before you click something that has a name or label on screen (a button, a menu, a tab, a link, a setting), find it with find_text " +
+                              "and click the x/y it gives; when the target is a switch or button on the same row as a label, use the label's y.");
+            }
             sb.AppendLine("- Maximize small windows (double-click the title bar or press win+up) when that makes them easier to work with.");
             sb.AppendLine("- Prefer keyboard shortcuts and the shell when they are more reliable than clicking (e.g. win+r, ctrl+l, Start-Process).");
             sb.AppendLine("- Click a text field before typing into it.");
