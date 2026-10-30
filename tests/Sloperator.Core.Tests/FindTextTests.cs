@@ -97,7 +97,7 @@ public class FindTextTests
         Assert.Contains("Only if they choose to install", result.Text);
         Assert.Contains("skip it for now (you will offer it again each time this comes up)", result.Text);
         Assert.DoesNotContain("once", result.Text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Settings → Advanced → Use text recognition", result.Text);
+        Assert.Contains("Settings → General → Use text recognition", result.Text);
         Assert.Contains("-Verb RunAs", result.Text); // installing a capability needs an administrator
         Assert.Contains("first tell them that Windows will now show an administrator prompt", result.Text); // the user is ready for it
         Assert.Contains("-ExecutionPolicy Bypass", result.Text); // a restricted execution policy doesn't stop it

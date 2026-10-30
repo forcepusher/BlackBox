@@ -68,7 +68,7 @@ public sealed class FindTextTool : Tool
         "Windows has no text recognition language installed, so the screen's text can't be read; look with screenshot and zoom for now. " +
         "Offer the user to install it: it improves how you use apps on screen, finding and clicking buttons, menus, links and values " +
         "quicker and more surely (a download of a few MB). Tell them they can install it now, skip it for now (you will offer it again each time this comes up), " +
-        "or turn text recognition off for good in Sloperator's Settings → Advanced → Use text recognition. " +
+        "or turn text recognition off for good in Sloperator's Settings → General → Use text recognition. " +
         "Only if they choose to install: first tell them that Windows will now show an administrator prompt asking whether Windows PowerShell may make " +
         "changes to the device, that this is the install and expected, and that they click Yes; then run in the shell: " +
         "$name = \"Language.OCR~~~$((Get-Culture).Name)~0.0.1.0\"; Start-Process powershell -Verb RunAs -Wait -ArgumentList " +

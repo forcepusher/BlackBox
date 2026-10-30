@@ -56,7 +56,7 @@ public sealed class TextRecognitionCardTests
         await off.TurnOffCommand.ExecuteAsync(null);
         Assert.False(off.IsOpen);
         Assert.Equal(1, turnedOff);
-        Assert.Contains("Settings → Advanced", off.Status);
+        Assert.Contains("Settings → General", off.Status);
         Assert.Equal(2, closed);
     }
 }
