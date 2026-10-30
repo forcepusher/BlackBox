@@ -118,7 +118,7 @@ public sealed partial class ShotItem(VideoGeneratorViewModel video, VideoShot sh
     public string Name => Shot.Camera.Trim() is { Length: > 0 } camera ? camera : Shot.Prompt.Trim() is { Length: > 0 } p ? p : "a new clip";
 
     /// <summary>What happens in it, as Sloperator asked for it.</summary>
-    public string Summary => Shot.Prompt.Trim() is { Length: > 0 } p ? p : "Nothing said yet.";
+    public string Summary => Shot.Prompt.Trim() is { Length: > 0 } p ? p : "Say in the chat what happens in it.";
 
     public string LengthText => $"{Shot.Seconds:0.#} s";
 
@@ -156,8 +156,11 @@ public sealed partial class ShotItem(VideoGeneratorViewModel video, VideoShot sh
     /// <summary>The slots are full size: one not made shows File… and Generate (a narrower one has them on its right-click menu).</summary>
     public bool SlotsRoomy => SlotWidth >= FullSlotWidth;
 
-    /// <summary>What happens in it shows between its frames while it isn't made, with room for a word a line (its tooltip has it all).</summary>
-    public bool ShowsSummary => !IsMade && (HasSlots ? BlockWidth - 2 * SlotWidth - 22 : BlockWidth - 10) >= 40;
+    /// <summary>
+    /// What happens in it shows between its frames while it isn't made, with room for a word a line (its tooltip has it all);
+    /// with nothing said yet, the line under them already says to say it.
+    /// </summary>
+    public bool ShowsSummary => !IsMade && Shot.Prompt.Trim().Length > 0 && (HasSlots ? BlockWidth - 2 * SlotWidth - 22 : BlockWidth - 10) >= 40;
 
     /// <summary>Its clip as a row of frames, once made.</summary>
     [ObservableProperty]
@@ -235,7 +238,7 @@ public sealed partial class SoundItem(VideoSound sound) : ObservableObject, IVid
     public bool IsNew => Sound.Source == VideoSound.Song && !IsMade && Sound.Tags.Trim().Length == 0;
 
     /// <summary>What it is, for its tooltip: a new one, what to do with it.</summary>
-    public string Summary => IsNew ? "Nothing said yet."
+    public string Summary => IsNew ? "Pick File…, Foley or Music, or say in the chat what it should be."
         : Sound.Source == VideoSound.Foley ? "Foley: the sounds of what the clips under it show" + (Sound.Tags.Trim() is { Length: > 0 } heard ? $" ({heard})" : "")
         : Sound.Source == VideoSound.Song ? $"Music: {Sound.Tags.Trim()}" : Kind;
 

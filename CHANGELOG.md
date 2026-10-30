@@ -44,6 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   looking at its window. Click it to bring that window to the front.
 
 ### Changed
+- The File inspector in the Side panel menu says "Look inside any file" (it said "Any file from the
+  chat", but it opens any file).
+- In the Video generator, a clip nothing is said of yet says "Say in the chat what happens in it.",
+  and a new sound what to pick, instead of "Nothing said yet."
+- A sound line's volume in the Video generator moves in steps of 5%.
 - Every button, dropdown and text field keeps its words the same distance from its left edge, as the
   Servers button does; buttons are a little wider.
 - Before clicking a named button, menu, tab, link or setting, the agent looks it up with text

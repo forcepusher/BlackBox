@@ -77,9 +77,12 @@
       <Setter Property="Stroke" Value="{StaticResource BbAccent}" />
       <Setter Property="StrokeThickness" Value="2" />
     </Style>
-    <!-- A sound line's volume: a short slider under its name. -->
+    <!-- A sound line's volume: a short slider under its name, in steps of 5% (the user, 2026-10-30:
+         dragged, it landed on 111%). -->
     <Style Selector="Slider.volume">
       <Setter Property="MinHeight" Value="0" />
+      <Setter Property="TickFrequency" Value="0.05" />
+      <Setter Property="IsSnapToTickEnabled" Value="True" />
     </Style>
     <Style Selector="Border.thumb">
       <Setter Property="Background" Value="#0C0C0C" />
