@@ -674,7 +674,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
         (false, var files) => $"{files.Count} files",
     };
 
-    public string StageTip => CanStage ? $"Stage {What} in git" : "Pick unstaged lines, or select an unstaged file, to stage them";
+    public string StageTip => CanStage ? $"Stage {What} in git" : "Pick unstaged changes first";
 
     public string UnstageTip => CanUnstage ? $"Unstage {What}: the file on disk stays as it is" : "Pick staged lines, or select a staged file, to unstage them";
 
@@ -686,8 +686,8 @@ public sealed partial class FileChangesViewModel : ObservableObject, IToolkit
             var targets = Targets(GitAct.Discard);
             if (targets.Count == 0)
                 return Targets().Any(t => t.File.Section == GitSection.Committed) ? "Committed changes can't be discarded here"
-                    : Targets().Count > 0 ? "Only changes not staged yet can be discarded: unstage these first"
-                    : "Pick unstaged lines, or select an unstaged file, to discard them";
+                    : Targets().Count > 0 ? "Unstage these first"
+                    : "Pick unstaged changes first";
             if (targets is [{ Lines: null, File.IsNew: true }])
                 return $"Move {Path.GetFileName(targets[0].File.FullPath)} to the Recycle Bin";
             var how = targets.All(t => t.File.Section == GitSection.Unstaged) ? " as staged" : targets.All(t => t.File.Section is null) ? " as before the agent's changes" : "";

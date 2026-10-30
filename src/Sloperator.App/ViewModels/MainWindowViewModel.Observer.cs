@@ -98,8 +98,7 @@ public sealed partial class MainWindowViewModel
     {
         if (usage.Size <= 0) return;
         ContextUsage = $"{usage.Used / 1000.0:0}k of {ContextSizes.Format(usage.Size)} used";
-        ContextUsageTip = $"The conversation fills about {usage.Used:N0} of the model's {usage.Size:N0} tokens of context. " +
-                          $"At {usage.Reset:N0} the model writes a handoff note and Sloperator starts a fresh context with it.";
+        ContextUsageTip = $"Starts a fresh context from a handoff note at {usage.Reset:N0} tokens.";
     }
 
     /// <summary>

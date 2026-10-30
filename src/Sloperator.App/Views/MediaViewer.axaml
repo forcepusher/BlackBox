@@ -105,11 +105,11 @@
       <ContentControl Content="{Binding Shown}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
 
       <Button Classes="side" HorizontalAlignment="Left" Command="{Binding PreviousCommand}" IsVisible="{Binding HasMany}"
-              ToolTip.Tip="The one before (Left arrow)" AutomationProperties.Name="Previous">
+              ToolTip.Tip="Previous (Left)" AutomationProperties.Name="Previous">
         <PathIcon Data="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
       </Button>
       <Button Classes="side" HorizontalAlignment="Right" Command="{Binding NextCommand}" IsVisible="{Binding HasMany}"
-              ToolTip.Tip="The next one (Right arrow)" AutomationProperties.Name="Next">
+              ToolTip.Tip="Next (Right)" AutomationProperties.Name="Next">
         <PathIcon Data="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
       </Button>
 

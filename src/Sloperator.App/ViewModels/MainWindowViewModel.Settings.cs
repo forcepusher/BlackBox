@@ -7,7 +7,14 @@ public sealed partial class MainWindowViewModel
 {
     // ---- settings -------------------------------------------------------------------
 
-    public SettingsViewModel CreateSettingsViewModel() => new(_settings.Clone(), _paths, LoadMcpConfig(), _mcp.Statuses);
+    public SettingsViewModel CreateSettingsViewModel() => new(_settings.Clone(), _paths, LoadMcpConfig(), _mcp.Statuses, PrimaryScreen());
+
+    /// <summary>The primary screen, for the screenshot sizes Settings shows; null where screens can't be read.</summary>
+    private Core.Platform.ScreenRect? PrimaryScreen()
+    {
+        try { return _platform.Screen.GetScreens().FirstOrDefault(); }
+        catch (Exception) { return null; }
+    }
 
     /// <summary>
     /// mcp.json as it is, read again a moment later when caught while the agent replaces it:

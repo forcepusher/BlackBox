@@ -27,6 +27,9 @@ internal sealed class ClickCheck
     /// <summary>When nothing has changed yet, how long to keep looking for a slow reaction.</summary>
     private static readonly TimeSpan[] Rechecks = [TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(700)];
 
+    /// <summary>How a click's result starts telling the model it probably missed; the agent looks for it too.</summary>
+    internal const string MissedNote = "Nothing on screen changed after this click";
+
     /// <summary>Off only to measure what the check adds (ClickAccuracyTests).</summary>
     internal static bool Enabled { get; set; } = true;
 

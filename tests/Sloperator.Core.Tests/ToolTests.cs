@@ -190,7 +190,7 @@ public class ToolTests
         // one at 100% to its left, lower down, and an ultrawide on its right.
         var platform = new FakePlatform { Screens = [new ScreenRect(0, 0, 3840, 2160), new ScreenRect(-1920, 400, 1920, 1080), new ScreenRect(3840, 0, 2560, 1080)] };
         var ctx = Ctx(platform);
-        Assert.Equal((2560, 1080), ctx.Settings.ScreenshotBox);
+        Assert.Equal((AgentSettings.MaxScreenshotSide, 1080), ctx.Settings.ScreenshotBox);
 
         async Task<string> Look(int screen) => (await new ScreenshotTool().ExecuteAsync(new JsonObject { ["screen"] = screen }, ctx, CancellationToken.None)).Text;
         async Task<string> Click(double x, double y)
@@ -673,11 +673,26 @@ public class ToolTests
         Assert.Equal("be brief", settings.Agent.CustomInstructions);
         // Web access and the click log are no longer settings: always on and shown. The old screenshot
         // presets are gone too, and the size box starts from its default.
-        Assert.Equal((2560, 1080), settings.Agent.ScreenshotBox);
+        Assert.Equal((AgentSettings.MaxScreenshotSide, 1080), settings.Agent.ScreenshotBox);
         var saved = File.ReadAllText(paths.SettingsFile);
         foreach (var gone in new[] { "backend", "local", "remote", "gpuLayers", "sendExtras", "enableThinking", "temperature", "keepScreenshots", "contextSize", "workingDirectory", "screenshotMaxPixels", "maxSteps", "maxPromptTokens",
                                      "screenshotResolution", "showInputs", "inputLogSeconds", "webSearch" })
             Assert.DoesNotContain(gone, saved);
+    }
+
+    [Fact]
+    public void An_old_screenshot_box_becomes_the_screenshot_size_closest_to_its_height()
+    {
+        static ScreenshotSize Size(string agent) =>
+            System.Text.Json.JsonSerializer.Deserialize(SettingsStore.Migrate($$"""{ "agent": {{agent}} }"""), SettingsJson.Default.AppSettings)!.Agent.ScreenshotSize;
+
+        Assert.Equal(ScreenshotSize.UpTo1080, Size("""{ "screenshotMaxWidth": 2560, "screenshotMaxHeight": 1080 }"""));
+        Assert.Equal(ScreenshotSize.UpTo720, Size("""{ "screenshotMaxWidth": 1280, "screenshotMaxHeight": 720 }"""));
+        Assert.Equal(ScreenshotSize.Full, Size("""{ "screenshotMaxWidth": 3840, "screenshotMaxHeight": 2160 }"""));
+        Assert.Equal(ScreenshotSize.Full, Size("""{ "screenshotMaxHeight": 720, "screenshotSize": "full" }""")); // already chosen
+        // Up to 1080 tall: a 5120x1440 screen keeps its width (3840x1080, not the old box's 2560x720).
+        var space = new ScreenSpace(new ScreenRect(0, 0, 5120, 1440), new AgentSettings().ScreenshotBox);
+        Assert.Equal((3840, 1088), (space.ImageWidth, space.ImageHeight));
     }
 
     [Fact]

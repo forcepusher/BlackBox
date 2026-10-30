@@ -77,7 +77,7 @@ public abstract class DesktopActionTool : Tool
         // A click on what is already selected changes nothing either: Paint's oval tool, picked by
         // one of the first clicks, was clicked some twenty times more, each "probably missed".
         if (check is not null && await check.MissedAsync(ctx, ct).ConfigureAwait(false))
-            text += "\nNothing on screen changed after this click, so it probably missed. Zoom in on what you meant and click it again, aiming at its middle. " +
+            text += "\n" + ClickCheck.MissedNote + ", so it probably missed. Zoom in on what you meant and click it again, aiming at its middle. " +
                     "Stop without clicking again only if the zoom shows it is already selected or switched on (a tool, a tab, a checkbox), " +
                     "which a click doesn't change, and say so in your reply. If it only needs more time to respond, wait instead; " +
                     "if you clicked an empty spot only to focus a window, ignore this.";

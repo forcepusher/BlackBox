@@ -147,7 +147,7 @@ public sealed partial class VideoGeneratorViewModel
     private string _status = "";
 
     /// <summary>The status, else how the timeline is used: nothing showed the right-click menu was there (the user, 2026-10-24).</summary>
-    public string StatusOrHint => Status.Length > 0 ? Status : "Right-click a row to create, a card to rename or delete. Drop files on the timeline to copy them in.";
+    public string StatusOrHint => Status.Length > 0 ? Status : "Right-click to add, rename or delete. Drop files to copy them in.";
 
     /// <summary>What went wrong, on the status line and in Data/errors.log, about the video in <paramref name="folder"/> (this one's).</summary>
     private void ShowError(string text, Exception error, string? folder = null)

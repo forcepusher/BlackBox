@@ -1251,6 +1251,26 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task Ending_right_after_a_click_that_changed_nothing_is_asked_to_check_once()
+    {
+        // The fake screen doesn't change when clicked, so the click's result says it probably missed.
+        var server = new ScriptedServer(Sse.ToolCall("c1", "mouse_click", """{"x":100,"y":100}"""),
+            Sse.Text("Clicked it, the cursor is on it."), Sse.Text("It was already selected."), Sse.Text("(not asked)"));
+        var settings = new AgentSettings { ScreenshotAfterActions = true, Approval = ApprovalMode.AskRisky };
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = settings, WorkingDirectory = Path.GetTempPath() };
+        var client = new OpenAiChatClient(new HttpClient(server), "http://test", null);
+        var session = new AgentSession(client, new ChatRequestOptions(), ToolRegistry.CreateDefault(includeScreenTools: true), ctx, "system prompt");
+        var observer = new RecordingObserver();
+
+        await session.RunAsync("click OK", observer, CancellationToken.None);
+
+        Assert.Equal(AgentStopReason.Completed, observer.StopReason);
+        Assert.Equal(3, server.Requests.Count); // asked once; the second end stands
+        Assert.Equal(AgentSession.MissedEndNote, LastText(server.Requests[2]));
+        Assert.Contains(observer.Notices, n => n.Contains("changed nothing"));
+    }
+
+    [Fact]
     public async Task A_reply_that_announces_a_step_without_its_call_ends_the_run()
     {
         // Whether a reply looks finished isn't guessed: nothing is sent in the user's place.

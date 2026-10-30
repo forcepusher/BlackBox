@@ -947,7 +947,7 @@ a song, in a Sound folder, with lip sync to its part under a shot) went with it.
 place to start one): each sound line has the dashed + after its last sound (`SoundLineItem.AddX`), and
 right-click on the line still has Create. The new sound offers **File…** (copies a sound in, as
 dropping one there does), **Foley** and **Music**, as buttons on it while it is new and first on its
-right-click menu after; its tooltip says "Nothing said yet: …" as a new clip's does. Foley turns it
+right-click menu after; its tooltip says "Nothing said yet." as a new clip's does. Foley turns it
 into `"source": "foley"` and sends "Make it." at once (there is nothing to say first); Music keeps it a
 song and sends "Make it." once its style is said, else the status line asks for it. Either sends with
 the pick in the box, as a message the user sends does: `SendFromToolkit("Make it.")` used to go with
@@ -1673,7 +1673,7 @@ What they share, and how they keep out of each other's way:
   window's program), and an agent that never looked is held back once another acted. Its own actions and plain looks don't count. One that waited
   5 minutes says so and suggests work that doesn't need them. Typing in any window's box pauses
   every window's clicks and keys, as typing in its own does ("Paused while you type in another
-  Sloperator window", without Resume, which only ends its own pause). One keyboard hook watches
+  window", without Resume, which only ends its own pause). One keyboard hook watches
   Pause/Break for all of them, and one press stops every window's run; with a hook each, the first
   that stopped its run swallowed the press, and the others never saw it.
 - **ComfyUI and the headless browser** are the process's: the server Sloperator started is closed by
@@ -2454,11 +2454,17 @@ OpenRouter; spelling out the pixel range or a worked example made it 5/28), and 
 on the grid and 3/28 in pixels (31B through OpenRouter: 1/28 and 0/28). The user had the grid taken out anyway: one way of pointing for every
 model, no forks by model name. Zoom's rulers, `mouse_drag` and pictures are all in pixels.
 
-Screenshots are scaled down to fit Settings → Advanced → Max screenshot size, keeping their shape
-and never scaled up (`AgentSettings.ScreenshotMaxWidth`/`ScreenshotMaxHeight`, kept within
-640×360..16384 when read). It was dropped on 2026-10-16 for always-native, and came back because a
-4K screen at full resolution takes four times the context of Full HD. 2560×1080 by default (the
-user: "wide full HD"): 1920×1080 and 21:9 screens go as they are, 4K goes at 1920×1080. Clicks map
+Screenshots are scaled down to Settings → Advanced → Screenshot size, keeping their shape and never
+scaled up (`AgentSettings.ScreenshotSize`: up to 1080 tall, full resolution, or up to 720 tall; each
+entry shows what the primary screen comes out at). A width × height box before it was dropped on
+2026-10-16 for always-native, and came back because a 4K screen at full resolution takes four times
+the context of Full HD; on 30 October 2026 the user replaced the box, which they found misleading,
+with this choice ("native, scaled down to 1080p vertically" by default). A saved box becomes the
+choice closest to its height. A screen 1080 high of any width goes as it is, 4K goes at 1920×1080,
+5120×1440 at 3840×1080 rather than the old box's 2560×720. Tests and the click benchmark still set a
+box of their own (`ScreenshotMaxWidth`/`ScreenshotMaxHeight`, not saved). On the click benchmark (Qwen
+3.8, 3 retries, grid base) full size hit 92 of 114 first and 99 in the end, 1920×1080 88 and 99
+(ultrawide buttons 4/5 to 1/5), 1280×720 55 and 70, with 19 trials never finding the target. Clicks map
 back through `ScreenSpace` per monitor, in physical pixels, so each screen's own scaling and its
 place in the desktop don't matter (`ToolTests.Screenshots_fit_the_max_size_and_clicks_land_on_the_real_screen_of_every_monitor`).
 That holds because the whole process is per-monitor DPI aware (the manifest, shared by the CLI, and
@@ -2524,6 +2530,12 @@ new one (half-covered buttons 0/5 to 3/5); one run each. It still ended a few mi
 wording alone doesn't stop that. On a slightly older develop, without any note it hit 86 first and 95
 in the end (90 and 103 with the old note): without it the
 model doesn't know a click missed, and ten misses ended with the model calling the click done.
+
+So when a reply without tool calls follows a click whose result says nothing changed, the model is
+asked once ("[Sloperator] Your last click changed nothing on screen ... yet you ended there") to zoom
+in and check; a second end stands. It is the one end-of-answer nudge kept after they were removed on
+27 October, and only for this case. Same base and bench: 94 first and 107 in the end (13 of 18 misses
+fixed), against 96 and 104 without it; no trial ended as done after a miss, against four.
 
 Pixel coordinates are described with the image's size ("pixels of the screenshot, which is
 2560x1088"). Told only "pixels of the screenshot", DeepSeek V4.1 Flash answered on a 0-1000 grid, the
@@ -3371,8 +3383,9 @@ reads the message before its next step, and a `wait` it is in ends for it. While
 its clicks and key presses hold off (for up to a minute), so they don't land in your typing. That
 includes a click whose target it is still looking for, and the rest of a series of key presses or
 of long text it is typing, which then goes back to the window it was meant for. A line above the
-box says it is paused and how it goes on: send the message, click Resume (what you typed stays in
-the box), or stop typing, after which it carries on in 15 seconds, counted down on that line. A
+box says it is paused and counts down to when it carries on by itself, 15 seconds after the last key
+("Paused while you type. I carry on in 12 s."); Resume beside it (what you typed stays in the box)
+and sending the message end the pause at once. A
 message that arrives as the run finishes starts the next one, and what the agent hadn't read when
 you stopped it goes back in the box.
 

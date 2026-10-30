@@ -23,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   message goes to the new model.
 
 ### Changed
+- **Screenshot size** under Settings → Advanced replaces the width × height box: **Up to 1080p tall**
+  (the default: your screen's own resolution, scaled down only when it's taller than 1080 pixels, so
+  ultrawide screens keep their detail), **Full resolution**, or **720p tall** (fewer tokens, but clicks
+  miss more). Each shows the size its screenshots of your screen come out at.
+- Shorter texts throughout: the start screen, tooltips, server status lines, Settings, the Video
+  generator and the File inspector say the same in fewer words, and tooltips that only repeated a
+  button's name are gone.
 - A chat video's right-click Copy is now two entries: **Copy image** for the frame on screen and
   **Copy file** for the video.
 - A new look in neutral greys: a darker background, filled buttons, fields darker than the window,
@@ -36,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Claude keeps it across tool calls.
 - After a click that changed nothing on screen, the agent is told to zoom in and click again, and to
   stop only when the zoom shows the thing was already selected, so it corrects more of its misses.
+  If it ends its answer right after such a click anyway, it is asked once to check the click first.
 - File changes lists each file on one compact line, its name and its counts, so a long list fits;
   whether it was modified or renamed shows in its tooltip.
 - The model list is read from the server again each time its dropdown opens, so a model loaded there

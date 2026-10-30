@@ -1,11 +1,14 @@
 using Sloperator.Core.Mcp;
+using Sloperator.Core.Platform;
 using Sloperator.Core.Settings;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Sloperator.App.ViewModels;
 
 /// <summary>Edits a copy of the settings; the window hands it back to the main view model on Save.</summary>
-public sealed partial class SettingsViewModel(AppSettings settings, AppPaths paths, string mcpConfigText, IReadOnlyList<McpServerStatus> mcpStatuses) : ObservableObject
+/// <param name="screen">The primary screen, to show what each screenshot size makes of it; null when it can't be read.</param>
+public sealed partial class SettingsViewModel(AppSettings settings, AppPaths paths, string mcpConfigText, IReadOnlyList<McpServerStatus> mcpStatuses,
+    ScreenRect? screen = null) : ObservableObject
 {
     public AppSettings Settings { get; } = settings;
 
@@ -33,24 +36,29 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
 
     // ---- Screenshot size ---------------------------------------------------------------
 
-    /// <summary>The fields' limits, as decimals: what NumericUpDown takes.</summary>
-    public static readonly decimal MinWidth = AgentSettings.MinScreenshotWidth, MinHeight = AgentSettings.MinScreenshotHeight, MaxSide = AgentSettings.MaxScreenshotSide;
+    /// <summary>The choices in the order the dropdown lists them.</summary>
+    private static readonly ScreenshotSize[] Sizes = [ScreenshotSize.UpTo1080, ScreenshotSize.Full, ScreenshotSize.UpTo720];
 
-    /// <summary>The box's width as the field shows it; a cleared field goes back to the default.</summary>
-    public decimal? ScreenshotWidth
+    /// <summary>Each choice with the size its screenshots of the primary screen come out at, so it's never a guess.</summary>
+    public string[] ScreenshotSizes { get; } = Sizes.Select(size =>
     {
-        get => Agent.ScreenshotMaxWidth;
-        set => Agent.ScreenshotMaxWidth = Side(value, MinWidth, AgentSettings.DefaultScreenshotWidth);
-    }
+        var name = size switch
+        {
+            ScreenshotSize.Full => "Full resolution, more context per screenshot",
+            ScreenshotSize.UpTo720 => "720p tall, fewer tokens but clicks miss more",
+            _ => "Up to 1080p tall (recommended)",
+        };
+        if (screen is not { } s)
+            return name;
+        var space = new ScreenSpace(s, new AgentSettings { ScreenshotSize = size }.ScreenshotBox);
+        return $"{name}: {space.ImageWidth} × {space.ImageHeight}";
+    }).ToArray();
 
-    public decimal? ScreenshotHeight
+    public int ScreenshotSizeIndex
     {
-        get => Agent.ScreenshotMaxHeight;
-        set => Agent.ScreenshotMaxHeight = Side(value, MinHeight, AgentSettings.DefaultScreenshotHeight);
+        get => Math.Max(0, Array.IndexOf(Sizes, Agent.ScreenshotSize));
+        set => Agent.ScreenshotSize = Sizes[Math.Clamp(value, 0, Sizes.Length - 1)];
     }
-
-    private static int Side(decimal? value, decimal min, int fallback) =>
-        value is { } v ? (int)Math.Clamp(Math.Round(v), min, MaxSide) : fallback;
 
     // ---- MCP servers -------------------------------------------------------------------
 
