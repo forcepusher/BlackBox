@@ -1426,6 +1426,17 @@ from the top of the chat to the top of the box, which showing it doesn't change:
 chat's height plus the heading's, a heading just shown and not laid out yet counted 0 and hid itself
 again, and the window was left with a blank strip where it had been.
 
+Each card's line under its name (`TextBlock.capabilityNote`, 11 px, a step under other grey text)
+keeps to one line down to the window's MinWidth (the user, 2026-10-30: the two-line cards were too
+big), so the wording is cut to fit rather than wrapped; the cards are as tall as that one line.
+The icon (`PathIcon.capability`, 24 px, 12 from the words) is centred on the name and that line
+together, not level with the name (with one short line under it, an 18 px icon at the top sat high,
+the user said). Measured on captures, the words' capitals-to-baseline against the card's inside
+and the icon's ink against the words: centred on the lines' boxes the icon sat 1-1.5 px low at 125%
+(the last box runs on under the baseline), and the words a pixel high; a bottom margin of 1 on the
+icon and a top margin of 1 on `StackPanel.capability` put both within half a pixel at 125% and
+at 100% (a DPI-unaware build). A bottom margin of 2 overshot to 0.5-1 px high.
+
 The logo there is `LogoBlob`, drawn from docs/logo/blob.svg's shapes at the size it is shown, the
 body's top, bottom and sides on whole pixels of the screen. It was Assets/sloperator.png (256 px) in
 an `Image` 40 across, which the user found "a tad blurry" at 100% (2026-10-30): shrunk that far its

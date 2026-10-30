@@ -43,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   button's name are gone.
 - On the start screen, "What should I do on your computer?" sits right over the chat box and stays in
   view, with the cards scrolling above it. In a very short window it makes room for a long message.
+- The start screen is tidier: each card says what it does in one line, in smaller text, so the cards
+  are shorter, with a bigger icon centred beside the name and that line; the Pause/Break card has one
+  line on the key and one on correcting and asking first;
+  the Ctrl V and New window lines say a little more; under the heading, "I may use your keyboard and
+  mouse when needed."
 - A chat video's right-click Copy is now two entries: **Copy image** for the frame on screen and
   **Copy file** for the video.
 - A new look in neutral greys: a darker background, filled buttons, fields darker than the window,
